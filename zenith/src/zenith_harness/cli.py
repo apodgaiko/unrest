@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import time
 from pathlib import Path
 
 import click
@@ -11,7 +10,6 @@ import click
 from .assets import AssetLoader, iter_skill_directories
 from .config import VALID_REASONING_EFFORTS, HarnessConfig
 from .envelope import render_task_list
-from .live import ProjectSelectionError, build_live_snapshot, render_live_snapshot
 from .providers import (
     ProviderDefinition,
     ProviderSelection,
@@ -249,70 +247,6 @@ def inspect_tasks_cmd(project_id: str, mission_id: str | None) -> None:
     rendered = render_task_list(tl, ts, mode="full")
     if rendered:
         click.echo(rendered)
-
-
-# ---------------------------------------------------------------------------
-# live
-# ---------------------------------------------------------------------------
-
-
-@cli.command("live")
-@click.option("--once", is_flag=True, help="Print one snapshot and exit.")
-@click.option("--json", "json_output", is_flag=True, help="Emit one pure JSON snapshot.")
-@click.option("--dashboard", is_flag=True, help="Start the terminal Textual dashboard.")
-@click.option("--project", "project_pin", default=None, help="Focus a project by id or path.")
-@click.option("--projects-dir", type=click.Path(file_okay=False, dir_okay=True), default=None)
-@click.option("--interval", type=float, default=2.0, show_default=True)
-def live_cmd(
-    once: bool,
-    json_output: bool,
-    dashboard: bool,
-    project_pin: str | None,
-    projects_dir: str | None,
-    interval: float,
-) -> None:
-    """Observe Zenith project buckets without mutating them."""
-    config = HarnessConfig.discover()
-    projects_path = Path(projects_dir).expanduser().resolve() if projects_dir else None
-
-    def snapshot():
-        try:
-            return build_live_snapshot(
-                config=config,
-                projects_dir=projects_path,
-                project=project_pin,
-            )
-        except ProjectSelectionError as exc:
-            raise click.ClickException(str(exc)) from exc
-
-    if once and json_output:
-        raise click.UsageError("--once cannot be combined with --json")
-
-    if dashboard:
-        if once or json_output:
-            raise click.UsageError("--dashboard cannot be combined with --once or --json")
-        from .textual_dashboard import ZenithDashboardApp
-
-        delay = max(interval, 0.1)
-        ZenithDashboardApp(snapshot_provider=snapshot, refresh_interval=delay).run()
-        return
-
-    if json_output:
-        click.echo(json.dumps(snapshot().to_dict(), indent=2))
-        return
-
-    if once:
-        click.echo(render_live_snapshot(snapshot()))
-        return
-
-    delay = max(interval, 0.1)
-    try:
-        while True:
-            click.clear()
-            click.echo(render_live_snapshot(snapshot()))
-            time.sleep(delay)
-    except KeyboardInterrupt:
-        return
 
 
 # ---------------------------------------------------------------------------
