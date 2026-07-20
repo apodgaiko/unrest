@@ -1,0 +1,12 @@
+Derived harness project
+
+This project includes software developed by Intelligent Internet:
+
+  Zenith — a continuous-improvement harness for long-running agent tasks
+  https://github.com/Intelligent-Internet/zenith
+
+The upstream Zenith software is licensed under the Apache License, Version 2.0.
+This derived project contains modifications and additions that are not part of
+the upstream Zenith project. Intelligent Internet does not endorse this derived
+project unless it states otherwise.
+
