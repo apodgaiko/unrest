@@ -32,7 +32,7 @@ Our Zenith method keeps the useful parts of repeated review while making the loo
 Copy this prompt into Claude Code or Codex:
 
 ```text
-/goal Read the readme at https://github.com/Intelligent-Internet/zenith, detect if using Claude Code, Codex, or both, install requirements, install and run Zenith (i.e. uv run zenith, as in the readme), and create a new skill called /zenith — when used (along with an additional prompt) it will call the skill: the minimum skill content should be: """First read .claude/orchestrator_prompt.md and treat it as your primary role, then use Zenith to run this mission.""" Afterwards, you can add information about the Zenith harness, based on the readme and the technical report (inside the repo), and info on how to start Zenith if it's not already running. Change the skill to use .codex when using it in Codex. If both harnesses are available, make sure to add the skill to both of them correctly. In fact, there might be more harness options (Hermes, for example). See what is supported in zenith/src/zenith_harness/providers.py, and for those that you detect are present, add their skills correctly. When finished, confirm to me that Zenith is installed, running, and ready, explain a bit about Zenith, and why and when to use it.
+/goal Read the readme at https://github.com/OpenAIBot1/zenith-foundry, detect if using Claude Code, Codex, or both, install requirements, install and run Zenith (i.e. uv run zenith, as in the readme), and create a new skill called /zenith — when used (along with an additional prompt) it will call the skill: the minimum skill content should be: """First read .claude/orchestrator_prompt.md and treat it as your primary role, then use Zenith to run this mission.""" Afterwards, you can add information about the Zenith harness, based on the readme and the technical report (inside the repo), and info on how to start Zenith if it's not already running. Change the skill to use .codex when using it in Codex. If both harnesses are available, make sure to add the skill to both of them correctly. In fact, there might be more harness options (Hermes, for example). See what is supported in zenith/src/zenith_harness/providers.py, and for those that you detect are present, add their skills correctly. When finished, confirm to me that Zenith is installed, running, and ready, explain a bit about Zenith, and why and when to use it.
 ```
 
 This will:
@@ -107,6 +107,84 @@ First read .claude/orchestrator_prompt.md and treat it as your primary role, the
 
 <your instruction or query>
 ```
+
+### Maintainer Codex and Claude Code setup for this fork
+
+The public `main` branch is the dashboard-free product line. The terminal
+dashboard is isolated on `experiment/terminal-dashboard`; do not switch to,
+merge, or install that branch during ordinary Zenith work. A correct `main`
+installation does not expose a `live` command.
+
+For regular development, install `main` globally as an editable uv tool:
+
+```bash
+git clone https://github.com/OpenAIBot1/zenith-foundry.git
+cd zenith-foundry/zenith
+uv tool install --editable .
+
+command -v zenith
+command -v zenith-server
+zenith --help
+```
+
+On the maintainer workstation, the canonical checkout is
+`/Users/aleksandrpodgaiko/Desktop/zenith/worktrees/product-main`. Both Codex and
+Claude Code use the global
+`/Users/aleksandrpodgaiko/.local/bin/zenith-server --mode orchestrator`
+executable, so neither host needs `zenith init` in every repository.
+
+Codex uses the personal `zenith@personal` plugin from
+`/Users/aleksandrpodgaiko/plugins/zenith`. The plugin owns the Zenith skill and
+global MCP registration. Verify it with:
+
+```bash
+codex plugin list
+codex mcp get zenith --json
+```
+
+Claude Code uses the user-scoped MCP registration and the skill at
+`/Users/aleksandrpodgaiko/.claude/skills/zenith`. Verify it with:
+
+```bash
+claude mcp get zenith
+claude mcp list
+```
+
+`claude mcp get zenith` must report `✔ Connected`, the global `zenith-server`
+command, the `claude` provider for orchestrator, worker, and terminal-reviewer
+roles, and the installed `claude-agent-acp` path. To reproduce or repair the
+user-scoped registration, remove the old `zenith` entry and add it again:
+
+```bash
+claude mcp remove zenith -s user
+claude mcp add -s user zenith \
+  -e ZENITH_ORCHESTRATOR_PROVIDER=claude \
+  -e ZENITH_WORKER_PROVIDER=claude \
+  -e ZENITH_TERMINAL_REVIEWER_PROVIDER=claude \
+  -e ZENITH_WORKER_ACP_COMMAND="$(command -v claude-agent-acp)" \
+  -e ZENITH_TERMINAL_REVIEWER_ACP_COMMAND="$(command -v claude-agent-acp)" \
+  -- "$(command -v zenith-server)" --mode orchestrator
+```
+
+For both hosts, the MCP command must be the global `zenith-server`, not an
+obsolete checkout under `Desktop/agents/cx` or `~/zenith`. Codex loads newly
+installed plugin tools at the start of a task, and Claude Code loads user MCP
+and skill changes in a new session. Start a fresh task/session after changing
+either setup, then invoke the Zenith skill.
+
+Update the local checkout and editable installation in one step:
+
+```bash
+zenith-update
+```
+
+The updater fast-forwards `origin/main`, reinstalls the editable uv tool and
+dependencies, verifies the installed commit, and fails if the dashboard-only
+`live` command appears. Future agents should use this command instead of
+manually repeating pull, sync, and reinstall steps. It updates the shared
+runtime used by both Codex and Claude Code. Users without the personal Codex
+plugin or user-scoped Claude registration should follow the portable `zenith
+init` workflow above.
 
 ## How Zenith Works
 
