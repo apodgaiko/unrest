@@ -401,7 +401,7 @@ class ContractStateFile(BaseModel):
 
 
 class ProjectRecord(BaseModel):
-    """Immutable: id, workspace_dir, created_at. HARNESS bucket."""
+    """Project identity and optional work-node runtime overrides."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -409,6 +409,8 @@ class ProjectRecord(BaseModel):
     workspace_dir: str
     created_at: str
     current_mission_id: str | None = None
+    worker_model: str | None = None
+    worker_reasoning_effort: str | None = None
 
 
 class AttentionFile(BaseModel):

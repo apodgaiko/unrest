@@ -36,6 +36,7 @@ RUNTIME_ENV_FORWARD_ALLOWLIST = (
     "GLM_API_KEY",
     "GLM_BASE_URL",
     "MAX_THINKING_TOKENS",
+    "ZENITH_WORKER_MODEL",
     "ZENITH_WORKER_REASONING_EFFORT",
     "ZENITH_VALIDATOR_REASONING_EFFORT",
     "ZENITH_TERMINAL_REVIEWER_REASONING_EFFORT",
@@ -72,6 +73,7 @@ def cli() -> None:
     default=None,
 )
 @click.option("--worker-acp-command", default=None)
+@click.option("--worker-model", default=None)
 @click.option("--validator-provider", type=click.Choice(provider_names_for_role("worker")), default=None)
 @click.option("--validator-acp-command", default=None)
 @click.option("--terminal-reviewer-provider", type=click.Choice(provider_names_for_role("worker")), default=None)
@@ -86,6 +88,7 @@ def init(
     orchestrator_provider: str | None,
     worker_provider: str | None,
     worker_acp_command: str | None,
+    worker_model: str | None,
     validator_provider: str | None,
     validator_acp_command: str | None,
     terminal_reviewer_provider: str | None,
@@ -134,6 +137,10 @@ def init(
         )
         if value
     }
+    if worker_model:
+        if selection.worker.name != "codex":
+            raise click.UsageError("--worker-model currently requires a Codex worker")
+        effort_env["ZENITH_WORKER_MODEL"] = worker_model
     _write_bootstrap_config(workspace, selection, storage_env, effort_env)
 
     # 2) Per-provider agents + orchestrator prompt
@@ -277,6 +284,9 @@ def live_cmd(
             )
         except ProjectSelectionError as exc:
             raise click.ClickException(str(exc)) from exc
+
+    if once and json_output:
+        raise click.UsageError("--once cannot be combined with --json")
 
     if dashboard:
         if once or json_output:
@@ -435,6 +445,22 @@ def _mcp_server_args() -> list[str]:
     ]
 
 
+def _uv_command() -> str:
+    """Pin the uv executable visible during init for GUI-hosted MCP startup."""
+    return shutil.which("uv") or "uv"
+
+
+def _runtime_mcp_env() -> dict[str, str]:
+    env = {
+        key: value
+        for key in ("PATH", "UV_CACHE_DIR")
+        if (value := os.environ.get(key))
+    }
+    if codex_path := (os.environ.get("CODEX_PATH") or shutil.which("codex")):
+        env["CODEX_PATH"] = codex_path
+    return env
+
+
 def _write_bootstrap_config(
     workspace: Path,
     selection: ProviderSelection,
@@ -442,7 +468,13 @@ def _write_bootstrap_config(
     cli_env: dict[str, str],
 ) -> None:
     fmt = selection.orchestrator.config_format
-    env = {**selection.env(), **storage_env, **_forwarded_runtime_env(), **cli_env}
+    env = {
+        **selection.env(),
+        **storage_env,
+        **_forwarded_runtime_env(),
+        **_runtime_mcp_env(),
+        **cli_env,
+    }
     server_args = _mcp_server_args()
     if fmt == "mcp_json":
         path = workspace / ".mcp.json"
@@ -451,7 +483,7 @@ def _write_bootstrap_config(
         )
         existing.setdefault("mcpServers", {})["zenith"] = {
             "type": "stdio",
-            "command": "uv",
+            "command": _uv_command(),
             "args": server_args,
             "env": env,
         }
@@ -461,15 +493,26 @@ def _write_bootstrap_config(
         config_path = workspace / ".codex" / "config.toml"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         env_lines = "\n".join(f'{k} = "{v}"' for k, v in env.items())
-        block = (
+        legacy_preamble = (
             'model = "gpt-5.5"\n'
             'sandbox_mode = "danger-full-access"\n'
             'model_reasoning_effort = "xhigh"\n'
             '[features]\n'
             'memories = true\n'
+        )
+        existing_text = (
+            config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+        )
+        before_marker = existing_text.partition("# BEGIN zenith")[0]
+        include_defaults = not existing_text.strip() or (
+            "# BEGIN zenith" in existing_text
+            and before_marker.rstrip().endswith(legacy_preamble.rstrip())
+        )
+        block = (
+            f"{legacy_preamble if include_defaults else ''}"
             "# BEGIN zenith\n"
             "[mcp_servers.zenith]\n"
-            'command = "uv"\n'
+            f'command = {json.dumps(_uv_command())}\n'
             f"args = {json.dumps(server_args)}\n"
             "startup_timeout_sec = 10\n"
             "tool_timeout_sec = 1000000\n"
@@ -478,17 +521,32 @@ def _write_bootstrap_config(
             f"{env_lines}\n"
             "# END zenith\n"
         )
-        _replace_managed_block(config_path, "# BEGIN zenith", "# END zenith", block)
+        _replace_managed_block(
+            config_path,
+            "# BEGIN zenith",
+            "# END zenith",
+            block,
+            legacy_prefix=legacy_preamble if include_defaults else None,
+        )
         click.echo(f"Wrote {config_path}")
     else:
         raise ValueError(f"unsupported config_format: {fmt}")
 
 
-def _replace_managed_block(path: Path, start: str, end: str, block: str) -> None:
+def _replace_managed_block(
+    path: Path,
+    start: str,
+    end: str,
+    block: str,
+    *,
+    legacy_prefix: str | None = None,
+) -> None:
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     if start in existing and end in existing:
         before, _, tail = existing.partition(start)
         _, _, after = tail.partition(end)
+        if legacy_prefix and before.rstrip().endswith(legacy_prefix.rstrip()):
+            before = before.rstrip()[: -len(legacy_prefix.rstrip())]
         updated = before.rstrip()
         if updated:
             updated += "\n\n"

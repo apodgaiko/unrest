@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from zenith_harness.config import HarnessConfig
-from zenith_harness.controller import ProjectController
+from zenith_harness.controller import ProjectController, ToolError
 from zenith_harness.dispatcher import (
     DispatchRequest,
     MockDispatcher,
@@ -68,6 +69,78 @@ async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
         "inspect_project",
         "abort_project",
     }
+
+
+@pytest.mark.asyncio
+async def test_start_project_persists_validated_worker_overrides(
+    config: HarnessConfig, workspace: Path
+) -> None:
+    config = replace(
+        config,
+        worker_provider_name="codex",
+        worker_acp_command="codex-acp",
+    )
+    controller = ProjectController(
+        config,
+        MockDispatcher(lambda request: WorkHandoff(node_id=request.task.id, done=True)),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
+    )
+    server = create_orchestrator_server(config, controller)
+
+    await server.call_tool(
+        "start_project",
+        {
+            "brief": "Ship it.",
+            "workspace_dir": str(workspace),
+            "worker_model": "gpt-test",
+            "worker_reasoning_effort": "high",
+        },
+    )
+
+    record = controller.store.list_projects()[0]
+    assert record.worker_model == "gpt-test"
+    assert record.worker_reasoning_effort == "high"
+
+
+def test_start_project_rejects_override_for_non_codex_worker_without_persisting(
+    config: HarnessConfig, workspace: Path
+) -> None:
+    controller = ProjectController(
+        config,
+        MockDispatcher(lambda request: WorkHandoff(node_id=request.task.id, done=True)),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
+    )
+
+    with pytest.raises(ToolError, match="invalid_worker_override_provider"):
+        controller.start_project(
+            "Ship it.",
+            str(workspace),
+            worker_reasoning_effort="high",
+        )
+    assert controller.store.list_projects() == []
+
+
+def test_start_project_rejects_invalid_codex_worker_effort_without_persisting(
+    config: HarnessConfig, workspace: Path
+) -> None:
+    config = replace(
+        config,
+        worker_provider_name="codex",
+        worker_acp_command="codex-acp",
+    )
+    controller = ProjectController(
+        config,
+        MockDispatcher(lambda request: WorkHandoff(node_id=request.task.id, done=True)),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
+    )
+
+    with pytest.raises(ToolError, match="invalid_worker_reasoning_effort"):
+        controller.start_project(
+            "Ship it.",
+            str(workspace),
+            worker_reasoning_effort="ultra",
+        )
+    assert controller.store.list_projects() == []
 
 
 @pytest.mark.asyncio

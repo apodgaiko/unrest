@@ -30,6 +30,7 @@ from .models import (
     Task,
     TaskList,
     TaskStateFile,
+    TerminalReviewHandoff,
     ValidateHandoff,
     WorkHandoff,
 )
@@ -720,11 +721,17 @@ class MissionCoordinator:
         try:
             report = self.terminal_reviewer.review(self.project_id, mid, spawn_ts)
         except Exception as exc:  # noqa: BLE001
-            self.store.save_state(
-                self.project_id,
-                Failed(reason=f"Terminal reviewer crashed: {exc}"),
+            report = TerminalReviewHandoff(
+                done=False,
+                report=(
+                    "Terminal reviewer runtime failure; mission artifacts were "
+                    "preserved and closure can be retried after resolving this "
+                    f"attention item.\n\nError: {exc}"
+                ),
             )
-            return StepResult.terminal("terminal_review_crash")
+            self.store.save_terminal_review(self.project_id, mid, spawn_ts, report)
+            self._raise_attention([attn_factory.terminal_review(mid, report)])
+            return StepResult.attention_needed("terminal_review_crash")
         self.store.save_terminal_review(self.project_id, mid, spawn_ts, report)
         if report.done:
             self.store.seal_mission(

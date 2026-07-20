@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tomllib
 from pathlib import Path
 
@@ -35,6 +36,10 @@ def _expected_mcp_server_args() -> list[str]:
     ]
 
 
+def _expected_uv_command() -> str:
+    return shutil.which("uv") or "uv"
+
+
 class TestInit:
     def test_stages_host_agent_surface_only(
         self, runner: CliRunner, workspace: Path, env: dict[str, str]
@@ -55,7 +60,7 @@ class TestInit:
         mcp = json.loads((workspace / ".mcp.json").read_text())
         assert "zenith" in mcp["mcpServers"]
         server = mcp["mcpServers"]["zenith"]
-        assert server["command"] == "uv"
+        assert server["command"] == _expected_uv_command()
         assert server["args"] == _expected_mcp_server_args()
 
     def test_init_does_not_touch_gitignore(
@@ -90,14 +95,148 @@ class TestInit:
         assert config_path.exists()
         config = tomllib.loads(config_path.read_text(encoding="utf-8"))
         server = config["mcp_servers"]["zenith"]
-        assert server["command"] == "uv"
+        assert server["command"] == _expected_uv_command()
         assert server["args"] == _expected_mcp_server_args()
         assert f"Initialized v5 project workspace at {workspace}" in r.output
-        assert "Start your agent from the initialized project workspace" in r.output
+
+    def test_codex_init_is_idempotent_and_migrates_legacy_managed_prefix(
+        self, runner: CliRunner, workspace: Path, env: dict[str, str]
+    ) -> None:
+        config_path = workspace / ".codex" / "config.toml"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(
+            'developer_instructions = "keep me"\n\n'
+            'model = "gpt-5.5"\n'
+            'sandbox_mode = "danger-full-access"\n'
+            'model_reasoning_effort = "xhigh"\n'
+            '[features]\n'
+            'memories = true\n'
+            '# BEGIN zenith\n'
+            '[mcp_servers.zenith]\n'
+            'command = "old-uv"\n'
+            '# END zenith\n',
+            encoding="utf-8",
+        )
+
+        for _ in range(2):
+            result = runner.invoke(
+                cli, ["init", "--workspace-dir", str(workspace), "--agent", "codex"]
+            )
+            assert result.exit_code == 0, result.output
+            parsed = tomllib.loads(config_path.read_text(encoding="utf-8"))
+            assert parsed["developer_instructions"] == "keep me"
+            assert parsed["mcp_servers"]["zenith"]["command"] == _expected_uv_command()
+
+        text = config_path.read_text(encoding="utf-8")
+        assert text.count("[features]") == 1
+        assert text.count("# BEGIN zenith") == 1
+        assert "Start your agent from the initialized project workspace" in result.output
         assert (
             "First read .codex/orchestrator_prompt.md and treat it as your primary role, "
-            "then use Zenith to run this mission." in r.output
+            "then use Zenith to run this mission." in result.output
         )
+
+    @pytest.mark.parametrize(
+        "existing",
+        [
+            'model = "user-model"\ndeveloper_instructions = "keep me"\n',
+            '[features]\nmemories = false\nweb_search = true\n',
+        ],
+    )
+    def test_codex_init_preserves_valid_unmanaged_host_config(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+        existing: str,
+    ) -> None:
+        config_path = workspace / ".codex" / "config.toml"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(existing, encoding="utf-8")
+
+        for _ in range(2):
+            result = runner.invoke(
+                cli, ["init", "--workspace-dir", str(workspace), "--agent", "codex"]
+            )
+            assert result.exit_code == 0, result.output
+            parsed = tomllib.loads(config_path.read_text(encoding="utf-8"))
+
+        if "user-model" in existing:
+            assert parsed["model"] == "user-model"
+            assert parsed["developer_instructions"] == "keep me"
+        else:
+            assert parsed["features"] == {"memories": False, "web_search": True}
+        assert parsed["mcp_servers"]["zenith"]["command"] == _expected_uv_command()
+
+    def test_codex_init_pins_runtime_executables_and_preserves_role_efforts(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr("zenith_harness.cli.shutil.which", lambda name: f"/opt/{name}")
+        monkeypatch.setenv("PATH", "/opt/bin:/usr/bin:/bin")
+        monkeypatch.setenv("UV_CACHE_DIR", "/tmp/zenith-uv-cache")
+        monkeypatch.setenv("ZENITH_WORKER_REASONING_EFFORT", "high")
+        monkeypatch.setenv("ZENITH_VALIDATOR_REASONING_EFFORT", "medium")
+        monkeypatch.setenv("ZENITH_TERMINAL_REVIEWER_REASONING_EFFORT", "low")
+
+        result = runner.invoke(
+            cli, ["init", "--workspace-dir", str(workspace), "--agent", "codex"]
+        )
+
+        assert result.exit_code == 0, result.output
+        config = tomllib.loads(
+            (workspace / ".codex" / "config.toml").read_text(encoding="utf-8")
+        )
+        server = config["mcp_servers"]["zenith"]
+        assert server["command"] == "/opt/uv"
+        assert server["env"]["PATH"] == "/opt/bin:/usr/bin:/bin"
+        assert server["env"]["UV_CACHE_DIR"] == "/tmp/zenith-uv-cache"
+        assert server["env"]["CODEX_PATH"] == "/opt/codex"
+        assert server["env"]["ZENITH_WORKER_REASONING_EFFORT"] == "high"
+        assert server["env"]["ZENITH_VALIDATOR_REASONING_EFFORT"] == "medium"
+        assert server["env"]["ZENITH_TERMINAL_REVIEWER_REASONING_EFFORT"] == "low"
+
+    def test_codex_init_writes_explicit_worker_model(
+        self, runner: CliRunner, workspace: Path, env: dict[str, str]
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "init",
+                "--workspace-dir",
+                str(workspace),
+                "--agent",
+                "codex",
+                "--worker-model",
+                "gpt-test",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        config = tomllib.loads(
+            (workspace / ".codex" / "config.toml").read_text(encoding="utf-8")
+        )
+        assert config["mcp_servers"]["zenith"]["env"]["ZENITH_WORKER_MODEL"] == "gpt-test"
+
+    def test_worker_model_rejected_for_non_codex_worker(
+        self, runner: CliRunner, workspace: Path, env: dict[str, str]
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "init",
+                "--workspace-dir",
+                str(workspace),
+                "--agent",
+                "claude",
+                "--worker-model",
+                "gpt-test",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "requires a Codex worker" in result.output
 
     def test_claude_init_writes_reasoning_effort_env(
         self,

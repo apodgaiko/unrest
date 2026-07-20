@@ -5,6 +5,7 @@ import inspect
 import json
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -89,52 +90,71 @@ class ACPError(Exception):
     pass
 
 
-def _augment_acp_command(
-    command: str, provider, reasoning_effort: str | None = None
-) -> str:
-    """Append provider-specific config flags to the ACP launch command.
+def _augment_acp_command(command: str, provider, reasoning_effort: str | None = None) -> str:
+    """Return the ACP adapter command unchanged.
 
-    For codex-acp this is the no-ask, no-sandbox combo — equivalent to
-    `codex --dangerously-bypass-approvals-and-sandbox`, which codex-acp
-    does not expose as a flag but accepts via `-c` overrides.
-
-    `reasoning_effort` is the per-role override from
-    ZENITH_<ROLE>_REASONING_EFFORT (validated against
-    `config.VALID_REASONING_EFFORTS` at discovery); None keeps the
-    historical "xhigh" default.
-
-    For hermes the command is passed through unchanged.
+    ``codex-acp`` does not parse Codex CLI ``-c`` options. Its supported
+    integration surface is the environment prepared by
+    :func:`_acp_subprocess_env`. The unused compatibility parameters remain in
+    this helper so older callers do not need to change atomically.
     """
-    name = getattr(provider, "name", None)
-    if name == "codex":
-        effort = reasoning_effort or "xhigh"
-        return (
-            command
-            + ' -c sandbox_mode="danger-full-access"'
-            + ' -c approval_policy="never"'
-            + f' -c model_reasoning_effort="{effort}"'
-        )
-    # hermes: no-op
     return command
 
 
-def _acp_subprocess_env(provider) -> dict[str, str]:
+def _acp_subprocess_env(
+    provider,
+    *,
+    reasoning_effort: str | None = None,
+    model: str | None = None,
+) -> dict[str, str]:
     """Build the env handed to an ACP-agent subprocess.
 
-    For codex we preserve PATH so node-based ACP adapters can launch via
-    `/usr/bin/env node`, and pass sandbox-disable hints through env. The
-    command line also receives `sandbox_mode="danger-full-access"` in
-    `_augment_acp_command`.
-
-    For hermes the env is passed through unchanged.
+    Codex configuration follows the adapter's documented ``CODEX_CONFIG``,
+    ``CODEX_PATH``, and ``INITIAL_AGENT_MODE`` contract. Existing JSON config is
+    preserved except for the harness-owned approval, sandbox, model, and effort
+    fields. Non-Codex providers are insulated from inherited Codex sandbox
+    hints.
     """
     env = os.environ.copy()
     name = getattr(provider, "name", None)
     if name == "codex":
-        # Env-var hints — harmless if codex ignores them.
+        if not env.get("CODEX_PATH"):
+            codex_path = shutil.which("codex", path=env.get("PATH"))
+            if codex_path:
+                env["CODEX_PATH"] = codex_path
+
+        config: dict[str, Any] = {}
+        raw_config = env.get("CODEX_CONFIG")
+        if raw_config:
+            try:
+                parsed = json.loads(raw_config)
+            except json.JSONDecodeError as exc:
+                raise ValueError("CODEX_CONFIG must be a valid JSON object") from exc
+            if not isinstance(parsed, dict):
+                raise ValueError("CODEX_CONFIG must be a valid JSON object")
+            config.update(parsed)
+        config.update(
+            {
+                "sandbox_mode": "danger-full-access",
+                "approval_policy": "never",
+                "model_reasoning_effort": reasoning_effort or "xhigh",
+            }
+        )
+        if model:
+            config["model"] = model
+        env["CODEX_CONFIG"] = json.dumps(config, separators=(",", ":"))
+        env["INITIAL_AGENT_MODE"] = "agent-full-access"
         env["CODEX_SANDBOX"] = "danger-full-access"
         env["CODEX_DISABLE_SANDBOX"] = "1"
-    # hermes: no special env needed
+    else:
+        for key in (
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "CODEX_SANDBOX",
+            "CODEX_DISABLE_SANDBOX",
+            "INITIAL_AGENT_MODE",
+        ):
+            env.pop(key, None)
     return env
 
 
@@ -217,6 +237,7 @@ class ACPProgressTracker:
     agent_message_id: str | None = None
     agent_buffer: str = ""
     last_emitted: str = ""
+    diagnostic_buffer: str = ""
 
     async def handle_session_update(self, params: dict[str, Any]) -> None:
         update = params.get("update")
@@ -226,6 +247,7 @@ class ACPProgressTracker:
             text = "".join(_extract_text_fragments(update.get("content")))
             if not text.strip():
                 return
+            self.diagnostic_buffer = (self.diagnostic_buffer + text)[-4000:]
             mid = update.get("messageId")
             if mid and mid != self.agent_message_id:
                 await self._flush()
@@ -570,6 +592,7 @@ class ACPNodeRunner:
             "validator" if task.type == "validate" else "worker"
         )
         role_config = self.config.for_role(role)
+        project_record = store.load_project(project_id)
         acp_command = role_config.worker_acp_command or role_config.resolved_worker_acp_command
         if not acp_command:
             raise RuntimeError(
@@ -579,6 +602,19 @@ class ACPNodeRunner:
             acp_command,
             role_config.worker_provider,
             role_config.worker_reasoning_effort,
+        )
+        agent_env = _acp_subprocess_env(
+            role_config.worker_provider,
+            reasoning_effort=(
+                project_record.worker_reasoning_effort
+                if role == "worker" and project_record.worker_reasoning_effort
+                else role_config.worker_reasoning_effort
+            ),
+            model=(
+                project_record.worker_model or os.environ.get("ZENITH_WORKER_MODEL")
+                if role == "worker"
+                else None
+            ),
         )
 
         workspace_dir = str(Path(cwd).expanduser().resolve() if cwd else store.workspace_dir(project_id))
@@ -638,7 +674,7 @@ class ACPNodeRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=workspace_dir,
-            env=_acp_subprocess_env(role_config.worker_provider),
+            env=agent_env,
             limit=SUBPROCESS_STREAM_LIMIT,
         )
         progress_tracker = ACPProgressTracker(callback=progress_callback)
@@ -726,6 +762,7 @@ class ACPNodeRunner:
             exit_code=worker_exit_code,
             stderr=worker_stderr,
             session_error=session_error,
+            agent_output=progress_tracker.diagnostic_buffer,
         )
 
     async def run_terminal_review(
@@ -749,6 +786,10 @@ class ACPNodeRunner:
             acp_command,
             role_config.worker_provider,
             role_config.worker_reasoning_effort,
+        )
+        agent_env = _acp_subprocess_env(
+            role_config.worker_provider,
+            reasoning_effort=role_config.worker_reasoning_effort,
         )
 
         workspace_dir = str(store.workspace_dir(project_id))
@@ -796,7 +837,7 @@ class ACPNodeRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=workspace_dir,
-            env=_acp_subprocess_env(role_config.worker_provider),
+            env=agent_env,
             limit=SUBPROCESS_STREAM_LIMIT,
         )
         tracker = ACPProgressTracker(callback=progress_callback)
@@ -1110,6 +1151,7 @@ class ACPNodeRunner:
         exit_code: int | None,
         stderr: str,
         session_error: str | None,
+        agent_output: str = "",
     ) -> NodeHandoff:
         parts: list[str] = ["Agent session ended without calling end_node."]
         if session_error:
@@ -1120,6 +1162,8 @@ class ACPNodeRunner:
             parts.append(f"exit_code={exit_code}")
         if stderr:
             parts.append(f"stderr={stderr}")
+        if agent_output:
+            parts.append(f"agent_output={_truncate_text(agent_output[-4000:], limit=2000)}")
         summary = " ".join(parts)
         handoff = self._synthesize_missing_handoff(task, summary=summary)
         atomic_write_json(handoff_path, handoff.model_dump(mode="json"))

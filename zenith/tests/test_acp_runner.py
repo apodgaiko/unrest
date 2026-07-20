@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -147,21 +148,88 @@ def test_synthesize_missing_handoff_records_failure(
     assert handoff_path.exists()
 
 
-def test_augment_acp_command_codex_appends_bypass_flags():
-    out = _augment_acp_command("codex-acp", PROVIDERS["codex"])
-    assert 'sandbox_mode="danger-full-access"' in out
-    assert 'approval_policy="never"' in out
-    assert 'model_reasoning_effort="xhigh"' in out
-    assert out.startswith("codex-acp ")
+def test_augment_acp_command_codex_untouched():
+    assert _augment_acp_command("codex-acp", PROVIDERS["codex"]) == "codex-acp"
 
 
-def test_augment_acp_command_codex_reasoning_effort_override():
-    out = _augment_acp_command("codex-acp", PROVIDERS["codex"], reasoning_effort="medium")
-    assert 'model_reasoning_effort="medium"' in out
-    assert "xhigh" not in out
-    # The bypass flags are effort-independent.
-    assert 'sandbox_mode="danger-full-access"' in out
-    assert 'approval_policy="never"' in out
+def test_codex_acp_env_uses_documented_config_and_effort(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("CODEX_CONFIG", '{"features":{"memories":true},"model":"kept"}')
+
+    env = _acp_subprocess_env(PROVIDERS["codex"], reasoning_effort="medium")
+
+    assert env["INITIAL_AGENT_MODE"] == "agent-full-access"
+    assert json.loads(env["CODEX_CONFIG"]) == {
+        "features": {"memories": True},
+        "model": "kept",
+        "model_reasoning_effort": "medium",
+        "sandbox_mode": "danger-full-access",
+        "approval_policy": "never",
+    }
+
+
+def test_codex_acp_env_defaults_to_historical_xhigh(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CODEX_CONFIG", raising=False)
+    config = json.loads(_acp_subprocess_env(PROVIDERS["codex"])["CODEX_CONFIG"])
+    assert config["model_reasoning_effort"] == "xhigh"
+
+
+def test_codex_acp_env_explicit_work_node_settings_win(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("CODEX_CONFIG", '{"model":"inherited"}')
+    config = json.loads(
+        _acp_subprocess_env(
+            PROVIDERS["codex"],
+            reasoning_effort="high",
+            model="project-model",
+        )["CODEX_CONFIG"]
+    )
+    assert config["model"] == "project-model"
+    assert config["model_reasoning_effort"] == "high"
+
+
+def test_codex_acp_env_malformed_inherited_config_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("CODEX_CONFIG", "not-json")
+    with pytest.raises(ValueError, match="CODEX_CONFIG must be a valid JSON object"):
+        _acp_subprocess_env(PROVIDERS["codex"])
+
+
+@pytest.mark.asyncio
+async def test_malformed_codex_config_fails_before_any_runtime_process_starts(
+    config: HarnessConfig,
+    project_setup,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    config = replace(
+        config,
+        worker_provider_name="codex",
+        worker_acp_command="codex-acp",
+    )
+    monkeypatch.setenv("CODEX_CONFIG", "not-json")
+    runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
+    started = False
+
+    async def forbidden_start(**kwargs):
+        nonlocal started
+        started = True
+        raise AssertionError("worker MCP server must not start")
+
+    monkeypatch.setattr(runner, "_start_worker_mcp_server", forbidden_start)
+    task = Task(id="w1", type="work", body="b", targets=["VAL-001"], skill="s")
+
+    with pytest.raises(ValueError, match="CODEX_CONFIG must be a valid JSON object"):
+        await runner.run_node(
+            "p1",
+            "mission-001",
+            task,
+            "2026-05-17T00-00-02Z",
+            project_setup,
+        )
+    assert started is False
 
 
 def test_augment_acp_command_claude_untouched():
@@ -170,6 +238,28 @@ def test_augment_acp_command_claude_untouched():
         _augment_acp_command("claude-agent-acp", PROVIDERS["claude"], reasoning_effort="low")
         == "claude-agent-acp"
     )
+
+
+def test_non_codex_env_removes_inherited_codex_controls(monkeypatch: pytest.MonkeyPatch):
+    for key in (
+        "CODEX_CONFIG",
+        "CODEX_PATH",
+        "CODEX_SANDBOX",
+        "CODEX_DISABLE_SANDBOX",
+        "INITIAL_AGENT_MODE",
+    ):
+        monkeypatch.setenv(key, "inherited")
+
+    env = _acp_subprocess_env(PROVIDERS["claude"])
+
+    for key in (
+        "CODEX_CONFIG",
+        "CODEX_PATH",
+        "CODEX_SANDBOX",
+        "CODEX_DISABLE_SANDBOX",
+        "INITIAL_AGENT_MODE",
+    ):
+        assert key not in env
 
 
 def test_codex_acp_env_preserves_node_path_when_bwrap_is_present(
@@ -188,6 +278,43 @@ def test_codex_acp_env_preserves_node_path_when_bwrap_is_present(
     assert str(bin_dir) in env["PATH"].split(os.pathsep)
     assert env["CODEX_SANDBOX"] == "danger-full-access"
     assert env["CODEX_DISABLE_SANDBOX"] == "1"
+
+
+def test_codex_acp_env_prefers_installed_codex_runtime(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    codex = tmp_path / "codex"
+    codex.write_text("#!/bin/sh\n", encoding="utf-8")
+    codex.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.delenv("CODEX_PATH", raising=False)
+
+    env = _acp_subprocess_env(PROVIDERS["codex"])
+
+    assert env["CODEX_PATH"] == str(codex)
+
+
+def test_missing_handoff_includes_bounded_agent_diagnostics(
+    config: HarnessConfig, project_setup
+):
+    store = project_setup
+    task = Task(id="w1", type="work", body="b", targets=["VAL-001"], skill="s")
+    runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
+    path = store.attempt_path("p1", "mission-001", "2026-05-17T00-00-01Z", "w1")
+
+    handoff = runner._synthesize_and_persist_missing_handoff(
+        handoff_path=path,
+        task=task,
+        stop_reason="end_turn",
+        exit_code=0,
+        stderr="",
+        session_error=None,
+        agent_output="secret-prefix " + ("diagnostic " * 500),
+    )
+
+    assert "agent_output=" in handoff.report
+    assert "secret-prefix" not in handoff.report
+    assert len(handoff.report) < 2200
 
 
 def test_attempt_path_naming(config: HarnessConfig, project_setup):

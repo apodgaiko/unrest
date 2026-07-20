@@ -88,6 +88,7 @@ class MissionSnapshot:
     contract_ids: list[str]
     recent_attempts: list[RecentAttempt]
     recent_evidence: list[RecentFile]
+    errors: list[str]
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,7 @@ class ProjectSnapshot:
     attention_items: list[AttentionSnapshot]
     mission: MissionSnapshot | None
     recent_decisions: list[RecentFile]
+    errors: list[str]
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,7 @@ class LiveSnapshot:
     selected_project_id: str | None
     project_count: int
     projects: list[ProjectSnapshot]
+    errors: list[str]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -139,9 +142,10 @@ def build_live_snapshot(
             projects_dir=Path(projects_dir).expanduser().resolve(),
         )
     store = ProjectStore(config)
+    records, discovery_errors = _discover_project_records(store)
     projects = [
         _build_project_snapshot(store, record, recent_limit=recent_limit)
-        for record in store.list_projects()
+        for record in records
     ]
     projects.sort(key=lambda item: (item.last_activity_mtime, item.created_at, item.id), reverse=True)
     selected = _select_project(projects, project)
@@ -151,6 +155,7 @@ def build_live_snapshot(
         selected_project_id=selected.id if selected else None,
         project_count=len(projects),
         projects=projects,
+        errors=discovery_errors,
     )
 
 
@@ -160,6 +165,9 @@ def render_live_snapshot(snapshot: LiveSnapshot) -> str:
         f"Zenith live snapshot: {snapshot.generated_at}",
         f"Projects dir: {snapshot.projects_dir}",
     ]
+    if snapshot.errors:
+        lines.append("Project discovery errors:")
+        lines.extend(f"  {error}" for error in snapshot.errors)
     if not snapshot.projects:
         lines.append("No Zenith projects found.")
         return "\n".join(lines)
@@ -187,6 +195,9 @@ def render_live_snapshot(snapshot: LiveSnapshot) -> str:
             f"last_activity={project.last_activity_at or '-'}"
         )
         lines.append(f"  workspace: {project.workspace}")
+        if project.errors:
+            lines.append("  read errors:")
+            lines.extend(f"    {error}" for error in project.errors)
         if project.attention_items:
             lines.append("  attention:")
             for item in project.attention_items:
@@ -211,7 +222,35 @@ def render_live_snapshot(snapshot: LiveSnapshot) -> str:
         recent = _recent_activity_labels(project)
         if recent:
             lines.append(f"  recent: {'; '.join(recent)}")
+        if mission.errors:
+            lines.append("  mission read errors:")
+            lines.extend(f"    {error}" for error in mission.errors)
     return "\n".join(lines)
+
+
+def _discover_project_records(
+    store: ProjectStore,
+) -> tuple[list[ProjectRecord], list[str]]:
+    """Discover records without hiding malformed project buckets."""
+    projects_dir = store.config.projects_dir
+    if not projects_dir.exists():
+        return [], []
+    records: list[ProjectRecord] = []
+    errors: list[str] = []
+    for entry in sorted(projects_dir.iterdir()):
+        project_json = entry / ".zenith-runtime" / "project.json"
+        if not project_json.exists():
+            continue
+        try:
+            records.append(
+                ProjectRecord.model_validate_json(
+                    project_json.read_text(encoding="utf-8")
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - observation must report all read failures
+            errors.append(f"{entry.name}: project record: {type(exc).__name__}: {exc}")
+    records.sort(key=lambda record: record.created_at, reverse=True)
+    return records, errors
 
 
 def _build_project_snapshot(
@@ -220,11 +259,19 @@ def _build_project_snapshot(
     *,
     recent_limit: int,
 ) -> ProjectSnapshot:
-    state = _safe_call(lambda: store.load_state(record.id))
+    errors: list[str] = []
+    state = _safe_call(
+        lambda: store.load_state(record.id), errors=errors, label="project state"
+    )
     state_name = _state_name(state)
     current_mission_id = record.current_mission_id or _mission_id_from_state(state)
     if current_mission_id is None:
-        missions = _safe_call(lambda: store.list_missions(record.id), default=[])
+        missions = _safe_call(
+            lambda: store.list_missions(record.id),
+            default=[],
+            errors=errors,
+            label="mission list",
+        )
         current_mission_id = missions[-1] if missions else None
 
     mission = None
@@ -237,7 +284,12 @@ def _build_project_snapshot(
             recent_limit=recent_limit,
         )
 
-    attention_items = _safe_call(lambda: store.load_attention(record.id), default=[])
+    attention_items = _safe_call(
+        lambda: store.load_attention(record.id),
+        default=[],
+        errors=errors,
+        label="attention",
+    )
     attention_snapshots = [_attention_snapshot(item) for item in attention_items]
     project_root = store.bucket_root(record.id)
     activity_mtime, activity_path = _latest_file(project_root)
@@ -259,6 +311,7 @@ def _build_project_snapshot(
             project_root=project_root,
             limit=recent_limit,
         ),
+        errors=errors,
     )
 
 
@@ -271,18 +324,29 @@ def _build_mission_snapshot(
     recent_limit: int,
 ) -> MissionSnapshot:
     project_root = store.bucket_root(project_id)
-    task_list = _safe_call(lambda: store.load_task_list(project_id, mission_id))
+    errors: list[str] = []
+    task_list = _safe_call(
+        lambda: store.load_task_list(project_id, mission_id),
+        errors=errors,
+        label="task list",
+    )
     task_state = _safe_call(
         lambda: store.load_task_state(project_id, mission_id),
         default=TaskStateFile(),
+        errors=errors,
+        label="task state",
     )
     contract_ids = _safe_call(
         lambda: store.list_contract_assertions(project_id, mission_id),
         default=[],
+        errors=errors,
+        label="contract inventory",
     )
     contract_state = _safe_call(
         lambda: store.load_contract_state(project_id, mission_id),
         default=ContractStateFile(),
+        errors=errors,
+        label="contract state",
     )
 
     tasks = _task_snapshots(task_list, task_state)
@@ -308,6 +372,7 @@ def _build_mission_snapshot(
             project_root=project_root,
             limit=recent_limit,
         ),
+        errors=errors,
     )
 
 
@@ -511,7 +576,7 @@ def _attempt_summary(
         passed=passed,
         request_attention=request_attention,
         report_path=display_report_path,
-        text=text,
+        text=text or "",
         truncated=truncated,
     )
 
@@ -559,10 +624,12 @@ def _latest_file(root: Path) -> tuple[float, Path | None]:
     return latest_mtime, latest_path
 
 
-def _safe_call(func, default=None):
+def _safe_call(func, default=None, *, errors: list[str] | None = None, label: str = "read"):
     try:
         return func()
-    except Exception:
+    except Exception as exc:
+        if errors is not None:
+            errors.append(f"{label}: {type(exc).__name__}: {_one_line(str(exc))}")
         return default
 
 

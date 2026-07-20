@@ -172,6 +172,8 @@ class ProjectStore:
         workspace_dir: str | Path,
         *,
         project_id: str | None = None,
+        worker_model: str | None = None,
+        worker_reasoning_effort: str | None = None,
     ) -> ProjectRecord:
         ws = Path(workspace_dir).expanduser().resolve()
         if not ws.exists():
@@ -228,6 +230,8 @@ class ProjectStore:
             id=pid,
             workspace_dir=str(ws),
             created_at=utc_now_iso(),
+            worker_model=worker_model,
+            worker_reasoning_effort=worker_reasoning_effort,
         )
         atomic_write_json(runtime / "project.json", record.model_dump(mode="json"))
         return record

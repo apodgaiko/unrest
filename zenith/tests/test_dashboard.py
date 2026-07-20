@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
@@ -144,8 +145,20 @@ def _touch_project(store: ProjectStore, project_id: str, mtime: float) -> None:
             os.utime(path, (mtime, mtime))
 
 
-def _file_mtimes(root: Path) -> dict[Path, int]:
-    return {path: path.stat().st_mtime_ns for path in root.rglob("*") if path.is_file()}
+def _tree_manifest(root: Path) -> dict[str, tuple[str, int, int, int, str | None]]:
+    manifest = {}
+    for path in [root, *sorted(root.rglob("*"))]:
+        stat = path.lstat()
+        kind = "symlink" if path.is_symlink() else "dir" if path.is_dir() else "file"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest() if kind == "file" else None
+        manifest[str(path.relative_to(root))] = (
+            kind,
+            stat.st_mode,
+            stat.st_size,
+            stat.st_mtime_ns,
+            digest,
+        )
+    return manifest
 
 
 def test_fleet_prioritizes_urgent_running_pinned_and_latest_remaining(
@@ -387,7 +400,7 @@ async def test_textual_app_constructs_and_interactions_do_not_mutate_project_fil
     )
     _touch_project(store, "first", 100)
     _touch_project(store, "second", 200)
-    before = _file_mtimes(config.projects_dir)
+    before = _tree_manifest(config.projects_dir)
 
     def snapshot():
         return build_live_snapshot(config=config)
@@ -416,7 +429,7 @@ async def test_textual_app_constructs_and_interactions_do_not_mutate_project_fil
         assert app.attention_expanded is True
         await pilot.press("q")
 
-    assert _file_mtimes(config.projects_dir) == before
+    assert _tree_manifest(config.projects_dir) == before
 
 
 def test_live_dashboard_cli_invokes_textual_app(
@@ -451,6 +464,24 @@ def test_live_dashboard_cli_invokes_textual_app(
 
     assert result.exit_code == 0, result.output
     assert ran == {"project_count": 1}
+
+
+@pytest.mark.parametrize("conflict", ["--once", "--json"])
+def test_live_dashboard_rejects_noninteractive_mode_conflicts(
+    config: HarnessConfig, conflict: str
+) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "live",
+            "--dashboard",
+            conflict,
+            "--projects-dir",
+            str(config.projects_dir),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "cannot be combined" in result.output
 
 
 def test_live_watch_mode_still_renders_until_keyboard_interrupt(

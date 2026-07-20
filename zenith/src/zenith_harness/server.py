@@ -132,11 +132,30 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         workspace_dir: Annotated[
             str, Field(description="Absolute path to the user's workspace.")
         ],
+        worker_model: Annotated[
+            str | None,
+            Field(description="Optional Codex model override for work nodes in this project."),
+        ] = None,
+        worker_reasoning_effort: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Optional Codex reasoning-effort override for work nodes in this "
+                    "project; validators and terminal review keep their configured roles."
+                )
+            ),
+        ] = None,
     ) -> dict[str, Any]:
         # No per-project lock: project_id does not exist until the call returns.
         try:
             return _to_payload(
-                await asyncio.to_thread(controller.start_project, brief, workspace_dir)
+                await asyncio.to_thread(
+                    controller.start_project,
+                    brief,
+                    workspace_dir,
+                    worker_model,
+                    worker_reasoning_effort,
+                )
             )
         except ToolError as exc:
             return _to_payload(exc)

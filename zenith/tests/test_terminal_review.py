@@ -118,6 +118,46 @@ class TestCleanReview:
         assert "status: done" in closeout.read_text()
 
 
+class TestTerminalReviewerFailure:
+    def test_runtime_failure_is_recoverable_attention(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        class FailingReviewer:
+            def review(
+                self, project_id: str, mission_id: str, spawn_ts: str
+            ) -> TerminalReviewHandoff:
+                raise RuntimeError("reviewer exited without a handoff")
+
+        controller = ProjectController(config, MockDispatcher(_responder), FailingReviewer())
+        pid = _start_and_seed_contract(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+        controller.advance_project(pid)
+        items = controller.store.load_attention(pid)
+        controller.decide_attention(
+            pid, [Decision(item_id=items[0].id, action="continue")]
+        )
+        controller.advance_project(pid)
+
+        env = controller.end_mission(pid)
+        assert env.state.state == "attention_needed"
+        items = controller.store.load_attention(pid)
+        assert len(items) == 1
+        assert items[0].kind == "terminal_review"
+        assert "reviewer exited without a handoff" in items[0].report
+        reviews = list(controller.store.terminal_reviews_dir(pid, "mission-001").iterdir())
+        assert len(reviews) == 1
+        assert "runtime failure" in reviews[0].read_text(encoding="utf-8")
+
+        controller.decide_attention(
+            pid, [Decision(item_id=items[0].id, action="continue")]
+        )
+        controller.terminal_reviewer = MockTerminalReviewer(
+            TerminalReviewHandoff(done=True, report="retry clean")
+        )
+        env = controller.end_mission(pid)
+        assert env.state.state == "done"
+
+
 class TestGapsTransition:
     def test_terminal_review_report_then_next_mission_seals(
         self, config: HarnessConfig, workspace: Path

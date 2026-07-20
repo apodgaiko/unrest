@@ -9,6 +9,7 @@ from zenith_harness.config import HarnessConfig
 from zenith_harness.models import (
     AttentionItemInternal,
     Decision,
+    ProjectRecord,
     Task,
     TaskList,
     TaskStateFile,
@@ -63,6 +64,30 @@ class TestProjectLifecycle:
         assert (runtime / "missions").is_dir()
         # Workspace stays clean of .zenith/
         assert not (workspace / ".zenith").exists()
+
+    def test_project_worker_overrides_round_trip_and_legacy_defaults(
+        self, store: ProjectStore, workspace: Path
+    ) -> None:
+        record = store.create_project(
+            "Build a thing.",
+            workspace,
+            project_id="p1",
+            worker_model="gpt-test",
+            worker_reasoning_effort="high",
+        )
+        assert record.worker_model == "gpt-test"
+        assert record.worker_reasoning_effort == "high"
+        assert store.load_project("p1") == record
+
+        legacy = ProjectRecord.model_validate(
+            {
+                "id": "legacy",
+                "workspace_dir": str(workspace),
+                "created_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        assert legacy.worker_model is None
+        assert legacy.worker_reasoning_effort is None
 
     def test_workspace_gitignore_untouched(
         self, store: ProjectStore, workspace: Path

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 
@@ -9,7 +10,11 @@ from click.testing import CliRunner
 
 from zenith_harness.cli import cli
 from zenith_harness.config import HarnessConfig
-from zenith_harness.live import ProjectSelectionError, build_live_snapshot
+from zenith_harness.live import (
+    ProjectSelectionError,
+    build_live_snapshot,
+    render_live_snapshot,
+)
 from zenith_harness.models import (
     AttentionItemInternal,
     ContractStateEntry,
@@ -140,8 +145,20 @@ def _touch_project(store: ProjectStore, project_id: str, mtime: float) -> None:
             os.utime(path, (mtime, mtime))
 
 
-def _file_mtimes(root: Path) -> dict[Path, int]:
-    return {path: path.stat().st_mtime_ns for path in root.rglob("*") if path.is_file()}
+def _tree_manifest(root: Path) -> dict[str, tuple[str, int, int, int, str | None]]:
+    manifest = {}
+    for path in [root, *sorted(root.rglob("*"))]:
+        stat = path.lstat()
+        kind = "symlink" if path.is_symlink() else "dir" if path.is_dir() else "file"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest() if kind == "file" else None
+        manifest[str(path.relative_to(root))] = (
+            kind,
+            stat.st_mode,
+            stat.st_size,
+            stat.st_mtime_ns,
+            digest,
+        )
+    return manifest
 
 
 def test_snapshot_discovers_multiple_projects_and_selects_newest_active(
@@ -261,7 +278,6 @@ def test_cli_json_is_parseable_and_supports_project_path_pin(
         cli,
         [
             "live",
-            "--once",
             "--json",
             "--projects-dir",
             str(config.projects_dir),
@@ -277,6 +293,42 @@ def test_cli_json_is_parseable_and_supports_project_path_pin(
     assert parsed["project_count"] == 2
     assert {project["id"] for project in parsed["projects"]} == {"pinned", "newer"}
     assert parsed["projects"][0]["mission"]["task_state_counts"]["running"] >= 1
+
+
+def test_cli_json_without_once_is_pure_json(
+    store: ProjectStore,
+    config: HarnessConfig,
+    workspace: Path,
+) -> None:
+    _seed_project(
+        store,
+        workspace,
+        project_id="json-only",
+        state=MissionRunning(mission_id="mission-001"),
+    )
+    result = CliRunner().invoke(
+        cli, ["live", "--json", "--projects-dir", str(config.projects_dir)]
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["selected_project_id"] == "json-only"
+
+
+def test_cli_missing_project_pin_is_nonzero_with_diagnostic(
+    config: HarnessConfig,
+) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "live",
+            "--once",
+            "--projects-dir",
+            str(config.projects_dir),
+            "--project",
+            "missing-project",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "project not found" in result.output
 
 
 def test_cli_shows_attention_details_in_json_and_human_output(
@@ -296,7 +348,6 @@ def test_cli_shows_attention_details_in_json_and_human_output(
         cli,
         [
             "live",
-            "--once",
             "--json",
             "--projects-dir",
             str(config.projects_dir),
@@ -356,18 +407,74 @@ def test_live_cli_does_not_mutate_project_files(
         project_id="readonly",
         state=MissionRunning(mission_id="mission-001"),
     )
-    before = _file_mtimes(config.projects_dir)
+    before = _tree_manifest(config.projects_dir)
 
     human = CliRunner().invoke(
         cli, ["live", "--once", "--projects-dir", str(config.projects_dir)]
     )
     json_result = CliRunner().invoke(
-        cli, ["live", "--once", "--json", "--projects-dir", str(config.projects_dir)]
+        cli, ["live", "--json", "--projects-dir", str(config.projects_dir)]
     )
 
     assert human.exit_code == 0, human.output
     assert json_result.exit_code == 0, json_result.output
-    assert _file_mtimes(config.projects_dir) == before
+    assert _tree_manifest(config.projects_dir) == before
+
+
+def test_live_cli_rejects_once_json_combination(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["live", "--once", "--json", "--projects-dir", str(tmp_path)],
+    )
+
+    assert result.exit_code == 2
+    assert "--once cannot be combined with --json" in result.output
+
+
+def test_corrupt_project_state_is_reported_not_silently_empty(
+    store: ProjectStore,
+    config: HarnessConfig,
+    workspace: Path,
+) -> None:
+    _seed_project(
+        store,
+        workspace,
+        project_id="corrupt",
+        state=MissionRunning(mission_id="mission-001"),
+    )
+    state_path = store.zenith_runtime_dir("corrupt") / "state.json"
+    state_path.write_text("not-json", encoding="utf-8")
+
+    snapshot = build_live_snapshot(config=config, project="corrupt")
+
+    project = snapshot.projects[0]
+    assert project.errors
+    assert "project state" in project.errors[0]
+    assert "JSON" in project.errors[0]
+
+
+def test_corrupt_project_record_is_reported_not_silently_omitted(
+    store: ProjectStore,
+    config: HarnessConfig,
+    workspace: Path,
+) -> None:
+    _seed_project(
+        store,
+        workspace,
+        project_id="corrupt-record",
+        state=MissionRunning(mission_id="mission-001"),
+    )
+    project_path = store.zenith_runtime_dir("corrupt-record") / "project.json"
+    project_path.write_text("not-json", encoding="utf-8")
+
+    snapshot = build_live_snapshot(config=config)
+
+    assert snapshot.project_count == 0
+    assert len(snapshot.errors) == 1
+    assert "corrupt-record: project record" in snapshot.errors[0]
+    rendered = render_live_snapshot(snapshot)
+    assert "Project discovery errors:" in rendered
+    assert "corrupt-record: project record" in rendered
 
 
 def test_workspace_path_pin_is_ambiguous_for_same_workspace_projects(

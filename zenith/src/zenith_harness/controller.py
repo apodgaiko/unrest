@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .config import HarnessConfig
+from .config import VALID_REASONING_EFFORTS, HarnessConfig
 from .coordinator import MissionCoordinator
 from .dispatcher import NodeDispatcher, TerminalReviewer
 from .envelope import EnvelopeDagMode, make_envelope
@@ -71,10 +71,38 @@ class ProjectController:
     # Tool methods
     # ------------------------------------------------------------------
 
-    def start_project(self, brief: str, workspace_dir: str) -> Envelope:
+    def start_project(
+        self,
+        brief: str,
+        workspace_dir: str,
+        worker_model: str | None = None,
+        worker_reasoning_effort: str | None = None,
+    ) -> Envelope:
         if not brief.strip():
             raise ToolError("invalid_brief", "brief is empty")
-        record = self.store.create_project(brief, workspace_dir)
+        if worker_model is not None and not worker_model.strip():
+            raise ToolError("invalid_worker_model", "worker_model is empty")
+        worker_provider = self.config.for_role("worker").worker_provider.name
+        if (worker_model is not None or worker_reasoning_effort is not None) and worker_provider != "codex":
+            raise ToolError(
+                "invalid_worker_override_provider",
+                "worker model and project effort overrides require a Codex worker",
+            )
+        if (
+            worker_reasoning_effort is not None
+            and worker_reasoning_effort not in VALID_REASONING_EFFORTS
+        ):
+            raise ToolError(
+                "invalid_worker_reasoning_effort",
+                "worker_reasoning_effort must be one of: "
+                + ", ".join(VALID_REASONING_EFFORTS),
+            )
+        record = self.store.create_project(
+            brief,
+            workspace_dir,
+            worker_model=worker_model,
+            worker_reasoning_effort=worker_reasoning_effort,
+        )
         mission_id = self.store.generate_mission_id(1)
         record.current_mission_id = mission_id
         self.store.save_project(record)
