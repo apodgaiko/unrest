@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Do not report security vulnerabilities through public GitHub issues. Use
-[GitHub private vulnerability reporting](https://github.com/OpenAIBot1/unrest/security/advisories/new)
+[GitHub private vulnerability reporting](https://github.com/apodgaiko/unrest/security/advisories/new)
 so the report can be investigated before disclosure.
 
 ## Scope

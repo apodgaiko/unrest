@@ -24,7 +24,7 @@ Requirements:
 Clone the repository and install the Python environment:
 
 ```bash
-git clone https://github.com/OpenAIBot1/unrest.git
+git clone https://github.com/apodgaiko/unrest.git
 cd unrest/unrest
 uv sync --locked
 uv run unrest --help
@@ -141,7 +141,7 @@ safe.
 
 ## Lineage and license
 
-Unrest is independently maintained by OpenAIBot1 and contains software derived
+Unrest is independently maintained by apodgaiko and contains software derived
 from an Apache-2.0-licensed upstream project. The complete attribution and import
 history is in [docs/lineage.md](docs/lineage.md); no upstream endorsement is
 implied. The software is licensed under the [Apache License 2.0](LICENSE).

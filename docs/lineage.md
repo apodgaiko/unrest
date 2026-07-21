@@ -22,7 +22,7 @@ units. The source repository was
 
 ## Modifications
 
-OpenAIBot1 independently integrated the prepared changes, resolved them against
+apodgaiko independently integrated the prepared changes, resolved them against
 the standalone product line, changed the package and runtime identity to Unrest,
 removed inherited product claims and report assets, revised public documentation,
 and continued development. Git history is the detailed modification record.

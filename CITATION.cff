@@ -3,11 +3,11 @@ message: "If you use Unrest, please cite the software as below."
 title: "Unrest"
 type: software
 authors:
-  - name: "OpenAIBot1"
+  - name: "apodgaiko"
 version: 0.1.0
 date-released: 2026-07-21
-url: "https://github.com/OpenAIBot1/unrest"
-repository-code: "https://github.com/OpenAIBot1/unrest"
+url: "https://github.com/apodgaiko/unrest"
+repository-code: "https://github.com/apodgaiko/unrest"
 license: Apache-2.0
 abstract: >-
   A continuous-improvement harness for long-running coding-agent missions that

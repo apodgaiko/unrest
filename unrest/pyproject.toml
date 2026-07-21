@@ -5,7 +5,7 @@ description = "Turn any coding agent into a mission orchestration system via MCP
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
-authors = [{ name = "OpenAIBot1" }]
+authors = [{ name = "apodgaiko" }]
 keywords = [
     "ai-agents",
     "agent-harness",
@@ -36,9 +36,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/OpenAIBot1/unrest"
-Repository = "https://github.com/OpenAIBot1/unrest"
-Issues = "https://github.com/OpenAIBot1/unrest/issues"
+Homepage = "https://github.com/apodgaiko/unrest"
+Repository = "https://github.com/apodgaiko/unrest"
+Issues = "https://github.com/apodgaiko/unrest/issues"
 
 [build-system]
 requires = ["setuptools>=77"]
