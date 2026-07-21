@@ -727,8 +727,8 @@ class MissionCoordinator:
 
     def _enter_terminal_review(self, mid: str) -> StepResult:
         config = self.store.load_terminal_review_config(self.project_id, mid)
-        # Revalidate persisted roots immediately before dispatch. This canonical
-        # policy preflight is best-effort; reviewer access is not OS-sandboxed.
+        # Revalidate persisted roots immediately before dispatch. This is
+        # preflight plus prompt policy for a trusted reviewer, not OS sandboxing.
         resolved_roots = self.store.resolve_terminal_review_roots(
             self.project_id, mid, config.deliverable_roots
         )

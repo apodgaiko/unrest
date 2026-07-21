@@ -13,6 +13,7 @@ from .providers import (
 )
 
 DEFAULT_MAX_PARALLEL_NODES = 4
+DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS = 900
 
 # codex-acp `model_reasoning_effort` values. Also a safety allowlist: the
 # resolved value is spliced into a shell command line by acp_runner. Codex's
@@ -41,6 +42,18 @@ def _resolve_max_parallel(value: str | None) -> int:
     except ValueError:
         return DEFAULT_MAX_PARALLEL_NODES
     return max(1, parsed)
+
+
+def _resolve_positive_seconds(value: str | None, *, env_var: str, default: int) -> int:
+    if not value:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise ValueError(f"{env_var} must be a positive integer") from exc
+    if parsed <= 0:
+        raise ValueError(f"{env_var} must be a positive integer")
+    return parsed
 
 
 def _resolve_reasoning_effort(value: str | None, *, env_var: str) -> str | None:
@@ -72,6 +85,7 @@ class HarnessConfig:
     terminal_reviewer_provider_name: str | None
     terminal_reviewer_acp_command: str | None
     max_parallel_nodes: int = DEFAULT_MAX_PARALLEL_NODES
+    terminal_review_timeout_seconds: int = DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS
     # Per-role reasoning effort for providers whose ACP command accepts one
     # (codex today). None means the provider default ("xhigh" for codex).
     worker_reasoning_effort: str | None = None
@@ -117,6 +131,11 @@ class HarnessConfig:
             terminal_reviewer_acp_command=terminal_reviewer_acp_command,
             max_parallel_nodes=_resolve_max_parallel(
                 os.environ.get("UNREST_MAX_PARALLEL_NODES")
+            ),
+            terminal_review_timeout_seconds=_resolve_positive_seconds(
+                os.environ.get("UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS"),
+                env_var="UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS",
+                default=DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS,
             ),
             worker_reasoning_effort=_resolve_reasoning_effort(
                 os.environ.get("UNREST_WORKER_REASONING_EFFORT"),

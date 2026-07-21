@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from unrest_harness.config import HarnessConfig
+from unrest_harness.config import (
+    DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS,
+    HarnessConfig,
+)
 
 _EFFORT_ENV_VARS = (
     "UNREST_WORKER_REASONING_EFFORT",
@@ -30,6 +33,25 @@ def test_discover_defaults_to_four_parallel_nodes(
     config = HarnessConfig.discover()
 
     assert config.max_parallel_nodes == 4
+    assert config.terminal_review_timeout_seconds == DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS
+
+
+def test_discover_terminal_review_timeout(monkeypatch, harness_home: Path) -> None:
+    monkeypatch.setenv("UNREST_HOME", str(harness_home))
+    monkeypatch.setenv("UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS", "37")
+
+    assert HarnessConfig.discover().terminal_review_timeout_seconds == 37
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "eventually"])
+def test_discover_rejects_non_positive_terminal_review_timeout(
+    monkeypatch, harness_home: Path, value: str
+) -> None:
+    monkeypatch.setenv("UNREST_HOME", str(harness_home))
+    monkeypatch.setenv("UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS", value)
+
+    with pytest.raises(ValueError, match="UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS"):
+        HarnessConfig.discover()
 
 
 def test_discover_explicit_one_uses_serial_parallelism(

@@ -588,9 +588,7 @@ class ACPNodeRunner:
         progress_callback: ProgressCallback | None = None,
     ) -> NodeHandoff:
         """Spawn the worker MCP server + ACP agent; poll the attempt file; return the handoff."""
-        role: Literal["validator", "worker"] = (
-            "validator" if task.type == "validate" else "worker"
-        )
+        role: Literal["validator", "worker"] = "validator" if task.type == "validate" else "worker"
         role_config = self.config.for_role(role)
         project_record = store.load_project(project_id)
         acp_command = role_config.worker_acp_command or role_config.resolved_worker_acp_command
@@ -617,7 +615,9 @@ class ACPNodeRunner:
             ),
         )
 
-        workspace_dir = str(Path(cwd).expanduser().resolve() if cwd else store.workspace_dir(project_id))
+        workspace_dir = str(
+            Path(cwd).expanduser().resolve() if cwd else store.workspace_dir(project_id)
+        )
         project_bucket = str(store.unrest_dir(project_id))
         handoff_path = store.attempt_path(project_id, mission_id, spawn_ts, task.id)
         handoff_path.parent.mkdir(parents=True, exist_ok=True)
@@ -774,13 +774,46 @@ class ACPNodeRunner:
         *,
         progress_callback: ProgressCallback | None = None,
     ) -> TerminalReviewHandoff:
-        """Adversarial fresh-context terminal review."""
+        """Run and bound the complete fresh-context terminal-review lifecycle."""
+        timeout = self.config.terminal_review_timeout_seconds
+        try:
+            return await asyncio.wait_for(
+                self._run_terminal_review_lifecycle(
+                    project_id,
+                    mission_id,
+                    spawn_ts,
+                    store,
+                    progress_callback=progress_callback,
+                ),
+                timeout=timeout,
+            )
+        except TimeoutError:
+            return TerminalReviewHandoff(
+                done=False,
+                report=(
+                    "Terminal review timed out after "
+                    f"{timeout} seconds. The ACP reviewer and its MCP server were "
+                    "stopped; mission artifacts were preserved and closure was not sealed. "
+                    "Resolve the reviewer failure or increase "
+                    "UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS, then retry closure."
+                ),
+            )
+
+    async def _run_terminal_review_lifecycle(
+        self,
+        project_id: str,
+        mission_id: str,
+        spawn_ts: str,
+        store: ProjectStore,
+        *,
+        progress_callback: ProgressCallback | None = None,
+    ) -> TerminalReviewHandoff:
+        """Adversarial review body; cancellation always tears down both children."""
         role_config = self.config.for_role("terminal_reviewer")
         acp_command = role_config.worker_acp_command
         if not acp_command:
             raise RuntimeError(
-                "No ACP command for terminal reviewer. "
-                "Set UNREST_TERMINAL_REVIEWER_ACP_COMMAND."
+                "No ACP command for terminal reviewer. Set UNREST_TERMINAL_REVIEWER_ACP_COMMAND."
             )
         acp_command = _augment_acp_command(
             acp_command,
@@ -808,53 +841,49 @@ class ACPNodeRunner:
             workspace_dir=workspace_dir,
             mcp_port=mcp_port,
         )
-        try:
-            await self._wait_for_server_ready("127.0.0.1", mcp_port)
-        except TimeoutError:
-            if mcp_process.returncode is None:
-                mcp_process.terminate()
-            await _close_subprocess(mcp_process, timeout=5)
-            raise RuntimeError(
-                "Terminal reviewer MCP server failed to start; cannot run terminal review"
-            )
-
-        worker_mcp_cfg = {
-            "type": "http",
-            "name": "unrest-terminal-reviewer",
-            "url": f"http://127.0.0.1:{mcp_port}/mcp",
-            "headers": [],
-            "env": [],
-        }
-
-        review_config = store.load_terminal_review_config(project_id, mission_id)
-        first_message = self._render_terminal_reviewer_prompts(
-            project_bucket=project_bucket,
-            workspace_dir=workspace_dir,
-            deliverable_roots=review_config.deliverable_roots,
-        )
-
-        process = await asyncio.create_subprocess_shell(
-            acp_command,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=workspace_dir,
-            env=agent_env,
-            limit=SUBPROCESS_STREAM_LIMIT,
-        )
+        process: asyncio.subprocess.Process | None = None
+        client: ACPClient | None = None
+        stderr_task: asyncio.Task[str] | None = None
         tracker = ACPProgressTracker(callback=progress_callback)
-        client = ACPClient(
-            process, workspace_dir, session_update_handler=tracker.handle_session_update
-        )
-        await client.start()
-        # Drain the reviewer subprocess's stderr continuously. Without this the
-        # OS stderr pipe (~64 KB) fills on a chatty reviewer (it reads the whole
-        # workspace and emits many tool calls), the child blocks on its stderr
-        # write, the ACP/stdout channel stalls, and the reviewer can never call
-        # submit_terminal_review -> spurious "terminal reviewer crashed". run_node
-        # already does this for workers; run_terminal_review omitted it.
-        stderr_task = asyncio.create_task(_drain_stream_chunks(process.stderr))
         try:
+            try:
+                await self._wait_for_server_ready("127.0.0.1", mcp_port)
+            except TimeoutError as exc:
+                raise RuntimeError(
+                    "Terminal reviewer MCP server failed to start; cannot run terminal review"
+                ) from exc
+
+            worker_mcp_cfg = {
+                "type": "http",
+                "name": "unrest-terminal-reviewer",
+                "url": f"http://127.0.0.1:{mcp_port}/mcp",
+                "headers": [],
+                "env": [],
+            }
+            review_config = store.load_terminal_review_config(project_id, mission_id)
+            first_message = self._render_terminal_reviewer_prompts(
+                project_bucket=project_bucket,
+                workspace_dir=workspace_dir,
+                deliverable_roots=review_config.deliverable_roots,
+            )
+            process = await asyncio.create_subprocess_shell(
+                acp_command,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=workspace_dir,
+                env=agent_env,
+                limit=SUBPROCESS_STREAM_LIMIT,
+            )
+            client = ACPClient(
+                process,
+                workspace_dir,
+                session_update_handler=tracker.handle_session_update,
+            )
+            await client.start()
+            # Continuous draining prevents a chatty reviewer from filling the
+            # stderr pipe and stalling its ACP/stdout channel.
+            stderr_task = asyncio.create_task(_drain_stream_chunks(process.stderr))
             await client.send_request(
                 "initialize",
                 {
@@ -884,18 +913,26 @@ class ACPNodeRunner:
             await self._poll_attempt_file(report_path, timeout=2.0)
         finally:
             try:
-                stderr_task.cancel()
-            except Exception:  # noqa: BLE001
-                pass
-            await tracker.flush()
-            if process.returncode is None:
+                await tracker.flush()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Terminal-review progress callback failed: %s", exc)
+            if process is not None and process.returncode is None:
                 try:
                     process.terminate()
                 except OSError:
                     pass
-            await _wait_for_process_exit(process, timeout=5)
-            await client.cleanup(close_main_process=False)
-            await _close_subprocess(process, timeout=0)
+            if process is not None:
+                await _wait_for_process_exit(process, timeout=5)
+            if stderr_task is not None:
+                stderr_task.cancel()
+                try:
+                    await stderr_task
+                except asyncio.CancelledError:
+                    pass
+            if client is not None:
+                await client.cleanup(close_main_process=False)
+            if process is not None:
+                await _close_subprocess(process, timeout=0)
             if mcp_process.returncode is None:
                 try:
                     mcp_process.terminate()
@@ -1010,16 +1047,12 @@ class ACPNodeRunner:
                 return False
             await asyncio.sleep(0.1)
 
-    async def _maybe_set_mode(
-        self, client: ACPClient, session_id: str, provider
-    ) -> None:
+    async def _maybe_set_mode(self, client: ACPClient, session_id: str, provider) -> None:
         mode = getattr(provider, "acp_runtime_mode", None)
         if not mode:
             return
         try:
-            await client.send_request(
-                "session/set_mode", {"sessionId": session_id, "modeId": mode}
-            )
+            await client.send_request("session/set_mode", {"sessionId": session_id, "modeId": mode})
         except ACPError as exc:
             raise ACPError(
                 f"Failed to set ACP runtime mode {mode!r} for {provider.name}: {exc}"
@@ -1135,9 +1168,7 @@ class ACPNodeRunner:
             return ValidateHandoff.model_validate(data)
         return WorkHandoff.model_validate(data)
 
-    def _synthesize_missing_handoff(
-        self, task: Task, *, summary: str = ""
-    ) -> NodeHandoff:
+    def _synthesize_missing_handoff(self, task: Task, *, summary: str = "") -> NodeHandoff:
         report = summary or "Agent session ended without calling end_node."
         if task.type == "validate":
             return ValidateHandoff(
@@ -1264,17 +1295,20 @@ class ACPTerminalReviewer:
         self.loader = AssetLoader(config)
         self.runner = ACPNodeRunner(config=config, loader=self.loader)
 
-    def review(
-        self, project_id: str, mission_id: str, spawn_ts: str
-    ) -> TerminalReviewHandoff:
+    def review(self, project_id: str, mission_id: str, spawn_ts: str) -> TerminalReviewHandoff:
         return _run_coro_blocking(
             self.runner.run_terminal_review(
                 project_id=project_id,
                 mission_id=mission_id,
                 spawn_ts=spawn_ts,
                 store=self.store,
+                progress_callback=self._report_progress,
             )
         )
+
+    @staticmethod
+    def _report_progress(message: str) -> None:
+        print(f"[unrest terminal-review] {message}", file=sys.stderr, flush=True)
 
 
 # ---------------------------------------------------------------------------

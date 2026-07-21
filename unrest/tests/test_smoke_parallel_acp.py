@@ -10,7 +10,6 @@ captured in the synthesized handoff) when ACP adapters launch concurrently.
 
 Run:
 
-    PATH="/home/pvduy/.npm/_npx/d820eb7d96bc2600/node_modules/.bin:$PATH" \
     UNREST_SMOKE_REAL_ACP=claude \
     uv run pytest tests/test_smoke_parallel_acp.py -s
 

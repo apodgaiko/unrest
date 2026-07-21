@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from unrest_harness.acp_runner import ACPNodeRunner
+from unrest_harness.acp_runner import ACPTerminalReviewer, ACPNodeRunner
 from unrest_harness.assets import AssetLoader
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController, ToolError
@@ -220,6 +220,42 @@ class TestCleanReview:
 
 
 class TestTerminalReviewerFailure:
+    def test_production_timeout_handoff_is_persisted_and_does_not_seal(
+        self,
+        config: HarnessConfig,
+        workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        reviewer = ACPTerminalReviewer(config)
+
+        async def timed_out(*args, **kwargs) -> TerminalReviewHandoff:
+            return TerminalReviewHandoff(
+                done=False,
+                report=(
+                    "Terminal review timed out after 900 seconds. The ACP reviewer "
+                    "and its MCP server were stopped; closure was not sealed."
+                ),
+            )
+
+        monkeypatch.setattr(reviewer.runner, "run_terminal_review", timed_out)
+        controller = ProjectController(config, MockDispatcher(_responder), reviewer)
+        pid = _start_and_seed_contract(controller, workspace)
+        _advance_to_closure(controller, pid)
+
+        env = controller.end_mission(pid)
+
+        assert env.state.state == "attention_needed"
+        assert not (
+            controller.store.mission_dir(pid, "mission-001") / "closeout.md"
+        ).exists()
+        reviews = list(
+            controller.store.terminal_reviews_dir(pid, "mission-001").glob("*.md")
+        )
+        assert len(reviews) == 1
+        persisted = reviews[0].read_text(encoding="utf-8")
+        assert "done: false" in persisted
+        assert "timed out after 900 seconds" in persisted
+
     def test_runtime_failure_is_recoverable_attention(
         self, config: HarnessConfig, workspace: Path
     ) -> None:

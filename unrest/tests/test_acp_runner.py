@@ -5,6 +5,7 @@ We don't run a real `claude-agent-acp` here; we use the bundled
 mechanic. The worker MCP server subprocess is bypassed: the mock agent
 writes directly to UNREST_HANDOFF_PATH itself.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from unrest_harness.acp_runner import (
+    ACPTerminalReviewer,
     ACPNodeRunner,
     _acp_subprocess_env,
     _augment_acp_command,
@@ -25,7 +27,7 @@ from unrest_harness.acp_runner import (
 from unrest_harness.providers import PROVIDERS
 from unrest_harness.assets import AssetLoader
 from unrest_harness.config import HarnessConfig
-from unrest_harness.models import Task, WorkHandoff
+from unrest_harness.models import Task, TerminalReviewHandoff, WorkHandoff
 from unrest_harness.storage import ProjectStore
 
 
@@ -71,9 +73,7 @@ def project_setup(config: HarnessConfig, workspace: Path):
     not shutil.which("python3") and not Path(sys.executable).exists(),
     reason="Python interpreter unavailable",
 )
-def test_run_node_with_mock_agent(
-    config: HarnessConfig, project_setup, workspace: Path
-):
+def test_run_node_with_mock_agent(config: HarnessConfig, project_setup, workspace: Path):
     """End-to-end via the mock agent (NO real worker MCP server subprocess —
     we point at a free port that nothing binds to and rely on the mock to
     write the handoff file itself).
@@ -93,7 +93,8 @@ def test_run_node_with_mock_agent(
 
         async def _no_op_server(*args, **kwargs):
             return await asyncio.create_subprocess_exec(
-                "sleep", "30",
+                "sleep",
+                "30",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -294,9 +295,7 @@ def test_codex_acp_env_prefers_installed_codex_runtime(
     assert env["CODEX_PATH"] == str(codex)
 
 
-def test_missing_handoff_includes_bounded_agent_diagnostics(
-    config: HarnessConfig, project_setup
-):
+def test_missing_handoff_includes_bounded_agent_diagnostics(config: HarnessConfig, project_setup):
     store = project_setup
     task = Task(id="w1", type="work", body="b", targets=["VAL-001"], skill="s")
     runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
@@ -333,3 +332,124 @@ def test_terminal_review_path_naming(config: HarnessConfig, project_setup):
     assert "terminal-reviews" in p.parts
     # JSON handoff lives in the runtime cursor tree, not the durable .unrest record.
     assert ".unrest-runtime" in p.parts
+
+
+@pytest.mark.asyncio
+async def test_terminal_review_timeout_cleans_acp_and_mcp_children(
+    config: HarnessConfig,
+    project_setup,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import unrest_harness.acp_runner as acp_runner_module
+
+    config = replace(
+        config,
+        terminal_reviewer_acp_command="fake-acp",
+        terminal_review_timeout_seconds=1,
+    )
+    runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.returncode = None
+            self.stdin = None
+            self.stderr = asyncio.StreamReader()
+            self.terminated = False
+            self._exited = asyncio.Event()
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self.returncode = -15
+            self._exited.set()
+
+        def kill(self) -> None:
+            self.terminate()
+
+        async def wait(self) -> int:
+            await self._exited.wait()
+            return -15
+
+    mcp_process = FakeProcess()
+    acp_process = FakeProcess()
+    client_cleaned = False
+    progress: list[str] = []
+
+    class FakeClient:
+        def __init__(self, process, working_dir, session_update_handler=None) -> None:
+            self.session_update_handler = session_update_handler
+
+        async def start(self) -> None:
+            return None
+
+        async def send_request(self, method: str, params: dict):
+            if method == "session/new":
+                return {"sessionId": "review-session"}
+            if method == "session/prompt":
+                assert self.session_update_handler is not None
+                await self.session_update_handler(
+                    {
+                        "update": {
+                            "sessionUpdate": "agent_message_chunk",
+                            "messageId": "m1",
+                            "content": [{"type": "text", "text": "still reviewing.\n"}],
+                        }
+                    }
+                )
+                await asyncio.Event().wait()
+            return {}
+
+        async def cleanup(self, *, close_main_process: bool = True) -> None:
+            nonlocal client_cleaned
+            client_cleaned = True
+
+    async def fake_start_mcp(**kwargs):
+        return mcp_process
+
+    async def ready(*args, **kwargs) -> None:
+        return None
+
+    async def fake_spawn(*args, **kwargs):
+        return acp_process
+
+    monkeypatch.setattr(runner, "_start_terminal_reviewer_mcp", fake_start_mcp)
+    monkeypatch.setattr(runner, "_wait_for_server_ready", ready)
+    monkeypatch.setattr(runner, "_find_free_port", lambda: 54321)
+    monkeypatch.setattr(asyncio, "create_subprocess_shell", fake_spawn)
+    monkeypatch.setattr(acp_runner_module, "ACPClient", FakeClient)
+
+    handoff = await runner.run_terminal_review(
+        "p1",
+        "mission-001",
+        "2026-05-17T10-00-01Z",
+        project_setup,
+        progress_callback=progress.append,
+    )
+
+    assert handoff.done is False
+    assert "timed out after 1 seconds" in handoff.report
+    assert "closure was not sealed" in handoff.report
+    assert progress == ["Agent: still reviewing."]
+    assert acp_process.terminated is True
+    assert mcp_process.terminated is True
+    assert client_cleaned is True
+
+
+def test_production_terminal_reviewer_emits_progress_to_stderr(
+    config: HarnessConfig,
+    project_setup,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reviewer = ACPTerminalReviewer(config, project_setup)
+
+    async def fake_review(*args, progress_callback=None, **kwargs):
+        assert progress_callback is not None
+        progress_callback("Agent: checking release evidence")
+        return TerminalReviewHandoff(done=False, report="gap")
+
+    monkeypatch.setattr(reviewer.runner, "run_terminal_review", fake_review)
+
+    handoff = reviewer.review("p1", "mission-001", "2026-05-17T10-00-02Z")
+
+    assert handoff.done is False
+    assert "[unrest terminal-review] Agent: checking release evidence" in capsys.readouterr().err

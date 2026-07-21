@@ -37,5 +37,11 @@ uv run pytest -q ../research/2026-07-production-log-mission/test_analyze_trace.p
 uv build
 ```
 
+Terminal reviews time out after 900 seconds by default. Override this with a
+positive integer in `UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS`. On timeout Unrest
+stops the reviewer and MCP child processes, persists a `done=false` review, and
+keeps the mission open. Declared review roots are canonical preflight plus prompt
+policy for trusted reviewers, not an OS filesystem sandbox.
+
 See the [repository README](../README.md) for architecture, host setup, security,
 research, and lineage. Licensed under the [Apache License 2.0](../LICENSE).

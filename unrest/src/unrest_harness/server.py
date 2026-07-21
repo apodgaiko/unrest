@@ -239,7 +239,8 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
                     "addition to the normal workspace product surface. None keeps the "
                     "persisted declaration (default empty), [] clears it, and a "
                     "non-empty list replaces it after canonical preflight. This is a "
-                    "best-effort independence guard, not an OS filesystem sandbox."
+                    "preflight plus prompt policy for a trusted reviewer, not an "
+                    "OS filesystem sandbox."
                 ),
             ),
         ] = None,

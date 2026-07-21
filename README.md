@@ -82,6 +82,11 @@ state lives under `.unrest-runtime/`. The MCP server and ACP adapters connect th
 host orchestrator to worker and validator agents without treating chat history as
 the source of truth.
 
+Terminal review is bounded to 900 seconds by default. Set
+`UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS` to a positive integer to change the
+limit. A timeout stops the ACP reviewer and its MCP server, records a failed
+review, and leaves the mission unsealed for retry.
+
 ## Why validation matters
 
 Tests can be green while the requested behavior is absent, incomplete, or only
@@ -128,6 +133,11 @@ Coding agents can execute commands and modify files. Use a sandbox and credentia
 appropriate to the mission, review requested permissions, and do not place secrets
 in prompts or durable mission artifacts. Report vulnerabilities privately as
 described in [SECURITY.md](SECURITY.md).
+
+Declared terminal-review roots receive canonical preflight and are reinforced by
+prompt policy for a trusted reviewer. They reduce accidental mission-history
+exposure; they do not provide OS-level confinement or make an untrusted reviewer
+safe.
 
 ## Lineage and license
 

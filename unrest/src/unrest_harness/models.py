@@ -350,8 +350,9 @@ class TerminalReviewHandoff(BaseModel):
 class TerminalReviewConfig(BaseModel):
     """Canonical roots authorized by closure-review policy after preflight.
 
-    This is a best-effort guard against accidental process-history exposure,
-    not an OS filesystem sandbox or hard read-isolation boundary.
+    This is preflight plus prompt policy for trusted reviewers, reducing
+    accidental process-history exposure. It is not an OS filesystem sandbox
+    or hard read-isolation boundary.
     """
 
     model_config = ConfigDict(extra="forbid")
