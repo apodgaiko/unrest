@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something in Zenith doesn't work as expected
+about: Something in Unrest doesn't work as expected
 labels: bug
 ---
 
@@ -16,4 +16,4 @@ A clear description of what went wrong.
 What you expected to happen instead.
 
 **Additional context**
-Logs, `.zenith` state, or screenshots if relevant.
+Logs, `.unrest` state, or screenshots if relevant.

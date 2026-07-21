@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: zenith
+        working-directory: unrest
     strategy:
       fail-fast: false
       matrix:
@@ -23,10 +23,23 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Lint (ruff)
         run: uv run ruff check .
       - name: Type-check (mypy)
         run: uv run mypy src
       - name: Test (pytest)
         run: uv run pytest -q
+      - name: Test research analyzer
+        run: uv run pytest -q ../research/2026-07-production-log-mission/test_analyze_trace.py
+      - name: Build wheel and source distribution
+        run: uv build
+      - name: Smoke-test installed wheel
+        run: |
+          uv venv --clear .wheel-venv
+          uv pip install --python .wheel-venv/bin/python dist/*.whl
+          cd "$(mktemp -d)"
+          "$GITHUB_WORKSPACE/unrest/.wheel-venv/bin/unrest" --help
+          "$GITHUB_WORKSPACE/unrest/.wheel-venv/bin/unrest-server" --help
+          "$GITHUB_WORKSPACE/unrest/.wheel-venv/bin/python" -m unrest_harness --help
+          "$GITHUB_WORKSPACE/unrest/.wheel-venv/bin/python" -c "import unrest_harness"

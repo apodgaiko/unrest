@@ -8,7 +8,7 @@ labels: enhancement
 A clear description of the gap or friction you hit.
 
 **Proposed solution**
-How you'd like Zenith to behave.
+How you'd like Unrest to behave.
 
 **Alternatives considered**
 Other approaches you thought about, if any.
