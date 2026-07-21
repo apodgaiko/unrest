@@ -1,10 +1,16 @@
 # Evidence and Source Map
 
-This research uses local, read-only trace sources. Public paths below use stable placeholders: `$ZENITH_HOME` is the local Zenith data root, `$CODEX_HOME` is the local Codex data root, `<historical-workspace>` is the preserved product workspace, and `<clean-research-checkout>` is the source checkout used for the audit.
+This research uses local, read-only traces from a pre-Unrest Zenith-derived run.
+Public paths below use stable placeholders: `$LEGACY_HARNESS_HOME` is that run's
+data root, `$CODEX_HOME` is the local Codex data root,
+`<historical-workspace>` is the preserved product workspace, and
+`<clean-research-checkout>` is the source checkout used for the audit. The old
+directory and source names below describe frozen inputs; they are not current
+Unrest setup instructions.
 
 ## Historical run
 
-- Project bucket: `$ZENITH_HOME/projects/20260717T130345Z-read-only-all-around-production-log-research-for-agent-builder-p`
+- Project bucket: `$LEGACY_HARNESS_HOME/projects/20260717T130345Z-read-only-all-around-production-log-research-for-agent-builder-p`
 - Runtime mission metadata: `<project>/.zenith-runtime/missions/mission-001`
 - Durable mission charter, decisions and evidence inventory: `<project>/.zenith`
 - Mission charter: `<project>/.zenith/missions/mission-001/mission.md`
@@ -18,17 +24,18 @@ The analyzer performs mission-evidence-payload-blind analysis over project/runti
 Clean research checkout:
 
 - `<clean-research-checkout>`
-- branch `research/zenith-run-efficiency-20260719`
+- historical branch `research/zenith-run-efficiency-20260719`
 - upstream source snapshot `feb1d62`
 
 Primary inspected surfaces:
 
-- `zenith/src/zenith_harness/bundled/prompts/orchestrator/system_prompt.md`
-- `zenith/src/zenith_harness/bundled/prompts/terminal-reviewer/system_prompt.md`
-- `zenith/src/zenith_harness/coordinator.py`
-- `zenith/src/zenith_harness/task_validation.py`
-- `zenith/src/zenith_harness/config.py`
-- ACP/provider runner and persistence modules under `zenith/src/zenith_harness/`
+- historical `zenith/src/zenith_harness/bundled/prompts/orchestrator/system_prompt.md`
+- historical `zenith/src/zenith_harness/bundled/prompts/terminal-reviewer/system_prompt.md`
+- historical `zenith/src/zenith_harness/coordinator.py`
+- historical `zenith/src/zenith_harness/task_validation.py`
+- historical `zenith/src/zenith_harness/config.py`
+- historical ACP/provider runner and persistence modules under
+  `zenith/src/zenith_harness/`
 
 The historical project does not record the executing harness commit. `feb1d62` is therefore a current-source audit target whose behavior matches the trace, not a proven identity for the July 17 process.
 

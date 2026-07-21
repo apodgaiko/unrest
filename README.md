@@ -1,294 +1,137 @@
-# Zenith: A Continuous-Improvement Harness for Long-Running Tasks
+# Unrest
 
-<img width="1500" height="600" alt="From RALPH to Zenith — Intelligent Internet technical report" src="https://github.com/user-attachments/assets/8c3c76e7-4a54-4c6e-95b7-25db573a0881" />
+> **No rest until proven.**
 
-<p>
-  <a href="https://github.com/Intelligent-Internet/zenith/actions/workflows/ci.yml"><img src="https://github.com/Intelligent-Internet/zenith/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+">
-  <a href="technical_report/Technical_Report.pdf"><img src="https://img.shields.io/badge/technical%20report-PDF-b31b1b.svg" alt="Technical Report"></a>
-</p>
+Unrest is a continuous-improvement harness for coding agents working on missions
+that outlive a single context window. The common failure is not that an agent
+cannot make progress; it is that the agent finds a plausible stopping point and
+declares victory before the result is complete.
 
-Zenith is an agent harness for work that may run for days or weeks, where the dominant failure mode is *premature completion* rather than inability to make progress. It runs a coding agent (Claude Code, Codex, or Hermes) as a multi-agent orchestrator over MCP/ACP: one orchestrator session reads task state each turn and decides whether to spawn workers and testers, register reusable skills, replan, or stop.
+Unrest keeps an orchestrator alive around that tendency. It turns a broad
+objective into durable mission state, dispatches focused workers, requires
+independent validation, replans from evidence, and stops only after a fresh
+terminal review can account for the requested outcome.
 
-This repository contains the Zenith harness ([`zenith/`](zenith/)) and the Intelligent Internet technical report (2026) behind it.
+## Install
 
-> **[Read the report (PDF)](technical_report/Technical_Report.pdf)**
-
-## Abstract
-
-Long-running agents often fail not because they cannot make progress, but because they stop before the task is truly complete. We tested five harness designs across eight long-horizon tasks to isolate the control mechanisms that matter: repeated gap-finding, revisable planning, independent verification, adaptive orchestration, and stopping discipline.
-
-RALPH is the strongest simple baseline because it forces each new session to reopen the gap between the current project state and the original requirement. But RALPH is expensive and has no principled stopping rule.
-
-Our Zenith method keeps the useful parts of repeated review while making the loop adaptive: the orchestrator dynamically allocates workers, testers, reusable skills, replanning, and stopping decisions. In this study, Zenith achieved the best mean rank while using less than half of RALPH's per-task cost.
-
-<img width="1445" height="1088" alt="Benchmark results: Zenith vs. RALPH variants across eight long-horizon tasks" src="https://github.com/user-attachments/assets/200a7337-38a9-4fa2-91e6-60cc6ce07f5b" />
-
-## Quick Start
-
-### Option 1 — Let your agent install it
-
-Copy this prompt into Claude Code or Codex:
-
-```text
-/goal Read the README at https://github.com/OpenAIBot1/zenith-foundry, install its requirements and ACP adapter, then run `uv run zenith init --scope user --agent claude` for Claude Code or `uv run zenith init --scope user --agent codex` for Codex. If both hosts are installed, run both commands. Confirm that the user-scoped MCP server and `/zenith` skill were installed, and tell me to start a new host session before using `/zenith <mission>`.
-```
-
-This will:
-
-- install Zenith with its requirements
-- start Zenith using `uv`
-- register Zenith for every workspace in each detected host
-- create a personal `/zenith` skill and install Zenith's agent assets
-
-Then, in Claude Code or Codex, type:
-
-```text
-/zenith <your instruction or query>
-```
-
-### Option 2 — Install manually
-
-**Requirements**
+Requirements:
 
 - Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/)
 - Node.js 22+ and `npm`
-- Claude Code, Codex, or Hermes (see [`providers.py`](zenith/src/zenith_harness/providers.py) for the supported set)
+- Claude Code, Codex, or Hermes
 
-**Install**
+Clone the repository and install the Python environment:
 
 ```bash
-cd zenith
-uv sync
-uv run zenith --help
+git clone https://github.com/OpenAIBot1/unrest.git
+cd unrest/unrest
+uv sync --locked
+uv run unrest --help
 ```
 
-Install the ACP adapters globally for the agents you want Zenith to run:
+Install the ACP adapter for the agents Unrest will dispatch:
 
 ```bash
-# Claude workers/validators
 npm install -g @agentclientprotocol/claude-agent-acp
-command -v claude-agent-acp
-
-# Codex workers/validators
 npm install -g @agentclientprotocol/codex-acp
-command -v codex-acp
 ```
 
-**Install for every workspace (recommended)**
+## Set up a host
 
-Run user-scope setup from the Zenith checkout:
+User scope makes Unrest available from every workspace in Claude Code or Codex:
 
 ```bash
-# Claude Code
-uv run zenith init --scope user --agent claude
-
-# Codex
-uv run zenith init --scope user --agent codex
-
-# If you use both, run both commands in either order.
+uv run unrest init --scope user --agent claude
+uv run unrest init --scope user --agent codex
 ```
 
-User scope writes only Zenith's MCP registration and managed assets. It preserves existing
-Codex/Claude preferences and does not select a model, reasoning effort, sandbox mode, or
-persist ambient API/model environment variables. `CODEX_HOME` and `CLAUDE_CONFIG_DIR` are
-honored when set.
-
-The MCP command contains the absolute path to this checkout. If you move or remove the
-checkout, rerun the corresponding user-scope command from its new location. User scope is
-currently supported for Claude Code and Codex; use project scope for Hermes.
-
-Restart the host or start a new session once after installation. You can then open any
-workspace and run:
+Run both commands if you use both hosts. The setup registers the `unrest` MCP
+server and installs the `/unrest` skill and its managed assets. Existing model,
+reasoning, sandbox, feature, and unrelated MCP settings are preserved. Restart
+the host after setup, then run:
 
 ```text
-/zenith <your instruction or query>
+/unrest <your mission>
 ```
 
-**Install for one project instead**
-
-Project scope remains the default and writes host configuration into the target workspace:
+Hermes and repository-local installations use project scope:
 
 ```bash
-uv run zenith init --scope project --workspace-dir /path/to/your-app --agent claude
-uv run zenith init --scope project --workspace-dir /path/to/your-app --agent codex
-uv run zenith init --scope project --workspace-dir /path/to/your-app --agent hermes
+uv run unrest init --scope project --workspace-dir /path/to/project --agent claude
+uv run unrest init --scope project --workspace-dir /path/to/project --agent codex
+uv run unrest init --scope project --workspace-dir /path/to/project --agent hermes
 ```
 
-`--scope project` may be omitted for backward compatibility.
+Project scope is the default, so `--scope project` may be omitted. Start the
+selected host in the initialized workspace and give it the generated
+orchestrator prompt: `.claude/orchestrator_prompt.md`,
+`.codex/orchestrator_prompt.md`, or `.hermes/orchestrator_prompt.md`.
 
-**Run a project-scoped mission**
+## How it works
 
-Start your agent from the initialized project workspace:
+1. The orchestrator investigates the objective and writes durable mission scope.
+2. Falsifiable contract assertions define what “done” means.
+3. Workers implement bounded parts of the plan in isolated contexts.
+4. Validators exercise the real product surface and record evidence.
+5. Gates reconcile the evidence; failures trigger repair or replanning.
+6. A fresh terminal reviewer checks the final deliverables before closure.
 
-```bash
-cd /path/to/your-app
+State that agents must resume from lives under `.unrest/`; runtime coordination
+state lives under `.unrest-runtime/`. The MCP server and ACP adapters connect the
+host orchestrator to worker and validator agents without treating chat history as
+the source of truth.
 
-claude
-# or
-codex
-```
+## Why validation matters
 
-Then ask the agent to read the generated orchestrator prompt (use `.codex/orchestrator_prompt.md` for Codex):
+Tests can be green while the requested behavior is absent, incomplete, or only
+works in the worker's chosen example. Unrest separates implementation from
+acceptance: validators are given explicit claims and evidence requirements, and
+user-visible behavior is checked through its real surface. A failed validation
+is information for the next iteration, not paperwork to route around.
 
-```text
-First read .claude/orchestrator_prompt.md and treat it as your primary role, then use Zenith to run this mission.
+## Repository layout
 
-<your instruction or query>
-```
-
-### Maintainer Codex and Claude Code setup for this fork
-
-The public `main` branch is the dashboard-free product line. The terminal
-dashboard is isolated on `experiment/terminal-dashboard`; do not switch to,
-merge, or install that branch during ordinary Zenith work. A correct `main`
-installation does not expose a `live` command.
-
-For regular development, install `main` globally as an editable uv tool:
-
-```bash
-git clone https://github.com/OpenAIBot1/zenith-foundry.git
-cd zenith-foundry/zenith
-uv tool install --editable .
-
-command -v zenith
-command -v zenith-server
-zenith --help
-```
-
-On the maintainer workstation, the canonical checkout is
-`/Users/aleksandrpodgaiko/Desktop/zenith/worktrees/product-main`. Both Codex and
-Claude Code use the global
-`/Users/aleksandrpodgaiko/.local/bin/zenith-server --mode orchestrator`
-executable, so neither host needs `zenith init` in every repository.
-
-Codex uses the personal `zenith@personal` plugin from
-`/Users/aleksandrpodgaiko/plugins/zenith`. The plugin owns the Zenith skill and
-global MCP registration. Verify it with:
-
-```bash
-codex plugin list
-codex mcp get zenith --json
-```
-
-Claude Code uses the user-scoped MCP registration and the skill at
-`/Users/aleksandrpodgaiko/.claude/skills/zenith`. Verify it with:
-
-```bash
-claude mcp get zenith
-claude mcp list
-```
-
-`claude mcp get zenith` must report `✔ Connected`, the global `zenith-server`
-command, the `claude` provider for orchestrator, worker, and terminal-reviewer
-roles, and the installed `claude-agent-acp` path. To reproduce or repair the
-user-scoped registration, remove the old `zenith` entry and add it again:
-
-```bash
-claude mcp remove zenith -s user
-claude mcp add -s user zenith \
-  -e ZENITH_ORCHESTRATOR_PROVIDER=claude \
-  -e ZENITH_WORKER_PROVIDER=claude \
-  -e ZENITH_TERMINAL_REVIEWER_PROVIDER=claude \
-  -e ZENITH_WORKER_ACP_COMMAND="$(command -v claude-agent-acp)" \
-  -e ZENITH_TERMINAL_REVIEWER_ACP_COMMAND="$(command -v claude-agent-acp)" \
-  -- "$(command -v zenith-server)" --mode orchestrator
-```
-
-For both hosts, the MCP command must be the global `zenith-server`, not an
-obsolete checkout under `Desktop/agents/cx` or `~/zenith`. Codex loads newly
-installed plugin tools at the start of a task, and Claude Code loads user MCP
-and skill changes in a new session. Start a fresh task/session after changing
-either setup, then invoke the Zenith skill.
-
-Update the local checkout and editable installation in one step:
-
-```bash
-zenith-update
-```
-
-The updater fast-forwards `origin/main`, reinstalls the editable uv tool and
-dependencies, verifies the installed commit, and fails if the dashboard-only
-`live` command appears. Future agents should use this command instead of
-manually repeating pull, sync, and reinstall steps. It updates the shared
-runtime used by both Codex and Claude Code. Users without the personal Codex
-plugin or user-scoped Claude registration should follow the portable `zenith
-init` workflow above.
-
-## How Zenith Works
-
-<p align="center">
-  <img src="technical_report/images/zenith.png" alt="Zenith harness architecture" width="780"/>
-</p>
-
-A single orchestrator session reads task state each turn and decides what to do next: spawn worker or tester subagents, register a reusable skill, replan, or stop. Workers and testers run in their own contexts and report back; the orchestrator integrates their results before the next decision.
-
-## Results
-
-### Frontier SWE Benchmark
-
-On the [Frontier SWE benchmark](https://www.frontierswe.com), Zenith — running on GPT-5.5 — ranks first overall, leading on implementation, performance, and dominance against frontier models paired with their native harnesses.
-
-| # | Model | Harness | Avg rank ↓ | Dominance ↑ | Implementation ↓ | Performance ↓ | Research ↓ |
-| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| 1 | GPT-5.5 | **Zenith** | **2.06** | **92%** | **1.60** | **1.89** | 3.33 |
-| 2 | Claude Fable | Claude Code | 2.71 | 88% | 1.80 | 2.11 | 6.00 |
-| 3 | Claude Opus 4.8 | Claude Code | 5.06 | 71% | 4.20 | 5.56 | 5.00 |
-| 4 | GLM-5.2 | Claude Code | 5.31 | 69% | 5.60 | 6.50 | 1.67 |
-| 5 | GPT-5.5 | Codex | 5.53 | 68% | 7.40 | 4.44 | 5.67 |
-| 6 | Claude Opus 4.7 | Claude Code | 6.35 | 59% | 5.00 | 7.00 | 6.67 |
-| 7 | Claude Opus 4.6 | Claude Code | 7.53 | 52% | 7.60 | 7.56 | 7.33 |
-| 8 | GPT-5.4 | Codex | 8.06 | 50% | 7.20 | 9.67 | 4.67 |
-| 9 | Composer 2.5 | Cursor CLI | 9.35 | 38% | 7.80 | 11.11 | 6.67 |
-| 10 | Gemini 3.1 Pro | Gemini CLI | 9.65 | 37% | 11.80 | 7.44 | 12.67 |
-| 11 | GLM-5.1 | Claude Code | 10.88 | 29% | 10.80 | 11.00 | 10.67 |
-| 12 | DeepSeek V4 Pro | Claude Code | 11.00 | 27% | 10.80 | 11.11 | 11.00 |
-| 13 | Kimi K2.5 | Kimi CLI | 11.65 | 24% | 13.00 | 10.22 | 13.67 |
-| 14 | Kimi K2.6 | Kimi CLI | 11.82 | 25% | 10.40 | 12.78 | 11.33 |
-| 15 | Qwen3.6-Plus | Qwen Code | 12.47 | 21% | 15.00 | 10.67 | 13.67 |
-
-<sub>*Metrics as reported by the [Frontier SWE leaderboard](https://www.frontierswe.com). Rank columns: lower is better. Dominance: higher is better.*</sub>
-
-### Ablation Study
-
-To isolate the control mechanisms that matter, we compared Zenith against RALPH and three reduced harness variants across eight long-horizon tasks. Zenith achieves the best mean rank at less than half of RALPH's per-task cost.
-
-| Method | Mean rank ↓ | Mean cost (USD/task) ↓ | Wins (of 8) ↑ |
-| --- | ---: | ---: | ---: |
-| One-session | 5.00 | $22.21 | 0 |
-| Plan-RALPH | 4.00 | $161.53 | 0 |
-| Milestone-RALPH | 2.88 | $209.47 | 0 |
-| RALPH | 1.75 | $407.58 | 3 |
-| **Zenith** | **1.38** | **$175.68** | **5** |
-
-<sub>*A "win" is a task on which the method ranked first; the eight wins partition the eight benchmark tasks.*</sub>
-
-## Repository Layout
-
-| Path | Contents |
+| Path | Purpose |
 | --- | --- |
-| [`zenith/`](zenith/) | The Zenith harness — Python package (`zenith-harness`), CLI, MCP server, bundled prompts and skills, tests |
-| [`technical_report/`](technical_report/) | *From RALPH to Zenith* technical report — PDF, LaTeX source, and figures |
+| [`unrest/`](unrest/) | Python distribution, CLI, MCP server, bundled prompts and skills, tests |
+| [`research/2026-07-production-log-mission/`](research/2026-07-production-log-mission/) | Reproducible case study of a historical long-running mission trace |
+| [`docs/lineage.md`](docs/lineage.md) | Source lineage, imported baselines, and attribution |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Lint, types, tests, research test, build, and wheel smoke checks |
 
-## Contributing
+## Development
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and PR guidelines, and [SECURITY.md](SECURITY.md) for how to report vulnerabilities.
+Run the same checks as CI from the Python project directory:
 
-## Citation
-
-```bibtex
-@techreport{ii2026zenith,
-  title       = {From RALPH to Zenith: Designing Harnesses for Long-Running Agents},
-  author      = {{Intelligent Internet}},
-  institution = {Intelligent Internet},
-  year        = {2026},
-  type        = {Technical Report},
-  url         = {https://github.com/Intelligent-Internet/zenith}
-}
+```bash
+cd unrest
+uv sync --locked
+uv run ruff check .
+uv run mypy src
+uv run pytest -q
+uv run pytest -q ../research/2026-07-production-log-mission/test_analyze_trace.py
+uv build
 ```
 
-## License
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.
 
-The Zenith code is licensed under the [Apache License 2.0](LICENSE). The technical report and its figures are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+## Research case study
+
+The [July 2026 production-log mission case study](research/2026-07-production-log-mission/README.md)
+reconstructs a pre-Unrest mission from frozen traces. It preserves the original
+measurements and their uncertainty boundaries; it is not an Unrest benchmark or
+a claim about current performance.
+
+## Security
+
+Coding agents can execute commands and modify files. Use a sandbox and credentials
+appropriate to the mission, review requested permissions, and do not place secrets
+in prompts or durable mission artifacts. Report vulnerabilities privately as
+described in [SECURITY.md](SECURITY.md).
+
+## Lineage and license
+
+Unrest is independently maintained by OpenAIBot1 and contains software derived
+from an Apache-2.0-licensed upstream project. The complete attribution and import
+history is in [docs/lineage.md](docs/lineage.md); no upstream endorsement is
+implied. The software is licensed under the [Apache License 2.0](LICENSE).

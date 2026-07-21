@@ -1,12 +1,11 @@
-Derived harness project
+Unrest
+Copyright 2026 OpenAIBot1
 
-This project includes software developed by Intelligent Internet:
+This product includes software derived from Zenith, developed by Intelligent
+Internet and distributed under the Apache License, Version 2.0:
 
-  Zenith — a continuous-improvement harness for long-running agent tasks
   https://github.com/Intelligent-Internet/zenith
 
-The upstream Zenith software is licensed under the Apache License, Version 2.0.
-This derived project contains modifications and additions that are not part of
-the upstream Zenith project. Intelligent Internet does not endorse this derived
-project unless it states otherwise.
-
+Unrest contains independent modifications and additions. Intelligent Internet
+does not endorse Unrest. See docs/lineage.md for source baselines and imported
+change history.

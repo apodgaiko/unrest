@@ -2,17 +2,24 @@
 
 ## Reporting a vulnerability
 
-Please do **not** report security vulnerabilities through public GitHub issues.
-
-Instead, use [GitHub's private vulnerability reporting](https://github.com/Intelligent-Internet/zenith/security/advisories/new) for this repository. We will acknowledge your report within a few business days and keep you informed as we investigate and remediate.
+Do not report security vulnerabilities through public GitHub issues. Use
+[GitHub private vulnerability reporting](https://github.com/OpenAIBot1/unrest/security/advisories/new)
+so the report can be investigated before disclosure.
 
 ## Scope
 
-Zenith runs coding agents that can execute commands and modify files in the workspace you point them at. When reporting, issues of particular interest include:
+Unrest runs coding agents that can execute commands and modify files in the
+workspace selected for a mission. Reports of particular interest include:
 
-- Escapes from the configured workspace directory by workers, testers, or validators
-- Prompt-injection paths that cause the orchestrator to take actions outside its mission
-- Unsafe handling of ACP subprocess input/output
+- escapes from configured workspace or declared artifact roots;
+- prompt injection that expands authority beyond the mission;
+- unsafe ACP subprocess input, output, or permission handling;
+- exposure of secrets through generated configuration or durable state;
+- terminal-review access outside its declared read-only surface.
+
+Include the Unrest version, operating system, host/provider, reproduction steps,
+and the smallest safe diagnostic output needed to demonstrate the issue. Remove
+credentials, private prompts, and unrelated mission data.
 
 ## Supported versions
 

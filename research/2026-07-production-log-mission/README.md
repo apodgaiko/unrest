@@ -1,12 +1,15 @@
-# Zenith Run-Efficiency Research: July 17–19 Production-Log Mission
+# Unrest case study: July 17–19 production-log mission
 
-Status: trace reconstruction complete; proposals are research recommendations, not yet implemented.
+Status: trace reconstruction complete. This case study was prepared for Unrest
+from a pre-Unrest, Zenith-derived production run; its measurements remain labels
+for that historical run, not benchmarks of the current product. Proposals are
+research recommendations, not claims that every change is implemented.
 
 Analyzed mission: `mission-001` in project `20260717T130345Z-read-only-all-around-production-log-research-for-agent-builder-p`
 
 Observed interval: 2026-07-17 13:03:45Z through 2026-07-19 15:36:09Z
 
-Current upstream source inspected: commit `feb1d62`
+Historical source checkout inspected for behavioral comparison: commit `feb1d62`
 
 Analysis outputs: [metrics.json](generated/metrics.json), [execution_ledger.csv](generated/execution_ledger.csv), [idle_gaps.csv](generated/idle_gaps.csv)
 
@@ -16,7 +19,7 @@ Evidence locations and method boundary: [SOURCES.md](SOURCES.md)
 
 The 50.54-hour wall time was not one slow operation. It was a useful core audit wrapped in an expanding assurance system.
 
-The original request legitimately grew from a two-project tool audit into a week-scale, 2,000-plus-session, stratified, request/response and semantic-integrity study. That explains much of the acquisition and analysis work. Zenith then amplified the cost through four mechanisms:
+The original request legitimately grew from a two-project tool audit into a week-scale, 2,000-plus-session, stratified, request/response and semantic-integrity study. That explains much of the acquisition and analysis work. The historical harness then amplified the cost through four mechanisms:
 
 1. it applied an engineering-style atomic-contract and dual-validator topology to exploratory research;
 2. an invalid “independent manual coding” method triggered a 24-shard semantic-reliability repair chain;
@@ -29,9 +32,9 @@ Unique-only correlation selected 70 of the 145 attempt/reviewer events and class
 
 A lean counterfactual keeps the defensible findings and uncertainty boundaries, but treats exploration, statistical estimability, and final acceptance as different things. It would use one immutable corpus, a small set of parallel analysis lanes, early closure of non-estimable population claims, changed-surface validation, and one final reviewer allowed to inspect the declared output root. Its explicitly unmeasured target is 16–24 wall hours for a comparable run (52–68% below actual); only a replay could turn that target into evidence.
 
-## 1. Zenith in five minutes
+## 1. The historical harness in five minutes
 
-Zenith is a persistent mission harness. It converts a broad user objective into explicit claims, schedules agents to produce and independently check evidence, pauses when evidence conflicts, and asks a final fresh reviewer whether the user-facing outcome really exists.
+The historical Zenith harness was a persistent mission system. It converted a broad user objective into explicit claims, scheduled agents to produce and independently check evidence, paused when evidence conflicted, and asked a final fresh reviewer whether the user-facing outcome really existed.
 
 ```mermaid
 flowchart LR
@@ -88,7 +91,7 @@ flowchart TD
 
 The original 13:02Z request asked for a broad comparison of tools and results for two Agent Builder projects. The user then explicitly raised the evidence floor: at least a couple thousand sessions, a week of `.ai` traffic, analyst-guided stratification, and wide request/response verification. Those additions are user-requested scope growth.
 
-Zenith encoded the clarified mission as a 2,400-attempt primary corpus plus up to 1,200 rarity-enriched successful sessions, with tool, jq, integrity, comparison, and independently estimated token analyses. The charter required all reproducibility artifacts and the final report to be written under mission evidence.
+The historical harness encoded the clarified mission as a 2,400-attempt primary corpus plus up to 1,200 rarity-enriched successful sessions, with tool, jq, integrity, comparison, and independently estimated token analyses. The charter required all reproducibility artifacts and the final report to be written under mission evidence.
 
 The subsequent expansion was mostly harness-created assurance work:
 
@@ -151,7 +154,7 @@ The structural critical path was:
 
 `scope → corpus → core analyses → semantic-reliability repair → fail-closed report → repeated provenance versions → final gate → terminal-review loop`
 
-There are 27 gaps of at least five minutes in the uniquely matched interval union; the two largest were 7.62 h and 5.38 h. The trace includes user interruption, overnight delay, Wi-Fi disruption and external model/usage-limit failures. Therefore the resulting 28.57 non-busy hours are an attribution-sensitive upper bound on scheduling opportunity, not “Zenith idle waste.” The matched subset reached 1.09× effective parallelism; ambiguity prevents treating that as a complete scheduler-utilization measure.
+There are 27 gaps of at least five minutes in the uniquely matched interval union; the two largest were 7.62 h and 5.38 h. The trace includes user interruption, overnight delay, Wi-Fi disruption and external model/usage-limit failures. Therefore the resulting 28.57 non-busy hours are an attribution-sensitive upper bound on scheduling opportunity, not “harness idle waste.” The matched subset reached 1.09× effective parallelism; ambiguity prevents treating that as a complete scheduler-utilization measure.
 
 The detailed timestamped ledger is [execution_ledger.csv](generated/execution_ledger.csv). Its phase labels are reproducible heuristics based on task identity and are deliberately not treated as ground truth.
 
@@ -191,11 +194,11 @@ The coordinator raises attention even when a gate clears. Attention protocol sto
 
 ### G. The final review contract contradicted the mission charter
 
-The mission charter said: write only inside the Zenith mission evidence tree. The terminal-reviewer prompt says its only inspection surface is the normal workspace and explicitly forbids all Zenith project and mission artifacts. The reviewer therefore could not observe the final report by construction.
+The mission charter said to write only inside the legacy mission evidence tree. The terminal-reviewer prompt limited inspection to the normal workspace and explicitly forbade the legacy project and mission artifacts. The reviewer therefore could not observe the final report by construction.
 
 All three terminal reviews returned the same class of gap. The coordinator treats `done=false` as attention and reaches `Done` only on `done=true`. Repeating the reviewer could not change the answer. A repeated-gap fingerprint should have classified this as a harness configuration conflict after the first occurrence.
 
-### H. Zenith cannot natively explain its own latency
+### H. The historical harness could not natively explain its own latency
 
 The runtime records attempts, task state and decisions, but it does not bind each attempt to provider session ID, task start/end, queue duration, model/token usage, artifact bytes, or a causal repair family. This analysis had to correlate 142 attempts with external Codex JSONL sessions. Even the exact harness commit that executed the run is absent from the project record.
 
@@ -276,11 +279,11 @@ The branch-ready specifications are expanded in [IMPLEMENTATION_BACKLOG.md](IMPL
 - Codex-reported token totals; and
 - logical/allocated artifact size and inode counts.
 
-The inferred initial task and contract counts subtract patch additions from final topology; in-place textual changes are not counted. Stage attribution is a task-identity heuristic, not ground truth. Non-busy time includes human and external-system pauses. Zero unmatched events does not prove attribution correctness, and 75 ambiguous events remain deliberately unattributed. The exact executing Zenith commit was not persisted. These limits are reasons to implement telemetry, not invitations to turn estimates into facts.
+The inferred initial task and contract counts subtract patch additions from final topology; in-place textual changes are not counted. Stage attribution is a task-identity heuristic, not ground truth. Non-busy time includes human and external-system pauses. Zero unmatched events does not prove attribution correctness, and 75 ambiguous events remain deliberately unattributed. The exact executing legacy-harness commit was not persisted. These limits are reasons to implement telemetry, not invitations to turn estimates into facts.
 
 ## Acceptance test for the recommendations
 
-Replay the frozen original brief against current Zenith and a candidate harness with the same data-access limits. Blind the final evaluator to which harness produced each result. A candidate wins only if it:
+Replay the frozen original brief against current Unrest and a candidate harness with the same data-access limits. Blind the final evaluator to which harness produced each result. A candidate wins only if it:
 
 1. preserves every independently supported conclusion and explicit coverage limitation;
 2. introduces no unsupported population, semantic or causal claim;

@@ -1,4 +1,4 @@
-# Branch-Ready Zenith Improvement Backlog
+# Unrest improvement backlog derived from the case study
 
 This backlog maps the research recommendations to current source surfaces. It is intentionally implementation-ready without pre-committing to an API that tests may disprove.
 
@@ -8,7 +8,7 @@ This backlog maps the research recommendations to current source surfaces. It is
 
 Current surfaces:
 
-- `zenith/src/zenith_harness/bundled/prompts/terminal-reviewer/system_prompt.md`
+- `unrest/src/unrest_harness/bundled/prompts/terminal-reviewer/system_prompt.md`
 - terminal-review launcher/provider code
 - mission/project persistence schemas
 - terminal-review tests
@@ -33,7 +33,7 @@ Tests:
 
 Current surfaces:
 
-- `zenith/src/zenith_harness/coordinator.py::_enter_terminal_review`
+- `unrest/src/unrest_harness/coordinator.py::_enter_terminal_review`
 - terminal-review persistence and attention schemas
 
 Proposal:
@@ -78,8 +78,8 @@ Do not implement budgets as silent hard caps. That would trade visible slowness 
 
 Current surfaces:
 
-- `zenith/src/zenith_harness/coordinator.py::_evaluate_gate`
-- `zenith/src/zenith_harness/coordinator.py::_upstream_validators`
+- `unrest/src/unrest_harness/coordinator.py::_evaluate_gate`
+- `unrest/src/unrest_harness/coordinator.py::_upstream_validators`
 - task supersession and contract-state persistence
 
 Proposal:

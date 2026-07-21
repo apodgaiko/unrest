@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Build a reproducible, mission-evidence-payload-blind Zenith trace profile.
+"""Build a reproducible, payload-blind profile of a pre-Unrest Zenith trace.
 
-The script reads Zenith runtime records and Codex JSONL session/event data. It
-does not open production-log or mission-evidence payload content; it retains
-bounded Codex session text only for event-to-session correlation.
+The legacy names and state directories read here identify the frozen historical
+input; they are not current Unrest runtime paths. The script also reads Codex
+JSONL session/event data. It does not open production-log or mission-evidence
+payload content; it retains bounded Codex session text only for event-to-session
+correlation.
 """
 
 from __future__ import annotations

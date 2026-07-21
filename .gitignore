@@ -18,7 +18,6 @@ build/
 *.fls
 *.fdb_latexmk
 *.synctex.gz
-technical_report/*.log
 
 # OS
 .DS_Store
