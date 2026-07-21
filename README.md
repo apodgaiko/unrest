@@ -25,7 +25,7 @@ Clone the repository and install the Python environment:
 
 ```bash
 git clone https://github.com/apodgaiko/unrest.git
-cd unrest/unrest
+cd unrest
 uv sync --locked
 uv run unrest --help
 ```
@@ -99,33 +99,24 @@ is information for the next iteration, not paperwork to route around.
 
 | Path | Purpose |
 | --- | --- |
-| [`unrest/`](unrest/) | Python distribution, CLI, MCP server, bundled prompts and skills, tests |
-| [`research/2026-07-production-log-mission/`](research/2026-07-production-log-mission/) | Reproducible case study of a historical long-running mission trace |
+| [`src/unrest_harness/`](src/unrest_harness/) | CLI, MCP server, runtime, bundled prompts, skills, and provider definitions |
+| [`tests/`](tests/) | Hermetic unit and integration tests plus opt-in live ACP smoke tests |
 | [`docs/lineage.md`](docs/lineage.md) | Source lineage, imported baselines, and attribution |
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Lint, types, tests, research test, build, and wheel smoke checks |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Lint, types, tests, build, and installed-wheel smoke checks |
 
 ## Development
 
-Run the same checks as CI from the Python project directory:
+Run the same checks as CI from the repository root:
 
 ```bash
-cd unrest
 uv sync --locked
 uv run ruff check .
 uv run mypy src
 uv run pytest -q
-uv run pytest -q ../research/2026-07-production-log-mission/test_analyze_trace.py
 uv build
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.
-
-## Research case study
-
-The [July 2026 production-log mission case study](research/2026-07-production-log-mission/README.md)
-reconstructs a pre-Unrest mission from frozen traces. It preserves the original
-measurements and their uncertainty boundaries; it is not an Unrest benchmark or
-a claim about current performance.
 
 ## Security
 
@@ -142,6 +133,6 @@ safe.
 ## Lineage and license
 
 Unrest is independently maintained by apodgaiko and contains software derived
-from an Apache-2.0-licensed upstream project. The complete attribution and import
-history is in [docs/lineage.md](docs/lineage.md); no upstream endorsement is
-implied. The software is licensed under the [Apache License 2.0](LICENSE).
+from an Apache-2.0-licensed upstream project. Attribution and provenance are in
+[docs/lineage.md](docs/lineage.md); no upstream endorsement is implied. The
+software is licensed under the [Apache License 2.0](LICENSE).
