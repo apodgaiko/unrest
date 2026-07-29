@@ -48,25 +48,38 @@ uv run unrest init --scope user --agent codex
 
 Run both commands if you use both hosts. The setup registers the `unrest` MCP
 server and installs the `/unrest` skill and its managed assets. Existing model,
-reasoning, sandbox, feature, and unrelated MCP settings are preserved. Restart
-the host after setup, then run:
+reasoning, feature, and unrelated MCP settings are preserved. Fresh installs
+use safe Claude/Codex permission and sandbox defaults; an unmanaged
+unrestricted setting fails instead of being silently adopted. Restart the host
+after setup, then run:
 
 ```text
 /unrest <your mission>
 ```
 
-Hermes and repository-local installations use project scope:
+Repository-local installations use project scope:
 
 ```bash
 uv run unrest init --scope project --workspace-dir /path/to/project --agent claude
 uv run unrest init --scope project --workspace-dir /path/to/project --agent codex
-uv run unrest init --scope project --workspace-dir /path/to/project --agent hermes
 ```
 
 Project scope is the default, so `--scope project` may be omitted. Start the
 selected host in the initialized workspace and give it the generated
 orchestrator prompt: `.claude/orchestrator_prompt.md`,
-`.codex/orchestrator_prompt.md`, or `.hermes/orchestrator_prompt.md`.
+or `.codex/orchestrator_prompt.md`. Hermes remains supported for ACP worker,
+validator, and terminal-reviewer roles, but not as an orchestrator because
+Unrest cannot currently enforce Hermes host settings.
+
+The only unrestricted mode is the explicit development opt-in:
+
+```bash
+uv run unrest init --workspace-dir /path/to/project --agent codex \
+  --unsafe-development-unrestricted
+```
+
+This writes conspicuous unsafe profile markers and enables provider
+full-access/bypass settings. It is not a production default.
 
 ## How it works
 
@@ -113,6 +126,7 @@ uv sync --locked
 uv run ruff check .
 uv run mypy src
 uv run pytest -q
+uv run unrest check-repository
 uv build
 ```
 
@@ -120,15 +134,17 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.
 
 ## Security
 
-Coding agents can execute commands and modify files. Use a sandbox and credentials
-appropriate to the mission, review requested permissions, and do not place secrets
-in prompts or durable mission artifacts. Report vulnerabilities privately as
-described in [SECURITY.md](SECURITY.md).
+Safe role policy is the default. It canonicalizes ACP filesystem access,
+enforces terminal cwd/environment/process declarations, uses one-shot ACP
+approval decisions, and forwards only declared environment and credential
+names. Generated MCP configuration does not persist credential values. Do not
+place secrets in prompts or durable mission artifacts. Report vulnerabilities
+privately as described in [SECURITY.md](SECURITY.md).
 
-Declared terminal-review roots receive canonical preflight and are reinforced by
-prompt policy for a trusted reviewer. They reduce accidental mission-history
-exposure; they do not provide OS-level confinement or make an untrusted reviewer
-safe.
+Declared terminal-review roots receive canonical preflight and ACP callback
+enforcement. Arbitrary terminal subprocess side effects are not an OS-level
+filesystem or network sandbox; unsupported denial profiles fail rather than
+claiming prompt-only confinement.
 
 ## Lineage and license
 

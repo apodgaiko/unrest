@@ -1,0 +1,70 @@
+{
+  "annotations": [
+    {
+      "kind": "COMPAT",
+      "reference": "id-registry.json#kind=compatibility",
+      "syntax": "COMPAT[ID]"
+    },
+    {
+      "kind": "INVARIANT",
+      "reference": "id-registry.json#kind=invariant",
+      "syntax": "INVARIANT[ID]"
+    },
+    {
+      "kind": "SECURITY",
+      "reference": "id-registry.json#kind=security",
+      "syntax": "SECURITY[ID]"
+    },
+    {
+      "kind": "TODO",
+      "reference": "removal-registry.json#issues+removal_conditions",
+      "syntax": "TODO[#issue; remove-after=condition]"
+    },
+    {
+      "kind": "WHY",
+      "reference": "../decisions/index.md#accepted-decisions",
+      "syntax": "WHY[ADR-ID]"
+    }
+  ],
+  "banned_content": {
+    "agent_identity_labels": [
+      "ai note",
+      "assistant",
+      "chatgpt",
+      "claude",
+      "codex",
+      "copilot",
+      "gemini",
+      "gpt"
+    ],
+    "attribution_context_terms": [
+      "agent",
+      "assistant",
+      "chain of thought",
+      "hidden",
+      "implementation notes",
+      "implementation reasoning",
+      "internal",
+      "internal notes",
+      "model",
+      "private",
+      "reasoning",
+      "scratch work",
+      "scratchpad",
+      "secret",
+      "work notes"
+    ],
+    "hidden_reasoning_phrases": [
+      "chain-of-thought",
+      "internal monologue"
+    ],
+    "hidden_reasoning_tags": [
+      "analysis",
+      "monologue",
+      "reasoning",
+      "scratchpad",
+      "thinking"
+    ]
+  },
+  "schema_version": 1
+}

@@ -92,6 +92,8 @@ class MissionCoordinator:
     # ------------------------------------------------------------------
 
     def step(self) -> StepResult:
+        # INVARIANT[ARCH-STATE-001]: One call returns after at most one
+        # externally visible state transition.
         state = self.store.load_state(self.project_id)
         if state is None or isinstance(state, Draft):
             return StepResult.idle()
@@ -136,19 +138,13 @@ class MissionCoordinator:
         if not runnable:
             return StepResult.idle("no runnable task work; call end_mission to request closure")
 
-        validator_batch = self._validator_batch_for_pending_gate(tl, task_state, runnable)
-        if len(validator_batch) > 1:
-            return self._dispatch_batch(mid, tl, task_state, validator_batch)
-        if len(validator_batch) == 1:
-            return self._dispatch_one(mid, validator_batch[0])
-
-        max_parallel = self.store.config.max_parallel_nodes
-        if max_parallel <= 1:
-            return self._dispatch_one(mid, runnable[0])
-        return self._dispatch_batch(mid, tl, task_state, runnable[:max_parallel])
+        selected = self._select_dispatch_tasks(tl, task_state, runnable)
+        if len(selected) == 1:
+            return self._dispatch_one(mid, selected[0])
+        return self._dispatch_batch(mid, tl, task_state, selected)
 
     def _dispatch_one(self, mid: str, task: Task) -> StepResult:
-        """Original serial dispatch path, retained for max_parallel=1."""
+        """Dispatch one work task or one validator."""
         spawn_ts = utc_now_filesafe()
         task_state = self.store.load_task_state(self.project_id, mid)
         task_state.set_status(task.id, "running")
@@ -257,6 +253,34 @@ class MissionCoordinator:
             ]
         return []
 
+    def _select_dispatch_tasks(
+        self,
+        tl: TaskList,
+        task_state: TaskStateFile,
+        runnable: list[Task],
+    ) -> list[Task]:
+        """Select one mutable task or a validator-only batch.
+
+        A complete ready gate-validation lane retains priority over unrelated
+        runnable work, subject to the same configured capacity ceiling.
+        Otherwise the configured-capacity slice is considered in authored
+        order. If that slice contains mutable work, only its first authored
+        task is selected; validator-only slices retain batching.
+        """
+        capacity = max(1, self.store.config.max_parallel_nodes)
+        validator_batch = self._validator_batch_for_pending_gate(
+            tl, task_state, runnable
+        )
+        if validator_batch:
+            return validator_batch[:capacity]
+
+        candidate_batch = runnable[:capacity]
+        if any(task.type == "work" for task in candidate_batch):
+            # INVARIANT[ARCH-DISPATCH-001]: Shared-checkout work is selected
+            # singly before any task is persisted as running.
+            return candidate_batch[:1]
+        return candidate_batch
+
     def _dispatch_batch(
         self,
         mid: str,
@@ -264,6 +288,9 @@ class MissionCoordinator:
         task_state: TaskStateFile,
         batch: list[Task],
     ) -> StepResult:
+        if any(task.type == "work" for task in batch):
+            raise RuntimeError("mutable work must use single-task dispatch")
+
         batch_attempts: list[_BatchAttempt] = []
         for index, task in enumerate(batch):
             spawn_ts = self._batch_spawn_ts(index)

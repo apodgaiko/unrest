@@ -27,6 +27,8 @@ jobs:
         run: uv run mypy src
       - name: Test (pytest)
         run: uv run pytest -q
+      - name: Repository contract
+        run: uv run unrest check-repository
       - name: Build wheel and source distribution
         run: uv build
       - name: Smoke-test installed wheel
@@ -35,6 +37,17 @@ jobs:
           uv pip install --python .wheel-venv/bin/python dist/*.whl
           cd "$(mktemp -d)"
           "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" --help
+          init_help="$("$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" init --help)"
+          grep -F -- "--unsafe-development-unrestricted" <<< "$init_help"
+          grep -F "permissions.defaultMode=default" <<< "$init_help"
+          grep -F "sandbox_mode=workspace-write" <<< "$init_help"
+          grep -F "approval_policy=on-request" <<< "$init_help"
           "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --help
           "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness --help
-          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "import unrest_harness"
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "from unrest_harness.config import HarnessConfig; assert HarnessConfig.discover().capability_policy.schema_version == 1"
+          set +e
+          output="$(UNREST_CAPABILITY_PROFILE=unsupported "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --mode orchestrator 2>&1)"
+          status=$?
+          set -e
+          test "$status" -ne 0
+          grep -F "CAP-POLICY-001 provider=unresolved role=unresolved version=1 capability=profile:unsupported" <<< "$output"

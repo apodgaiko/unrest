@@ -19,6 +19,7 @@ Run these from the repository root before opening a pull request:
 uv run ruff check .
 uv run mypy src
 uv run pytest -q
+uv run unrest check-repository
 uv build
 ```
 

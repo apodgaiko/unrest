@@ -6,6 +6,16 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
+from .capability_policy import (
+    CAPABILITY_POLICY_VERSION,
+    SAFE_PROFILE,
+    CapabilityPolicy,
+    CapabilityPolicyError,
+    RoleName,
+    load_capability_policy,
+    resolve_profile_from_environment,
+    validate_provider_support,
+)
 from .providers import (
     ProviderSelection,
     default_worker_provider_name,
@@ -91,9 +101,14 @@ class HarnessConfig:
     worker_reasoning_effort: str | None = None
     validator_reasoning_effort: str | None = None
     terminal_reviewer_reasoning_effort: str | None = None
+    capability_policy_version: int = CAPABILITY_POLICY_VERSION
+    capability_profile: str = SAFE_PROFILE
 
     @classmethod
     def discover(cls) -> HarnessConfig:
+        capability_policy_version, capability_profile = (
+            resolve_profile_from_environment(os.environ)
+        )
         harness_home = (
             Path(os.environ.get("UNREST_HOME") or (Path.home() / ".unrest"))
             .expanduser()
@@ -149,6 +164,8 @@ class HarnessConfig:
                 os.environ.get("UNREST_TERMINAL_REVIEWER_REASONING_EFFORT"),
                 env_var="UNREST_TERMINAL_REVIEWER_REASONING_EFFORT",
             ),
+            capability_policy_version=capability_policy_version,
+            capability_profile=capability_profile,
         )
 
     # ------------------------------------------------------------------
@@ -157,15 +174,21 @@ class HarnessConfig:
 
     @property
     def orchestrator_provider(self):
-        return get_provider(self.orchestrator_provider_name)
+        return self._provider_for_role(
+            self.orchestrator_provider_name,
+            "orchestrator",
+        )
 
     @property
     def worker_provider(self):
-        return get_provider(self.worker_provider_name)
+        return self._provider_for_role(self.worker_provider_name, "worker")
 
     @property
     def validator_provider(self):
-        return get_provider(self.validator_provider_name or self.worker_provider_name)
+        return self._provider_for_role(
+            self.validator_provider_name or self.worker_provider_name,
+            "validator",
+        )
 
     @property
     def terminal_reviewer_provider(self):
@@ -174,7 +197,19 @@ class HarnessConfig:
             or self.validator_provider_name
             or self.worker_provider_name
         )
-        return get_provider(name)
+        return self._provider_for_role(name, "terminal_reviewer")
+
+    def _provider_for_role(self, name: str, role: RoleName):
+        try:
+            return get_provider(name)
+        except ValueError as exc:
+            raise CapabilityPolicyError(
+                provider=name,
+                role=role,
+                version=self.capability_policy_version,
+                capability="provider",
+                reason="provider is not declared",
+            ) from exc
 
     @property
     def resolved_worker_acp_command(self) -> str | None:
@@ -208,7 +243,38 @@ class HarnessConfig:
             ),
             worker_acp_command=self.worker_acp_command,
             validation_worker_acp_command=self.validator_acp_command,
+            terminal_reviewer=self.terminal_reviewer_provider,
+            terminal_reviewer_acp_command=self.terminal_reviewer_acp_command,
         )
+
+    @property
+    def capability_policy(self) -> CapabilityPolicy:
+        policy = load_capability_policy(self.bundled_dir)
+        if policy.schema_version != self.capability_policy_version:
+            raise CapabilityPolicyError(
+                provider="unresolved",
+                role="unresolved",
+                version=self.capability_policy_version,
+                capability="policy-version",
+                reason="does not match the bundled policy resource",
+            )
+        return policy
+
+    def validate_capability_support(self) -> None:
+        policy = self.capability_policy
+        providers: dict[RoleName, object] = {
+            "orchestrator": self.orchestrator_provider,
+            "worker": self.worker_provider,
+            "validator": self.validator_provider,
+            "terminal_reviewer": self.terminal_reviewer_provider,
+        }
+        for role, provider in providers.items():
+            validate_provider_support(
+                provider,  # type: ignore[arg-type]
+                role=role,
+                policy=policy,
+                profile=self.capability_profile,
+            )
 
     # ------------------------------------------------------------------
     # Bucket paths

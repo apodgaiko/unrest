@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
 import inspect
 import json
 import logging
 import os
 import shutil
+import shlex
 import socket
 import subprocess
 import sys
@@ -14,6 +16,22 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, ClassVar, Coroutine, Literal
 
 from .assets import AssetLoader
+from .capability_policy import (
+    SAFE_PROFILE,
+    UNSAFE_DEVELOPMENT_PROFILE,
+    CapabilityPolicyError,
+    ResolvedRoleCapability,
+    RoleName,
+    StreamingCredentialRedactor,
+    build_role_environment,
+    credential_values,
+    enforce_environment_credential_provenance,
+    enforce_persisted_environment_credential_provenance,
+    profile_environment,
+    redact_credential_values,
+    resolve_role_capability,
+    validate_role_environment,
+)
 from .config import HarnessConfig
 from .dispatcher import DispatchRequest, NodeHandoff
 from .models import (
@@ -86,6 +104,135 @@ def _truncate_text(text: str, *, limit: int = 280) -> str:
     return normalized[: limit - 1].rstrip() + "…"
 
 
+def _redact_json_value(value: Any, credentials: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        return redact_credential_values(value, credentials)
+    if isinstance(value, list):
+        return [_redact_json_value(item, credentials) for item in value]
+    if isinstance(value, dict):
+        entries = [
+            (
+                key,
+                (
+                    redact_credential_values(key, credentials)
+                    if isinstance(key, str)
+                    else key
+                ),
+                _redact_json_value(item, credentials),
+            )
+            for key, item in value.items()
+        ]
+        candidate_counts: dict[Any, int] = {}
+        for _, candidate, _ in entries:
+            candidate_counts[candidate] = candidate_counts.get(candidate, 0) + 1
+
+        # Unchanged keys and every natural redaction candidate are reserved first.
+        # A changed key in a collision group receives the first free #N suffix.
+        # Sorting by the raw source key makes the allocation independent of mapping
+        # insertion order without ever exposing that key in output or diagnostics.
+        reserved_keys = set(candidate_counts)
+        allocated_keys: dict[Any, Any] = {}
+        collision_entries = sorted(
+            (
+                (key, candidate)
+                for key, candidate, _ in entries
+                if key != candidate and candidate_counts[candidate] > 1
+            ),
+            key=lambda entry: (entry[1], entry[0]),
+        )
+        next_suffix: dict[str, int] = {}
+        for key, candidate in collision_entries:
+            suffix = next_suffix.get(candidate, 1)
+            output_key = f"{candidate}#{suffix}"
+            while output_key in reserved_keys:
+                suffix += 1
+                output_key = f"{candidate}#{suffix}"
+            allocated_keys[key] = output_key
+            reserved_keys.add(output_key)
+            next_suffix[candidate] = suffix + 1
+
+        redacted_entries = [
+            (allocated_keys.get(key, candidate), item)
+            for key, candidate, item in entries
+        ]
+        if all(isinstance(key, str) for key, _ in redacted_entries):
+            redacted_entries.sort(key=lambda entry: str(entry[0]))
+
+        redacted_mapping: dict[Any, Any] = {}
+        for key, item in redacted_entries:
+            if key in redacted_mapping:
+                raise ValueError(
+                    "credential redaction could not represent mapping keys safely"
+                )
+            redacted_mapping[key] = item
+        return redacted_mapping
+    return value
+
+
+def _redact_terminal_bytes(
+    output: bytes,
+    credentials: dict[str, str],
+    *,
+    incomplete: bool,
+) -> str:
+    """Redact a terminal snapshot while retaining undecidable stream suffixes."""
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    text = decoder.decode(output, final=not incomplete)
+    redactor = StreamingCredentialRedactor(credentials)
+    return redactor.feed(text, final=not incomplete)
+
+
+def _load_redacted_json(path: Path, credentials: dict[str, str]) -> Any:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    redacted = _redact_json_value(data, credentials)
+    if redacted != data:
+        atomic_write_json(path, redacted)
+    return redacted
+
+
+_DROP_CREDENTIAL_ALIAS = object()
+
+
+def _structured_value_is_sensitive(
+    value: str,
+    credentials: dict[str, str],
+) -> bool:
+    return not enforce_persisted_environment_credential_provenance(
+        {"value": value},
+        credentials,
+    )
+
+
+def _drop_structured_credential_aliases(
+    value: Any,
+    credentials: dict[str, str],
+) -> Any:
+    """Remove structured scalar values or keys containing credential tokens."""
+    if isinstance(value, str):
+        if _structured_value_is_sensitive(value, credentials):
+            return _DROP_CREDENTIAL_ALIAS
+        return value
+    if isinstance(value, list):
+        items = (
+            _drop_structured_credential_aliases(item, credentials)
+            for item in value
+        )
+        return [item for item in items if item is not _DROP_CREDENTIAL_ALIAS]
+    if isinstance(value, dict):
+        sanitized: dict[Any, Any] = {}
+        for key, item in sorted(value.items(), key=lambda entry: str(entry[0])):
+            if (
+                isinstance(key, str)
+                and _structured_value_is_sensitive(key, credentials)
+            ):
+                continue
+            projected = _drop_structured_credential_aliases(item, credentials)
+            if projected is not _DROP_CREDENTIAL_ALIAS:
+                sanitized[key] = projected
+        return sanitized
+    return value
+
+
 class ACPError(Exception):
     pass
 
@@ -104,27 +251,31 @@ def _augment_acp_command(command: str, provider, reasoning_effort: str | None = 
 def _acp_subprocess_env(
     provider,
     *,
+    policy: ResolvedRoleCapability,
     reasoning_effort: str | None = None,
     model: str | None = None,
+    internal: dict[str, str] | None = None,
+    host_environment: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    """Build the env handed to an ACP-agent subprocess.
-
-    Codex configuration follows the adapter's documented ``CODEX_CONFIG``,
-    ``CODEX_PATH``, and ``INITIAL_AGENT_MODE`` contract. Existing JSON config is
-    preserved except for the harness-owned approval, sandbox, model, and effort
-    fields. Non-Codex providers are insulated from inherited Codex sandbox
-    hints.
-    """
-    env = os.environ.copy()
+    """Build the least-privilege environment handed to an ACP agent."""
+    host = dict(os.environ if host_environment is None else host_environment)
+    credentials = credential_values(policy, host)
+    env = build_role_environment(
+        policy,
+        host,
+        internal=internal,
+        include_credentials=True,
+    )
     name = getattr(provider, "name", None)
     if name == "codex":
-        if not env.get("CODEX_PATH"):
-            codex_path = shutil.which("codex", path=env.get("PATH"))
-            if codex_path:
-                env["CODEX_PATH"] = codex_path
+        codex_path = host.get("CODEX_PATH")
+        if not codex_path:
+            codex_path = shutil.which("codex", path=host.get("PATH"))
+        if codex_path:
+            env["CODEX_PATH"] = codex_path
 
         config: dict[str, Any] = {}
-        raw_config = env.get("CODEX_CONFIG")
+        raw_config = host.get("CODEX_CONFIG")
         if raw_config:
             try:
                 parsed = json.loads(raw_config)
@@ -132,20 +283,39 @@ def _acp_subprocess_env(
                 raise ValueError("CODEX_CONFIG must be a valid JSON object") from exc
             if not isinstance(parsed, dict):
                 raise ValueError("CODEX_CONFIG must be a valid JSON object")
-            config.update(parsed)
-        config.update(
-            {
-                "sandbox_mode": "danger-full-access",
-                "approval_policy": "never",
-                "model_reasoning_effort": reasoning_effort or "xhigh",
-            }
-        )
+            sanitized = _drop_structured_credential_aliases(parsed, credentials)
+            if not isinstance(sanitized, dict):
+                raise AssertionError("sanitized CODEX_CONFIG must remain an object")
+            config.update(sanitized)
+        if policy.profile == UNSAFE_DEVELOPMENT_PROFILE:
+            config.update(
+                {
+                    "sandbox_mode": "danger-full-access",
+                    "approval_policy": "never",
+                    "model_reasoning_effort": reasoning_effort or "xhigh",
+                }
+            )
+            env["INITIAL_AGENT_MODE"] = "agent-full-access"
+            env["CODEX_SANDBOX"] = "danger-full-access"
+            env["CODEX_DISABLE_SANDBOX"] = "1"
+        else:
+            config.update(
+                {
+                    "sandbox_mode": "workspace-write",
+                    "approval_policy": "on-request",
+                    "model_reasoning_effort": reasoning_effort or "xhigh",
+                }
+            )
+            env["INITIAL_AGENT_MODE"] = "agent"
+            env.pop("CODEX_SANDBOX", None)
+            env.pop("CODEX_DISABLE_SANDBOX", None)
         if model:
             config["model"] = model
-        env["CODEX_CONFIG"] = json.dumps(config, separators=(",", ":"))
-        env["INITIAL_AGENT_MODE"] = "agent-full-access"
-        env["CODEX_SANDBOX"] = "danger-full-access"
-        env["CODEX_DISABLE_SANDBOX"] = "1"
+        sanitized_config = _drop_structured_credential_aliases(config, credentials)
+        if not isinstance(sanitized_config, dict):
+            raise AssertionError("sanitized CODEX_CONFIG must remain an object")
+        config = sanitized_config
+        env["CODEX_CONFIG"] = json.dumps(config, separators=(",", ":"), sort_keys=True)
     else:
         for key in (
             "CODEX_CONFIG",
@@ -155,7 +325,20 @@ def _acp_subprocess_env(
             "INITIAL_AGENT_MODE",
         ):
             env.pop(key, None)
-    return env
+        if policy.profile == SAFE_PROFILE:
+            for key in (
+                "CLAUDE_CODE_BYPASS_PERMISSIONS",
+                "CLAUDE_CODE_DISABLE_PERMISSIONS",
+                "CLAUDE_CODE_PERMISSION_MODE",
+            ):
+                env.pop(key, None)
+    final_environment = enforce_environment_credential_provenance(
+        env,
+        credentials,
+        inherit_all=policy.environment.inherit_all,
+    )
+    validate_role_environment(policy, final_environment)
+    return final_environment
 
 
 _NOT_FOUND = object()
@@ -234,6 +417,8 @@ class ManagedTerminal:
 @dataclass
 class ACPProgressTracker:
     callback: ProgressCallback | None = None
+    redactor: Callable[[str], str] = lambda text: text
+    stream_redactor: StreamingCredentialRedactor | None = None
     agent_message_id: str | None = None
     agent_buffer: str = ""
     last_emitted: str = ""
@@ -245,14 +430,18 @@ class ACPProgressTracker:
             return
         if update.get("sessionUpdate") == "agent_message_chunk":
             text = "".join(_extract_text_fragments(update.get("content")))
-            if not text.strip():
+            if not text:
                 return
-            self.diagnostic_buffer = (self.diagnostic_buffer + text)[-4000:]
             mid = update.get("messageId")
             if mid and mid != self.agent_message_id:
                 await self._flush()
                 self.agent_message_id = str(mid)
-            self.agent_buffer += text
+            safe_text = (
+                self.stream_redactor.feed(text)
+                if self.stream_redactor is not None
+                else text
+            )
+            self.agent_buffer += safe_text
             normalized = _normalize_progress_text(self.agent_buffer)
             if (
                 "\n" in text
@@ -262,11 +451,19 @@ class ACPProgressTracker:
                 await self._flush()
 
     async def flush(self) -> None:
+        if self.stream_redactor is not None:
+            self.agent_buffer += self.stream_redactor.finish()
         await self._flush()
 
     async def _flush(self) -> None:
-        msg = _normalize_progress_text(self.agent_buffer)
+        safe_buffer = (
+            self.agent_buffer
+            if self.stream_redactor is not None
+            else self.redactor(self.agent_buffer)
+        )
+        msg = _normalize_progress_text(safe_buffer)
         self.agent_buffer = ""
+        self.diagnostic_buffer = (self.diagnostic_buffer + safe_buffer)[-4000:]
         if not msg or self.callback is None or msg == self.last_emitted:
             return
         self.last_emitted = msg
@@ -285,10 +482,15 @@ class ACPClient:
         self,
         process: asyncio.subprocess.Process,
         working_dir: str,
+        policy: ResolvedRoleCapability,
+        terminal_environment: dict[str, str],
         session_update_handler: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None,
     ):
         self._process = process
         self._working_dir = working_dir
+        self._policy = policy
+        self._terminal_environment = terminal_environment
+        self._credentials = credential_values(policy, terminal_environment)
         self._session_update_handler = session_update_handler
         self._request_id = 0
         self._pending: dict[int, asyncio.Future] = {}
@@ -297,6 +499,9 @@ class ACPClient:
         self._terminal_count = 0
         self._request_tasks: set[asyncio.Task] = set()
         self._closing = False
+
+    def set_credential_inventory(self, credentials: dict[str, str]) -> None:
+        self._credentials = credentials.copy()
 
     async def start(self) -> None:
         self._reader_task = asyncio.create_task(self._read_loop())
@@ -359,9 +564,11 @@ class ACPClient:
         if rid is not None and rid in self._pending:
             fut = self._pending.pop(rid)
             if "error" in data:
-                fut.set_exception(ACPError(str(data["error"])))
+                error = _redact_json_value(data["error"], self._credentials)
+                fut.set_exception(ACPError(str(error)))
             else:
-                fut.set_result(data.get("result"))
+                result = _redact_json_value(data.get("result"), self._credentials)
+                fut.set_result(result)
 
     async def _handle_request(self, data: dict[str, Any]) -> None:
         method = data["method"]
@@ -372,7 +579,17 @@ class ACPClient:
         except Exception as e:  # noqa: BLE001
             if rid is not None:
                 await self._write(
-                    {"jsonrpc": "2.0", "id": rid, "error": {"code": -32603, "message": str(e)}}
+                    {
+                        "jsonrpc": "2.0",
+                        "id": rid,
+                        "error": {
+                            "code": -32603,
+                            "message": redact_credential_values(
+                                str(e),
+                                self._credentials,
+                            ),
+                        },
+                    }
                 )
             return
         if rid is not None:
@@ -385,6 +602,8 @@ class ACPClient:
                     }
                 )
             else:
+                if method != "terminal/output":
+                    result = _redact_json_value(result, self._credentials)
                 await self._write(
                     {
                         "jsonrpc": "2.0",
@@ -404,17 +623,7 @@ class ACPClient:
                     pass
             return None
         if method == "session/request_permission":
-            options = params.get("options", [])
-            allow = next(
-                (o for o in options if o.get("kind") == "allow_once"),
-                options[0] if options else {"optionId": "allow"},
-            )
-            return {
-                "outcome": {
-                    "optionId": allow.get("optionId", "allow"),
-                    "outcome": "selected",
-                }
-            }
+            return self._handle_permission_request(params)
         if method == "fs/read_text_file":
             return self._handle_fs_read(params)
         if method == "fs/write_text_file":
@@ -430,9 +639,11 @@ class ACPClient:
         return _NOT_FOUND
 
     def _handle_fs_read(self, params: dict[str, Any]) -> dict[str, str]:
-        path = Path(params.get("path", ""))
-        if not path.is_absolute():
-            path = Path(self._working_dir) / path
+        path = self._policy.authorize_path(
+            params.get("path", ""),
+            access="read",
+            working_dir=Path(self._working_dir),
+        )
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
             line = params.get("line")
@@ -449,30 +660,61 @@ class ACPClient:
         return {"content": text}
 
     def _handle_fs_write(self, params: dict[str, Any]) -> dict[str, Any]:
-        path = Path(params["path"])
-        if not path.is_absolute():
-            path = Path(self._working_dir) / path
+        path = self._policy.authorize_path(
+            params["path"],
+            access="write",
+            working_dir=Path(self._working_dir),
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(params["content"], encoding="utf-8")
         return {}
 
     async def _handle_terminal_create(self, params: dict[str, Any]) -> dict[str, str]:
+        command = params.get("command", "")
+        if not isinstance(command, str) or not command:
+            raise ValueError("terminal command must be a non-empty string")
+        args = params.get("args") or []
+        if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
+            raise ValueError("terminal args must be a list of strings")
+        self._policy.authorize_command(command)
+        cwd = self._policy.authorize_path(
+            params.get("cwd") or self._working_dir,
+            access="cwd",
+            working_dir=Path(self._working_dir),
+        )
+        env_list = params.get("env") or []
+        if not isinstance(env_list, list):
+            raise ValueError("terminal env must be a list")
+        requested_environment: dict[str, str] = {}
+        for variable in env_list:
+            if (
+                not isinstance(variable, dict)
+                or not isinstance(variable.get("name"), str)
+                or not isinstance(variable.get("value"), str)
+            ):
+                raise ValueError("terminal env entries require string name/value")
+            name = variable["name"]
+            if name in requested_environment:
+                raise ValueError(f"duplicate terminal environment name: {name}")
+            requested_environment[name] = variable["value"]
+        self._policy.authorize_terminal_environment(tuple(requested_environment))
+
         self._terminal_count += 1
         terminal_id = f"terminal-{self._terminal_count}"
-        cmd = params.get("command", "")
-        args = params.get("args") or []
-        cwd = params.get("cwd") or self._working_dir
-        env_list = params.get("env") or []
         output_limit = params.get("outputByteLimit") or 1024 * 1024
-        env = os.environ.copy()
-        for var in env_list:
-            env[var["name"]] = var["value"]
-        full_cmd = " ".join([cmd, *args])
-        process = await asyncio.create_subprocess_shell(
-            full_cmd,
+        if not isinstance(output_limit, int) or output_limit <= 0:
+            raise ValueError("outputByteLimit must be a positive integer")
+        env = enforce_environment_credential_provenance(
+            {**self._terminal_environment, **requested_environment},
+            self._credentials,
+            inherit_all=self._policy.environment.inherit_all,
+        )
+        process = await asyncio.create_subprocess_exec(
+            command,
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
-            cwd=cwd,
+            cwd=str(cwd),
             env=env,
             limit=SUBPROCESS_STREAM_LIMIT,
         )
@@ -482,6 +724,56 @@ class ACPClient:
         self._terminals[terminal_id] = terminal
         asyncio.create_task(self._read_terminal_output(terminal))
         return {"terminalId": terminal_id}
+
+    def _handle_permission_request(self, params: dict[str, Any]) -> dict[str, Any]:
+        options = params.get("options")
+        tool_call = params.get("toolCall")
+        if not isinstance(options, list) or not isinstance(tool_call, dict):
+            return {"outcome": {"outcome": "cancelled"}}
+        kind = tool_call.get("kind")
+        if not isinstance(kind, str) or not kind:
+            return {"outcome": {"outcome": "cancelled"}}
+        valid_kinds = {
+            "allow_always",
+            "allow_once",
+            "reject_always",
+            "reject_once",
+        }
+        option_ids: set[str] = set()
+        for option in options:
+            if not isinstance(option, dict):
+                return {"outcome": {"outcome": "cancelled"}}
+            option_id = option.get("optionId")
+            name = option.get("name")
+            option_kind = option.get("kind")
+            if (
+                not isinstance(option_id, str)
+                or not option_id.strip()
+                or not isinstance(name, str)
+                or not name.strip()
+                or not isinstance(option_kind, str)
+                or option_kind not in valid_kinds
+                or option_id in option_ids
+            ):
+                return {"outcome": {"outcome": "cancelled"}}
+            option_ids.add(option_id)
+
+        allowed = (
+            self._policy.approvals.behavior == "allow_once"
+            and kind in self._policy.approvals.tool_kinds
+        )
+        desired_kind = "allow_once" if allowed else "reject_once"
+        matching = [
+            option for option in options if option["kind"] == desired_kind
+        ]
+        if len(matching) != 1:
+            return {"outcome": {"outcome": "cancelled"}}
+        return {
+            "outcome": {
+                "optionId": matching[0]["optionId"],
+                "outcome": "selected",
+            }
+        }
 
     async def _read_terminal_output(self, terminal: ManagedTerminal) -> None:
         assert terminal.process.stdout is not None
@@ -508,7 +800,11 @@ class ACPClient:
         if t is None:
             return {"output": "", "truncated": False}
         out: dict[str, Any] = {
-            "output": t.output.decode("utf-8", errors="replace"),
+            "output": _redact_terminal_bytes(
+                bytes(t.output),
+                self._credentials,
+                incomplete=t.process.returncode is None or t.truncated,
+            ),
             "truncated": t.truncated,
         }
         if t.process.returncode is not None:
@@ -591,6 +887,20 @@ class ACPNodeRunner:
         role: Literal["validator", "worker"] = "validator" if task.type == "validate" else "worker"
         role_config = self.config.for_role(role)
         project_record = store.load_project(project_id)
+        workspace_path = (
+            Path(cwd).expanduser().resolve(strict=True)
+            if cwd
+            else store.workspace_dir(project_id).resolve(strict=True)
+        )
+        project_record_path = store.unrest_dir(project_id).resolve(strict=True)
+        resolved_policy = resolve_role_capability(
+            role_config.worker_provider,
+            role=role,
+            policy=role_config.capability_policy,
+            profile=role_config.capability_profile,
+            workspace=workspace_path,
+            project_record=project_record_path,
+        )
         acp_command = role_config.worker_acp_command or role_config.resolved_worker_acp_command
         if not acp_command:
             raise RuntimeError(
@@ -601,8 +911,21 @@ class ACPNodeRunner:
             role_config.worker_provider,
             role_config.worker_reasoning_effort,
         )
+        workspace_dir = str(workspace_path)
+        project_bucket = str(project_record_path)
+        handoff_path = store.attempt_path(project_id, mission_id, spawn_ts, task.id)
+        runtime_environment = {
+            **profile_environment(role_config.capability_profile),
+            "UNREST_HANDOFF_PATH": str(handoff_path),
+            "UNREST_HOME": str(self.config.harness_home),
+            "UNREST_MISSION_ID": mission_id,
+            "UNREST_NODE_ID": task.id,
+            "UNREST_NODE_TYPE": task.type,
+            "UNREST_PROJECT_ID": project_id,
+        }
         agent_env = _acp_subprocess_env(
             role_config.worker_provider,
+            policy=resolved_policy,
             reasoning_effort=(
                 project_record.worker_reasoning_effort
                 if role == "worker" and project_record.worker_reasoning_effort
@@ -613,21 +936,26 @@ class ACPNodeRunner:
                 if role == "worker"
                 else None
             ),
+            internal=runtime_environment,
         )
+        terminal_environment = build_role_environment(
+            resolved_policy,
+            os.environ,
+            include_credentials=True,
+        )
+        secrets = credential_values(resolved_policy, os.environ)
 
-        workspace_dir = str(
-            Path(cwd).expanduser().resolve() if cwd else store.workspace_dir(project_id)
-        )
-        project_bucket = str(store.unrest_dir(project_id))
-        handoff_path = store.attempt_path(project_id, mission_id, spawn_ts, task.id)
+        def redact(text: str) -> str:
+            return redact_credential_values(text, secrets)
+
         handoff_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 0) For claude-agent-acp: drop a project-level settings.json that
-        #    overrides the user's global ~/.claude/settings.json. Adapter
-        #    rejects session/new with `Invalid permissions.defaultMode: auto`
-        #    if the user's global setting carries the SDK-unsupported "auto"
-        #    default.
-        _ensure_claude_settings(Path(workspace_dir), role_config.worker_provider)
+        _ensure_claude_settings(
+            workspace_path,
+            role_config.worker_provider,
+            role_config.capability_profile,
+            role=role,
+        )
 
         # 1) Start the worker MCP server subprocess.
         mcp_port = self._find_free_port()
@@ -638,6 +966,12 @@ class ACPNodeRunner:
             handoff_path=str(handoff_path),
             workspace_dir=workspace_dir,
             mcp_port=mcp_port,
+            environment=build_role_environment(
+                resolved_policy,
+                os.environ,
+                internal=runtime_environment,
+                include_credentials=False,
+            ),
         )
         try:
             await self._wait_for_server_ready("127.0.0.1", mcp_port)
@@ -668,8 +1002,11 @@ class ACPNodeRunner:
         )
 
         # 3) Spawn the ACP agent.
-        process = await asyncio.create_subprocess_shell(
-            acp_command,
+        command_parts = shlex.split(acp_command)
+        if not command_parts:
+            raise ValueError("ACP command cannot be empty")
+        process = await asyncio.create_subprocess_exec(
+            *command_parts,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -677,12 +1014,25 @@ class ACPNodeRunner:
             env=agent_env,
             limit=SUBPROCESS_STREAM_LIMIT,
         )
-        progress_tracker = ACPProgressTracker(callback=progress_callback)
+        progress_tracker = ACPProgressTracker(
+            callback=progress_callback,
+            redactor=redact,
+            stream_redactor=StreamingCredentialRedactor(secrets),
+        )
         client = ACPClient(
             process,
             workspace_dir,
+            policy=resolved_policy,
+            terminal_environment=terminal_environment,
             session_update_handler=progress_tracker.handle_session_update,
         )
+        set_credential_inventory = getattr(
+            client,
+            "set_credential_inventory",
+            None,
+        )
+        if set_credential_inventory is not None:
+            set_credential_inventory(secrets)
         await client.start()
         prompt_stop_reason: str | None = None
         session_error: str | None = None
@@ -696,8 +1046,11 @@ class ACPNodeRunner:
                 {
                     "protocolVersion": 1,
                     "clientCapabilities": {
-                        "fs": {"readTextFile": True, "writeTextFile": True},
-                        "terminal": True,
+                        "fs": {
+                            "readTextFile": any(root.read for root in resolved_policy.roots),
+                            "writeTextFile": any(root.write for root in resolved_policy.roots),
+                        },
+                        "terminal": resolved_policy.process.enabled,
                     },
                     "clientInfo": {"name": "unrest", "version": "0.1.0"},
                 },
@@ -709,7 +1062,12 @@ class ACPNodeRunner:
             provider = role_config.worker_provider
             session_resp = await client.send_request("session/new", session_params)
             session_id = session_resp["sessionId"]
-            await self._maybe_set_mode(client, session_id, provider)
+            await self._maybe_set_mode(
+                client,
+                session_id,
+                provider,
+                role_config.capability_profile,
+            )
 
             prompt_result = await client.send_request(
                 "session/prompt",
@@ -723,8 +1081,8 @@ class ACPNodeRunner:
             # 4) Give the worker MCP server a short grace period to flush.
             await self._poll_attempt_file(handoff_path, timeout=2.0)
         except Exception as exc:  # noqa: BLE001
-            session_error = str(exc)
-            logger.error("ACP session failed for node %s: %s", task.id, exc)
+            session_error = redact(str(exc))
+            logger.error("ACP session failed for node %s: %s", task.id, session_error)
         finally:
             await progress_tracker.flush()
             if process.returncode is None:
@@ -739,7 +1097,8 @@ class ACPNodeRunner:
             worker_exit_code = process.returncode
             try:
                 worker_stderr = _truncate_text(
-                    await asyncio.wait_for(stderr_task, timeout=0.5), limit=2000
+                    redact(await asyncio.wait_for(stderr_task, timeout=0.5)),
+                    limit=2000,
                 )
             except (asyncio.TimeoutError, Exception):
                 worker_stderr = ""
@@ -754,7 +1113,11 @@ class ACPNodeRunner:
 
         # 5) Parse and return.
         if handoff_path.exists():
-            return self._parse_handoff_file(handoff_path, task)
+            return self._parse_handoff_file(
+                handoff_path,
+                task,
+                credentials=secrets,
+            )
         return self._synthesize_and_persist_missing_handoff(
             handoff_path=handoff_path,
             task=task,
@@ -763,6 +1126,7 @@ class ACPNodeRunner:
             stderr=worker_stderr,
             session_error=session_error,
             agent_output=progress_tracker.diagnostic_buffer,
+            credentials=secrets,
         )
 
     async def run_terminal_review(
@@ -810,6 +1174,18 @@ class ACPNodeRunner:
     ) -> TerminalReviewHandoff:
         """Adversarial review body; cancellation always tears down both children."""
         role_config = self.config.for_role("terminal_reviewer")
+        workspace_path = store.workspace_dir(project_id).resolve(strict=True)
+        project_record_path = store.unrest_dir(project_id).resolve(strict=True)
+        review_config = store.load_terminal_review_config(project_id, mission_id)
+        resolved_policy = resolve_role_capability(
+            role_config.worker_provider,
+            role="terminal_reviewer",
+            policy=role_config.capability_policy,
+            profile=role_config.capability_profile,
+            workspace=workspace_path,
+            project_record=project_record_path,
+            deliverable_roots=tuple(Path(root) for root in review_config.deliverable_roots),
+        )
         acp_command = role_config.worker_acp_command
         if not acp_command:
             raise RuntimeError(
@@ -820,18 +1196,40 @@ class ACPNodeRunner:
             role_config.worker_provider,
             role_config.worker_reasoning_effort,
         )
+        workspace_dir = str(workspace_path)
+        project_bucket = str(project_record_path)
+        report_path = store.terminal_review_path(project_id, mission_id, spawn_ts)
+        runtime_environment = {
+            **profile_environment(role_config.capability_profile),
+            "UNREST_HOME": str(self.config.harness_home),
+            "UNREST_MISSION_ID": mission_id,
+            "UNREST_PROJECT_ID": project_id,
+            "UNREST_TERMINAL_REVIEW_PATH": str(report_path),
+        }
         agent_env = _acp_subprocess_env(
             role_config.worker_provider,
+            policy=resolved_policy,
             reasoning_effort=role_config.worker_reasoning_effort,
+            internal=runtime_environment,
         )
+        terminal_environment = build_role_environment(
+            resolved_policy,
+            os.environ,
+            include_credentials=True,
+        )
+        secrets = credential_values(resolved_policy, os.environ)
 
-        workspace_dir = str(store.workspace_dir(project_id))
-        project_bucket = str(store.unrest_dir(project_id))
-        report_path = store.terminal_review_path(project_id, mission_id, spawn_ts)
+        def redact(text: str) -> str:
+            return redact_credential_values(text, secrets)
+
         report_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Same claude-agent-acp settings workaround as run_node.
-        _ensure_claude_settings(Path(workspace_dir), role_config.worker_provider)
+        _ensure_claude_settings(
+            workspace_path,
+            role_config.worker_provider,
+            role_config.capability_profile,
+            role="terminal_reviewer",
+        )
 
         mcp_port = self._find_free_port()
         mcp_process = await self._start_terminal_reviewer_mcp(
@@ -840,11 +1238,21 @@ class ACPNodeRunner:
             report_path=str(report_path),
             workspace_dir=workspace_dir,
             mcp_port=mcp_port,
+            environment=build_role_environment(
+                resolved_policy,
+                os.environ,
+                internal=runtime_environment,
+                include_credentials=False,
+            ),
         )
         process: asyncio.subprocess.Process | None = None
         client: ACPClient | None = None
         stderr_task: asyncio.Task[str] | None = None
-        tracker = ACPProgressTracker(callback=progress_callback)
+        tracker = ACPProgressTracker(
+            callback=progress_callback,
+            redactor=redact,
+            stream_redactor=StreamingCredentialRedactor(secrets),
+        )
         try:
             try:
                 await self._wait_for_server_ready("127.0.0.1", mcp_port)
@@ -860,14 +1268,16 @@ class ACPNodeRunner:
                 "headers": [],
                 "env": [],
             }
-            review_config = store.load_terminal_review_config(project_id, mission_id)
             first_message = self._render_terminal_reviewer_prompts(
                 project_bucket=project_bucket,
                 workspace_dir=workspace_dir,
                 deliverable_roots=review_config.deliverable_roots,
             )
-            process = await asyncio.create_subprocess_shell(
-                acp_command,
+            command_parts = shlex.split(acp_command)
+            if not command_parts:
+                raise ValueError("ACP command cannot be empty")
+            process = await asyncio.create_subprocess_exec(
+                *command_parts,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -878,8 +1288,17 @@ class ACPNodeRunner:
             client = ACPClient(
                 process,
                 workspace_dir,
+                policy=resolved_policy,
+                terminal_environment=terminal_environment,
                 session_update_handler=tracker.handle_session_update,
             )
+            set_credential_inventory = getattr(
+                client,
+                "set_credential_inventory",
+                None,
+            )
+            if set_credential_inventory is not None:
+                set_credential_inventory(secrets)
             await client.start()
             # Continuous draining prevents a chatty reviewer from filling the
             # stderr pipe and stalling its ACP/stdout channel.
@@ -889,8 +1308,11 @@ class ACPNodeRunner:
                 {
                     "protocolVersion": 1,
                     "clientCapabilities": {
-                        "fs": {"readTextFile": True, "writeTextFile": True},
-                        "terminal": True,
+                        "fs": {
+                            "readTextFile": any(root.read for root in resolved_policy.roots),
+                            "writeTextFile": any(root.write for root in resolved_policy.roots),
+                        },
+                        "terminal": resolved_policy.process.enabled,
                     },
                     "clientInfo": {"name": "unrest", "version": "0.1.0"},
                 },
@@ -902,7 +1324,12 @@ class ACPNodeRunner:
             provider = role_config.worker_provider
             session_resp = await client.send_request("session/new", session_params)
             session_id = session_resp["sessionId"]
-            await self._maybe_set_mode(client, session_id, provider)
+            await self._maybe_set_mode(
+                client,
+                session_id,
+                provider,
+                role_config.capability_profile,
+            )
             await client.send_request(
                 "session/prompt",
                 {
@@ -915,7 +1342,10 @@ class ACPNodeRunner:
             try:
                 await tracker.flush()
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Terminal-review progress callback failed: %s", exc)
+                logger.warning(
+                    "Terminal-review progress callback failed: %s",
+                    redact(str(exc)),
+                )
             if process is not None and process.returncode is None:
                 try:
                     process.terminate()
@@ -941,7 +1371,9 @@ class ACPNodeRunner:
             await _close_subprocess(mcp_process, timeout=5)
 
         if report_path.exists():
-            return TerminalReviewHandoff.model_validate_json(report_path.read_text())
+            return TerminalReviewHandoff.model_validate(
+                _load_redacted_json(report_path, secrets)
+            )
         raise RuntimeError(
             "Terminal reviewer exited without calling submit_terminal_review; "
             "no terminal review was written. The mission cannot be sealed as done "
@@ -961,6 +1393,7 @@ class ACPNodeRunner:
         handoff_path: str,
         workspace_dir: str,
         mcp_port: int,
+        environment: dict[str, str],
     ) -> asyncio.subprocess.Process:
         cmd = [
             sys.executable,
@@ -975,19 +1408,12 @@ class ACPNodeRunner:
             "--port",
             str(mcp_port),
         ]
-        env = os.environ.copy()
-        env["UNREST_HOME"] = str(self.config.harness_home)
-        env["UNREST_PROJECT_ID"] = project_id
-        env["UNREST_MISSION_ID"] = mission_id
-        env["UNREST_NODE_ID"] = task.id
-        env["UNREST_NODE_TYPE"] = task.type
-        env["UNREST_HANDOFF_PATH"] = handoff_path
         return await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=workspace_dir,
-            env=env,
+            env=environment,
             limit=SUBPROCESS_STREAM_LIMIT,
         )
 
@@ -999,6 +1425,7 @@ class ACPNodeRunner:
         report_path: str,
         workspace_dir: str,
         mcp_port: int,
+        environment: dict[str, str],
     ) -> asyncio.subprocess.Process:
         cmd = [
             sys.executable,
@@ -1013,16 +1440,12 @@ class ACPNodeRunner:
             "--port",
             str(mcp_port),
         ]
-        env = os.environ.copy()
-        env["UNREST_PROJECT_ID"] = project_id
-        env["UNREST_MISSION_ID"] = mission_id
-        env["UNREST_TERMINAL_REVIEW_PATH"] = report_path
         return await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=workspace_dir,
-            env=env,
+            env=environment,
             limit=SUBPROCESS_STREAM_LIMIT,
         )
 
@@ -1047,8 +1470,18 @@ class ACPNodeRunner:
                 return False
             await asyncio.sleep(0.1)
 
-    async def _maybe_set_mode(self, client: ACPClient, session_id: str, provider) -> None:
-        mode = getattr(provider, "acp_runtime_mode", None)
+    async def _maybe_set_mode(
+        self,
+        client: ACPClient,
+        session_id: str,
+        provider,
+        profile: str,
+    ) -> None:
+        mode = (
+            "bypassPermissions"
+            if provider.name == "claude" and profile == UNSAFE_DEVELOPMENT_PROFILE
+            else None
+        )
         if not mode:
             return
         try:
@@ -1161,9 +1594,14 @@ class ACPNodeRunner:
     # Handoff parsing + synthesis
     # ------------------------------------------------------------------
 
-    def _parse_handoff_file(self, path: Path, task: Task) -> NodeHandoff:
-        raw = path.read_text(encoding="utf-8")
-        data = json.loads(raw)
+    def _parse_handoff_file(
+        self,
+        path: Path,
+        task: Task,
+        *,
+        credentials: dict[str, str] | None = None,
+    ) -> NodeHandoff:
+        data = _load_redacted_json(path, credentials or {})
         if task.type == "validate":
             return ValidateHandoff.model_validate(data)
         return WorkHandoff.model_validate(data)
@@ -1191,6 +1629,7 @@ class ACPNodeRunner:
         stderr: str,
         session_error: str | None,
         agent_output: str = "",
+        credentials: dict[str, str] | None = None,
     ) -> NodeHandoff:
         parts: list[str] = ["Agent session ended without calling end_node."]
         if session_error:
@@ -1203,7 +1642,7 @@ class ACPNodeRunner:
             parts.append(f"stderr={stderr}")
         if agent_output:
             parts.append(f"agent_output={_truncate_text(agent_output[-4000:], limit=2000)}")
-        summary = " ".join(parts)
+        summary = redact_credential_values(" ".join(parts), credentials or {})
         handoff = self._synthesize_missing_handoff(task, summary=summary)
         atomic_write_json(handoff_path, handoff.model_dump(mode="json"))
         return handoff
@@ -1276,7 +1715,10 @@ class ACPNodeDispatcher:
                     handoffs.append(
                         self.runner._synthesize_missing_handoff(
                             request.task,
-                            summary=f"Dispatcher crashed: {result}",
+                            summary=(
+                                "Dispatcher crashed before a handoff; runtime "
+                                "diagnostics were not persisted."
+                            ),
                         )
                     )
                 else:
@@ -1316,37 +1758,122 @@ class ACPTerminalReviewer:
 # ---------------------------------------------------------------------------
 
 
-def _ensure_claude_settings(workspace: Path, provider) -> None:
-    """Write `<workspace>/.claude/settings.json` overriding `permissions.defaultMode`.
-
-    The `@zed-industries/claude-agent-acp` adapter loads settings as
-    user → project → local → enterprise (last write wins). Without this, a
-    user with `"permissions": {"defaultMode": "auto"}` in their global
-    `~/.claude/settings.json` will see session/new fail with
-    `Invalid permissions.defaultMode: auto.` — the Claude Code SDK does not
-    accept "auto".
-
-    We touch this file only when:
-    - The provider declares a non-empty `acp_runtime_mode` (i.e. claude).
-    - The file does not already exist (respect any user-authored override).
-
-    In v5 the workspace is the user's repo, so we conservatively no-op on
-    pre-existing files.
-    """
-    mode = getattr(provider, "acp_runtime_mode", None)
-    if not mode:
+def _ensure_claude_settings(
+    workspace: Path,
+    provider,
+    profile: str,
+    *,
+    role: RoleName = "orchestrator",
+    settings_dir: Path | None = None,
+) -> None:
+    """Install or migrate only Unrest-owned Claude permission defaults."""
+    if provider.name != "claude":
         return
-    claude_dir = workspace / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
+    claude_dir = settings_dir or workspace / ".claude"
     settings_path = claude_dir / "settings.json"
+    marker_path = claude_dir / ".unrest-managed-settings.json"
+    existing: dict[str, Any]
     if settings_path.exists():
-        # Respect user-authored settings; the user can put whatever they want
-        # in there. If their setting is "auto" we can't help — they need to
-        # change it manually.
+        try:
+            loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CapabilityPolicyError(
+                provider="claude",
+                role=role,
+                version=1,
+                capability="host-settings",
+                reason="Claude settings must be a valid JSON object",
+            ) from exc
+        if not isinstance(loaded, dict):
+            raise CapabilityPolicyError(
+                provider="claude",
+                role=role,
+                version=1,
+                capability="host-settings",
+                reason="Claude settings root must be an object",
+            )
+        existing = loaded
+    else:
+        existing = {}
+
+    marker_managed = False
+    if marker_path.exists():
+        try:
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CapabilityPolicyError(
+                provider="claude",
+                role=role,
+                version=1,
+                capability="host-settings-marker",
+                reason="managed settings marker is malformed",
+            ) from exc
+        marker_managed = marker == {
+            "managed_fields": ["permissions.defaultMode"],
+            "schema_version": 1,
+        }
+        if not marker_managed:
+            raise CapabilityPolicyError(
+                provider="claude",
+                role=role,
+                version=1,
+                capability="host-settings-marker",
+                reason="managed settings marker is unsupported",
+            )
+
+    permissions = existing.get("permissions")
+    if permissions is None:
+        permissions = {}
+        existing["permissions"] = permissions
+    if not isinstance(permissions, dict):
+        raise CapabilityPolicyError(
+            provider="claude",
+            role=role,
+            version=1,
+            capability="host-settings:permissions",
+            reason="permissions must be an object",
+        )
+
+    legacy_managed = existing == {
+        "permissions": {"defaultMode": "bypassPermissions"}
+    }
+    current_mode = permissions.get("defaultMode")
+    desired_mode = (
+        "bypassPermissions"
+        if profile == UNSAFE_DEVELOPMENT_PROFILE
+        else "default"
+    )
+    if (
+        profile == SAFE_PROFILE
+        and current_mode not in (None, "default")
+        and not marker_managed
+        and not legacy_managed
+    ):
+        raise CapabilityPolicyError(
+            provider="claude",
+            role=role,
+            version=1,
+            capability=f"host-settings:permissions.defaultMode={current_mode}",
+            reason="unmanaged ambient permission mode is not safe",
+        )
+
+    should_manage = (
+        not settings_path.exists()
+        or current_mode is None
+        or marker_managed
+        or legacy_managed
+        or profile == UNSAFE_DEVELOPMENT_PROFILE
+    )
+    if not should_manage:
         return
-    settings_path.write_text(
-        json.dumps({"permissions": {"defaultMode": mode}}, indent=2) + "\n",
-        encoding="utf-8",
+    permissions["defaultMode"] = desired_mode
+    atomic_write_json(settings_path, existing)
+    atomic_write_json(
+        marker_path,
+        {
+            "managed_fields": ["permissions.defaultMode"],
+            "schema_version": 1,
+        },
     )
 
 

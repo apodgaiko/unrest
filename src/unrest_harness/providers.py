@@ -5,6 +5,7 @@ from typing import Literal
 
 ProviderName = Literal["claude", "codex", "hermes"]
 ConfigFormat = Literal["mcp_json", "codex_config"]
+CapabilityRole = Literal["orchestrator", "worker", "validator", "terminal_reviewer"]
 
 ORCHESTRATOR_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     "claude",
@@ -29,6 +30,21 @@ class ProviderDefinition:
     orchestrator_prompt_output_path: str | None = None
     acp_supports_system_prompt: bool = True
     acp_runtime_mode: str | None = None
+    capability_policy_versions: tuple[int, ...] = (1,)
+    capability_profiles: tuple[str, ...] = (
+        "safe",
+        "unsafe-development-unrestricted",
+    )
+    capability_roles: tuple[CapabilityRole, ...] = (
+        "orchestrator",
+        "worker",
+        "validator",
+        "terminal_reviewer",
+    )
+    network_modes: tuple[str, ...] = ("allow",)
+    acp_filesystem_enforcement: bool = True
+    acp_terminal_enforcement: bool = True
+    acp_permission_enforcement: bool = True
 
 
 @dataclass(frozen=True)
@@ -38,6 +54,8 @@ class ProviderSelection:
     validation_worker: ProviderDefinition | None = None
     worker_acp_command: str | None = None
     validation_worker_acp_command: str | None = None
+    terminal_reviewer: ProviderDefinition | None = None
+    terminal_reviewer_acp_command: str | None = None
 
     @property
     def resolved_worker_acp_command(self) -> str | None:
@@ -61,6 +79,24 @@ class ProviderSelection:
             or self.resolved_validation_worker.default_worker_acp_command
         )
 
+    @property
+    def resolved_terminal_reviewer(self) -> ProviderDefinition:
+        return self.terminal_reviewer or self.validation_worker or self.worker
+
+    @property
+    def resolved_terminal_reviewer_acp_command(self) -> str | None:
+        if self.terminal_reviewer_acp_command:
+            return self.terminal_reviewer_acp_command
+        if self.resolved_terminal_reviewer.name != self.resolved_validation_worker.name:
+            return (
+                self.resolved_terminal_reviewer.default_worker_acp_command
+                or self.resolved_validation_worker_acp_command
+            )
+        return (
+            self.resolved_validation_worker_acp_command
+            or self.resolved_terminal_reviewer.default_worker_acp_command
+        )
+
     def env(self) -> dict[str, str]:
         env: dict[str, str] = {
             "UNREST_ORCHESTRATOR_PROVIDER": self.orchestrator.name,
@@ -76,6 +112,13 @@ class ProviderSelection:
             and validation_command is not None
         ):
             env["UNREST_VALIDATOR_ACP_COMMAND"] = validation_command
+        if self.resolved_terminal_reviewer.name != self.resolved_validation_worker.name:
+            env["UNREST_TERMINAL_REVIEWER_PROVIDER"] = (
+                self.resolved_terminal_reviewer.name
+            )
+        terminal_command = self.resolved_terminal_reviewer_acp_command
+        if terminal_command != validation_command and terminal_command is not None:
+            env["UNREST_TERMINAL_REVIEWER_ACP_COMMAND"] = terminal_command
         return env
 
     def skill_install_dirs(self) -> tuple[str, ...]:
@@ -83,6 +126,7 @@ class ProviderSelection:
             self.orchestrator.skill_dirs
             + self.worker.skill_dirs
             + self.resolved_validation_worker.skill_dirs
+            + self.resolved_terminal_reviewer.skill_dirs
         )
 
     def skill_alias_dirs(self) -> tuple[str, ...]:
@@ -90,6 +134,7 @@ class ProviderSelection:
             self.orchestrator.skill_alias_dirs
             + self.worker.skill_alias_dirs
             + self.resolved_validation_worker.skill_alias_dirs
+            + self.resolved_terminal_reviewer.skill_alias_dirs
         )
 
     def providers(self) -> tuple[ProviderDefinition, ...]:
@@ -97,6 +142,7 @@ class ProviderSelection:
             self.orchestrator,
             self.worker,
             self.resolved_validation_worker,
+            self.resolved_terminal_reviewer,
         )
         ordered: list[ProviderDefinition] = []
         seen: set[str] = set()
@@ -128,7 +174,7 @@ PROVIDERS: dict[ProviderName, ProviderDefinition] = {
         default_worker_acp_command="claude-agent-acp",
         agent_output_dir=".claude/agents",
         orchestrator_prompt_output_path=".claude/orchestrator_prompt.md",
-        acp_runtime_mode="bypassPermissions",
+        acp_runtime_mode=None,
     ),
     "codex": ProviderDefinition(
         name="codex",
@@ -150,6 +196,7 @@ PROVIDERS: dict[ProviderName, ProviderDefinition] = {
         orchestrator_prompt_output_path=".hermes/orchestrator_prompt.md",
         acp_supports_system_prompt=True,
         acp_runtime_mode=None,
+        capability_roles=("worker", "validator", "terminal_reviewer"),
     ),
 }
 

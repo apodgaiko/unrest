@@ -1,0 +1,561 @@
+{
+  "policy_id": "unrest-role-capabilities",
+  "profiles": {
+    "safe": {
+      "orchestrator": {
+        "approvals": {
+          "behavior": "deny",
+          "tool_kinds": []
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE",
+            "UNREST_CAPABILITY_POLICY_VERSION",
+            "UNREST_CAPABILITY_PROFILE",
+            "UNREST_HOME",
+            "UNREST_ORCHESTRATOR_PROVIDER",
+            "UNREST_TERMINAL_REVIEWER_ACP_COMMAND",
+            "UNREST_TERMINAL_REVIEWER_PROVIDER",
+            "UNREST_VALIDATOR_ACP_COMMAND",
+            "UNREST_VALIDATOR_PROVIDER",
+            "UNREST_WORKER_ACP_COMMAND",
+            "UNREST_WORKER_PROVIDER"
+          ],
+          "terminal_injection": [
+            "LANG",
+            "LC_ALL",
+            "PATH",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ]
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": true
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": true
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "terminal_reviewer": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "read",
+            "search",
+            "execute",
+            "think",
+            "fetch",
+            "other"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE",
+            "UNREST_CAPABILITY_POLICY_VERSION",
+            "UNREST_CAPABILITY_PROFILE",
+            "UNREST_HOME",
+            "UNREST_MISSION_ID",
+            "UNREST_PROJECT_ID",
+            "UNREST_TERMINAL_REVIEW_PATH"
+          ],
+          "terminal_injection": [
+            "LANG",
+            "LC_ALL",
+            "PATH",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ]
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [
+            "*"
+          ],
+          "enabled": true
+        }
+      },
+      "validator": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "read",
+            "search",
+            "execute",
+            "think",
+            "fetch",
+            "other"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE",
+            "UNREST_CAPABILITY_POLICY_VERSION",
+            "UNREST_CAPABILITY_PROFILE",
+            "UNREST_HANDOFF_PATH",
+            "UNREST_HOME",
+            "UNREST_MISSION_ID",
+            "UNREST_NODE_ID",
+            "UNREST_NODE_TYPE",
+            "UNREST_PROJECT_ID"
+          ],
+          "terminal_injection": [
+            "LANG",
+            "LC_ALL",
+            "PATH",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ]
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": true
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [
+            "*"
+          ],
+          "enabled": true
+        }
+      },
+      "worker": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "read",
+            "edit",
+            "delete",
+            "move",
+            "search",
+            "execute",
+            "think",
+            "fetch",
+            "other"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE",
+            "UNREST_CAPABILITY_POLICY_VERSION",
+            "UNREST_CAPABILITY_PROFILE",
+            "UNREST_HANDOFF_PATH",
+            "UNREST_HOME",
+            "UNREST_MISSION_ID",
+            "UNREST_NODE_ID",
+            "UNREST_NODE_TYPE",
+            "UNREST_PROJECT_ID"
+          ],
+          "terminal_injection": [
+            "LANG",
+            "LC_ALL",
+            "PATH",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ]
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": true
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": true
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [
+            "*"
+          ],
+          "enabled": true
+        }
+      }
+    },
+    "unsafe-development-unrestricted": {
+      "orchestrator": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "read",
+            "edit",
+            "delete",
+            "move",
+            "search",
+            "execute",
+            "think",
+            "fetch",
+            "other"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "*"
+          ],
+          "forward": [
+            "*"
+          ],
+          "inherit_all": true,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_DISABLE_SANDBOX",
+            "CODEX_PATH",
+            "CODEX_SANDBOX",
+            "INITIAL_AGENT_MODE",
+            "UNREST_CAPABILITY_POLICY_VERSION",
+            "UNREST_CAPABILITY_PROFILE",
+            "UNREST_HOME",
+            "UNREST_ORCHESTRATOR_PROVIDER",
+            "UNREST_TERMINAL_REVIEWER_ACP_COMMAND",
+            "UNREST_TERMINAL_REVIEWER_PROVIDER",
+            "UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED",
+            "UNREST_VALIDATOR_ACP_COMMAND",
+            "UNREST_VALIDATOR_PROVIDER",
+            "UNREST_WORKER_ACP_COMMAND",
+            "UNREST_WORKER_PROVIDER"
+          ],
+          "terminal_injection": [
+            "*"
+          ]
+        },
+        "filesystem": [
+          {
+            "name": "host",
+            "read": true,
+            "write": true
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [
+            "*"
+          ],
+          "enabled": true
+        }
+      },
+      "terminal_reviewer": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "read",
+            "edit",
+            "delete",
+            "move",
+            "search",
+            "execute",
+            "think",
+            "fetch",
+            "other"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "*"
+          ],
+          "forward": [
+            "*"
+          ],
+          "inherit_all": true,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_DISABLE_SANDBOX",
+            "CODEX_PATH",
+            "CODEX_SANDBOX",
+            "INITIAL_AGENT_MODE",
+            "UNREST_CAPABILITY_POLICY_VERSION",
+            "UNREST_CAPABILITY_PROFILE",
+            "UNREST_HOME",
+            "UNREST_MISSION_ID",
+            "UNREST_PROJECT_ID",
+            "UNREST_TERMINAL_REVIEW_PATH",
+            "UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED"
+          ],
+          "terminal_injection": [
+            "*"
+          ]
+        },
+        "filesystem": [
+          {
+            "name": "host",
+            "read": true,
+            "write": true
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [
+            "*"
+          ],
+          "enabled": true
+        }
+      },
+      "validator": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "read",
+            "edit",
+            "delete",
+            "move",
+            "search",
+            "execute",
+            "think",
+            "fetch",
+            "other"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "*"
+          ],
+          "forward": [
+            "*"
+          ],
+          "inherit_all": true,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_DISABLE_SANDBOX",
+            "CODEX_PATH",
+            "CODEX_SANDBOX",
+            "INITIAL_AGENT_MODE",
+            "UNREST_CAPABILITY_POLICY_VERSION",
+            "UNREST_CAPABILITY_PROFILE",
+            "UNREST_HANDOFF_PATH",
+            "UNREST_HOME",
+            "UNREST_MISSION_ID",
+            "UNREST_NODE_ID",
+            "UNREST_NODE_TYPE",
+            "UNREST_PROJECT_ID",
+            "UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED"
+          ],
+          "terminal_injection": [
+            "*"
+          ]
+        },
+        "filesystem": [
+          {
+            "name": "host",
+            "read": true,
+            "write": true
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [
+            "*"
+          ],
+          "enabled": true
+        }
+      },
+      "worker": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "read",
+            "edit",
+            "delete",
+            "move",
+            "search",
+            "execute",
+            "think",
+            "fetch",
+            "other"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "*"
+          ],
+          "forward": [
+            "*"
+          ],
+          "inherit_all": true,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_DISABLE_SANDBOX",
+            "CODEX_PATH",
+            "CODEX_SANDBOX",
+            "INITIAL_AGENT_MODE",
+            "UNREST_CAPABILITY_POLICY_VERSION",
+            "UNREST_CAPABILITY_PROFILE",
+            "UNREST_HANDOFF_PATH",
+            "UNREST_HOME",
+            "UNREST_MISSION_ID",
+            "UNREST_NODE_ID",
+            "UNREST_NODE_TYPE",
+            "UNREST_PROJECT_ID",
+            "UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED"
+          ],
+          "terminal_injection": [
+            "*"
+          ]
+        },
+        "filesystem": [
+          {
+            "name": "host",
+            "read": true,
+            "write": true
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [
+            "*"
+          ],
+          "enabled": true
+        }
+      }
+    }
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,83 @@
+{
+  "documents": [
+    {
+      "id": "ADR-INDEX-001",
+      "path": "docs/decisions/index.md"
+    },
+    {
+      "id": "ARCH-ANNOTATION-001",
+      "path": "docs/architecture/annotations.md"
+    },
+    {
+      "id": "ARCH-CAPABILITY-001",
+      "path": "docs/architecture/capability-policy.md"
+    },
+    {
+      "id": "ARCH-INDEX-001",
+      "path": "docs/architecture/index.md"
+    },
+    {
+      "id": "ARCH-MCP-001",
+      "path": "docs/v5/08-mcp-surface.md"
+    },
+    {
+      "id": "ARCH-REPOSITORY-CONTRACT-DOC-001",
+      "path": "docs/architecture/repository-contract.md"
+    },
+    {
+      "id": "ARCH-RUNTIME-001",
+      "path": "docs/v5/07-runtime-architecture.md"
+    },
+    {
+      "id": "GOV-CHANGE-001",
+      "path": "docs/architecture/change-governance.md"
+    },
+    {
+      "id": "PLAN-V5-001",
+      "path": "docs/v5/10-implementation-plan.md"
+    },
+    {
+      "id": "SPEC-STORAGE-001",
+      "path": "specs/memory_v2/PRODUCT.md"
+    },
+    {
+      "id": "SPEC-TASK-001",
+      "path": "specs/task_list/PRODUCT.md"
+    },
+    {
+      "id": "TPL-ADR-001",
+      "path": "docs/templates/adr.md"
+    },
+    {
+      "id": "TPL-CLOSEOUT-001",
+      "path": "docs/templates/change-closeout.md"
+    },
+    {
+      "id": "TPL-PLAN-001",
+      "path": "docs/templates/implementation-plan.md"
+    },
+    {
+      "id": "TPL-TASK-001",
+      "path": "docs/templates/task-packet.md"
+    }
+  ],
+  "frontmatter_policy": {
+    "allow_unknown_fields": false,
+    "required_fields": [
+      "applies_to",
+      "id",
+      "related_decisions",
+      "schema_version",
+      "status",
+      "verified_by"
+    ],
+    "supported_schema_versions": [
+      1
+    ],
+    "supported_statuses": [
+      "active",
+      "deprecated"
+    ]
+  },
+  "schema_version": 1
+}

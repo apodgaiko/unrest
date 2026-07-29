@@ -1,0 +1,142 @@
+{
+  "ids": [
+    {
+      "id": "ARCH-ASSET-001",
+      "kind": "invariant",
+      "source": "docs/architecture/index.md",
+      "statement": "Skill resolution is deterministic: project, personal, then bundled, with the first unique name winning."
+    },
+    {
+      "id": "ARCH-BASELINE-001",
+      "kind": "invariant",
+      "source": "docs/architecture/index.md",
+      "statement": "Baseline artifacts are byte-deterministic and every fixture is explicitly classified."
+    },
+    {
+      "id": "ARCH-CLOSURE-001",
+      "kind": "invariant",
+      "source": "docs/v5/07-runtime-architecture.md",
+      "statement": "Mission closeout follows a successful terminal review or an explicit acknowledged-gap transition."
+    },
+    {
+      "id": "ARCH-CONFIG-001",
+      "kind": "invariant",
+      "source": "docs/v5/07-runtime-architecture.md",
+      "statement": "Role configuration is explicit and invalid bounded values fail instead of being silently broadened."
+    },
+    {
+      "id": "ARCH-DISPATCH-001",
+      "kind": "invariant",
+      "source": "specs/task_list/PRODUCT.md",
+      "statement": "Authored task order is deterministic, work selects singly before persistence, and only validator-only batches may run concurrently."
+    },
+    {
+      "id": "ARCH-GATE-001",
+      "kind": "invariant",
+      "source": "specs/task_list/PRODUCT.md",
+      "statement": "Every covering upstream validator must pass every gate target; missing evidence and dissent fail."
+    },
+    {
+      "id": "ARCH-GOVERNANCE-001",
+      "kind": "invariant",
+      "source": "docs/architecture/change-governance.md",
+      "statement": "Protected path-category resolution, schema generation, and diagnostics are deterministic."
+    },
+    {
+      "id": "ARCH-MCP-001",
+      "kind": "invariant",
+      "source": "docs/v5/08-mcp-surface.md",
+      "statement": "Orchestrator, worker, and terminal-reviewer MCP modes register disjoint tool sets."
+    },
+    {
+      "id": "ARCH-REPOSITORY-CONTRACT-001",
+      "kind": "invariant",
+      "source": "docs/architecture/repository-contract.md",
+      "statement": "One read-only command deterministically validates repository identity, references, governance, schemas, generated output, and its own CI enforcement."
+    },
+    {
+      "id": "ARCH-STATE-001",
+      "kind": "invariant",
+      "source": "docs/v5/07-runtime-architecture.md",
+      "statement": "One coordinator step performs at most one externally visible state transition."
+    },
+    {
+      "id": "ARCH-STORAGE-001",
+      "kind": "invariant",
+      "source": "specs/memory_v2/PRODUCT.md",
+      "statement": "Durable mission records and orchestrator-only runtime cursors remain in separate roots."
+    },
+    {
+      "id": "ARCH-TASK-001",
+      "kind": "invariant",
+      "source": "specs/task_list/PRODUCT.md",
+      "statement": "Every live contract assertion has exactly one non-superseded work owner."
+    },
+    {
+      "id": "ARCH-WRITE-001",
+      "kind": "invariant",
+      "source": "specs/memory_v2/PRODUCT.md",
+      "statement": "Normal text and JSON persistence uses a sibling temporary file followed by atomic replacement."
+    },
+    {
+      "id": "COMPAT-CAPABILITY-POLICY-001",
+      "kind": "compatibility",
+      "source": "docs/architecture/capability-policy.md",
+      "statement": "Capability policy evolution uses an explicit integer version and stable provider, role, version, and capability diagnostics."
+    },
+    {
+      "id": "COMPAT-ENVELOPE-001",
+      "kind": "compatibility",
+      "source": "specs/task_list/PRODUCT.md",
+      "statement": "The public envelope retains the dag field name for its textual task-list view."
+    },
+    {
+      "id": "COMPAT-PATCH-001",
+      "kind": "compatibility",
+      "source": "specs/task_list/PRODUCT.md",
+      "statement": "Supersede and cancel rewrite direct dependency edges while decision records preserve audit rationale."
+    },
+    {
+      "id": "COMPAT-SCHEMA-EVOLUTION-001",
+      "kind": "compatibility",
+      "source": "docs/architecture/change-governance.md",
+      "statement": "Schema readers use explicit versions with tested compatibility or an explicit hard cut and recovery path."
+    },
+    {
+      "id": "SEC-CAPABILITY-001",
+      "kind": "security",
+      "source": "docs/architecture/capability-policy.md",
+      "statement": "Child authority resolves and fails closed before process startup, and callback access and environments cannot exceed the resolved role."
+    },
+    {
+      "id": "SEC-MCP-001",
+      "kind": "security",
+      "source": "docs/v5/08-mcp-surface.md",
+      "statement": "Worker and terminal-reviewer servers do not register orchestrator lifecycle tools."
+    },
+    {
+      "id": "SEC-PROTECTED-REVIEW-001",
+      "kind": "security",
+      "source": "docs/architecture/change-governance.md",
+      "statement": "Agents and providers cannot satisfy accountable review or approve protected promotion."
+    },
+    {
+      "id": "SEC-REVIEW-ROOT-001",
+      "kind": "security",
+      "source": "specs/memory_v2/PRODUCT.md",
+      "statement": "Terminal-review deliverable roots resolve only inside the workspace product surface or current mission evidence."
+    },
+    {
+      "id": "SEC-SENSITIVITY-PROVENANCE-001",
+      "kind": "security",
+      "source": "docs/architecture/capability-policy.md",
+      "statement": "Declared, name-proven, and payload-proven sensitivity is joined monotonically after deterministic grammar-tokenized container decomposition, one stdlib-validated structured Python format AST whose field, traversal, conversion, and recursively nested specification descendants remain inspectable, authority-independent URI and structured-field normalization, bounded reversible derivation, and component-bounded template recognition; sensitive field evidence propagates to every decoded descendant, concrete evidence dominates templates, and ceilings fail closed only after concrete provenance without inventing matches or suppressing ordinary over-limit values without it."
+    }
+  ],
+  "kinds": [
+    "compatibility",
+    "invariant",
+    "security"
+  ],
+  "schema_version": 1
+}

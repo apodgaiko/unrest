@@ -1,0 +1,36 @@
+{
+  "classification": "known_defect",
+  "description": "The approved baseline marks multiple shared-checkout work tasks running and dispatches overlapping writers; this fixture is characterization-only, not the repaired scheduler oracle.",
+  "fixture_id": "BASE-SCHEDULER-DEFECT-001",
+  "observations": {
+    "cleared_after_dispatch": [
+      "work-a",
+      "work-b"
+    ],
+    "intervals": [
+      {
+        "finish": 2,
+        "start": 1,
+        "task_id": "work-a"
+      },
+      {
+        "finish": 3,
+        "start": 0,
+        "task_id": "work-b"
+      }
+    ],
+    "max_active": 2,
+    "overlap_observed": true,
+    "repaired_behavior_contract": "VAL-SCHED-*",
+    "running_before_dispatch": [
+      "work-a",
+      "work-b"
+    ],
+    "selected": [
+      "work-b",
+      "work-a"
+    ]
+  },
+  "schema_version": 1,
+  "source_commit": "9ebed0a9007289d419dae476f0dd582e8a21a550"
+}
