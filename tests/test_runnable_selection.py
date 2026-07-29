@@ -21,6 +21,7 @@ from unrest_harness.dispatcher import (
 from unrest_harness.models import (
     Task,
     TaskList,
+    TaskStateFile,
     TerminalReviewHandoff,
     ValidateHandoff,
     ValidationItem,
@@ -79,7 +80,6 @@ class TestRunnableSelection:
             _task("a", "work", ["X"]),
             _task("b", "work", ["Y"]),
         ])
-        from unrest_harness.models import TaskStateFile
         ts = TaskStateFile()
         ts.set_status("a", "pending")
         ts.set_status("b", "pending")
@@ -92,7 +92,6 @@ class TestRunnableSelection:
             _task("b", "work", ["Y"]),
             _task("a", "work", ["X"]),
         ])
-        from unrest_harness.models import TaskStateFile
         ts = TaskStateFile()
         ts.set_status("a", "pending")
         ts.set_status("b", "pending")
@@ -104,7 +103,6 @@ class TestRunnableSelection:
         tl = TaskList(tasks=[
             _task("g1", "gate", ["X"]),
         ])
-        from unrest_harness.models import TaskStateFile
         ts = TaskStateFile()
         ts.set_status("g1", "pending")
         c = _coordinator(config)
@@ -115,7 +113,6 @@ class TestRunnableSelection:
             _task("w1", "work", ["X"]),
             _task("w2", "work", ["Y"], depends_on=["w1"]),
         ])
-        from unrest_harness.models import TaskStateFile
         ts = TaskStateFile()
         ts.set_status("w1", "pending")
         ts.set_status("w2", "pending")
@@ -128,7 +125,6 @@ class TestRunnableSelection:
             _task("w1", "work", ["X"]),
             _task("w2", "work", ["Y"], depends_on=["w1"]),
         ])
-        from unrest_harness.models import TaskStateFile
         ts = TaskStateFile()
         ts.set_status("w1", "cleared")
         ts.set_status("w2", "pending")
@@ -148,13 +144,127 @@ class TestRunnableSelection:
             _task("w1", "work", ["X"]),
             _task("w2", "work", ["Y"], depends_on=["w1"]),
         ])
-        from unrest_harness.models import TaskStateFile
         ts = TaskStateFile()
         ts.set_status("w1", "superseded")
         ts.set_status("w2", "pending")
         c = _coordinator(config)
         runnable = c._all_runnable_tasks(tl, ts)
         assert runnable == []
+
+    @pytest.mark.parametrize(
+        ("task_types", "selected_id"),
+        [
+            (["work", "work"], "first"),
+            (["work", "validate"], "first"),
+            (["validate", "work"], "first"),
+        ],
+    )
+    def test_capacity_slice_containing_work_selects_one_authored_task(
+        self,
+        config: HarnessConfig,
+        task_types: list[str],
+        selected_id: str,
+    ) -> None:
+        object.__setattr__(config, "max_parallel_nodes", 2)
+        tl = TaskList(
+            tasks=[
+                _task("first", task_types[0], ["X"]),
+                _task("second", task_types[1], ["Y"]),
+            ]
+        )
+        ts = TaskStateFile()
+        for task in tl.tasks:
+            ts.set_status(task.id, "pending")
+
+        coordinator = _coordinator(config)
+        runnable = coordinator._all_runnable_tasks(tl, ts)
+
+        assert [
+            task.id
+            for task in coordinator._select_dispatch_tasks(tl, ts, runnable)
+        ] == [selected_id]
+
+    def test_validator_only_capacity_slice_remains_batchable(
+        self, config: HarnessConfig
+    ) -> None:
+        object.__setattr__(config, "max_parallel_nodes", 2)
+        tl = TaskList(
+            tasks=[
+                _task("v1", "validate", ["X"]),
+                _task("v2", "validate", ["Y"]),
+                _task("v3", "validate", ["Z"]),
+            ]
+        )
+        ts = TaskStateFile()
+        for task in tl.tasks:
+            ts.set_status(task.id, "pending")
+
+        coordinator = _coordinator(config)
+        runnable = coordinator._all_runnable_tasks(tl, ts)
+
+        assert [
+            task.id
+            for task in coordinator._select_dispatch_tasks(tl, ts, runnable)
+        ] == ["v1", "v2"]
+
+    @pytest.mark.parametrize(
+        ("capacity", "first_expected", "refill_expected"),
+        [
+            (1, ["validator-b"], ["validator-a"]),
+            (2, ["validator-b", "validator-a"], ["validator-c"]),
+        ],
+    )
+    def test_ready_gate_validator_lane_is_capacity_bounded_and_refills_in_order(
+        self,
+        config: HarnessConfig,
+        capacity: int,
+        first_expected: list[str],
+        refill_expected: list[str],
+    ) -> None:
+        object.__setattr__(config, "max_parallel_nodes", capacity)
+        validator_ids = ["validator-b", "validator-a", "validator-c"]
+        tl = TaskList(
+            tasks=[
+                _task("work-owner", "work", ["X"]),
+                _task("later-work", "work", [], depends_on=["work-owner"]),
+                *[
+                    _task(
+                        validator_id,
+                        "validate",
+                        ["X"],
+                        depends_on=["work-owner"],
+                    )
+                    for validator_id in validator_ids
+                ],
+                _task(
+                    "gate",
+                    "gate",
+                    ["X"],
+                    depends_on=[
+                        "validator-c",
+                        "validator-a",
+                        "validator-b",
+                    ],
+                ),
+            ]
+        )
+        ts = TaskStateFile()
+        for task in tl.tasks:
+            ts.set_status(task.id, "pending")
+        ts.set_status("work-owner", "cleared")
+
+        coordinator = _coordinator(config)
+        runnable = coordinator._all_runnable_tasks(tl, ts)
+        selected = coordinator._select_dispatch_tasks(tl, ts, runnable)
+
+        assert [task.id for task in selected] == first_expected
+        for task in selected:
+            ts.set_status(task.id, "cleared")
+
+        refill_runnable = coordinator._all_runnable_tasks(tl, ts)
+        refill = coordinator._select_dispatch_tasks(tl, ts, refill_runnable)
+
+        assert [task.id for task in refill] == refill_expected
 
 
 class TestSerialDispatchPicksFirstByListOrder:

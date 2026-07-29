@@ -100,6 +100,8 @@ def create_terminal_reviewer_server() -> FastMCP:
 
 
 def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) -> None:
+    # SECURITY[SEC-MCP-001]: Lifecycle tools are registered only on the
+    # orchestrator server; worker and reviewer modes construct disjoint servers.
     # Per-project lock around mutating controller calls. The thread hop in each
     # tool prevents event-loop blocking, but two same-project tool calls could
     # otherwise race on disk state (attention, attempts, task-state, tasks).

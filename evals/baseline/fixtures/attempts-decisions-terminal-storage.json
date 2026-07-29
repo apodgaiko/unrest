@@ -1,0 +1,55 @@
+{
+  "classification": "intended",
+  "description": "Attempt and terminal-review JSON handoffs have durable Markdown mirrors; decisions append numbered records.",
+  "fixture_id": "BASE-STORAGE-002",
+  "observations": {
+    "artifacts": [
+      {
+        "content": "# Decision 001: first\n\n- Timestamp: 2026-07-21T15:00:00Z\n\n## Resolved attention items\n### att-gate-a-000001 — action=continue\n- report:\n```\nGate report from gate-a\n```\n",
+        "path": ".unrest/decisions/001-first.md",
+        "sha256": "f5d50a9fd3a08fcaf190393916873363e857bdb48876b28a6deff7e5de67062c"
+      },
+      {
+        "content": "# Decision 002: second\n\n- Timestamp: 2026-07-21T15:00:00Z\n\n## Resolved attention items\n### att-gate-a-000001 — action=continue\n- report:\n```\nGate report from gate-a\n```\n",
+        "path": ".unrest/decisions/002-second.md",
+        "sha256": "02e778988aaf55ab7610d5ca745deca82b3ef990efe33da214593f2c05324360"
+      },
+      {
+        "content": "---\nnode_id: validate-a\ndone: true\npassed: true\nrequest_attention: false\n---\n\n## Items\n\n- VAL-A: passed\n\n## Report\n\nValidation complete.\n",
+        "path": ".unrest/missions/mission-001/attempts/2026-07-21T15-00-00Z-validate__validate-a.md",
+        "sha256": "09629afe70d57ae73abe17459a8e0a19cceda8fbcc117aecbb1ce5ba024c4bcc"
+      },
+      {
+        "content": "---\nnode_id: work-a\ndone: true\nrequest_attention: false\n---\n\n## Report\n\nWork complete.\n",
+        "path": ".unrest/missions/mission-001/attempts/2026-07-21T15-00-00Z-work__work-a.md",
+        "sha256": "827e5dc3d53daa996652ed125229399bf13a17459e42091ac8d6c8e5a9cbc1a6"
+      },
+      {
+        "content": "---\ndone: false\n---\n\n## Report\n\nClosure gap.\n",
+        "path": ".unrest/missions/mission-001/terminal-reviews/2026-07-21T15-00-00Z-review.md",
+        "sha256": "817be9c8e5f93b5f92c87836c889b446302f03e3580fd9af3ceaa8926f8059cd"
+      },
+      {
+        "content": "{\n  \"node_id\": \"validate-a\",\n  \"done\": true,\n  \"report\": \"Validation complete.\",\n  \"items\": [\n    {\n      \"item_id\": \"VAL-A\",\n      \"passed\": true\n    }\n  ],\n  \"passed\": true,\n  \"request_attention\": false\n}\n",
+        "path": ".unrest-runtime/missions/mission-001/attempts/2026-07-21T15-00-00Z-validate__validate-a.json",
+        "sha256": "d15d11f787b652b27771295edf23251442d46edccabacddef09d6626bf20d535"
+      },
+      {
+        "content": "{\n  \"node_id\": \"work-a\",\n  \"done\": true,\n  \"report\": \"Work complete.\",\n  \"request_attention\": false\n}\n",
+        "path": ".unrest-runtime/missions/mission-001/attempts/2026-07-21T15-00-00Z-work__work-a.json",
+        "sha256": "8caad93838dfe7ddfe5dc8c73643c951c17bff8ad4a60bff00838f693b5fa76a"
+      },
+      {
+        "content": "{\n  \"done\": false,\n  \"report\": \"Closure gap.\"\n}\n",
+        "path": ".unrest-runtime/missions/mission-001/terminal-reviews/2026-07-21T15-00-00Z-review.json",
+        "sha256": "f3341d3c6a61003a05b77e4c6be94129997ba23923fd293f980c3f5e2051b582"
+      }
+    ],
+    "decision_filenames": [
+      "001-first.md",
+      "002-second.md"
+    ]
+  },
+  "schema_version": 1,
+  "source_commit": "9ebed0a9007289d419dae476f0dd582e8a21a550"
+}

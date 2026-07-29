@@ -27,6 +27,8 @@ jobs:
         run: uv run mypy src
       - name: Test (pytest)
         run: uv run pytest -q
+      - name: Repository contract
+        run: uv run unrest check-repository
       - name: Build wheel and source distribution
         run: uv build
       - name: Smoke-test installed wheel
