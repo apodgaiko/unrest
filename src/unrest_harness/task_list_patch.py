@@ -69,6 +69,8 @@ def _rewrite_depends_on(
     audit ids resolve and status transitions are recorded); only the
     references to them in *downstream* `depends_on` are mutated.
     """
+    # COMPAT[COMPAT-PATCH-001]: Persist the rewritten direct edge; do not add
+    # a hidden runtime supersession-chain reader.
     out: list[Task] = []
     for task in tasks:
         new_deps: list[str] = []

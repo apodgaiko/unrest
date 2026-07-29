@@ -13,12 +13,24 @@ import click
 from .assets import AssetLoader, iter_skill_directories
 from .config import VALID_REASONING_EFFORTS, HarnessConfig
 from .envelope import render_task_list
+from .governance import (
+    GovernanceValidationError,
+    check_commit_message,
+    governance_report,
+    load_component_paths,
+    load_protected_surface_policy,
+)
 from .providers import (
     ProviderDefinition,
     ProviderSelection,
     default_worker_provider_name,
     get_provider,
     provider_names_for_role,
+)
+from .repository_contract import (
+    RepositoryContractError,
+    check_repository,
+    find_repository_root,
 )
 from .storage import ProjectStore
 
@@ -51,6 +63,100 @@ USER_SCOPE_ORCHESTRATORS = ("claude", "codex")
 @click.group()
 def cli() -> None:
     """Unrest CLI — set up + inspect long-running coding projects."""
+
+
+# ---------------------------------------------------------------------------
+# governance checks
+# ---------------------------------------------------------------------------
+
+
+@cli.command("check-repository")
+def check_repository_cmd() -> None:
+    """Validate the canonical repository contract without changing the worktree."""
+    try:
+        root = find_repository_root(Path.cwd())
+        report = check_repository(root)
+    except RepositoryContractError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(report.render(), nl=False)
+
+
+@cli.command("check-governance")
+@click.option(
+    "--policy",
+    "policy_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--component-map",
+    "component_map_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option("--path", "paths", multiple=True)
+def check_governance_cmd(
+    policy_path: Path,
+    component_map_path: Path,
+    paths: tuple[str, ...],
+) -> None:
+    """Validate governance policy and print a deterministic resolution report."""
+    try:
+        policy = load_protected_surface_policy(policy_path)
+        component_paths = load_component_paths(component_map_path)
+        report = governance_report(policy, component_paths, paths)
+    except GovernanceValidationError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(json.dumps(report, indent=2, sort_keys=True))
+
+
+@cli.command("check-commit")
+@click.option(
+    "--message-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option("--changed-path", "changed_paths", multiple=True, required=True)
+@click.option(
+    "--policy",
+    "policy_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--component-map",
+    "component_map_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+def check_commit_cmd(
+    message_file: Path,
+    changed_paths: tuple[str, ...],
+    policy_path: Path,
+    component_map_path: Path,
+) -> None:
+    """Check conventional subject, governance trailers, and changed paths."""
+    try:
+        policy = load_protected_surface_policy(policy_path)
+        component_paths = load_component_paths(component_map_path)
+        result = check_commit_message(
+            message_file.read_text(encoding="utf-8"),
+            changed_paths=changed_paths,
+            policy=policy,
+            component_paths=component_paths,
+        )
+    except GovernanceValidationError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(
+        json.dumps(
+            {
+                "protected_surfaces": list(result.protected_surfaces),
+                "status": "ok",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------

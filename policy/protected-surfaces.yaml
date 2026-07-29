@@ -1,0 +1,169 @@
+schema_version: 1
+policy_id: GOV-PROTECTED-SURFACES-001
+accountable_roles:
+  - id: release-maintainer
+    kind: team
+  - id: security-maintainer
+    kind: team
+forbidden_approver_kinds:
+  - agent
+  - provider
+protected_surfaces:
+  - id: capability-policy
+    selectors:
+      - kind: path
+        value: src/unrest_harness/capability_policy.py
+      - kind: path-prefix
+        value: policy/capabilities/
+    reviewer_roles:
+      - release-maintainer
+      - security-maintainer
+    rollback_plan_required: true
+    evaluation:
+      selection: strongest-applicable
+      tiers:
+        - full-repository
+        - installed-wheel
+        - real-cli-mcp-acp
+        - security
+  - id: coordinator-semantics
+    selectors:
+      - kind: component
+        value: COMP-COORDINATOR
+    reviewer_roles:
+      - release-maintainer
+      - security-maintainer
+    rollback_plan_required: true
+    evaluation:
+      selection: strongest-applicable
+      tiers:
+        - concurrency
+        - full-repository
+        - real-cli-mcp-acp
+  - id: evaluation-holdouts
+    selectors:
+      - kind: path-prefix
+        value: evals/baseline/
+      - kind: path-prefix
+        value: evals/holdouts/
+    reviewer_roles:
+      - release-maintainer
+      - security-maintainer
+    rollback_plan_required: true
+    evaluation:
+      selection: strongest-applicable
+      tiers:
+        - full-repository
+        - private-holdout
+        - security
+  - id: governance-self-protection
+    selectors:
+      - kind: component
+        value: COMP-GOVERNANCE
+      - kind: path
+        value: .github/workflows/ci.yml
+      - kind: path
+        value: policy/protected-surfaces.yaml
+      - kind: path
+        value: src/unrest_harness/governance.py
+      - kind: path
+        value: src/unrest_harness/repository_contract.py
+      - kind: path-prefix
+        value: schemas/
+    reviewer_roles:
+      - release-maintainer
+      - security-maintainer
+    rollback_plan_required: true
+    evaluation:
+      selection: strongest-applicable
+      tiers:
+        - full-repository
+        - security
+  - id: promotion-policy
+    selectors:
+      - kind: path-prefix
+        value: policy/promotion/
+    reviewer_roles:
+      - release-maintainer
+      - security-maintainer
+    rollback_plan_required: true
+    evaluation:
+      selection: strongest-applicable
+      tiers:
+        - full-repository
+        - real-cli-mcp-acp
+        - security
+  - id: rollback-controls
+    selectors:
+      - kind: path-prefix
+        value: policy/rollback/
+    reviewer_roles:
+      - release-maintainer
+      - security-maintainer
+    rollback_plan_required: true
+    evaluation:
+      selection: strongest-applicable
+      tiers:
+        - full-repository
+        - real-cli-mcp-acp
+        - security
+  - id: storage-migrations
+    selectors:
+      - kind: component
+        value: COMP-STORAGE
+    reviewer_roles:
+      - release-maintainer
+      - security-maintainer
+    rollback_plan_required: true
+    evaluation:
+      selection: strongest-applicable
+      tiers:
+        - full-repository
+        - installed-wheel
+        - real-cli-mcp-acp
+self_protection:
+  - id: continuous-integration
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: .github/workflows/ci.yml
+  - id: contract-validator
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: src/unrest_harness/governance.py
+  - id: evaluation-holdouts
+    category_id: evaluation-holdouts
+    selector:
+      kind: path-prefix
+      value: evals/holdouts/
+  - id: evaluation-oracles
+    category_id: evaluation-holdouts
+    selector:
+      kind: path-prefix
+      value: evals/baseline/
+  - id: policy-schema
+    category_id: governance-self-protection
+    selector:
+      kind: path-prefix
+      value: schemas/
+  - id: promotion-controls
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: policy/protected-surfaces.yaml
+  - id: protected-surface-policy
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: policy/protected-surfaces.yaml
+  - id: repository-contract-validator
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: src/unrest_harness/repository_contract.py
+  - id: rollback-controls
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: policy/protected-surfaces.yaml
