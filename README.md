@@ -113,6 +113,7 @@ uv sync --locked
 uv run ruff check .
 uv run mypy src
 uv run pytest -q
+uv run unrest check-repository
 uv build
 ```
 

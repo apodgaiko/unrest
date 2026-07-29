@@ -1,0 +1,19 @@
+{
+  "classification": "observed_legacy",
+  "description": "The blocking coordinator selects the first max_parallel_nodes runnable tasks in authored order.",
+  "fixture_id": "BASE-SCHEDULER-LEGACY-001",
+  "observations": {
+    "authored_order": [
+      "work-b",
+      "work-a",
+      "work-c"
+    ],
+    "result": "batch cleared: work-b, work-a",
+    "selected": [
+      "work-b",
+      "work-a"
+    ]
+  },
+  "schema_version": 1,
+  "source_commit": "9ebed0a9007289d419dae476f0dd582e8a21a550"
+}
