@@ -97,6 +97,20 @@ Terminal review is bounded to 900 seconds by default. Set
 limit. A timeout stops the ACP reviewer and its MCP server, records a failed
 review, and leaves the mission unsealed for retry.
 
+## Safety and repository contracts
+
+Unrest resolves a versioned capability policy before starting any MCP or ACP
+role. The default `safe` profile limits filesystem, process, environment,
+credential, and approval authority; unrestricted development access requires
+the explicit `--unsafe-development-unrestricted` opt-in. Unsupported provider,
+role, policy, or profile combinations fail closed before mission work starts.
+
+Repository governance is executable rather than advisory. The public
+`check-repository`, `check-governance`, and `check-commit` commands validate
+protected surfaces, canonical schemas and metadata, generated baselines,
+documentation references, and capability-policy assets. CI also exercises the
+built wheel to prove packaged policy discovery and fail-closed startup.
+
 ## Why validation matters
 
 Tests can be green while the requested behavior is absent, incomplete, or only
