@@ -2094,6 +2094,48 @@ def test_ci_python_test_and_build_steps_cannot_be_skipped_or_soft_failed(
     assert _status(repository) == before
 
 
+def test_ci_requires_enforcing_tests_after_build(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = repository / ".github/workflows/ci.yml"
+    text = path.read_text(encoding="utf-8")
+    post_build = (
+        "      - name: Test built tree hermeticity\n"
+        "        run: uv run pytest -q\n"
+    )
+    assert text.count(post_build) == 1
+    path.write_text(text.replace(post_build, "", 1), encoding="utf-8")
+    before = _status(repository)
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-CI-PRE-POST-BUILD-TESTS-MISSING" in result.output
+    assert _status(repository) == before
+
+
+def test_ci_requires_installed_wheel_lifecycle_mission(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = repository / ".github/workflows/ci.yml"
+    text = path.read_text(encoding="utf-8")
+    invocation = "-m unrest_harness.installed_wheel_check"
+    assert text.count(invocation) == 1
+    path.write_text(
+        text.replace(invocation, "-m unrest_harness --help", 1),
+        encoding="utf-8",
+    )
+    before = _status(repository)
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-CI-INSTALLED-MISSION-MISSING" in result.output
+    assert _status(repository) == before
+
+
 def test_ci_reachable_dependency_control_remains_valid(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,

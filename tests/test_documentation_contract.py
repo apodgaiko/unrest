@@ -16,7 +16,10 @@ import pytest
 
 from unrest_harness.assets import parse_frontmatter
 from unrest_harness.governance import parse_commonmark
-from unrest_harness.repository_contract import _identity_private_marker_categories
+from unrest_harness.repository_contract import (
+    _identity_private_marker_categories,
+    visible_guidance_paths,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -452,17 +455,32 @@ def _template_errors(
     return errors
 
 
+def test_guidance_enumerator_excludes_generated_and_tool_trees(
+    tmp_path: Path,
+) -> None:
+    expected = tmp_path / "src" / "AGENTS.md"
+    generated = (
+        tmp_path / "build" / "lib" / "AGENTS.md",
+        tmp_path / "dist" / "AGENTS.md",
+        tmp_path / ".venv" / "AGENTS.md",
+        tmp_path / "src" / "__pycache__" / "AGENTS.md",
+    )
+    expected.parent.mkdir(parents=True)
+    expected.write_text("expected\n", encoding="utf-8")
+    for path in generated:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("generated\n", encoding="utf-8")
+
+    assert visible_guidance_paths(tmp_path) == {"src/AGENTS.md"}
+
+
 def test_guidance_hierarchy_resolves_exact_root_to_leaf_chains() -> None:
     tracked = _tracked_paths()
     assert EXPECTED_GUIDANCE <= tracked
     root_agents = ROOT / "AGENTS.md"
     assert root_agents.is_file() and not root_agents.is_symlink()
 
-    found = {
-        _repo_path(path)
-        for path in ROOT.rglob("AGENTS.md")
-        if not any(part.startswith(".") for part in path.relative_to(ROOT).parts)
-    }
+    found = visible_guidance_paths(ROOT)
     assert found == EXPECTED_GUIDANCE
     expected = {
         "README.md": ["AGENTS.md"],

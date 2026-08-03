@@ -1,0 +1,35 @@
+{
+  "base_sha": "9ebed0a",
+  "branch": "codex/batch-0-recommended-fixes",
+  "excluded_paths": [
+    ".validation/",
+    "validator-regressions/"
+  ],
+  "included_path_groups": [
+    ".github/workflows/ci.yml",
+    "docs/architecture/",
+    "docs/release/",
+    "evals/baseline/",
+    "evidence/batch-0/",
+    "policy/protected-surfaces.yaml",
+    "pyproject.toml",
+    "schemas/",
+    "specs/",
+    "src/unrest_harness/",
+    "tests/",
+    "uv.lock"
+  ],
+  "manifest_version": 1,
+  "mission_scope": "Batch 0 recommended fixes and reviewed merge blockers only",
+  "protected_categories": [
+    "capability-policy",
+    "coordinator-semantics",
+    "evaluation-holdouts",
+    "governance-self-protection",
+    "storage-migrations"
+  ],
+  "reviewed_blocker_head": "858d617dbce69ae3bc683f608465c8f899eadcae",
+  "rollback_plan": "docs/release/batch-0-rollback.md",
+  "schema_compatibility": "No versioned wire or persisted schema version changes",
+  "task_id": "B0-MERGE-BLOCKERS"
+}

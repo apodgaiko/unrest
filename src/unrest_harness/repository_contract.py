@@ -53,6 +53,24 @@ from .governance import (
 CANONICAL_COMMAND = "uv run unrest check-repository"
 ARCHITECTURE_DIR = "docs/architecture"
 ANNOTATION_POLICY_PATH = f"{ARCHITECTURE_DIR}/annotation-policy.json"
+
+
+def visible_guidance_paths(root: Path) -> set[str]:
+    """Enumerate repository guidance while excluding generated/tool trees."""
+    found: set[str] = set()
+    for directory, dirnames, filenames in os.walk(root):
+        relative = Path(directory).relative_to(root)
+        dirnames[:] = [
+            name
+            for name in dirnames
+            if not name.startswith(".")
+            and name not in {"__pycache__", "build", "dist"}
+        ]
+        if "AGENTS.md" in filenames and not any(
+            part.startswith(".") for part in relative.parts
+        ):
+            found.add((relative / "AGENTS.md").as_posix())
+    return found
 COMPONENT_MAP_PATH = f"{ARCHITECTURE_DIR}/component-map.json"
 EVIDENCE_POLICY_PATH = f"{ARCHITECTURE_DIR}/evidence-policy.json"
 HISTORICAL_POLICY_PATH = f"{ARCHITECTURE_DIR}/historical-record-policy.json"
@@ -1223,20 +1241,7 @@ class _RepositoryValidator:
         }
 
     def _visible_guidance_paths(self) -> set[str]:
-        found: set[str] = set()
-        for directory, dirnames, filenames in os.walk(self.root):
-            relative = Path(directory).relative_to(self.root)
-            dirnames[:] = [
-                name
-                for name in dirnames
-                if not name.startswith(".")
-                and name not in {"__pycache__", "build", "dist"}
-            ]
-            if "AGENTS.md" in filenames and not any(
-                part.startswith(".") for part in relative.parts
-            ):
-                found.add((relative / "AGENTS.md").as_posix())
-        return found
+        return visible_guidance_paths(self.root)
 
     def _guidance_chain(self, target_path: str) -> tuple[str, ...]:
         target = self.root / target_path
@@ -3482,12 +3487,62 @@ class _RepositoryValidator:
                 for index, _step, kinds in surface_steps
                 if kinds & {"build", "publish"}
             ]
+            test_indexes = [
+                index
+                for index, _step, kinds in surface_steps
+                if "test" in kinds
+            ]
             if build_indexes and exact_indexes[0] >= min(build_indexes):
                 self._add(
                     "REPO-CI-COMMAND-ORDER",
                     location,
                     "repository contract must run before build, package, or publish",
                 )
+            if build_indexes and (
+                not test_indexes
+                or min(test_indexes) >= min(build_indexes)
+                or max(test_indexes) <= max(build_indexes)
+            ):
+                self._add(
+                    "REPO-CI-PRE-POST-BUILD-TESTS-MISSING",
+                    location,
+                    "an enforcing test step is required both before and after build",
+                )
+            installed_check_steps = [
+                (index, step)
+                for index, step in enumerate(steps)
+                if isinstance(step, dict)
+                and isinstance(step.get("run"), str)
+                and "-m unrest_harness.installed_wheel_check" in step["run"]
+            ]
+            if len(installed_check_steps) != 1:
+                self._add(
+                    "REPO-CI-INSTALLED-MISSION-MISSING",
+                    location,
+                    "expected exactly one installed-wheel lifecycle mission",
+                )
+            else:
+                check_index, check_step = installed_check_steps[0]
+                if build_indexes and check_index <= max(build_indexes):
+                    self._add(
+                        "REPO-CI-INSTALLED-MISSION-ORDER",
+                        location,
+                        "installed-wheel lifecycle mission must run after build",
+                    )
+                if not _ci_condition_is_always(check_step.get("if")):
+                    self._add(
+                        "REPO-CI-INSTALLED-MISSION-CONDITIONAL",
+                        location,
+                        "installed-wheel lifecycle mission must run unconditionally",
+                    )
+                if not _ci_continue_on_error_is_disabled(
+                    check_step.get("continue-on-error")
+                ):
+                    self._add(
+                        "REPO-CI-INSTALLED-MISSION-CONTINUE-ON-ERROR",
+                        location,
+                        "installed-wheel lifecycle mission failures must remain enforcing",
+                    )
         if python_jobs == 0 or python_matrix_jobs == 0:
             self._add(
                 "REPO-CI-PYTHON-MATRIX-MISSING",

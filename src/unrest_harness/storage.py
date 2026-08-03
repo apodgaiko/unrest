@@ -22,6 +22,7 @@ import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Mapping
 
 from .capability_policy import redact_sensitive_value
 from .config import HarnessConfig
@@ -67,9 +68,14 @@ def atomic_write_text(
     path: str | Path,
     content: str,
     *,
+    inventory: Mapping[str, str] | None = None,
     _redact: bool = True,
 ) -> None:
-    redacted = redact_sensitive_value(content) if _redact else content
+    redacted = (
+        redact_sensitive_value(content, inventory)
+        if _redact
+        else content
+    )
     if not isinstance(redacted, str):
         raise TypeError("canonical text redaction returned a non-text value")
     target = Path(path)
@@ -79,8 +85,13 @@ def atomic_write_text(
     os.replace(tmp_path, target)
 
 
-def atomic_write_json(path: str | Path, payload: object) -> None:
-    redacted = redact_sensitive_value(payload)
+def atomic_write_json(
+    path: str | Path,
+    payload: object,
+    *,
+    inventory: Mapping[str, str] | None = None,
+) -> None:
+    redacted = redact_sensitive_value(payload, inventory)
     atomic_write_text(
         path,
         json.dumps(redacted, indent=2, ensure_ascii=False) + "\n",
@@ -470,12 +481,22 @@ class ProjectStore:
         spawn_ts: str,
         node_id: str,
         handoff: WorkHandoff | ValidateHandoff,
+        *,
+        inventory: Mapping[str, str] | None = None,
     ) -> Path:
         json_path = self.attempt_path(project_id, mission_id, spawn_ts, node_id)
         json_path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(json_path, handoff.model_dump(mode="json"))
+        atomic_write_json(
+            json_path,
+            handoff.model_dump(mode="json"),
+            inventory=inventory,
+        )
         md_path = self.attempt_report_path(project_id, mission_id, spawn_ts, node_id)
-        atomic_write_text(md_path, attempt_to_markdown(handoff))
+        atomic_write_text(
+            md_path,
+            attempt_to_markdown(handoff),
+            inventory=inventory,
+        )
         return json_path
 
     def read_attempt(
@@ -808,14 +829,24 @@ class ProjectStore:
         mission_id: str,
         spawn_ts: str,
         review: TerminalReviewHandoff,
+        *,
+        inventory: Mapping[str, str] | None = None,
     ) -> Path:
         # JSON: fallback only (acp_runner's MCP server normally writes this).
         json_path = self.terminal_review_path(project_id, mission_id, spawn_ts)
         if not json_path.exists():
             json_path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write_json(json_path, review.model_dump(mode="json"))
+            atomic_write_json(
+                json_path,
+                review.model_dump(mode="json"),
+                inventory=inventory,
+            )
         md_path = self.terminal_review_report_path(project_id, mission_id, spawn_ts)
-        atomic_write_text(md_path, terminal_review_to_markdown(review))
+        atomic_write_text(
+            md_path,
+            terminal_review_to_markdown(review),
+            inventory=inventory,
+        )
         return md_path
 
     # ------------------------------------------------------------------

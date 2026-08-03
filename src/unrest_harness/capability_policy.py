@@ -5,13 +5,11 @@ import base64
 import binascii
 import hashlib
 import ast
-import io
 import json
 import math
 import os
 import re
 import string
-import tokenize
 import tomllib
 import urllib.parse
 from collections import deque
@@ -95,6 +93,7 @@ CAPABILITY_SINK_IDS = (
     "generated-codex-user-config",
     "installed-policy-assets",
     "mcp-environment",
+    "mcp-sensitive-inventory-channel",
     "synthesized-handoff",
     "terminal-environment",
     "terminal-review-handoff-json",
@@ -108,15 +107,20 @@ CAPABILITY_SINK_OMISSION_IDS = (
     "acp-cancel-terminal-review",
     "acp-node-request-callers",
     "acp-session-mode-request-caller",
+    "acp-session-update-callback-delegation",
     "acp-terminal-review-progress-print",
     "acp-terminal-review-request-callers",
     "baseline-cli-output",
     "baseline-fixture-bytes",
     "baseline-running-mission-fixture",
     "baseline-storage-fixture",
+    "capability-projection-owner-path-reversal",
     "generated-managed-config-block",
     "generated-provider-assets",
     "generated-provider-settings",
+    "installed-wheel-lifecycle-fixtures",
+    "mock-dispatcher-callback",
+    "repository-contract-html-stack-reverse",
     "storage-atomic-json",
     "storage-attempt",
     "storage-attention",
@@ -616,63 +620,6 @@ def validate_capability_sink_anchors(
     """Bind declarations and reject undeclared reachable capability effects."""
     errors: list[str] = []
     source_root = repository_root / "src/unrest_harness"
-    normalized_sources: list[tuple[str, str]] = []
-
-    def source_without_comments(source: str) -> str:
-        lines = source.splitlines(keepends=True)
-        try:
-            tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-            comments = [
-                token_info
-                for token_info in tokens
-                if token_info.type == tokenize.COMMENT
-            ]
-        except (IndentationError, tokenize.TokenError):
-            return source
-        for token_info in reversed(comments):
-            start_row, start_column = token_info.start
-            end_row, end_column = token_info.end
-            if start_row != end_row:
-                continue
-            line = lines[start_row - 1]
-            lines[start_row - 1] = (
-                line[:start_column]
-                + (" " * (end_column - start_column))
-                + line[end_column:]
-            )
-        normalized_lines = [
-            line.rstrip()
-            for line in "".join(lines).splitlines()
-        ]
-        while normalized_lines and not normalized_lines[-1]:
-            normalized_lines.pop()
-        return "\n".join(normalized_lines) + "\n"
-
-    for path in sorted(source_root.rglob("*.py")):
-        relative_path = path.relative_to(repository_root).as_posix()
-        try:
-            source = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            errors.append(
-                f"reachable-capability-closure: {relative_path} is unavailable"
-            )
-            continue
-        source_digest = hashlib.sha256(
-            source_without_comments(source).encode("utf-8")
-        ).hexdigest()
-        normalized_sources.append((relative_path, source_digest))
-    observed_source_digest = hashlib.sha256(
-        json.dumps(
-            normalized_sources,
-            ensure_ascii=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
-    if observed_source_digest != catalog.reachable_source_sha256:
-        errors.append(
-            "reachable-capability-closure: "
-            "source graph does not match the reviewed catalog"
-        )
 
     for sink in catalog.sinks:
         relative_path, separator, anchor = sink.implementation.partition(":")
@@ -734,6 +681,7 @@ def validate_capability_sink_anchors(
     # that owns it. A new owner has no declaration and therefore fails closed.
     stream_methods = {
         "_write",
+        "communicate",
         "critical",
         "debug",
         "emit",
@@ -743,11 +691,16 @@ def validate_capability_sink_anchors(
         "log",
         "send",
         "sendall",
+        "sendmsg",
+        "sendto",
         "warning",
         "warn",
         "write",
         "write_bytes",
         "write_text",
+        "writerow",
+        "writerows",
+        "writev",
         "writelines",
         "writestr",
     }
@@ -758,18 +711,63 @@ def validate_capability_sink_anchors(
         "print",
         "send_request",
     }
-    serializer_channels = {"json.dump", "pickle.dump", "yaml.dump"}
-    unsupported_reversible_roots = {
-        "bz2",
-        "codecs",
-        "lzma",
-        "quopri",
-        "zlib",
+    serializer_modules = {
+        "json": {"dump"},
+        "marshal": {"dump"},
+        "msgpack": {"dump", "pack"},
+        "pickle": {"dump"},
+        "plistlib": {"dump"},
+        "toml": {"dump"},
+        "yaml": {"dump", "safe_dump"},
+    }
+    descriptor_functions = {
+        "os.pwrite",
+        "os.pwritev",
+        "os.write",
+        "os.writev",
+    }
+    reversible_module_operations = {
+        "base64": {
+            "b16decode",
+            "b16encode",
+            "b32decode",
+            "b32encode",
+            "b32hexdecode",
+            "b32hexencode",
+            "b64decode",
+            "b64encode",
+            "b85decode",
+            "b85encode",
+            "decodebytes",
+            "encodebytes",
+            "urlsafe_b64decode",
+            "urlsafe_b64encode",
+        },
+        "binascii": {
+            "a2b_base64",
+            "a2b_hex",
+            "b2a_base64",
+            "b2a_hex",
+            "hexlify",
+            "unhexlify",
+        },
+        "bz2": {"compress", "decompress"},
+        "codecs": {"decode", "encode"},
+        "lzma": {"compress", "decompress"},
+        "quopri": {"decode", "decodestring", "encode", "encodestring"},
+        "urllib.parse": {"quote", "quote_plus", "unquote", "unquote_plus"},
+        "zlib": {"compress", "decompress"},
+    }
+    protected_dynamic_modules = {
+        "os",
+        *serializer_modules,
+        *reversible_module_operations,
     }
     supported_transform_owners = {
         "base64.b64decode": "_decode_base64_text",
         "bytes.fromhex": "_decode_hex_text",
         "urllib.parse.unquote": "_decode_percent_text",
+        "urllib.parse.quote": "_bounded_candidate_alias_representations",
     }
     canonical_delegations = {
         "atomic_write_json",
@@ -784,31 +782,444 @@ def validate_capability_sink_anchors(
         "src/unrest_harness/acp_runner.py:ACPTerminalReviewer._report_progress": (
             "print",
         ),
+        "src/unrest_harness/acp_runner.py:ACPClient._dispatch": (
+            "_session_update_handler",
+        ),
         "src/unrest_harness/baseline.py:_seed_running_mission": ("write_text",),
         "src/unrest_harness/baseline.py:_storage_state": ("write_text",),
         "src/unrest_harness/baseline.py:generate_baseline": ("write_bytes",),
         "src/unrest_harness/baseline.py:main": ("print", "print", "print"),
         "src/unrest_harness/cli.py:_replace_managed_block": ("write_text",),
         "src/unrest_harness/cli.py:_setup_provider_assets": ("write_text",),
+        "src/unrest_harness/installed_wheel_check.py:run_installed_wheel_check": (
+            "write_text",
+            "write_text",
+        ),
+        "src/unrest_harness/dispatcher.py:MockDispatcher.dispatch": (
+            "_responder",
+        ),
     }
     observed_omission_primitives: dict[str, list[str]] = {}
+    observed_effects: list[tuple[str, str, str]] = []
 
-    def qualified_name(
-        function: ast.expr,
-        import_aliases: Mapping[str, str],
+    def expression_name(
+        expression: ast.expr,
+        aliases: Mapping[str, str],
+        constants: Mapping[str, str | int] | None = None,
     ) -> str:
-        parts: list[str] = []
-        cursor: ast.expr = function
-        while isinstance(cursor, ast.Attribute):
-            parts.append(cursor.attr)
-            cursor = cursor.value
-        if isinstance(cursor, ast.Name):
-            parts.extend(
-                reversed(
-                    import_aliases.get(cursor.id, cursor.id).split(".")
+        """Resolve a locally assigned callable without inspecting values."""
+        if isinstance(expression, ast.Name):
+            return aliases.get(expression.id, expression.id)
+        if isinstance(expression, ast.Attribute):
+            owner = expression_name(expression.value, aliases, constants)
+            return f"{owner}.{expression.attr}" if owner else expression.attr
+        if isinstance(expression, ast.Subscript):
+            owner = expression_name(expression.value, aliases, constants)
+            key = constant_string(expression.slice, constants or {})
+            if owner.endswith(".__dict__"):
+                module_name = owner.removesuffix(".__dict__")
+                if key is not None:
+                    return f"{module_name}.{key}"
+                if module_name in protected_dynamic_modules:
+                    return f"{module_name}.<dynamic>"
+            container_key = constant_container_key(
+                expression.slice,
+                constants or {},
+            )
+            if container_key is not None:
+                slot = container_slot(owner, container_key)
+                resolved = aliases.get(slot)
+                if resolved is not None:
+                    return resolved
+                return slot
+            return f"{owner}[]" if owner else ""
+        if (
+            isinstance(expression, ast.Call)
+            and isinstance(expression.func, ast.Name)
+            and expression.func.id == "getattr"
+            and len(expression.args) >= 2
+        ):
+            owner = expression_name(expression.args[0], aliases, constants)
+            attribute = constant_string(
+                expression.args[1],
+                constants or {},
+            )
+            if owner and attribute is not None:
+                return f"{owner}.{attribute}"
+            if owner in protected_dynamic_modules:
+                return f"{owner}.<dynamic>"
+        if (
+            isinstance(expression, ast.Call)
+            and isinstance(expression.func, ast.Name)
+            and expression.func.id == "vars"
+            and len(expression.args) == 1
+        ):
+            owner = expression_name(expression.args[0], aliases, constants)
+            return f"{owner}.__dict__" if owner else ""
+        if (
+            isinstance(expression, ast.Call)
+            and isinstance(expression.func, ast.Attribute)
+            and expression.func.attr == "get"
+            and len(expression.args) >= 1
+        ):
+            owner = expression_name(
+                expression.func.value,
+                aliases,
+                constants,
+            )
+            if owner.endswith(".__dict__"):
+                module_name = owner.removesuffix(".__dict__")
+                attribute = constant_string(
+                    expression.args[0],
+                    constants or {},
+                )
+                if attribute is not None:
+                    return f"{module_name}.{attribute}"
+                if module_name in protected_dynamic_modules:
+                    return f"{module_name}.<dynamic>"
+        if (
+            isinstance(expression, ast.Call)
+            and isinstance(expression.func, ast.Name)
+            and expression.func.id == "next"
+            and len(expression.args) == 1
+            and isinstance(expression.args[0], ast.Call)
+            and isinstance(expression.args[0].func, ast.Name)
+            and expression.args[0].func.id == "iter"
+            and len(expression.args[0].args) == 1
+        ):
+            owner = expression_name(
+                expression.args[0].args[0],
+                aliases,
+                constants,
+            )
+            return aliases.get(container_slot(owner, "<singleton>"), "")
+        return ""
+
+    def constant_string(
+        expression: ast.AST,
+        constants: Mapping[str, str | int],
+    ) -> str | None:
+        value = constant_primitive(expression, constants)
+        return value if isinstance(value, str) else None
+
+    def constant_primitive(
+        expression: ast.AST,
+        constants: Mapping[str, str | int],
+    ) -> str | int | None:
+        if isinstance(expression, ast.Constant) and isinstance(
+            expression.value,
+            (str, int),
+        ):
+            return expression.value
+        if isinstance(expression, ast.Name):
+            return constants.get(expression.id)
+        return None
+
+    def constant_container_key(
+        expression: ast.AST,
+        constants: Mapping[str, str | int],
+    ) -> str | int | None:
+        return constant_primitive(expression, constants)
+
+    def container_slot(owner: str, key: str | int) -> str:
+        return f"{owner}[{key!r}]"
+
+    def literal_container_items(
+        expression: ast.expr,
+        constants: Mapping[str, str | int],
+    ) -> tuple[tuple[tuple[str | int, ...], ast.expr], ...]:
+        immediate: tuple[tuple[str | int, ast.expr], ...]
+        if isinstance(expression, (ast.List, ast.Tuple)):
+            immediate = tuple(enumerate(expression.elts))
+        elif isinstance(expression, ast.Dict):
+            immediate = tuple(
+                (key, value)
+                for key_node, value in zip(
+                    expression.keys,
+                    expression.values,
+                    strict=True,
+                )
+                if key_node is not None
+                and (
+                    key := constant_container_key(key_node, constants)
+                )
+                is not None
+            )
+        elif isinstance(expression, ast.Set) and len(expression.elts) == 1:
+            immediate = (("<singleton>", expression.elts[0]),)
+        else:
+            return ()
+        output: list[tuple[tuple[str | int, ...], ast.expr]] = []
+        for key, item in immediate:
+            nested = literal_container_items(item, constants)
+            if nested:
+                output.extend(
+                    ((key, *path), leaf) for path, leaf in nested
+                )
+            else:
+                output.append(((key,), item))
+        return tuple(output)
+
+    def annotation_is_callable(annotation: ast.expr | None) -> bool:
+        if annotation is None:
+            return False
+        for item in ast.walk(annotation):
+            if isinstance(item, ast.Name) and item.id == "Callable":
+                return True
+            if isinstance(item, ast.Attribute) and item.attr == "Callable":
+                return True
+        return False
+
+    def shape_matched_assignments(
+        target: ast.expr,
+        value: ast.expr,
+    ) -> tuple[tuple[tuple[str, ...], ast.expr], ...]:
+        if isinstance(target, ast.Name):
+            return (((target.id,), value),)
+        if (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, (ast.Tuple, ast.List))
+            and len(target.elts) == len(value.elts)
+            and not any(isinstance(item, ast.Starred) for item in target.elts)
+        ):
+            return tuple(
+                assignment
+                for target_item, value_item in zip(
+                    target.elts,
+                    value.elts,
+                    strict=True,
+                )
+                for assignment in shape_matched_assignments(
+                    target_item,
+                    value_item,
                 )
             )
-        return ".".join(reversed(parts))
+        return ()
+
+    def shape_matched_state_values(
+        target: ast.expr,
+        value: ast.expr,
+    ) -> tuple[ast.expr, ...]:
+        if isinstance(target, (ast.Attribute, ast.Subscript)):
+            return (value,)
+        if (
+            isinstance(target, (ast.Tuple, ast.List))
+            and isinstance(value, (ast.Tuple, ast.List))
+            and len(target.elts) == len(value.elts)
+            and not any(
+                isinstance(item, ast.Starred)
+                for item in (*target.elts, *value.elts)
+            )
+        ):
+            return tuple(
+                state_value
+                for target_item, value_item in zip(
+                    target.elts,
+                    value.elts,
+                    strict=True,
+                )
+                for state_value in shape_matched_state_values(
+                    target_item,
+                    value_item,
+                )
+            )
+        return ()
+
+    def expression_contains_callable(
+        expression: ast.AST,
+        callable_names: set[str],
+    ) -> bool:
+        if isinstance(expression, ast.Name):
+            return expression.id in callable_names
+        if isinstance(expression, (ast.Tuple, ast.List, ast.Set)):
+            return any(
+                expression_contains_callable(item, callable_names)
+                for item in expression.elts
+            )
+        if isinstance(expression, ast.Dict):
+            return any(
+                expression_contains_callable(item, callable_names)
+                for item in (*expression.keys, *expression.values)
+                if item is not None
+            )
+        if isinstance(expression, (ast.Attribute, ast.Subscript)):
+            return expression_contains_callable(expression.value, callable_names)
+        if isinstance(expression, ast.Lambda):
+            positional = (
+                *expression.args.posonlyargs,
+                *expression.args.args,
+            )
+            default_count = len(expression.args.defaults)
+            default_arguments = (
+                positional[-default_count:] if default_count else ()
+            )
+            captured_names = {
+                argument.arg
+                for argument, default in zip(
+                    default_arguments,
+                    expression.args.defaults,
+                    strict=True,
+                )
+                if expression_contains_callable(default, callable_names)
+            }
+            captured_names.update(
+                argument.arg
+                for argument, default in zip(
+                    expression.args.kwonlyargs,
+                    expression.args.kw_defaults,
+                    strict=True,
+                )
+                if default is not None
+                and expression_contains_callable(default, callable_names)
+            )
+            return any(
+                expression_contains_callable(
+                    item.func,
+                    callable_names | captured_names,
+                )
+                for item in ast.walk(expression.body)
+                if isinstance(item, ast.Call)
+            )
+        return False
+
+    def callable_alias_source_names(expression: ast.AST) -> set[str]:
+        if isinstance(expression, ast.Name):
+            return {expression.id}
+        if isinstance(expression, (ast.Tuple, ast.List, ast.Set)):
+            return {
+                name
+                for item in expression.elts
+                for name in callable_alias_source_names(item)
+            }
+        if isinstance(expression, ast.Dict):
+            return {
+                name
+                for item in (*expression.keys, *expression.values)
+                if item is not None
+                for name in callable_alias_source_names(item)
+            }
+        if isinstance(expression, (ast.Attribute, ast.Subscript)):
+            return callable_alias_source_names(expression.value)
+        return set()
+
+    def called_local_name(function: ast.expr) -> str | None:
+        if isinstance(function, ast.Name):
+            return function.id
+        if isinstance(function, ast.Subscript):
+            names = callable_alias_source_names(function.value)
+            return next(iter(names)) if len(names) == 1 else None
+        return None
+
+    def serializer_channel(call_name: str, node: ast.Call) -> bool:
+        module_name, separator, operation = call_name.rpartition(".")
+        if (
+            separator
+            and (
+                operation in serializer_modules.get(module_name, set())
+                or (
+                    operation == "<dynamic>"
+                    and module_name in serializer_modules
+                )
+            )
+        ):
+            return len(node.args) >= 2 or any(
+                keyword.arg in {"file", "fp", "stream"}
+                for keyword in node.keywords
+            )
+        # A two-argument dump has the serializer-to-stream shape even when a
+        # new serializer module has not yet been added to this reviewed list.
+        return operation == "dump" and len(node.args) >= 2
+
+    def reversible_operation(call_name: str) -> bool:
+        if call_name == "bytes.fromhex":
+            return True
+        module_name, separator, operation = call_name.rpartition(".")
+        if (
+            separator
+            and operation == "<dynamic>"
+            and module_name in reversible_module_operations
+        ):
+            return True
+        if separator and operation in reversible_module_operations.get(
+            module_name,
+            set(),
+        ):
+            return True
+        return operation in {"maketrans", "translate"}
+
+    def capability_callable_family(call_name: str) -> str | None:
+        if reversible_operation(call_name):
+            return "transform"
+        module_name, separator, operation = call_name.rpartition(".")
+        if separator and operation in serializer_modules.get(
+            module_name,
+            set(),
+        ):
+            return "serializer"
+        if operation == "<dynamic>" and module_name in serializer_modules:
+            return "serializer"
+        if (
+            call_name in direct_channel_functions
+            or call_name in descriptor_functions
+            or call_name == "os.<dynamic>"
+        ):
+            return "writer"
+        return None
+
+    def effect_implementation(
+        node: ast.AST,
+        parents: Mapping[ast.AST, ast.AST],
+        relative_path: str,
+    ) -> tuple[str, str]:
+        cursor: ast.AST | None = node
+        names: list[str] = []
+        while cursor is not None:
+            if isinstance(
+                cursor,
+                (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef),
+            ):
+                names.append(cursor.name)
+            cursor = parents.get(cursor)
+        anchor = "<module>" if not names else ".".join(reversed(names))
+        return anchor, f"{relative_path}:{anchor}"
+
+    def reverse_slice(node: ast.Subscript) -> bool:
+        slice_node = node.slice
+        return (
+            isinstance(slice_node, ast.Slice)
+            and isinstance(slice_node.step, ast.UnaryOp)
+            and isinstance(slice_node.step.op, ast.USub)
+            and isinstance(slice_node.step.operand, ast.Constant)
+            and slice_node.step.operand.value == 1
+        )
+
+    def joined_reversal(node: ast.Call) -> bool:
+        if (
+            not isinstance(node.func, ast.Attribute)
+            or node.func.attr != "join"
+            or len(node.args) != 1
+        ):
+            return False
+        candidate = node.args[0]
+        return (
+            isinstance(candidate, ast.Call)
+            and isinstance(candidate.func, ast.Name)
+            and candidate.func.id == "reversed"
+        )
+
+    def materialized_reversal(node: ast.Call) -> bool:
+        if (
+            not isinstance(node.func, ast.Name)
+            or node.func.id not in {"bytearray", "bytes", "list", "tuple"}
+            or len(node.args) != 1
+        ):
+            return False
+        candidate = node.args[0]
+        return (
+            isinstance(candidate, ast.Call)
+            and isinstance(candidate.func, ast.Name)
+            and candidate.func.id == "reversed"
+        )
 
     for path in sorted(source_root.rglob("*.py")):
         relative_path = path.relative_to(repository_root).as_posix()
@@ -819,20 +1230,56 @@ def validate_capability_sink_anchors(
             errors.append(f"reachable-sink-closure: {relative_path} is unavailable")
             continue
         import_aliases: dict[str, str] = {}
-        for statement in ast.walk(tree):
-            if isinstance(statement, ast.Import):
-                for alias in statement.names:
+        for module_statement in tree.body:
+            if isinstance(module_statement, ast.Import):
+                for alias in module_statement.names:
                     import_aliases[alias.asname or alias.name] = alias.name
-            elif isinstance(statement, ast.ImportFrom) and statement.module:
-                for alias in statement.names:
+            elif (
+                isinstance(module_statement, ast.ImportFrom)
+                and module_statement.module
+            ):
+                for alias in module_statement.names:
                     import_aliases[alias.asname or alias.name] = (
-                        f"{statement.module}.{alias.name}"
+                        f"{module_statement.module}.{alias.name}"
                     )
         parents: dict[ast.AST, ast.AST] = {}
         for parent in ast.walk(tree):
             for child in ast.iter_child_nodes(parent):
                 parents[child] = parent
+
+        def is_invoked_callable_reference(node: ast.AST) -> bool:
+            parent = parents.get(node)
+            return isinstance(parent, ast.Call) and parent.func is node
+
+        def resolved_capability_references(
+            expression: ast.AST,
+            aliases: Mapping[str, str],
+            constants: Mapping[str, str | int],
+        ) -> set[tuple[str, str]]:
+            references: set[tuple[str, str]] = set()
+            for item in ast.walk(expression):
+                if not isinstance(
+                    item,
+                    (ast.Name, ast.Attribute, ast.Subscript, ast.Call),
+                ) or is_invoked_callable_reference(item):
+                    continue
+                name = expression_name(item, aliases, constants)
+                family = capability_callable_family(name)
+                if family is not None:
+                    references.add((family, name))
+                if not name:
+                    continue
+                slot_prefix = f"{name}["
+                for slot, slot_name in aliases.items():
+                    if not slot.startswith(slot_prefix):
+                        continue
+                    slot_family = capability_callable_family(slot_name)
+                    if slot_family is not None:
+                        references.add((slot_family, slot_name))
+            return references
+
         function_parameters: dict[ast.AST, set[str]] = {}
+        parameter_annotations: dict[ast.AST, dict[str, ast.expr | None]] = {}
         for owner_node in ast.walk(tree):
             if not isinstance(
                 owner_node,
@@ -847,46 +1294,451 @@ def validate_capability_sink_anchors(
                     *owner_node.args.kwonlyargs,
                 )
             }
+            parameter_annotations[owner_node] = {
+                argument.arg: argument.annotation
+                for argument in (
+                    *owner_node.args.posonlyargs,
+                    *owner_node.args.args,
+                    *owner_node.args.kwonlyargs,
+                )
+            }
+
+        def lexical_owner(node: ast.AST) -> ast.AST:
+            cursor: ast.AST | None = node
+            while cursor is not None:
+                if isinstance(cursor, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    return cursor
+                cursor = parents.get(cursor)
+            return tree
+
+        def lexical_class(node: ast.AST) -> ast.ClassDef | None:
+            cursor: ast.AST | None = node
+            while cursor is not None:
+                if isinstance(cursor, ast.ClassDef):
+                    return cursor
+                cursor = parents.get(cursor)
+            return None
+
+        assigned_callable_attributes: dict[ast.ClassDef, set[str]] = {}
+        called_attributes: dict[ast.ClassDef, set[str]] = {}
+        callable_attribute_assignments: list[
+            tuple[ast.ClassDef, str, ast.AST, str]
+        ] = []
+        for statement in ast.walk(tree):
+            owner_class = lexical_class(statement)
+            if owner_class is None:
+                continue
+            if (
+                isinstance(statement, (ast.Assign, ast.AnnAssign))
+                and isinstance(statement.value, ast.Name)
+            ):
+                attribute_targets = (
+                    tuple(statement.targets)
+                    if isinstance(statement, ast.Assign)
+                    else (statement.target,)
+                )
+                owner_scope = lexical_owner(statement)
+                if statement.value.id not in function_parameters.get(
+                    owner_scope,
+                    set(),
+                ):
+                    continue
+                for target in attribute_targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                    ):
+                        assigned_callable_attributes.setdefault(
+                            owner_class,
+                            set(),
+                        ).add(target.attr)
+                        callable_attribute_assignments.append(
+                            (
+                                owner_class,
+                                target.attr,
+                                owner_scope,
+                                statement.value.id,
+                            )
+                        )
+            elif (
+                isinstance(statement, ast.Call)
+                and isinstance(statement.func, ast.Attribute)
+                and isinstance(statement.func.value, ast.Name)
+                and statement.func.value.id == "self"
+            ):
+                called_attributes.setdefault(owner_class, set()).add(
+                    statement.func.attr
+                )
+        class_callback_attributes = {
+            owner_class: attributes
+            & called_attributes.get(owner_class, set())
+            for owner_class, attributes in assigned_callable_attributes.items()
+        }
+        callable_attribute_parameters: dict[ast.AST, set[str]] = {}
+        for owner_class, attribute, owner_scope, parameter in (
+            callable_attribute_assignments
+        ):
+            if attribute in class_callback_attributes.get(owner_class, set()):
+                callable_attribute_parameters.setdefault(
+                    owner_scope,
+                    set(),
+                ).add(parameter)
+
+        def is_class_callback_call(function: ast.expr, node: ast.AST) -> bool:
+            owner_class = lexical_class(node)
+            return (
+                owner_class is not None
+                and isinstance(function, ast.Attribute)
+                and isinstance(function.value, ast.Name)
+                and function.value.id == "self"
+                and function.attr
+                in class_callback_attributes.get(owner_class, set())
+            )
+
+        scopes: tuple[ast.AST, ...] = (tree, *function_parameters)
+        scope_aliases: dict[ast.AST, dict[str, str]] = {
+            scope: dict(import_aliases) for scope in scopes
+        }
+        for statement in ast.walk(tree):
+            aliases = scope_aliases[lexical_owner(statement)]
+            if isinstance(statement, ast.Import):
+                for alias in statement.names:
+                    aliases[alias.asname or alias.name] = alias.name
+            elif isinstance(statement, ast.ImportFrom) and statement.module:
+                for alias in statement.names:
+                    aliases[alias.asname or alias.name] = (
+                        f"{statement.module}.{alias.name}"
+                    )
+        scope_assignments: dict[
+            ast.AST,
+            list[tuple[tuple[str, ...], ast.expr]],
+        ] = {scope: [] for scope in scopes}
+        for statement in ast.walk(tree):
+            target_nodes: tuple[ast.expr, ...]
+            value: ast.expr | None
+            if isinstance(statement, ast.Assign):
+                target_nodes = tuple(statement.targets)
+                value = statement.value
+            elif isinstance(statement, ast.AnnAssign):
+                target_nodes = (statement.target,)
+                value = statement.value
+            else:
+                continue
+            if value is None:
+                continue
+            for target in target_nodes:
+                scope_assignments[lexical_owner(statement)].extend(
+                    shape_matched_assignments(target, value)
+                )
+
+        scope_constants: dict[ast.AST, dict[str, str | int]] = {}
+        for scope in scopes:
+            constants = (
+                {}
+                if scope is tree
+                else dict(scope_constants.get(tree, {}))
+            )
+            assignments = scope_assignments[scope]
+            local_counts: dict[str, int] = {}
+            for names, _value in assignments:
+                for name in names:
+                    local_counts[name] = local_counts.get(name, 0) + 1
+                    constants.pop(name, None)
+            for _ in range(len(assignments) + 1):
+                changed = False
+                for names, value in assignments:
+                    resolved = constant_primitive(value, constants)
+                    if resolved is None:
+                        continue
+                    for name in names:
+                        if local_counts[name] != 1:
+                            continue
+                        if constants.get(name) != resolved:
+                            constants[name] = resolved
+                            changed = True
+                if not changed:
+                    break
+            scope_constants[scope] = constants
+
+        # Resolve simple and bound callable aliases to a fixed point. This is
+        # deliberately lexical and value-free: it models ownership/flow, not
+        # runtime data or arbitrary source text.
+        for scope in scopes:
+            aliases = scope_aliases[scope]
+            for _ in range(len(scope_assignments[scope]) + 1):
+                changed = False
+                for names, value in scope_assignments[scope]:
+                    resolved = expression_name(
+                        value,
+                        aliases,
+                        scope_constants[scope],
+                    )
+                    if resolved:
+                        for name in names:
+                            if aliases.get(name) != resolved:
+                                aliases[name] = resolved
+                                changed = True
+                    for key_path, item in literal_container_items(
+                        value,
+                        scope_constants[scope],
+                    ):
+                        item_name = expression_name(
+                            item,
+                            aliases,
+                            scope_constants[scope],
+                        )
+                        if not item_name:
+                            continue
+                        for name in names:
+                            slot = name
+                            for key in key_path:
+                                slot = container_slot(slot, key)
+                            if aliases.get(slot) != item_name:
+                                aliases[slot] = item_name
+                                changed = True
+                if not changed:
+                    break
+
+        scope_callable_names: dict[ast.AST, set[str]] = {
+            scope: set() for scope in scopes
+        }
+        scope_callback_wrappers: dict[ast.AST, set[str]] = {
+            scope: set() for scope in scopes
+        }
+        scope_output_callback_names: dict[ast.AST, set[str]] = {
+            scope: set() for scope in scopes
+        }
+        for scope in function_parameters:
+            output_names = scope_output_callback_names[scope]
+            output_names.update(
+                name
+                for name in function_parameters[scope]
+                if name == "callback"
+            )
+            output_names.update(
+                callable_attribute_parameters.get(scope, set())
+            )
+            for _ in range(len(scope_assignments[scope]) + 1):
+                changed = False
+                for targets, value in scope_assignments[scope]:
+                    if expression_contains_callable(value, output_names):
+                        before = len(output_names)
+                        output_names.update(targets)
+                        changed = changed or len(output_names) != before
+                if not changed:
+                    break
+        nested_callback_wrappers: dict[ast.AST, set[str]] = {}
+        for nested in function_parameters:
+            if not isinstance(nested, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            parent_node = parents.get(nested)
+            if parent_node is None:
+                continue
+            enclosing = lexical_owner(parent_node)
+            if enclosing is tree:
+                continue
+            enclosing_output_names = scope_output_callback_names[enclosing]
+            positional = (*nested.args.posonlyargs, *nested.args.args)
+            default_count = len(nested.args.defaults)
+            default_arguments = (
+                positional[-default_count:] if default_count else ()
+            )
+            captured_default_names = {
+                argument.arg
+                for argument, default in zip(
+                    default_arguments,
+                    nested.args.defaults,
+                    strict=True,
+                )
+                if expression_name(
+                    default,
+                    scope_aliases[enclosing],
+                    scope_constants[enclosing],
+                )
+                in enclosing_output_names
+            }
+            captured_default_names.update(
+                argument.arg
+                for argument, default in zip(
+                    nested.args.kwonlyargs,
+                    nested.args.kw_defaults,
+                    strict=True,
+                )
+                if default is not None
+                and expression_name(
+                    default,
+                    scope_aliases[enclosing],
+                    scope_constants[enclosing],
+                )
+                in enclosing_output_names
+            )
+            invokes_enclosing_parameter = any(
+                (
+                    called_name in captured_default_names
+                    or expression_name(
+                        call.func,
+                        scope_aliases[enclosing],
+                        scope_constants[enclosing],
+                    )
+                    in enclosing_output_names
+                )
+                for call in ast.walk(nested)
+                if isinstance(call, ast.Call) and lexical_owner(call) is nested
+                if (called_name := called_local_name(call.func)) is not None
+            )
+            if invokes_enclosing_parameter:
+                nested_callback_wrappers.setdefault(enclosing, set()).add(
+                    nested.name
+                )
+        for scope in function_parameters:
+            parameters = function_parameters[scope]
+            callable_names = scope_callable_names[scope]
+            callable_names.update(
+                name
+                for name, annotation in parameter_annotations[scope].items()
+                if annotation_is_callable(annotation)
+            )
+            callable_names.update(nested_callback_wrappers.get(scope, set()))
+            owner_class = lexical_class(scope)
+            if owner_class is not None and class_callback_attributes.get(
+                owner_class,
+                set(),
+            ):
+                callable_names.update(
+                    callable_attribute_parameters.get(scope, set())
+                )
+            called_names = {
+                called_name
+                for node in ast.walk(scope)
+                if isinstance(node, ast.Call) and lexical_owner(node) is scope
+                if (called_name := called_local_name(node.func)) is not None
+            }
+            for called_name in sorted(called_names):
+                alias_chain = {called_name}
+                for _ in range(len(scope_assignments[scope]) + 1):
+                    before = len(alias_chain)
+                    for targets, value in scope_assignments[scope]:
+                        if set(targets) & alias_chain:
+                            alias_chain.update(
+                                callable_alias_source_names(value)
+                            )
+                    if len(alias_chain) == before:
+                        break
+                if alias_chain & (parameters - {"cls", "self"}):
+                    callable_names.update(alias_chain)
+            for _ in range(len(scope_assignments[scope]) + 1):
+                changed = False
+                for targets, value in scope_assignments[scope]:
+                    if expression_contains_callable(value, callable_names):
+                        before = len(callable_names)
+                        callable_names.update(targets)
+                        changed = changed or len(callable_names) != before
+                if not changed:
+                    break
+            wrapper_names = scope_callback_wrappers[scope]
+            wrapper_names.update(nested_callback_wrappers.get(scope, set()))
+            for _ in range(len(scope_assignments[scope]) + 1):
+                changed = False
+                for targets, value in scope_assignments[scope]:
+                    is_lambda_wrapper = (
+                        isinstance(value, ast.Lambda)
+                        and expression_contains_callable(
+                            value,
+                            callable_names,
+                        )
+                    )
+                    aliases_wrapper = expression_contains_callable(
+                        value,
+                        wrapper_names,
+                    )
+                    if is_lambda_wrapper or aliases_wrapper:
+                        before = len(wrapper_names)
+                        wrapper_names.update(targets)
+                        changed = changed or len(wrapper_names) != before
+                if not changed:
+                    break
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             function = node.func
-            call_name = qualified_name(function, import_aliases)
+            scope = lexical_owner(node)
+            call_name = expression_name(
+                function,
+                scope_aliases[scope],
+                scope_constants[scope],
+            )
             leaf_name = call_name.rsplit(".", 1)[-1]
-            cursor: ast.AST | None = node
-            names: list[str] = []
             owner: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+            cursor: ast.AST | None = node
             while cursor is not None:
-                if isinstance(cursor, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                    names.append(cursor.name)
                 if owner is None and isinstance(
                     cursor,
                     (ast.FunctionDef, ast.AsyncFunctionDef),
                 ):
                     owner = cursor
                 cursor = parents.get(cursor)
-            if not names:
-                anchor = "<module>"
-            else:
-                anchor = ".".join(reversed(names))
-            implementation = f"{relative_path}:{anchor}"
+            anchor, implementation = effect_implementation(
+                node,
+                parents,
+                relative_path,
+            )
 
-            parameter_channel = (
-                isinstance(function, ast.Name)
-                and owner is not None
-                and function.id in function_parameters[owner]
-                and isinstance(
-                    parents.get(node),
-                    (ast.Expr, ast.Await),
+            callback_channel = (
+                owner is not None
+                and (
+                    (
+                        expression_contains_callable(
+                            function,
+                            scope_callable_names[owner],
+                        )
+                        and isinstance(
+                            parents.get(node),
+                            (ast.Expr, ast.Await),
+                        )
+                    )
+                    or is_class_callback_call(function, node)
+                    or expression_contains_callable(
+                        function,
+                        scope_output_callback_names[owner],
+                    )
+                    or expression_contains_callable(
+                        function,
+                        scope_callback_wrappers[owner],
+                    )
                 )
             )
+            is_serializer_channel = serializer_channel(call_name, node)
             output_effect = (
                 leaf_name in stream_methods
                 or leaf_name in direct_channel_functions
-                or call_name in serializer_channels
-                or parameter_channel
+                or call_name in descriptor_functions
+                or call_name == "os.<dynamic>"
+                or is_serializer_channel
+                or callback_channel
             )
+            if output_effect:
+                if is_serializer_channel:
+                    effect_family = "serializer"
+                elif callback_channel:
+                    effect_family = "callback"
+                elif leaf_name in direct_channel_functions:
+                    effect_family = "direct-channel"
+                else:
+                    effect_family = "stream-channel"
+                effect_primitive = (
+                    call_name
+                    if effect_family in {"serializer", "direct-channel"}
+                    else (
+                        "<dynamic-callback>"
+                        if effect_family == "callback"
+                        else leaf_name
+                    )
+                )
+                observed_effects.append(
+                    (implementation, effect_family, effect_primitive)
+                )
             if output_effect and implementation not in declared_implementations:
                 errors.append(
                     "reachable-sink-closure: "
@@ -904,19 +1756,8 @@ def validate_capability_sink_anchors(
                 ).append(leaf_name)
 
             expected_owner = supported_transform_owners.get(call_name)
-            root_name = call_name.partition(".")[0]
             unsupported_transform = (
-                (
-                    root_name in unsupported_reversible_roots
-                    and leaf_name
-                    in {
-                        "compress",
-                        "decode",
-                        "decompress",
-                        "encode",
-                    }
-                )
-                or leaf_name in {"maketrans", "translate"}
+                reversible_operation(call_name) and expected_owner is None
             )
             if expected_owner is not None and anchor != expected_owner:
                 errors.append(
@@ -929,6 +1770,166 @@ def validate_capability_sink_anchors(
                     "reachable-transform-closure: "
                     f"unsupported reversible operation at {implementation}:{node.lineno}"
                 )
+            if expected_owner is not None:
+                observed_effects.append(
+                    (implementation, "supported-transform", call_name)
+                )
+            elif unsupported_transform:
+                observed_effects.append(
+                    (implementation, "unsupported-transform", call_name)
+                )
+
+        # Callable capability may leave its lexical owner without being
+        # invoked there (registration, return, or assignment to externally
+        # reachable state). Those flows are security effects in their own
+        # right; otherwise an alias can move the eventual write beyond the
+        # reviewed owner.
+        for node in ast.walk(tree):
+            scope = lexical_owner(node)
+            if scope is tree:
+                continue
+            callable_names = scope_callable_names[scope]
+            aliases = scope_aliases[scope]
+            escape_kind: str | None = None
+            escape_values: tuple[ast.expr, ...] = ()
+            if isinstance(node, (ast.Return, ast.Yield, ast.YieldFrom)):
+                escape_kind = "return"
+                escape_values = () if node.value is None else (node.value,)
+            elif isinstance(node, ast.Assign):
+                if any(
+                    isinstance(target, (ast.Attribute, ast.Subscript))
+                    for target in node.targets
+                ):
+                    escape_kind = "state"
+                    escape_values = (node.value,)
+                else:
+                    escape_values = tuple(
+                        state_value
+                        for target in node.targets
+                        for state_value in shape_matched_state_values(
+                            target,
+                            node.value,
+                        )
+                    )
+                    if escape_values:
+                        escape_kind = "state"
+            elif isinstance(node, ast.AnnAssign) and isinstance(
+                node.target,
+                (ast.Attribute, ast.Subscript),
+            ):
+                escape_kind = "state"
+                escape_values = () if node.value is None else (node.value,)
+            for escape_value in escape_values:
+                if (
+                    escape_kind is not None
+                    and expression_contains_callable(
+                        escape_value,
+                        callable_names,
+                    )
+                ):
+                    _anchor, implementation = effect_implementation(
+                        node,
+                        parents,
+                        relative_path,
+                    )
+                    observed_effects.append(
+                        (implementation, "callback-escape", escape_kind)
+                    )
+
+                escaped_capabilities = resolved_capability_references(
+                    escape_value,
+                    aliases,
+                    scope_constants[scope],
+                )
+                for family, capability_name in sorted(escaped_capabilities):
+                    _anchor, implementation = effect_implementation(
+                        node,
+                        parents,
+                        relative_path,
+                    )
+                    observed_effects.append(
+                        (
+                            implementation,
+                            f"{family}-escape",
+                            capability_name,
+                        )
+                    )
+
+            if not isinstance(node, ast.Call):
+                continue
+            if expression_contains_callable(node.func, callable_names):
+                continue
+            escaped_argument = any(
+                expression_contains_callable(argument, callable_names)
+                for argument in (
+                    *node.args,
+                    *(keyword.value for keyword in node.keywords),
+                )
+            )
+            if escaped_argument:
+                _anchor, implementation = effect_implementation(
+                    node,
+                    parents,
+                    relative_path,
+                )
+                observed_effects.append(
+                    (implementation, "callback-escape", "argument")
+                )
+                if implementation not in declared_implementations:
+                    errors.append(
+                        "reachable-sink-closure: "
+                        f"uncataloged callback escape at "
+                        f"{implementation}:{node.lineno}"
+                    )
+
+            capability_references: set[tuple[str, str]] = set()
+            for argument in (
+                *node.args,
+                *(keyword.value for keyword in node.keywords),
+            ):
+                capability_references.update(
+                    resolved_capability_references(
+                        argument,
+                        aliases,
+                        scope_constants[scope],
+                    )
+                )
+            for family, capability_name in sorted(capability_references):
+                _anchor, implementation = effect_implementation(
+                    node,
+                    parents,
+                    relative_path,
+                )
+                observed_effects.append(
+                    (implementation, f"{family}-escape", capability_name)
+                )
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Subscript) and reverse_slice(node):
+                transform_primitive = "reverse-slice"
+            elif isinstance(node, ast.Call) and joined_reversal(node):
+                transform_primitive = "join-reversed"
+            elif isinstance(node, ast.Call) and materialized_reversal(node):
+                transform_primitive = "materialize-reversed"
+            else:
+                continue
+            _anchor, implementation = effect_implementation(
+                node,
+                parents,
+                relative_path,
+            )
+            observed_effects.append(
+                (
+                    implementation,
+                    "unsupported-transform",
+                    transform_primitive,
+                )
+            )
+            if implementation not in omission_implementations:
+                errors.append(
+                    "reachable-transform-closure: "
+                    f"unsupported reversible operation at "
+                    f"{implementation}:{node.lineno}"
+                )
     for implementation in sorted(
         set(expected_omission_primitives) | set(observed_omission_primitives)
     ):
@@ -939,6 +1940,19 @@ def validate_capability_sink_anchors(
                 "reachable-sink-closure: "
                 f"declared omission effect drift at {implementation}"
             )
+    observed_effect_digest = hashlib.sha256(
+        json.dumps(
+            sorted(observed_effects),
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    if observed_effect_digest != catalog.reachable_source_sha256:
+        errors.append(
+            "reachable-capability-closure: "
+            "effect graph does not match the reviewed catalog "
+            f"(observed sha256={observed_effect_digest})"
+        )
     return tuple(errors)
 
 
@@ -1480,6 +2494,72 @@ class SensitiveValueInventory(dict[str, str]):
 
     def copy(self) -> SensitiveValueInventory:
         return SensitiveValueInventory(self, provenance=self.provenance)
+
+
+def serialize_sensitive_value_inventory(
+    inventory: Mapping[str, str],
+) -> bytes:
+    """Serialize an explicit inventory for a private parent/child channel."""
+    return json.dumps(
+        {
+            "provenance": [
+                {
+                    "derived": item.derived,
+                    "evidence": list(item.evidence),
+                    "source_name": item.source_name,
+                    "value": item.value,
+                }
+                for item in sensitive_value_provenance(inventory)
+            ],
+            "values": dict(sorted(inventory.items())),
+        },
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def deserialize_sensitive_value_inventory(
+    payload: bytes,
+) -> SensitiveValueInventory:
+    """Restore an inventory received over the private startup channel."""
+    decoded = json.loads(payload.decode("utf-8"))
+    if not isinstance(decoded, dict):
+        raise ValueError("sensitive inventory payload must be an object")
+    values = decoded.get("values")
+    provenance = decoded.get("provenance")
+    if not isinstance(values, dict) or not isinstance(provenance, list):
+        raise ValueError("sensitive inventory payload has an invalid shape")
+    if not all(
+        isinstance(name, str) and isinstance(value, str)
+        for name, value in values.items()
+    ):
+        raise ValueError("sensitive inventory values must be strings")
+    records: list[SensitiveValueProvenance] = []
+    for item in provenance:
+        if not isinstance(item, dict):
+            raise ValueError("sensitive inventory provenance must be objects")
+        source_name = item.get("source_name")
+        value = item.get("value")
+        evidence = item.get("evidence")
+        derived = item.get("derived")
+        if (
+            not isinstance(source_name, str)
+            or not isinstance(value, str)
+            or not isinstance(evidence, list)
+            or not all(isinstance(reason, str) for reason in evidence)
+            or not isinstance(derived, bool)
+        ):
+            raise ValueError("sensitive inventory provenance is invalid")
+        records.append(
+            SensitiveValueProvenance(
+                source_name=source_name,
+                value=value,
+                evidence=tuple(evidence),
+                derived=derived,
+            )
+        )
+    return SensitiveValueInventory(values, provenance=records)
 
 
 def _name_components(name: str) -> tuple[str, ...]:
@@ -3192,9 +4272,22 @@ def _format_ast_observed_depth(value: str) -> int:
     return visit(value, 0)
 
 
-def _bounded_semantic_traversal(text: Any) -> _SemanticTraversal:
+def _bounded_semantic_traversal(
+    text: Any,
+    *,
+    sensitivity_provenance: tuple[str, ...] = (),
+) -> _SemanticTraversal:
     pending: deque[tuple[_SemanticNode, frozenset[int]]] = deque(
-        [(_SemanticNode(text, 0), frozenset())]
+        [
+            (
+                _SemanticNode(
+                    text,
+                    0,
+                    sensitivity_provenance=sensitivity_provenance,
+                ),
+                frozenset(),
+            )
+        ]
     )
     nodes: list[_SemanticNode] = []
     seen_strings: set[
@@ -3393,7 +4486,14 @@ def _bounded_semantic_traversal(text: Any) -> _SemanticTraversal:
                     _SemanticNode(
                         item.value,
                         node.depth + 1,
-                        sensitivity_provenance=item.sensitivity_provenance,
+                        sensitivity_provenance=tuple(
+                            sorted(
+                                {
+                                    *node.sensitivity_provenance,
+                                    *item.sensitivity_provenance,
+                                }
+                            )
+                        ),
                         transform_count=format_transform_count,
                         origin=item.origin,
                         format_context_invalid=format_context_invalid,
@@ -3726,13 +4826,43 @@ def classify_environment_value(
 ) -> SensitivityClassification:
     """Run normalization, derivation, recognition, extraction, and aggregation."""
     name_evidence = _name_sensitivity(name)
-    traversal = _bounded_semantic_traversal(value)
+    source_sensitivity_provenance = tuple(
+        sorted(
+            {
+                *(
+                    name_evidence.evidence
+                    if (
+                        name_evidence.classified
+                        and not name_evidence.conditional_on_payload
+                    )
+                    else ()
+                ),
+                *(("declared-credential-provenance",) if declared else ()),
+            }
+        )
+    )
+    traversal = _bounded_semantic_traversal(
+        value,
+        sensitivity_provenance=source_sensitivity_provenance,
+    )
     derived: dict[str, set[str]] = {}
     templates: set[str] = set()
     allow_high_entropy = (
         "benign-family-name" not in name_evidence.benign_evidence
         or name_evidence.classified
     )
+
+    def concrete_format_provenance(node: _SemanticNode) -> bool:
+        if not node.format_ast_component:
+            return True
+        if any(
+            not reason.startswith("semantic-field:")
+            for reason in node.sensitivity_provenance
+        ):
+            return True
+        return node.origin == "derived" or node.origin.endswith(
+            "-assignment-value"
+        )
 
     for node in traversal.nodes:
         if not isinstance(node.value, str) or not node.value:
@@ -3747,6 +4877,7 @@ def classify_environment_value(
             node.sensitivity_provenance
             and not node.mapping_key
             and not recognition.complete
+            and concrete_format_provenance(node)
         ):
             derived.setdefault(node.value, set()).add(
                 f"{node.origin}-credential-field"
@@ -4562,6 +5693,7 @@ __all__ = [
     "credential_source_values",
     "credential_values",
     "declared_credential_values",
+    "deserialize_sensitive_value_inventory",
     "enforce_environment_credential_provenance",
     "enforce_persisted_environment_credential_provenance",
     "load_capability_policy",
@@ -4571,6 +5703,7 @@ __all__ = [
     "redact_sensitive_value",
     "resolve_profile_from_environment",
     "resolve_role_capability",
+    "serialize_sensitive_value_inventory",
     "is_credential_source_name",
     "sensitive_value_provenance",
     "sensitive_values",

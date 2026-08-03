@@ -1,9 +1,9 @@
 """ACP runner adaptation tests — direct-to-PROJECT handoff path discipline.
 
-We don't run a real `claude-agent-acp` here; we use the bundled
-`mock_acp_agent.py` to exercise the ACP client + the handoff polling
-mechanic. The worker MCP server subprocess is bypassed: the mock agent
-writes directly to UNREST_HANDOFF_PATH itself.
+Most tests use the bundled ``mock_acp_agent.py`` rather than a live provider.
+The startup-channel regression runs the real worker/reviewer MCP subprocesses;
+the other mock-agent tests bypass those subprocesses and write the handoff
+directly.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from fastmcp import Client
 
 from unrest_harness.acp_runner import (
     ACPTerminalReviewer,
@@ -26,6 +27,7 @@ from unrest_harness.acp_runner import (
 )
 from unrest_harness.capability_policy import (
     SAFE_PROFILE,
+    credential_values,
     load_capability_policy,
     resolve_role_capability,
 )
@@ -80,6 +82,141 @@ def project_setup(config: HarnessConfig, workspace: Path):
     contract_dir = store.ensure_contract_dir("p1", "mission-001")
     (contract_dir / "VAL-001.md").write_text("# VAL-001\n\nTest.\n")
     return store
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ("worker", "terminal-reviewer"))
+async def test_real_mcp_inventory_fd_redacts_before_crash_and_restart(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    """The private startup FD protects the first durable write, before cleanup."""
+    secret_name = "ANTHROPIC_API_KEY"
+    secret = "plum"
+    monkeypatch.setenv(secret_name, secret)
+
+    store = ProjectStore(config)
+    store.create_project("brief", workspace, project_id=f"p-{mode}")
+    project_id = f"p-{mode}"
+    mission_id = "mission-001"
+    spawn_ts = "2026-08-03T00-00-00Z"
+    runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
+    role = "worker" if mode == "worker" else "terminal_reviewer"
+    policy = resolve_role_capability(
+        PROVIDERS["claude"],
+        role=role,  # type: ignore[arg-type]
+        policy=load_capability_policy(config.bundled_dir),
+        profile=SAFE_PROFILE,
+        workspace=workspace,
+        project_record=store.unrest_dir(project_id),
+    )
+    inventory = credential_values(policy, {secret_name: os.environ[secret_name]})
+    assert inventory == {secret_name: secret}
+
+    mcp_port = runner._find_free_port()
+    base_environment = {
+        "LANG": "C",
+        "PATH": os.environ["PATH"],
+        "UNREST_HOME": str(config.harness_home),
+        "UNREST_MISSION_ID": mission_id,
+        "UNREST_PROJECT_ID": project_id,
+    }
+    if mode == "worker":
+        artifact_path = store.attempt_path(
+            project_id, mission_id, spawn_ts, "w-secret"
+        )
+        base_environment.update(
+            {
+                "UNREST_HANDOFF_PATH": str(artifact_path),
+                "UNREST_NODE_ID": "w-secret",
+                "UNREST_NODE_TYPE": "work",
+            }
+        )
+        process = await runner._start_worker_mcp_server(
+            task=Task(
+                id="w-secret",
+                type="work",
+                body="persist",
+                targets=["VAL-001"],
+                skill="s",
+            ),
+            project_id=project_id,
+            mission_id=mission_id,
+            handoff_path=str(artifact_path),
+            workspace_dir=str(workspace),
+            mcp_port=mcp_port,
+            sensitive_inventory=inventory,
+            environment=base_environment,
+        )
+        tool_name = "end_node"
+    else:
+        artifact_path = store.terminal_review_path(
+            project_id, mission_id, spawn_ts
+        )
+        base_environment["UNREST_TERMINAL_REVIEW_PATH"] = str(artifact_path)
+        process = await runner._start_terminal_reviewer_mcp(
+            project_id=project_id,
+            mission_id=mission_id,
+            report_path=str(artifact_path),
+            workspace_dir=str(workspace),
+            mcp_port=mcp_port,
+            sensitive_inventory=inventory,
+            environment=base_environment,
+        )
+        tool_name = "submit_terminal_review"
+
+    stderr = b""
+    try:
+        await runner._wait_for_server_ready("127.0.0.1", mcp_port)
+        async with Client(f"http://127.0.0.1:{mcp_port}/mcp") as client:
+            await client.call_tool(
+                tool_name,
+                {"done": True, "report": secret},
+            )
+
+            # This is the vulnerable window: the tool has returned, while both
+            # the MCP child and its parent-side runner cleanup are still live.
+            persisted = artifact_path.read_text(encoding="utf-8")
+            assert process.returncode is None
+            assert secret not in persisted
+            assert f"<redacted:{secret_name}>" in persisted
+    finally:
+        # Model a crash immediately after the successful handoff and prove the
+        # inherited FD child is actually terminated before restart recovery.
+        if process.returncode is None:
+            process.terminate()
+        _, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+    assert process.returncode is not None, stderr.decode(errors="replace")
+
+    restarted = ProjectStore(config)
+    if mode == "worker":
+        handoff = restarted.read_attempt(
+            project_id, mission_id, spawn_ts, "w-secret"
+        )
+        assert isinstance(handoff, WorkHandoff)
+        restarted.save_attempt(
+            project_id, mission_id, spawn_ts, "w-secret", handoff
+        )
+        mirror_path = restarted.attempt_report_path(
+            project_id, mission_id, spawn_ts, "w-secret"
+        )
+    else:
+        review = TerminalReviewHandoff.model_validate_json(
+            artifact_path.read_text(encoding="utf-8")
+        )
+        restarted.save_terminal_review(
+            project_id, mission_id, spawn_ts, review
+        )
+        mirror_path = restarted.terminal_review_report_path(
+            project_id, mission_id, spawn_ts
+        )
+
+    for path in (artifact_path, mirror_path):
+        persisted = path.read_text(encoding="utf-8")
+        assert secret not in persisted
+        assert f"<redacted:{secret_name}>" in persisted
 
 
 # ---------------------------------------------------------------------------

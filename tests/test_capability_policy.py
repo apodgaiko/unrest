@@ -2863,6 +2863,38 @@ def test_triply_unpadded_urlsafe_base64_in_brace_format_index_is_contained(
     ) == {"ORDINARY": "kept"}
 
 
+def test_declared_format_source_propagates_parent_sensitivity_to_plain_index() -> None:
+    secret = "local7"
+    aliases = [secret]
+    for _ in range(3):
+        aliases.append(
+            base64.urlsafe_b64encode(aliases[-1].encode())
+            .decode()
+            .rstrip("=")
+        )
+    source = f"{{mapping[{aliases[-1]}]!s:^12}}"
+    assert source.format(mapping={aliases[-1]: "ordinary"}) == "  ordinary  "
+
+    inventory = credential_source_values(
+        {"DECLARED_FORMAT_SOURCE": source},
+        declared_names=("DECLARED_FORMAT_SOURCE",),
+    )
+    assert set(aliases).issubset(sensitive_values(inventory))
+
+    assert redact_sensitive_value(
+        {"separate_payload": secret, "ordinary": "kept"},
+        inventory,
+    ) == {
+        "separate_payload": "<redacted:DECLARED_FORMAT_SOURCE>",
+        "ordinary": "kept",
+    }
+
+    for benign_name in ("RUNTIME_SETTING", "ORDINARY_FORMAT_TEMPLATE"):
+        benign_inventory = credential_source_values({benign_name: source})
+        assert benign_inventory == {}
+        assert sensitive_values(benign_inventory) == ()
+
+
 def test_semantic_inspection_limits_do_not_suppress_unstructured_or_malformed_values(
 ) -> None:
     secret = "VCAP_LIMIT_CONTROL_SECRET_31f70d"

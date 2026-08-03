@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from unrest_harness.capability_policy import credential_source_values
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController, ToolError
 from unrest_harness.dispatcher import (
@@ -241,6 +242,112 @@ async def test_submit_terminal_review_writes_file(tmp_path: Path, monkeypatch) -
     )
     data = json.loads(review_path.read_text())
     assert data == {"done": True, "report": "all clean"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "path_name"),
+    (("worker", "handoff.json"), ("reviewer", "terminal-review.json")),
+)
+async def test_mcp_handoff_is_redacted_before_tool_return(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    path_name: str,
+) -> None:
+    secret = "plum"
+    inventory = credential_source_values(
+        {"DECLARED_AUTH": secret},
+        declared_names=("DECLARED_AUTH",),
+    )
+    path = tmp_path / path_name
+    if mode == "worker":
+        monkeypatch.setenv("UNREST_HANDOFF_PATH", str(path))
+        monkeypatch.setenv("UNREST_NODE_TYPE", "work")
+        monkeypatch.setenv("UNREST_NODE_ID", "w-secret")
+        server = create_worker_server(inventory)
+        await server.call_tool(
+            "end_node",
+            {"done": True, "report": secret},
+        )
+    else:
+        monkeypatch.setenv("UNREST_TERMINAL_REVIEW_PATH", str(path))
+        server = create_terminal_reviewer_server(inventory)
+        await server.call_tool(
+            "submit_terminal_review",
+            {"done": True, "report": secret},
+        )
+
+    persisted = path.read_text(encoding="utf-8")
+    assert secret not in persisted
+    assert "<redacted:DECLARED_AUTH>" in persisted
+
+
+@pytest.mark.asyncio
+async def test_redacted_mcp_handoffs_survive_restart_and_mirroring(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "plum"
+    inventory = credential_source_values(
+        {"DECLARED_AUTH": secret},
+        declared_names=("DECLARED_AUTH",),
+    )
+    store = ProjectStore(config)
+    store.create_project("brief", workspace, project_id="p-secret")
+    spawn_ts = "2026-08-03T00-00-00Z"
+
+    attempt_path = store.attempt_path(
+        "p-secret", "mission-001", spawn_ts, "w-secret"
+    )
+    monkeypatch.setenv("UNREST_HANDOFF_PATH", str(attempt_path))
+    monkeypatch.setenv("UNREST_NODE_TYPE", "work")
+    monkeypatch.setenv("UNREST_NODE_ID", "w-secret")
+    await create_worker_server(inventory).call_tool(
+        "end_node",
+        {"done": True, "report": secret},
+    )
+
+    restarted = ProjectStore(config)
+    handoff = restarted.read_attempt(
+        "p-secret", "mission-001", spawn_ts, "w-secret"
+    )
+    assert isinstance(handoff, WorkHandoff)
+    restarted.save_attempt(
+        "p-secret", "mission-001", spawn_ts, "w-secret", handoff
+    )
+
+    review_path = restarted.terminal_review_path(
+        "p-secret", "mission-001", spawn_ts
+    )
+    monkeypatch.setenv("UNREST_TERMINAL_REVIEW_PATH", str(review_path))
+    await create_terminal_reviewer_server(inventory).call_tool(
+        "submit_terminal_review",
+        {"done": True, "report": secret},
+    )
+    restarted_again = ProjectStore(config)
+    review = TerminalReviewHandoff.model_validate_json(
+        review_path.read_text(encoding="utf-8")
+    )
+    restarted_again.save_terminal_review(
+        "p-secret", "mission-001", spawn_ts, review
+    )
+
+    persisted_paths = (
+        attempt_path,
+        restarted.attempt_report_path(
+            "p-secret", "mission-001", spawn_ts, "w-secret"
+        ),
+        review_path,
+        restarted_again.terminal_review_report_path(
+            "p-secret", "mission-001", spawn_ts
+        ),
+    )
+    for path in persisted_paths:
+        persisted = path.read_text(encoding="utf-8")
+        assert secret not in persisted
+        assert "<redacted:DECLARED_AUTH>" in persisted
 
 
 # ---------------------------------------------------------------------------

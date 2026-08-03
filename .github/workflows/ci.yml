@@ -31,6 +31,8 @@ jobs:
         run: uv run unrest check-repository
       - name: Build wheel and source distribution
         run: uv build
+      - name: Test built tree hermeticity
+        run: uv run pytest -q
       - name: Smoke-test installed wheel
         run: |
           uv venv --clear .wheel-venv
@@ -40,6 +42,7 @@ jobs:
           "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --help
           "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness --help
           "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "from unrest_harness.config import HarnessConfig; assert HarnessConfig.discover().capability_policy.schema_version == 1"
+          env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CODEX_API_KEY -u GLM_API_KEY -u OPENAI_API_KEY -u ZAI_API_KEY "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness.installed_wheel_check
           set +e
           output="$(UNREST_CAPABILITY_PROFILE=unsupported "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --mode orchestrator 2>&1)"
           status=$?

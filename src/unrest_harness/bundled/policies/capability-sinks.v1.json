@@ -27,6 +27,11 @@
       "reason": "The outbound payload delegates to the cataloged ACPClient.send_request boundary."
     },
     {
+      "id": "acp-session-update-callback-delegation",
+      "implementation": "src/unrest_harness/acp_runner.py:ACPClient._dispatch",
+      "reason": "Session updates are delegated to the configured progress handler, whose implementation owns redaction and display enforcement."
+    },
+    {
       "id": "acp-terminal-review-progress-print",
       "implementation": "src/unrest_harness/acp_runner.py:ACPTerminalReviewer._report_progress",
       "reason": "The caller supplies output already filtered by the cataloged progress redactor."
@@ -57,6 +62,11 @@
       "reason": "Deterministic repository fixture generation is not a runtime value channel."
     },
     {
+      "id": "capability-projection-owner-path-reversal",
+      "implementation": "src/unrest_harness/capability_policy.py:validate_capability_sink_anchors.effect_implementation",
+      "reason": "Reversing the locally accumulated AST owner-name components only constructs a diagnostic implementation path."
+    },
+    {
       "id": "generated-managed-config-block",
       "implementation": "src/unrest_harness/cli.py:_replace_managed_block",
       "reason": "The caller passes capability-filtered generated configuration."
@@ -70,6 +80,21 @@
       "id": "generated-provider-settings",
       "implementation": "src/unrest_harness/acp_runner.py:_ensure_claude_settings",
       "reason": "Only fixed capability-mode settings reach the canonical atomic artifact boundary."
+    },
+    {
+      "id": "installed-wheel-lifecycle-fixtures",
+      "implementation": "src/unrest_harness/installed_wheel_check.py:run_installed_wheel_check",
+      "reason": "The installed-candidate gate writes only fixed provider-independent contract and evidence fixtures inside its isolated temporary project."
+    },
+    {
+      "id": "mock-dispatcher-callback",
+      "implementation": "src/unrest_harness/dispatcher.py:MockDispatcher.dispatch",
+      "reason": "The in-process test dispatcher delegates only to the explicitly supplied test responder and has no provider or persistence surface."
+    },
+    {
+      "id": "repository-contract-html-stack-reverse",
+      "implementation": "src/unrest_harness/repository_contract.py:_SupportedHTMLLabelParser.handle_endtag",
+      "reason": "Reversing the parser's in-memory tag-name stack is unrelated to caller values or credential transforms."
     },
     {
       "id": "storage-atomic-json",
@@ -137,7 +162,7 @@
       "reason": "Delegates to the cataloged canonical atomic artifact boundary."
     }
   ],
-  "reachable_source_sha256": "a3df5dcb7802ff4a4a570e12025998e2f8361e8a023f8b4fc211b2e0edc04567",
+  "reachable_source_sha256": "1f6b36f3823bee651077a54b27a3ca710bca6d834abd6c2bdd8f72b0caa5fac7",
   "schema_version": 1,
   "sinks": [
     {
@@ -277,6 +302,13 @@
       "enforcement": "build_role_environment",
       "id": "mcp-environment",
       "implementation": "src/unrest_harness/acp_runner.py:ACPNodeRunner.run_node",
+      "inventory": "SensitiveValueInventory",
+      "sink_class": "runtime"
+    },
+    {
+      "enforcement": "serialize_sensitive_value_inventory",
+      "id": "mcp-sensitive-inventory-channel",
+      "implementation": "src/unrest_harness/acp_runner.py:_write_pipe_payload",
       "inventory": "SensitiveValueInventory",
       "sink_class": "runtime"
     },

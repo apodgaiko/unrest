@@ -74,13 +74,46 @@ a cataloged canonical sink or an exact version-1 delegation omission. Primitive
 effects inside omissions are pinned as a multiset, so an omission cannot gain
 an alternate writer. Reversible codec operations are likewise bound to their
 declared transform owner; an additional codec or transform fails closed.
-The catalog also pins a location-independent source digest over every
-Python module in the shipped harness package. This is the mechanical closure
-guarantee: any newly added or changed computation—including a writer,
-serializer, callback, descriptor channel, or reversible transform whose local
-spelling is unknown to the detailed classifier—requires an explicit catalog
-review before repository validation can pass. The narrower effect classifier
-exists to provide useful diagnostics; it is not the completeness oracle.
+The catalog's version-1 `reachable_source_sha256` field retains its original
+wire name but pins a deterministic semantic projection, not whole Python
+source files. The projection records each capability-relevant effect's owning
+implementation, effect family, and resolved primitive, including writers,
+serializers, callbacks, descriptor channels, canonical delegations, supported
+codec calls, unsupported codec families, and reverse slices. Lexical symbol
+flow resolves imported, locally assigned, bound-method, callback, and
+container aliases, neutral lambda wrappers, and constant-name `getattr`
+references, including names reached through scoped constant propagation or a
+module's constant-key `__dict__`, `__dict__.get(...)`, or `vars(...)` mapping;
+narrow lexical flow also preserves capability callables stored in literal
+list/tuple slots, constant-key dictionaries, and singleton sets when acquired
+through a single-assignment string/integer subscript or `next(iter(...))`.
+Nested literal slots are resolved recursively, and simple tuple/list
+destructuring is followed only when target and value shapes match exactly,
+including protected leaves assigned directly into attribute or subscript
+state. Starred or dynamically shaped unpacking remains outside this model.
+Dynamic container contents, reassigned indices, and arbitrary dynamic indices
+are not evaluated. Returning any resolved capability
+slot is recorded as a callable-escape effect even without local invocation.
+When a statically modeled literal container itself escapes through a return,
+state assignment, or external call argument, every protected callable in its
+known nested slots is recorded under the corresponding capability family.
+Nested local callback
+wrappers and lambda/default-argument captures are linked
+to their enclosing output-callback parameter. Direct callback returns,
+returning a wrapper result, registering, or storing a known callback or
+capability callable are recorded as effects.
+Serializer-to-stream, descriptor-writer, reversible-codec entry points,
+reverse slices, joined reversals, and `bytes`, `bytearray`, `list`, or `tuple`
+materializations of `reversed(...)` are explicit reviewed families, so a new
+family member or owner fails closed instead of depending on one preferred
+spelling. Dynamic member names on protected capability modules are recorded
+conservatively; dynamic names on unrelated objects stay outside the projection
+until their resolved callable enters a protected flow. Sorted records,
+including multiplicity, are canonical-JSON encoded before hashing. A new or
+moved capability effect therefore requires catalog review, while unrelated
+arithmetic, predicates, data attributes, ordering, control flow, comments,
+and formatting do not. Explicit omission records cover the few reviewed
+non-sensitive effects whose syntax overlaps a protected family.
 Adding an implementation effect, adding an omission, or deleting either side
 of a declaration fails repository validation.
 `unrest check-repository` runs those same strict loaders against the three

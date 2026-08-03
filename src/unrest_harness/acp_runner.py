@@ -32,6 +32,7 @@ from .capability_policy import (
     redact_credential_values,
     redact_sensitive_value,
     resolve_role_capability,
+    serialize_sensitive_value_inventory,
     validate_role_environment,
 )
 from .config import HarnessConfig
@@ -55,6 +56,20 @@ SUBPROCESS_STREAM_LIMIT = int(
         str(8 * 1024 * 1024),
     )
 )
+
+
+def _write_pipe_payload(
+    fd: int,
+    sensitive_inventory: dict[str, str],
+) -> None:
+    payload = serialize_sensitive_value_inventory(sensitive_inventory)
+    try:
+        view = memoryview(payload)
+        while view:
+            written = os.write(fd, view)
+            view = view[written:]
+    finally:
+        os.close(fd)
 
 
 # ---------------------------------------------------------------------------
@@ -919,6 +934,7 @@ class ACPNodeRunner:
             handoff_path=str(handoff_path),
             workspace_dir=workspace_dir,
             mcp_port=mcp_port,
+            sensitive_inventory=secrets,
             environment=build_role_environment(
                 resolved_policy,
                 os.environ,
@@ -1191,6 +1207,7 @@ class ACPNodeRunner:
             report_path=str(report_path),
             workspace_dir=workspace_dir,
             mcp_port=mcp_port,
+            sensitive_inventory=secrets,
             environment=build_role_environment(
                 resolved_policy,
                 os.environ,
@@ -1346,8 +1363,10 @@ class ACPNodeRunner:
         handoff_path: str,
         workspace_dir: str,
         mcp_port: int,
+        sensitive_inventory: dict[str, str],
         environment: dict[str, str],
     ) -> asyncio.subprocess.Process:
+        read_fd, write_fd = os.pipe()
         cmd = [
             sys.executable,
             "-m",
@@ -1360,15 +1379,36 @@ class ACPNodeRunner:
             "127.0.0.1",
             "--port",
             str(mcp_port),
+            "--sensitive-inventory-fd",
+            str(read_fd),
         ]
-        return await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=workspace_dir,
-            env=environment,
-            limit=SUBPROCESS_STREAM_LIMIT,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=workspace_dir,
+                env=environment,
+                limit=SUBPROCESS_STREAM_LIMIT,
+                pass_fds=(read_fd,),
+            )
+        except BaseException:
+            os.close(write_fd)
+            raise
+        finally:
+            os.close(read_fd)
+        try:
+            await asyncio.to_thread(
+                _write_pipe_payload,
+                write_fd,
+                sensitive_inventory,
+            )
+        except BaseException:
+            if process.returncode is None:
+                process.terminate()
+            await _close_subprocess(process, timeout=5)
+            raise
+        return process
 
     async def _start_terminal_reviewer_mcp(
         self,
@@ -1378,8 +1418,10 @@ class ACPNodeRunner:
         report_path: str,
         workspace_dir: str,
         mcp_port: int,
+        sensitive_inventory: dict[str, str],
         environment: dict[str, str],
     ) -> asyncio.subprocess.Process:
+        read_fd, write_fd = os.pipe()
         cmd = [
             sys.executable,
             "-m",
@@ -1392,15 +1434,36 @@ class ACPNodeRunner:
             "127.0.0.1",
             "--port",
             str(mcp_port),
+            "--sensitive-inventory-fd",
+            str(read_fd),
         ]
-        return await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=workspace_dir,
-            env=environment,
-            limit=SUBPROCESS_STREAM_LIMIT,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=workspace_dir,
+                env=environment,
+                limit=SUBPROCESS_STREAM_LIMIT,
+                pass_fds=(read_fd,),
+            )
+        except BaseException:
+            os.close(write_fd)
+            raise
+        finally:
+            os.close(read_fd)
+        try:
+            await asyncio.to_thread(
+                _write_pipe_payload,
+                write_fd,
+                sensitive_inventory,
+            )
+        except BaseException:
+            if process.returncode is None:
+                process.terminate()
+            await _close_subprocess(process, timeout=5)
+            raise
+        return process
 
     async def _wait_for_server_ready(self, host: str, port: int, *, timeout: float = 15) -> None:
         deadline = asyncio.get_event_loop().time() + timeout

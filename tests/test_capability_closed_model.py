@@ -357,6 +357,751 @@ def test_semantically_equivalent_new_output_effects_require_governance(
     "addition",
     (
         """
+def _new_callback_alias(value, callback):
+    middle = callback
+    emit = middle
+    emit(value)
+""",
+        """
+def _new_callback_container_alias(value, callback):
+    emitters = [callback]
+    emitters[0](value)
+""",
+        """
+class _NewStoredCallback:
+    def __init__(self, callback):
+        self.emit = callback
+
+    def publish(self, value):
+        self.emit(value)
+""",
+        """
+def _new_bound_writer_alias(value, target):
+    emit = target.write
+    emit(value)
+""",
+        """
+def _new_serializer_stream(value, target):
+    import marshal
+    serialize = marshal.dump
+    serialize(value, target)
+""",
+        """
+def _new_descriptor_vector_writer(value, descriptor):
+    import os
+    emit = os.writev
+    emit(descriptor, [value])
+""",
+    ),
+)
+def test_output_aliases_and_new_stream_families_fail_closed(
+    tmp_path: Path,
+    addition: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        "reachable-sink-closure: uncataloged output effect" in error
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+def test_annotated_callback_escape_changes_semantic_closure(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + """
+
+def _new_callback_escape(callback: Callable[[str], None]):
+    return {"emit": callback}
+""",
+        encoding="utf-8",
+    )
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        error.startswith("reachable-capability-closure:")
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    ("addition", "diagnostic"),
+    (
+        (
+            """
+def _new_lambda_callback_wrapper(value, callback):
+    deliver = lambda item: callback(item)
+    return deliver(value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_dynamic_descriptor_writer(value, descriptor):
+    import os
+    deliver = getattr(os, "write")
+    deliver(descriptor, value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_dynamic_serializer(value, target):
+    import pickle
+    serialize = getattr(pickle, "dump")
+    serialize(value, target)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_dynamic_base85_transform(value):
+    import base64
+    encode = getattr(base64, "b85encode")
+    return encode(value)
+""",
+            "reachable-transform-closure: unsupported reversible operation",
+        ),
+        (
+            """
+def _new_joined_reversal(value):
+    return "".join(reversed(value))
+""",
+            "reachable-transform-closure: unsupported reversible operation",
+        ),
+    ),
+    ids=(
+        "lambda-callback-wrapper",
+        "dynamic-descriptor-writer",
+        "dynamic-serializer",
+        "dynamic-reversible-codec",
+        "joined-reversal",
+    ),
+)
+def test_neutral_wrapper_and_dynamic_capability_bypasses_fail_closed(
+    tmp_path: Path,
+    addition: str,
+    diagnostic: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        diagnostic in error
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    ("addition", "diagnostic"),
+    (
+        (
+            """
+def _new_constant_descriptor_writer(value, descriptor):
+    import os
+    operation = "write"
+    invoke = getattr(os, operation)
+    invoke(descriptor, value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_constant_serializer(value, target):
+    import pickle
+    operation = "dump"
+    invoke = getattr(pickle, operation)
+    invoke(value, target)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_constant_transform(value):
+    import base64
+    operation = "b85encode"
+    invoke = getattr(base64, operation)
+    return invoke(value)
+""",
+            "reachable-transform-closure: unsupported reversible operation",
+        ),
+        (
+            """
+def _new_nested_callback_wrapper(value, callback):
+    def deliver(item):
+        callback(item)
+
+    invoke = deliver
+    return invoke(value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_module_dict_descriptor_writer(value, descriptor):
+    import os
+    invoke = os.__dict__["write"]
+    invoke(descriptor, value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_module_dict_serializer(value, target):
+    import pickle
+    invoke = pickle.__dict__["dump"]
+    invoke(value, target)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_module_dict_transform(value):
+    import base64
+    invoke = base64.__dict__["b85encode"]
+    return invoke(value)
+""",
+            "reachable-transform-closure: unsupported reversible operation",
+        ),
+        *(
+            (
+                f"""
+def _new_{materializer}_reversal(value):
+    return {materializer}(reversed(value))
+""",
+                "reachable-transform-closure: unsupported reversible operation",
+            )
+            for materializer in ("bytearray", "bytes", "list", "tuple")
+        ),
+    ),
+    ids=(
+        "constant-descriptor-writer",
+        "constant-serializer",
+        "constant-transform",
+        "nested-callback-wrapper",
+        "module-dict-descriptor-writer",
+        "module-dict-serializer",
+        "module-dict-transform",
+        "bytearray-reversal",
+        "bytes-reversal",
+        "list-reversal",
+        "tuple-reversal",
+    ),
+)
+def test_scoped_indirect_capability_acquisition_fails_closed(
+    tmp_path: Path,
+    addition: str,
+    diagnostic: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        diagnostic in error
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    ("addition", "diagnostic"),
+    (
+        (
+            """
+def _new_returned_callback(value, callback):
+    return callback(value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_lambda_default_callback(value, callback):
+    invoke = lambda item, fn=callback: fn(item)
+    return invoke(value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_nested_default_callback(value, callback):
+    def deliver(item, fn=callback):
+        return fn(item)
+
+    invoke = deliver
+    return invoke(value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_nested_outer_alias_callback(value, callback):
+    fn = callback
+
+    def deliver(item):
+        return fn(item)
+
+    invoke = deliver
+    return invoke(value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        *(
+            (
+                f"""
+def _new_{lookup}_{family}(value, target):
+    import {module}
+    invoke = {expression}
+    return invoke(target, value) if {is_writer!r} else invoke(value, target)
+""",
+                diagnostic,
+            )
+            for lookup, expression_template in (
+                ("module_dict_get", "{module}.__dict__.get({operation!r})"),
+                ("vars_lookup", "vars({module})[{operation!r}]"),
+            )
+            for family, module, operation, diagnostic, is_writer in (
+                (
+                    "descriptor_writer",
+                    "os",
+                    "write",
+                    "reachable-sink-closure: uncataloged output effect",
+                    True,
+                ),
+                (
+                    "serializer",
+                    "pickle",
+                    "dump",
+                    "reachable-sink-closure: uncataloged output effect",
+                    False,
+                ),
+                (
+                    "transform",
+                    "base64",
+                    "b85encode",
+                    "reachable-transform-closure: unsupported reversible operation",
+                    False,
+                ),
+            )
+            for expression in (
+                expression_template.format(module=module, operation=operation),
+            )
+        ),
+    ),
+    ids=(
+        "returned-callback",
+        "lambda-default-callback",
+        "nested-default-callback",
+        "nested-outer-alias-callback",
+        "module-dict-get-descriptor",
+        "module-dict-get-serializer",
+        "module-dict-get-transform",
+        "vars-descriptor",
+        "vars-serializer",
+        "vars-transform",
+    ),
+)
+def test_returned_callbacks_and_mapping_style_acquisition_fail_closed(
+    tmp_path: Path,
+    addition: str,
+    diagnostic: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        diagnostic in error
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    ("addition", "diagnostic"),
+    (
+        (
+            """
+def _new_list_serializer(value, target):
+    import pickle
+    emitters = [pickle.dump]
+    return emitters[0](value, target)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_dict_transform(value):
+    import base64
+    transforms = {"encode": base64.b85encode}
+    return transforms["encode"](value)
+""",
+            "reachable-transform-closure: unsupported reversible operation",
+        ),
+        (
+            """
+def _new_tuple_descriptor_writer(value, descriptor):
+    import os
+    emitters = (os.write,)
+    return emitters[0](descriptor, value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_list_bound_writer(value, target):
+    emitters = [target.write]
+    return emitters[0](value)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+        (
+            """
+def _new_singleton_set_serializer(value, target):
+    import pickle
+    emitters = {pickle.dump}
+    emit = next(iter(emitters))
+    return emit(value, target)
+""",
+            "reachable-sink-closure: uncataloged output effect",
+        ),
+    ),
+    ids=(
+        "list-serializer",
+        "dict-transform",
+        "tuple-descriptor",
+        "list-bound-writer",
+        "singleton-set-serializer",
+    ),
+)
+def test_literal_container_capability_aliases_fail_closed(
+    tmp_path: Path,
+    addition: str,
+    diagnostic: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        diagnostic in error
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    "addition",
+    (
+        """
+def _new_returned_transform_slot():
+    import base64
+    transforms = [base64.b85encode]
+    return transforms[0]
+""",
+        """
+def _new_returned_serializer_slot():
+    import pickle
+    serializers = {"dump": pickle.dump}
+    return serializers["dump"]
+""",
+        """
+def _new_returned_descriptor_slot():
+    import os
+    writers = (os.write,)
+    return writers[0]
+""",
+        """
+def _new_returned_writer_slot():
+    writers = [print]
+    return writers[0]
+""",
+        """
+def _new_returned_singleton_writer():
+    import os
+    writers = {os.write}
+    return next(iter(writers))
+""",
+    ),
+    ids=(
+        "transform-list-slot",
+        "serializer-dict-slot",
+        "descriptor-tuple-slot",
+        "writer-list-slot",
+        "writer-singleton-slot",
+    ),
+)
+def test_returned_literal_container_capabilities_change_closure(
+    tmp_path: Path,
+    addition: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        error.startswith("reachable-capability-closure:")
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    "addition",
+    (
+        """
+def _new_constant_index_descriptor_slot():
+    import os
+    slot = 0
+    writers = [os.write]
+    return writers[slot]
+""",
+        """
+def _new_constant_key_serializer_slot():
+    import pickle
+    slot = "dump"
+    serializers = {"dump": pickle.dump}
+    return serializers[slot]
+""",
+        """
+def _new_constant_index_transform_slot():
+    import base64
+    slot = 0
+    transforms = [base64.b85encode]
+    return transforms[slot]
+""",
+        """
+def _new_nested_transform_slot():
+    import base64
+    transforms = [[base64.b85encode]]
+    return transforms[0][0]
+""",
+        """
+def _new_nested_serializer_slot():
+    import pickle
+    serializers = {"formats": [pickle.dump]}
+    return serializers["formats"][0]
+""",
+        """
+def _new_nested_writer_slot():
+    writers = [[print]]
+    return writers[0][0]
+""",
+        """
+def _new_destructured_serializer():
+    import pickle
+    (emit,) = (pickle.dump,)
+    return emit
+""",
+        """
+def _new_destructured_transform():
+    import base64
+    [encode] = [base64.b85encode]
+    return encode
+""",
+        """
+def _new_destructured_writer():
+    (emit,) = (print,)
+    return emit
+""",
+    ),
+    ids=(
+        "constant-index-descriptor",
+        "constant-key-serializer",
+        "constant-index-transform",
+        "nested-transform",
+        "nested-serializer",
+        "nested-writer",
+        "destructured-serializer",
+        "destructured-transform",
+        "destructured-writer",
+    ),
+)
+def test_bounded_nested_and_destructured_capability_aliases_change_closure(
+    tmp_path: Path,
+    addition: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        error.startswith("reachable-capability-closure:")
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    "addition",
+    (
+        """
+def _new_returned_writer_container():
+    import os
+    writers = [os.write]
+    return writers
+""",
+        """
+def _new_returned_serializer_container():
+    import pickle
+    serializers = (pickle.dump,)
+    return serializers
+""",
+        """
+def _new_returned_transform_container():
+    import base64
+    transforms = {"encode": base64.b85encode}
+    return transforms
+""",
+        """
+def _new_returned_singleton_container():
+    writers = {print}
+    return writers
+""",
+        """
+def _new_returned_nested_container():
+    import base64
+    transforms = [[base64.b85encode]]
+    return transforms
+""",
+        """
+def _new_yielded_transform_container():
+    import base64
+    transforms = {"decode": (base64.b85decode,)}
+    yield transforms
+""",
+        """
+class _NewStoredCapabilityContainer:
+    def store(self):
+        import pickle
+        serializers = [pickle.dump]
+        self.serializers = serializers
+""",
+        """
+def _new_passed_capability_container(register):
+    import os
+    writers = {"write": os.write}
+    register(writers)
+""",
+    ),
+    ids=(
+        "returned-list-writer",
+        "returned-tuple-serializer",
+        "returned-dict-transform",
+        "returned-singleton-set",
+        "returned-nested-list",
+        "yielded-nested-transform",
+        "stored-serializer-list",
+        "passed-writer-dict",
+    ),
+)
+def test_escaped_literal_capability_containers_change_closure(
+    tmp_path: Path,
+    addition: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        error.startswith("reachable-capability-closure:")
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    "addition",
+    (
+        """
+class _NewDestructuredWriterState:
+    def store(self):
+        import os
+        self.writers, label = ([os.write], "fixed")
+""",
+        """
+class _NewDestructuredSerializerState:
+    def store(self):
+        import pickle
+        [self.serializers, label] = ({"nested": [pickle.dump]}, "fixed")
+""",
+        """
+class _NewNestedDestructuredTransformState:
+    def store(self):
+        import base64
+        ((self.encoder,), label) = ((base64.b85encode,), "fixed")
+""",
+        """
+def _new_destructured_subscript_state(state):
+    import os
+    state["writers"], label = ([os.write], "fixed")
+""",
+    ),
+    ids=(
+        "attribute-writer-container",
+        "attribute-serializer-container",
+        "nested-attribute-transform",
+        "subscript-writer-container",
+    ),
+)
+def test_exact_destructuring_into_state_changes_closure(
+    tmp_path: Path,
+    addition: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert any(
+        error.startswith("reachable-capability-closure:")
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    "addition",
+    (
+        """
 def _new_rot_transform(value):
     import codecs
     return codecs.decode(value, "rot_13")
@@ -390,6 +1135,48 @@ def test_new_reversible_transform_implementations_fail_closed(
     )
 
 
+@pytest.mark.parametrize(
+    "addition",
+    (
+        """
+def _new_base85_transform(value):
+    import base64
+    encode = base64.b85encode
+    return encode(value)
+""",
+        """
+def _new_percent_transform(value):
+    from urllib.parse import quote_plus as encode
+    return encode(value)
+""",
+        """
+def _new_transform_callable_escape():
+    import base64
+    import functools
+    return functools.partial(base64.urlsafe_b64encode)
+""",
+    ),
+)
+def test_reversible_entry_points_and_callable_escapes_fail_closed(
+    tmp_path: Path,
+    addition: str,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    errors = validate_capability_sink_anchors(repository, catalog)
+    assert any(
+        error.startswith("reachable-transform-closure:")
+        or error.startswith("reachable-capability-closure:")
+        for error in errors
+    )
+
+
 def test_declared_omission_cannot_gain_an_additional_primitive_writer(
     tmp_path: Path,
 ) -> None:
@@ -414,7 +1201,7 @@ def test_declared_omission_cannot_gain_an_additional_primitive_writer(
     )
 
 
-def test_unknown_new_computation_fails_normalized_source_closure(
+def test_unknown_new_reversible_computation_fails_semantic_effect_closure(
     tmp_path: Path,
 ) -> None:
     repository = tmp_path / "repository"
@@ -434,9 +1221,188 @@ def _new_reversible_slice(value):
         repository / "src/unrest_harness/bundled"
     )
     assert any(
-        error.startswith("reachable-capability-closure:")
+        error.startswith("reachable-transform-closure:")
         for error in validate_capability_sink_anchors(repository, catalog)
     )
+
+
+def test_unrelated_new_computation_does_not_change_capability_closure(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + """
+
+def _unrelated_arithmetic(left, right):
+    return (left * 7) + right
+""",
+        encoding="utf-8",
+    )
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert validate_capability_sink_anchors(repository, catalog) == ()
+
+
+def test_unrelated_aliases_predicates_and_write_attributes_do_not_change_closure(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + """
+
+def _unrelated_local_flow(
+    value,
+    predicate: Callable[[int], bool],
+    declaration,
+):
+    import math as json
+    magnitude = abs
+    accepted = predicate(value)
+    return magnitude(value), accepted, declaration.write, json.sqrt(value)
+""",
+        encoding="utf-8",
+    )
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert validate_capability_sink_anchors(repository, catalog) == ()
+
+
+def test_unrelated_dynamic_callables_and_composition_do_not_change_closure(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + """
+
+def _unrelated_dynamic_callables(owner, attribute, value):
+    import math
+    dynamic = getattr(owner, attribute)
+    square_root = getattr(math, "sqrt")
+    increment = lambda item: item + 1
+    return dynamic(value), square_root(value), increment(value)
+
+
+def _unrelated_ordering(value):
+    return (
+        "".join(sorted(value)),
+        tuple(sorted(value)),
+        bytes(sorted(value)),
+        list(sorted(value)),
+    )
+
+
+def _unrelated_dynamic_and_module_dict(owner, operation, value):
+    import math
+    dynamic = getattr(owner, operation)
+    harmless_name = "sqrt"
+    square_root = math.__dict__[harmless_name]
+    return dynamic(value), square_root(value)
+
+
+def _unrelated_nested_function(value):
+    def adjust(item):
+        return item + 1
+
+    invoke = adjust
+    return invoke(value)
+
+
+def _unrelated_returned_predicate(value, predicate):
+    return predicate(value)
+
+
+def _unrelated_predicate_defaults(value, predicate):
+    direct = lambda item, fn=predicate: fn(item)
+
+    def nested(item, fn=predicate):
+        return fn(item)
+
+    return direct(value), nested(value)
+
+
+def _unrelated_mapping_lookups(value):
+    import math
+    from_dict = math.__dict__.get("sqrt")
+    from_vars = vars(math)["sqrt"]
+    return from_dict(value), from_vars(value)
+
+
+def _unrelated_literal_containers(value, index, key):
+    import math
+    sequence = [math.sqrt, abs]
+    tupled = (math.floor, math.ceil)
+    mapped = {"sqrt": math.sqrt, "floor": math.floor}
+    singleton = {math.sqrt}
+    selected = next(iter(singleton))
+    return (
+        sequence[index](value),
+        tupled[0](value),
+        mapped[key](value),
+        selected(value),
+    )
+
+
+def _unrelated_returned_container_slots():
+    import math
+    sequence = [math.sqrt]
+    mapped = {"floor": math.floor}
+    singleton = {math.ceil}
+    return sequence[0], mapped["floor"], next(iter(singleton))
+
+
+def _unrelated_bounded_container_flow():
+    import math
+    slot = 0
+    key = "sqrt"
+    nested = [[math.sqrt]]
+    mapped = {"sqrt": math.sqrt}
+    (floor,) = (math.floor,)
+    [ceil] = [math.ceil]
+    return nested[slot][0], mapped[key], floor, ceil
+
+
+class _UnrelatedStoredContainer:
+    def store(self):
+        import math
+        helpers = [math.sqrt]
+        self.helpers = helpers
+
+
+class _UnrelatedDestructuredState:
+    def store(self, state):
+        import math
+        self.helpers, label = ([math.sqrt], "fixed")
+        [state["rounding"], label] = ({"nested": [math.floor]}, "fixed")
+
+
+def _unrelated_escaped_containers():
+    import math
+    sequence = [math.sqrt]
+    nested = {"rounding": (math.floor, math.ceil)}
+    singleton = {math.sqrt}
+    tuple(nested)
+    return sequence, singleton
+""",
+        encoding="utf-8",
+    )
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    assert validate_capability_sink_anchors(repository, catalog) == ()
 
 
 def test_handoff_and_terminal_review_artifacts_redact_brace_index_derivatives(
