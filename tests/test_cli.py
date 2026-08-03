@@ -12,6 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 from unrest_harness.cli import cli
+from unrest_harness.providers import provider_names_for_role
 
 
 @pytest.fixture
@@ -45,6 +46,36 @@ def _tree_snapshot(root: Path) -> dict[str, tuple[str, int, bytes]]:
 
 
 class TestInit:
+    def test_help_advertises_only_supported_orchestrators(
+        self,
+        runner: CliRunner,
+    ) -> None:
+        result = runner.invoke(cli, ["init", "--help"])
+
+        assert result.exit_code == 0, result.output
+        assert "--agent [claude|codex]" in result.output
+        assert "--orchestrator-provider [claude|codex]" in result.output
+        assert "--worker-provider [claude|codex|hermes]" in result.output
+        assert provider_names_for_role("orchestrator") == ("claude", "codex")
+
+    def test_invalid_authority_is_value_free_without_traceback(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+    ) -> None:
+        invalid = "invalid-profile-sensitive-value"
+        result = runner.invoke(
+            cli,
+            ["init", "--workspace-dir", str(workspace), "--agent", "claude"],
+            env={**env, "UNREST_CAPABILITY_PROFILE": invalid},
+        )
+        assert result.exit_code == 1
+        assert "Error: CAP-POLICY-001" in result.output
+        assert "unsupported capability profile" in result.output
+        assert invalid not in result.output
+        assert "Traceback" not in result.output
+
     def test_stages_host_agent_surface_only(
         self, runner: CliRunner, workspace: Path, env: dict[str, str]
     ) -> None:
@@ -133,7 +164,10 @@ class TestInit:
 
         text = config_path.read_text(encoding="utf-8")
         assert text.count("[features]") == 1
-        assert text.count("# BEGIN unrest") == 1
+        assert text.splitlines().count("# BEGIN unrest") == 1
+        assert text.splitlines().count("# BEGIN unrest capability policy v1") == 1
+        assert 'sandbox_mode = "danger-full-access"' not in text
+        assert 'sandbox_mode = "workspace-write"' in text
         assert "Start your agent from the initialized project workspace" in result.output
         assert (
             "First read .codex/orchestrator_prompt.md and treat it as your primary role, "
@@ -171,6 +205,62 @@ class TestInit:
         else:
             assert parsed["features"] == {"memories": False, "web_search": True}
         assert parsed["mcp_servers"]["unrest"]["command"] == _expected_server_command()
+
+    @pytest.mark.parametrize(
+        ("existing", "expected_sandbox", "expected_approval"),
+        [
+            (
+                'sandbox_mode = "workspace-write"\nmodel = "keep-model"\n',
+                "workspace-write",
+                "on-request",
+            ),
+            (
+                'sandbox_mode = "read-only"\nmodel = "keep-model"\n',
+                "read-only",
+                "on-request",
+            ),
+            (
+                'approval_policy = "on-request"\nmodel = "keep-model"\n',
+                "workspace-write",
+                "on-request",
+            ),
+            (
+                'approval_policy = "untrusted"\nmodel = "keep-model"\n',
+                "workspace-write",
+                "untrusted",
+            ),
+        ],
+    )
+    def test_codex_init_completes_partial_safe_root_settings_idempotently(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+        existing: str,
+        expected_sandbox: str,
+        expected_approval: str,
+    ) -> None:
+        config_path = workspace / ".codex" / "config.toml"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(existing, encoding="utf-8")
+
+        first = runner.invoke(
+            cli,
+            ["init", "--workspace-dir", str(workspace), "--agent", "codex"],
+        )
+        assert first.exit_code == 0, first.output
+        first_bytes = config_path.read_bytes()
+        parsed = tomllib.loads(first_bytes.decode("utf-8"))
+        assert parsed["sandbox_mode"] == expected_sandbox
+        assert parsed["approval_policy"] == expected_approval
+        assert parsed["model"] == "keep-model"
+
+        second = runner.invoke(
+            cli,
+            ["init", "--workspace-dir", str(workspace), "--agent", "codex"],
+        )
+        assert second.exit_code == 0, second.output
+        assert config_path.read_bytes() == first_bytes
 
     def test_codex_init_pins_runtime_executables_and_preserves_role_efforts(
         self,
@@ -389,10 +479,10 @@ class TestInit:
         mcp_env = mcp["mcpServers"]["unrest"]["env"]
         assert mcp_env["ANTHROPIC_BASE_URL"] == "https://api.z.ai/api/anthropic"
         assert mcp_env["ANTHROPIC_MODEL"] == "glm-5.2[1m]"
-        assert mcp_env["ZAI_API_KEY"] == "zai-test-key"
+        assert "ZAI_API_KEY" not in mcp_env
         assert "DATABASE_URL" not in mcp_env
 
-    @pytest.mark.parametrize("agent", ["claude", "codex", "hermes"])
+    @pytest.mark.parametrize("agent", ["claude", "codex"])
     def test_explicit_project_scope_matches_default(
         self,
         runner: CliRunner,
@@ -435,6 +525,37 @@ class TestInit:
         assert default_result.output.replace(str(default_workspace), "<workspace>") == (
             explicit_result.output.replace(str(explicit_workspace), "<workspace>")
         )
+
+    def test_hermes_remains_available_for_child_roles(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            [
+                "init",
+                "--workspace-dir",
+                str(workspace),
+                "--agent",
+                "claude",
+                "--worker-provider",
+                "hermes",
+                "--validator-provider",
+                "hermes",
+                "--terminal-reviewer-provider",
+                "hermes",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        generated = json.loads((workspace / ".mcp.json").read_text())
+        generated_env = generated["mcpServers"]["unrest"]["env"]
+        assert generated_env["UNREST_ORCHESTRATOR_PROVIDER"] == "claude"
+        assert generated_env["UNREST_WORKER_PROVIDER"] == "hermes"
+        assert (workspace / ".claude" / "orchestrator_prompt.md").exists()
+        assert not (workspace / ".hermes" / "orchestrator_prompt.md").exists()
 
 
 @pytest.fixture
@@ -674,8 +795,10 @@ class TestUserScopeInit:
         assert config["features"]["memories"] is False
         assert config["mcp_servers"]["unrest"]["command"] == "unrest-server"
         assert config["mcp_servers"]["after"]["command"] == "after"
-        assert first.count(b"# BEGIN unrest") == 1
-        assert first.count(b"# END unrest") == 1
+        assert first.splitlines().count(b"# BEGIN unrest") == 1
+        assert first.splitlines().count(b"# BEGIN unrest capability policy v1") == 1
+        assert first.splitlines().count(b"# END unrest") == 1
+        assert first.splitlines().count(b"# END unrest capability policy v1") == 1
         assert stat.S_IMODE(config_path.stat().st_mode) == 0o640
 
         rerun = runner.invoke(cli, ["init", "--scope", "user", "--agent", "codex"])
@@ -879,7 +1002,7 @@ class TestUserScopeInit:
             cli, ["init", "--scope", "user", "--agent", "hermes"]
         )
         assert unsupported.exit_code != 0
-        assert "use --scope project for hermes" in unsupported.output
+        assert "Invalid value for '--agent': 'hermes'" in unsupported.output
         assert list(user_home.iterdir()) == []
 
     def test_registered_command_launches_from_another_workspace(

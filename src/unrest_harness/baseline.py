@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import tempfile
 from collections import Counter
 from contextlib import ExitStack, contextmanager
@@ -21,7 +20,6 @@ from unittest.mock import patch
 import yaml
 from pydantic import ValidationError
 
-from .acp_runner import _acp_subprocess_env
 from .config import HarnessConfig
 from .controller import ProjectController
 from .coordinator import MissionCoordinator
@@ -41,7 +39,6 @@ from .models import (
     ValidationItem,
     WorkHandoff,
 )
-from .providers import get_provider
 from .storage import ProjectStore
 
 BASE_SHA = "9ebed0a9007289d419dae476f0dd582e8a21a550"
@@ -705,21 +702,22 @@ def _concurrent_writers() -> Fixture:
 
 
 def _implicit_unrestricted_defaults() -> Fixture:
-    with patch.dict(os.environ, {"PATH": os.environ.get("PATH", "")}, clear=True):
-        codex_env = _acp_subprocess_env(get_provider("codex"))
-    codex_config = json.loads(codex_env["CODEX_CONFIG"])
+    # This fixture freezes the approved-base observation. The repaired runtime
+    # intentionally no longer exposes an API that can reproduce implicit
+    # unrestricted defaults, so generating this known-defect record from the
+    # current adapter would turn baseline evidence into a moving oracle.
     return _fixture(
         "BASE-CAPABILITY-DEFECT-001",
         "known_defect",
         "Provider adapters implicitly select unrestricted Claude and Codex modes in the approved baseline; this is characterization-only.",
         {
-            "claude_acp_runtime_mode": get_provider("claude").acp_runtime_mode,
+            "claude_acp_runtime_mode": "bypassPermissions",
             "codex": {
-                "approval_policy": codex_config["approval_policy"],
-                "codex_disable_sandbox": codex_env["CODEX_DISABLE_SANDBOX"],
-                "codex_sandbox": codex_env["CODEX_SANDBOX"],
-                "initial_agent_mode": codex_env["INITIAL_AGENT_MODE"],
-                "sandbox_mode": codex_config["sandbox_mode"],
+                "approval_policy": "never",
+                "codex_disable_sandbox": "1",
+                "codex_sandbox": "danger-full-access",
+                "initial_agent_mode": "agent-full-access",
+                "sandbox_mode": "danger-full-access",
             },
             "repaired_behavior_contract": "VAL-CAP-*",
         },

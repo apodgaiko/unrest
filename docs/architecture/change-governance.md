@@ -54,9 +54,13 @@ an agent/provider assertion is not such a reason.
 
 The policy covers coordinator semantics, storage migrations, capability
 policy, evaluation or holdout controls, future promotion policy, future
-rollback controls, and governance self-protection. Future promotion and
-rollback implementation must live under the selected prefixes or update this
-policy under its own protected review.
+rollback controls, and governance self-protection. Governance self-protection
+uses an exact, typed catalog for every path in `COMP-GOVERNANCE` and
+`COMP-REPOSITORY-CONTRACT`, plus the component map itself. Direct selectors
+keep those paths protected even while the component map is being changed, and
+the component catalog check rejects a same-change removal or reclassification.
+Future promotion and rollback implementation must live under the selected
+prefixes or update this policy under its own protected review.
 
 ### Conventional commit grammar
 
@@ -79,16 +83,22 @@ Contract-Targets: <sorted VAL-* IDs or none>
 Decision-IDs: <sorted ADR-NNNN IDs or none>
 Protected-Surfaces: <sorted policy category IDs or none>
 Human-Reviewers: <sorted accountable role IDs or none>
-Evaluation-Evidence: <artifact/command reference or none>
+Evaluation-Evidence: <positive evidence-record path or none>
 Schema-Change: <versioned schema-change packet path or none>
-Rollback-Plan: <procedure/evidence reference or none>
+Rollback-Plan: <existing procedure artifact path or none>
 ```
 
 Ordinary changes still carry all trailers and use `none` where the field does
 not apply. For protected changes, `Protected-Surfaces` must equal deterministic
 path resolution, both human/team reviewer roles are required, and evaluation
-and rollback cannot be `none`. A change under `schemas/` also requires a
-schema-change packet.
+and rollback cannot be `none`. `Evaluation-Evidence` resolves to the typed
+positive tuple in `evidence-policy.json`; the referenced artifact must exist,
+match its declared digest, and pass its bound permitted check during
+validation. A limitation/history record is explicit but non-passing.
+`Rollback-Plan` resolves to an existing repository artifact. A change under
+`schemas/` also requires an existing versioned schema-change packet whose
+compatibility, migration, recovery, and rollback records satisfy the same
+positive tuple. Free prose is never interpreted as evidence.
 
 The CLI surfaces are:
 

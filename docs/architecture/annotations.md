@@ -55,17 +55,14 @@ sounds reasonable.
 - Temporary task notes belong in the task handoff or change closeout.
 - Do not include chat roles, agent identity, conversations, hidden reasoning,
   speculative monologue, prompts, or private source excerpts.
-- The machine-readable policy classifies rendered CommonMark comment tokens,
-  so list/quote prefixes and emphasis cannot disguise an attribution. Exact
-  configured provider/agent labels followed by `:` or `says:` are rejected.
-  Unlisted attribution labels are also rejected when their rendered body uses
-  configured private-agent context such as private implementation reasoning or
-  hidden model notes. Reasoning-tag classification is structural: configured
-  tags plus tag names rooted in analysis, reasoning, thinking, thought,
-  scratch, or monologue are rejected in opening, closing, attributed, and
-  self-closing forms. The configured lists are stable policy vocabulary, not
-  an exhaustive name allowlist. Ordinary technical prose that merely names
-  providers or discusses reasoning remains valid.
+- The machine-readable policy defines an open identity slot rather than an
+  allowlist of provider names. Rendered Markdown labels of the form
+  an identity slot (optionally followed by `says`) and a colon, then a
+  configured private-reasoning concept are rejected for any identity. Compound Markdown/HTML attribute
+  values and private-concept HTML tags with an explicit identity attribute use
+  the same grammar. The policy exhaustively names supported containers and
+  normalization. Arbitrary prose, source or HTML comments, fenced examples,
+  and link destinations are outside this rule.
 
 ## Failure modes
 

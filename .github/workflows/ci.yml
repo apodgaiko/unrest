@@ -39,4 +39,11 @@ jobs:
           "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" --help
           "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --help
           "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness --help
-          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "import unrest_harness"
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "from unrest_harness.config import HarnessConfig; assert HarnessConfig.discover().capability_policy.schema_version == 1"
+          set +e
+          output="$(UNREST_CAPABILITY_PROFILE=unsupported "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --mode orchestrator 2>&1)"
+          status=$?
+          set -e
+          test "$status" -ne 0
+          grep -F "CAP-POLICY-001 provider=unresolved role=unresolved version=1 capability=" <<< "$output"
+          grep -F "unsupported capability profile" <<< "$output"

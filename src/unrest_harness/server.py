@@ -40,6 +40,7 @@ def create_orchestrator_server(
     controller: ProjectController | None = None,
 ) -> FastMCP:
     """7 orchestrator tools, registered on a stdio MCP server."""
+    config.validate_capability_support()
     if controller is None:
         from .dispatcher import MockDispatcher, MockTerminalReviewer
 
@@ -470,24 +471,14 @@ def main() -> None:
 
     if args.mode == "orchestrator":
         config = HarnessConfig.discover()
-        # Production: wire the ACP dispatcher from acp_runner.
-        dispatcher: NodeDispatcher
-        reviewer: TerminalReviewer
-        try:
-            from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer  # noqa: PLC0415
+        # Capability/provider failures are startup errors. They must never
+        # enter the diagnostic mock path because that would hide a denied
+        # child profile behind apparently working lifecycle tools.
+        config.validate_capability_support()
+        from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer  # noqa: PLC0415
 
-            dispatcher = ACPNodeDispatcher(config)
-            reviewer = ACPTerminalReviewer(config)
-        except Exception as exc:  # pragma: no cover — diagnostic
-            logger.warning("Falling back to no-op dispatcher: %s", exc)
-            from .dispatcher import MockDispatcher, MockTerminalReviewer  # noqa: PLC0415
-
-            dispatcher = MockDispatcher(
-                lambda r: WorkHandoff(
-                    node_id=r.task.id, done=False, report="no ACP runtime available"
-                )
-            )
-            reviewer = MockTerminalReviewer(TerminalReviewHandoff(done=True, report=""))
+        dispatcher: NodeDispatcher = ACPNodeDispatcher(config)
+        reviewer: TerminalReviewer = ACPTerminalReviewer(config)
         controller = ProjectController(config, dispatcher, reviewer)
         server = create_orchestrator_server(config, controller)
     elif args.mode == "worker":

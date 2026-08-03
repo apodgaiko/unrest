@@ -9,6 +9,10 @@
       "path": "docs/architecture/annotations.md"
     },
     {
+      "id": "ARCH-CAPABILITY-001",
+      "path": "docs/architecture/capability-policy.md"
+    },
+    {
       "id": "ARCH-INDEX-001",
       "path": "docs/architecture/index.md"
     },

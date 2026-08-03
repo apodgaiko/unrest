@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from unrest_harness.governance import (
     COMMIT_TRAILERS,
     REQUIRED_ACCOUNTABLE_ROLES,
     REQUIRED_EVALUATION_TIERS,
+    REQUIRED_PROTECTED_COMPONENT_PATHS,
     REQUIRED_SELF_PROTECTION,
     WORKFLOW_TEMPLATE_CONTENT,
     WORKFLOW_TEMPLATE_FIELDS,
@@ -24,6 +26,7 @@ from unrest_harness.governance import (
     governance_report,
     load_component_paths,
     load_protected_surface_policy,
+    parse_commonmark,
     render_policy_json_schema,
     resolve_path_category,
     validate_policy_components,
@@ -200,6 +203,55 @@ def _schema_packet(mode: str, root: Path) -> dict[str, Any]:
     }
 
 
+def _protected_commit_fixture(root: Path) -> dict[str, str]:
+    evidence_policy = root / "docs/architecture/evidence-policy.json"
+    evidence_policy.parent.mkdir(parents=True, exist_ok=True)
+    evidence_policy.write_bytes(
+        (ROOT / "docs/architecture/evidence-policy.json").read_bytes()
+    )
+
+    artifact_relative = "evidence/governance/full-gate.txt"
+    artifact = root / artifact_relative
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text("checks passed\n", encoding="utf-8")
+    record_relative = "evidence/governance/full-gate.json"
+    record = {
+        "artifact_path": artifact_relative,
+        "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        "exact_check": f"test -s {artifact_relative}",
+        "exit_code": 0,
+        "mode": "evaluation",
+        "observed_result": "checks-passed",
+        "record_type": "evidence",
+        "schema_version": 1,
+        "status": "passed",
+    }
+    (root / record_relative).write_text(
+        json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    rollback_relative = "docs/rollback/governance.md"
+    rollback = root / rollback_relative
+    rollback.parent.mkdir(parents=True, exist_ok=True)
+    rollback.write_text("# Governance rollback\n", encoding="utf-8")
+
+    schema_relative = "evidence/governance/schema-change.yaml"
+    schema_packet = root / schema_relative
+    schema_packet.write_text(
+        yaml.safe_dump(
+            _schema_packet("backward-compatible", root),
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "evaluation": record_relative,
+        "rollback": rollback_relative,
+        "schema": schema_relative,
+    }
+
+
 def test_checked_in_policy_schema_and_path_category_report_are_deterministic() -> None:
     policy, components = _current_policy_and_components()
     assert POLICY_SCHEMA_PATH.read_text(encoding="utf-8") == render_policy_json_schema()
@@ -228,6 +280,59 @@ def test_checked_in_policy_schema_and_path_category_report_are_deterministic() -
     }
     assert list(report["path_categories"]) == sorted(report["path_categories"])
     assert set(report["self_protection"]) == set(REQUIRED_SELF_PROTECTION)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    sorted(
+        {
+            path
+            for paths in REQUIRED_PROTECTED_COMPONENT_PATHS.values()
+            for path in paths
+        }
+    ),
+)
+def test_complete_governance_and_repository_catalog_is_directly_protected(
+    relative_path: str,
+) -> None:
+    policy, components = _current_policy_and_components()
+
+    assert (
+        resolve_path_category(policy, components, relative_path)
+        == "governance-self-protection"
+    )
+
+
+def test_same_change_component_reclassification_cannot_disable_protection() -> None:
+    policy, components = _current_policy_and_components()
+    reclassified = copy.deepcopy(components)
+    governance_paths = list(reclassified["COMP-GOVERNANCE"])
+    governance_paths.remove(".github/PULL_REQUEST_TEMPLATE.md")
+    reclassified["COMP-GOVERNANCE"] = tuple(governance_paths)
+    reclassified["COMP-ASSETS"] = (
+        *reclassified["COMP-ASSETS"],
+        ".github/PULL_REQUEST_TEMPLATE.md",
+    )
+
+    with pytest.raises(GovernanceValidationError) as catalog_error:
+        validate_policy_components(policy, reclassified)
+
+    assert "GOV-COMPONENT-PROTECTED-CATALOG-MISMATCH" in _diagnostic_codes(
+        catalog_error.value
+    )
+    with pytest.raises(GovernanceValidationError) as commit_error:
+        check_commit_message(
+            _commit_message(),
+            changed_paths=(
+                ".github/PULL_REQUEST_TEMPLATE.md",
+                "docs/architecture/component-map.json",
+            ),
+            policy=policy,
+            component_paths=reclassified,
+        )
+    assert "GOV-COMMIT-PROTECTED-SURFACES-MISMATCH" in _diagnostic_codes(
+        commit_error.value
+    )
 
 
 @pytest.mark.parametrize(
@@ -295,9 +400,12 @@ def test_each_self_protection_control_cannot_be_removed(control_id: str) -> None
 def test_each_self_protection_control_cannot_be_redirected(control_id: str) -> None:
     data = copy.deepcopy(_policy_data())
     control = next(item for item in data["self_protection"] if item["id"] == control_id)
-    control["selector"]["value"] = (
-        "docs/" if control["selector"]["kind"] == "path-prefix" else "README.md"
-    )
+    replacement = {
+        "component": "COMP-STORAGE",
+        "path": "NOTICE",
+        "path-prefix": "docs/",
+    }
+    control["selector"]["value"] = replacement[control["selector"]["kind"]]
     _assert_policy_error(data, "GOV-POLICY-SELF-PROTECTION-WEAKENED")
 
 
@@ -354,11 +462,12 @@ def test_unknown_component_and_runtime_path_ambiguity_fail_closed() -> None:
     assert "GOV-POLICY-PATH-AMBIGUOUS" in _diagnostic_codes(ambiguous.value)
 
 
-def test_ordinary_and_protected_commit_messages_are_valid() -> None:
+def test_ordinary_and_protected_commit_messages_are_valid(tmp_path: Path) -> None:
     policy, components = _current_policy_and_components()
+    fixture = _protected_commit_fixture(tmp_path)
     ordinary = check_commit_message(
         _commit_message(),
-        changed_paths=("README.md",),
+        changed_paths=("NOTICE",),
         policy=policy,
         component_paths=components,
     )
@@ -369,13 +478,14 @@ def test_ordinary_and_protected_commit_messages_are_valid() -> None:
             **{
                 "Protected-Surfaces": "governance-self-protection",
                 "Human-Reviewers": ", ".join(REQUIRED_ACCOUNTABLE_ROLES),
-                "Evaluation-Evidence": "evidence/governance/full-gate.json",
-                "Rollback-Plan": "docs/rollback/governance.md",
+                "Evaluation-Evidence": fixture["evaluation"],
+                "Rollback-Plan": fixture["rollback"],
             }
         ),
         changed_paths=("policy/protected-surfaces.yaml",),
         policy=policy,
         component_paths=components,
+        repository_root=tmp_path,
     )
     assert protected.protected_surfaces == ("governance-self-protection",)
 
@@ -384,16 +494,67 @@ def test_ordinary_and_protected_commit_messages_are_valid() -> None:
             **{
                 "Protected-Surfaces": "governance-self-protection",
                 "Human-Reviewers": ", ".join(REQUIRED_ACCOUNTABLE_ROLES),
-                "Evaluation-Evidence": "evidence/governance/full-gate.json",
-                "Schema-Change": "evidence/governance/schema-change.yaml",
-                "Rollback-Plan": "docs/rollback/governance.md",
+                "Evaluation-Evidence": fixture["evaluation"],
+                "Schema-Change": fixture["schema"],
+                "Rollback-Plan": fixture["rollback"],
             }
         ),
         changed_paths=("schemas/protected-surfaces.schema.json",),
         policy=policy,
         component_paths=components,
+        repository_root=tmp_path,
     )
     assert schema_change.protected_surfaces == ("governance-self-protection",)
+
+
+def test_commonmark_model_parses_attributes_aliases_and_code_boundaries() -> None:
+    surface = parse_commonmark(
+        "## Recovery {#rOlLbAcK}\n\n"
+        "## Review <a id=assistant&#45;private&#45;reasoning></a>\n\n"
+        "```markdown\n## Inert {#rollback}\n```\n\n"
+        "    ## Also inert {#rollback}\n"
+    )
+
+    assert surface.top_level_headings == (
+        surface.headings[0],
+        surface.headings[1],
+    )
+    assert surface.headings[0].aliases == ("rOlLbAcK",)
+    assert surface.headings[1].aliases == ("assistant-private-reasoning",)
+    assert {
+        (attribute.source, attribute.name, attribute.value)
+        for attribute in surface.attributes
+    } >= {
+        ("markdown", "id", "rOlLbAcK"),
+        ("html", "id", "assistant-private-reasoning"),
+    }
+    assert all("Inert" not in heading.text for heading in surface.headings)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        "AGENTS.md",
+        "docs/architecture/repository-contract.md",
+    ),
+)
+def test_named_repository_contract_paths_cannot_declare_no_protection(
+    relative_path: str,
+) -> None:
+    policy, components = _current_policy_and_components()
+
+    with pytest.raises(GovernanceValidationError) as captured:
+        check_commit_message(
+            _commit_message(),
+            changed_paths=(relative_path,),
+            policy=policy,
+            component_paths=components,
+        )
+
+    assert "GOV-COMMIT-PROTECTED-SURFACES-MISMATCH" in _diagnostic_codes(
+        captured.value
+    )
 
 
 @pytest.mark.parametrize("missing_trailer", COMMIT_TRAILERS)
@@ -556,6 +717,128 @@ def test_invalid_commit_table_has_stable_errors(
             policy=policy,
             component_paths=components,
         )
+    assert expected_code in _diagnostic_codes(captured.value)
+
+
+@pytest.mark.parametrize(
+    ("changed_path", "overrides", "expected_code"),
+    [
+        (
+            "policy/protected-surfaces.yaml",
+            {
+                "Protected-Surfaces": "governance-self-protection",
+                "Human-Reviewers": ", ".join(REQUIRED_ACCOUNTABLE_ROLES),
+                "Evaluation-Evidence": (
+                    "proof rests in the departure lounge until the suite materializes"
+                ),
+                "Rollback-Plan": "docs/rollback.md",
+            },
+            "GOV-COMMIT-PROTECTED-EVALUATION",
+        ),
+        (
+            "schemas/protected-surfaces.schema.json",
+            {
+                "Protected-Surfaces": "governance-self-protection",
+                "Human-Reviewers": ", ".join(REQUIRED_ACCOUNTABLE_ROLES),
+                "Evaluation-Evidence": "evidence/full-gate.json",
+                "Schema-Change": "packet not ready yet",
+                "Rollback-Plan": "docs/rollback.md",
+            },
+            "GOV-COMMIT-SCHEMA-PACKET-MISSING",
+        ),
+    ],
+)
+def test_commit_evidence_trailers_reject_nonconcrete_paraphrases(
+    changed_path: str,
+    overrides: dict[str, str],
+    expected_code: str,
+) -> None:
+    policy, components = _current_policy_and_components()
+
+    with pytest.raises(GovernanceValidationError) as captured:
+        check_commit_message(
+            _commit_message(**overrides),
+            changed_paths=(changed_path,),
+            policy=policy,
+            component_paths=components,
+        )
+
+    assert expected_code in _diagnostic_codes(captured.value)
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        "verification proof has yet to be assembled",
+        "migration dossier remains aspirational",
+        "dossier arrives after signoff",
+        "packet queued behind approval",
+        "reviewers expect to furnish the report later",
+    ],
+)
+def test_commit_evidence_uses_the_positive_reference_schema(
+    evidence: str,
+    tmp_path: Path,
+) -> None:
+    policy, components = _current_policy_and_components()
+    fixture = _protected_commit_fixture(tmp_path)
+
+    with pytest.raises(GovernanceValidationError) as captured:
+        check_commit_message(
+            _commit_message(
+                **{
+                    "Protected-Surfaces": "governance-self-protection",
+                    "Human-Reviewers": ", ".join(REQUIRED_ACCOUNTABLE_ROLES),
+                    "Evaluation-Evidence": evidence,
+                    "Rollback-Plan": fixture["rollback"],
+                }
+            ),
+            changed_paths=("policy/protected-surfaces.yaml",),
+            policy=policy,
+            component_paths=components,
+            repository_root=tmp_path,
+        )
+
+    assert "GOV-COMMIT-PROTECTED-EVALUATION" in _diagnostic_codes(captured.value)
+
+
+@pytest.mark.parametrize(
+    ("evidence", "expected_code"),
+    [
+        ("evidence/full-gate.json", "GOV-EVIDENCE-RECORD-MISSING"),
+        (
+            "uv run pytest -q tests/test_governance.py",
+            "GOV-EVIDENCE-REFERENCE-INVALID",
+        ),
+        ("VAL-DOC-004", "GOV-EVIDENCE-REFERENCE-INVALID"),
+        ("sha256:" + "a" * 64, "GOV-EVIDENCE-REFERENCE-INVALID"),
+        ("2026-07-29: 199 tests passed", "GOV-EVIDENCE-REFERENCE-INVALID"),
+    ],
+)
+def test_commit_evidence_rejects_legacy_untyped_reference_kinds(
+    evidence: str,
+    expected_code: str,
+    tmp_path: Path,
+) -> None:
+    policy, components = _current_policy_and_components()
+    fixture = _protected_commit_fixture(tmp_path)
+
+    with pytest.raises(GovernanceValidationError) as captured:
+        check_commit_message(
+            _commit_message(
+                **{
+                    "Protected-Surfaces": "governance-self-protection",
+                    "Human-Reviewers": ", ".join(REQUIRED_ACCOUNTABLE_ROLES),
+                    "Evaluation-Evidence": evidence,
+                    "Rollback-Plan": fixture["rollback"],
+                }
+            ),
+            changed_paths=("policy/protected-surfaces.yaml",),
+            policy=policy,
+            component_paths=components,
+            repository_root=tmp_path,
+        )
+
     assert expected_code in _diagnostic_codes(captured.value)
 
 
@@ -851,6 +1134,9 @@ def test_schema_evolution_invalid_table_has_stable_errors(
         "pending reviewer evidence",
         "uv run pytest tests/test_schema.py will confirm later",
         "artifact reports readable",
+        "proof remains uncollected until migration rehearsals conclude",
+        "results rest offstage until rollout settles",
+        "the audit record awaits the next review window",
     ],
 )
 def test_schema_evolution_rejects_semantically_deferred_evidence(
@@ -1020,14 +1306,25 @@ def test_cli_governance_report_and_commit_check_exercise_real_commands(
         "policy/protected-surfaces.yaml": "governance-self-protection"
     }
 
+    fixture = _protected_commit_fixture(tmp_path)
+    temporary_policy = tmp_path / "policy/protected-surfaces.yaml"
+    temporary_policy.parent.mkdir(parents=True, exist_ok=True)
+    temporary_policy.write_bytes(POLICY_PATH.read_bytes())
+    temporary_components = tmp_path / "docs/architecture/component-map.json"
+    temporary_components.write_bytes(COMPONENT_MAP_PATH.read_bytes())
+    subprocess.run(
+        ["git", "init", "-q", str(tmp_path)],
+        check=True,
+        capture_output=True,
+    )
     message_path = tmp_path / "COMMIT_EDITMSG"
     message_path.write_text(
         _commit_message(
             **{
                 "Protected-Surfaces": "governance-self-protection",
                 "Human-Reviewers": ", ".join(REQUIRED_ACCOUNTABLE_ROLES),
-                "Evaluation-Evidence": "evidence/governance/full-gate.json",
-                "Rollback-Plan": "docs/rollback/governance.md",
+                "Evaluation-Evidence": fixture["evaluation"],
+                "Rollback-Plan": fixture["rollback"],
             }
         ),
         encoding="utf-8",
@@ -1041,9 +1338,9 @@ def test_cli_governance_report_and_commit_check_exercise_real_commands(
             "--changed-path",
             "policy/protected-surfaces.yaml",
             "--policy",
-            str(POLICY_PATH),
+            str(temporary_policy),
             "--component-map",
-            str(COMPONENT_MAP_PATH),
+            str(temporary_components),
         ],
     )
     assert commit.exit_code == 0, commit.output

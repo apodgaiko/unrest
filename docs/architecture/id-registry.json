@@ -79,6 +79,12 @@
       "statement": "Normal text and JSON persistence uses a sibling temporary file followed by atomic replacement."
     },
     {
+      "id": "COMPAT-CAPABILITY-POLICY-001",
+      "kind": "compatibility",
+      "source": "docs/architecture/capability-policy.md",
+      "statement": "Capability policy evolution uses an explicit integer version and stable value-free provider, role, version, capability, model, and sink diagnostics."
+    },
+    {
       "id": "COMPAT-ENVELOPE-001",
       "kind": "compatibility",
       "source": "specs/task_list/PRODUCT.md",
@@ -97,6 +103,12 @@
       "statement": "Schema readers use explicit versions with tested compatibility or an explicit hard cut and recovery path."
     },
     {
+      "id": "SEC-CAPABILITY-001",
+      "kind": "security",
+      "source": "docs/architecture/capability-policy.md",
+      "statement": "Child authority resolves and fails closed before process startup, and callback access, environments, protocol channels, and persisted sinks cannot exceed the resolved role."
+    },
+    {
       "id": "SEC-MCP-001",
       "kind": "security",
       "source": "docs/v5/08-mcp-surface.md",
@@ -113,6 +125,12 @@
       "kind": "security",
       "source": "specs/memory_v2/PRODUCT.md",
       "statement": "Terminal-review deliverable roots resolve only inside the workspace product surface or current mission evidence."
+    },
+    {
+      "id": "SEC-SENSITIVITY-PROVENANCE-001",
+      "kind": "security",
+      "source": "docs/architecture/capability-policy.md",
+      "statement": "The versioned closed transform and semantic-role model joins sensitivity provenance monotonically into one canonical inventory, enforces exact ceilings, and projects that inventory through every cataloged runtime, protocol, diagnostic, artifact, and package sink."
     }
   ],
   "kinds": [

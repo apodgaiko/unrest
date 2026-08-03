@@ -57,7 +57,7 @@ fixtures:
 - fixture_id: BASE-STORAGE-002
   path: fixtures/attempts-decisions-terminal-storage.json
   classification: intended
-  sha256: 4c036b862022fe50a516a7f3cfbca67aaa017a7d32b476e83aebf1660ecf6c54
+  sha256: 08d87176da967cb1e3db43e708d17acfc9b235dff381dd1dc61da3e025daacfb
 - fixture_id: BASE-SCHEDULER-LEGACY-001
   path: fixtures/blocking-scheduler-selection.json
   classification: observed_legacy
@@ -81,7 +81,7 @@ fixtures:
 - fixture_id: BASE-STORAGE-001
   path: fixtures/storage-state.json
   classification: intended
-  sha256: d2602e455def48cbb32f12aa8c341b5a4ac048f62e9dfa380e5ae981cd17d02a
+  sha256: 3830b4919cb4ce16caaa8f6cadc08449a32146f37f20da6738f0b9be51fb9378
 - fixture_id: BASE-TERMINAL-001
   path: fixtures/terminal-review-closure.json
   classification: intended

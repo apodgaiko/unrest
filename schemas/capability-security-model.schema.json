@@ -1,0 +1,206 @@
+{
+  "$defs": {
+    "SecurityCeilings": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregate_work_bytes": {
+          "title": "Aggregate Work Bytes",
+          "type": "integer"
+        },
+        "decoded_bytes": {
+          "title": "Decoded Bytes",
+          "type": "integer"
+        },
+        "expansion_nodes": {
+          "title": "Expansion Nodes",
+          "type": "integer"
+        },
+        "format_ast_depth": {
+          "title": "Format Ast Depth",
+          "type": "integer"
+        },
+        "semantic_depth": {
+          "title": "Semantic Depth",
+          "type": "integer"
+        },
+        "semantic_nodes": {
+          "title": "Semantic Nodes",
+          "type": "integer"
+        },
+        "text_bytes": {
+          "title": "Text Bytes",
+          "type": "integer"
+        },
+        "transform_count": {
+          "title": "Transform Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "text_bytes",
+        "semantic_depth",
+        "semantic_nodes",
+        "transform_count",
+        "decoded_bytes",
+        "aggregate_work_bytes",
+        "format_ast_depth",
+        "expansion_nodes"
+      ],
+      "title": "SecurityCeilings",
+      "type": "object"
+    },
+    "SecurityJoin": {
+      "additionalProperties": false,
+      "properties": {
+        "commutative": {
+          "const": true,
+          "title": "Commutative",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "idempotent": {
+          "const": true,
+          "title": "Idempotent",
+          "type": "boolean"
+        },
+        "monotonic": {
+          "const": true,
+          "title": "Monotonic",
+          "type": "boolean"
+        },
+        "operation": {
+          "const": "set-union",
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "operation",
+        "commutative",
+        "idempotent",
+        "monotonic"
+      ],
+      "title": "SecurityJoin",
+      "type": "object"
+    },
+    "SecuritySemanticRole": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "propagates_parent_provenance": {
+          "title": "Propagates Parent Provenance",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "propagates_parent_provenance"
+      ],
+      "title": "SecuritySemanticRole",
+      "type": "object"
+    },
+    "SecurityTransform": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "structural",
+            "string",
+            "grammar"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "reversible": {
+          "title": "Reversible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "reversible"
+      ],
+      "title": "SecurityTransform",
+      "type": "object"
+    }
+  },
+  "$id": "https://unrest.dev/schemas/capability-security-model.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "ceilings": {
+      "$ref": "#/$defs/SecurityCeilings"
+    },
+    "exhaustion_behavior": {
+      "const": "fail-closed-with-concrete-provenance",
+      "title": "Exhaustion Behavior",
+      "type": "string"
+    },
+    "joins": {
+      "items": {
+        "$ref": "#/$defs/SecurityJoin"
+      },
+      "title": "Joins",
+      "type": "array"
+    },
+    "model_id": {
+      "const": "unrest-capability-security-model",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "semantic_roles": {
+      "items": {
+        "$ref": "#/$defs/SecuritySemanticRole"
+      },
+      "title": "Semantic Roles",
+      "type": "array"
+    },
+    "sink_catalog": {
+      "const": "capability-sinks.v1.json",
+      "title": "Sink Catalog",
+      "type": "string"
+    },
+    "transforms": {
+      "items": {
+        "$ref": "#/$defs/SecurityTransform"
+      },
+      "title": "Transforms",
+      "type": "array"
+    },
+    "unsupported_behavior": {
+      "const": "fail-closed",
+      "title": "Unsupported Behavior",
+      "type": "string"
+    }
+  },
+  "required": [
+    "model_id",
+    "schema_version",
+    "transforms",
+    "semantic_roles",
+    "joins",
+    "ceilings",
+    "sink_catalog",
+    "unsupported_behavior",
+    "exhaustion_behavior"
+  ],
+  "title": "CapabilitySecurityModel",
+  "type": "object"
+}

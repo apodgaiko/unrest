@@ -30,14 +30,14 @@
         "sha256": "817be9c8e5f93b5f92c87836c889b446302f03e3580fd9af3ceaa8926f8059cd"
       },
       {
-        "content": "{\n  \"node_id\": \"validate-a\",\n  \"done\": true,\n  \"report\": \"Validation complete.\",\n  \"items\": [\n    {\n      \"item_id\": \"VAL-A\",\n      \"passed\": true\n    }\n  ],\n  \"passed\": true,\n  \"request_attention\": false\n}\n",
+        "content": "{\n  \"done\": true,\n  \"items\": [\n    {\n      \"item_id\": \"VAL-A\",\n      \"passed\": true\n    }\n  ],\n  \"node_id\": \"validate-a\",\n  \"passed\": true,\n  \"report\": \"Validation complete.\",\n  \"request_attention\": false\n}\n",
         "path": ".unrest-runtime/missions/mission-001/attempts/2026-07-21T15-00-00Z-validate__validate-a.json",
-        "sha256": "d15d11f787b652b27771295edf23251442d46edccabacddef09d6626bf20d535"
+        "sha256": "7c2435c48a619dc3c7eadbcc8628ed1bf133d379cbc19346829da0038b5fd099"
       },
       {
-        "content": "{\n  \"node_id\": \"work-a\",\n  \"done\": true,\n  \"report\": \"Work complete.\",\n  \"request_attention\": false\n}\n",
+        "content": "{\n  \"done\": true,\n  \"node_id\": \"work-a\",\n  \"report\": \"Work complete.\",\n  \"request_attention\": false\n}\n",
         "path": ".unrest-runtime/missions/mission-001/attempts/2026-07-21T15-00-00Z-work__work-a.json",
-        "sha256": "8caad93838dfe7ddfe5dc8c73643c951c17bff8ad4a60bff00838f693b5fa76a"
+        "sha256": "52d92979b35e0b0570f896d8c1489847c5a4804c50c103922f89d752ea56f21f"
       },
       {
         "content": "{\n  \"done\": false,\n  \"report\": \"Closure gap.\"\n}\n",

@@ -34,12 +34,30 @@ document's metadata and the policy below.
 - [Protected-surface policy](../../policy/protected-surfaces.yaml) and
   [schema](../../schemas/protected-surfaces.schema.json) — strict human-review,
   evaluation, rollback, and governance self-protection requirements.
+- [Role capability policy](capability-policy.md), packaged
+  [authority policy](../../src/unrest_harness/bundled/policies/role-capabilities.v1.json),
+  [closed security model](../../src/unrest_harness/bundled/policies/capability-security-model.v1.json),
+  [sink catalog](../../src/unrest_harness/bundled/policies/capability-sinks.v1.json),
+  and their [authority](../../schemas/role-capabilities.schema.json),
+  [model](../../schemas/capability-security-model.schema.json), and
+  [sink](../../schemas/capability-sinks.schema.json) schemas — fail-closed
+  authority, monotonic provenance, exact bounds, and complete output
+  enforcement for every runtime role.
 - [Normative-document policy](normative-documents.json) — canonical document
   inventory and strict frontmatter rules.
 - [Stable ID registry](id-registry.json) — invariant, security, and
   compatibility records.
+- [Historical-record policy](historical-record-policy.json) — candidate
+  baseline IDs/classifications, pinned finite active-role locators, and exact
+  role/reference repair authorizations whose separate current-contract tuples
+  are shared by the role-specific repository validators.
 - [Annotation policy](annotation-policy.json) and
-  [annotation guide](annotations.md) — approved permanent comment vocabulary.
+  [annotation guide](annotations.md) — approved permanent comment vocabulary
+  and the open identity-attribution grammar.
+- [Template-heading policy](template-heading-policy.json) — operative
+  top-level canonical ATX/Setext headings and excluded containers.
+- [Evidence policy](evidence-policy.json) — exhaustive protected evidence
+  locations, typed non-passing records, and the positive tuple schema.
 - [Removal registry](removal-registry.json) — issue and removal-condition
   records required by structured TODOs.
 - [Repository contract](repository-contract.md) — the canonical deterministic,

@@ -25,19 +25,19 @@
         "sha256": "545e58991ed76d418f266a358f349aca8ffc85ddc67ca7ba3f58590a949109c5"
       },
       {
-        "content": "{\n  \"tasks\": {\n    \"work-b\": {\n      \"status\": \"pending\",\n      \"last_attempt\": null\n    },\n    \"work-a\": {\n      \"status\": \"pending\",\n      \"last_attempt\": null\n    }\n  }\n}\n",
+        "content": "{\n  \"tasks\": {\n    \"work-a\": {\n      \"last_attempt\": null,\n      \"status\": \"pending\"\n    },\n    \"work-b\": {\n      \"last_attempt\": null,\n      \"status\": \"pending\"\n    }\n  }\n}\n",
         "path": ".unrest-runtime/missions/mission-001/task-state.json",
-        "sha256": "9722dcfca5e75206c6a82fb25cc54be13fd6b52389e5d0db79399eb2c081bc1a"
+        "sha256": "bdd1bba3225bba1c4a0ca0efc60b7055ac5a782713c89f82a66ed198aab8c99f"
       },
       {
-        "content": "{\n  \"tasks\": [\n    {\n      \"id\": \"work-b\",\n      \"type\": \"work\",\n      \"body\": \"Implement VAL-B.\",\n      \"targets\": [\n        \"VAL-B\"\n      ],\n      \"skill\": \"baseline-worker\",\n      \"auto_merge\": true,\n      \"depends_on\": []\n    },\n    {\n      \"id\": \"work-a\",\n      \"type\": \"work\",\n      \"body\": \"Implement VAL-A.\",\n      \"targets\": [\n        \"VAL-A\"\n      ],\n      \"skill\": \"baseline-worker\",\n      \"auto_merge\": true,\n      \"depends_on\": []\n    }\n  ]\n}\n",
+        "content": "{\n  \"tasks\": [\n    {\n      \"auto_merge\": true,\n      \"body\": \"Implement VAL-B.\",\n      \"depends_on\": [],\n      \"id\": \"work-b\",\n      \"skill\": \"baseline-worker\",\n      \"targets\": [\n        \"VAL-B\"\n      ],\n      \"type\": \"work\"\n    },\n    {\n      \"auto_merge\": true,\n      \"body\": \"Implement VAL-A.\",\n      \"depends_on\": [],\n      \"id\": \"work-a\",\n      \"skill\": \"baseline-worker\",\n      \"targets\": [\n        \"VAL-A\"\n      ],\n      \"type\": \"work\"\n    }\n  ]\n}\n",
         "path": ".unrest-runtime/missions/mission-001/tasks.json",
-        "sha256": "d1cbcd839bd139580eef9d16bcb9849c045edbc27c7150869062c88c518db7f8"
+        "sha256": "972040c297b6095ac3142fa170bde23c2e4df7f7505a558a81d16fed82820e50"
       },
       {
-        "content": "{\n  \"state\": \"mission_running\",\n  \"mission_id\": \"mission-001\"\n}\n",
+        "content": "{\n  \"mission_id\": \"mission-001\",\n  \"state\": \"mission_running\"\n}\n",
         "path": ".unrest-runtime/state.json",
-        "sha256": "ff02a84eb0e5a1e8f0e931e3523187dd089aefe8988ed97943a9003d77c7a41a"
+        "sha256": "04742f2027afc92462cb90cb1120fdfc5cf18c8e542bda58a600ed5903160331"
       }
     ],
     "authored_task_order": [

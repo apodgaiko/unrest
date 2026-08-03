@@ -4,8 +4,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +108,187 @@ def _write_json(path: Path, value: Any) -> None:
         json.dumps(value, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def test_repository_command_strictly_validates_each_capability_asset_content(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policies = repository / "src/unrest_harness/bundled/policies"
+    cases = (
+        (
+            "role-capabilities.v1.json",
+            "top-duplicate",
+            lambda text: text.replace("{", '{\n  "schema_version": 1,', 1),
+        ),
+        (
+            "role-capabilities.v1.json",
+            "nested-duplicate",
+            lambda text: text.replace(
+                '"behavior": "deny",',
+                '"behavior": "deny",\n          "behavior": "deny",',
+                1,
+            ),
+        ),
+        (
+            "role-capabilities.v1.json",
+            "unsupported-version",
+            lambda text: text.replace('"schema_version": 1', '"schema_version": 2'),
+        ),
+        (
+            "capability-security-model.v1.json",
+            "top-duplicate",
+            lambda text: text.replace("{", '{\n  "schema_version": 1,', 1),
+        ),
+        (
+            "capability-security-model.v1.json",
+            "nested-duplicate",
+            lambda text: text.replace(
+                '"semantic_depth": 24,',
+                '"semantic_depth": 24,\n    "semantic_depth": 24,',
+                1,
+            ),
+        ),
+        (
+            "capability-security-model.v1.json",
+            "unsupported-version",
+            lambda text: text.replace('"schema_version": 1', '"schema_version": 2'),
+        ),
+        (
+            "capability-sinks.v1.json",
+            "top-duplicate",
+            lambda text: text.replace("{", '{\n  "schema_version": 1,', 1),
+        ),
+        (
+            "capability-sinks.v1.json",
+            "nested-duplicate",
+            lambda text: text.replace(
+                '"id": "acp-cancel-client-cleanup",',
+                (
+                    '"id": "acp-cancel-client-cleanup",\n'
+                    '      "id": "acp-cancel-client-cleanup",'
+                ),
+                1,
+            ),
+        ),
+        (
+            "capability-sinks.v1.json",
+            "unsupported-version",
+            lambda text: text.replace('"schema_version": 1', '"schema_version": 2'),
+        ),
+    )
+    originals = {
+        filename: (policies / filename).read_text(encoding="utf-8")
+        for filename, _, _ in cases
+    }
+
+    for filename, mutation_name, mutate in cases:
+        path = policies / filename
+        for original_name, original_text in originals.items():
+            (policies / original_name).write_text(original_text, encoding="utf-8")
+        mutated = mutate(originals[filename])
+        assert mutated != originals[filename], (filename, mutation_name)
+        path.write_text(mutated, encoding="utf-8")
+
+        result = _run_cli(repository, monkeypatch)
+
+        assert result.exit_code != 0, (filename, mutation_name, result.output)
+        assert "REPO-CAPABILITY-ASSET-INVALID" in result.output
+        assert f"src/unrest_harness/bundled/policies/{filename}" in result.output
+        if "duplicate" in mutation_name:
+            assert "REPO-JSON-DUPLICATE-KEY" in result.output
+
+    for filename, original in originals.items():
+        (policies / filename).write_text(original, encoding="utf-8")
+
+
+def test_repository_command_rejects_semantically_equivalent_role_policy_drift(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = (
+        repository
+        / "src/unrest_harness/bundled/policies/role-capabilities.v1.json"
+    )
+    document = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(
+        json.dumps(document, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code != 0
+    assert "REPO-CANONICAL-JSON-DRIFT" in result.output
+    assert "role-capabilities.v1.json" in result.output
+
+
+def test_v3_scope_adjudication_is_complete_and_versioned() -> None:
+    path = (
+        ROOT
+        / "tests/fixtures/repository-contract-v3-scope-adjudication.json"
+    )
+    adjudication = json.loads(path.read_text(encoding="utf-8"))
+    assert adjudication["schema_version"] == 1
+    assert adjudication["sources"] == [
+        {"case_count": 120, "id": "structural-v3-scrutiny"},
+        {"case_count": 75, "id": "v3-surface"},
+    ]
+
+    records = adjudication["dispositions"]
+    assert len(records) == 195
+    assert len(
+        {
+            (record["source"], record["case_id"])
+            for record in records
+        }
+    ) == 195
+    assert {
+        record["disposition"]
+        for record in records
+    } == {
+        "benign-control",
+        "explicitly-out-of-scope",
+        "retained-in-scope",
+    }
+    assert {
+        target: {
+            disposition: sum(
+                record["target"] == target
+                and record["disposition"] == disposition
+                for record in records
+            )
+            for disposition in {
+                record["disposition"]
+                for record in records
+                if record["target"] == target
+            }
+        }
+        for target in {
+            record["target"]
+            for record in records
+        }
+    } == {
+        "VAL-DOC-001": {
+            "benign-control": 16,
+            "explicitly-out-of-scope": 21,
+        },
+        "VAL-DOC-002": {
+            "benign-control": 11,
+            "explicitly-out-of-scope": 18,
+            "retained-in-scope": 16,
+        },
+        "VAL-DOC-003": {
+            "benign-control": 14,
+            "explicitly-out-of-scope": 15,
+            "retained-in-scope": 11,
+        },
+        "VAL-DOC-004": {
+            "benign-control": 23,
+            "explicitly-out-of-scope": 32,
+            "retained-in-scope": 18,
+        },
+    }
 
 
 def _snapshot_worktree(repository: Path) -> dict[str, tuple[int, str]]:
@@ -220,14 +403,6 @@ def _apply_mutation(repository: Path, mutation: str) -> str:
             encoding="utf-8",
         )
         return "src/unrest_harness/repository_contract.py"
-    if mutation == "codex_reasoning_marker":
-        path = repository / "src/unrest_harness/repository_contract.py"
-        path.write_text(
-            path.read_text(encoding="utf-8")
-            + "\n# codex: private reasoning about the next implementation step.\n",
-            encoding="utf-8",
-        )
-        return "src/unrest_harness/repository_contract.py"
     if mutation == "component_edge":
         path = repository / "docs/architecture/component-map.json"
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -249,6 +424,22 @@ def _apply_mutation(repository: Path, mutation: str) -> str:
         )
         component["paths"].append("policy/protected-surfaces.yaml")
         component["paths"].sort()
+        _write_json(path, value)
+        return "docs/architecture/component-map.json"
+    if mutation == "component_protected_reclassification":
+        path = repository / "docs/architecture/component-map.json"
+        value = json.loads(path.read_text(encoding="utf-8"))
+        governance = next(
+            item
+            for item in value["components"]
+            if item["id"] == "COMP-GOVERNANCE"
+        )
+        assets = next(
+            item for item in value["components"] if item["id"] == "COMP-ASSETS"
+        )
+        governance["paths"].remove(".github/PULL_REQUEST_TEMPLATE.md")
+        assets["paths"].append(".github/PULL_REQUEST_TEMPLATE.md")
+        assets["paths"].sort()
         _write_json(path, value)
         return "docs/architecture/component-map.json"
     if mutation == "template_heading_comment":
@@ -374,11 +565,6 @@ def _apply_mutation(repository: Path, mutation: str) -> str:
             "src/unrest_harness/repository_contract.py",
         ),
         (
-            "codex_reasoning_marker",
-            "REPO-ANNOTATION-BANNED-MARKER",
-            "src/unrest_harness/repository_contract.py",
-        ),
-        (
             "component_edge",
             "REPO-COMPONENT-EDGE-UNRESOLVED",
             "docs/architecture/component-map.json",
@@ -386,6 +572,11 @@ def _apply_mutation(repository: Path, mutation: str) -> str:
         (
             "component_policy_ambiguity",
             "GOV-POLICY-PATH-AMBIGUOUS",
+            "docs/architecture/component-map.json",
+        ),
+        (
+            "component_protected_reclassification",
+            "GOV-COMPONENT-PROTECTED-CATALOG-MISMATCH",
             "docs/architecture/component-map.json",
         ),
         (
@@ -644,230 +835,681 @@ def test_source_reference_parser_leaves_external_urls_external(
     assert _status(repository) == before
 
 
-@pytest.mark.parametrize(
-    ("defect_id", "classification"),
-    [
-        ("BASE-SCHEDULER-DEFECT-001", "known_defect"),
-        ("BASE-STORAGE-LEGACY-001", "observed_legacy"),
-    ],
+HISTORICAL_REFERENCES = (
+    "BASE-CAPABILITY-DEFECT-001",
+    "BASE-SCHEDULER-DEFECT-001",
+    "BASE-SCHEDULER-LEGACY-001",
+    "BASE-STORAGE-LEGACY-001",
+    "known_defect",
+    "observed_legacy",
 )
-def test_baseline_non_normative_records_cannot_become_component_invariants(
+HISTORICAL_ACTIVE_ROLES = (
+    "canonical-template",
+    "compatibility-rule",
+    "component-invariant",
+    "invariant-rule",
+    "security-rule",
+)
+HISTORICAL_ACTIVE_ROLE_LOCATOR_MUTATIONS = (
+    ("canonical-template", ("id",), "canonical-template-redirected"),
+    (
+        "canonical-template",
+        ("registry_path",),
+        "docs/architecture/component-map.json",
+    ),
+    ("canonical-template", ("collection_field",), "components"),
+    ("canonical-template", ("record_filter", "field"), "status"),
+    ("canonical-template", ("record_filter", "prefix"), "docs/decisions/"),
+    ("canonical-template", ("value_field",), "path"),
+    ("compatibility-rule", ("id",), "compatibility-rule-redirected"),
+    (
+        "compatibility-rule",
+        ("registry_path",),
+        "docs/architecture/component-map.json",
+    ),
+    ("compatibility-rule", ("collection_field",), "components"),
+    ("compatibility-rule", ("record_filter", "field"), "statement"),
+    ("compatibility-rule", ("record_filter", "equals"), "invariant"),
+    ("compatibility-rule", ("value_field",), "statement"),
+    ("component-invariant", ("id",), "component-invariant-redirected"),
+    (
+        "component-invariant",
+        ("registry_path",),
+        "docs/architecture/normative-documents.json",
+    ),
+    ("component-invariant", ("collection_field",), "decisions"),
+    ("component-invariant", ("value_list_field",), "decisions"),
+    ("invariant-rule", ("id",), "invariant-rule-redirected"),
+    (
+        "invariant-rule",
+        ("registry_path",),
+        "docs/architecture/component-map.json",
+    ),
+    ("invariant-rule", ("collection_field",), "components"),
+    ("invariant-rule", ("record_filter", "field"), "statement"),
+    ("invariant-rule", ("record_filter", "equals"), "security"),
+    ("invariant-rule", ("value_field",), "statement"),
+    ("security-rule", ("id",), "security-rule-redirected"),
+    (
+        "security-rule",
+        ("registry_path",),
+        "docs/architecture/component-map.json",
+    ),
+    ("security-rule", ("collection_field",), "components"),
+    ("security-rule", ("record_filter", "field"), "statement"),
+    ("security-rule", ("record_filter", "equals"), "compatibility"),
+    ("security-rule", ("value_field",), "statement"),
+)
+
+
+def _link_historical_reference(
     repository: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    defect_id: str,
-    classification: str,
+    *,
+    active_role: str,
+    reference: str,
 ) -> None:
+    if active_role == "canonical-template":
+        path = repository / "docs/architecture/normative-documents.json"
+        policy = json.loads(path.read_text(encoding="utf-8"))
+        template = next(
+            item for item in policy["documents"] if item["id"] == "TPL-ADR-001"
+        )
+        template["id"] = reference
+        _write_json(path, policy)
+        return
+    if active_role == "component-invariant":
+        path = repository / "docs/architecture/component-map.json"
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+        component = next(
+            item
+            for item in catalog["components"]
+            if item["id"] == "COMP-BASELINE"
+        )
+        component["invariants"].append(reference)
+        component["invariants"].sort()
+        _write_json(path, catalog)
+        return
+    kinds = {
+        "compatibility-rule": "compatibility",
+        "invariant-rule": "invariant",
+        "security-rule": "security",
+    }
     source_path = "docs/v5/07-runtime-architecture.md"
-    registry_path = repository / "docs/architecture/id-registry.json"
-    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    source = repository / source_path
+    source.write_text(
+        source.read_text(encoding="utf-8") + f"\n- `{reference}`\n",
+        encoding="utf-8",
+    )
+    path = repository / "docs/architecture/id-registry.json"
+    registry = json.loads(path.read_text(encoding="utf-8"))
     registry["ids"].append(
         {
-            "id": defect_id,
-            "kind": "invariant",
+            "id": reference,
+            "kind": kinds[active_role],
             "source": source_path,
-            "statement": f"{classification} is promoted to a runtime invariant.",
+            "statement": "Current contract role fixture.",
         }
     )
     registry["ids"].sort(key=lambda item: item["id"])
-    _write_json(registry_path, registry)
+    _write_json(path, registry)
 
-    source = repository / source_path
-    source.write_text(
-        source.read_text(encoding="utf-8")
-        + f"\n- `{defect_id}`: the baseline classification is normative.\n",
-        encoding="utf-8",
+
+@pytest.mark.parametrize(
+    ("active_role", "reference", "authorization_state"),
+    tuple(
+        product(
+            HISTORICAL_ACTIVE_ROLES,
+            HISTORICAL_REFERENCES,
+            ("absent", "separate-valid", "historical-current-contract"),
+        )
+    ),
+)
+def test_historical_reference_active_role_authorization_matrix(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    active_role: str,
+    reference: str,
+    authorization_state: str,
+) -> None:
+    _link_historical_reference(
+        repository,
+        active_role=active_role,
+        reference=reference,
     )
-    component_path = repository / "docs/architecture/component-map.json"
-    components = json.loads(component_path.read_text(encoding="utf-8"))
-    baseline = next(
-        component
-        for component in components["components"]
-        if component["id"] == "COMP-BASELINE"
+    if authorization_state != "absent":
+        path = repository / "docs/architecture/historical-record-policy.json"
+        policy = json.loads(path.read_text(encoding="utf-8"))
+        policy["authorizations"] = [
+            {
+                "active_role": active_role,
+                "current_contract_id": (
+                    "ARCH-REPOSITORY-CONTRACT-001"
+                    if authorization_state == "separate-valid"
+                    else reference
+                ),
+                "historical_reference": reference,
+            }
+        ]
+        _write_json(path, policy)
+
+    result = _run_cli(repository, monkeypatch)
+
+    if authorization_state == "separate-valid":
+        assert result.exit_code == 0, result.output
+    else:
+        assert result.exit_code == 1
+        assert "REPO-BASELINE-NONNORMATIVE-PROMOTED" in result.output
+        assert repr(active_role) in result.output
+        if authorization_state == "historical-current-contract":
+            assert "REPO-HISTORICAL-AUTHORIZATION-INVALID" in result.output
+
+
+@pytest.mark.parametrize(
+    ("active_role", "field_path", "replacement"),
+    HISTORICAL_ACTIVE_ROLE_LOCATOR_MUTATIONS,
+)
+def test_historical_active_role_locators_are_pinned(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    active_role: str,
+    field_path: tuple[str, ...],
+    replacement: str,
+) -> None:
+    reference = "BASE-SCHEDULER-DEFECT-001"
+    _link_historical_reference(
+        repository,
+        active_role=active_role,
+        reference=reference,
     )
-    baseline["invariants"].append(defect_id)
-    baseline["invariants"].sort()
-    _write_json(component_path, components)
-    before = _status(repository)
+    path = repository / "docs/architecture/historical-record-policy.json"
+    policy = json.loads(path.read_text(encoding="utf-8"))
+    role = next(item for item in policy["active_roles"] if item["id"] == active_role)
+    target = role
+    for field in field_path[:-1]:
+        target = target[field]
+    target[field_path[-1]] = replacement
+    _write_json(path, policy)
 
     result = _run_cli(repository, monkeypatch)
 
     assert result.exit_code == 1
-    assert "REPO-BASELINE-NONNORMATIVE-ID" in result.output
+    assert "REPO-HISTORICAL-ACTIVE-ROLE-INVALID" in result.output
+    assert "active role locators must exactly match the version-1 contract" in (
+        result.output
+    )
     assert "REPO-BASELINE-NONNORMATIVE-PROMOTED" in result.output
-    assert "REPO-COMPONENT-NONNORMATIVE-INVARIANT" in result.output
-    assert _status(repository) == before
+    assert repr(active_role) in result.output
+
+
+def test_historical_authorization_does_not_apply_to_a_different_active_role(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _link_historical_reference(
+        repository,
+        active_role="compatibility-rule",
+        reference="known_defect",
+    )
+    path = repository / "docs/architecture/historical-record-policy.json"
+    policy = json.loads(path.read_text(encoding="utf-8"))
+    policy["authorizations"] = [
+        {
+            "active_role": "invariant-rule",
+            "current_contract_id": "ARCH-REPOSITORY-CONTRACT-001",
+            "historical_reference": "known_defect",
+        }
+    ]
+    _write_json(path, policy)
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-BASELINE-NONNORMATIVE-PROMOTED" in result.output
+    assert "REPO-ID-FORMAT" in result.output
+
+
+def test_malformed_authorization_contract_cannot_enable_role_exceptions(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _link_historical_reference(
+        repository,
+        active_role="component-invariant",
+        reference="BASE-SCHEDULER-DEFECT-001",
+    )
+    path = repository / "docs/architecture/historical-record-policy.json"
+    policy = json.loads(path.read_text(encoding="utf-8"))
+    policy["authorization_contract"]["current_contract_registry"] = (
+        "docs/architecture/normative-documents.json"
+    )
+    policy["authorizations"] = [
+        {
+            "active_role": "component-invariant",
+            "current_contract_id": "ARCH-REPOSITORY-CONTRACT-001",
+            "historical_reference": "BASE-SCHEDULER-DEFECT-001",
+        }
+    ]
+    _write_json(path, policy)
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-HISTORICAL-AUTHORIZATION-INVALID" in result.output
+    assert "REPO-BASELINE-NONNORMATIVE-PROMOTED" in result.output
+    assert "REPO-COMPONENT-INVARIANT-UNKNOWN" in result.output
+
+
+def test_historical_exception_does_not_broaden_stable_id_grammar(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_path = "docs/v5/07-runtime-architecture.md"
+    source = repository / source_path
+    source.write_text(
+        source.read_text(encoding="utf-8") + "\n- `arbitrary_legacy`\n",
+        encoding="utf-8",
+    )
+    path = repository / "docs/architecture/id-registry.json"
+    registry = json.loads(path.read_text(encoding="utf-8"))
+    registry["ids"].append(
+        {
+            "id": "arbitrary_legacy",
+            "kind": "compatibility",
+            "source": source_path,
+            "statement": "Uncataloged ID grammar control.",
+        }
+    )
+    registry["ids"].sort(key=lambda item: item["id"])
+    _write_json(path, registry)
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-ID-FORMAT" in result.output
 
 
 @pytest.mark.parametrize(
-    "promotion",
+    "prose",
     [
         (
-            "BASE-SCHEDULER-DEFECT-001 is not merely a historical "
-            "characterization; it is the normative runtime invariant all "
-            "implementations must preserve."
+            "The historical record BASE-SCHEDULER-DEFECT-001 is now the "
+            "definitive blueprint all schedulers must copy."
         ),
         (
-            "Although known_defect was once a characterization, "
-            "BASE-SCHEDULER-DEFECT-001 now defines canonical scheduler behavior."
+            "Although known_defect was retired, present schedulers are "
+            "compelled to reenact its behavior."
         ),
         (
-            "BASE-SCHEDULER-DEFECT-001 is no longer just characterization "
-            "evidence; implementations should retain it as authoritative behavior."
+            "observed_legacy is the authoritative record of what failed, not "
+            "a current behavioral oracle."
         ),
         (
-            "The normative source of truth is BASE-SCHEDULER-DEFECT-001, "
-            "despite its historical known_defect label."
+            "The old scheduler is a source of truth in this historical account."
         ),
     ],
 )
-def test_baseline_non_normative_promotion_cannot_hide_behind_negation(
+def test_arbitrary_historical_prose_is_outside_the_bounded_role_oracle(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
-    promotion: str,
+    prose: str,
 ) -> None:
     path = repository / "docs/v5/07-runtime-architecture.md"
     path.write_text(
-        path.read_text(encoding="utf-8") + f"\n{promotion}\n",
+        path.read_text(encoding="utf-8") + f"\n{prose}\n",
         encoding="utf-8",
     )
-    before = _status(repository)
-
-    result = _run_cli(repository, monkeypatch)
-
-    assert result.exit_code == 1
-    assert "REPO-BASELINE-NONNORMATIVE-PROMOTED" in result.output
-    assert _status(repository) == before
-
-
-@pytest.mark.parametrize(
-    "content",
-    [
-        "Claude: private implementation reasoning",
-        "CHATGPT says: hidden implementation reasoning",
-        "codex says : hidden implementation reasoning",
-        "**Claude:** hidden implementation reasoning",
-        "- **ChatGPT:** hidden implementation reasoning",
-        "Gemini: hidden implementation reasoning",
-        "Copilot says: hidden implementation reasoning",
-        "Marlowe: private implementation reasoning",
-        "- **DeepSeek:** hidden implementation notes",
-        "**qwen:** private implementation notes",
-        "<REASONING type=\"private\">hidden implementation thoughts",
-        "<analysis/> hidden implementation thoughts",
-        "<THINKING>hidden implementation thoughts",
-        "</monologue>",
-        "</analysis>",
-        "<scratchpad private=\"true\">hidden implementation thoughts</scratchpad>",
-        "<private-thoughts>hidden implementation notes</private-thoughts>",
-        "chain_of_thought: hidden implementation thoughts",
-        "internal monologue: hidden implementation thoughts",
-    ],
-)
-def test_normalized_agent_identity_and_reasoning_categories_reject_variants(
-    repository: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    content: str,
-) -> None:
-    path = repository / "src/unrest_harness/repository_contract.py"
-    path.write_text(
-        path.read_text(encoding="utf-8") + f"\n# {content}\n",
-        encoding="utf-8",
-    )
-    before = _status(repository)
-
-    result = _run_cli(repository, monkeypatch)
-
-    assert result.exit_code == 1
-    assert "REPO-ANNOTATION-BANNED-MARKER" in result.output
-    assert _status(repository) == before
-
-
-@pytest.mark.parametrize(
-    "content",
-    [
-        "Claude provider support uses explicit settings.",
-        "Codex and ChatGPT names are ordinary technical prose.",
-        "Gemini and Copilot adapters use explicit settings.",
-        "Reasoning tags are filtered by the repository policy.",
-        "Thinking about recovery is ordinary engineering prose.",
-        "A monologue tag would not be public documentation.",
-    ],
-)
-def test_agent_names_and_reasoning_in_ordinary_prose_remain_valid(
-    repository: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    content: str,
-) -> None:
-    path = repository / "src/unrest_harness/repository_contract.py"
-    path.write_text(
-        path.read_text(encoding="utf-8") + f"\n# {content}\n",
-        encoding="utf-8",
-    )
-    before = _status(repository)
 
     result = _run_cli(repository, monkeypatch)
 
     assert result.exit_code == 0, result.output
-    assert _status(repository) == before
+
+
+PRIVATE_CONCEPT_VARIANTS = (
+    "chain_of_thought",
+    "hidden reasoning",
+    "private-reasoning",
+    "scratchpad",
+)
+PRIVATE_IDENTITIES = ("Orion", "Ｑｗｅｎ")
+PRIVATE_CONTAINERS = (
+    "html-attribute-value",
+    "html-private-concept-tag",
+    "html-visible-label",
+    "markdown-attribute-value",
+    "markdown-visible-label",
+)
+
+
+def _private_marker(container: str, identity: str, concept: str) -> str:
+    compound = "-".join((*normalized_parts(identity), *normalized_parts(concept)))
+    if container == "html-attribute-value":
+        return f'<a data-note="{compound}"></a>'
+    if container == "html-private-concept-tag":
+        return f"<{compound}></{compound}>"
+    if container == "html-visible-label":
+        return f"<p>{identity} says： {concept}</p>"
+    if container == "markdown-attribute-value":
+        return f"## Review {{data-note={compound}}}"
+    return f"- **{identity}:** {concept}"
+
+
+def normalized_parts(value: str) -> tuple[str, ...]:
+    return tuple(
+        part
+        for part in re.split(r"[^a-z0-9]+", value.casefold())
+        if part
+    ) or ("identity",)
 
 
 @pytest.mark.parametrize(
-    ("relative_path", "heading"),
+    ("container", "identity", "concept"),
+    tuple(product(PRIVATE_CONTAINERS, PRIVATE_IDENTITIES, PRIVATE_CONCEPT_VARIANTS)),
+)
+def test_open_identity_private_reasoning_grammar_covers_every_container(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container: str,
+    identity: str,
+    concept: str,
+) -> None:
+    path = repository / "docs/architecture/repository-contract.md"
+    marker = _private_marker(container, identity, concept)
+    path.write_text(
+        path.read_text(encoding="utf-8") + f"\n{marker}\n",
+        encoding="utf-8",
+    )
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-NORMATIVE-BANNED-MARKER" in result.output
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "control"),
     [
-        ("docs/templates/adr.md", "## Scope"),
-        ("docs/templates/implementation-plan.md", "## Rollback"),
-        ("docs/templates/task-packet.md", "## Scope"),
+        (
+            "docs/architecture/repository-contract.md",
+            "Orion — private reasoning",
+        ),
+        (
+            "docs/architecture/repository-contract.md",
+            "The assistant's private scratchpad contains confidential notes.",
+        ),
+        (
+            "docs/architecture/repository-contract.md",
+            "<!-- Orion: private reasoning -->",
+        ),
+        (
+            "docs/architecture/repository-contract.md",
+            "```text\nOrion: private reasoning\n```",
+        ),
+        (
+            "docs/architecture/repository-contract.md",
+            "[public review](https://example.invalid/#orion-private-reasoning)",
+        ),
+        (
+            "docs/architecture/repository-contract.md",
+            "<analysis>identity-free tag</analysis>",
+        ),
+        (
+            "src/unrest_harness/repository_contract.py",
+            "# Orion: private reasoning",
+        ),
     ],
 )
-def test_duplicate_required_template_headings_are_rejected(
+def test_private_reasoning_out_of_scope_containers_and_prose_are_controls(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     relative_path: str,
-    heading: str,
+    control: str,
 ) -> None:
     path = repository / relative_path
     path.write_text(
-        path.read_text(encoding="utf-8")
-        + f"\n{heading}\n\n`<competing field copy>`\n",
+        path.read_text(encoding="utf-8") + f"\n{control}\n",
         encoding="utf-8",
     )
-    before = _status(repository)
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 0, result.output
+
+
+@pytest.mark.parametrize(
+    ("existing_syntax", "duplicate_syntax", "visible_label"),
+    tuple(
+        product(
+            ("atx", "setext"),
+            ("atx", "setext"),
+            ("SCOPE", "Ｓｃｏｐｅ", "Sc\u200dope", "[Scope](task-packet.md#scope)"),
+        )
+    ),
+)
+def test_canonical_heading_atx_setext_visible_label_matrix(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    existing_syntax: str,
+    duplicate_syntax: str,
+    visible_label: str,
+) -> None:
+    path = repository / "docs/templates/task-packet.md"
+    text = path.read_text(encoding="utf-8")
+    if existing_syntax == "setext":
+        text = text.replace("## Scope", "Scope\n-----", 1)
+    duplicate = (
+        f"## {visible_label}"
+        if duplicate_syntax == "atx"
+        else f"{visible_label}\n{'-' * 10}"
+    )
+    path.write_text(text + f"\n{duplicate}\n", encoding="utf-8")
 
     result = _run_cli(repository, monkeypatch)
 
     assert result.exit_code == 1
     assert "REPO-TEMPLATE-FIELD-DUPLICATE" in result.output
-    assert heading in result.output
-    assert _status(repository) == before
 
 
 @pytest.mark.parametrize(
-    ("relative_path", "heading"),
+    "control",
     [
-        ("docs/templates/adr.md", "Scope"),
-        ("docs/templates/implementation-plan.md", "Rollback"),
-        ("docs/templates/task-packet.md", "Scope"),
+        "<!--\nScope\n-----\n-->",
+        "```markdown\nScope\n-----\n```",
+        "> Scope\n> -----",
+        "    Scope\n    -----",
+        "- example\n\n  Scope\n  -----",
+        "<h2>Scope</h2>",
+        "## Recovery procedure {#scope}",
+        "## [Scope examples](task-packet.md#scope)",
+        "## Scope examples",
+        "### Scope",
     ],
 )
-def test_duplicate_setext_headings_are_rejected_structurally(
+def test_nonoperative_and_noncanonical_heading_controls_remain_valid(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
-    relative_path: str,
-    heading: str,
+    control: str,
 ) -> None:
-    path = repository / relative_path
+    path = repository / "docs/templates/task-packet.md"
     path.write_text(
-        path.read_text(encoding="utf-8")
-        + f"\n{heading}\n{'-' * max(3, len(heading))}\n\nCompeting field copy.\n",
+        path.read_text(encoding="utf-8") + f"\n{control}\n",
         encoding="utf-8",
     )
-    before = _status(repository)
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 0, result.output
+
+
+@pytest.mark.parametrize(
+    "substitute",
+    [
+        "<!--\nScope\n-----\n-->",
+        "```markdown\nScope\n-----\n```",
+        "> Scope\n> -----",
+        "    Scope\n    -----",
+        "- example\n\n  Scope\n  -----",
+        "<h2>Scope</h2>",
+    ],
+)
+def test_nonoperative_heading_cannot_substitute_for_required_section(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    substitute: str,
+) -> None:
+    path = repository / "docs/templates/task-packet.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("## Scope", substitute, 1),
+        encoding="utf-8",
+    )
 
     result = _run_cli(repository, monkeypatch)
 
     assert result.exit_code == 1
-    assert "REPO-TEMPLATE-FIELD-DUPLICATE" in result.output
-    assert _status(repository) == before
+    assert "REPO-TEMPLATE-FIELD-MISSING" in result.output
+
+
+def _write_positive_evidence_record(repository: Path) -> tuple[Path, dict[str, Any]]:
+    artifact_path = "evidence/bounded/result.txt"
+    artifact = repository / artifact_path
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text("bounded evidence\n", encoding="utf-8")
+    record = {
+        "artifact_path": artifact_path,
+        "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        "exact_check": f"test -s {artifact_path}",
+        "exit_code": 0,
+        "mode": "evaluation",
+        "observed_result": "checks-passed",
+        "record_type": "evidence",
+        "schema_version": 1,
+        "status": "passed",
+    }
+    record_path = repository / "evidence/bounded/evaluation.json"
+    _write_json(record_path, record)
+    return record_path, record
+
+
+def _bind_adr_evidence_field(repository: Path, value: str) -> None:
+    path = repository / "docs/templates/adr.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "<strongest applicable tier and results>",
+            value,
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "valid",
+        "missing-artifact_path",
+        "missing-artifact_sha256",
+        "missing-exact_check",
+        "missing-exit_code",
+        "missing-mode",
+        "missing-observed_result",
+        "missing-record_type",
+        "missing-schema_version",
+        "missing-status",
+        "artifact-missing",
+        "artifact-hash",
+        "check-unbound",
+        "execution-failed",
+        "mode-mismatch",
+        "result-unrecognized",
+        "status-nonpassing",
+    ],
+)
+def test_positive_evidence_tuple_matrix(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    record_path, record = _write_positive_evidence_record(repository)
+    if mutation.startswith("missing-"):
+        record.pop(mutation.removeprefix("missing-"))
+    elif mutation == "artifact-missing":
+        record["artifact_path"] = "evidence/bounded/absent.txt"
+        record["exact_check"] = "test -s evidence/bounded/absent.txt"
+    elif mutation == "artifact-hash":
+        record["artifact_sha256"] = "0" * 64
+    elif mutation == "check-unbound":
+        record["exact_check"] = "test -s evidence/bounded/other.txt"
+    elif mutation == "execution-failed":
+        record["exit_code"] = 1
+    elif mutation == "mode-mismatch":
+        record["mode"] = "rollback"
+        record["observed_result"] = "rollback-complete"
+    elif mutation == "result-unrecognized":
+        record["observed_result"] = "promised-later"
+    elif mutation == "status-nonpassing":
+        record["status"] = "pending"
+    _write_json(record_path, record)
+    _bind_adr_evidence_field(repository, "evidence/bounded/evaluation.json")
+
+    result = _run_cli(repository, monkeypatch)
+
+    if mutation == "valid":
+        assert result.exit_code == 0, result.output
+    else:
+        assert result.exit_code == 1
+        assert "REPO-EVIDENCE-RECORD-INVALID" in result.output
+
+
+@pytest.mark.parametrize("record_type", ["history", "limitation"])
+def test_typed_evidence_disclosures_are_explicitly_nonpassing(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    record_type: str,
+) -> None:
+    record_path = repository / "evidence/bounded/evaluation.json"
+    record_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(
+        record_path,
+        {
+            "mode": "evaluation",
+            "record_type": record_type,
+            "schema_version": 1,
+            "status": "non-passing",
+            "summary": "Cataloged disclosure, not successful evidence.",
+        },
+    )
+    _bind_adr_evidence_field(repository, "evidence/bounded/evaluation.json")
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-EVIDENCE-NONPASSING" in result.output
+
+
+@pytest.mark.parametrize(
+    "prose",
+    [
+        "Evidence dossier: TBD after review.",
+        "Evaluation evidence: expected by 2030-01-01 after approval.",
+        "The audit result is to be made available when approval arrives.",
+        "The scheduler result queue remains bounded.",
+        "Verification material is merely aspirational at this stage.",
+        "Evidence: evidence/future/report.json will appear later.",
+    ],
+)
+def test_free_evidence_prose_is_not_a_protected_location_or_classification(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prose: str,
+) -> None:
+    path = repository / "docs/v5/10-implementation-plan.md"
+    path.write_text(
+        path.read_text(encoding="utf-8") + f"\n{prose}\n",
+        encoding="utf-8",
+    )
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 0, result.output
 
 
 @pytest.mark.parametrize("indent", [" ", "  ", "   "])

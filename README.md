@@ -19,7 +19,8 @@ Requirements:
 - Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/)
 - Node.js 22+ and `npm`
-- Claude Code, Codex, or Hermes
+- Claude Code or Codex as the orchestrator host
+- Optionally, Hermes for ACP child roles
 
 Clone the repository and install the Python environment:
 
@@ -55,18 +56,27 @@ the host after setup, then run:
 /unrest <your mission>
 ```
 
-Hermes and repository-local installations use project scope:
+Repository-local installations use project scope:
 
 ```bash
 uv run unrest init --scope project --workspace-dir /path/to/project --agent claude
 uv run unrest init --scope project --workspace-dir /path/to/project --agent codex
-uv run unrest init --scope project --workspace-dir /path/to/project --agent hermes
 ```
 
 Project scope is the default, so `--scope project` may be omitted. Start the
 selected host in the initialized workspace and give it the generated
 orchestrator prompt: `.claude/orchestrator_prompt.md`,
-`.codex/orchestrator_prompt.md`, or `.hermes/orchestrator_prompt.md`.
+or `.codex/orchestrator_prompt.md`.
+
+Hermes is supported for ACP child roles, not as an orchestrator host. Select it
+with `--worker-provider hermes`, `--validator-provider hermes`, or
+`--terminal-reviewer-provider hermes` while using Claude Code or Codex as the
+orchestrator. For example:
+
+```bash
+uv run unrest init --scope project --workspace-dir /path/to/project \
+  --agent claude --worker-provider hermes
+```
 
 ## How it works
 

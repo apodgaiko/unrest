@@ -16,7 +16,7 @@ import pytest
 
 from unrest_harness.assets import parse_frontmatter
 from unrest_harness.governance import parse_commonmark
-from unrest_harness.repository_contract import _banned_content_categories
+from unrest_harness.repository_contract import _identity_private_marker_categories
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,10 +40,13 @@ EXPECTED_INDEX_TARGETS = {
     "docs/architecture/annotations.md",
     "docs/architecture/change-governance.md",
     "docs/architecture/component-map.json",
+    "docs/architecture/evidence-policy.json",
+    "docs/architecture/historical-record-policy.json",
     "docs/architecture/id-registry.json",
     "docs/architecture/normative-documents.json",
     "docs/architecture/removal-registry.json",
     "docs/decisions/index.md",
+    "docs/architecture/template-heading-policy.json",
     "docs/templates/adr.md",
     "docs/templates/change-closeout.md",
     "docs/templates/implementation-plan.md",
@@ -404,11 +407,6 @@ def _annotation_errors(comments: list[str]) -> list[str]:
 
     for raw in comments:
         comment = raw.removeprefix("#").strip()
-        for category in _banned_content_categories(
-            comment,
-            annotation_policy["banned_content"],
-        ):
-            errors.append(f"annotation_banned_marker:{category}")
         structured = structured_re.match(comment)
         if structured and structured.group(1) not in approved:
             errors.append(f"annotation_unknown_kind:{structured.group(1)}")
@@ -723,40 +721,100 @@ def test_annotation_vocabulary_and_checked_in_annotations_resolve() -> None:
         "WHY",
     }
     assert policy["banned_content"] == {
-        "agent_identity_labels": [
-            "ai note",
-            "assistant",
-            "chatgpt",
-            "claude",
-            "codex",
-            "copilot",
-            "gemini",
-            "gpt",
+        "identity_attribution_grammar": {
+            "identity_slot": {
+                "kind": "open-token-sequence",
+                "maximum_tokens": 6,
+                "minimum_tokens": 1,
+            },
+            "known_identity_examples": [
+                "assistant",
+                "chatgpt",
+                "claude",
+                "codex",
+                "copilot",
+                "gemini",
+                "gpt",
+            ],
+            "private_reasoning_concepts": [
+                "chain of thought",
+                "hidden reasoning",
+                "private reasoning",
+                "scratchpad",
+            ],
+            "visible_label_forms": [
+                "<identity> says: <private-reasoning-concept>",
+                "<identity>: <private-reasoning-concept>",
+            ],
+        },
+        "normalization": [
+            "casefold",
+            "collapse-token-separators",
+            "html-entity-decode",
+            "strip-unicode-format-controls",
+            "unicode-nfkc",
         ],
-        "attribution_context_terms": [
-            "agent",
-            "assistant",
-            "chain of thought",
-            "hidden",
-            "implementation notes",
-            "implementation reasoning",
-            "internal",
-            "internal notes",
-            "model",
-            "private",
-            "reasoning",
-            "scratch work",
-            "scratchpad",
-            "secret",
-            "work notes",
+        "out_of_scope_containers": [
+            "arbitrary-prose",
+            "fenced-code",
+            "html-comment",
+            "link-destination",
+            "source-comment",
         ],
-        "hidden_reasoning_phrases": ["chain-of-thought", "internal monologue"],
-        "hidden_reasoning_tags": [
-            "analysis",
-            "monologue",
-            "reasoning",
-            "scratchpad",
-            "thinking",
+        "supported_containers": [
+            {
+                "id": "html-attribute-value",
+                "kind": "compound-identity-private-concept",
+                "names": ["class", "data-*", "id", "name"],
+            },
+            {
+                "compound_tag_name": True,
+                "id": "html-private-concept-tag",
+                "identity_attribute_names": [
+                    "agent",
+                    "data-agent",
+                    "data-identity",
+                    "data-model",
+                    "data-provider",
+                    "identity",
+                    "model",
+                    "provider",
+                ],
+                "kind": "private-concept-plus-identity-attribute",
+            },
+            {
+                "id": "html-visible-label",
+                "kind": "visible-label",
+                "tags": [
+                    "dd",
+                    "div",
+                    "dt",
+                    "h1",
+                    "h2",
+                    "h3",
+                    "h4",
+                    "h5",
+                    "h6",
+                    "li",
+                    "p",
+                    "span",
+                ],
+            },
+            {
+                "id": "markdown-attribute-value",
+                "kind": "compound-identity-private-concept",
+                "names": ["class", "data-*", "id", "name"],
+            },
+            {
+                "id": "markdown-visible-label",
+                "kind": "visible-label",
+                "structures": [
+                    "block-quote",
+                    "heading",
+                    "list-item",
+                    "paragraph",
+                ],
+            },
         ],
     }
     comments: list[str] = []
@@ -767,7 +825,10 @@ def test_annotation_vocabulary_and_checked_in_annotations_resolve() -> None:
 
     for _doc_id, path, _metadata in _normative_documents():
         text = (ROOT / path).read_text(encoding="utf-8")
-        assert not _banned_content_categories(text, policy["banned_content"])
+        assert not _identity_private_marker_categories(
+            text,
+            policy["banned_content"],
+        )
 
 
 @pytest.mark.parametrize(
@@ -781,25 +842,6 @@ def test_annotation_vocabulary_and_checked_in_annotations_resolve() -> None:
             "# TODO[#99; remove-after=trace-v2]: remove projection",
             "annotation_unresolved_issue:",
         ),
-        ("# assistant: try changing this later", "annotation_banned_marker:"),
-        ("# Claude says: private implementation thoughts", "annotation_banned_marker:"),
-        ("# chatgpt: private implementation thoughts", "annotation_banned_marker:"),
-        ("# **Claude:** private implementation thoughts", "annotation_banned_marker:"),
-        ("# - **ChatGPT:** private implementation thoughts", "annotation_banned_marker:"),
-        ("# Gemini: private implementation thoughts", "annotation_banned_marker:"),
-        ("# Copilot says: private implementation thoughts", "annotation_banned_marker:"),
-        ("# Marlowe: private implementation thoughts", "annotation_banned_marker:"),
-        ("# - **DeepSeek:** hidden implementation notes", "annotation_banned_marker:"),
-        ("# **qwen:** private implementation notes", "annotation_banned_marker:"),
-        ("# Llama: secret work notes", "annotation_banned_marker:"),
-        ("# <reasoning>private implementation thoughts", "annotation_banned_marker:"),
-        ("# <analysis/> private implementation thoughts", "annotation_banned_marker:"),
-        ("# <THINKING>private implementation thoughts", "annotation_banned_marker:"),
-        ("# </monologue> private implementation thoughts", "annotation_banned_marker:"),
-        ("# <scratchpad>private implementation thoughts", "annotation_banned_marker:"),
-        ("# <private-thoughts>implementation detail", "annotation_banned_marker:"),
-        ("# chain_of_thought: private implementation thoughts", "annotation_banned_marker:"),
-        ("# internal monologue: private implementation thoughts", "annotation_banned_marker:"),
     ],
 )
 def test_malformed_broken_or_conversational_annotations_fail(
@@ -819,9 +861,28 @@ def test_malformed_broken_or_conversational_annotations_fail(
         "# Reasoning tags are rejected by the annotation scanner.",
         "# Thinking through recovery requires explicit evidence.",
         "# The monologue tag is not part of public documentation.",
+        "# assistant: try changing this later",
+        "# Claude says: private implementation thoughts",
+        "# chatgpt: private implementation thoughts",
+        "# **Claude:** private implementation thoughts",
+        "# - **ChatGPT:** private implementation thoughts",
+        "# Gemini: private implementation thoughts",
+        "# Copilot says: private implementation thoughts",
+        "# Marlowe: private implementation thoughts",
+        "# - **DeepSeek:** hidden implementation notes",
+        "# **qwen:** private implementation notes",
+        "# Llama: secret work notes",
+        "# <reasoning>private implementation thoughts",
+        "# <analysis/> private implementation thoughts",
+        "# <THINKING>private implementation thoughts",
+        "# </monologue> private implementation thoughts",
+        "# <scratchpad>private implementation thoughts",
+        "# <private-thoughts>implementation detail",
+        "# chain_of_thought: private implementation thoughts",
+        "# internal monologue: private implementation thoughts",
     ],
 )
-def test_agent_names_and_reasoning_words_in_ordinary_comments_are_valid(
+def test_source_comments_are_outside_private_marker_classification(
     comment: str,
 ) -> None:
     assert not _annotation_errors([comment])

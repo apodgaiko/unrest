@@ -1,0 +1,167 @@
+{
+  "canonical_templates": [
+    {
+      "document_id": "TPL-ADR-001",
+      "path": "docs/templates/adr.md",
+      "required_headings": [
+        {
+          "level": 2,
+          "visible_label": "Alternatives considered"
+        },
+        {
+          "level": 2,
+          "visible_label": "Consequences"
+        },
+        {
+          "level": 2,
+          "visible_label": "Context"
+        },
+        {
+          "level": 2,
+          "visible_label": "Decision"
+        },
+        {
+          "level": 2,
+          "visible_label": "Implementation and verification"
+        },
+        {
+          "level": 2,
+          "visible_label": "Protected-surface review"
+        },
+        {
+          "level": 2,
+          "visible_label": "Record metadata"
+        },
+        {
+          "level": 2,
+          "visible_label": "References"
+        },
+        {
+          "level": 2,
+          "visible_label": "Rollback"
+        },
+        {
+          "level": 2,
+          "visible_label": "Scope"
+        }
+      ]
+    },
+    {
+      "document_id": "TPL-PLAN-001",
+      "path": "docs/templates/implementation-plan.md",
+      "required_headings": [
+        {
+          "level": 2,
+          "visible_label": "Current behavior and evidence"
+        },
+        {
+          "level": 2,
+          "visible_label": "Dependency and execution order"
+        },
+        {
+          "level": 2,
+          "visible_label": "Implementation steps"
+        },
+        {
+          "level": 2,
+          "visible_label": "Invariants, compatibility, and security"
+        },
+        {
+          "level": 2,
+          "visible_label": "Objective and success criteria"
+        },
+        {
+          "level": 2,
+          "visible_label": "Plan identity"
+        },
+        {
+          "level": 2,
+          "visible_label": "Risks, decisions, and follow-ons"
+        },
+        {
+          "level": 2,
+          "visible_label": "Rollback"
+        },
+        {
+          "level": 2,
+          "visible_label": "Scope and non-goals"
+        },
+        {
+          "level": 2,
+          "visible_label": "Surface and file map"
+        },
+        {
+          "level": 2,
+          "visible_label": "Verification and evidence"
+        }
+      ]
+    },
+    {
+      "document_id": "TPL-TASK-001",
+      "path": "docs/templates/task-packet.md",
+      "required_headings": [
+        {
+          "level": 2,
+          "visible_label": "Current behavior and evidence"
+        },
+        {
+          "level": 2,
+          "visible_label": "Handoff requirements"
+        },
+        {
+          "level": 2,
+          "visible_label": "Implementation requirements"
+        },
+        {
+          "level": 2,
+          "visible_label": "Invariants and risks"
+        },
+        {
+          "level": 2,
+          "visible_label": "Objective"
+        },
+        {
+          "level": 2,
+          "visible_label": "Read first"
+        },
+        {
+          "level": 2,
+          "visible_label": "Scope"
+        },
+        {
+          "level": 2,
+          "visible_label": "Task identity"
+        },
+        {
+          "level": 2,
+          "visible_label": "Verification and evidence"
+        }
+      ]
+    }
+  ],
+  "excluded_identity_sources": [
+    "explicit-anchor-alias",
+    "link-destination",
+    "raw-html-heading"
+  ],
+  "non_operative_containers": [
+    "block-quote",
+    "fenced-code",
+    "indented-code",
+    "nested-list",
+    "raw-html"
+  ],
+  "normalization": [
+    "casefold",
+    "collapse-whitespace",
+    "html-entity-decode",
+    "rendered-visible-label",
+    "strip-unicode-format-controls",
+    "unicode-nfkc"
+  ],
+  "operative_syntaxes": [
+    "atx",
+    "setext"
+  ],
+  "schema_version": 1
+}

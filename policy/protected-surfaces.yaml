@@ -11,6 +11,8 @@ forbidden_approver_kinds:
 protected_surfaces:
   - id: capability-policy
     selectors:
+      - kind: component
+        value: COMP-CAPABILITY
       - kind: path
         value: src/unrest_harness/capability_policy.py
       - kind: path-prefix
@@ -60,16 +62,46 @@ protected_surfaces:
     selectors:
       - kind: component
         value: COMP-GOVERNANCE
+      - kind: component
+        value: COMP-REPOSITORY-CONTRACT
+      - kind: path
+        value: .github/PULL_REQUEST_TEMPLATE.md
       - kind: path
         value: .github/workflows/ci.yml
       - kind: path
+        value: AGENTS.md
+      - kind: path
+        value: CONTRIBUTING.md
+      - kind: path
+        value: README.md
+      - kind: path
+        value: docs/architecture/annotation-policy.json
+      - kind: path
+        value: docs/architecture/change-governance.md
+      - kind: path
+        value: docs/architecture/component-map.json
+      - kind: path
+        value: docs/architecture/evidence-policy.json
+      - kind: path
+        value: docs/architecture/historical-record-policy.json
+      - kind: path
+        value: docs/architecture/repository-contract.md
+      - kind: path
+        value: docs/architecture/template-heading-policy.json
+      - kind: path
+        value: docs/templates/adr.md
+      - kind: path
         value: policy/protected-surfaces.yaml
+      - kind: path
+        value: pyproject.toml
+      - kind: path
+        value: schemas/protected-surfaces.schema.json
       - kind: path
         value: src/unrest_harness/governance.py
       - kind: path
         value: src/unrest_harness/repository_contract.py
-      - kind: path-prefix
-        value: schemas/
+      - kind: path
+        value: uv.lock
     reviewer_roles:
       - release-maintainer
       - security-maintainer
@@ -122,6 +154,21 @@ protected_surfaces:
         - installed-wheel
         - real-cli-mcp-acp
 self_protection:
+  - id: annotation-policy
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: docs/architecture/annotation-policy.json
+  - id: architecture-component-map
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: docs/architecture/component-map.json
+  - id: change-governance-document
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: docs/architecture/change-governance.md
   - id: continuous-integration
     category_id: governance-self-protection
     selector:
@@ -132,6 +179,16 @@ self_protection:
     selector:
       kind: path
       value: src/unrest_harness/governance.py
+  - id: contribution-guidance
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: CONTRIBUTING.md
+  - id: dependency-lock
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: uv.lock
   - id: evaluation-holdouts
     category_id: evaluation-holdouts
     selector:
@@ -142,11 +199,46 @@ self_protection:
     selector:
       kind: path-prefix
       value: evals/baseline/
+  - id: evidence-policy
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: docs/architecture/evidence-policy.json
+  - id: governance-adr-template
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: docs/templates/adr.md
+  - id: governance-component-catalog
+    category_id: governance-self-protection
+    selector:
+      kind: component
+      value: COMP-GOVERNANCE
+  - id: historical-record-policy
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: docs/architecture/historical-record-policy.json
   - id: policy-schema
     category_id: governance-self-protection
     selector:
-      kind: path-prefix
-      value: schemas/
+      kind: path
+      value: schemas/protected-surfaces.schema.json
+  - id: project-guidance
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: AGENTS.md
+  - id: project-metadata
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: pyproject.toml
+  - id: project-readme
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: README.md
   - id: promotion-controls
     category_id: governance-self-protection
     selector:
@@ -157,6 +249,21 @@ self_protection:
     selector:
       kind: path
       value: policy/protected-surfaces.yaml
+  - id: pull-request-template
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: .github/PULL_REQUEST_TEMPLATE.md
+  - id: repository-contract-component-catalog
+    category_id: governance-self-protection
+    selector:
+      kind: component
+      value: COMP-REPOSITORY-CONTRACT
+  - id: repository-contract-document
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: docs/architecture/repository-contract.md
   - id: repository-contract-validator
     category_id: governance-self-protection
     selector:
@@ -167,3 +274,8 @@ self_protection:
     selector:
       kind: path
       value: policy/protected-surfaces.yaml
+  - id: template-heading-policy
+    category_id: governance-self-protection
+    selector:
+      kind: path
+      value: docs/architecture/template-heading-policy.json

@@ -14,6 +14,7 @@ import tomllib
 import tokenize
 from collections import Counter
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from itertools import product
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
@@ -24,13 +25,27 @@ from jsonschema.exceptions import SchemaError
 
 from .assets import parse_frontmatter
 from .baseline import GENERATED_FILENAMES, generate_baseline
+from .capability_policy import (
+    CapabilityPolicy,
+    CapabilityPolicyError,
+    CapabilitySecurityModel,
+    CapabilitySinkCatalog,
+    load_capability_policy,
+    load_capability_security_model,
+    load_capability_sink_catalog,
+    validate_capability_model_anchors,
+    validate_capability_sink_anchors,
+)
 from .governance import (
     GovernanceValidationError,
     load_component_paths,
     load_protected_surface_policy,
+    normalize_document_text,
+    normalized_document_tokens,
     parse_commonmark,
     render_policy_json_schema,
     resolve_path_category,
+    validate_evidence_record_reference,
     validate_policy_components,
     validate_workflow_template,
 )
@@ -39,20 +54,102 @@ CANONICAL_COMMAND = "uv run unrest check-repository"
 ARCHITECTURE_DIR = "docs/architecture"
 ANNOTATION_POLICY_PATH = f"{ARCHITECTURE_DIR}/annotation-policy.json"
 COMPONENT_MAP_PATH = f"{ARCHITECTURE_DIR}/component-map.json"
+EVIDENCE_POLICY_PATH = f"{ARCHITECTURE_DIR}/evidence-policy.json"
+HISTORICAL_POLICY_PATH = f"{ARCHITECTURE_DIR}/historical-record-policy.json"
 ID_REGISTRY_PATH = f"{ARCHITECTURE_DIR}/id-registry.json"
 NORMATIVE_POLICY_PATH = f"{ARCHITECTURE_DIR}/normative-documents.json"
 REMOVAL_REGISTRY_PATH = f"{ARCHITECTURE_DIR}/removal-registry.json"
+TEMPLATE_HEADING_POLICY_PATH = f"{ARCHITECTURE_DIR}/template-heading-policy.json"
+CAPABILITY_MODEL_PATH = (
+    "src/unrest_harness/bundled/policies/capability-security-model.v1.json"
+)
+CAPABILITY_SINKS_PATH = "src/unrest_harness/bundled/policies/capability-sinks.v1.json"
+CAPABILITY_ROLE_POLICY_PATH = (
+    "src/unrest_harness/bundled/policies/role-capabilities.v1.json"
+)
+CAPABILITY_MODEL_SCHEMA_PATH = "schemas/capability-security-model.schema.json"
+CAPABILITY_SINKS_SCHEMA_PATH = "schemas/capability-sinks.schema.json"
+CAPABILITY_ROLE_POLICY_SCHEMA_PATH = "schemas/role-capabilities.schema.json"
 POLICY_PATH = "policy/protected-surfaces.yaml"
 POLICY_SCHEMA_PATH = "schemas/protected-surfaces.schema.json"
 CI_PATH = ".github/workflows/ci.yml"
 BASELINE_PATH = "evals/baseline"
 
+HISTORICAL_ACTIVE_ROLE_LOCATORS = (
+    {
+        "collection_field": "documents",
+        "id": "canonical-template",
+        "record_filter": {
+            "field": "path",
+            "prefix": "docs/templates/",
+        },
+        "registry_path": NORMATIVE_POLICY_PATH,
+        "value_field": "id",
+    },
+    {
+        "collection_field": "ids",
+        "id": "compatibility-rule",
+        "record_filter": {
+            "equals": "compatibility",
+            "field": "kind",
+        },
+        "registry_path": ID_REGISTRY_PATH,
+        "value_field": "id",
+    },
+    {
+        "collection_field": "components",
+        "id": "component-invariant",
+        "registry_path": COMPONENT_MAP_PATH,
+        "value_list_field": "invariants",
+    },
+    {
+        "collection_field": "ids",
+        "id": "invariant-rule",
+        "record_filter": {
+            "equals": "invariant",
+            "field": "kind",
+        },
+        "registry_path": ID_REGISTRY_PATH,
+        "value_field": "id",
+    },
+    {
+        "collection_field": "ids",
+        "id": "security-rule",
+        "record_filter": {
+            "equals": "security",
+            "field": "kind",
+        },
+        "registry_path": ID_REGISTRY_PATH,
+        "value_field": "id",
+    },
+)
+HISTORICAL_ACTIVE_ROLE_IDS = tuple(
+    role["id"] for role in HISTORICAL_ACTIVE_ROLE_LOCATORS
+)
+HISTORICAL_AUTHORIZATION_CONTRACT = {
+    "active_role_field": "active_role",
+    "current_contract_field": "current_contract_id",
+    "current_contract_registry": ID_REGISTRY_PATH,
+    "historical_reference_field": "historical_reference",
+}
+ID_KIND_ACTIVE_ROLES = {
+    "compatibility": "compatibility-rule",
+    "invariant": "invariant-rule",
+    "security": "security-rule",
+}
+
 CANONICAL_JSON_PATHS = (
     ANNOTATION_POLICY_PATH,
     COMPONENT_MAP_PATH,
+    EVIDENCE_POLICY_PATH,
+    HISTORICAL_POLICY_PATH,
     ID_REGISTRY_PATH,
     NORMATIVE_POLICY_PATH,
     REMOVAL_REGISTRY_PATH,
+    TEMPLATE_HEADING_POLICY_PATH,
+    CAPABILITY_MODEL_PATH,
+    CAPABILITY_ROLE_POLICY_PATH,
+    CAPABILITY_SINKS_PATH,
 )
 EXPECTED_GUIDANCE = (
     "AGENTS.md",
@@ -75,44 +172,6 @@ EXPECTED_GUIDANCE_CHAINS = {
     ),
     "tests/test_storage.py": ("AGENTS.md", "tests/AGENTS.md"),
 }
-TEMPLATE_HEADINGS = {
-    "TPL-ADR-001": (
-        "## Record metadata",
-        "## Scope",
-        "## Context",
-        "## Decision",
-        "## Alternatives considered",
-        "## Consequences",
-        "## Protected-surface review",
-        "## Rollback",
-        "## Implementation and verification",
-        "## References",
-    ),
-    "TPL-PLAN-001": (
-        "## Plan identity",
-        "## Objective and success criteria",
-        "## Current behavior and evidence",
-        "## Scope and non-goals",
-        "## Surface and file map",
-        "## Invariants, compatibility, and security",
-        "## Dependency and execution order",
-        "## Implementation steps",
-        "## Rollback",
-        "## Verification and evidence",
-        "## Risks, decisions, and follow-ons",
-    ),
-    "TPL-TASK-001": (
-        "## Task identity",
-        "## Objective",
-        "## Read first",
-        "## Current behavior and evidence",
-        "## Scope",
-        "## Invariants and risks",
-        "## Implementation requirements",
-        "## Verification and evidence",
-        "## Handoff requirements",
-    ),
-}
 TEMPLATE_YAML_FIELDS = {
     "TPL-CLOSEOUT-001": (
         ("task_id:", ("task_id",)),
@@ -133,12 +192,12 @@ TEMPLATE_YAML_FIELDS = {
         ("optional:", ("follow_ons", "optional")),
     ),
 }
-TEMPLATE_IDS = tuple(sorted((*TEMPLATE_HEADINGS, *TEMPLATE_YAML_FIELDS)))
 SUPPORTED_METASCHEMAS = {
     "https://json-schema.org/draft/2020-12/schema": Draft202012Validator,
 }
 CHECK_FAMILIES = (
     "annotations",
+    "capability-security",
     "canonical-json",
     "ci",
     "component-map",
@@ -230,13 +289,33 @@ _TemplateYAMLLoader.add_constructor(
 )
 
 
+def _compatible_text(text: str) -> str:
+    return normalize_document_text(text)
+
+
+def _logical_heading_text(text: str) -> str:
+    """Normalize only the rendered visible label of an operative heading."""
+
+    normalized = _compatible_text(text)
+    return re.sub(r"\s+", " ", normalized).strip().casefold()
+
+
+def _logical_heading_key(level: int, text: str) -> str:
+    return f"{'#' * level} {_logical_heading_text(text)}"
+
+
 def _markdown_headings(text: str) -> tuple[str, ...]:
-    """Return operative ATX or setext headings from the CommonMark token stream."""
+    """Return visible identities for operative top-level Markdown headings."""
 
     return tuple(
-        f"{'#' * heading.level} {heading.text}"
+        _logical_heading_key(heading.level, heading.text)
         for heading in parse_commonmark(text).top_level_headings
+        if heading.text
     )
+
+
+def _required_heading_key(level: int, visible_label: str) -> str:
+    return _logical_heading_key(level, visible_label)
 
 
 def _markdown_yaml_mappings(
@@ -270,11 +349,32 @@ def _mapping_has_path(mapping: dict[str, Any], path: tuple[str, ...]) -> bool:
     return True
 
 
+def _mapping_values_at_path(value: Any, path: tuple[str, ...]) -> tuple[Any, ...]:
+    if not path:
+        return (value,)
+    part, *remaining = path
+    if part == "*":
+        if isinstance(value, list):
+            children = value
+        elif isinstance(value, dict):
+            children = list(value.values())
+        else:
+            return ()
+        return tuple(
+            item
+            for child in children
+            for item in _mapping_values_at_path(child, tuple(remaining))
+        )
+    if not isinstance(value, dict) or part not in value:
+        return ()
+    return _mapping_values_at_path(value[part], tuple(remaining))
+
+
 _BANNED_CONTENT_FIELDS = {
-    "agent_identity_labels",
-    "attribution_context_terms",
-    "hidden_reasoning_phrases",
-    "hidden_reasoning_tags",
+    "identity_attribution_grammar",
+    "normalization",
+    "out_of_scope_containers",
+    "supported_containers",
 }
 _SOURCE_REFERENCE_GRAMMAR = re.compile(
     r"^(?P<path>(?:docs|specs)/"
@@ -297,106 +397,182 @@ _EXTERNAL_REFERENCE = re.compile(
     r"(?:https?://|mailto:)[^\s)\]}>\"'`]+",
     re.IGNORECASE,
 )
-_PRIVATE_TAG_ROOTS = (
-    "analysis",
-    "monologue",
-    "reason",
-    "scratch",
-    "thought",
-    "think",
-)
 
 
-def _banned_content_categories(
+def _contains_phrase(
+    tokens: tuple[str, ...],
+    phrase: tuple[str, ...],
+) -> bool:
+    return bool(phrase) and any(
+        tokens[index : index + len(phrase)] == phrase
+        for index in range(len(tokens) - len(phrase) + 1)
+    )
+
+
+class _SupportedHTMLLabelParser(HTMLParser):
+    """Collect visible labels only from cataloged HTML elements."""
+
+    def __init__(self, supported_tags: set[str]) -> None:
+        super().__init__(convert_charrefs=True)
+        self.supported_tags = supported_tags
+        self.stack: list[str] = []
+        self.labels: list[str] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        del attrs
+        self.stack.append(normalize_document_text(tag).casefold())
+
+    def handle_startendtag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        del tag, attrs
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized = normalize_document_text(tag).casefold()
+        if normalized in self.stack:
+            index = len(self.stack) - 1 - self.stack[::-1].index(normalized)
+            del self.stack[index:]
+
+    def handle_data(self, data: str) -> None:
+        if self.stack and self.stack[-1] in self.supported_tags:
+            normalized = re.sub(r"\s+", " ", data).strip()
+            if normalized:
+                self.labels.append(normalized)
+
+
+def _attribute_name_matches(name: str, supported: set[str]) -> bool:
+    return name in supported or ("data-*" in supported and name.startswith("data-"))
+
+
+def _identity_private_marker_categories(
     text: str,
-    policy: dict[str, list[str]],
+    policy: dict[str, Any],
 ) -> tuple[str, ...]:
-    """Classify rendered labels and structural reasoning tags without banning prose."""
+    """Apply the cataloged open identity-slot grammar to supported containers."""
 
-    categories: list[str] = []
-    surface = parse_commonmark(text)
-    labels = policy["agent_identity_labels"]
-    label_pattern = "|".join(
-        re.escape(label)
-        for label in sorted(labels, key=lambda value: (-len(value), value))
+    grammar = policy.get("identity_attribution_grammar")
+    containers = policy.get("supported_containers")
+    if not isinstance(grammar, dict) or not isinstance(containers, list):
+        return ()
+    identity_slot = grammar.get("identity_slot")
+    concepts = grammar.get("private_reasoning_concepts")
+    if (
+        not isinstance(identity_slot, dict)
+        or not isinstance(concepts, list)
+        or not all(isinstance(concept, str) for concept in concepts)
+    ):
+        return ()
+    minimum = identity_slot.get("minimum_tokens")
+    maximum = identity_slot.get("maximum_tokens")
+    if not isinstance(minimum, int) or not isinstance(maximum, int):
+        return ()
+    concept_tokens = tuple(
+        normalized_document_tokens(concept)
+        for concept in concepts
     )
-    identity_re = re.compile(
-        rf"^(?:{label_pattern})(?:[ \t]+says)?[ \t]*:",
-        re.IGNORECASE,
-    )
-    attribution_re = re.compile(
-        r"^(?P<label>[A-Za-z][A-Za-z0-9]*(?:[ \t]+"
-        r"[A-Za-z][A-Za-z0-9]*){0,2})(?:[ \t]+says)?[ \t]*:"
-        r"(?P<body>.*)$",
-    )
-    context_terms = tuple(
-        re.sub(r"[-_\s]+", " ", term.casefold()).strip()
-        for term in policy["attribution_context_terms"]
-    )
-    identity_found = False
-    for line in surface.visible_lines:
-        if label_pattern and identity_re.search(line):
-            identity_found = True
-            break
-        match = attribution_re.match(line)
+    by_id = {
+        container["id"]: container
+        for container in containers
+        if isinstance(container, dict) and isinstance(container.get("id"), str)
+    }
+
+    def has_concept(tokens: tuple[str, ...]) -> bool:
+        return any(_contains_phrase(tokens, concept) for concept in concept_tokens)
+
+    def is_identity(tokens: tuple[str, ...]) -> bool:
+        return minimum <= len(tokens) <= maximum
+
+    def visible_label_matches(candidate: str) -> bool:
+        compatible = normalize_document_text(candidate)
+        match = re.fullmatch(
+            r"\s*(?P<label>[^:\n]{1,160}?)\s*:\s*(?P<body>\S.*)",
+            compatible,
+        )
         if match is None:
-            continue
-        normalized_body = re.sub(
-            r"[-_\s]+", " ", match.group("body").casefold()
-        ).strip()
-        if any(
-            re.search(rf"\b{re.escape(term)}\b", normalized_body)
-            for term in context_terms
-            if term
+            return False
+        label_tokens = normalized_document_tokens(match.group("label"))
+        if label_tokens[-1:] == ("says",):
+            label_tokens = label_tokens[:-1]
+        return is_identity(label_tokens) and has_concept(
+            normalized_document_tokens(match.group("body"))
+        )
+
+    def compound_matches(candidate: str) -> bool:
+        tokens = normalized_document_tokens(candidate)
+        for concept in concept_tokens:
+            for index in range(len(tokens) - len(concept) + 1):
+                if tokens[index : index + len(concept)] != concept:
+                    continue
+                identity = (*tokens[:index], *tokens[index + len(concept) :])
+                if is_identity(identity):
+                    return True
+        return False
+
+    surface = parse_commonmark(text)
+    if "markdown-visible-label" in by_id and any(
+        visible_label_matches(line) for line in surface.visible_lines
+    ):
+        return ("identity-attributed-private-reasoning",)
+
+    html_visible = by_id.get("html-visible-label")
+    if isinstance(html_visible, dict):
+        tags = html_visible.get("tags")
+        if isinstance(tags, list) and all(isinstance(tag, str) for tag in tags):
+            for token in surface.html_tokens:
+                parser = _SupportedHTMLLabelParser(set(tags))
+                try:
+                    parser.feed(token)
+                    parser.close()
+                except (AssertionError, ValueError):
+                    continue
+                if any(visible_label_matches(label) for label in parser.labels):
+                    return ("identity-attributed-private-reasoning",)
+
+    attribute_containers = {
+        source: by_id.get(f"{source}-attribute-value")
+        for source in ("html", "markdown")
+    }
+    for attribute in surface.attributes:
+        container = attribute_containers.get(attribute.source)
+        names = container.get("names") if isinstance(container, dict) else None
+        if (
+            isinstance(names, list)
+            and all(isinstance(name, str) for name in names)
+            and _attribute_name_matches(attribute.name, set(names))
+            and compound_matches(attribute.value)
         ):
-            identity_found = True
-            break
-    if identity_found:
-        categories.append("agent-identity")
+            return ("identity-attributed-private-reasoning",)
 
-    tags = policy["hidden_reasoning_tags"]
-    configured = {tag.casefold() for tag in tags}
-    html_tag_re = re.compile(
-        r"</?[ \t]*(?P<tag>[a-z][a-z0-9_-]*)"
-        r"(?:[ \t]+[^<>]*?)?[ \t]*/?>",
-        re.IGNORECASE,
-    )
-    tag_tokens = (*surface.html_tokens, *surface.visible_lines)
-    if any(
-        (
-            (normalized_tag := match.group("tag").casefold()) in configured
-            or any(root in normalized_tag for root in _PRIVATE_TAG_ROOTS)
+    tag_container = by_id.get("html-private-concept-tag")
+    if isinstance(tag_container, dict):
+        identity_names = tag_container.get("identity_attribute_names")
+        allowed_identity_names = (
+            set(identity_names)
+            if isinstance(identity_names, list)
+            and all(isinstance(name, str) for name in identity_names)
+            else set()
         )
-        for token in tag_tokens
-        for match in html_tag_re.finditer(token)
-    ):
-        categories.append("hidden-reasoning-tag")
-
-    normalized_phrases = tuple(
-        re.sub(r"[-_\s]+", " ", phrase.casefold()).strip()
-        for phrase in policy["hidden_reasoning_phrases"]
-    )
-    normalized_lines = tuple(
-        re.sub(r"[-_\s]+", " ", line.casefold()).strip()
-        for line in surface.visible_lines
-    )
-    if any(
-        line.startswith(f"{phrase}:") or line.startswith(f"{phrase} notes:")
-        for phrase in normalized_phrases
-        if phrase
-        for line in normalized_lines
-    ) or any(
-        (
-            match := attribution_re.match(line)
-        ) is not None
-        and any(
-            root in re.sub(r"[-_\s]+", " ", match.group("label").casefold())
-            for root in _PRIVATE_TAG_ROOTS
-        )
-        for line in surface.visible_lines
-    ):
-        categories.append("hidden-reasoning-phrase")
-    return tuple(categories)
+        for element in surface.elements:
+            tag_tokens = normalized_document_tokens(element.tag)
+            if tag_container.get("compound_tag_name") is True and compound_matches(
+                element.tag
+            ):
+                return ("identity-attributed-private-reasoning",)
+            if not any(tag_tokens == concept for concept in concept_tokens):
+                continue
+            if any(
+                attribute.name in allowed_identity_names
+                and is_identity(normalized_document_tokens(attribute.value))
+                for attribute in element.attributes
+            ):
+                return ("identity-attributed-private-reasoning",)
+    return ()
 
 
 def _ci_condition_is_always(value: Any) -> bool:
@@ -811,20 +987,22 @@ class _RepositoryValidator:
         self.diagnostics: list[RepositoryDiagnostic] = []
         self._json_cache: dict[str, Any] = {}
         self._normative_documents: list[tuple[str, str, dict[str, Any], str]] = []
+        self._normative_role_aliases: dict[tuple[str, str], str] = {}
         self._accepted_decisions: set[str] = set()
         self._global_ids: dict[str, set[str]] = {}
-        self._non_normative_baseline_ids: set[str] = set()
-        self._non_normative_classifications: set[str] = set()
+        self._historical_authorized_links_cache: set[tuple[str, str]] | None = None
 
     def run(self) -> RepositoryContractReport:
         self._check_guidance()
-        self._load_baseline_non_normative()
         self._load_accepted_decisions()
         self._check_normative_documents()
         self._check_stable_ids()
         self._check_annotations()
         self._check_component_map()
+        self._check_capability_security()
         self._check_templates()
+        self._check_historical_active_roles()
+        self._check_evidence_policy()
         self._check_protected_policy()
         self._check_schemas()
         self._check_generated_outputs()
@@ -862,6 +1040,126 @@ class _RepositoryValidator:
             )
             self._add("REPO-FILE-UNREADABLE", relative_path, message)
             return None
+
+    def _historical_authorized_links(self) -> set[tuple[str, str]]:
+        if self._historical_authorized_links_cache is not None:
+            return self._historical_authorized_links_cache
+        self._historical_authorized_links_cache = set()
+        catalog = self._load_json(HISTORICAL_POLICY_PATH)
+        manifest_text = self._read_text(f"{BASELINE_PATH}/manifest.yaml")
+        id_registry = self._load_json(ID_REGISTRY_PATH)
+        if (
+            not isinstance(catalog, dict)
+            or not isinstance(id_registry, dict)
+            or manifest_text is None
+            or set(catalog)
+            != {
+                "active_roles",
+                "authorizations",
+                "authorization_contract",
+                "historical_classifications",
+                "historical_records",
+                "schema_version",
+                "source_manifest",
+            }
+            or catalog.get("schema_version") != 1
+            or catalog.get("source_manifest") != f"{BASELINE_PATH}/manifest.yaml"
+            or catalog.get("authorization_contract")
+            != HISTORICAL_AUTHORIZATION_CONTRACT
+        ):
+            return self._historical_authorized_links_cache
+        try:
+            manifest = yaml.safe_load(manifest_text)
+        except yaml.YAMLError:
+            return self._historical_authorized_links_cache
+        fixtures = manifest.get("fixtures") if isinstance(manifest, dict) else None
+        if not isinstance(fixtures, list):
+            return self._historical_authorized_links_cache
+        expected_records = sorted(
+            (
+                {
+                    "classification": fixture["classification"],
+                    "id": fixture["fixture_id"],
+                }
+                for fixture in fixtures
+                if isinstance(fixture, dict)
+                and isinstance(fixture.get("fixture_id"), str)
+                and fixture.get("classification")
+                in {"known_defect", "observed_legacy"}
+            ),
+            key=lambda item: item["id"],
+        )
+        expected_classifications = sorted(
+            {item["classification"] for item in expected_records}
+        )
+        active_roles = catalog.get("active_roles")
+        authorizations = catalog.get("authorizations")
+        if (
+            catalog.get("historical_records") != expected_records
+            or catalog.get("historical_classifications")
+            != expected_classifications
+            or active_roles != list(HISTORICAL_ACTIVE_ROLE_LOCATORS)
+            or not isinstance(authorizations, list)
+        ):
+            return self._historical_authorized_links_cache
+        forbidden = {
+            *expected_classifications,
+            *(item["id"] for item in expected_records),
+        }
+        id_entries = id_registry.get("ids")
+        if not isinstance(id_entries, list):
+            return self._historical_authorized_links_cache
+        current_contract_ids = {
+            entry["id"]
+            for entry in id_entries
+            if isinstance(entry, dict)
+            and isinstance(entry.get("id"), str)
+            and entry["id"] not in forbidden
+            and re.fullmatch(
+                r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+",
+                entry["id"],
+            )
+            is not None
+        }
+        for authorization in authorizations:
+            if not isinstance(authorization, dict) or set(authorization) != {
+                "active_role",
+                "current_contract_id",
+                "historical_reference",
+            }:
+                continue
+            active_role = authorization.get("active_role")
+            current_contract = authorization.get("current_contract_id")
+            historical_reference = authorization.get("historical_reference")
+            if (
+                active_role in HISTORICAL_ACTIVE_ROLE_IDS
+                and current_contract in current_contract_ids
+                and historical_reference in forbidden
+            ):
+                self._historical_authorized_links_cache.add(
+                    (str(active_role), str(historical_reference))
+                )
+        return self._historical_authorized_links_cache
+
+    def _historical_role_is_authorized(
+        self,
+        active_role: str,
+        historical_reference: str,
+    ) -> bool:
+        return (
+            active_role,
+            historical_reference,
+        ) in self._historical_authorized_links()
+
+    def _effective_normative_policy_id(self, entry: dict[str, Any]) -> Any:
+        declared_id = entry.get("id")
+        path = entry.get("path")
+        if not isinstance(declared_id, str) or not isinstance(path, str):
+            return declared_id
+        return self._normative_role_aliases.get(
+            (declared_id, path),
+            declared_id,
+        )
 
     def _load_json(self, relative_path: str) -> Any | None:
         if relative_path in self._json_cache:
@@ -904,96 +1202,6 @@ class _RepositoryValidator:
             return
         section = text.partition("## Accepted decisions")[2].partition("\n## ")[0]
         self._accepted_decisions = set(re.findall(r"\bADR-[0-9]{4}\b", section))
-
-    def _load_baseline_non_normative(self) -> None:
-        text = self._read_text(f"{BASELINE_PATH}/manifest.yaml")
-        if text is None:
-            return
-        try:
-            manifest = yaml.safe_load(text)
-        except yaml.YAMLError:
-            return
-        fixtures = manifest.get("fixtures") if isinstance(manifest, dict) else None
-        if not isinstance(fixtures, list):
-            return
-        for fixture in fixtures:
-            if not isinstance(fixture, dict):
-                continue
-            fixture_id = fixture.get("fixture_id")
-            classification = fixture.get("classification")
-            if (
-                isinstance(fixture_id, str)
-                and isinstance(classification, str)
-                and classification != "intended"
-            ):
-                self._non_normative_baseline_ids.add(fixture_id)
-                self._non_normative_classifications.add(classification)
-
-    def _check_normative_baseline_claims(self, path: str, body: str) -> None:
-        protected_tokens = (
-            self._non_normative_baseline_ids | self._non_normative_classifications
-        )
-        safe_context = re.compile(
-            r"\b(?:characterization|historical|non-normative)\b|"
-            r"\b(?:does not|do not|is not|are not|not an?|never)\b|"
-            r"\b(?:classified|retained only as)\b",
-            re.IGNORECASE,
-        )
-        promotion_context = re.compile(
-            r"\b(?:authoritative|canonical|governing|intended|normative|required)\b"
-            r".{0,60}\b(?:behavior|contract|invariant|oracle|promise|rule|"
-            r"semantics?|source of truth)\b|"
-            r"\b(?:is|are|becomes?|defines?|represents?|serves as)\b.{0,60}"
-            r"\b(?:authoritative|canonical|governing|intended|normative|required|"
-            r"invariant|oracle)\b|"
-            r"\b(?:must|should)\b.{0,40}\b(?:follow|match|preserve|reproduce|"
-            r"retain)\b|"
-            r"\b(?:not merely|not only|no longer|rather than)\b|"
-            r"\b(?:but|however|instead|now)\b.{0,40}"
-            r"\b(?:authoritative|behavior|canonical|invariant|normative|preserve)\b",
-            re.IGNORECASE,
-        )
-        for block in parse_commonmark(body).visible_blocks:
-            offsets = [
-                offset
-                for token in protected_tokens
-                if (offset := block.find(token)) >= 0
-            ]
-            if not offsets:
-                continue
-            first_offset = min(offsets)
-            clause_start = max(
-                block.rfind(delimiter, 0, first_offset)
-                for delimiter in (".", ";", "\n")
-            )
-            clause_ends = [
-                offset
-                for delimiter in (".", "\n")
-                if (offset := block.find(delimiter, first_offset)) >= 0
-            ]
-            clause_end = min(clause_ends, default=len(block))
-            relevant_block = block[clause_start + 1 : clause_end]
-            explicitly_non_normative = safe_context.search(relevant_block) is not None
-            promotion_text = re.sub(
-                r"\b(?:is|are|was|were)\s+not\s+(?:an?\s+)?"
-                r"(?:normative|canonical|intended|required|invariant)\b",
-                "",
-                re.sub(
-                    r"\bnon-normative\b",
-                    "",
-                    relevant_block,
-                    flags=re.IGNORECASE,
-                ),
-                flags=re.IGNORECASE,
-            )
-            promoted = promotion_context.search(promotion_text) is not None
-            if promoted or not explicitly_non_normative:
-                self._add(
-                    "REPO-BASELINE-NONNORMATIVE-PROMOTED",
-                    path,
-                    "baseline defect/legacy classification is used without "
-                    "an explicit non-normative characterization",
-                )
 
     def _tracked_paths(self) -> set[str]:
         process = subprocess.run(
@@ -1221,11 +1429,6 @@ class _RepositoryValidator:
         supported_versions = set(version_values)
         seen_ids: set[str] = set()
         seen_paths: set[str] = set()
-        declared_order: list[str] = [
-            entry["id"]
-            for entry in documents
-            if isinstance(entry, dict) and isinstance(entry.get("id"), str)
-        ]
         indices = list(range(len(documents)))
         if self.reverse:
             indices.reverse()
@@ -1314,11 +1517,20 @@ class _RepositoryValidator:
                     )
             actual_id = metadata.get("id")
             if actual_id != declared_id:
-                self._add(
-                    "REPO-FRONTMATTER-ID-MISMATCH",
-                    path,
-                    f"expected {declared_id!r}, found {actual_id!r}",
-                )
+                if (
+                    isinstance(actual_id, str)
+                    and self._historical_role_is_authorized(
+                        "canonical-template",
+                        declared_id,
+                    )
+                ):
+                    self._normative_role_aliases[(declared_id, path)] = actual_id
+                else:
+                    self._add(
+                        "REPO-FRONTMATTER-ID-MISMATCH",
+                        path,
+                        f"expected {declared_id!r}, found {actual_id!r}",
+                    )
             status = metadata.get("status")
             if not isinstance(status, str) or status not in supported_statuses:
                 self._add(
@@ -1380,8 +1592,19 @@ class _RepositoryValidator:
             if isinstance(actual_id, str):
                 self._record_global_id(actual_id, path)
             self._normative_documents.append((declared_id, path, metadata, body))
-            self._check_normative_baseline_claims(path, body)
+            if (declared_id, path) in self._normative_role_aliases:
+                self._normative_documents[-1] = (
+                    self._normative_role_aliases[(declared_id, path)],
+                    path,
+                    metadata,
+                    body,
+                )
             self._check_markdown_links(path, text)
+        declared_order = [
+            self._effective_normative_policy_id(entry)
+            for entry in documents
+            if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+        ]
         if declared_order != sorted(declared_order):
             self._add(
                 "REPO-NORMATIVE-ORDER",
@@ -1398,11 +1621,16 @@ class _RepositoryValidator:
         anchors: set[str] = set()
         counts: dict[str, int] = {}
         for heading in parse_commonmark(text).headings:
-            normalized = re.sub(r"[^\w\s-]", "", heading.text.casefold())
+            normalized = re.sub(
+                r"[^\w\s-]",
+                "",
+                _compatible_text(heading.text).casefold(),
+            )
             base = re.sub(r"[\s-]+", "-", normalized).strip("-")
             count = counts.get(base, 0)
             counts[base] = count + 1
             anchors.add(base if count == 0 else f"{base}-{count}")
+            anchors.update(heading.aliases)
         return anchors
 
     def _repo_path_has_exact_case(self, relative_path: str) -> bool:
@@ -1657,7 +1885,21 @@ class _RepositoryValidator:
                 )
                 continue
             order.append(record_id)
-            if re.fullmatch(r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+", record_id) is None:
+            active_role = ID_KIND_ACTIVE_ROLES.get(kind)
+            if (
+                re.fullmatch(
+                    r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+",
+                    record_id,
+                )
+                is None
+                and (
+                    active_role is None
+                    or not self._historical_role_is_authorized(
+                        active_role,
+                        record_id,
+                    )
+                )
+            ):
                 self._add(
                     "REPO-ID-FORMAT",
                     location,
@@ -1670,18 +1912,6 @@ class _RepositoryValidator:
                     f"ID {record_id!r} appears more than once",
                 )
             seen.add(record_id)
-            if (
-                record_id in self._non_normative_baseline_ids
-                or any(
-                    classification in statement
-                    for classification in self._non_normative_classifications
-                )
-            ):
-                self._add(
-                    "REPO-BASELINE-NONNORMATIVE-ID",
-                    location,
-                    "baseline defect/legacy records cannot become stable invariants",
-                )
             if kind not in kinds:
                 self._add(
                     "REPO-ID-KIND-UNKNOWN",
@@ -1752,16 +1982,73 @@ class _RepositoryValidator:
             )
         annotations = annotation_policy.get("annotations")
         banned_content = annotation_policy.get("banned_content")
+        grammar = (
+            banned_content.get("identity_attribution_grammar")
+            if isinstance(banned_content, dict)
+            else None
+        )
+        containers = (
+            banned_content.get("supported_containers")
+            if isinstance(banned_content, dict)
+            else None
+        )
+        identity_slot = (
+            grammar.get("identity_slot") if isinstance(grammar, dict) else None
+        )
+        container_ids = [
+            entry.get("id")
+            for entry in containers
+            if isinstance(entry, dict)
+        ] if isinstance(containers, list) else []
         if (
             not isinstance(annotations, list)
             or not isinstance(banned_content, dict)
             or set(banned_content) != _BANNED_CONTENT_FIELDS
+            or not isinstance(grammar, dict)
+            or set(grammar)
+            != {
+                "identity_slot",
+                "known_identity_examples",
+                "private_reasoning_concepts",
+                "visible_label_forms",
+            }
+            or not isinstance(identity_slot, dict)
+            or identity_slot
+            != {
+                "kind": "open-token-sequence",
+                "maximum_tokens": 6,
+                "minimum_tokens": 1,
+            }
             or any(
-                not isinstance(values, list)
-                or not all(isinstance(value, str) and value.strip() for value in values)
-                or values != sorted(set(values))
-                for values in banned_content.values()
+                not isinstance(grammar.get(field), list)
+                or not all(
+                    isinstance(value, str) and value.strip()
+                    for value in grammar[field]
+                )
+                or grammar[field] != sorted(set(grammar[field]))
+                for field in (
+                    "known_identity_examples",
+                    "private_reasoning_concepts",
+                    "visible_label_forms",
+                )
             )
+            or any(
+                not isinstance(banned_content.get(field), list)
+                or not all(
+                    isinstance(value, str) and value.strip()
+                    for value in banned_content[field]
+                )
+                or banned_content[field] != sorted(set(banned_content[field]))
+                for field in ("normalization", "out_of_scope_containers")
+            )
+            or container_ids
+            != [
+                "html-attribute-value",
+                "html-private-concept-tag",
+                "html-visible-label",
+                "markdown-attribute-value",
+                "markdown-visible-label",
+            ]
         ):
             self._add(
                 "REPO-ANNOTATION-POLICY-SHAPE",
@@ -1769,11 +2056,7 @@ class _RepositoryValidator:
                 "annotations and normalized banned-content categories are invalid",
             )
             return
-        typed_banned_content = {
-            field: values
-            for field, values in banned_content.items()
-            if isinstance(field, str) and isinstance(values, list)
-        }
+        typed_banned_content: dict[str, Any] = banned_content
         expected_references = {
             "COMPAT": "id-registry.json#kind=compatibility",
             "INVARIANT": "id-registry.json#kind=invariant",
@@ -1899,15 +2182,6 @@ class _RepositoryValidator:
                 continue
             for raw in comments:
                 comment = raw.removeprefix("#").strip()
-                for category in _banned_content_categories(
-                    comment,
-                    typed_banned_content,
-                ):
-                    self._add(
-                        "REPO-ANNOTATION-BANNED-MARKER",
-                        relative,
-                        f"comment contains banned {category} content",
-                    )
                 structured = structured_re.match(comment)
                 if structured and structured.group(1) not in approved:
                     self._add(
@@ -1966,7 +2240,7 @@ class _RepositoryValidator:
             text = self._read_text(normative_path)
             if text is None:
                 continue
-            for category in _banned_content_categories(
+            for category in _identity_private_marker_categories(
                 text,
                 typed_banned_content,
             ):
@@ -2104,13 +2378,13 @@ class _RepositoryValidator:
                             f"{field} edge {edge!r} is missing or not regular",
                         )
             for invariant in string_lists["invariants"]:
-                if invariant in self._non_normative_baseline_ids:
-                    self._add(
-                        "REPO-COMPONENT-NONNORMATIVE-INVARIANT",
-                        location,
-                        f"baseline record {invariant!r} is non-normative",
+                if (
+                    invariant not in registered_ids
+                    and not self._historical_role_is_authorized(
+                        "component-invariant",
+                        invariant,
                     )
-                if invariant not in registered_ids:
+                ):
                     self._add(
                         "REPO-COMPONENT-INVARIANT-UNKNOWN",
                         location,
@@ -2130,16 +2404,263 @@ class _RepositoryValidator:
                 "components must be sorted by ID",
             )
 
+    def _check_historical_active_roles(self) -> None:
+        catalog = self._load_json(HISTORICAL_POLICY_PATH)
+        manifest_text = self._read_text(f"{BASELINE_PATH}/manifest.yaml")
+        if not isinstance(catalog, dict) or manifest_text is None:
+            return
+        if set(catalog) != {
+            "active_roles",
+            "authorizations",
+            "authorization_contract",
+            "historical_classifications",
+            "historical_records",
+            "schema_version",
+            "source_manifest",
+        } or catalog.get("schema_version") != 1:
+            self._add(
+                "REPO-HISTORICAL-CATALOG-SHAPE",
+                HISTORICAL_POLICY_PATH,
+                "catalog must match the version-1 historical-record contract",
+            )
+            return
+        if catalog.get("source_manifest") != f"{BASELINE_PATH}/manifest.yaml":
+            self._add(
+                "REPO-HISTORICAL-CATALOG-SOURCE",
+                HISTORICAL_POLICY_PATH,
+                "source_manifest must name the candidate baseline manifest",
+            )
+        try:
+            manifest = yaml.safe_load(manifest_text)
+        except yaml.YAMLError as error:
+            self._add(
+                "REPO-HISTORICAL-MANIFEST-INVALID",
+                f"{BASELINE_PATH}/manifest.yaml",
+                str(error),
+            )
+            return
+        fixtures = manifest.get("fixtures") if isinstance(manifest, dict) else None
+        if not isinstance(fixtures, list):
+            return
+        expected_records = sorted(
+            (
+                {
+                    "classification": fixture["classification"],
+                    "id": fixture["fixture_id"],
+                }
+                for fixture in fixtures
+                if isinstance(fixture, dict)
+                and isinstance(fixture.get("fixture_id"), str)
+                and fixture.get("classification") in {"known_defect", "observed_legacy"}
+            ),
+            key=lambda item: item["id"],
+        )
+        expected_classifications = sorted(
+            {item["classification"] for item in expected_records}
+        )
+        if (
+            catalog.get("historical_records") != expected_records
+            or catalog.get("historical_classifications") != expected_classifications
+        ):
+            self._add(
+                "REPO-HISTORICAL-CATALOG-DRIFT",
+                HISTORICAL_POLICY_PATH,
+                "historical IDs/classifications must exactly match the candidate manifest",
+            )
+
+        active_roles = catalog.get("active_roles")
+        authorizations = catalog.get("authorizations")
+        authorization_contract = catalog.get("authorization_contract")
+        if (
+            not isinstance(active_roles, list)
+            or not isinstance(authorizations, list)
+            or not isinstance(authorization_contract, dict)
+        ):
+            self._add(
+                "REPO-HISTORICAL-CATALOG-SHAPE",
+                HISTORICAL_POLICY_PATH,
+                "active roles and authorizations must be finite lists",
+            )
+            return
+        if active_roles != list(HISTORICAL_ACTIVE_ROLE_LOCATORS):
+            self._add(
+                "REPO-HISTORICAL-ACTIVE-ROLE-INVALID",
+                HISTORICAL_POLICY_PATH,
+                "active role locators must exactly match the version-1 contract",
+            )
+
+        forbidden = {
+            *expected_classifications,
+            *(item["id"] for item in expected_records),
+        }
+        id_registry = self._load_json(ID_REGISTRY_PATH)
+        current_contract_ids = {
+            entry["id"]
+            for entry in id_registry.get("ids", [])
+            if isinstance(id_registry, dict)
+            and isinstance(entry, dict)
+            and isinstance(entry.get("id"), str)
+            and entry["id"] not in forbidden
+        } if isinstance(id_registry, dict) else set()
+        allowed_links = self._historical_authorized_links()
+        authorization_order: list[tuple[str, str, str]] = []
+        if authorization_contract != HISTORICAL_AUTHORIZATION_CONTRACT:
+            self._add(
+                "REPO-HISTORICAL-AUTHORIZATION-INVALID",
+                f"{HISTORICAL_POLICY_PATH}#authorization_contract",
+                "authorization contract fields must match the version-1 contract",
+            )
+        for index, authorization in enumerate(authorizations):
+            location = f"{HISTORICAL_POLICY_PATH}#authorizations[{index}]"
+            if not isinstance(authorization, dict) or set(authorization) != {
+                "active_role",
+                "current_contract_id",
+                "historical_reference",
+            }:
+                self._add(
+                    "REPO-HISTORICAL-AUTHORIZATION-INVALID",
+                    location,
+                    "authorization fields must match the catalog contract",
+                )
+                continue
+            active_role = authorization.get("active_role")
+            current_contract = authorization.get("current_contract_id")
+            historical_reference = authorization.get("historical_reference")
+            if (
+                active_role not in HISTORICAL_ACTIVE_ROLE_IDS
+                or current_contract not in current_contract_ids
+                or historical_reference not in forbidden
+            ):
+                self._add(
+                    "REPO-HISTORICAL-AUTHORIZATION-INVALID",
+                    location,
+                    "authorization must bind one historical reference and separate current contract",
+                )
+                continue
+            authorization_order.append(
+                (str(active_role), str(historical_reference), str(current_contract))
+            )
+        if authorization_order != sorted(set(authorization_order)):
+            self._add(
+                "REPO-HISTORICAL-AUTHORIZATION-ORDER",
+                HISTORICAL_POLICY_PATH,
+                "authorizations must be sorted and unique",
+            )
+
+        for role in HISTORICAL_ACTIVE_ROLE_LOCATORS:
+            role_id = role.get("id")
+            registry_path = role.get("registry_path")
+            collection_field = role.get("collection_field")
+            if not all(
+                isinstance(value, str)
+                for value in (role_id, registry_path, collection_field)
+            ):
+                self._add(
+                    "REPO-HISTORICAL-ACTIVE-ROLE-INVALID",
+                    HISTORICAL_POLICY_PATH,
+                    "active role locator is incomplete",
+                )
+                continue
+            assert isinstance(role_id, str)
+            assert isinstance(registry_path, str)
+            assert isinstance(collection_field, str)
+            registry = self._load_json(registry_path)
+            records = (
+                registry.get(collection_field) if isinstance(registry, dict) else None
+            )
+            if not isinstance(records, list):
+                self._add(
+                    "REPO-HISTORICAL-ACTIVE-ROLE-INVALID",
+                    HISTORICAL_POLICY_PATH,
+                    f"{role_id} registry collection does not resolve",
+                )
+                continue
+            record_filter = role.get("record_filter")
+            for index, record in enumerate(records):
+                if not isinstance(record, dict):
+                    continue
+                if isinstance(record_filter, dict):
+                    field = record_filter.get("field")
+                    if "equals" in record_filter and record.get(field) != record_filter["equals"]:
+                        continue
+                    if "prefix" in record_filter and (
+                        not isinstance(record.get(field), str)
+                        or not record[field].startswith(record_filter["prefix"])
+                    ):
+                        continue
+                values: list[tuple[str, str]] = []
+                value_field = role.get("value_field")
+                value_list_field = role.get("value_list_field")
+                if isinstance(value_field, str) and isinstance(record.get(value_field), str):
+                    values.append((value_field, record[value_field]))
+                if isinstance(value_list_field, str) and isinstance(
+                    record.get(value_list_field), list
+                ):
+                    values.extend(
+                        (f"{value_list_field}[{value_index}]", value)
+                        for value_index, value in enumerate(record[value_list_field])
+                        if isinstance(value, str)
+                    )
+                for field_location, value in values:
+                    if (
+                        value in forbidden
+                        and (role_id, value) not in allowed_links
+                    ):
+                        self._add(
+                            "REPO-BASELINE-NONNORMATIVE-PROMOTED",
+                            f"{registry_path}#{collection_field}[{index}].{field_location}",
+                            f"historical reference {value!r} occupies active role {role_id!r}",
+                        )
+
     def _check_templates(self) -> None:
         policy = self._load_json(NORMATIVE_POLICY_PATH)
-        if not isinstance(policy, dict) or not isinstance(policy.get("documents"), list):
+        heading_policy = self._load_json(TEMPLATE_HEADING_POLICY_PATH)
+        if (
+            not isinstance(policy, dict)
+            or not isinstance(policy.get("documents"), list)
+            or not isinstance(heading_policy, dict)
+        ):
             return
+        if set(heading_policy) != {
+            "canonical_templates",
+            "excluded_identity_sources",
+            "non_operative_containers",
+            "normalization",
+            "operative_syntaxes",
+            "schema_version",
+        } or heading_policy.get("schema_version") != 1:
+            self._add(
+                "REPO-TEMPLATE-HEADING-CATALOG-SHAPE",
+                TEMPLATE_HEADING_POLICY_PATH,
+                "catalog must match the version-1 template-heading contract",
+            )
+            return
+        template_records = heading_policy.get("canonical_templates")
+        if not isinstance(template_records, list):
+            return
+        template_by_id = {
+            record["document_id"]: record
+            for record in template_records
+            if isinstance(record, dict)
+            and isinstance(record.get("document_id"), str)
+        }
+        if list(template_by_id) != sorted(template_by_id) or set(template_by_id) != {
+            "TPL-ADR-001",
+            "TPL-PLAN-001",
+            "TPL-TASK-001",
+        }:
+            self._add(
+                "REPO-TEMPLATE-HEADING-CATALOG-SHAPE",
+                TEMPLATE_HEADING_POLICY_PATH,
+                "canonical template heading records are incomplete or unordered",
+            )
         entries = policy["documents"]
-        for template_id in TEMPLATE_IDS:
+        for template_id in sorted((*template_by_id, *TEMPLATE_YAML_FIELDS)):
             matching = [
                 entry
                 for entry in entries
-                if isinstance(entry, dict) and entry.get("id") == template_id
+                if isinstance(entry, dict)
+                and self._effective_normative_policy_id(entry) == template_id
             ]
             if len(matching) != 1:
                 self._add(
@@ -2151,6 +2672,16 @@ class _RepositoryValidator:
             path = matching[0].get("path")
             if not isinstance(path, str):
                 continue
+            heading_record = template_by_id.get(template_id)
+            if (
+                heading_record is not None
+                and heading_record.get("path") != path
+            ):
+                self._add(
+                    "REPO-TEMPLATE-HEADING-CATALOG-DRIFT",
+                    TEMPLATE_HEADING_POLICY_PATH,
+                    f"{template_id} path does not match normative-documents.json",
+                )
             document = next(
                 (
                     item
@@ -2162,17 +2693,38 @@ class _RepositoryValidator:
             if document is None:
                 continue
             body = document[3]
-            if template_id in TEMPLATE_HEADINGS:
+            if heading_record is not None:
+                required_headings = heading_record.get("required_headings")
+                if not isinstance(required_headings, list):
+                    continue
                 heading_counts = Counter(_markdown_headings(body))
                 missing_fields = [
-                    field
-                    for field in TEMPLATE_HEADINGS[template_id]
-                    if heading_counts[field] == 0
+                    f"{'#' * field['level']} {field['visible_label']}"
+                    for field in required_headings
+                    if isinstance(field, dict)
+                    and isinstance(field.get("level"), int)
+                    and isinstance(field.get("visible_label"), str)
+                    and heading_counts[
+                        _required_heading_key(
+                            field["level"],
+                            field["visible_label"],
+                        )
+                    ]
+                    == 0
                 ]
                 duplicate_fields = [
-                    field
-                    for field in TEMPLATE_HEADINGS[template_id]
-                    if heading_counts[field] > 1
+                    f"{'#' * field['level']} {field['visible_label']}"
+                    for field in required_headings
+                    if isinstance(field, dict)
+                    and isinstance(field.get("level"), int)
+                    and isinstance(field.get("visible_label"), str)
+                    and heading_counts[
+                        _required_heading_key(
+                            field["level"],
+                            field["visible_label"],
+                        )
+                    ]
+                    > 1
                 ]
                 duplicate_keys: tuple[str, ...] = ()
             else:
@@ -2182,6 +2734,7 @@ class _RepositoryValidator:
                         _mapping_has_path(mapping, field_path)
                         for mapping in mappings
                     )
+
                     for display, field_path in TEMPLATE_YAML_FIELDS[template_id]
                 }
                 missing_fields = [
@@ -2229,6 +2782,236 @@ class _RepositoryValidator:
                         diagnostic.message,
                     )
 
+    def _check_capability_security(self) -> None:
+        bundled = self.root / "src/unrest_harness/bundled"
+        loaded_assets: dict[
+            str,
+            CapabilityPolicy | CapabilitySecurityModel | CapabilitySinkCatalog,
+        ] = {}
+        asset_specs = (
+            (
+                CAPABILITY_ROLE_POLICY_PATH,
+                CAPABILITY_ROLE_POLICY_SCHEMA_PATH,
+                load_capability_policy,
+            ),
+            (
+                CAPABILITY_MODEL_PATH,
+                CAPABILITY_MODEL_SCHEMA_PATH,
+                load_capability_security_model,
+            ),
+            (
+                CAPABILITY_SINKS_PATH,
+                CAPABILITY_SINKS_SCHEMA_PATH,
+                load_capability_sink_catalog,
+            ),
+        )
+        for document_path, _, loader in asset_specs:
+            try:
+                loaded_assets[document_path] = loader(bundled)
+            except CapabilityPolicyError:
+                self._add(
+                    "REPO-CAPABILITY-ASSET-INVALID",
+                    document_path,
+                    "version-1 capability asset is missing or invalid",
+                )
+        for document_path, schema_path, _ in asset_specs:
+            document = self._load_json(document_path)
+            schema = self._load_json(schema_path)
+            if not isinstance(document, dict) or not isinstance(schema, dict):
+                continue
+            errors = sorted(
+                Draft202012Validator(schema).iter_errors(document),
+                key=lambda error: tuple(str(item) for item in error.absolute_path),
+            )
+            for error in errors:
+                location = "/".join(str(item) for item in error.absolute_path)
+                self._add(
+                    "REPO-CAPABILITY-ASSET-SCHEMA",
+                    f"{document_path}#{location}" if location else document_path,
+                    "version-1 capability asset does not match its strict schema",
+                )
+        model = loaded_assets.get(CAPABILITY_MODEL_PATH)
+        catalog = loaded_assets.get(CAPABILITY_SINKS_PATH)
+        if not isinstance(model, CapabilitySecurityModel) or not isinstance(
+            catalog,
+            CapabilitySinkCatalog,
+        ):
+            return
+        if model.sink_catalog != Path(CAPABILITY_SINKS_PATH).name:
+            self._add(
+                "REPO-CAPABILITY-SINK-CATALOG",
+                CAPABILITY_MODEL_PATH,
+                "security model does not bind the canonical sink catalog",
+            )
+        for error in validate_capability_model_anchors(self.root, model):
+            field_name, _, reason = error.partition(": ")
+            self._add(
+                "REPO-CAPABILITY-MODEL-ANCHOR",
+                f"{CAPABILITY_MODEL_PATH}#{field_name}",
+                reason or "model implementation binding is invalid",
+            )
+        for error in validate_capability_sink_anchors(self.root, catalog):
+            sink_id, _, reason = error.partition(": ")
+            self._add(
+                "REPO-CAPABILITY-SINK-CATALOG",
+                f"{CAPABILITY_SINKS_PATH}#{sink_id}",
+                reason or "sink implementation binding is invalid",
+            )
+
+    def _check_evidence_policy(self) -> None:
+        policy = self._load_json(EVIDENCE_POLICY_PATH)
+        normative = self._load_json(NORMATIVE_POLICY_PATH)
+        if not isinstance(policy, dict) or not isinstance(normative, dict):
+            return
+        if set(policy) != {
+            "canonical_template_fields",
+            "commit_trailers",
+            "non_passing_record",
+            "positive_record",
+            "schema_evolution_records",
+            "schema_version",
+        } or policy.get("schema_version") != 1:
+            self._add(
+                "REPO-EVIDENCE-CATALOG-SHAPE",
+                EVIDENCE_POLICY_PATH,
+                "catalog must match the version-1 protected-evidence contract",
+            )
+            return
+        trailers = policy.get("commit_trailers")
+        schema_records = policy.get("schema_evolution_records")
+        positive = policy.get("positive_record")
+        non_passing = policy.get("non_passing_record")
+        fields = policy.get("canonical_template_fields")
+        if (
+            not isinstance(trailers, list)
+            or [item.get("name") for item in trailers if isinstance(item, dict)]
+            != ["Evaluation-Evidence", "Rollback-Plan", "Schema-Change"]
+            or not isinstance(schema_records, list)
+            or [item.get("id") for item in schema_records if isinstance(item, dict)]
+            != ["compatibility", "migration", "recovery", "rollback"]
+            or not isinstance(positive, dict)
+            or set(positive.get("required_fields", []))
+            != {
+                "artifact_path",
+                "artifact_sha256",
+                "exact_check",
+                "exit_code",
+                "mode",
+                "observed_result",
+                "record_type",
+                "schema_version",
+                "status",
+            }
+            or not isinstance(non_passing, dict)
+            or set(non_passing.get("allowed_record_types", []))
+            != {"history", "limitation"}
+            or not isinstance(fields, list)
+        ):
+            self._add(
+                "REPO-EVIDENCE-CATALOG-SHAPE",
+                EVIDENCE_POLICY_PATH,
+                "protected locations or positive tuple are incomplete",
+            )
+            return
+        declared_documents = {
+            self._effective_normative_policy_id(entry): entry["path"]
+            for entry in normative.get("documents", [])
+            if isinstance(entry, dict)
+            and isinstance(entry.get("id"), str)
+            and isinstance(entry.get("path"), str)
+        }
+        for field in fields:
+            if not isinstance(field, dict):
+                continue
+            document_id = field.get("document_id")
+            path = field.get("path")
+            if (
+                not isinstance(document_id, str)
+                or not isinstance(path, str)
+                or declared_documents.get(document_id) != path
+            ):
+                self._add(
+                    "REPO-EVIDENCE-CATALOG-LOCATION",
+                    EVIDENCE_POLICY_PATH,
+                    "canonical evidence field does not resolve through normative-documents.json",
+                )
+                continue
+            document = next(
+                (
+                    item
+                    for item in self._normative_documents
+                    if item[0] == document_id and item[1] == path
+                ),
+                None,
+            )
+            if document is None:
+                continue
+            values: tuple[Any, ...] = ()
+            if isinstance(field.get("field"), str) and isinstance(
+                field.get("heading"), str
+            ):
+                expected_field = _logical_heading_text(field["field"])
+                expected_heading = _logical_heading_text(field["heading"])
+                values = tuple(
+                    block.field_value
+                    for block in parse_commonmark(document[3]).blocks
+                    if block.field_name is not None
+                    and block.field_value is not None
+                    and _logical_heading_text(block.field_name) == expected_field
+                    and block.heading_path
+                    and _logical_heading_text(block.heading_path[-1].text)
+                    == expected_heading
+                )
+            elif isinstance(field.get("yaml_path"), str):
+                mappings, _duplicates = _markdown_yaml_mappings(document[3])
+                path_parts = tuple(field["yaml_path"].split("."))
+                values = tuple(
+                    value
+                    for mapping in mappings
+                    for value in _mapping_values_at_path(mapping, path_parts)
+                )
+            if not values:
+                self._add(
+                    "REPO-EVIDENCE-FIELD-MISSING",
+                    path,
+                    f"cataloged evidence field {field.get('id')!r} is absent",
+                )
+                continue
+            for value in values:
+                if isinstance(value, str) and re.fullmatch(r"<[^<>]+>", value):
+                    continue
+                if not isinstance(value, str):
+                    self._add(
+                        "REPO-EVIDENCE-RECORD-INVALID",
+                        path,
+                        f"cataloged evidence field {field.get('id')!r} is not a record reference",
+                    )
+                    continue
+                try:
+                    validation = validate_evidence_record_reference(
+                        value,
+                        repository_root=self.root,
+                        expected_mode=(
+                            "rollback"
+                            if field.get("id") == "closeout-rollback-verification"
+                            else "evaluation"
+                        ),
+                    )
+                except GovernanceValidationError as error:
+                    for diagnostic in error.diagnostics:
+                        self._add(
+                            "REPO-EVIDENCE-RECORD-INVALID",
+                            path,
+                            f"{field.get('id')}: {diagnostic.code}",
+                        )
+                    continue
+                if not validation.passing:
+                    self._add(
+                        "REPO-EVIDENCE-NONPASSING",
+                        path,
+                        f"cataloged evidence field {field.get('id')!r} is explicitly non-passing",
+                    )
+
     def _check_protected_policy(self) -> None:
         if not (self.root / POLICY_PATH).is_file():
             self._add(
@@ -2241,9 +3024,17 @@ class _RepositoryValidator:
             policy = load_protected_surface_policy(self.root / POLICY_PATH)
         except GovernanceValidationError as error:
             for diagnostic in error.diagnostics:
+                diagnostic_base = (
+                    COMPONENT_MAP_PATH
+                    if diagnostic.code.startswith("GOV-COMPONENT-")
+                    else POLICY_PATH
+                )
                 self._add(
                     diagnostic.code,
-                    self._governance_location(POLICY_PATH, diagnostic.location),
+                    self._governance_location(
+                        diagnostic_base,
+                        diagnostic.location,
+                    ),
                     diagnostic.message,
                 )
             return
@@ -2252,9 +3043,17 @@ class _RepositoryValidator:
             validate_policy_components(policy, components)
         except GovernanceValidationError as error:
             for diagnostic in error.diagnostics:
+                diagnostic_base = (
+                    COMPONENT_MAP_PATH
+                    if diagnostic.code.startswith("GOV-COMPONENT-")
+                    else POLICY_PATH
+                )
                 self._add(
                     diagnostic.code,
-                    self._governance_location(POLICY_PATH, diagnostic.location),
+                    self._governance_location(
+                        diagnostic_base,
+                        diagnostic.location,
+                    ),
                     diagnostic.message,
                 )
         else:
@@ -2368,7 +3167,28 @@ class _RepositoryValidator:
             text = self._read_text(relative)
             if value is None or text is None:
                 continue
-            if text != self._canonical_json(value):
+            expected = self._canonical_json(value)
+            if (
+                relative == NORMATIVE_POLICY_PATH
+                and isinstance(value, dict)
+                and isinstance(value.get("documents"), list)
+                and self._normative_role_aliases
+            ):
+                normalized = self._canonicalize(value)
+                assert isinstance(normalized, dict)
+                normalized["documents"] = sorted(
+                    (
+                        self._canonicalize(entry)
+                        for entry in value["documents"]
+                    ),
+                    key=lambda entry: str(
+                        self._effective_normative_policy_id(entry)
+                        if isinstance(entry, dict)
+                        else entry
+                    ),
+                )
+                expected = json.dumps(normalized, indent=2, sort_keys=True) + "\n"
+            if text != expected:
                 self._add(
                     "REPO-CANONICAL-JSON-DRIFT",
                     relative,

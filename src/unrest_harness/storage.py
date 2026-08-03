@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .capability_policy import redact_sensitive_value
 from .config import HarnessConfig
 from .models import (
     AttentionFile,
@@ -62,17 +63,28 @@ def slugify(value: str, fallback: str = "item") -> str:
     return slug[:64] or fallback
 
 
-def atomic_write_text(path: str | Path, content: str) -> None:
+def atomic_write_text(
+    path: str | Path,
+    content: str,
+    *,
+    _redact: bool = True,
+) -> None:
+    redacted = redact_sensitive_value(content) if _redact else content
+    if not isinstance(redacted, str):
+        raise TypeError("canonical text redaction returned a non-text value")
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = target.with_suffix(target.suffix + ".tmp")
-    tmp_path.write_text(content, encoding="utf-8")
+    tmp_path.write_text(redacted, encoding="utf-8")
     os.replace(tmp_path, target)
 
 
 def atomic_write_json(path: str | Path, payload: object) -> None:
+    redacted = redact_sensitive_value(payload)
     atomic_write_text(
-        path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+        path,
+        json.dumps(redacted, indent=2, ensure_ascii=False) + "\n",
+        _redact=False,
     )
 
 

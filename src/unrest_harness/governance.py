@@ -7,12 +7,15 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import html
 import json
 import os
 import re
 import shlex
 import subprocess
+import unicodedata
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Self
 
@@ -55,16 +58,66 @@ REQUIRED_EVALUATION_TIERS: dict[str, frozenset[str]] = {
         {"full-repository", "installed-wheel", "real-cli-mcp-acp"}
     ),
 }
+REQUIRED_PROTECTED_COMPONENT_PATHS: dict[str, tuple[str, ...]] = {
+    "COMP-GOVERNANCE": (
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        "docs/architecture/change-governance.md",
+        "docs/templates/adr.md",
+        "policy/protected-surfaces.yaml",
+        "schemas/protected-surfaces.schema.json",
+        "src/unrest_harness/governance.py",
+    ),
+    "COMP-REPOSITORY-CONTRACT": (
+        ".github/workflows/ci.yml",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "README.md",
+        "docs/architecture/annotation-policy.json",
+        "docs/architecture/component-map.json",
+        "docs/architecture/evidence-policy.json",
+        "docs/architecture/historical-record-policy.json",
+        "docs/architecture/repository-contract.md",
+        "docs/architecture/template-heading-policy.json",
+        "pyproject.toml",
+        "src/unrest_harness/repository_contract.py",
+        "uv.lock",
+    ),
+}
 REQUIRED_SELF_PROTECTION: dict[str, tuple[str, str, str]] = {
+    "annotation-policy": (
+        "governance-self-protection",
+        "path",
+        "docs/architecture/annotation-policy.json",
+    ),
+    "architecture-component-map": (
+        "governance-self-protection",
+        "path",
+        "docs/architecture/component-map.json",
+    ),
+    "change-governance-document": (
+        "governance-self-protection",
+        "path",
+        "docs/architecture/change-governance.md",
+    ),
     "continuous-integration": (
         "governance-self-protection",
         "path",
         ".github/workflows/ci.yml",
     ),
+    "contribution-guidance": (
+        "governance-self-protection",
+        "path",
+        "CONTRIBUTING.md",
+    ),
     "contract-validator": (
         "governance-self-protection",
         "path",
         "src/unrest_harness/governance.py",
+    ),
+    "dependency-lock": (
+        "governance-self-protection",
+        "path",
+        "uv.lock",
     ),
     "evaluation-holdouts": (
         "evaluation-holdouts",
@@ -76,10 +129,30 @@ REQUIRED_SELF_PROTECTION: dict[str, tuple[str, str, str]] = {
         "path-prefix",
         "evals/baseline/",
     ),
+    "evidence-policy": (
+        "governance-self-protection",
+        "path",
+        "docs/architecture/evidence-policy.json",
+    ),
+    "governance-adr-template": (
+        "governance-self-protection",
+        "path",
+        "docs/templates/adr.md",
+    ),
+    "governance-component-catalog": (
+        "governance-self-protection",
+        "component",
+        "COMP-GOVERNANCE",
+    ),
+    "historical-record-policy": (
+        "governance-self-protection",
+        "path",
+        "docs/architecture/historical-record-policy.json",
+    ),
     "policy-schema": (
         "governance-self-protection",
-        "path-prefix",
-        "schemas/",
+        "path",
+        "schemas/protected-surfaces.schema.json",
     ),
     "promotion-controls": (
         "governance-self-protection",
@@ -91,6 +164,36 @@ REQUIRED_SELF_PROTECTION: dict[str, tuple[str, str, str]] = {
         "path",
         "policy/protected-surfaces.yaml",
     ),
+    "project-guidance": (
+        "governance-self-protection",
+        "path",
+        "AGENTS.md",
+    ),
+    "project-metadata": (
+        "governance-self-protection",
+        "path",
+        "pyproject.toml",
+    ),
+    "project-readme": (
+        "governance-self-protection",
+        "path",
+        "README.md",
+    ),
+    "pull-request-template": (
+        "governance-self-protection",
+        "path",
+        ".github/PULL_REQUEST_TEMPLATE.md",
+    ),
+    "repository-contract-component-catalog": (
+        "governance-self-protection",
+        "component",
+        "COMP-REPOSITORY-CONTRACT",
+    ),
+    "repository-contract-document": (
+        "governance-self-protection",
+        "path",
+        "docs/architecture/repository-contract.md",
+    ),
     "repository-contract-validator": (
         "governance-self-protection",
         "path",
@@ -100,6 +203,11 @@ REQUIRED_SELF_PROTECTION: dict[str, tuple[str, str, str]] = {
         "governance-self-protection",
         "path",
         "policy/protected-surfaces.yaml",
+    ),
+    "template-heading-policy": (
+        "governance-self-protection",
+        "path",
+        "docs/architecture/template-heading-policy.json",
     ),
 }
 
@@ -141,6 +249,35 @@ class CommonMarkHeading:
 
     level: int
     text: str
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class DocumentAttribute:
+    """One decoded HTML or Markdown attribute."""
+
+    name: str
+    value: str
+    source: Literal["html", "markdown"]
+
+
+@dataclass(frozen=True)
+class DocumentElement:
+    """One parsed HTML element, including closing-only structural markers."""
+
+    tag: str
+    attributes: tuple[DocumentAttribute, ...]
+    closing: bool = False
+
+
+@dataclass(frozen=True)
+class CommonMarkBlock:
+    """Visible Markdown block with its logical section and field context."""
+
+    text: str
+    heading_path: tuple[CommonMarkHeading, ...]
+    field_name: str | None
+    field_value: str | None
 
 
 @dataclass(frozen=True)
@@ -149,6 +286,9 @@ class CommonMarkSurface:
 
     headings: tuple[CommonMarkHeading, ...]
     top_level_headings: tuple[CommonMarkHeading, ...]
+    blocks: tuple[CommonMarkBlock, ...]
+    attributes: tuple[DocumentAttribute, ...]
+    elements: tuple[DocumentElement, ...]
     visible_blocks: tuple[str, ...]
     visible_lines: tuple[str, ...]
     operative_lines: tuple[str, ...]
@@ -163,6 +303,164 @@ class CommonMarkSurface:
 
 
 _COMMONMARK = MarkdownIt("commonmark")
+
+
+def normalize_document_text(text: str) -> str:
+    """Apply the compatibility/security normalization used by document rules."""
+
+    compatible = unicodedata.normalize("NFKC", html.unescape(text))
+    return "".join(
+        character
+        for character in compatible
+        if unicodedata.category(character) != "Cf"
+    )
+
+
+def normalized_document_tokens(text: str) -> tuple[str, ...]:
+    """Return punctuation-independent normalized word tokens."""
+
+    return tuple(
+        re.findall(r"[a-z0-9]+", normalize_document_text(text).casefold())
+    )
+
+
+class _DocumentHTMLParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.elements: list[DocumentElement] = []
+
+    def _append(
+        self,
+        tag: str,
+        attributes: list[tuple[str, str | None]],
+    ) -> None:
+        self.elements.append(
+            DocumentElement(
+                tag=normalize_document_text(tag).casefold(),
+                attributes=tuple(
+                    DocumentAttribute(
+                        name=normalize_document_text(name).casefold(),
+                        value=normalize_document_text(value or ""),
+                        source="html",
+                    )
+                    for name, value in attributes
+                ),
+            )
+        )
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        self._append(tag, attrs)
+
+    def handle_startendtag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        self._append(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        self.elements.append(
+            DocumentElement(
+                tag=normalize_document_text(tag).casefold(),
+                attributes=(),
+                closing=True,
+            )
+        )
+
+
+def _parse_html_elements(text: str) -> tuple[DocumentElement, ...]:
+    parser = _DocumentHTMLParser()
+    try:
+        parser.feed(text)
+        parser.close()
+    except (AssertionError, ValueError):
+        return ()
+    return tuple(parser.elements)
+
+
+def _markdown_attribute_list(
+    text: str,
+) -> tuple[str, tuple[DocumentAttribute, ...]]:
+    """Split one trailing Pandoc/Kramdown-style attribute list when valid."""
+
+    compatible = normalize_document_text(text).rstrip()
+    if not compatible.endswith("}"):
+        return compatible, ()
+    opening = compatible.rfind("{")
+    if opening < 0:
+        return compatible, ()
+    payload = compatible[opening + 1 : -1].strip()
+    if not payload:
+        return compatible, ()
+    lexer = shlex.shlex(payload, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        parts = tuple(lexer)
+    except ValueError:
+        return compatible, ()
+    attributes: list[DocumentAttribute] = []
+    classes: list[str] = []
+    for part in parts:
+        if re.fullmatch(r"#[^\s{}]+", part):
+            attributes.append(
+                DocumentAttribute("id", html.unescape(part[1:]), "markdown")
+            )
+        elif re.fullmatch(r"\.[^\s{}]+", part):
+            classes.append(html.unescape(part[1:]))
+        elif (
+            match := re.fullmatch(
+                r"(?P<name>[A-Za-z_:][A-Za-z0-9_.:-]*)=(?P<value>\S+)",
+                part,
+            )
+        ) is not None:
+            attributes.append(
+                DocumentAttribute(
+                    normalize_document_text(match.group("name")).casefold(),
+                    html.unescape(match.group("value")),
+                    "markdown",
+                )
+            )
+        else:
+            return compatible, ()
+    if classes:
+        attributes.append(DocumentAttribute("class", " ".join(classes), "markdown"))
+    return compatible[:opening].rstrip(), tuple(attributes)
+
+
+def _field_parts(text: str) -> tuple[str | None, str | None]:
+    match = re.match(r"^(?P<name>[^:\n]{1,80})\s*:\s*(?P<value>.*)$", text)
+    if match is None:
+        return None, None
+    return match.group("name").strip(), match.group("value").strip()
+
+
+def _heading_from_inline(inline: Token, level: int) -> CommonMarkHeading:
+    raw_text = re.sub(r"\s+", " ", _inline_visible_text(inline)).strip()
+    text, markdown_attributes = _markdown_attribute_list(raw_text)
+    html_elements = tuple(
+        element
+        for child in inline.children or ()
+        if child.type == "html_inline"
+        for element in _parse_html_elements(child.content)
+    )
+    aliases = {
+        attribute.value
+        for attribute in (
+            *markdown_attributes,
+            *(
+                attribute
+                for element in html_elements
+                for attribute in element.attributes
+            ),
+        )
+        if attribute.name in {"id", "name"} and attribute.value
+    }
+    return CommonMarkHeading(level, text, tuple(sorted(aliases)))
 
 
 def _inline_visible_text(token: Token) -> str:
@@ -187,6 +485,9 @@ def parse_commonmark(text: str) -> CommonMarkSurface:
     tokens = _COMMONMARK.parse(text)
     headings: list[CommonMarkHeading] = []
     top_level_headings: list[CommonMarkHeading] = []
+    blocks: list[CommonMarkBlock] = []
+    attributes: list[DocumentAttribute] = []
+    elements: list[DocumentElement] = []
     visible_blocks: list[str] = []
     visible_lines: list[str] = []
     operative_lines: list[str] = []
@@ -197,6 +498,18 @@ def parse_commonmark(text: str) -> CommonMarkSurface:
     top_level_html_inlines: list[str] = []
     top_level_fences: list[tuple[str, str]] = []
     containers: list[str] = []
+    heading_path: list[CommonMarkHeading] = []
+    heading_by_inline_index: dict[int, CommonMarkHeading] = {}
+    for index, token in enumerate(tokens):
+        if token.type != "heading_open" or index + 1 >= len(tokens):
+            continue
+        inline = tokens[index + 1]
+        if inline.type != "inline":
+            continue
+        heading_by_inline_index[index + 1] = _heading_from_inline(
+            inline,
+            int(token.tag.removeprefix("h")),
+        )
     for index, token in enumerate(tokens):
         if token.nesting == -1:
             closing = token.type.removesuffix("_close")
@@ -214,6 +527,13 @@ def parse_commonmark(text: str) -> CommonMarkSurface:
                 top_level_fences.append(fence)
         elif token.type == "html_block":
             html_blocks.append(token.content)
+            parsed_elements = _parse_html_elements(token.content)
+            elements.extend(parsed_elements)
+            attributes.extend(
+                attribute
+                for element in parsed_elements
+                for attribute in element.attributes
+            )
             if not semantic_containers:
                 top_level_html_blocks.append(token.content)
         elif token.type == "html_inline":
@@ -224,10 +544,21 @@ def parse_commonmark(text: str) -> CommonMarkSurface:
             for child in token.children or []:
                 if child.type == "html_inline":
                     html_inlines.append(child.content)
+                    parsed_elements = _parse_html_elements(child.content)
+                    elements.extend(parsed_elements)
+                    attributes.extend(
+                        attribute
+                        for element in parsed_elements
+                        for attribute in element.attributes
+                    )
                     if not semantic_containers:
                         top_level_html_inlines.append(child.content)
             visible = _inline_visible_text(token)
             normalized_block = re.sub(r"\s+", " ", visible).strip()
+            rendered_block, markdown_attributes = _markdown_attribute_list(
+                normalized_block
+            )
+            attributes.extend(markdown_attributes)
             if normalized_block:
                 visible_blocks.append(normalized_block)
             normalized_lines = [
@@ -241,13 +572,25 @@ def parse_commonmark(text: str) -> CommonMarkSurface:
                 "list_item",
             ):
                 operative_lines.extend(normalized_lines)
-        if token.type == "heading_open" and index + 1 < len(tokens):
-            inline = tokens[index + 1]
-            if inline.type == "inline":
-                heading = CommonMarkHeading(
-                    level=int(token.tag.removeprefix("h")),
-                    text=re.sub(r"\s+", " ", _inline_visible_text(inline)).strip(),
+            if (
+                rendered_block
+                and (heading := heading_by_inline_index.get(index)) is None
+            ):
+                field_name, field_value = _field_parts(rendered_block)
+                blocks.append(
+                    CommonMarkBlock(
+                        text=rendered_block,
+                        heading_path=tuple(heading_path),
+                        field_name=field_name,
+                        field_value=field_value,
+                    )
                 )
+            elif heading is not None:
+                del heading_path[heading.level - 1 :]
+                heading_path.append(heading)
+        if token.type == "heading_open" and index + 1 < len(tokens):
+            heading = heading_by_inline_index.get(index + 1)
+            if heading is not None:
                 headings.append(heading)
                 if not semantic_containers:
                     top_level_headings.append(heading)
@@ -256,6 +599,9 @@ def parse_commonmark(text: str) -> CommonMarkSurface:
     return CommonMarkSurface(
         headings=tuple(headings),
         top_level_headings=tuple(top_level_headings),
+        blocks=tuple(blocks),
+        attributes=tuple(attributes),
+        elements=tuple(elements),
         visible_blocks=tuple(visible_blocks),
         visible_lines=tuple(visible_lines),
         operative_lines=tuple(operative_lines),
@@ -500,7 +846,7 @@ class SchemaEvidenceRecord(_StrictModel):
                     f"GOV-SCHEMA-EVIDENCE-PATH-INVALID: {field} must be "
                     "repository-relative"
                 ) from error
-        if "\n" in self.exact_check or _is_placeholder(self.exact_check):
+        if "\n" in self.exact_check:
             raise ValueError(
                 "GOV-SCHEMA-EVIDENCE-CHECK-INVALID: exact_check must be a "
                 "concrete one-line command"
@@ -514,22 +860,6 @@ class SchemaEvidenceRecord(_StrictModel):
         if (
             len(command) < 2
             or re.fullmatch(r"[A-Za-z0-9_./-]+", command[0]) is None
-            or command[0].casefold()
-            in {
-                "artifact",
-                "awaiting",
-                "evidence",
-                "forthcoming",
-                "pending",
-                "report",
-                "will",
-            }
-            or re.search(
-                r"\b(?:awaiting|deferred|forthcoming|later|pending|placeholder|"
-                r"tbd|todo|will)\b",
-                self.exact_check,
-                re.IGNORECASE,
-            )
         ):
             raise ValueError(
                 "GOV-SCHEMA-EVIDENCE-CHECK-INVALID: exact_check must name an "
@@ -745,99 +1075,6 @@ def _selectors_overlap(left: ProtectedSelector, right: ProtectedSelector) -> boo
     exact = left if left.kind == "path" else right
     prefix = right if right.kind == "path-prefix" else left
     return exact.value.startswith(prefix.value)
-
-
-_PLACEHOLDER_VALUES = frozenset(
-    {
-        "n/a",
-        "na",
-        "none",
-        "pending",
-        "placeholder",
-        "replace-me",
-        "replace me",
-        "tbd",
-        "todo",
-        "unknown",
-    }
-)
-
-
-def _is_placeholder(value: str) -> bool:
-    normalized = value.strip().casefold()
-    words = re.sub(r"[\s_-]+", " ", normalized)
-    placeholder_prefix = re.match(
-        r"^(?:deferred|n/?a|none|pending|placeholder|replace me|tbd|to do|todo|unknown)\b",
-        words,
-    )
-    deferred_phrase = re.search(
-        r"\b(?:not yet available|to (?:be )?(?:added|provided|supplied|written)|"
-        r"will be (?:added|provided|supplied|written|implemented|tested)|"
-        r"will (?:add|provide|supply|write|implement|test)|"
-        r"evidence to follow|coming soon|once (?:the )?"
-        r"(?:test|tests|artifact|artifacts) "
-        r"(?:exist|exists|complete|are available))\b",
-        words,
-    )
-    return (
-        normalized in _PLACEHOLDER_VALUES
-        or bool(re.fullmatch(r"<[^>]*>", normalized))
-        or placeholder_prefix is not None
-        or deferred_phrase is not None
-    )
-
-
-def _is_substantive_schema_proof(
-    evidence: str,
-    behavior: SchemaProofBehavior,
-) -> bool:
-    normalized = re.sub(r"[^a-z0-9]+", " ", evidence.casefold()).strip()
-    words = normalized.split()
-    if len(words) < 3:
-        return False
-    expected_terms = {
-        "old-fixtures-readable": {
-            "accept",
-            "accepted",
-            "compatibility",
-            "compatible",
-            "load",
-            "loaded",
-            "preserved",
-            "read",
-            "readable",
-        },
-        "unsupported-version-rejected": {
-            "error",
-            "errors",
-            "fail",
-            "failed",
-            "raise",
-            "raises",
-            "reject",
-            "rejected",
-            "rejection",
-            "unsupported",
-        },
-    }[behavior]
-    has_mode_result = bool(expected_terms & set(words))
-    has_evidence_locator = (
-        "/" in evidence
-        or "::" in evidence
-        or bool(
-            {
-                "artifact",
-                "command",
-                "evidence",
-                "pytest",
-                "report",
-                "test",
-                "transcript",
-            }
-            & set(words)
-        )
-    )
-    return has_mode_result and has_evidence_locator
 
 
 def _diagnostics_from_validation(
@@ -1409,6 +1646,15 @@ def validate_policy_components(
         for selector in surface.selectors
         if selector.kind == "component" and selector.value not in component_paths
     ]
+    diagnostics.extend(
+        GovernanceDiagnostic(
+            "GOV-COMPONENT-PROTECTED-CATALOG-MISMATCH",
+            component_id,
+            "protected component paths must match the authoritative catalog",
+        )
+        for component_id, expected_paths in REQUIRED_PROTECTED_COMPONENT_PATHS.items()
+        if component_paths.get(component_id) != expected_paths
+    )
     if diagnostics:
         raise GovernanceValidationError(diagnostics)
 
@@ -1440,6 +1686,335 @@ def _normalize_repo_path(value: str) -> str:
             ]
         )
     return path.as_posix()
+
+
+EVIDENCE_POLICY_PATH = "docs/architecture/evidence-policy.json"
+
+
+@dataclass(frozen=True)
+class EvidenceRecordValidation:
+    """Validated state of one cataloged evidence record."""
+
+    mode: str
+    passing: bool
+    record_type: str
+
+
+def _evidence_diagnostic(
+    code: str,
+    location: str,
+    message: str,
+) -> GovernanceValidationError:
+    return GovernanceValidationError(
+        [GovernanceDiagnostic(code, location, message)]
+    )
+
+
+def _regular_repository_file(
+    root: Path,
+    relative: str,
+    *,
+    location: str,
+    missing_code: str,
+) -> Path:
+    try:
+        normalized = _normalize_repo_path(relative)
+    except GovernanceValidationError as error:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-PATH-INVALID",
+            location,
+            "reference must be a normalized repository-relative path",
+        ) from error
+    cursor = root
+    for part in PurePosixPath(normalized).parts:
+        try:
+            entries = {entry.name: entry for entry in os.scandir(cursor)}
+        except OSError:
+            entries = {}
+        entry = entries.get(part)
+        if entry is None or entry.is_symlink():
+            raise _evidence_diagnostic(
+                missing_code,
+                location,
+                f"{relative!r} is not a regular repository file",
+            )
+        cursor /= part
+    try:
+        resolved = cursor.resolve(strict=True)
+        resolved.relative_to(root)
+    except (OSError, ValueError) as error:
+        raise _evidence_diagnostic(
+            missing_code,
+            location,
+            f"{relative!r} is not a regular repository file",
+        ) from error
+    if not resolved.is_file():
+        raise _evidence_diagnostic(
+            missing_code,
+            location,
+            f"{relative!r} is not a regular repository file",
+        )
+    return resolved
+
+
+def _load_evidence_policy(root: Path) -> dict[str, Any]:
+    path = _regular_repository_file(
+        root,
+        EVIDENCE_POLICY_PATH,
+        location=EVIDENCE_POLICY_PATH,
+        missing_code="GOV-EVIDENCE-POLICY-MISSING",
+    )
+    try:
+        policy = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-POLICY-INVALID",
+            EVIDENCE_POLICY_PATH,
+            type(error).__name__,
+        ) from error
+    if (
+        not isinstance(policy, dict)
+        or policy.get("schema_version") != 1
+        or not isinstance(policy.get("positive_record"), dict)
+        or not isinstance(policy.get("non_passing_record"), dict)
+    ):
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-POLICY-INVALID",
+            EVIDENCE_POLICY_PATH,
+            "catalog does not match the version-1 evidence contract",
+        )
+    return policy
+
+
+def validate_evidence_record_reference(
+    reference: str,
+    *,
+    repository_root: Path,
+    expected_mode: str,
+) -> EvidenceRecordValidation:
+    """Validate one typed record without inferring evidence from free prose."""
+
+    try:
+        root = repository_root.resolve(strict=True)
+    except OSError as error:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-ROOT-INVALID",
+            ".",
+            type(error).__name__,
+        ) from error
+    policy = _load_evidence_policy(root)
+    positive = policy["positive_record"]
+    non_passing = policy["non_passing_record"]
+    record_prefix = positive.get("record_prefix")
+    if (
+        not isinstance(record_prefix, str)
+        or not reference.startswith(record_prefix)
+        or not reference.endswith(".json")
+    ):
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-REFERENCE-INVALID",
+            reference,
+            "expected a cataloged JSON evidence-record path",
+        )
+    path = _regular_repository_file(
+        root,
+        reference,
+        location=reference,
+        missing_code="GOV-EVIDENCE-RECORD-MISSING",
+    )
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-RECORD-INVALID",
+            reference,
+            type(error).__name__,
+        ) from error
+    if not isinstance(record, dict):
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-RECORD-INVALID",
+            reference,
+            "evidence record must be a JSON object",
+        )
+
+    record_type = record.get("record_type")
+    mode = record.get("mode")
+    if not isinstance(mode, str) or mode != expected_mode:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-MODE-MISMATCH",
+            reference,
+            f"expected mode {expected_mode!r}",
+        )
+    allowed_results = positive.get("observed_results")
+    if not isinstance(allowed_results, dict) or mode not in allowed_results:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-MODE-UNSUPPORTED",
+            reference,
+            f"mode {mode!r} is not cataloged",
+        )
+
+    non_passing_types = non_passing.get("allowed_record_types")
+    if isinstance(non_passing_types, list) and record_type in non_passing_types:
+        required = non_passing.get("required_fields")
+        if (
+            not isinstance(required, list)
+            or set(record) != set(required)
+            or record.get("schema_version") != 1
+            or record.get("status") != non_passing.get("status")
+            or not isinstance(record.get("summary"), str)
+            or not record["summary"].strip()
+        ):
+            raise _evidence_diagnostic(
+                "GOV-EVIDENCE-NONPASSING-INVALID",
+                reference,
+                "typed history/limitation record has invalid fields",
+            )
+        return EvidenceRecordValidation(mode, False, str(record_type))
+
+    required = positive.get("required_fields")
+    if (
+        record_type != "evidence"
+        or not isinstance(required, list)
+        or set(record) != set(required)
+        or record.get("schema_version") != positive.get("schema_version")
+        or record.get("status") != positive.get("status")
+    ):
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-RECORD-INVALID",
+            reference,
+            "positive record fields do not match the catalog",
+        )
+    observed_result = record.get("observed_result")
+    mode_results = allowed_results[mode]
+    if (
+        not isinstance(mode_results, list)
+        or observed_result not in mode_results
+    ):
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-RESULT-INVALID",
+            reference,
+            f"observed result is not enumerated for mode {mode!r}",
+        )
+    if record.get("exit_code") != positive.get("successful_exit_code"):
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-EXECUTION-NONPASSING",
+            reference,
+            "positive evidence requires declared successful execution",
+        )
+
+    artifact_path = record.get("artifact_path")
+    artifact_sha256 = record.get("artifact_sha256")
+    artifact_prefix = positive.get("artifact_prefix")
+    if (
+        not isinstance(artifact_path, str)
+        or not isinstance(artifact_prefix, str)
+        or not artifact_path.startswith(artifact_prefix)
+        or not isinstance(artifact_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", artifact_sha256) is None
+    ):
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-ARTIFACT-INVALID",
+            reference,
+            "artifact path and SHA-256 must match the catalog",
+        )
+    artifact = _regular_repository_file(
+        root,
+        artifact_path,
+        location=f"{reference}#artifact_path",
+        missing_code="GOV-EVIDENCE-ARTIFACT-MISSING",
+    )
+    before_hash = _sha256_path(artifact)
+    if before_hash != artifact_sha256:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-ARTIFACT-HASH-MISMATCH",
+            reference,
+            "declared artifact SHA-256 does not match repository bytes",
+        )
+
+    exact_check = record.get("exact_check")
+    permitted_checks = positive.get("permitted_checks")
+    expected_checks = {
+        item["command"].replace("{artifact_path}", artifact_path)
+        for item in permitted_checks
+        if isinstance(item, dict)
+        and isinstance(item.get("command"), str)
+    } if isinstance(permitted_checks, list) else set()
+    if not isinstance(exact_check, str) or exact_check not in expected_checks:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-CHECK-INVALID",
+            reference,
+            "exact_check is not a permitted check bound to artifact_path",
+        )
+    argv = tuple(shlex.split(exact_check))
+    check_environment = {
+        key: value
+        for key in ("LANG", "LC_ALL", "PATH", "TMPDIR")
+        if (value := os.environ.get(key)) is not None
+    }
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=root,
+            env=check_environment,
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-CHECK-FAILED",
+            reference,
+            "permitted check could not complete",
+        ) from error
+    if result.returncode != positive.get("successful_exit_code"):
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-CHECK-FAILED",
+            reference,
+            f"permitted check exited {result.returncode}",
+        )
+    if _sha256_path(artifact) != before_hash:
+        raise _evidence_diagnostic(
+            "GOV-EVIDENCE-ARTIFACT-CHANGED",
+            reference,
+            "bound artifact changed while its check executed",
+        )
+    return EvidenceRecordValidation(mode, True, "evidence")
+
+
+def validate_schema_change_reference(
+    reference: str,
+    *,
+    repository_root: Path,
+) -> SchemaEvolutionPacket:
+    """Resolve and validate the typed schema-evolution packet named by a trailer."""
+
+    root = repository_root.resolve(strict=True)
+    if (
+        not reference.startswith("evidence/")
+        or PurePosixPath(reference).suffix not in {".json", ".yaml", ".yml"}
+    ):
+        raise _evidence_diagnostic(
+            "GOV-SCHEMA-REFERENCE-INVALID",
+            reference,
+            "expected an evidence/ JSON or YAML schema-evolution packet",
+        )
+    path = _regular_repository_file(
+        root,
+        reference,
+        location=reference,
+        missing_code="GOV-SCHEMA-PACKET-MISSING",
+    )
+    try:
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)
+    except GovernanceValidationError:
+        raise
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        raise _evidence_diagnostic(
+            "GOV-SCHEMA-PACKET-INVALID",
+            reference,
+            type(error).__name__,
+        ) from error
+    return validate_schema_change_data(data, repository_root=root)
 
 
 def _component_matches(
@@ -1578,6 +2153,7 @@ def check_commit_message(
     changed_paths: tuple[str, ...],
     policy: ProtectedSurfacePolicy,
     component_paths: dict[str, tuple[str, ...]],
+    repository_root: Path | None = None,
 ) -> CommitCheckResult:
     diagnostics: list[GovernanceDiagnostic] = []
     normalized = message.rstrip("\n")
@@ -1761,33 +2337,76 @@ def check_commit_message(
                 "protected changes require release-maintainer and security-maintainer",
             )
         )
-    if expected_surfaces and trailers["Evaluation-Evidence"] == "none":
-        diagnostics.append(
-            GovernanceDiagnostic(
-                "GOV-COMMIT-PROTECTED-EVALUATION",
-                "Evaluation-Evidence",
-                "protected changes require strongest-applicable evaluation evidence",
+    resolved_root: Path | None = None
+    if repository_root is not None:
+        try:
+            resolved_root = repository_root.resolve(strict=True)
+        except OSError:
+            resolved_root = None
+    if expected_surfaces:
+        evaluation_passing = False
+        if resolved_root is not None:
+            try:
+                evaluation = validate_evidence_record_reference(
+                    trailers["Evaluation-Evidence"],
+                    repository_root=resolved_root,
+                    expected_mode="evaluation",
+                )
+                evaluation_passing = evaluation.passing
+            except GovernanceValidationError as error:
+                diagnostics.extend(error.diagnostics)
+        if not evaluation_passing:
+            diagnostics.append(
+                GovernanceDiagnostic(
+                    "GOV-COMMIT-PROTECTED-EVALUATION",
+                    "Evaluation-Evidence",
+                    "protected changes require a passing positive evidence record",
+                )
             )
-        )
-    if expected_surfaces and trailers["Rollback-Plan"] == "none":
-        diagnostics.append(
-            GovernanceDiagnostic(
-                "GOV-COMMIT-PROTECTED-ROLLBACK",
-                "Rollback-Plan",
-                "protected changes require a rollback plan",
+
+        rollback_valid = False
+        if resolved_root is not None and trailers["Rollback-Plan"] != "none":
+            try:
+                _regular_repository_file(
+                    resolved_root,
+                    trailers["Rollback-Plan"],
+                    location="Rollback-Plan",
+                    missing_code="GOV-COMMIT-ROLLBACK-ARTIFACT-MISSING",
+                )
+                rollback_valid = True
+            except GovernanceValidationError as error:
+                diagnostics.extend(error.diagnostics)
+        if not rollback_valid:
+            diagnostics.append(
+                GovernanceDiagnostic(
+                    "GOV-COMMIT-PROTECTED-ROLLBACK",
+                    "Rollback-Plan",
+                    "protected changes require an existing rollback-plan artifact",
+                )
             )
-        )
     schema_changed = any(
         _normalize_repo_path(path).startswith("schemas/") for path in changed_paths
     )
-    if schema_changed and trailers["Schema-Change"] == "none":
-        diagnostics.append(
-            GovernanceDiagnostic(
-                "GOV-COMMIT-SCHEMA-PACKET-MISSING",
-                "Schema-Change",
-                "schema changes require a versioned evolution packet",
+    if schema_changed:
+        schema_valid = False
+        if resolved_root is not None:
+            try:
+                validate_schema_change_reference(
+                    trailers["Schema-Change"],
+                    repository_root=resolved_root,
+                )
+                schema_valid = True
+            except (GovernanceValidationError, OSError) as error:
+                if isinstance(error, GovernanceValidationError):
+                    diagnostics.extend(error.diagnostics)
+        if not schema_valid:
+            diagnostics.append(
+                GovernanceDiagnostic(
+                    "GOV-COMMIT-SCHEMA-PACKET-MISSING",
+                    "Schema-Change",
+                    "schema changes require a passing versioned evolution packet",
+                )
             )
-        )
     if diagnostics:
         raise GovernanceValidationError(diagnostics)
     return CommitCheckResult(expected_surfaces, trailers)

@@ -184,10 +184,24 @@ class TestRunnableSelection:
             for task in coordinator._select_dispatch_tasks(tl, ts, runnable)
         ] == [selected_id]
 
-    def test_validator_only_capacity_slice_remains_batchable(
-        self, config: HarnessConfig
+    @pytest.mark.parametrize(
+        ("capacity", "expected_ids"),
+        [
+            (-2, ["v1"]),
+            (0, ["v1"]),
+            (1, ["v1"]),
+            (2, ["v1", "v2"]),
+            (3, ["v1", "v2", "v3"]),
+            (4, ["v1", "v2", "v3"]),
+        ],
+    )
+    def test_validator_only_capacity_is_clamped_and_filled(
+        self,
+        config: HarnessConfig,
+        capacity: int,
+        expected_ids: list[str],
     ) -> None:
-        object.__setattr__(config, "max_parallel_nodes", 2)
+        object.__setattr__(config, "max_parallel_nodes", capacity)
         tl = TaskList(
             tasks=[
                 _task("v1", "validate", ["X"]),
@@ -205,7 +219,22 @@ class TestRunnableSelection:
         assert [
             task.id
             for task in coordinator._select_dispatch_tasks(tl, ts, runnable)
-        ] == ["v1", "v2"]
+        ] == expected_ids
+
+    def test_batch_dispatch_rejects_mutable_work_at_its_entry_point(
+        self,
+        config: HarnessConfig,
+    ) -> None:
+        coordinator = _coordinator(config)
+        work = _task("work", "work", ["X"])
+
+        with pytest.raises(RuntimeError, match="mutable work"):
+            coordinator._dispatch_batch(
+                "mission-001",
+                TaskList(tasks=[work]),
+                TaskStateFile(),
+                [work],
+            )
 
     @pytest.mark.parametrize(
         ("capacity", "first_expected", "refill_expected"),

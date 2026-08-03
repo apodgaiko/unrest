@@ -1,0 +1,1575 @@
+{
+  "dispositions": [
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-new-archive-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-new-behavior-to-copy",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-new-compatibility-baseline",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-new-dictates-semantics",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-new-historical-context-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-new-retired-record-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-prior-final-bound-to-copy",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-prior-final-definitive-blueprint",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-prior-historical-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-prior-promotion-classification",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-prior-promotion-id",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-prior-scrutiny-historical-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-prior-scrutiny-promotion",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-v3-authoritative-history-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-v3-compelled-retain",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-v3-definitive-history-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-v3-html-history-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-v3-html-promotion",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-v3-must-not-guide-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-v3-must-reenact",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-v3-passive-embodied",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-v3-source-of-truth",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-v3-unicode-modal",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-v3-used-as-design-rule",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-v3-warning-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-new-benign-anchor-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-new-benign-prose-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-new-benign-reason-code-element",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-new-disguised-thought-tag",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-new-dotted-identity",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-new-entity-html-attribute",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-new-format-control",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-new-fullwidth-text",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-new-markdown-explicit-anchor",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-new-unquoted-html-attribute",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-prior-benign-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-prior-case-heading",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-prior-disguised-tag",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-prior-fullwidth-colon",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-prior-html-anchor",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-prior-linked-marker",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-v3-confidential-deliberation",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-v3-em-dash-label",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-v3-fenced-marker",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-v3-heading-product-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-v3-html-comment",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-v3-html-product-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-v3-html-visible-text",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-v3-inline-code",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-v3-link-product-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-v3-markdown-class",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-v3-markdown-link",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-v3-provider-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-v3-ratio-colon",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-v3-spaced-unquoted-attribute",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-new-anchor-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-new-format-control",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-new-fullwidth-setext",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-new-html-anchor-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-new-indented-code-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-new-linked-decorated",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-new-linked-distinct-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-new-setext-distinct-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-prior-case-setext",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-prior-distinct-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-prior-explicit-anchor",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-prior-fenced-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-prior-linked-case",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-prior-uppercase-setext",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-v3-fenced-html-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-v3-href-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-v3-html-h2-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-v3-html-h2-visible",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-v3-html-single-quote-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-v3-hyphen-distinct-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-v3-link-with-inline-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-v3-linked-distinct-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-v3-markdown-entity-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-v3-setext-name-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-new-angle-placeholder",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-new-concrete-commit-control",
+      "command": "check-commit-concrete",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-new-concrete-field-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-new-concrete-remains-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-new-coverage-subject",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-new-dossier-commit",
+      "command": "check-commit-dossier",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-new-format-control-field",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-new-fullwidth-field",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-new-historical-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-new-queued-report",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-new-schema-queued-commit",
+      "command": "check-commit-schema-queued",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-new-subject-after-verb",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-prior-concrete-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-prior-disguised-placeholder",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-prior-final-aspirational",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-prior-final-has-yet",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-prior-final-has-yet-commit",
+      "command": "check-commit-has-yet",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-prior-final-schema-aspirational-commit",
+      "command": "check-commit-schema-aspirational",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-prior-limitation-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-prior-nonconcrete-commit",
+      "command": "check-commit-nonconcrete-prior",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-prior-scrutiny-future-cycle",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-prior-scrutiny-roadmap",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-prior-unseen-placeholder",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-v3-bounded-id-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-v3-commit-future-date",
+      "command": "check-commit-future-date",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-v3-commit-future-path",
+      "command": "check-commit-future-path",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-v3-commit-limitation-control",
+      "command": "check-commit-limitation-control",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-v3-commit-schema-future-date",
+      "command": "check-commit-schema-future-date",
+      "disposition": "retained-in-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-v3-digest-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-v3-external-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-future-date-field",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-future-path-field",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-future-result-field",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-v3-historical-field-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-html-provisional",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-v3-limitation-field-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-modal-future",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-passive-future",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-proof-placeholder-field",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-unicode-provisional",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-v3-unrecognized-placeholder-field",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "structural-v3-scrutiny",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-previous-archive-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-previous-bound-to-copy",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-previous-definitive-blueprint",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-previous-explicit-historical-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-previous-obligated-emulate",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-previous-removed-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-previous-retired-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-unseen-compelled-reenact",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-unseen-history-heading-binding-law",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-unseen-history-heading-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "arbitrary historical prose without active-role linkage",
+      "case_id": "doc1-unseen-mandatory-behavior",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc1-unseen-reenact-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-001"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-benign-product-language",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-benign-public-reasoning-setting",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc2-benign-reason-code-element",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-entity-html-anchor",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-format-control-identity",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-hidden-analysis-tag",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-linked-label-marker",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-previous-dotted-identity",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-previous-fullwidth-colon",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-previous-markdown-anchor",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-previous-quoted-html-anchor",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "cataloged identity-attribution grammar and container",
+      "case_id": "doc2-previous-unquoted-html-anchor",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-unseen-em-dash-attribution",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-unseen-markdown-link-destination",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "unsupported prose, synonym, punctuation, comment, fence, link destination, or tag form",
+      "case_id": "doc2-unseen-private-scratchpad-prose",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-002"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-distinct-level-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-distinct-section-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-entity-html-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-fenced-field-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-fenced-heading-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-format-control-heading",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc3-indented-code-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-linked-heading",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-previous-explicit-scope-anchor",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-previous-html-alias-different-label",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-previous-markdown-alias-different-label",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "operative canonical ATX/Setext visible label",
+      "case_id": "doc3-previous-uppercase-setext",
+      "command": "check-repository",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-setext-markdown-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-unquoted-html-name-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-unseen-kramdown-next-line-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "alias, raw HTML, or noncanonical visible label",
+      "case_id": "doc3-unseen-raw-html-heading-alias",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-003"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-benign-product-report",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-benign-result-queue",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-commit-concrete-evaluation-control",
+      "command": "check-commit",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-commit-concrete-schema-control",
+      "command": "check-commit",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-commit-previous-dossier-arrives",
+      "command": "check-commit",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-commit-previous-has-yet",
+      "command": "check-commit",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-commit-previous-packet-queued",
+      "command": "check-commit",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-commit-previous-schema-aspirational",
+      "command": "check-commit",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-commit-unseen-provisional-evaluation-path",
+      "command": "check-commit",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "protected commit field or schema-packet reference",
+      "case_id": "doc4-commit-unseen-provisional-schema-path",
+      "command": "check-commit",
+      "disposition": "retained-in-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-concrete-combined",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-concrete-command",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-concrete-date",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-concrete-digest",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-concrete-id",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-concrete-path",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-concrete-result",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-honest-history",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-honest-limitation",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-non-evidence-roadmap-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-paired-field-future-possibility",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-previous-aspirational",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "accepted boundary or ordinary technical control",
+      "case_id": "doc4-previous-concrete-remains-control",
+      "command": "check-repository",
+      "disposition": "benign-control",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-previous-furnished",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-previous-has-yet",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-previous-queued",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-previous-roadmap",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-previous-slated-cycle",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-previous-subject-after-verb",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-unseen-evidence-section-future-possibility",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-unseen-provisional-command",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    },
+    {
+      "basis": "free prose outside an enumerated protected evidence location",
+      "case_id": "doc4-unseen-provisional-path",
+      "command": "check-repository",
+      "disposition": "explicitly-out-of-scope",
+      "source": "v3-surface",
+      "target": "VAL-DOC-004"
+    }
+  ],
+  "schema_version": 1,
+  "sources": [
+    {
+      "case_count": 120,
+      "id": "structural-v3-scrutiny"
+    },
+    {
+      "case_count": 75,
+      "id": "v3-surface"
+    }
+  ]
+}

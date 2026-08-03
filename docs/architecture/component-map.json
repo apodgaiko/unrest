@@ -58,6 +58,37 @@
     },
     {
       "decisions": [],
+      "id": "COMP-CAPABILITY",
+      "invariants": [
+        "COMPAT-CAPABILITY-POLICY-001",
+        "SEC-CAPABILITY-001",
+        "SEC-SENSITIVITY-PROVENANCE-001"
+      ],
+      "paths": [
+        "docs/architecture/capability-policy.md",
+        "schemas/capability-security-model.schema.json",
+        "schemas/capability-sinks.schema.json",
+        "schemas/role-capabilities.schema.json",
+        "src/unrest_harness/acp_runner.py",
+        "src/unrest_harness/bundled/policies/capability-security-model.v1.json",
+        "src/unrest_harness/bundled/policies/capability-sinks.v1.json",
+        "src/unrest_harness/bundled/policies/role-capabilities.v1.json",
+        "src/unrest_harness/capability_policy.py",
+        "src/unrest_harness/cli.py",
+        "src/unrest_harness/config.py",
+        "src/unrest_harness/providers.py",
+        "src/unrest_harness/server.py"
+      ],
+      "specifications": [
+        "docs/architecture/capability-policy.md"
+      ],
+      "tests": [
+        "tests/test_capability_closed_model.py",
+        "tests/test_capability_policy.py"
+      ]
+    },
+    {
+      "decisions": [],
       "id": "COMP-CLI-CONFIG",
       "invariants": [
         "ARCH-CONFIG-001"
@@ -153,7 +184,12 @@
         "AGENTS.md",
         "CONTRIBUTING.md",
         "README.md",
+        "docs/architecture/annotation-policy.json",
+        "docs/architecture/component-map.json",
+        "docs/architecture/evidence-policy.json",
+        "docs/architecture/historical-record-policy.json",
         "docs/architecture/repository-contract.md",
+        "docs/architecture/template-heading-policy.json",
         "pyproject.toml",
         "src/unrest_harness/repository_contract.py",
         "uv.lock"
