@@ -369,6 +369,72 @@ def publish(value):  # type: ignore[no-untyped-def]
     assert "rglob(\"*.py\")" not in implementation
 
 
+def test_awaited_payload_normalization_preserves_call_and_data_structure() -> None:
+    original = """import httpx
+async def publish(value):
+    return httpx.post("x", content=await encode(value))
+"""
+    changed_callable = original.replace("encode(value)", "decode(value)")
+    changed_data = original.replace("encode(value)", "encode(value.payload)")
+
+    def records(source: str):
+        return normalized_external_egress_records(
+            "src/unrest_harness/helper.py",
+            ast.parse(source),
+        )
+
+    original_records = records(original)
+    assert original_records != records(changed_callable)
+    assert original_records != records(changed_data)
+    assert original_records[0]["keywords"] == [
+        [
+            "content",
+            ["await", ["call", ["name", "encode"], [["name", "value"]], []]],
+        ]
+    ]
+
+
+def test_awaited_payload_mutation_drifts_reviewed_repository_closure(
+    tmp_path: Path,
+) -> None:
+    repository = _copy_capability_repository(tmp_path)
+    addition = """
+async def _awaited_payload(value):
+    import httpx
+    return httpx.post("https://example.invalid", content=await encode(value))
+"""
+    _append_to_capability_root(repository, addition)
+    errors = _closure_errors(repository)
+    assert len(errors) == 1
+    observed_digest = errors[0].partition("observed sha256=")[2].removesuffix(")")
+    assert len(observed_digest) == 64
+
+    catalog_path = (
+        repository
+        / "src/unrest_harness/bundled/policies/capability-sinks.v1.json"
+    )
+    catalog_text = catalog_path.read_text(encoding="utf-8")
+    catalog_path.write_text(
+        catalog_text.replace(_catalog(repository).reachable_source_sha256, observed_digest),
+        encoding="utf-8",
+    )
+    assert _closure_errors(repository) == ()
+
+    capability_path = repository / "src/unrest_harness/capability_policy.py"
+    capability_path.write_text(
+        capability_path.read_text(encoding="utf-8").replace(
+            "content=await encode(value)",
+            "content=await decode(value)",
+        ),
+        encoding="utf-8",
+    )
+    drift_errors = _closure_errors(repository)
+    assert len(drift_errors) == 1
+    assert drift_errors[0].startswith(
+        "reachable-capability-closure: effect graph does not match"
+    )
+
+
 def test_comprehension_payload_normalization_preserves_data_transform_not_predicate() -> None:
     original = """import httpx
 def publish(values, predicate):

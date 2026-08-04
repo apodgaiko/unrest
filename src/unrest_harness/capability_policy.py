@@ -890,6 +890,8 @@ def _normalized_egress_expression(node: ast.AST) -> Any:
                 for item in node.keywords
             ],
         ]
+    if isinstance(node, ast.Await):
+        return ["await", _normalized_egress_expression(node.value)]
     if isinstance(node, ast.Subscript):
         return [
             "subscript",

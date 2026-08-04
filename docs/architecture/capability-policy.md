@@ -126,7 +126,8 @@ data-bearing calls that do not resolve to local Python implementations. A
 custom Python 3.11-3.13-stable AST representation preserves callable and data
 structure while ignoring locations, comments, formatting, type comments and
 ignores, absent empty fields, and comprehension predicates. Comprehension
-payload expressions and iteration sources remain data-bearing structure. Call
+payload expressions, iteration sources, and awaited operands remain
+data-bearing structure. Call
 projection is independent of how the
 result is used: discarded, returned, assigned, awaited, and calls nested in
 ordinary expressions have identical capability records. External calls,
