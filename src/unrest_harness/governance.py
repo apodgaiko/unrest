@@ -26,7 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 POLICY_ID = "GOV-PROTECTED-SURFACES-001"
 POLICY_SCHEMA_VERSION = 1
-REQUIRED_ACCOUNTABLE_ROLES = ("release-maintainer", "security-maintainer")
+REQUIRED_ACCOUNTABLE_ROLES = ("maintainer",)
 FORBIDDEN_APPROVER_KINDS = ("agent", "provider")
 REQUIRED_SURFACE_IDS = (
     "capability-policy",
@@ -712,17 +712,41 @@ class ProtectedSurfacePolicy(_StrictModel):
     protected_surfaces: list[ProtectedSurface] = Field(min_length=1)
     self_protection: list[SelfProtectionControl] = Field(min_length=1)
 
+    @model_validator(mode="before")
+    @classmethod
+    def validate_exact_accountability(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if data.get("accountable_roles") != [
+            {"id": "maintainer", "kind": "human"}
+        ]:
+            raise ValueError(
+                "GOV-POLICY-ACCOUNTABLE-ROLE-EXACT: accountable_roles must be "
+                "exactly [{id: maintainer, kind: human}]"
+            )
+        surfaces = data.get("protected_surfaces")
+        if isinstance(surfaces, list):
+            for surface in surfaces:
+                if not isinstance(surface, dict):
+                    continue
+                if surface.get("reviewer_roles") != ["maintainer"]:
+                    surface_id = surface.get("id", "<unknown>")
+                    raise ValueError(
+                        "GOV-POLICY-SURFACE-REVIEWERS-EXACT: "
+                        f"{surface_id} reviewer_roles must be exactly [maintainer]"
+                    )
+        return data
+
     @model_validator(mode="after")
     def validate_contract(self) -> Self:
         role_ids = [role.id for role in self.accountable_roles]
         if role_ids != list(REQUIRED_ACCOUNTABLE_ROLES):
             raise ValueError(
-                "GOV-POLICY-REVIEWERS-INCOMPLETE: release-maintainer and "
-                "security-maintainer are required"
+                "GOV-POLICY-ACCOUNTABLE-ROLE-EXACT: maintainer is required"
             )
-        if any(role.kind not in {"human", "team"} for role in self.accountable_roles):
+        if any(role.kind != "human" for role in self.accountable_roles):
             raise ValueError(
-                "GOV-POLICY-APPROVER-KIND-FORBIDDEN: accountable roles must be human or team"
+                "GOV-POLICY-ACCOUNTABLE-ROLE-EXACT: maintainer must be human"
             )
         if self.forbidden_approver_kinds != list(FORBIDDEN_APPROVER_KINDS):
             raise ValueError(
@@ -737,8 +761,8 @@ class ProtectedSurfacePolicy(_StrictModel):
         for surface in self.protected_surfaces:
             if surface.reviewer_roles != list(REQUIRED_ACCOUNTABLE_ROLES):
                 raise ValueError(
-                    f"GOV-POLICY-REVIEWERS-INCOMPLETE: {surface.id} must require "
-                    "both accountable roles"
+                    f"GOV-POLICY-SURFACE-REVIEWERS-EXACT: {surface.id} must "
+                    "require exactly maintainer"
                 )
             missing_tiers = REQUIRED_EVALUATION_TIERS[surface.id] - set(
                 surface.evaluation.tiers
@@ -2329,12 +2353,12 @@ def check_commit_message(
                 "agents and providers cannot satisfy accountable review",
             )
         )
-    if expected_surfaces and reviewer_roles != REQUIRED_ACCOUNTABLE_ROLES:
+    elif expected_surfaces and reviewer_roles != REQUIRED_ACCOUNTABLE_ROLES:
         diagnostics.append(
             GovernanceDiagnostic(
                 "GOV-COMMIT-PROTECTED-REVIEWERS",
                 "Human-Reviewers",
-                "protected changes require release-maintainer and security-maintainer",
+                "protected changes require exactly Human-Reviewers: maintainer",
             )
         )
     resolved_root: Path | None = None
@@ -2446,7 +2470,7 @@ WORKFLOW_TEMPLATE_CONTENT: dict[str, dict[str, tuple[str, ...]]] = {
         "contract-targets": ("contract_targets:",),
         "decision-id": ("id: ADR-NNNN",),
         "evaluation-evidence": ("- Evaluation evidence:",),
-        "human-reviewers": ("- Required reviewers:", "- Review evidence:"),
+        "human-reviewers": ("- Required maintainer reviewer:", "- Review evidence:"),
         "protected-surfaces": ("- Protected categories:",),
         "rollback": (
             "## Rollback",
@@ -2476,7 +2500,7 @@ WORKFLOW_TEMPLATE_CONTENT: dict[str, dict[str, tuple[str, ...]]] = {
             "- Non-applicable tiers and stable reasons:",
         ),
         "human-reviewers": (
-            "- Required human/team reviewers:",
+            "- Required maintainer reviewer:",
             "- Approval evidence:",
         ),
         "protected-surfaces": (

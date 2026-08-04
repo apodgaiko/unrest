@@ -159,6 +159,7 @@ def test_manifest_matches_kickoff_and_hashes_every_classified_fixture() -> None:
         "live_provider_credentials_required": False,
     }
     assert manifest["kickoff_record"] == KICKOFF_RECORD
+    assert manifest["kickoff_record"]["protected_reviewers"] == ["maintainer"]
     assert manifest["classification_vocabulary"] == list(CLASSIFICATIONS)
     assert manifest["provider_independent_configuration"] == {
         "node_dispatch": "in-process controlled dispatcher",

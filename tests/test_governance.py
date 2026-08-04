@@ -15,6 +15,7 @@ from click.testing import CliRunner
 from unrest_harness.cli import cli
 from unrest_harness.governance import (
     COMMIT_TRAILERS,
+    FORBIDDEN_APPROVER_KINDS,
     REQUIRED_ACCOUNTABLE_ROLES,
     REQUIRED_EVALUATION_TIERS,
     REQUIRED_PROTECTED_COMPONENT_PATHS,
@@ -57,6 +58,12 @@ def _assert_policy_error(data: dict[str, Any], expected_code: str) -> None:
     with pytest.raises(GovernanceValidationError) as captured:
         validate_policy_data(data)
     assert expected_code in _diagnostic_codes(captured.value)
+
+
+def _assert_singular_policy_error(data: dict[str, Any], expected_code: str) -> None:
+    with pytest.raises(GovernanceValidationError) as captured:
+        validate_policy_data(data)
+    assert [item.code for item in captured.value.diagnostics] == [expected_code]
 
 
 def _current_policy_and_components():
@@ -280,6 +287,91 @@ def test_checked_in_policy_schema_and_path_category_report_are_deterministic() -
     }
     assert list(report["path_categories"]) == sorted(report["path_categories"])
     assert set(report["self_protection"]) == set(REQUIRED_SELF_PROTECTION)
+    assert report["accountable_roles"] == [{"id": "maintainer", "kind": "human"}]
+    assert FORBIDDEN_APPROVER_KINDS == ("agent", "provider")
+    assert all(
+        surface["reviewer_roles"] == ["maintainer"]
+        for surface in report["protected_surfaces"].values()
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "missing",
+        "wrong-id",
+        "wrong-kind",
+        "duplicate",
+        "extra",
+        "agent",
+        "provider",
+        "empty",
+        "old-role",
+        "old-security-role",
+        "unknown-role",
+    ),
+)
+def test_accountable_role_set_rejects_each_non_exact_mutation_singularly(
+    mutation: str,
+) -> None:
+    data = copy.deepcopy(_policy_data())
+    roles = data["accountable_roles"]
+    if mutation == "missing":
+        del data["accountable_roles"]
+    elif mutation == "wrong-id":
+        roles[0]["id"] = "Maintainer"
+    elif mutation == "wrong-kind":
+        roles[0]["kind"] = "team"
+    elif mutation == "duplicate":
+        roles.append({"id": "maintainer", "kind": "human"})
+    elif mutation == "extra":
+        roles.append({"id": "auditor", "kind": "human"})
+    elif mutation in {"agent", "provider"}:
+        roles[0]["kind"] = mutation
+    elif mutation == "empty":
+        data["accountable_roles"] = []
+    elif mutation == "old-role":
+        roles[0]["id"] = "-".join(("release", "maintainer"))
+    elif mutation == "old-security-role":
+        roles[0]["id"] = "-".join(("security", "maintainer"))
+    else:
+        roles[0]["id"] = "unknown-reviewer"
+
+    _assert_singular_policy_error(data, "GOV-POLICY-ACCOUNTABLE-ROLE-EXACT")
+
+
+@pytest.mark.parametrize("surface_index", range(7))
+@pytest.mark.parametrize(
+    ("mutation", "reviewers"),
+    (
+        ("missing", None),
+        ("empty", []),
+        ("wrong-id", ["Maintainer"]),
+        ("old-role", ["-".join(("release", "maintainer"))]),
+        ("old-security-role", ["-".join(("security", "maintainer"))]),
+        ("unknown-role", ["unknown-reviewer"]),
+        ("agent", ["agent"]),
+        ("provider", ["provider"]),
+        ("duplicate-list", ["maintainer", "maintainer"]),
+        ("extra-list", ["maintainer", "unknown-reviewer"]),
+    ),
+)
+def test_each_surface_rejects_non_exact_reviewer_lists_singularly(
+    surface_index: int,
+    mutation: str,
+    reviewers: list[str] | None,
+) -> None:
+    data = copy.deepcopy(_policy_data())
+    surface = data["protected_surfaces"][surface_index]
+    if mutation == "missing":
+        del surface["reviewer_roles"]
+    else:
+        surface["reviewer_roles"] = reviewers
+
+    _assert_singular_policy_error(
+        data,
+        "GOV-POLICY-SURFACE-REVIEWERS-EXACT",
+    )
 
 
 @pytest.mark.parametrize(
@@ -344,7 +436,7 @@ def test_same_change_component_reclassification_cannot_disable_protection() -> N
         ("empty_selectors", "GOV-POLICY-VALUE-INVALID"),
         ("path_escape", "GOV-POLICY-PATH-INVALID"),
         ("ambiguous_selector", "GOV-POLICY-SELECTOR-AMBIGUOUS"),
-        ("agent_accountable", "GOV-POLICY-VALUE-UNSUPPORTED"),
+        ("agent_accountable", "GOV-POLICY-ACCOUNTABLE-ROLE-EXACT"),
         ("missing_forbidden_kind", "GOV-POLICY-FORBIDDEN-KINDS-INCOMPLETE"),
         ("rollback_disabled", "GOV-POLICY-VALUE-UNSUPPORTED"),
         ("weak_evaluation", "GOV-POLICY-EVALUATION-WEAKENED"),
@@ -412,7 +504,7 @@ def test_each_self_protection_control_cannot_be_redirected(control_id: str) -> N
 @pytest.mark.parametrize(
     ("weakening", "expected_code"),
     [
-        ("reviewers", "GOV-POLICY-REVIEWERS-INCOMPLETE"),
+        ("reviewers", "GOV-POLICY-SURFACE-REVIEWERS-EXACT"),
         ("evaluation", "GOV-POLICY-EVALUATION-WEAKENED"),
         ("rollback", "GOV-POLICY-VALUE-UNSUPPORTED"),
     ],
@@ -426,7 +518,7 @@ def test_each_category_rejects_review_evaluation_or_rollback_weakening(
     data = copy.deepcopy(_policy_data())
     surface = data["protected_surfaces"][surface_index]
     if weakening == "reviewers":
-        surface["reviewer_roles"] = ["release-maintainer"]
+        surface["reviewer_roles"] = []
     elif weakening == "evaluation":
         surface["evaluation"]["tiers"].remove(
             sorted(REQUIRED_EVALUATION_TIERS[surface["id"]])[0]
@@ -434,6 +526,55 @@ def test_each_category_rejects_review_evaluation_or_rollback_weakening(
     else:
         surface["rollback_plan_required"] = False
     _assert_policy_error(data, expected_code)
+
+
+@pytest.mark.parametrize(
+    ("reviewers", "expected_code"),
+    (
+        ("none", "GOV-COMMIT-PROTECTED-REVIEWERS"),
+        ("-".join(("release", "maintainer")), "GOV-COMMIT-PROTECTED-REVIEWERS"),
+        ("-".join(("security", "maintainer")), "GOV-COMMIT-PROTECTED-REVIEWERS"),
+        (
+            "maintainer, " + "-".join(("release", "maintainer")),
+            "GOV-COMMIT-PROTECTED-REVIEWERS",
+        ),
+        ("agent-worker", "GOV-COMMIT-APPROVER-KIND-FORBIDDEN"),
+        ("provider-reviewer", "GOV-COMMIT-APPROVER-KIND-FORBIDDEN"),
+        ("unknown-reviewer", "GOV-COMMIT-PROTECTED-REVIEWERS"),
+        ("maintainer, maintainer", "GOV-COMMIT-HUMAN-REVIEWERS-INVALID"),
+        ("unknown-reviewer, maintainer", "GOV-COMMIT-HUMAN-REVIEWERS-INVALID"),
+    ),
+)
+def test_protected_commit_reviewer_mutations_fail_with_one_exact_diagnostic(
+    tmp_path: Path,
+    reviewers: str,
+    expected_code: str,
+) -> None:
+    policy, components = _current_policy_and_components()
+    fixture = _protected_commit_fixture(tmp_path)
+    message = _commit_message(
+        **{
+            "Protected-Surfaces": "governance-self-protection",
+            "Human-Reviewers": reviewers,
+            "Evaluation-Evidence": fixture["evaluation"],
+            "Rollback-Plan": fixture["rollback"],
+        }
+    )
+
+    with pytest.raises(GovernanceValidationError) as captured:
+        check_commit_message(
+            message,
+            changed_paths=("policy/protected-surfaces.yaml",),
+            policy=policy,
+            component_paths=components,
+            repository_root=tmp_path,
+        )
+
+    assert [item.code for item in captured.value.diagnostics] == [expected_code]
+    assert "maintainer" in captured.value.diagnostics[0].message or expected_code in {
+        "GOV-COMMIT-APPROVER-KIND-FORBIDDEN",
+        "GOV-COMMIT-HUMAN-REVIEWERS-INVALID",
+    }
 
 
 def test_unknown_component_and_runtime_path_ambiguity_fail_closed() -> None:
@@ -658,7 +799,7 @@ def test_commit_grammar_mutations_have_stable_diagnostics(
             _commit_message(
                 **{
                     "Protected-Surfaces": "governance-self-protection",
-                    "Human-Reviewers": "agent-worker, release-maintainer",
+                    "Human-Reviewers": "agent-worker, maintainer",
                     "Evaluation-Evidence": "evidence/full-gate.json",
                     "Rollback-Plan": "docs/rollback.md",
                 }
@@ -1349,6 +1490,35 @@ def test_cli_governance_report_and_commit_check_exercise_real_commands(
         "status": "ok",
     }
 
+    message_path.write_text(
+        _commit_message(
+            **{
+                "Protected-Surfaces": "governance-self-protection",
+                "Human-Reviewers": "none",
+                "Evaluation-Evidence": fixture["evaluation"],
+                "Rollback-Plan": fixture["rollback"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    rejected = runner.invoke(
+        cli,
+        [
+            "check-commit",
+            "--message-file",
+            str(message_path),
+            "--changed-path",
+            "policy/protected-surfaces.yaml",
+            "--policy",
+            str(temporary_policy),
+            "--component-map",
+            str(temporary_components),
+        ],
+    )
+    assert rejected.exit_code == 1
+    assert rejected.output.count("GOV-COMMIT-PROTECTED-REVIEWERS") == 1
+    assert "exactly Human-Reviewers: maintainer" in rejected.output
+
 
 def test_governance_does_not_claim_nonexistent_promotion_runtime() -> None:
     text = (
@@ -1357,3 +1527,32 @@ def test_governance_does_not_claim_nonexistent_promotion_runtime() -> None:
     assert "does not implement a promotion service" in " ".join(text.split())
     assert "deliberately does not add" in text
     assert not (ROOT / "src" / "unrest_harness" / "promotion.py").exists()
+
+
+def test_active_governance_docs_state_exact_solo_maintainer_contract() -> None:
+    architecture = (
+        ROOT / "docs" / "architecture" / "change-governance.md"
+    ).read_text(encoding="utf-8")
+    pull_request = PR_TEMPLATE_PATH.read_text(encoding="utf-8")
+    adr = ADR_TEMPLATE_PATH.read_text(encoding="utf-8")
+    closure = (ROOT / "docs" / "release" / "batch-0-closure.md").read_text(
+        encoding="utf-8"
+    )
+    fixture = (
+        ROOT / "tests" / "fixtures" / "governance" / "valid-protected-commit.txt"
+    ).read_text(encoding="utf-8")
+
+    for document in (architecture, pull_request, adr, closure):
+        normalized = " ".join(document.split())
+        assert "owner may self-approve" in normalized.lower()
+        assert "no second account or team is required" in normalized.lower()
+        assert "does not claim GitHub identity enforcement" in normalized
+    assert "Security remains" in architecture
+    assert (
+        "Security evaluation is evidence, not another accountability role"
+        in " ".join(closure.split())
+    )
+    assert "Human-Reviewers: maintainer" in architecture
+    assert "Human-Reviewers: maintainer" in pull_request
+    assert "Human-Reviewers: maintainer" in adr
+    assert fixture.count("Human-Reviewers: maintainer") == 1

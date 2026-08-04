@@ -13,9 +13,11 @@ in mission evidence and CI; they are not copied into the release document.
 | Adversarial review | Frozen-candidate contract review after bounded bypass probes | passed locally |
 | Full repository and wheel gates | `evidence/batch-0/evaluation.json` | passed locally |
 | Pull-request CI | branch PR checks | pending PR |
-| Human release approval | `release-maintainer` | pending external approval |
-| Human security approval | `security-maintainer` | pending external approval |
+| Human maintainer approval | `maintainer` | pending external approval |
+| Security evaluation | strongest-applicable security tier | passed locally |
 
-The release is not approved for promotion until the PR checks pass and both
-accountable human roles approve. Agent or provider review cannot satisfy those
-requirements.
+The release is not approved for promotion until the PR checks pass and the one
+human `maintainer` approves. The repository owner may self-approve; no second
+account or team is required. Security evaluation is evidence, not another
+accountability role. Agent or provider review cannot satisfy the maintainer
+requirement, and this record does not claim GitHub identity enforcement.

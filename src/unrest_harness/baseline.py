@@ -54,10 +54,7 @@ KICKOFF_RECORD = {
         "role_capability_policy": "absent",
         "unsafe_development_override": "absent",
     },
-    "protected_reviewers": [
-        "security-maintainer",
-        "release-maintainer",
-    ],
+    "protected_reviewers": ["maintainer"],
     "evaluation_tier": [
         "full-repository",
         "installed-wheel",

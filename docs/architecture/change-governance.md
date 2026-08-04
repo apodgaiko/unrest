@@ -31,11 +31,14 @@ version-1 source of truth for protected categories. Its checked-in
 coercion, missing categories, empty requirements, escaping or ambiguous
 selectors, agent/provider approvers, and weakened self-protection.
 
-Every protected category requires both accountable team roles:
-`release-maintainer` and `security-maintainer`. Agents and providers may
-propose, implement, or evaluate a change, but they cannot satisfy either
-approval role. Human approval evidence is external to this repository until a
-later promotion runtime consumes it.
+Every protected category requires exactly one accountable role: the repository
+owner acting as the human `maintainer`. The owner may self-approve; no second
+account or team is required. Agents and providers may propose, implement, or
+evaluate a change, but they cannot satisfy accountable review. Security remains
+a strongest-applicable evaluation tier where listed; it is not a second
+accountability role. Human approval evidence is external to this repository
+until a later promotion runtime consumes it. This policy validates the recorded
+role and evidence, but does not claim GitHub identity enforcement.
 
 `strongest-applicable` means every listed tier that the changed surface and
 available local infrastructure can exercise must run. A tier may be omitted
@@ -88,9 +91,15 @@ Schema-Change: <versioned schema-change packet path or none>
 Rollback-Plan: <existing procedure artifact path or none>
 ```
 
+The protected-review trailer is exactly:
+
+```text
+Human-Reviewers: maintainer
+```
+
 Ordinary changes still carry all trailers and use `none` where the field does
 not apply. For protected changes, `Protected-Surfaces` must equal deterministic
-path resolution, both human/team reviewer roles are required, and evaluation
+path resolution, `Human-Reviewers` must be exactly `maintainer`, and evaluation
 and rollback cannot be `none`. `Evaluation-Evidence` resolves to the typed
 positive tuple in `evidence-policy.json`; the referenced artifact must exist,
 match its declared digest, and pass its bound permitted check during
@@ -192,7 +201,8 @@ with stable `GOV-*` diagnostics.
 1. Resolve changed paths through the current protected-surface policy.
 2. Fill the PR template and any required ADR or schema-evolution packet.
 3. Run the strongest applicable evaluation tiers and record evidence.
-4. Obtain both accountable human/team reviews for protected changes.
+4. Record the human `maintainer` review for protected changes; the owner may
+   self-approve and needs no second account or team.
 5. Verify the rollback procedure before promotion is requested.
 6. Change the policy/model/schema together; because they are self-protected,
    weakening any one follows the same protected review path.

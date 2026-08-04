@@ -16,8 +16,7 @@ kickoff_record:
     role_capability_policy: absent
     unsafe_development_override: absent
   protected_reviewers:
-  - security-maintainer
-  - release-maintainer
+  - maintainer
   evaluation_tier:
   - full-repository
   - installed-wheel

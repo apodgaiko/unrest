@@ -28,11 +28,16 @@
 
 <!-- GOV-FIELD:human-reviewers -->
 
-- Required human/team reviewers: `none`
+- Required maintainer reviewer: `none`
 - Approval evidence: `none`
 
-Agents and providers may implement or evaluate this change. They do not count
-as `release-maintainer` or `security-maintainer` approval.
+For a protected change, use the repository owner acting as the one human
+`maintainer`; the owner may self-approve and no second account or team is
+required. Agents and providers may implement or evaluate the change, but they
+cannot satisfy accountable review. This records repository policy only and
+does not claim GitHub identity enforcement.
+
+For a protected commit, record exactly `Human-Reviewers: maintainer`.
 
 ## Evaluation evidence
 

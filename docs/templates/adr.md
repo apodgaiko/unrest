@@ -64,9 +64,16 @@ evaluation_tier: []
 ## Protected-surface review
 
 - Protected categories: `<sorted policy category IDs or none>`
-- Required reviewers: `<release-maintainer and security-maintainer or none>`
+- Required maintainer reviewer: `<maintainer or none>`
 - Review evidence: `<links/paths>`
 - Evaluation evidence: `<strongest applicable tier and results>`
+
+The repository owner may self-approve as the one human `maintainer`; no second
+account or team is required. Security evaluation remains an evidence tier, not
+a second accountable role. This template does not claim GitHub identity
+enforcement.
+
+For a protected commit, record exactly `Human-Reviewers: maintainer`.
 
 <!-- GOV-FIELD:protected-surfaces -->
 <!-- GOV-FIELD:human-reviewers -->
