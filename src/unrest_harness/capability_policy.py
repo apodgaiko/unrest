@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import builtins
 import hashlib
 import ast
+import importlib.util
 import json
 import math
 import os
@@ -613,13 +615,656 @@ def load_capability_sink_catalog(bundled_dir: Path) -> CapabilitySinkCatalog:
     )
 
 
+class CapabilitySourceGraphError(ValueError):
+    """Bounded diagnostic for an invalid capability source graph."""
+
+
+def _repository_relative_python_path(
+    repository_root: Path,
+    raw_path: str,
+    *,
+    source: str,
+) -> str:
+    path = Path(raw_path)
+    if path.is_absolute() or any(part == ".." for part in path.parts):
+        raise CapabilitySourceGraphError(f"{source} path escapes the repository")
+    candidate = (repository_root / path).resolve()
+    try:
+        relative = candidate.relative_to(repository_root.resolve()).as_posix()
+    except ValueError as exc:
+        raise CapabilitySourceGraphError(
+            f"{source} path escapes the repository"
+        ) from exc
+    if candidate.suffix != ".py" or not candidate.is_file():
+        raise CapabilitySourceGraphError(f"{source} Python path is unavailable")
+    return relative
+
+
+def _strict_component_python_paths(repository_root: Path) -> tuple[str, ...]:
+    path = repository_root / "docs/architecture/component-map.json"
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise CapabilitySourceGraphError(
+                    "component map contains duplicate object members"
+                )
+            result[key] = value
+        return result
+
+    try:
+        document = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=unique_object,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise CapabilitySourceGraphError("component map is unavailable or malformed") from exc
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"components", "schema_version"}
+        or document["schema_version"] != 1
+    ):
+        raise CapabilitySourceGraphError("component map has an invalid top-level record")
+    components = document["components"]
+    if not isinstance(components, list):
+        raise CapabilitySourceGraphError("component map has an invalid component list")
+    matches = [
+        item
+        for item in components
+        if isinstance(item, dict) and item.get("id") == "COMP-CAPABILITY"
+    ]
+    if len(matches) != 1:
+        raise CapabilitySourceGraphError(
+            "component map must contain exactly one COMP-CAPABILITY record"
+        )
+    component = matches[0]
+    expected_fields = {"decisions", "id", "invariants", "paths", "specifications", "tests"}
+    if set(component) != expected_fields or not isinstance(component["paths"], list):
+        raise CapabilitySourceGraphError("COMP-CAPABILITY record is malformed")
+    raw_paths = component["paths"]
+    if not all(isinstance(item, str) for item in raw_paths):
+        raise CapabilitySourceGraphError("COMP-CAPABILITY paths are malformed")
+    if len(raw_paths) != len(set(raw_paths)):
+        raise CapabilitySourceGraphError("COMP-CAPABILITY paths are duplicated")
+    python_paths = tuple(item for item in raw_paths if item.endswith(".py"))
+    return tuple(
+        _repository_relative_python_path(
+            repository_root,
+            item,
+            source="COMP-CAPABILITY",
+        )
+        for item in python_paths
+    )
+
+
+def _module_name_for_path(relative_path: str) -> tuple[str, bool]:
+    path = Path(relative_path)
+    try:
+        source_relative = path.relative_to("src")
+    except ValueError as exc:
+        raise CapabilitySourceGraphError(
+            "capability Python path is outside the source package"
+        ) from exc
+    parts = source_relative.with_suffix("").parts
+    is_package = parts[-1] == "__init__"
+    if is_package:
+        parts = parts[:-1]
+    if not parts or parts[0] != "unrest_harness":
+        raise CapabilitySourceGraphError(
+            "capability Python path is outside unrest_harness"
+        )
+    return ".".join(parts), is_package
+
+
+def _local_module_path(repository_root: Path, module_name: str) -> str | None:
+    if module_name != "unrest_harness" and not module_name.startswith(
+        "unrest_harness."
+    ):
+        return None
+    base = repository_root / "src" / Path(*module_name.split("."))
+    candidates = (base.with_suffix(".py"), base / "__init__.py")
+    for candidate in candidates:
+        if candidate.is_file():
+            resolved = candidate.resolve()
+            try:
+                return resolved.relative_to(repository_root.resolve()).as_posix()
+            except ValueError as exc:
+                raise CapabilitySourceGraphError(
+                    f"repository-local import for {module_name} escapes the repository"
+                ) from exc
+    return None
+
+
+def _package_initializer_paths(
+    repository_root: Path,
+    module_name: str,
+    *,
+    is_package: bool,
+) -> tuple[str, ...]:
+    parts = module_name.split(".")
+    package_count = len(parts) if is_package else len(parts) - 1
+    initializers: list[str] = []
+    for length in range(1, package_count + 1):
+        package = ".".join(parts[:length])
+        path = repository_root / "src" / Path(*package.split(".")) / "__init__.py"
+        if not path.is_file():
+            raise CapabilitySourceGraphError(
+                f"executed package initializer for {package} is unavailable"
+            )
+        resolved = path.resolve()
+        try:
+            initializers.append(
+                resolved.relative_to(repository_root.resolve()).as_posix()
+            )
+        except ValueError as exc:
+            raise CapabilitySourceGraphError(
+                f"executed package initializer for {package} escapes the repository"
+            ) from exc
+    return tuple(initializers)
+
+
+def _local_import_paths(
+    repository_root: Path,
+    relative_path: str,
+    tree: ast.Module,
+) -> tuple[str, ...]:
+    module_name, is_package = _module_name_for_path(relative_path)
+    package_name = module_name if is_package else module_name.rpartition(".")[0]
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        candidates: list[str] = []
+        if isinstance(node, ast.Import):
+            candidates.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                relative_name = "." * node.level + (node.module or "")
+                try:
+                    base_name = importlib.util.resolve_name(
+                        relative_name,
+                        package_name,
+                    )
+                except (ImportError, ValueError) as exc:
+                    raise CapabilitySourceGraphError(
+                        f"unresolved relative import in {relative_path}"
+                    ) from exc
+            else:
+                base_name = node.module or ""
+            if base_name:
+                candidates.append(base_name)
+                candidates.extend(
+                    f"{base_name}.{alias.name}"
+                    for alias in node.names
+                    if alias.name != "*"
+                )
+        for candidate in candidates:
+            local_path = _local_module_path(repository_root, candidate)
+            if local_path is None:
+                continue
+            imported.add(local_path)
+            imported.update(
+                _package_initializer_paths(
+                    repository_root,
+                    candidate,
+                    is_package=local_path.endswith("/__init__.py"),
+                )
+            )
+    return tuple(sorted(imported))
+
+
+def build_reachable_capability_source_graph(
+    repository_root: Path,
+    catalog: CapabilitySinkCatalog,
+) -> tuple[str, ...]:
+    """Return the deterministic repository-local capability import closure."""
+    roots = set(_strict_component_python_paths(repository_root))
+    declarations: tuple[CapabilitySink | CapabilitySinkOmission, ...] = (
+        *catalog.sinks,
+        *catalog.omissions,
+    )
+    for declaration in declarations:
+        raw_path, separator, anchor = declaration.implementation.partition(":")
+        if not separator or not raw_path or not anchor:
+            raise CapabilitySourceGraphError("capability implementation locator is malformed")
+        if raw_path.endswith(".py"):
+            roots.add(
+                _repository_relative_python_path(
+                    repository_root,
+                    raw_path,
+                    source="capability implementation",
+                )
+            )
+    if not roots:
+        raise CapabilitySourceGraphError("capability source graph has no Python roots")
+
+    pending = sorted(roots)
+    closure: set[str] = set()
+    while pending:
+        relative_path = pending.pop(0)
+        if relative_path in closure:
+            continue
+        path = repository_root / relative_path
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, SyntaxError) as exc:
+            raise CapabilitySourceGraphError(
+                f"reachable Python source {relative_path} is unavailable or malformed"
+            ) from exc
+        closure.add(relative_path)
+        module_name, is_package = _module_name_for_path(relative_path)
+        discovered = set(
+            _package_initializer_paths(
+                repository_root,
+                module_name,
+                is_package=is_package,
+            )
+        )
+        discovered.update(_local_import_paths(repository_root, relative_path, tree))
+        pending = sorted(set(pending) | (discovered - closure))
+    return tuple(sorted(closure))
+
+
+def _normalized_egress_expression(node: ast.AST) -> Any:
+    """Serialize egress-relevant expressions without CPython AST field drift."""
+    if isinstance(node, ast.Name):
+        return ["name", node.id]
+    if isinstance(node, ast.Attribute):
+        return ["attribute", _normalized_egress_expression(node.value), node.attr]
+    if isinstance(node, ast.Constant):
+        normalized_value: Any = node.value
+        if isinstance(normalized_value, bytes):
+            normalized_value = {"bytes_hex": normalized_value.hex()}
+        elif not isinstance(
+            normalized_value,
+            (str, int, float, complex, bool, type(None)),
+        ):
+            normalized_value = type(normalized_value).__name__
+        return ["constant", normalized_value]
+    if isinstance(node, ast.Call):
+        return [
+            "call",
+            _normalized_egress_expression(node.func),
+            [_normalized_egress_expression(item) for item in node.args],
+            [
+                [item.arg, _normalized_egress_expression(item.value)]
+                for item in node.keywords
+            ],
+        ]
+    if isinstance(node, ast.Subscript):
+        return [
+            "subscript",
+            _normalized_egress_expression(node.value),
+            _normalized_egress_expression(node.slice),
+        ]
+    if isinstance(node, ast.Slice):
+        return [
+            "slice",
+            *[
+                None if item is None else _normalized_egress_expression(item)
+                for item in (node.lower, node.upper, node.step)
+            ],
+        ]
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return [
+            type(node).__name__.lower(),
+            [_normalized_egress_expression(item) for item in node.elts],
+        ]
+    if isinstance(node, ast.Dict):
+        return [
+            "dict",
+            [
+                [
+                    None if key is None else _normalized_egress_expression(key),
+                    _normalized_egress_expression(value),
+                ]
+                for key, value in zip(node.keys, node.values, strict=True)
+            ],
+        ]
+    if isinstance(node, (ast.BinOp, ast.BoolOp, ast.UnaryOp, ast.Compare)):
+        children = [
+            _normalized_egress_expression(item)
+            for item in ast.iter_child_nodes(node)
+            if not isinstance(item, (ast.operator, ast.boolop, ast.unaryop, ast.cmpop))
+        ]
+        operators = [
+            type(item).__name__
+            for item in ast.iter_child_nodes(node)
+            if isinstance(item, (ast.operator, ast.boolop, ast.unaryop, ast.cmpop))
+        ]
+        return [type(node).__name__.lower(), operators, children]
+    if isinstance(node, ast.IfExp):
+        return [
+            "if-expression",
+            _normalized_egress_expression(node.test),
+            _normalized_egress_expression(node.body),
+            _normalized_egress_expression(node.orelse),
+        ]
+    if isinstance(node, ast.Starred):
+        return ["starred", _normalized_egress_expression(node.value)]
+    if isinstance(node, ast.JoinedStr):
+        return [
+            "joined-string",
+            [_normalized_egress_expression(item) for item in node.values],
+        ]
+    if isinstance(node, ast.FormattedValue):
+        return [
+            "formatted-value",
+            _normalized_egress_expression(node.value),
+            node.conversion,
+            None
+            if node.format_spec is None
+            else _normalized_egress_expression(node.format_spec),
+        ]
+    if isinstance(node, ast.Lambda):
+        return ["lambda", _normalized_egress_expression(node.body)]
+    if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+        return [
+            type(node).__name__.lower(),
+            _normalized_egress_expression(node.elt),
+            [
+                [
+                    _normalized_egress_expression(generator.target),
+                    _normalized_egress_expression(generator.iter),
+                    generator.is_async,
+                ]
+                for generator in node.generators
+            ],
+        ]
+    if isinstance(node, ast.DictComp):
+        return [
+            "dictcomp",
+            _normalized_egress_expression(node.key),
+            _normalized_egress_expression(node.value),
+            [
+                [
+                    _normalized_egress_expression(generator.target),
+                    _normalized_egress_expression(generator.iter),
+                    generator.is_async,
+                ]
+                for generator in node.generators
+            ],
+        ]
+    return ["expression", type(node).__name__]
+
+
+def normalized_external_egress_records(
+    relative_path: str,
+    tree: ast.Module,
+) -> tuple[dict[str, Any], ...]:
+    """Project data-bearing calls that cannot resolve to local Python code."""
+    imported: dict[str, tuple[str, bool]] = {}
+    local_definitions = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported[alias.asname or alias.name.split(".")[0]] = (
+                    alias.name,
+                    alias.name == "unrest_harness" or alias.name.startswith("unrest_harness."),
+                )
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            is_local = bool(node.level) or module == "unrest_harness" or module.startswith(
+                "unrest_harness."
+            )
+            for alias in node.names:
+                imported[alias.asname or alias.name] = (
+                    f"{module}.{alias.name}" if module else alias.name,
+                    is_local,
+                )
+
+    parents: dict[ast.AST, ast.AST] = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[child] = parent
+
+    def owner(node: ast.AST) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+        cursor: ast.AST | None = node
+        while cursor is not None:
+            if isinstance(cursor, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return cursor
+            cursor = parents.get(cursor)
+        return None
+
+    def anchor(node: ast.AST) -> str:
+        cursor: ast.AST | None = node
+        names: list[str] = []
+        while cursor is not None:
+            if isinstance(cursor, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                names.insert(0, cursor.name)
+            cursor = parents.get(cursor)
+        return "<module>" if not names else ".".join(names)
+
+    records: list[dict[str, Any]] = []
+    functions = [
+        item
+        for item in ast.walk(tree)
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    for function in functions:
+        parameters = {
+            item.arg
+            for item in (
+                *function.args.posonlyargs,
+                *function.args.args,
+                *function.args.kwonlyargs,
+            )
+        }
+        tainted = set(parameters)
+        external_aliases: set[str] = set()
+        function_imports: dict[str, bool] = {}
+        for item in ast.walk(function):
+            if owner(item) is not function:
+                continue
+            if isinstance(item, ast.Import):
+                for alias in item.names:
+                    function_imports[alias.asname or alias.name.split(".")[0]] = not (
+                        alias.name == "unrest_harness"
+                        or alias.name.startswith("unrest_harness.")
+                    )
+            elif isinstance(item, ast.ImportFrom):
+                module = item.module or ""
+                is_external = not (
+                    bool(item.level)
+                    or module == "unrest_harness"
+                    or module.startswith("unrest_harness.")
+                )
+                for alias in item.names:
+                    function_imports[alias.asname or alias.name] = is_external
+
+        def names_in(expression: ast.AST) -> set[str]:
+            return {
+                item.id for item in ast.walk(expression) if isinstance(item, ast.Name)
+            }
+
+        def local_self_method(expression: ast.AST) -> bool:
+            if not (
+                isinstance(expression, ast.Attribute)
+                and isinstance(expression.value, ast.Name)
+                and expression.value.id in {"self", "cls"}
+            ):
+                return False
+            class_node = parents.get(function)
+            return isinstance(class_node, ast.ClassDef) and any(
+                isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and item.name == expression.attr
+                for item in class_node.body
+            )
+
+        def external_callable(expression: ast.AST) -> bool:
+            if isinstance(expression, ast.Name):
+                if expression.id in external_aliases:
+                    return True
+                if expression.id in function_imports:
+                    return function_imports[expression.id]
+                binding = imported.get(expression.id)
+                if binding is not None:
+                    return not binding[1]
+                return (
+                    expression.id not in local_definitions
+                    and expression.id not in parameters
+                    and not hasattr(builtins, expression.id)
+                )
+            if isinstance(expression, ast.Attribute):
+                if local_self_method(expression):
+                    return False
+                root: ast.AST = expression
+                while isinstance(root, ast.Attribute):
+                    root = root.value
+                if isinstance(root, ast.Name):
+                    binding = imported.get(root.id)
+                    if binding is not None:
+                        return not binding[1]
+                    if root.id in function_imports:
+                        return function_imports[root.id]
+                    return root.id in parameters or root.id in external_aliases
+                return True
+            if (
+                isinstance(expression, ast.Call)
+                and isinstance(expression.func, ast.Name)
+                and expression.func.id == "getattr"
+                and len(expression.args) >= 2
+                and isinstance(expression.args[1], ast.Constant)
+                and isinstance(expression.args[1].value, str)
+            ):
+                target = expression.args[0]
+                return (
+                    isinstance(target, ast.Name) and target.id in parameters
+                ) or external_callable(target)
+            return False
+
+        object_method_aliases: set[str] = set()
+
+        def unknown_object_callable(expression: ast.AST) -> bool:
+            if isinstance(expression, ast.Name):
+                return expression.id in object_method_aliases
+            if isinstance(expression, ast.Attribute):
+                root: ast.AST = expression
+                while isinstance(root, ast.Attribute):
+                    root = root.value
+                return isinstance(root, ast.Name) and root.id in parameters
+            if (
+                isinstance(expression, ast.Call)
+                and isinstance(expression.func, ast.Name)
+                and expression.func.id == "getattr"
+                and len(expression.args) >= 2
+                and isinstance(expression.args[1], ast.Constant)
+                and isinstance(expression.args[1].value, str)
+            ):
+                target = expression.args[0]
+                return (
+                    isinstance(target, ast.Name) and target.id in parameters
+                ) or unknown_object_callable(target)
+            return False
+
+        data_packets: set[str] = set()
+
+        def call_carries_data(call: ast.Call) -> bool:
+            if not external_callable(call.func):
+                return False
+            keyword_data = any(
+                names_in(item.value) & tainted for item in call.keywords
+            )
+            nonleading_data = any(names_in(item) & tainted for item in call.args[1:])
+            packet_data = any(names_in(item) & data_packets for item in call.args)
+            receiver_data = unknown_object_callable(call.func) and any(
+                names_in(item) & tainted for item in call.args
+            )
+            return keyword_data or nonleading_data or packet_data or receiver_data
+
+        assignments = [
+            item
+            for item in ast.walk(function)
+            if owner(item) is function and isinstance(item, (ast.Assign, ast.AnnAssign))
+        ]
+        for _ in range(len(assignments) + 1):
+            changed = False
+            for assignment in assignments:
+                value = assignment.value
+                if value is None:
+                    continue
+                targets = (
+                    assignment.targets
+                    if isinstance(assignment, ast.Assign)
+                    else (assignment.target,)
+                )
+                target_names = {
+                    item.id
+                    for target in targets
+                    for item in ast.walk(target)
+                    if isinstance(item, ast.Name)
+                }
+                if names_in(value) & tainted:
+                    before = len(tainted)
+                    tainted.update(target_names)
+                    changed = changed or len(tainted) != before
+                if external_callable(value):
+                    before = len(external_aliases)
+                    external_aliases.update(target_names)
+                    changed = changed or len(external_aliases) != before
+                if unknown_object_callable(value):
+                    before = len(object_method_aliases)
+                    object_method_aliases.update(target_names)
+                    changed = changed or len(object_method_aliases) != before
+                carries_data = bool(names_in(value) & data_packets) or any(
+                    isinstance(item, ast.Call) and call_carries_data(item)
+                    for item in ast.walk(value)
+                )
+                if carries_data:
+                    before = len(data_packets)
+                    data_packets.update(target_names)
+                    changed = changed or len(data_packets) != before
+            if not changed:
+                break
+
+        for call in ast.walk(function):
+            if not isinstance(call, ast.Call) or owner(call) is not function:
+                continue
+            if not call_carries_data(call):
+                continue
+            records.append(
+                {
+                    "anchor": anchor(call),
+                    "arguments": [
+                        _normalized_egress_expression(item) for item in call.args
+                    ],
+                    "callable": _normalized_egress_expression(call.func),
+                    "keywords": [
+                        [item.arg, _normalized_egress_expression(item.value)]
+                        for item in call.keywords
+                    ],
+                    "path": relative_path,
+                }
+            )
+    return tuple(
+        sorted(
+            records,
+            key=lambda item: json.dumps(
+                item,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        )
+    )
+
+
 def validate_capability_sink_anchors(
     repository_root: Path,
     catalog: CapabilitySinkCatalog,
 ) -> tuple[str, ...]:
     """Bind declarations and reject undeclared reachable capability effects."""
     errors: list[str] = []
-    source_root = repository_root / "src/unrest_harness"
+    try:
+        source_graph = build_reachable_capability_source_graph(
+            repository_root,
+            catalog,
+        )
+    except CapabilitySourceGraphError as exc:
+        return (f"reachable-capability-closure: {exc}",)
 
     for sink in catalog.sinks:
         relative_path, separator, anchor = sink.implementation.partition(":")
@@ -801,6 +1446,7 @@ def validate_capability_sink_anchors(
     }
     observed_omission_primitives: dict[str, list[str]] = {}
     observed_effects: list[tuple[str, str, str]] = []
+    completeness_records: list[dict[str, Any]] = []
 
     def expression_name(
         expression: ast.expr,
@@ -1221,14 +1867,17 @@ def validate_capability_sink_anchors(
             and candidate.func.id == "reversed"
         )
 
-    for path in sorted(source_root.rglob("*.py")):
-        relative_path = path.relative_to(repository_root).as_posix()
+    for relative_path in source_graph:
+        path = repository_root / relative_path
         try:
             text = path.read_text(encoding="utf-8")
             tree = ast.parse(text)
         except (OSError, UnicodeError, SyntaxError):
             errors.append(f"reachable-sink-closure: {relative_path} is unavailable")
             continue
+        completeness_records.extend(
+            normalized_external_egress_records(relative_path, tree)
+        )
         import_aliases: dict[str, str] = {}
         for module_statement in tree.body:
             if isinstance(module_statement, ast.Import):
@@ -1942,9 +2591,21 @@ def validate_capability_sink_anchors(
             )
     observed_effect_digest = hashlib.sha256(
         json.dumps(
-            sorted(observed_effects),
+            {
+                "completeness": sorted(
+                    completeness_records,
+                    key=lambda item: json.dumps(
+                        item,
+                        ensure_ascii=True,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    ),
+                ),
+                "effects": sorted(observed_effects),
+            },
             ensure_ascii=True,
             separators=(",", ":"),
+            sort_keys=True,
         ).encode("utf-8")
     ).hexdigest()
     if observed_effect_digest != catalog.reachable_source_sha256:

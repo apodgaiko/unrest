@@ -84,7 +84,8 @@
       ],
       "tests": [
         "tests/test_capability_closed_model.py",
-        "tests/test_capability_policy.py"
+        "tests/test_capability_policy.py",
+        "tests/test_capability_source_graph.py"
       ]
     },
     {

@@ -19,6 +19,7 @@ applies_to:
 verified_by:
   - tests/test_capability_closed_model.py
   - tests/test_capability_policy.py
+  - tests/test_capability_source_graph.py
   - tests/test_cli.py
   - tests/test_documentation_contract.py
 related_decisions: []
@@ -76,7 +77,13 @@ an alternate writer. Reversible codec operations are likewise bound to their
 declared transform owner; an additional codec or transform fails closed.
 The catalog's version-1 `reachable_source_sha256` field retains its original
 wire name but pins a deterministic semantic projection, not whole Python
-source files. The projection records each capability-relevant effect's owning
+source files. Roots are sink and omission implementations plus Python paths in
+the canonical `COMP-CAPABILITY` record. Repository-local imports and executed
+package initializers enter transitively; external modules and unimported files
+do not. Every discovered local path resolves against the repository before
+entry, so imported modules and executed package initializers that escape through
+symlinks fail closed. Invalid, duplicate, missing, unresolved, or escaping
+component records fail closed. The projection records each capability-relevant effect's owning
 implementation, effect family, and resolved primitive, including writers,
 serializers, callbacks, descriptor channels, canonical delegations, supported
 codec calls, unsupported codec families, and reverse slices. Lexical symbol
@@ -114,6 +121,18 @@ moved capability effect therefore requires catalog review, while unrelated
 arithmetic, predicates, data attributes, ordering, control flow, comments,
 and formatting do not. Explicit omission records cover the few reviewed
 non-sensitive effects whose syntax overlaps a protected family.
+The same canonical JSON also contains path-bearing completeness records for
+data-bearing calls that do not resolve to local Python implementations. A
+custom Python 3.11-3.13-stable AST representation preserves callable and data
+structure while ignoring locations, comments, formatting, type comments and
+ignores, absent empty fields, and comprehension predicates. Comprehension
+payload expressions and iteration sources remain data-bearing structure. Call
+projection is independent of how the
+result is used: discarded, returned, assigned, awaited, and calls nested in
+ordinary expressions have identical capability records. External calls,
+unknown object methods, bound aliases, and constant-name `getattr` are covered
+without a method-name allowlist; explicit effects retain their precise
+diagnostics.
 Adding an implementation effect, adding an omission, or deleting either side
 of a declaration fails repository validation.
 `unrest check-repository` runs those same strict loaders against the three

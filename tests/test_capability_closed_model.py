@@ -1,6 +1,7 @@
 """Closed Batch 0 capability-security model and sink-catalog contracts."""
 from __future__ import annotations
 
+import ast
 import base64
 import json
 import shutil
@@ -15,9 +16,11 @@ from unrest_harness.capability_policy import (
     SECURITY_SEMANTIC_ROLE_IDS,
     SECURITY_TRANSFORM_IDS,
     CapabilityPolicyError,
+    build_reachable_capability_source_graph,
     load_capability_policy,
     load_capability_security_model,
     load_capability_sink_catalog,
+    normalized_external_egress_records,
     validate_capability_model_anchors,
     validate_capability_sink_anchors,
 )
@@ -32,6 +35,18 @@ from unrest_harness.storage import (
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLED = ROOT / "src" / "unrest_harness" / "bundled"
 POLICIES = BUNDLED / "policies"
+
+
+def _capability_repository(tmp_path: Path) -> Path:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    (repository / "docs/architecture").mkdir(parents=True)
+    shutil.copy2(
+        ROOT / "docs/architecture/component-map.json",
+        repository / "docs/architecture/component-map.json",
+    )
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    return repository
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -55,6 +70,19 @@ def _mutated_bundled(
         encoding="utf-8",
     )
     return bundled
+
+
+def _copy_capability_repository(tmp_path: Path) -> Path:
+    repository = tmp_path / "repository"
+    shutil.copytree(ROOT / "src", repository / "src")
+    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    architecture = repository / "docs" / "architecture"
+    architecture.mkdir(parents=True)
+    shutil.copy2(
+        ROOT / "docs" / "architecture" / "component-map.json",
+        architecture / "component-map.json",
+    )
+    return repository
 
 
 @pytest.mark.parametrize(
@@ -115,6 +143,103 @@ def test_sink_catalog_is_exact_and_every_anchor_resolves() -> None:
     assert len(catalog.reachable_source_sha256) == 64
     assert validate_capability_model_anchors(ROOT, model) == ()
     assert validate_capability_sink_anchors(ROOT, catalog) == ()
+
+
+def test_capability_source_graph_has_exact_roots_closure_and_initializer() -> None:
+    catalog = load_capability_sink_catalog(BUNDLED)
+    graph = build_reachable_capability_source_graph(ROOT, catalog)
+    assert graph == tuple(sorted(graph))
+    assert len(graph) == 21
+    assert "src/unrest_harness/__init__.py" in graph
+    assert "src/unrest_harness/capability_policy.py" in graph
+    assert "src/unrest_harness/__main__.py" not in graph
+
+
+def test_new_imported_helper_enters_graph_and_egress_projection(tmp_path: Path) -> None:
+    repository = _capability_repository(tmp_path)
+    root = repository / "src/unrest_harness/capability_policy.py"
+    root.write_text(
+        "from . import capability_helper\n" + root.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    helper = repository / "src/unrest_harness/capability_helper.py"
+    helper.write_text("def relay(value):\n    return value\n", encoding="utf-8")
+    catalog = load_capability_sink_catalog(repository / "src/unrest_harness/bundled")
+    graph = build_reachable_capability_source_graph(repository, catalog)
+    assert "src/unrest_harness/capability_helper.py" in graph
+    helper.write_text(
+        "import httpx\n\ndef relay(value):\n    httpx.post('https://example', content=value)\n",
+        encoding="utf-8",
+    )
+    assert any(
+        error.startswith("reachable-capability-closure:")
+        for error in validate_capability_sink_anchors(repository, catalog)
+    )
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "import httpx\ndef relay(value):\n httpx.post('https://x', content=value)\n",
+        "import urllib.request\ndef relay(value):\n request=urllib.request.Request('https://x', data=value)\n urllib.request.urlopen(request)\n",
+        "import subprocess\ndef relay(value):\n subprocess.run(['tool'], input=value)\n",
+        "def relay(connection, value):\n connection.execute('insert', value)\n",
+        "def relay(queue, value):\n emit=queue.send\n emit(value)\n",
+        "import httpx\ndef relay(value):\n emit=httpx.post\n emit('https://x', content=value)\n",
+        "import httpx\ndef relay(value):\n getattr(httpx, 'post')('https://x', content=value)\n",
+    ),
+)
+def test_normalized_projection_catches_atomic_external_egress(source: str) -> None:
+    records = normalized_external_egress_records("src/unrest_harness/helper.py", ast.parse(source))
+    assert records
+    assert all(record["path"] == "src/unrest_harness/helper.py" for record in records)
+
+
+def test_projection_is_semantic_deterministic_and_path_bound() -> None:
+    plain = "def relay(value):\n return value > 0 and value != 2\n"
+    formatted = "# comment\n\ndef relay( value ):\n    return (value > 0) and (value != 2)\n"
+    assert normalized_external_egress_records("x.py", ast.parse(plain)) == ()
+    assert normalized_external_egress_records("x.py", ast.parse(formatted)) == ()
+    egress = ast.parse("def relay(queue, value):\n queue.send(value)\n")
+    first = normalized_external_egress_records("a.py", egress)
+    assert first == normalized_external_egress_records("a.py", egress)
+    assert first != normalized_external_egress_records("b.py", egress)
+
+
+@pytest.mark.parametrize("mutation", ("missing", "duplicate", "escape", "malformed"))
+def test_component_record_failures_close_source_graph(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    repository = _capability_repository(tmp_path)
+    path = repository / "docs/architecture/component-map.json"
+    document = _load_json(path)
+    component = next(
+        item for item in document["components"] if item["id"] == "COMP-CAPABILITY"
+    )
+    if mutation == "missing":
+        document["components"].remove(component)
+    elif mutation == "duplicate":
+        document["components"].append(component)
+    elif mutation == "escape":
+        component["paths"].append("../escape.py")
+    else:
+        component.pop("tests")
+    path.write_text(json.dumps(document, sort_keys=True), encoding="utf-8")
+    catalog = load_capability_sink_catalog(repository / "src/unrest_harness/bundled")
+    errors = validate_capability_sink_anchors(repository, catalog)
+    assert errors[0].startswith("reachable-capability-closure:")
+
+
+def test_unimported_module_does_not_change_capability_closure(tmp_path: Path) -> None:
+    repository = _capability_repository(tmp_path)
+    path = repository / "src/unrest_harness/not_reachable.py"
+    path.write_text(
+        "import httpx\nvalue = httpx.post('https://example', content=b'x')\n",
+        encoding="utf-8",
+    )
+    catalog = load_capability_sink_catalog(repository / "src/unrest_harness/bundled")
+    assert validate_capability_sink_anchors(repository, catalog) == ()
 
 
 @pytest.mark.parametrize(
@@ -246,9 +371,7 @@ def test_capability_asset_loaders_reject_strict_shape_controls(
 
 
 def test_sink_anchor_mutations_are_detected(tmp_path: Path) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     catalog = load_capability_sink_catalog(repository / "src/unrest_harness/bundled")
     path = repository / "src/unrest_harness/acp_runner.py"
     path.write_text(
@@ -271,9 +394,7 @@ def test_sink_anchor_mutations_are_detected(tmp_path: Path) -> None:
 def test_reachable_uncataloged_channels_fail_closed_model_validation(
     tmp_path: Path,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(
         path.read_text(encoding="utf-8")
@@ -339,9 +460,7 @@ def test_semantically_equivalent_new_output_effects_require_governance(
     tmp_path: Path,
     addition: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -398,9 +517,7 @@ def test_output_aliases_and_new_stream_families_fail_closed(
     tmp_path: Path,
     addition: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -415,9 +532,7 @@ def test_output_aliases_and_new_stream_families_fail_closed(
 def test_annotated_callback_escape_changes_semantic_closure(
     tmp_path: Path,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(
         path.read_text(encoding="utf-8")
@@ -496,9 +611,7 @@ def test_neutral_wrapper_and_dynamic_capability_bypasses_fail_closed(
     addition: str,
     diagnostic: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -611,9 +724,7 @@ def test_scoped_indirect_capability_acquisition_fails_closed(
     addition: str,
     diagnostic: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -727,9 +838,7 @@ def test_returned_callbacks_and_mapping_style_acquisition_fail_closed(
     addition: str,
     diagnostic: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -803,9 +912,7 @@ def test_literal_container_capability_aliases_fail_closed(
     addition: str,
     diagnostic: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -862,9 +969,7 @@ def test_returned_literal_container_capabilities_change_closure(
     tmp_path: Path,
     addition: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -951,9 +1056,7 @@ def test_bounded_nested_and_destructured_capability_aliases_change_closure(
     tmp_path: Path,
     addition: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -1032,9 +1135,7 @@ def test_escaped_literal_capability_containers_change_closure(
     tmp_path: Path,
     addition: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -1084,9 +1185,7 @@ def test_exact_destructuring_into_state_changes_closure(
     tmp_path: Path,
     addition: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -1121,9 +1220,7 @@ def test_new_reversible_transform_implementations_fail_closed(
     tmp_path: Path,
     addition: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -1161,9 +1258,7 @@ def test_reversible_entry_points_and_callable_escapes_fail_closed(
     tmp_path: Path,
     addition: str,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
     catalog = load_capability_sink_catalog(
@@ -1180,9 +1275,7 @@ def test_reversible_entry_points_and_callable_escapes_fail_closed(
 def test_declared_omission_cannot_gain_an_additional_primitive_writer(
     tmp_path: Path,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/baseline.py"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
@@ -1204,9 +1297,7 @@ def test_declared_omission_cannot_gain_an_additional_primitive_writer(
 def test_unknown_new_reversible_computation_fails_semantic_effect_closure(
     tmp_path: Path,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(
         path.read_text(encoding="utf-8")
@@ -1229,9 +1320,7 @@ def _new_reversible_slice(value):
 def test_unrelated_new_computation_does_not_change_capability_closure(
     tmp_path: Path,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(
         path.read_text(encoding="utf-8")
@@ -1251,9 +1340,7 @@ def _unrelated_arithmetic(left, right):
 def test_unrelated_aliases_predicates_and_write_attributes_do_not_change_closure(
     tmp_path: Path,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(
         path.read_text(encoding="utf-8")
@@ -1280,9 +1367,7 @@ def _unrelated_local_flow(
 def test_unrelated_dynamic_callables_and_composition_do_not_change_closure(
     tmp_path: Path,
 ) -> None:
-    repository = tmp_path / "repository"
-    shutil.copytree(ROOT / "src", repository / "src")
-    shutil.copy2(ROOT / "pyproject.toml", repository / "pyproject.toml")
+    repository = _copy_capability_repository(tmp_path)
     path = repository / "src/unrest_harness/capability_policy.py"
     path.write_text(
         path.read_text(encoding="utf-8")
