@@ -1,20 +1,110 @@
-Batch 0 merge-blocker evaluation
-date: 2026-08-03
-branch: codex/batch-0-recommended-fixes
-reviewed blocker head: 858d617dbce69ae3bc683f608465c8f899eadcae
+Batch 0 final closure evidence
+date: 2026-08-05
+reviewed base: eb0ba661b52bcc8004733471c9409b6795d59772
+frozen candidate: 8843d3ff4969f338e7020bb1c4974f533ac0f622
+clean detached checkout: /private/tmp/unrest-batch0-finalgate.4iHxA9/candidate
 
-tracked Python ruff check: passed
-mypy src: passed (22 source files)
-capability closed-model tests: passed (118)
-capability policy tests: passed (1725)
-ACP/server/storage persistence tests: passed (88)
-repository contract: passed
-wheel and source distribution build: passed
-post-build full pytest: passed (2843 passed, 7 expected opt-in skips)
-installed wheel from unrelated directory: passed
-installed lifecycle: project, plan, work, validation, gate, terminal review,
-persistence, restart, and resume passed without live credentials
-adversarial contract review: passed on frozen implementation candidate
+Original ancestry and approved implementation scope
 
-No credential values, environment values, prompts, source bodies, or command
-transcripts are included in this artifact.
+`git merge-base --is-ancestor eb0ba661b52bcc8004733471c9409b6795d59772 8843d3ff4969f338e7020bb1c4974f533ac0f622`
+exit: 0
+
+`git rev-list --count eb0ba661b52bcc8004733471c9409b6795d59772..8843d3ff4969f338e7020bb1c4974f533ac0f622`
+exit: 0
+count: 3
+
+1. 0821003c82e6d4eae6135b1314aada7163983faa
+   subject: fix(governance): adopt solo-maintainer review policy
+   Human-Reviewers trailers: 1
+   Human-Reviewers: maintainer
+2. cc384cba34767965b393fe16360a9110ff95242d
+   subject: fix(security): bound capability closure over reachable source graph
+   Human-Reviewers trailers: 1
+   Human-Reviewers: maintainer
+3. 8843d3ff4969f338e7020bb1c4974f533ac0f622
+   subject: fix(security): preserve awaited egress payload structure
+   Human-Reviewers trailers: 1
+   Human-Reviewers: maintainer
+
+The reviewed three-commit range changes exactly these 19 tracked paths:
+
+.github/PULL_REQUEST_TEMPLATE.md
+docs/architecture/capability-policy.md
+docs/architecture/change-governance.md
+docs/architecture/component-map.json
+docs/release/batch-0-closure.md
+docs/templates/adr.md
+evals/baseline/manifest.yaml
+evals/baseline/report.json
+policy/protected-surfaces.yaml
+src/unrest_harness/baseline.py
+src/unrest_harness/bundled/policies/capability-sinks.v1.json
+src/unrest_harness/capability_policy.py
+src/unrest_harness/governance.py
+tests/fixtures/governance/valid-protected-commit.txt
+tests/test_baseline.py
+tests/test_capability_closed_model.py
+tests/test_capability_source_graph.py
+tests/test_governance.py
+tests/test_repository_contract.py
+
+Ordered frozen-candidate gate
+
+1. `uv sync --locked`
+   exit: 0
+   result: 87 packages resolved; 81 packages checked
+2. `uv run ruff check .`
+   exit: 0
+3. `uv run mypy src`
+   exit: 0
+   result: no issues in 22 source files
+4. `env -u CODEX_PATH uv run pytest -q`
+   exit: 1
+   result: 3014 passed; 7 skipped; 2 failed before product execution because
+   the restricted shell denied `socket.bind(("127.0.0.1", 0))`
+5. `env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart`
+   exit: 0
+   result: the exact 2 denied parameterizations passed unchanged in 3.24s in
+   a loopback-capable shell; the 3014 prior passes were not rerun
+6. `uv run unrest check-repository`
+   exit: 0
+   result: status ok
+7. `uv run unrest check-governance --policy policy/protected-surfaces.yaml --component-map docs/architecture/component-map.json`
+   exit: 0
+   result: sole accountable role and reviewer maintainer
+8. `uv build`
+   exit: 0
+   result: wheel and source distribution built
+9. `uv pip install --python /private/tmp/unrest-batch0-wheel-venv.mvmEUy/bin/python /private/tmp/unrest-batch0-finalgate.4iHxA9/candidate/dist/unrest_harness-0.1.0-py3-none-any.whl`
+   exit: 0
+   result: 69 packages installed into a fresh Python 3.13.12 environment;
+   installed unrest-harness version 0.1.0
+10. From unrelated fresh working directory
+    `/private/tmp/unrest-batch0-wheel-cwd.1e343G`,
+    `/private/tmp/unrest-batch0-wheel-venv.mvmEUy/bin/python -m unrest_harness.installed_wheel_check`
+    exit: 0
+
+The effective test result is 3016 passed, 7 skipped, and 0 failed. The build
+and install each required one network-capable retry after a restricted-shell
+DNS failure; the successful command and artifact were unchanged.
+
+Installed wheel identity
+
+filename: unrest_harness-0.1.0-py3-none-any.whl
+distribution: unrest-harness
+version: 0.1.0
+python tag: py3
+ABI tag: none
+platform tag: any
+SHA-256: b72c5e89f8e3d4cff6cd55c251d099b04f81ed78e68f9392950afca17c633ded
+
+Final integrity observations
+
+candidate SHA after the gate: 8843d3ff4969f338e7020bb1c4974f533ac0f622
+tracked candidate status: clean
+candidate `git diff --check`: clean
+protected-path metadata: absent from the checkout and candidate tree
+optional evidence commit: not created
+
+No credential values, environment values, prompts, source bodies, sentinels,
+or raw command transcripts are included in this artifact.
