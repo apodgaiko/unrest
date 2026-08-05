@@ -104,6 +104,21 @@ slot is recorded as a callable-escape effect even without local invocation.
 When a statically modeled literal container itself escapes through a return,
 state assignment, or external call argument, every protected callable in its
 known nested slots is recorded under the corresponding capability family.
+External-egress completeness treats every positional argument of an
+egress-capable callable as a possible payload, including the first argument of
+direct, imported, aliased, custom, and bound callables. Callable provenance is
+preserved across local assignments: local functions, lambdas, builtins,
+dynamic pure callables, and the side-effect-free standard-library math module
+remain computation rather than becoming unknown external sinks. Composite
+callable expressions inherit pure provenance only when every supported choice
+or element is structurally proven pure; an unknown factory remains external
+regardless of its arguments. Iteration and comprehension targets inherit pure
+provenance only from a structurally proven container whose elements are all
+pure callables; unknown iterables and factory results remain external. A bound
+method's receiver remains part of the normalized callable expression rather
+than its payload arguments. Fixed leading command and URL literals therefore
+remain structural context, while a capability-derived value in that position
+changes the deterministic projection without relying on sink or method names.
 Nested local callback
 wrappers and lambda/default-argument captures are linked
 to their enclosing output-callback parameter. Direct callback returns,

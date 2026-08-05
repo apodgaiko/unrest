@@ -130,6 +130,104 @@ def _atomic_http_egress(value):
     assert "reachable-capability-closure:" in result.output
 
 
+@pytest.mark.parametrize(
+    "source",
+    (
+        """def _first_positional_subprocess(value):
+    import subprocess
+    subprocess.run(value)
+""",
+        """def _first_positional_aliased_http(value):
+    import httpx
+    dispatch = httpx.post
+    dispatch(value)
+""",
+        """def _first_positional_bound(channel, value):
+    send_fds = channel.send_fds
+    send_fds(value)
+""",
+    ),
+)
+def test_check_repository_cli_rejects_first_positional_external_egress(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\n" + source,
+        encoding="utf-8",
+    )
+
+    result = _run_cli(repository, monkeypatch)
+    assert result.exit_code != 0
+    assert "reachable-capability-closure:" in result.output
+
+
+def test_check_repository_cli_accepts_proven_pure_callable_composites(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + """
+
+def _pure_callable_composites(value, predicate):
+    import math
+
+    def local_adjust(item):
+        return item + 1
+
+    dispatch = math.sqrt if predicate else abs
+    selected = next(iter([math.sqrt, abs, local_adjust]))
+    return (
+        dispatch(value),
+        selected(value),
+        tuple(fn(value) for fn in [math.sqrt, abs, local_adjust]),
+    )
+""",
+        encoding="utf-8",
+    )
+
+    result = _run_cli(repository, monkeypatch)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    "selection",
+    (
+        "factory(math.sqrt)",
+        "factory(math.sqrt, httpx.post)",
+        "math.sqrt if predicate else httpx.post",
+    ),
+    ids=("unknown-factory", "mixed-factory", "mixed-conditional"),
+)
+def test_check_repository_cli_rejects_incomplete_callable_provenance(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    selection: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + f"""
+
+def _incomplete_callable_provenance(factory, predicate, value):
+    import httpx
+    import math
+    dispatch = {selection}
+    dispatch(value)
+""",
+        encoding="utf-8",
+    )
+
+    result = _run_cli(repository, monkeypatch)
+    assert result.exit_code == 1
+    assert "reachable-capability-closure:" in result.output
+
+
 def test_repository_command_strictly_validates_each_capability_asset_content(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,

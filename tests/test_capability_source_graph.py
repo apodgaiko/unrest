@@ -223,6 +223,232 @@ _RESULT_CONTEXTS = {
 }
 
 
+_FIRST_POSITIONAL_EGRESS_CALLS = {
+    "subprocess": """import subprocess
+def publish(value):
+    subprocess.run(value)
+""",
+    "aliased-http": """import httpx
+def publish(value):
+    dispatch = httpx.post
+    dispatch(value)
+""",
+    "custom": """def publish(value):
+    send_fds(value)
+""",
+    "bound": """def publish(channel, value):
+    send_fds = channel.send_fds
+    send_fds(value)
+""",
+}
+
+
+@pytest.mark.parametrize("source", tuple(_FIRST_POSITIONAL_EGRESS_CALLS.values()))
+def test_first_positional_external_egress_is_data_bearing(source: str) -> None:
+    records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    )
+
+    assert len(records) == 1
+    assert records[0]["arguments"] == [["name", "value"]]
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        'import subprocess\ndef publish():\n    subprocess.run(["consumer"])\n',
+        'import httpx\ndef publish():\n    httpx.post("https://example.invalid")\n',
+        "def publish(channel):\n    channel.send_fds()\n",
+        "def publish(channel):\n    send_fds = channel.send_fds\n    send_fds()\n",
+    ),
+)
+def test_fixed_leading_literals_and_method_receivers_are_not_payloads(
+    source: str,
+) -> None:
+    assert normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    ) == ()
+
+
+def test_pure_callable_provenance_is_not_external_egress() -> None:
+    source = """def calculate(owner, attribute, value, predicate):
+    import math
+    magnitude = abs
+    dynamic = getattr(owner, attribute)
+    square_root = getattr(math, "sqrt")
+    increment = lambda item: item + 1
+    accepted = predicate
+
+    def adjust(item):
+        return item + 2
+
+    invoke = adjust
+    return (
+        magnitude(value),
+        dynamic(value),
+        square_root(value),
+        increment(value),
+        invoke(value),
+        accepted(value),
+    )
+"""
+
+    assert normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    ) == ()
+
+
+@pytest.mark.parametrize(
+    "selection",
+    (
+        "math.sqrt if predicate else abs",
+        "next(iter([math.sqrt, abs, local_adjust]))",
+    ),
+    ids=("conditional", "literal-iterable-selector"),
+)
+def test_complete_pure_callable_composites_are_not_external_egress(
+    selection: str,
+) -> None:
+    source = f"""def calculate(value, predicate):
+    import math
+
+    def local_adjust(item):
+        return item + 1
+
+    dispatch = {selection}
+    return dispatch(value)
+"""
+
+    assert normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    ) == ()
+
+
+@pytest.mark.parametrize(
+    "selection",
+    (
+        "factory()",
+        "factory(math.sqrt)",
+        "factory(math.sqrt, httpx.post)",
+        "math.sqrt if predicate else httpx.post",
+    ),
+    ids=(
+        "unknown-factory",
+        "unknown-factory-pure-argument",
+        "mixed-factory-arguments",
+        "mixed-conditional",
+    ),
+)
+def test_incomplete_callable_composites_remain_external_egress(
+    selection: str,
+) -> None:
+    source = f"""def publish(factory, predicate, value):
+    import httpx
+    import math
+
+    dispatch = {selection}
+    dispatch(value)
+"""
+
+    records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    )
+    assert len(records) == 1
+    assert records[0]["callable"] == ["name", "dispatch"]
+
+
+def test_direct_mixed_conditional_call_remains_external_egress() -> None:
+    source = """def publish(predicate, value):
+    import httpx
+    import math
+    (math.sqrt if predicate else httpx.post)(value)
+"""
+
+    records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    )
+    assert len(records) == 1
+    assert records[0]["callable"][0] == "if-expression"
+
+
+@pytest.mark.parametrize(
+    "body",
+    (
+        "return tuple(fn(value) for fn in callables)",
+        "for fn in callables:\n        fn(value)",
+    ),
+    ids=("generator", "loop"),
+)
+def test_proven_pure_callable_iteration_is_not_external_egress(body: str) -> None:
+    source = f"""def calculate(value):
+    import math
+
+    def local_adjust(item):
+        return item + 1
+
+    callables = [math.sqrt, abs, local_adjust]
+    {body}
+"""
+
+    assert normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    ) == ()
+
+
+@pytest.mark.parametrize(
+    ("setup", "iterable"),
+    (
+        ("", "callables"),
+        ("", "factory()"),
+        ("    import httpx\n", "[abs, httpx.post]"),
+    ),
+    ids=("unknown-iterable", "factory-result", "external-member"),
+)
+def test_unknown_callable_iteration_remains_external_egress(
+    setup: str,
+    iterable: str,
+) -> None:
+    source = f"""def publish(callables, factory, value):
+{setup}    for dispatch in {iterable}:
+        dispatch(value)
+"""
+
+    records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    )
+    assert len(records) == 1
+    assert records[0]["callable"] == ["name", "dispatch"]
+
+
+@pytest.mark.parametrize("source", tuple(_FIRST_POSITIONAL_EGRESS_CALLS.values()))
+def test_first_positional_external_egress_drifts_closure_deterministically(
+    tmp_path: Path,
+    source: str,
+) -> None:
+    repository = _copy_capability_repository(tmp_path)
+    _append_to_capability_root(repository, "\n" + source)
+
+    first = _closure_errors(repository)
+    repeated = _closure_errors(repository)
+    assert first == repeated
+    closure_errors = tuple(
+        error
+        for error in first
+        if error.startswith("reachable-capability-closure: effect graph does not match")
+    )
+    assert len(closure_errors) == 1
+    observed_digest = closure_errors[0].partition("observed sha256=")[2].removesuffix(")")
+    assert len(observed_digest) == 64
+
+
 def _result_used_egress_source(egress: str, context: str) -> str:
     setup, call = _RESULT_USED_EGRESS_CALLS[egress]
     statement = _RESULT_CONTEXTS[context].format(call=call)

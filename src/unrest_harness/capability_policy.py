@@ -994,13 +994,14 @@ def normalized_external_egress_records(
     tree: ast.Module,
 ) -> tuple[dict[str, Any], ...]:
     """Project data-bearing calls that cannot resolve to local Python code."""
+    side_effect_free_import_roots = {"math"}
     imported: dict[str, tuple[str, bool]] = {}
     local_definitions = {
         node.name
         for node in tree.body
         if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
     }
-    for node in ast.walk(tree):
+    for node in tree.body:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 imported[alias.asname or alias.name.split(".")[0]] = (
@@ -1057,15 +1058,25 @@ def normalized_external_egress_records(
         }
         tainted = set(parameters)
         external_aliases: set[str] = set()
-        function_imports: dict[str, bool] = {}
+        pure_callable_iterables: set[str] = set()
+        local_callable_bindings = {
+            item.name
+            for item in function.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        function_imports: dict[str, tuple[bool, bool]] = {}
         for item in ast.walk(function):
             if owner(item) is not function:
                 continue
             if isinstance(item, ast.Import):
                 for alias in item.names:
-                    function_imports[alias.asname or alias.name.split(".")[0]] = not (
-                        alias.name == "unrest_harness"
-                        or alias.name.startswith("unrest_harness.")
+                    root = alias.name.split(".")[0]
+                    function_imports[alias.asname or root] = (
+                        not (
+                            alias.name == "unrest_harness"
+                            or alias.name.startswith("unrest_harness.")
+                        ),
+                        root in side_effect_free_import_roots,
                     )
             elif isinstance(item, ast.ImportFrom):
                 module = item.module or ""
@@ -1075,7 +1086,10 @@ def normalized_external_egress_records(
                     or module.startswith("unrest_harness.")
                 )
                 for alias in item.names:
-                    function_imports[alias.asname or alias.name] = is_external
+                    function_imports[alias.asname or alias.name] = (
+                        is_external,
+                        module.split(".")[0] in side_effect_free_import_roots,
+                    )
 
         def names_in(expression: ast.AST) -> set[str]:
             return {
@@ -1096,17 +1110,37 @@ def normalized_external_egress_records(
                 for item in class_node.body
             )
 
+        def side_effect_free_import_reference(expression: ast.AST) -> bool:
+            root = expression
+            while isinstance(root, ast.Attribute):
+                root = root.value
+            if not isinstance(root, ast.Name):
+                return False
+            function_binding = function_imports.get(root.id)
+            if function_binding is not None:
+                return function_binding[1]
+            module_binding = imported.get(root.id)
+            return module_binding is not None and (
+                module_binding[0].split(".")[0] in side_effect_free_import_roots
+            )
+
         def external_callable(expression: ast.AST) -> bool:
             if isinstance(expression, ast.Name):
                 if expression.id in external_aliases:
                     return True
                 if expression.id in function_imports:
-                    return function_imports[expression.id]
+                    is_external, side_effect_free = function_imports[expression.id]
+                    return is_external and not side_effect_free
                 binding = imported.get(expression.id)
                 if binding is not None:
-                    return not binding[1]
+                    return (
+                        not binding[1]
+                        and binding[0].split(".")[0]
+                        not in side_effect_free_import_roots
+                    )
                 return (
                     expression.id not in local_definitions
+                    and expression.id not in local_callable_bindings
                     and expression.id not in parameters
                     and not hasattr(builtins, expression.id)
                 )
@@ -1116,12 +1150,22 @@ def normalized_external_egress_records(
                 root: ast.AST = expression
                 while isinstance(root, ast.Attribute):
                     root = root.value
+                if isinstance(
+                    root,
+                    (ast.Constant, ast.Dict, ast.List, ast.Set, ast.Tuple),
+                ):
+                    return False
                 if isinstance(root, ast.Name):
+                    if root.id in function_imports:
+                        is_external, side_effect_free = function_imports[root.id]
+                        return is_external and not side_effect_free
                     binding = imported.get(root.id)
                     if binding is not None:
-                        return not binding[1]
-                    if root.id in function_imports:
-                        return function_imports[root.id]
+                        return (
+                            not binding[1]
+                            and binding[0].split(".")[0]
+                            not in side_effect_free_import_roots
+                        )
                     return root.id in parameters or root.id in external_aliases
                 return True
             if (
@@ -1136,30 +1180,89 @@ def normalized_external_egress_records(
                 return (
                     isinstance(target, ast.Name) and target.id in parameters
                 ) or external_callable(target)
+            if isinstance(expression, (ast.Call, ast.IfExp)):
+                return not side_effect_free_callable(expression)
             return False
 
-        object_method_aliases: set[str] = set()
-
-        def unknown_object_callable(expression: ast.AST) -> bool:
+        def side_effect_free_callable(expression: ast.AST) -> bool:
+            if isinstance(expression, ast.Lambda):
+                return True
             if isinstance(expression, ast.Name):
-                return expression.id in object_method_aliases
+                if expression.id in local_callable_bindings:
+                    return True
+                if (
+                    expression.id in local_definitions
+                    or expression.id in parameters
+                    or hasattr(builtins, expression.id)
+                ):
+                    return True
+                function_binding = function_imports.get(expression.id)
+                if function_binding is not None:
+                    return function_binding[1]
+                module_binding = imported.get(expression.id)
+                return module_binding is not None and (
+                    module_binding[0].split(".")[0]
+                    in side_effect_free_import_roots
+                )
             if isinstance(expression, ast.Attribute):
-                root: ast.AST = expression
-                while isinstance(root, ast.Attribute):
-                    root = root.value
-                return isinstance(root, ast.Name) and root.id in parameters
+                return side_effect_free_import_reference(expression)
+            if isinstance(expression, ast.IfExp):
+                return side_effect_free_callable(
+                    expression.body
+                ) and side_effect_free_callable(expression.orelse)
+            if isinstance(expression, ast.Subscript):
+                if side_effect_free_import_reference(expression.value):
+                    return True
+                return (
+                    isinstance(expression.value, ast.Call)
+                    and isinstance(expression.value.func, ast.Name)
+                    and expression.value.func.id == "vars"
+                    and len(expression.value.args) == 1
+                    and not expression.value.keywords
+                    and side_effect_free_import_reference(expression.value.args[0])
+                )
+            if not isinstance(expression, ast.Call):
+                return False
+            if (
+                isinstance(expression.func, ast.Name)
+                and expression.func.id == "getattr"
+                and len(expression.args) >= 2
+            ):
+                attribute = expression.args[1]
+                return not (
+                    isinstance(attribute, ast.Constant)
+                    and isinstance(attribute.value, str)
+                ) or side_effect_free_import_reference(expression.args[0])
+            if (
+                isinstance(expression.func, ast.Attribute)
+                and expression.func.attr == "get"
+                and side_effect_free_import_reference(expression.func.value)
+            ):
+                return True
+            if (
+                isinstance(expression.func, ast.Name)
+                and expression.func.id == "next"
+                and len(expression.args) == 1
+                and not expression.keywords
+            ):
+                return proven_pure_callable_iterable(expression.args[0])
+            return False
+
+        def proven_pure_callable_iterable(expression: ast.AST) -> bool:
+            if isinstance(expression, ast.Name):
+                return expression.id in pure_callable_iterables
+            if isinstance(expression, (ast.List, ast.Set, ast.Tuple)):
+                return bool(expression.elts) and all(
+                    side_effect_free_callable(item) for item in expression.elts
+                )
             if (
                 isinstance(expression, ast.Call)
                 and isinstance(expression.func, ast.Name)
-                and expression.func.id == "getattr"
-                and len(expression.args) >= 2
-                and isinstance(expression.args[1], ast.Constant)
-                and isinstance(expression.args[1].value, str)
+                and expression.func.id in {"iter", "list", "set", "tuple"}
+                and len(expression.args) == 1
+                and not expression.keywords
             ):
-                target = expression.args[0]
-                return (
-                    isinstance(target, ast.Name) and target.id in parameters
-                ) or unknown_object_callable(target)
+                return proven_pure_callable_iterable(expression.args[0])
             return False
 
         data_packets: set[str] = set()
@@ -1170,19 +1273,22 @@ def normalized_external_egress_records(
             keyword_data = any(
                 names_in(item.value) & tainted for item in call.keywords
             )
-            nonleading_data = any(names_in(item) & tainted for item in call.args[1:])
+            positional_data = any(names_in(item) & tainted for item in call.args)
             packet_data = any(names_in(item) & data_packets for item in call.args)
-            receiver_data = unknown_object_callable(call.func) and any(
-                names_in(item) & tainted for item in call.args
-            )
-            return keyword_data or nonleading_data or packet_data or receiver_data
+            return keyword_data or positional_data or packet_data
 
         assignments = [
             item
             for item in ast.walk(function)
             if owner(item) is function and isinstance(item, (ast.Assign, ast.AnnAssign))
         ]
-        for _ in range(len(assignments) + 1):
+        iteration_bindings = [
+            (item.target, item.iter)
+            for item in ast.walk(function)
+            if owner(item) is function
+            and isinstance(item, (ast.For, ast.AsyncFor, ast.comprehension))
+        ]
+        for _ in range(len(assignments) + len(iteration_bindings) + 1):
             changed = False
             for assignment in assignments:
                 value = assignment.value
@@ -1207,10 +1313,14 @@ def normalized_external_egress_records(
                     before = len(external_aliases)
                     external_aliases.update(target_names)
                     changed = changed or len(external_aliases) != before
-                if unknown_object_callable(value):
-                    before = len(object_method_aliases)
-                    object_method_aliases.update(target_names)
-                    changed = changed or len(object_method_aliases) != before
+                if side_effect_free_callable(value):
+                    before = len(local_callable_bindings)
+                    local_callable_bindings.update(target_names)
+                    changed = changed or len(local_callable_bindings) != before
+                if proven_pure_callable_iterable(value):
+                    before = len(pure_callable_iterables)
+                    pure_callable_iterables.update(target_names)
+                    changed = changed or len(pure_callable_iterables) != before
                 carries_data = bool(names_in(value) & data_packets) or any(
                     isinstance(item, ast.Call) and call_carries_data(item)
                     for item in ast.walk(value)
@@ -1219,6 +1329,13 @@ def normalized_external_egress_records(
                     before = len(data_packets)
                     data_packets.update(target_names)
                     changed = changed or len(data_packets) != before
+            for target, iterable in iteration_bindings:
+                if not isinstance(target, ast.Name):
+                    continue
+                if proven_pure_callable_iterable(iterable):
+                    before = len(local_callable_bindings)
+                    local_callable_bindings.add(target.id)
+                    changed = changed or len(local_callable_bindings) != before
             if not changed:
                 break
 
