@@ -107,11 +107,17 @@ known nested slots is recorded under the corresponding capability family.
 External-egress completeness treats every positional argument of an
 egress-capable callable as a possible payload, including the first argument of
 direct, imported, aliased, custom, and bound callables. Callable provenance is
-preserved across local assignments: local functions, lambdas, builtins, and
+preserved across local assignments, and the normalized callable for a
+single-assignment bound or factory alias retains the originating receiver or
+factory expression. Local functions, lambdas, builtins, and
 the side-effect-free standard-library math module remain computation rather
 than becoming unknown external sinks. Unknown callable parameters fail closed
-when invoked with capability-derived data, including direct, aliased, and
-defaulted parameters; calls used only as predicates remain computation.
+when invoked with data, including direct, aliased, and defaulted parameters.
+Predicate position does not erase that provenance: unknown data-bearing calls
+in `if`, `while`, and comprehension predicates remain external-egress records,
+while proven-local, builtin, and side-effect-free math predicates remain
+computation. A locally defined or single-assignment local callable shadows an
+unrelated import of the same name, including through aliases and nested scopes.
 Composite
 callable expressions inherit pure provenance only when every supported choice
 or element is structurally proven pure; an unknown factory remains external
@@ -143,16 +149,24 @@ The same canonical JSON also contains path-bearing completeness records for
 data-bearing calls that do not resolve to local Python implementations. A
 custom Python 3.11-3.13-stable AST representation preserves callable and data
 structure while ignoring locations, comments, formatting, type comments and
-ignores, absent empty fields, and comprehension predicates. Comprehension
+ignores, absent empty fields, and comprehension predicates from an enclosing
+payload expression. Calls within those predicates are still classified
+independently from their own callable and argument provenance. Comprehension
 payload expressions, iteration sources, and awaited operands remain
 data-bearing structure. Module and function scopes use the same lexical model;
 scope-local single-assignment literal bindings, their aliases, and inherited
-module constants preserve fixed URL or command provenance. Reassigned,
+module constants preserve fixed URL or command provenance. Stable literal
+bindings are substituted into normalized argument and constant-name `getattr`
+structure, so changing the bound value changes closure while renaming a stable
+alias does not. Reassigned,
 selected, or otherwise unresolved argument bindings are not treated as fixed
 and remain fail-closed even when every argument has lost literal provenance.
-An additional argument is conservatively
-data-bearing even when its value is a literal or constant binding, while a sole
-fixed command, URL, or receiver is structural context. Call
+Every argument is conservatively data-bearing, including a sole inline or
+constant payload, except when the complete call has only one structurally fixed
+URL or fixed list/tuple command. Argument-free external and receiver calls are
+also clean. Dynamic or reassigned `getattr` method selection on an unknown
+receiver remains fail-closed; only a structurally pure import receiver such as
+`math` can prove a dynamic attribute callable benign. Call
 projection is independent of how the
 result is used: discarded, returned, assigned, awaited, and calls nested in
 ordinary expressions have identical capability records. External calls,

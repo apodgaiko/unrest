@@ -1348,13 +1348,16 @@ def test_unrelated_aliases_predicates_and_write_attributes_do_not_change_closure
 
 def _unrelated_local_flow(
     value,
-    predicate: Callable[[int], bool],
     declaration,
     ):
-        import math as json
-        magnitude = abs
-        accepted = value if predicate(value) else 0
-        return magnitude(value), accepted, declaration.write, json.sqrt(value)
+    import math as json
+
+    def predicate(item):
+        return bool(item)
+
+    magnitude = abs
+    accepted = value if predicate(value) else 0
+    return magnitude(value), accepted, declaration.write, json.sqrt(value)
 """,
         encoding="utf-8",
     )
@@ -1373,9 +1376,9 @@ def test_unrelated_dynamic_callables_and_composition_do_not_change_closure(
         path.read_text(encoding="utf-8")
         + """
 
-def _unrelated_dynamic_callables(owner, attribute, value):
+def _unrelated_dynamic_callables(attribute, value):
     import math
-    dynamic = getattr(owner, attribute)
+    dynamic = getattr(math, attribute)
     square_root = getattr(math, "sqrt")
     increment = lambda item: item + 1
     return dynamic(value), square_root(value), increment(value)
@@ -1390,9 +1393,9 @@ def _unrelated_ordering(value):
     )
 
 
-def _unrelated_dynamic_and_module_dict(owner, operation, value):
+def _unrelated_dynamic_and_module_dict(operation, value):
     import math
-    dynamic = getattr(owner, operation)
+    dynamic = getattr(math, operation)
     harmless_name = "sqrt"
     square_root = math.__dict__[harmless_name]
     return dynamic(value), square_root(value)

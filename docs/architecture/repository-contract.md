@@ -85,12 +85,20 @@ The command checks:
   dynamic callback, ACP wire write, request, and cancellation to a canonical
   sink or exact delegation omission. Primitive omission effects are pinned,
   and reversible codec operations must remain inside their declared transform
-  owners. Its deterministic external-egress projection covers module and
-  function scopes, constant and parameter-derived payloads, and unknown
-  callback results in discarded, assigned, returned, awaited, and nested
-  contexts. Unresolved argument bindings fail closed without requiring literal
-  provenance, while argument-free calls and fixed command, URL, receiver, and
-  proven-pure computation controls remain benign;
+  owners. Its deterministic external-egress projection covers module,
+  function, and nested scopes; transitive imported helpers; inline, stable, and
+  aliased constants; parameter-derived payloads; receiver and bound aliases;
+  factory-produced callables; and literal or stable constant-name `getattr`
+  calls in discarded, assigned, returned, awaited, and nested contexts.
+  Stable literal values and assigned callable provenance enter the normalized
+  record. Reassigned, unresolved, selected, or mixed argument, method, and
+  receiver bindings fail closed without name allowlists. Unknown data-bearing
+  calls remain recorded in `if`, `while`, and list, set, dictionary, or
+  generator comprehension predicates. Proven-local callable bindings override
+  unrelated import provenance in their lexical scope and nested scopes, while
+  unimported helpers, argument-free calls, sole fixed commands or URLs, and
+  structurally proven-pure local, builtin, or math composition, iteration, and
+  predicates remain benign;
 - all three checked-in packaged capability documents through their runtime
   strict loaders and canonical schemas. Role policy, security model, and sink
   catalog reject missing or unknown fields, unsupported versions, and

@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import binascii
 import builtins
+import copy
 import hashlib
 import ast
 import importlib.util
@@ -989,6 +990,29 @@ def _normalized_egress_expression(node: ast.AST) -> Any:
     return ["expression", type(node).__name__]
 
 
+def _normalized_bound_egress_expression(
+    node: ast.AST,
+    bindings: Mapping[str, ast.AST],
+) -> Any:
+    """Serialize after substituting acyclic, structurally stable bindings."""
+
+    class _Resolver(ast.NodeTransformer):
+        def __init__(self) -> None:
+            self.resolving: set[str] = set()
+
+        def visit_Name(self, candidate: ast.Name) -> ast.AST:  # noqa: N802
+            binding = bindings.get(candidate.id)
+            if binding is None or candidate.id in self.resolving:
+                return candidate
+            self.resolving.add(candidate.id)
+            try:
+                return self.visit(copy.deepcopy(binding))
+            finally:
+                self.resolving.remove(candidate.id)
+
+    return _normalized_egress_expression(_Resolver().visit(copy.deepcopy(node)))
+
+
 def normalized_external_egress_records(
     relative_path: str,
     tree: ast.Module,
@@ -996,11 +1020,6 @@ def normalized_external_egress_records(
     """Project data-bearing calls that cannot resolve to local Python code."""
     side_effect_free_import_roots = {"math"}
     imported: dict[str, tuple[str, bool]] = {}
-    local_definitions = {
-        node.name
-        for node in tree.body
-        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
-    }
     for node in tree.body:
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -1053,6 +1072,7 @@ def normalized_external_egress_records(
     ]
     scope_literal_bindings: dict[ast.AST, dict[str, ast.AST]] = {}
     scope_unknown_literal_names: dict[ast.AST, set[str]] = {}
+    scope_local_callable_names: dict[ast.AST, set[str]] = {}
     for scope in scopes:
         function = None if isinstance(scope, ast.Module) else scope
         parameters = (
@@ -1069,11 +1089,12 @@ def normalized_external_egress_records(
         )
         tainted = set(parameters)
         external_aliases: set[str] = set()
+        external_alias_bindings: dict[str, ast.AST] = {}
         pure_callable_iterables: set[str] = set()
-        local_callable_bindings = {
+        direct_local_callables = {
             item.name
             for item in scope.body
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            if isinstance(item, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
         }
         scope_imports: dict[str, tuple[bool, bool]] = {}
         if function is None:
@@ -1090,6 +1111,14 @@ def normalized_external_egress_records(
 
         def in_scope(node: ast.AST) -> bool:
             return owner(node) is function
+
+        invoked_callable_names = {
+            item.func.id
+            for item in ast.walk(scope)
+            if in_scope(item)
+            and isinstance(item, ast.Call)
+            and isinstance(item.func, ast.Name)
+        }
 
         def names_in(expression: ast.AST) -> set[str]:
             return {
@@ -1139,6 +1168,12 @@ def normalized_external_egress_records(
                 binding_values.setdefault(item.target.id, []).append(item.value)
 
         locally_bound_names = set(binding_values) | parameters
+        inherited_local_callables = set(
+            scope_local_callable_names.get(enclosing_scope, set())
+        )
+        local_callable_bindings = (
+            inherited_local_callables - locally_bound_names
+        ) | direct_local_callables
         literal_bindings = {
             name: expression
             for name, expression in inherited_literals.items()
@@ -1255,6 +1290,11 @@ def normalized_external_egress_records(
 
         def external_callable(expression: ast.AST) -> bool:
             if isinstance(expression, ast.Name):
+                if (
+                    expression.id in local_callable_bindings
+                    or hasattr(builtins, expression.id)
+                ):
+                    return False
                 if expression.id in external_aliases:
                     return True
                 if expression.id in {"self", "cls"}:
@@ -1269,11 +1309,7 @@ def normalized_external_egress_records(
                         and binding[0].split(".")[0]
                         not in side_effect_free_import_roots
                     )
-                return (
-                    expression.id not in local_definitions
-                    and expression.id not in local_callable_bindings
-                    and not hasattr(builtins, expression.id)
-                )
+                return True
             if isinstance(expression, ast.Attribute):
                 if local_self_method(expression):
                     return False
@@ -1296,20 +1332,27 @@ def normalized_external_egress_records(
                             and binding[0].split(".")[0]
                             not in side_effect_free_import_roots
                         )
-                    return root.id in parameters or root.id in external_aliases
+                    return (
+                        root.id not in local_callable_bindings
+                        and not hasattr(builtins, root.id)
+                    )
                 return True
             if (
                 isinstance(expression, ast.Call)
                 and isinstance(expression.func, ast.Name)
                 and expression.func.id == "getattr"
                 and len(expression.args) >= 2
-                and isinstance(expression.args[1], ast.Constant)
-                and isinstance(expression.args[1].value, str)
             ):
+                method = resolved_literal(expression.args[1])
                 target = expression.args[0]
                 return (
-                    isinstance(target, ast.Name) and target.id in parameters
-                ) or external_callable(target)
+                    isinstance(method, ast.Constant)
+                    and isinstance(method.value, str)
+                    and (
+                        isinstance(target, ast.Name) and target.id in parameters
+                        or external_callable(target)
+                    )
+                ) or not side_effect_free_import_reference(target)
             if isinstance(expression, (ast.Call, ast.IfExp)):
                 return not side_effect_free_callable(expression)
             return False
@@ -1320,10 +1363,7 @@ def normalized_external_egress_records(
             if isinstance(expression, ast.Name):
                 if expression.id in local_callable_bindings:
                     return True
-                if (
-                    expression.id in local_definitions
-                    or hasattr(builtins, expression.id)
-                ):
+                if hasattr(builtins, expression.id):
                     return True
                 scope_binding = scope_imports.get(expression.id)
                 if scope_binding is not None:
@@ -1357,11 +1397,7 @@ def normalized_external_egress_records(
                 and expression.func.id == "getattr"
                 and len(expression.args) >= 2
             ):
-                attribute = expression.args[1]
-                return not (
-                    isinstance(attribute, ast.Constant)
-                    and isinstance(attribute.value, str)
-                ) or side_effect_free_import_reference(expression.args[0])
+                return side_effect_free_import_reference(expression.args[0])
             if (
                 isinstance(expression.func, ast.Attribute)
                 and expression.func.attr == "get"
@@ -1411,45 +1447,36 @@ def normalized_external_egress_records(
                 for item in literal.elts
             )
 
-        def result_is_predicate(call: ast.Call) -> bool:
-            cursor: ast.AST = call
-            while (parent := parents.get(cursor)) is not None:
-                if isinstance(parent, (ast.If, ast.IfExp, ast.While)):
-                    return cursor is parent.test
-                if isinstance(parent, ast.comprehension):
-                    return cursor in parent.ifs
-                if isinstance(
-                    parent,
-                    (ast.BoolOp, ast.Compare, ast.UnaryOp, ast.NamedExpr),
-                ):
-                    cursor = parent
-                    continue
-                return False
+        def result_is_callable_source(call: ast.Call) -> bool:
+            parent = parents.get(call)
+            if isinstance(parent, ast.Call) and parent.func is call:
+                return True
+            if isinstance(parent, ast.Assign) and parent.value is call:
+                assigned = {
+                    name
+                    for target in parent.targets
+                    for name in assigned_names(target)
+                }
+                return bool(assigned & invoked_callable_names)
+            if isinstance(parent, ast.AnnAssign) and parent.value is call:
+                return bool(assigned_names(parent.target) & invoked_callable_names)
             return False
 
         def call_carries_data(call: ast.Call) -> bool:
-            if not external_callable(call.func) or result_is_predicate(call):
+            if (
+                not external_callable(call.func)
+                or result_is_callable_source(call)
+            ):
                 return False
-            keyword_data = any(
-                names_in(item.value) & tainted for item in call.keywords
-            )
-            positional_data = any(names_in(item) & tainted for item in call.args)
-            packet_data = any(names_in(item) & data_packets for item in call.args)
             arguments = [*call.args, *(item.value for item in call.keywords)]
-            unresolved_argument_data = any(
-                names_in(item) & unknown_literal_names for item in arguments
-            )
-            structurally_additional_data = len(arguments) > 1 and (
-                any(fixed_external_context(item) for item in arguments)
-                or bool(call.args)
-                and fixed_command_context(call.args[0])
-            )
-            return (
-                keyword_data
-                or positional_data
-                or packet_data
-                or unresolved_argument_data
-                or structurally_additional_data
+            if not arguments:
+                return False
+            return not (
+                len(arguments) == 1
+                and (
+                    fixed_external_context(arguments[0])
+                    or fixed_command_context(arguments[0])
+                )
             )
 
         assignments = [
@@ -1488,9 +1515,17 @@ def normalized_external_egress_records(
                     before = len(external_aliases)
                     external_aliases.update(target_names)
                     changed = changed or len(external_aliases) != before
+                    for name in target_names:
+                        if binding_values.get(name) == [value]:
+                            external_alias_bindings[name] = value
                 if side_effect_free_callable(value):
+                    proven_local_targets = {
+                        name
+                        for name in target_names
+                        if binding_values.get(name) == [value]
+                    }
                     before = len(local_callable_bindings)
-                    local_callable_bindings.update(target_names)
+                    local_callable_bindings.update(proven_local_targets)
                     changed = changed or len(local_callable_bindings) != before
                 if proven_pure_callable_iterable(value):
                     before = len(pure_callable_iterables)
@@ -1513,21 +1548,43 @@ def normalized_external_egress_records(
                     changed = changed or len(local_callable_bindings) != before
             if not changed:
                 break
+        scope_local_callable_names[scope] = set(local_callable_bindings)
 
         for call in ast.walk(scope):
             if not isinstance(call, ast.Call) or not in_scope(call):
                 continue
             if not call_carries_data(call):
                 continue
+
+            def resolved_callable(
+                expression: ast.AST,
+                resolving: frozenset[str] = frozenset(),
+            ) -> ast.AST:
+                if isinstance(expression, ast.Name) and expression.id not in resolving:
+                    binding = external_alias_bindings.get(expression.id)
+                    if binding is not None:
+                        return resolved_callable(binding, resolving | {expression.id})
+                return expression
+
             records.append(
                 {
                     "anchor": anchor(call),
                     "arguments": [
-                        _normalized_egress_expression(item) for item in call.args
+                        _normalized_bound_egress_expression(item, literal_bindings)
+                        for item in call.args
                     ],
-                    "callable": _normalized_egress_expression(call.func),
+                    "callable": _normalized_bound_egress_expression(
+                        resolved_callable(call.func),
+                        literal_bindings,
+                    ),
                     "keywords": [
-                        [item.arg, _normalized_egress_expression(item.value)]
+                        [
+                            item.arg,
+                            _normalized_bound_egress_expression(
+                                item.value,
+                                literal_bindings,
+                            ),
+                        ]
                         for item in call.keywords
                     ],
                     "path": relative_path,

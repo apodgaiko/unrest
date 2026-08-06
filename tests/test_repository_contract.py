@@ -16,6 +16,10 @@ import pytest
 import yaml
 from click.testing import CliRunner, Result
 
+from unrest_harness.capability_policy import (
+    load_capability_sink_catalog,
+    validate_capability_sink_anchors,
+)
 from unrest_harness.cli import cli
 from unrest_harness.repository_contract import (
     CANONICAL_COMMAND,
@@ -172,6 +176,123 @@ def test_check_repository_cli_rejects_first_positional_external_egress(
 @pytest.mark.parametrize(
     "source",
     (
+        'transport(b"inline")\n',
+        'from transport_lib import ship\ndef publish():\n    return ship("payload")\n',
+        "from transport_lib import ship as dispatch\n"
+        'PAYLOAD = b"payload"\nALIAS = PAYLOAD\n'
+        "def publish():\n    result = dispatch(ALIAS)\n    return result\n",
+        "import transport_lib as transport\n"
+        "def publish(value):\n    return consume(transport.ship(payload=value))\n",
+        "def consume(result):\n    return result\n"
+        "def outer(callback, value):\n"
+        "    def publish():\n        return consume(callback(value))\n"
+        "    return publish()\n",
+        "async def publish(factory, value):\n"
+        "    dispatch = factory()\n"
+        "    result = await dispatch(value)\n"
+        "    return result\n",
+        'channel.relay_frame(b"inline")\n',
+        'PAYLOAD = b"payload"\n'
+        "def publish(connection):\n    connection.execute(PAYLOAD)\n",
+        "def publish(channel, value):\n"
+        "    dispatch = channel.relay_frame\n"
+        "    return dispatch(payload=value)\n",
+        'METHOD = "relay"\n'
+        "def publish(receiver, value):\n    getattr(receiver, METHOD)(value)\n",
+        'METHOD = "relay"\nPAYLOAD = b"payload"\n'
+        "def publish(receiver):\n"
+        "    dispatch = getattr(receiver, METHOD)\n"
+        "    return dispatch(payload=PAYLOAD)\n",
+        "def publish(receiver, method, value):\n"
+        "    getattr(receiver, method)(value)\n",
+    ),
+    ids=(
+        "direct-inline",
+        "from-import-literal",
+        "aliased-import-constant-alias",
+        "module-attribute-keyword-parameter",
+        "nested-callback",
+        "awaited-factory",
+        "module-receiver-inline",
+        "receiver-constant",
+        "bound-custom-keyword",
+        "named-getattr",
+        "assigned-named-getattr",
+        "dynamic-getattr-fail-closed",
+    ),
+)
+def test_check_repository_cli_external_egress_matrix_has_exact_output(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\n" + source,
+        encoding="utf-8",
+    )
+    catalog = load_capability_sink_catalog(
+        repository / "src/unrest_harness/bundled"
+    )
+    errors = validate_capability_sink_anchors(repository, catalog)
+    assert len(errors) == 1
+    sink_id, _, reason = errors[0].partition(": ")
+    expected = (
+        "Error: REPO-CAPABILITY-SINK-CATALOG:"
+        "src/unrest_harness/bundled/policies/capability-sinks.v1.json#"
+        f"{sink_id}: {reason}\n"
+    )
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == 1
+    assert first.output == expected
+    assert repeated.exit_code == first.exit_code
+    assert repeated.output == first.output
+
+
+def test_check_repository_cli_bounds_transitively_imported_tracked_helper(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = repository / "src/unrest_harness/egress_helpers"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    source = (
+        "import httpx\n"
+        "def publish():\n"
+        '    httpx.post("https://example.invalid", content=b"payload")\n'
+    )
+    (package / "reachable.py").write_text(source, encoding="utf-8")
+    (package / "unimported.py").write_text(source, encoding="utf-8")
+    (package / "bridge.py").write_text(
+        "from . import reachable\n",
+        encoding="utf-8",
+    )
+    _git(repository, "add", "src/unrest_harness/egress_helpers")
+    _git(repository, "commit", "-qm", "add bounded helper controls")
+
+    clean = _run_cli(repository, monkeypatch)
+    assert clean.exit_code == 0
+    assert json.loads(clean.output)["status"] == "ok"
+
+    capability_path = repository / "src/unrest_harness/capability_policy.py"
+    capability_path.write_text(
+        capability_path.read_text(encoding="utf-8")
+        + "\nfrom .egress_helpers import bridge\n",
+        encoding="utf-8",
+    )
+    _git(repository, "add", "src/unrest_harness/capability_policy.py")
+    _git(repository, "commit", "-qm", "import tracked helper")
+
+    result = _run_cli(repository, monkeypatch)
+    assert result.exit_code == 1
+    assert result.output.count("reachable-capability-closure:") == 1
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
         'import httpx\n_payload = b"module-secret"\n'
         'httpx.post("https://example.invalid", content=_payload)\n',
         'import httpx\n_named_url = "https://example.invalid"\n'
@@ -290,6 +411,110 @@ def test_check_repository_cli_accepts_named_fixed_external_context(
     ids=("receiver-only", "external-no-arguments", "local-with-payload"),
 )
 def test_check_repository_cli_accepts_no_data_and_local_calls(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\n" + source,
+        encoding="utf-8",
+    )
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == repeated.exit_code == 0, first.output
+    assert first.output == repeated.output
+    assert json.loads(first.output)["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "def _predicate_if(value):\n"
+        "    if nebula_emit(value):\n"
+        "        return value\n",
+        "from nebula_bus import poll as orbit_poll\n"
+        "def _predicate_while(value):\n"
+        "    while orbit_poll(value):\n"
+        "        break\n",
+        "def _predicate_list(values, callback):\n"
+        "    return [value for value in values if callback(value)]\n",
+        "import nebula_bus as constellation\n"
+        "def _predicate_set(values):\n"
+        "    return {value for value in values if constellation.accept(value)}\n",
+        "def _predicate_dict(values, callback):\n"
+        "    predicate = callback\n"
+        "    return {value: value for value in values if predicate(value)}\n",
+        "from nebula_bus import permits\n"
+        "def _predicate_generator(values):\n"
+        "    return (value for value in values if permits(value))\n",
+    ),
+    ids=(
+        "if-direct",
+        "while-import-alias",
+        "list-comprehension-callback",
+        "set-comprehension-module-import",
+        "dict-comprehension-callback-alias",
+        "generator-comprehension-from-import",
+    ),
+)
+def test_check_repository_cli_rejects_unknown_data_bearing_predicates(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    catalog_path = (
+        repository
+        / "src/unrest_harness/bundled/policies/capability-sinks.v1.json"
+    )
+    catalog_before = catalog_path.read_bytes()
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\n" + source,
+        encoding="utf-8",
+    )
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == repeated.exit_code == 1
+    assert first.output == repeated.output
+    assert "reachable-capability-closure:" in first.output
+    assert catalog_path.read_bytes() == catalog_before
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "from nebula_bus import permits\n"
+        "permits = lambda value: bool(value)\n"
+        "permits(1)\n",
+        "from nebula_bus import permits as accept\n"
+        "def _local_function_shadow(value):\n"
+        "    def accept(item):\n"
+        "        return bool(item)\n"
+        "    return accept(value)\n",
+        "from nebula_bus import permits as dispatch\n"
+        "def _local_alias_shadow(value):\n"
+        "    def local_accept(item):\n"
+        "        return bool(item)\n"
+        "    dispatch = local_accept\n"
+        "    return dispatch(value)\n",
+        "from nebula_bus import permits\n"
+        "def _outer_shadow():\n"
+        "    permits = lambda item: bool(item)\n"
+        "    def inner(value):\n"
+        "        return permits(value)\n"
+        "    return inner\n",
+    ),
+    ids=(
+        "module-lambda-shadow",
+        "local-function-shadow",
+        "local-function-alias-shadow",
+        "inherited-lambda-shadow",
+    ),
+)
+def test_check_repository_cli_accepts_proven_local_import_shadows(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     source: str,

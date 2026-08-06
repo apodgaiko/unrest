@@ -109,6 +109,39 @@ def test_new_import_adds_helper_and_executed_package_initializer(
     )
 
 
+def test_transitively_imported_helper_enters_and_identical_unimported_helper_stays_out(
+    tmp_path: Path,
+) -> None:
+    repository = _copy_capability_repository(tmp_path)
+    package = repository / "src/unrest_harness/egress_helpers"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    payload_source = (
+        "import httpx\n"
+        "def publish():\n"
+        '    httpx.post("https://example.invalid", content=b"payload")\n'
+    )
+    (package / "reachable.py").write_text(payload_source, encoding="utf-8")
+    (package / "unimported.py").write_text(payload_source, encoding="utf-8")
+    (package / "bridge.py").write_text(
+        "from . import reachable\n",
+        encoding="utf-8",
+    )
+
+    assert _closure_errors(repository) == ()
+    _append_to_capability_root(repository, "\nfrom .egress_helpers import bridge\n")
+
+    graph = build_reachable_capability_source_graph(repository, _catalog(repository))
+    assert "src/unrest_harness/egress_helpers/bridge.py" in graph
+    assert "src/unrest_harness/egress_helpers/reachable.py" in graph
+    assert "src/unrest_harness/egress_helpers/unimported.py" not in graph
+    errors = _closure_errors(repository)
+    assert len(errors) == 1
+    assert errors[0].startswith(
+        "reachable-capability-closure: effect graph does not match"
+    )
+
+
 def test_imported_local_symlink_escaping_repository_fails_closed(
     tmp_path: Path,
 ) -> None:
@@ -273,10 +306,10 @@ def test_fixed_leading_literals_and_method_receivers_are_not_payloads(
 
 
 def test_pure_callable_provenance_is_not_external_egress() -> None:
-    source = """def calculate(owner, attribute, value):
+    source = """def calculate(attribute, value):
     import math
     magnitude = abs
-    dynamic = getattr(owner, attribute)
+    dynamic = getattr(math, attribute)
     square_root = getattr(math, "sqrt")
     increment = lambda item: item + 1
 
@@ -357,7 +390,15 @@ def test_incomplete_callable_composites_remain_external_egress(
         ast.parse(source),
     )
     assert len(records) == 1
-    assert records[0]["callable"] == ["name", "dispatch"]
+    if selection.startswith("factory"):
+        assert records[0]["callable"][:2] == ["call", ["name", "factory"]]
+    else:
+        assert records[0]["callable"] == [
+            "if-expression",
+            ["name", "predicate"],
+            ["attribute", ["name", "math"], "sqrt"],
+            ["attribute", ["name", "httpx"], "post"],
+        ]
 
 
 def test_direct_mixed_conditional_call_remains_external_egress() -> None:
@@ -597,6 +638,343 @@ def test_unknown_callback_parameters_fail_closed_in_every_result_context(
     assert records == returned
 
 
+def _egress_record(
+    *,
+    anchor: str,
+    callable_expression: list[object],
+    arguments: list[list[object]] | None = None,
+    keywords: list[list[object]] | None = None,
+) -> dict[str, object]:
+    return {
+        "anchor": anchor,
+        "arguments": arguments or [],
+        "callable": callable_expression,
+        "keywords": keywords or [],
+        "path": "src/unrest_harness/helper.py",
+    }
+
+
+_INLINE_BYTES = ["constant", {"bytes_hex": "696e6c696e65"}]
+_PAYLOAD_BYTES = ["constant", {"bytes_hex": "7061796c6f6164"}]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    (
+        (
+            'transport(b"inline")\n',
+            _egress_record(
+                anchor="<module>",
+                callable_expression=["name", "transport"],
+                arguments=[_INLINE_BYTES],
+            ),
+        ),
+        (
+            'from transport_lib import ship\ndef publish():\n    return ship("payload")\n',
+            _egress_record(
+                anchor="publish",
+                callable_expression=["name", "ship"],
+                arguments=[["constant", "payload"]],
+            ),
+        ),
+        (
+            "from transport_lib import ship as dispatch\n"
+            'PAYLOAD = b"payload"\nALIAS = PAYLOAD\n'
+            "def publish():\n    result = dispatch(ALIAS)\n    return result\n",
+            _egress_record(
+                anchor="publish",
+                callable_expression=["name", "dispatch"],
+                arguments=[_PAYLOAD_BYTES],
+            ),
+        ),
+        (
+            "import transport_lib as transport\n"
+            "def consume(result):\n    return result\n"
+            "def publish(value):\n"
+            "    return consume(transport.ship(payload=value))\n",
+            _egress_record(
+                anchor="publish",
+                callable_expression=["attribute", ["name", "transport"], "ship"],
+                keywords=[["payload", ["name", "value"]]],
+            ),
+        ),
+        (
+            "def consume(result):\n    return result\n"
+            "def outer(callback, value):\n"
+            "    def publish():\n"
+            "        return consume(callback(value))\n"
+            "    return publish()\n",
+            _egress_record(
+                anchor="outer.publish",
+                callable_expression=["name", "callback"],
+                arguments=[["name", "value"]],
+            ),
+        ),
+        (
+            "async def publish(factory, value):\n"
+            "    dispatch = factory()\n"
+            "    result = await dispatch(value)\n"
+            "    return result\n",
+            _egress_record(
+                anchor="publish",
+                callable_expression=["call", ["name", "factory"], [], []],
+                arguments=[["name", "value"]],
+            ),
+        ),
+        (
+            'def publish(callback):\n    callback(payload=b"inline")\n',
+            _egress_record(
+                anchor="publish",
+                callable_expression=["name", "callback"],
+                keywords=[["payload", _INLINE_BYTES]],
+            ),
+        ),
+        (
+            "import httpx\n"
+            "def publish():\n"
+            '    return httpx.post("https://example.invalid", content=b"inline")\n',
+            _egress_record(
+                anchor="publish",
+                callable_expression=["attribute", ["name", "httpx"], "post"],
+                arguments=[["constant", "https://example.invalid"]],
+                keywords=[["content", _INLINE_BYTES]],
+            ),
+        ),
+        (
+            "import subprocess\n"
+            'COMMAND = ["consumer"]\nPAYLOAD = b"payload"\n'
+            "subprocess.run(COMMAND, input=PAYLOAD)\n",
+            _egress_record(
+                anchor="<module>",
+                callable_expression=["attribute", ["name", "subprocess"], "run"],
+                arguments=[["list", [["constant", "consumer"]]]],
+                keywords=[["input", _PAYLOAD_BYTES]],
+            ),
+        ),
+        (
+            'PAYLOAD = b"payload"\nPAYLOAD = load_payload()\n'
+            "def publish(callback):\n    callback(PAYLOAD)\n",
+            _egress_record(
+                anchor="publish",
+                callable_expression=["name", "callback"],
+                arguments=[["name", "PAYLOAD"]],
+            ),
+        ),
+        (
+            "def publish(callback, enabled):\n"
+            '    callback(load_payload() if enabled else b"inline")\n',
+            _egress_record(
+                anchor="publish",
+                callable_expression=["name", "callback"],
+                arguments=[[
+                    "if-expression",
+                    ["name", "enabled"],
+                    ["call", ["name", "load_payload"], [], []],
+                    _INLINE_BYTES,
+                ]],
+            ),
+        ),
+    ),
+    ids=(
+        "module-direct-inline",
+        "from-import-returned-literal",
+        "aliased-import-assigned-constant-alias",
+        "module-attribute-nested-keyword-parameter",
+        "nested-callback-parameter",
+        "awaited-factory-callable",
+        "sole-keyword-inline",
+        "http-context-plus-inline-payload",
+        "subprocess-context-plus-constant-payload",
+        "reassigned-payload-fail-closed",
+        "mixed-payload-fail-closed",
+    ),
+)
+def test_external_egress_callable_payload_scope_matrix_has_exact_records(
+    source: str,
+    expected: dict[str, object],
+) -> None:
+    first = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    )
+    repeated = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    )
+    assert first == (expected,)
+    assert repeated == first
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    (
+        (
+            'channel.relay_frame(b"inline")\n',
+            _egress_record(
+                anchor="<module>",
+                callable_expression=["attribute", ["name", "channel"], "relay_frame"],
+                arguments=[_INLINE_BYTES],
+            ),
+        ),
+        (
+            'PAYLOAD = b"payload"\n'
+            "def publish(connection):\n    connection.execute(PAYLOAD)\n",
+            _egress_record(
+                anchor="publish",
+                callable_expression=["attribute", ["name", "connection"], "execute"],
+                arguments=[_PAYLOAD_BYTES],
+            ),
+        ),
+        (
+            "def publish(channel, value):\n"
+            "    dispatch = channel.relay_frame\n"
+            "    return dispatch(payload=value)\n",
+            _egress_record(
+                anchor="publish",
+                callable_expression=["attribute", ["name", "channel"], "relay_frame"],
+                keywords=[["payload", ["name", "value"]]],
+            ),
+        ),
+        (
+            "def outer(receiver, value):\n"
+            "    def publish():\n"
+            "        return receiver.transmit(value)\n"
+            "    return publish()\n",
+            _egress_record(
+                anchor="outer.publish",
+                callable_expression=["attribute", ["name", "receiver"], "transmit"],
+                arguments=[["name", "value"]],
+            ),
+        ),
+        (
+            "def publish(left, right, enabled, value):\n"
+            "    return (left if enabled else right).forward(value)\n",
+            _egress_record(
+                anchor="publish",
+                callable_expression=[
+                    "attribute",
+                    [
+                        "if-expression",
+                        ["name", "enabled"],
+                        ["name", "left"],
+                        ["name", "right"],
+                    ],
+                    "forward",
+                ],
+                arguments=[["name", "value"]],
+            ),
+        ),
+    ),
+    ids=(
+        "module-receiver-literal",
+        "receiver-stable-constant",
+        "bound-alias-keyword-parameter",
+        "nested-custom-receiver",
+        "conditional-receiver-fail-closed",
+    ),
+)
+def test_receiver_and_bound_alias_matrix_has_exact_records(
+    source: str,
+    expected: dict[str, object],
+) -> None:
+    assert normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    ) == (expected,)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_callable"),
+    (
+        (
+            'def publish(receiver, value):\n    getattr(receiver, "relay")(value)\n',
+            ["call", ["name", "getattr"], [["name", "receiver"], ["constant", "relay"]], []],
+        ),
+        (
+            'METHOD = "relay"\n'
+            "def publish(receiver, value):\n    getattr(receiver, METHOD)(value)\n",
+            ["call", ["name", "getattr"], [["name", "receiver"], ["constant", "relay"]], []],
+        ),
+        (
+            'METHOD = "relay"\nPAYLOAD = b"payload"\n'
+            "def publish(receiver):\n"
+            "    dispatch = getattr(receiver, METHOD)\n"
+            "    return dispatch(payload=PAYLOAD)\n",
+            ["call", ["name", "getattr"], [["name", "receiver"], ["constant", "relay"]], []],
+        ),
+        (
+            "def publish(receiver, method, value):\n"
+            "    getattr(receiver, method)(value)\n",
+            ["call", ["name", "getattr"], [["name", "receiver"], ["name", "method"]], []],
+        ),
+        (
+            'METHOD = "relay"\nMETHOD = choose_method()\n'
+            'def publish(receiver):\n    getattr(receiver, METHOD)(b"inline")\n',
+            ["call", ["name", "getattr"], [["name", "receiver"], ["name", "METHOD"]], []],
+        ),
+    ),
+    ids=(
+        "literal-method",
+        "stable-named-method",
+        "assigned-alias-keyword-constant",
+        "dynamic-method-fail-closed",
+        "reassigned-method-fail-closed",
+    ),
+)
+def test_getattr_matrix_retains_exact_callable_provenance(
+    source: str,
+    expected_callable: list[object],
+) -> None:
+    records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    )
+    assert len(records) == 1
+    assert records[0]["anchor"] == "publish"
+    assert records[0]["callable"] == expected_callable
+    assert records[0]["path"] == "src/unrest_harness/helper.py"
+
+
+def test_stable_constant_value_changes_projection_and_alias_spelling_does_not() -> None:
+    template = 'PAYLOAD = b"{payload}"\nALIAS = PAYLOAD\ndef publish(callback):\n    callback({name})\n'
+    direct = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(template.format(payload="first", name="PAYLOAD")),
+    )
+    aliased = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(template.format(payload="first", name="ALIAS")),
+    )
+    changed = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(template.format(payload="second", name="ALIAS")),
+    )
+    assert direct == aliased
+    assert direct != changed
+
+
+def test_projection_sorting_and_duplicate_multiplicity_are_stable() -> None:
+    first = """def publish(callback):
+    callback(b"second")
+    callback(b"first")
+"""
+    reordered = """def publish(callback):
+    callback(b"first")
+    callback(b"second")
+"""
+    duplicated = """def publish(callback):
+    callback(b"same")
+    callback(b"same")
+"""
+    first_records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(first)
+    )
+    assert first_records == normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(reordered)
+    )
+    duplicate_records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(duplicated)
+    )
+    assert len(duplicate_records) == 2
+    assert duplicate_records[0] == duplicate_records[1]
+
+
 @pytest.mark.parametrize(
     "source",
     (
@@ -614,8 +992,10 @@ def test_unknown_callback_parameters_fail_closed_in_every_result_context(
         "    def adjust(item):\n"
         "        return item + 1\n"
         "    return adjust(value)\n",
-        "def select(values, predicate):\n"
-        "    return [value for value in values if predicate(value)]\n",
+        "def select(values):\n"
+        "    def keep(value):\n"
+        "        return bool(value)\n"
+        "    return [value for value in values if keep(value)]\n",
     ),
     ids=(
         "module-fixed-url",
@@ -636,6 +1016,151 @@ def test_scope_and_callback_completeness_preserves_benign_controls(
         "src/unrest_harness/helper.py",
         ast.parse(source),
     ) == ()
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_callable", "expected_argument"),
+    (
+        (
+            "def select(value):\n    if nebula_emit(value):\n        return value\n",
+            ["name", "nebula_emit"],
+            "value",
+        ),
+        (
+            "from nebula_bus import poll as orbit_poll\n"
+            "def await_signal(value):\n"
+            "    while orbit_poll(value):\n"
+            "        break\n",
+            ["name", "orbit_poll"],
+            "value",
+        ),
+        (
+            "def select(values, callback):\n"
+            "    return [value for value in values if callback(value)]\n",
+            ["name", "callback"],
+            "value",
+        ),
+        (
+            "import nebula_bus as constellation\n"
+            "def select(values):\n"
+            "    return {value for value in values if constellation.accept(value)}\n",
+            ["attribute", ["name", "constellation"], "accept"],
+            "value",
+        ),
+        (
+            "def select(values, callback):\n"
+            "    predicate = callback\n"
+            "    return {value: value for value in values if predicate(value)}\n",
+            ["name", "callback"],
+            "value",
+        ),
+        (
+            "from nebula_bus import permits\n"
+            "def select(values):\n"
+            "    return (value for value in values if permits(value))\n",
+            ["name", "permits"],
+            "value",
+        ),
+    ),
+    ids=(
+        "if-direct",
+        "while-import-alias",
+        "list-comprehension-callback",
+        "set-comprehension-module-import",
+        "dict-comprehension-callback-alias",
+        "generator-comprehension-from-import",
+    ),
+)
+def test_unknown_data_bearing_predicates_retain_external_egress_records(
+    source: str,
+    expected_callable: list[object],
+    expected_argument: str,
+) -> None:
+    first = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    )
+    repeated = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    )
+
+    assert first == (
+        _egress_record(
+            anchor=next(
+                node.name
+                for node in ast.parse(source).body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            ),
+            callable_expression=expected_callable,
+            arguments=[["name", expected_argument]],
+        ),
+    )
+    assert repeated == first
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "from nebula_bus import permits\n"
+        "permits = lambda value: bool(value)\n"
+        "permits(1)\n",
+        "from nebula_bus import permits as accept\n"
+        "def select(value):\n"
+        "    def accept(item):\n"
+        "        return bool(item)\n"
+        "    return accept(value)\n",
+        "from nebula_bus import permits as dispatch\n"
+        "def select(value):\n"
+        "    def local_accept(item):\n"
+        "        return bool(item)\n"
+        "    dispatch = local_accept\n"
+        "    return dispatch(value)\n",
+        "from nebula_bus import permits\n"
+        "def outer():\n"
+        "    permits = lambda item: bool(item)\n"
+        "    def inner(value):\n"
+        "        return permits(value)\n"
+        "    return inner\n",
+    ),
+    ids=(
+        "module-lambda-shadow",
+        "local-function-shadow",
+        "local-function-alias-shadow",
+        "inherited-lambda-shadow",
+    ),
+)
+def test_proven_local_callable_shadowing_overrides_import_provenance(
+    source: str,
+) -> None:
+    assert normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    ) == ()
+
+
+def test_reassigned_import_shadow_remains_fail_closed() -> None:
+    source = """from nebula_bus import permits
+def select(value):
+    permits = lambda item: bool(item)
+    permits = choose_callable()
+    return permits(value)
+"""
+    records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    )
+    assert len(records) == 1
+    assert records[0]["callable"] == ["name", "permits"]
+
+
+def test_callback_parameter_shadowing_module_local_remains_fail_closed() -> None:
+    source = """def permits(value):
+    return bool(value)
+def select(permits, value):
+    return permits(value)
+"""
+    records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py", ast.parse(source)
+    )
+    assert len(records) == 1
+    assert records[0]["callable"] == ["name", "permits"]
 
 
 @pytest.mark.parametrize("mutation", tuple(_ATOMIC_EGRESS_MUTATIONS))
@@ -687,7 +1212,9 @@ def test_reachable_predicates_orderings_comments_and_formatting_are_normalized(
     )
     text += """
 
-def _pure_local_predicate_and_ordering(values, predicate):
+def _pure_local_predicate_and_ordering(values):
+    def predicate(item):
+        return bool(item)
     accepted = [item for item in values if predicate(item) and item > 0]
     return sorted(accepted, key=lambda item: (item % 2, item))
 """
@@ -819,11 +1346,13 @@ async def _awaited_payload(value):
 
 def test_comprehension_payload_normalization_preserves_data_transform_not_predicate() -> None:
     original = """import httpx
-def publish(values, predicate):
+def publish(values):
+    def predicate(item):
+        return bool(item)
     httpx.post("x", content=[encode(item) for item in values if predicate(item)])
 """
     changed_transform = original.replace("encode(item)", "decode(item)")
-    changed_predicate = original.replace("predicate(item)", "item > 0")
+    changed_predicate = original.replace("if predicate(item)", "if item > 0")
 
     def records(source: str):
         return normalized_external_egress_records(
