@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import tomllib
 from itertools import product
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,10 @@ from click.testing import CliRunner, Result
 from unrest_harness.cli import cli
 from unrest_harness.repository_contract import (
     CANONICAL_COMMAND,
+    COMPATIBILITY_TEST_COMMAND,
+    DISTRIBUTION_CHECK_COMMAND,
+    FULL_SOURCE_SUITE_COMMAND,
+    _shell_command_string,
     check_repository,
 )
 
@@ -162,6 +167,144 @@ def test_check_repository_cli_rejects_first_positional_external_egress(
     result = _run_cli(repository, monkeypatch)
     assert result.exit_code != 0
     assert "reachable-capability-closure:" in result.output
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        'import httpx\n_payload = b"module-secret"\n'
+        'httpx.post("https://example.invalid", content=_payload)\n',
+        'import httpx\n_named_url = "https://example.invalid"\n'
+        '_named_payload = b"module-secret"\n'
+        'httpx.post(_named_url, content=_named_payload)\n',
+        'import subprocess\n_named_command = ["consumer"]\n'
+        '_command_payload = b"module-secret"\n'
+        'subprocess.run(_named_command, input=_command_payload)\n',
+        'import httpx\n_alias_url = "https://example.invalid"\n'
+        '_url_reference = _alias_url\n_alias_payload = b"module-secret"\n'
+        '_payload_reference = _alias_payload\n'
+        'httpx.post(_url_reference, content=_payload_reference)\n',
+        'import httpx\n_reassigned_url = "https://example.invalid"\n'
+        '_reassigned_url = _select_url()\n_reassigned_payload = b"module-secret"\n'
+        'httpx.post(_reassigned_url, content=_reassigned_payload)\n',
+        'import httpx\n_reassigned_url = "https://example.invalid"\n'
+        '_reassigned_url = _select_url()\n_reassigned_payload = b"module-secret"\n'
+        '_reassigned_payload = _load_payload()\n'
+        'httpx.post(_reassigned_url, content=_reassigned_payload)\n',
+        'import httpx\n_unknown_url = _select_url()\n'
+        '_unknown_payload = _load_payload()\n'
+        'httpx.post(_unknown_url, content=_unknown_payload)\n',
+        'import httpx\n_selected_url = _select_url() if _enabled() else _alternate_url()\n'
+        '_selected_payload = ('
+        '_load_payload() if _enabled() else _alternate_payload())\n'
+        'httpx.post(_selected_url, content=_selected_payload)\n',
+        'def _bound_unknown_payload(channel):\n'
+        '    payload = _load_payload()\n'
+        '    return channel.send(payload)\n',
+        'import httpx\ndef _constant_http():\n'
+        '    return httpx.post("https://example.invalid", content=b"literal-secret")\n',
+        "def _assigned_callback(value, callback):\n"
+        "    result = callback(value)\n"
+        "    return result\n",
+        "def _returned_callback_alias(value, callback):\n"
+        "    dispatch = callback\n"
+        "    return dispatch(value)\n",
+        "def _default_callback(value, callback=print):\n"
+        "    return callback(value)\n",
+    ),
+    ids=(
+        "module-http",
+        "named-url-and-payload",
+        "named-command-and-payload",
+        "named-aliases",
+        "reassigned-context",
+        "both-reassigned",
+        "both-unknown",
+        "mixed-selectors",
+        "bound-unknown-payload",
+        "constant-http",
+        "assigned-callback",
+        "returned-callback-alias",
+        "default-callback",
+    ),
+)
+def test_check_repository_cli_rejects_scope_and_callback_egress(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    catalog_path = (
+        repository
+        / "src/unrest_harness/bundled/policies/capability-sinks.v1.json"
+    )
+    catalog_before = catalog_path.read_bytes()
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\n" + source,
+        encoding="utf-8",
+    )
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == repeated.exit_code == 1
+    assert first.output == repeated.output
+    assert "reachable-capability-closure:" in first.output
+    assert catalog_path.read_bytes() == catalog_before
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        'import httpx\n_fixed_url = "https://example.invalid"\nhttpx.post(_fixed_url)\n',
+        'import subprocess\n_fixed_command = ["consumer"]\n'
+        'subprocess.run(_fixed_command)\n',
+    ),
+    ids=("named-fixed-url", "named-fixed-command"),
+)
+def test_check_repository_cli_accepts_named_fixed_external_context(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\n" + source,
+        encoding="utf-8",
+    )
+
+    result = _run_cli(repository, monkeypatch)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "def _receiver_only(channel):\n    channel.send()\n",
+        "def _external_without_payload():\n    external_callback()\n",
+        "def _local_with_payload(value):\n"
+        "    def local_callback(item):\n"
+        "        return item\n"
+        "    return local_callback(value)\n",
+    ),
+    ids=("receiver-only", "external-no-arguments", "local-with-payload"),
+)
+def test_check_repository_cli_accepts_no_data_and_local_calls(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\n" + source,
+        encoding="utf-8",
+    )
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == repeated.exit_code == 0, first.output
+    assert first.output == repeated.output
+    assert json.loads(first.output)["status"] == "ok"
 
 
 def test_check_repository_cli_accepts_proven_pure_callable_composites(
@@ -617,8 +760,8 @@ def _apply_mutation(repository: Path, mutation: str) -> str:
         path = repository / ".github/workflows/ci.yml"
         path.write_text(
             path.read_text(encoding="utf-8").replace(
-                'python-version: ["3.11", "3.12", "3.13"]',
-                'python-version: ["3.11", "3.12"]',
+                'python-version: "3.13"',
+                'python-version: "3.14"',
                 1,
             ),
             encoding="utf-8",
@@ -1826,19 +1969,21 @@ def test_ci_source_removal_or_substitution_is_rejected_by_the_command(
         "      - name: Repository contract\n"
         f"        run: {CANONICAL_COMMAND}\n"
     )
-    assert text.count(step) == 1
+    assert text.count(step) == 2
     if mutation == "removed":
-        text = text.replace(step, "", 1)
+        text = step.join(text.rsplit(step, 1)[:-1]) + text.rsplit(step, 1)[-1]
         expected = "REPO-CI-COMMAND-MISSING"
     elif mutation == "substituted":
-        text = text.replace(
+        before, after = text.rsplit(step, 1)
+        text = before + step.replace(
             CANONICAL_COMMAND,
             "uv run python -m unrest_harness.repository_contract",
             1,
-        )
+        ) + after
         expected = "REPO-CI-COMMAND-SUBSTITUTED"
     else:
-        text = text.replace(step, "", 1)
+        before, after = text.rsplit(step, 1)
+        text = before + after
         marker = "      - name: Smoke-test installed wheel\n"
         text = text.replace(marker, step + marker, 1)
         expected = "REPO-CI-COMMAND-ORDER"
@@ -1850,9 +1995,318 @@ def test_ci_source_removal_or_substitution_is_rejected_by_the_command(
 
     assert result.exit_code == 1
     assert expected in result.output
-    assert ".github/workflows/ci.yml#jobs.checks" in result.output
+    assert ".github/workflows/ci.yml#jobs.primary" in result.output
     assert str(repository) not in result.output
     assert _status(repository) == before
+
+
+def test_ci_has_one_full_suite_and_exact_tier_surfaces() -> None:
+    workflow_text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+    compatibility = workflow["jobs"]["compatibility"]
+    primary = workflow["jobs"]["primary"]
+
+    assert compatibility["strategy"]["matrix"]["python-version"] == ["3.11", "3.12"]
+    assert primary["steps"][1]["with"]["python-version"] == "3.13"
+    commands = [
+        step["run"].strip()
+        for job in (compatibility, primary)
+        for step in job["steps"]
+        if "run" in step
+    ]
+    assert commands.count(FULL_SOURCE_SUITE_COMMAND) == 1
+    assert commands.count(COMPATIBILITY_TEST_COMMAND) == 1
+    assert commands.count(DISTRIBUTION_CHECK_COMMAND) == 1
+    assert sum("pytest" in command for command in commands) == 2
+    assert sum(command == "uv build" for command in commands) == 1
+    assert workflow_text.count("-m unrest_harness.installed_wheel_check") == 1
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    (
+        (("bash", "-c", "uv run pytest -q"), "uv run pytest -q"),
+        (("bash", "-lc", "uv run pytest -q"), "uv run pytest -q"),
+        (("sh", "-ec", "uv run pytest -q"), "uv run pytest -q"),
+        (("zsh", "-fc", "uv run pytest -q"), "uv run pytest -q"),
+        (
+            ("bash", "-o", "pipefail", "-c", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (
+            ("bash", "+o", "pipefail", "-c", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (
+            ("bash", "-O", "extglob", "-c", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (
+            ("bash", "+O", "extglob", "-c", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (
+            ("bash", "-Oc", "extglob", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (
+            ("bash", "-co", "pipefail", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (
+            ("bash", "--noprofile", "--norc", "-c", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (
+            ("bash", "--init-file", "/dev/null", "-c", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (
+            ("bash", "--rcfile=/dev/null", "-c", "uv run pytest -q"),
+            "uv run pytest -q",
+        ),
+        (("bash", "--", "-c", "uv run pytest -q"), None),
+        (("bash", "script.sh", "-c", "uv run pytest -q"), None),
+        (("bash", "-o", "-c", "uv run pytest -q"), None),
+        (("bash", "+O", "-c", "uv run pytest -q"), None),
+        (("bash", "--init-file", "-c", "uv run pytest -q"), None),
+        (("bash", "--init-file=", "-c", "uv run pytest -q"), None),
+        (("bash", "--help", "-c", "uv run pytest -q"), None),
+        (("bash", "--unknown", "-c", "uv run pytest -q"), None),
+        (("bash", "-q", "-c", "uv run pytest -q"), None),
+        (("bash", "-c"), None),
+        (("python", "-c", "uv run pytest -q"), None),
+    ),
+    ids=(
+        "plain-command",
+        "bash-combined",
+        "sh-combined",
+        "zsh-combined",
+        "minus-o",
+        "plus-o",
+        "minus-O",
+        "plus-O",
+        "combined-Oc",
+        "combined-co",
+        "boolean-long",
+        "separate-long-operand",
+        "equals-long-operand",
+        "option-terminator",
+        "script-stop",
+        "malformed-o-operand",
+        "malformed-O-operand",
+        "malformed-long-operand",
+        "empty-equals-operand",
+        "terminal-long-option",
+        "unknown-long-option",
+        "unknown-short-option",
+        "missing-command-string",
+        "not-a-shell",
+    ),
+)
+def test_shell_command_string_uses_bounded_structural_option_grammar(
+    command: tuple[str, ...],
+    expected: str | None,
+) -> None:
+    assert _shell_command_string(command) == expected
+
+
+@pytest.mark.parametrize(
+    "extra_job",
+    [
+        "",
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: uv run pytest -q\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: python -m pytest ./tests/\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: sh -c 'uv run python -m pytest -q .'\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: bash -lc 'uv run pytest -q'\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: sh -ec 'uv run pytest -q'\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: zsh -fc 'uv run pytest -q' ci-shell\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: bash -o pipefail -c 'uv run pytest -q'\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: bash -O extglob -c 'uv run pytest -q'\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: bash +o pipefail -c 'uv run pytest -q'\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: bash +O extglob -c 'uv run pytest -q'\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: bash -Oc extglob 'uv run pytest -q'\n"
+        ),
+        (
+            "\n  duplicate-suite:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: bash --noprofile --rcfile=/dev/null -c 'uv run pytest -q'\n"
+        ),
+    ],
+    ids=(
+        "same-job",
+        "direct",
+        "python-module-tests",
+        "nested-shell-dot",
+        "bash-login-command",
+        "sh-errexit-command",
+        "zsh-fast-command",
+        "bash-pipefail-command",
+        "bash-extglob-command",
+        "bash-plus-pipefail-command",
+        "bash-plus-extglob-command",
+        "bash-combined-option-operand-command",
+        "bash-long-options-command",
+    ),
+)
+def test_ci_rejects_any_additional_full_suite_spelling(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra_job: str,
+) -> None:
+    path = repository / ".github/workflows/ci.yml"
+    text = path.read_text(encoding="utf-8")
+    if extra_job:
+        text += extra_job
+    else:
+        marker = "      - name: Repository contract\n"
+        duplicate = "      - name: Duplicate suite\n        run: uv run pytest -q\n"
+        text = text.replace(marker, duplicate + marker, 1)
+    path.write_text(text, encoding="utf-8")
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-CI-FULL-SUITE-COUNT" in result.output
+    assert "REPO-CI-TEST-SURFACES-INVALID" in result.output
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "bash -o pipefail -c 'printf option-argument-control'",
+        "bash +o pipefail -c 'printf plus-option-argument-control'",
+        "bash -O extglob -c 'printf shopt-argument-control'",
+        "bash +O extglob -c 'printf plus-shopt-argument-control'",
+        "bash --rcfile=/dev/null -c 'printf long-option-control'",
+        "bash -- -c 'uv run pytest -q'",
+        "bash -o -c 'uv run pytest -q'",
+        "bash --init-file -c 'uv run pytest -q'",
+        "bash --unknown -c 'uv run pytest -q'",
+        "bash -q -c 'uv run pytest -q'",
+    ),
+    ids=(
+        "bash-pipefail",
+        "bash-plus-pipefail",
+        "bash-extglob",
+        "bash-plus-extglob",
+        "bash-long-equals",
+        "option-terminator",
+        "malformed-short-operand",
+        "malformed-long-operand",
+        "unknown-long-option",
+        "unknown-short-option",
+    ),
+)
+def test_ci_accepts_option_taking_shell_wrappers_without_pytest(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    path = repository / ".github/workflows/ci.yml"
+    text = path.read_text(encoding="utf-8")
+    text += (
+        "\n  shell-control:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        f"      - run: {command}\n"
+    )
+    path.write_text(text, encoding="utf-8")
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "ok"
+
+
+def test_ci_pytest_text_and_focused_selection_are_not_full_suite_invocations(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = repository / ".github/workflows/ci.yml"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(
+        "      - name: Repository contract\n",
+        "      - name: Harmless pytest controls\n"
+        "        run: |\n"
+        "          echo pytest\n"
+        "          uv run pytest -q tests/test_assets.py -k impossible\n"
+        "          bash -lc 'uv run pytest -q tests/test_config.py -k impossible'\n"
+        "          sh scripts/pytest-smoke.sh\n"
+        "      - name: Repository contract\n",
+        1,
+    )
+    path.write_text(text, encoding="utf-8")
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-CI-TEST-SURFACES-INVALID" in result.output
+    assert "REPO-CI-FULL-SUITE-COUNT" not in result.output
+
+
+def test_root_ruff_excludes_only_runtime_validation_artifacts() -> None:
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert configuration["tool"]["ruff"]["exclude"] == [
+        ".validation",
+        "validator-regressions",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1881,7 +2335,8 @@ def test_ci_contract_must_precede_option_bearing_build_commands(
         "        run: uv build\n"
     )
     option_build = standard_build.replace("uv build", build_command)
-    text = text.replace(contract, "", 1).replace(
+    before, after = text.rsplit(contract, 1)
+    text = (before + after).replace(
         standard_build,
         option_build + contract,
         1,
@@ -1906,9 +2361,13 @@ def test_ci_contract_must_precede_publish_commands(
         "      - name: Repository contract\n"
         f"        run: {CANONICAL_COMMAND}\n"
     )
-    test_step = "      - name: Test (pytest)\n        run: uv run pytest -q\n"
+    test_step = (
+        "      - name: Full source suite\n"
+        "        run: env -u CODEX_PATH uv run pytest -q\n"
+    )
     publish_step = "      - name: Publish check\n        run: uv publish --dry-run\n"
-    text = text.replace(contract, "", 1).replace(
+    before, after = text.rsplit(contract, 1)
+    text = (before + after).replace(
         test_step,
         test_step + publish_step + contract,
         1,
@@ -1927,44 +2386,58 @@ def test_ci_contract_must_precede_publish_commands(
     ("old", "new", "expected"),
     [
         (
-            '        python-version: ["3.11", "3.12", "3.13"]',
-            '        python-version: ["3.11", "3.12", "3.13"]\n'
-            "        exclude:\n"
-            '          - python-version: "3.13"',
+            '        python-version: ["3.11", "3.12"]',
+            '        python-version: ["3.11"]',
             "REPO-CI-PYTHON-COVERAGE-MISSING",
         ),
         (
-            '        python-version: ["3.11", "3.12", "3.13"]',
-            '        python-version: ["3.11", "3.12", "3.13"]\n'
+            '        python-version: ["3.11", "3.12"]',
+            '        python-version: ["3.11", "3.12"]\n'
             "        exclude:\n"
             "          - python-version: ${{ matrix.disabled-version }}",
             "REPO-CI-MATRIX-INVALID",
         ),
         (
+            "      - name: Full source suite\n"
+            "        run: env -u CODEX_PATH uv run pytest -q\n"
             "      - name: Repository contract\n"
             f"        run: {CANONICAL_COMMAND}",
+            "      - name: Full source suite\n"
+            "        run: env -u CODEX_PATH uv run pytest -q\n"
             "      - name: Repository contract\n"
-            "        if: matrix.python-version != '3.13'\n"
+            "        if: ${{ false }}\n"
             f"        run: {CANONICAL_COMMAND}",
             "REPO-CI-COMMAND-CONDITIONAL",
         ),
         (
+            "      - name: Full source suite\n"
+            "        run: env -u CODEX_PATH uv run pytest -q\n"
             "      - name: Repository contract\n"
             f"        run: {CANONICAL_COMMAND}",
+            "      - name: Full source suite\n"
+            "        run: env -u CODEX_PATH uv run pytest -q\n"
             "      - name: Repository contract\n"
             "        continue-on-error: true\n"
             f"        run: {CANONICAL_COMMAND}",
             "REPO-CI-COMMAND-CONTINUE-ON-ERROR",
         ),
         (
+            "  primary:\n"
+            "    name: primary source and package gate (py3.13)\n"
             "    runs-on: ubuntu-latest",
-            "    if: matrix.python-version != '3.13'\n"
+            "  primary:\n"
+            "    name: primary source and package gate (py3.13)\n"
+            "    if: ${{ false }}\n"
             "    runs-on: ubuntu-latest",
             "REPO-CI-JOB-CONDITIONAL",
         ),
         (
+            "  primary:\n"
+            "    name: primary source and package gate (py3.13)\n"
             "    runs-on: ubuntu-latest",
-            "    continue-on-error: ${{ matrix.experimental }}\n"
+            "  primary:\n"
+            "    name: primary source and package gate (py3.13)\n"
+            "    continue-on-error: true\n"
             "    runs-on: ubuntu-latest",
             "REPO-CI-JOB-CONTINUE-ON-ERROR",
         ),
@@ -1990,40 +2463,27 @@ def test_ci_effective_coverage_rejects_lane_skipping_and_softening(
     assert _status(repository) == before
 
 
-@pytest.mark.parametrize("control", ["literal_controls", "partial_exclusion"])
-def test_ci_effective_coverage_accepts_non_skipping_controls(
+def test_ci_effective_coverage_accepts_literal_non_skipping_controls(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
-    control: str,
 ) -> None:
     path = repository / ".github/workflows/ci.yml"
     text = path.read_text(encoding="utf-8")
-    if control == "literal_controls":
-        text = text.replace(
-            "    runs-on: ubuntu-latest",
-            "    if: ${{ true }}\n"
-            "    continue-on-error: false\n"
-            "    runs-on: ubuntu-latest",
-            1,
-        ).replace(
-            "      - name: Repository contract\n"
-            f"        run: {CANONICAL_COMMAND}",
-            "      - name: Repository contract\n"
-            "        if: always()\n"
-            "        continue-on-error: ${{ false }}\n"
-            f"        run: {CANONICAL_COMMAND}",
-            1,
-        )
-    else:
-        text = text.replace(
-            '        python-version: ["3.11", "3.12", "3.13"]',
-            '        python-version: ["3.11", "3.12", "3.13"]\n'
-            '        os: ["ubuntu", "macos"]\n'
-            "        exclude:\n"
-            '          - python-version: "3.13"\n'
-            '            os: "macos"',
-            1,
-        )
+    text = text.replace(
+        "    runs-on: ubuntu-latest",
+        "    if: ${{ true }}\n"
+        "    continue-on-error: false\n"
+        "    runs-on: ubuntu-latest",
+        1,
+    ).replace(
+        "      - name: Repository contract\n"
+        f"        run: {CANONICAL_COMMAND}",
+        "      - name: Repository contract\n"
+        "        if: always()\n"
+        "        continue-on-error: ${{ false }}\n"
+        f"        run: {CANONICAL_COMMAND}",
+        1,
+    )
     path.write_text(text, encoding="utf-8")
     before = _status(repository)
 
@@ -2085,8 +2545,8 @@ def test_ci_dependency_reachability_rejects_impossible_needs(
         + "\n"
     )
     text = text.replace("jobs:\n", f"jobs:\n{blocker_job}", 1).replace(
-        "  checks:\n",
-        "  checks:\n    needs: blocker\n",
+        "  primary:\n",
+        "  primary:\n    needs: blocker\n",
         1,
     )
     path.write_text(text, encoding="utf-8")
@@ -2177,10 +2637,11 @@ def test_ci_alternate_python_matrix_cannot_test_or_build_without_enforcement(
     ("old", "new", "expected"),
     [
         (
-            "      - name: Test (pytest)\n        run: uv run pytest -q",
-            "      - name: Test (pytest)\n"
-            "        if: matrix.python-version != '3.13'\n"
-            "        run: uv run pytest -q",
+            "      - name: Full source suite\n"
+            "        run: env -u CODEX_PATH uv run pytest -q",
+            "      - name: Full source suite\n"
+            "        if: ${{ false }}\n"
+            "        run: env -u CODEX_PATH uv run pytest -q",
             "REPO-CI-PYTHON-STEP-CONDITIONAL",
         ),
         (
@@ -2212,15 +2673,15 @@ def test_ci_python_test_and_build_steps_cannot_be_skipped_or_soft_failed(
     assert _status(repository) == before
 
 
-def test_ci_requires_enforcing_tests_after_build(
+def test_ci_requires_focused_distribution_check_after_build(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     path = repository / ".github/workflows/ci.yml"
     text = path.read_text(encoding="utf-8")
     post_build = (
-        "      - name: Test built tree hermeticity\n"
-        "        run: uv run pytest -q\n"
+        "      - name: Check distribution archives\n"
+        "        run: uv run python tools/check_distribution.py dist\n"
     )
     assert text.count(post_build) == 1
     path.write_text(text.replace(post_build, "", 1), encoding="utf-8")
@@ -2229,8 +2690,24 @@ def test_ci_requires_enforcing_tests_after_build(
     result = _run_cli(repository, monkeypatch)
 
     assert result.exit_code == 1
-    assert "REPO-CI-PRE-POST-BUILD-TESTS-MISSING" in result.output
+    assert "REPO-CI-DISTRIBUTION-CHECK-MISSING" in result.output
     assert _status(repository) == before
+
+
+def test_ci_rejects_duplicate_post_build_full_pytest(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = repository / ".github/workflows/ci.yml"
+    text = path.read_text(encoding="utf-8")
+    marker = "      - name: Check distribution archives\n"
+    duplicate = "      - name: Duplicate built-tree suite\n        run: uv run pytest -q\n"
+    path.write_text(text.replace(marker, duplicate + marker, 1), encoding="utf-8")
+
+    result = _run_cli(repository, monkeypatch)
+
+    assert result.exit_code == 1
+    assert "REPO-CI-POST-BUILD-PYTEST" in result.output
 
 
 def test_ci_requires_installed_wheel_lifecycle_mission(
@@ -2269,8 +2746,8 @@ def test_ci_reachable_dependency_control_remains_valid(
         "      - run: echo ready\n",
         1,
     ).replace(
-        "  checks:\n",
-        "  checks:\n    needs: prerequisite\n",
+        "  primary:\n",
+        "  primary:\n    needs: prerequisite\n",
         1,
     )
     path.write_text(text, encoding="utf-8")

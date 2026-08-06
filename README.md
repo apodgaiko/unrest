@@ -130,16 +130,31 @@ is information for the next iteration, not paperwork to route around.
 
 ## Development
 
-Run the same checks as CI from the repository root:
+During a focused edit, run the narrow checks that exercise the changed behavior:
+
+```bash
+uv run pytest -q <focused-test-paths>
+uv run ruff check <changed-product-paths>
+uv run mypy <changed-typed-paths>
+```
+
+Run milestone checks from the repository root:
 
 ```bash
 uv sync --locked
 uv run ruff check .
 uv run mypy src
-uv run pytest -q
 uv run unrest check-repository
-uv build
+uv run pytest -q <milestone-test-paths>
 ```
+
+Record why a focused check type is inapplicable when necessary. A frozen
+release candidate runs the full source suite exactly once on Python 3.13 with
+`env -u CODEX_PATH uv run pytest -q`; Python 3.11 and 3.12 run lightweight
+compatibility checks. Changes to CLI entry points, bundled assets, package data,
+or MCP surfaces additionally run `uv build`,
+`uv run python tools/check_distribution.py dist`, and the installed-wheel
+lifecycle from an unrelated working directory.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.
 

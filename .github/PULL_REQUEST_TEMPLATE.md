@@ -81,10 +81,36 @@ Rollback-Plan: none
 
 ## Verification checklist
 
+Complete the focused tier and every higher tier applicable to this candidate;
+record non-applicable higher tiers and their stable reasons in the evidence
+section above.
+
+### Focused/change tier
+
+- [ ] Narrow pytest, Ruff, and mypy targets cover the edited behavior, or an
+      inapplicable check has a recorded reason.
+
+### Milestone tier
+
 - [ ] `uv run ruff check .`
 - [ ] `uv run mypy src`
-- [ ] `uv run pytest -q`
+- [ ] `uv run unrest check-repository`
+- [ ] Focused milestone tests are recorded above.
+
+### Frozen-candidate release tier (once, Python 3.13)
+
+- [ ] `env -u CODEX_PATH uv run pytest -q`
+- [ ] Any environment-only continuation is bounded to the affected cases and
+      recorded without repeating the full source suite.
+- [ ] `uv build`
+- [ ] `uv run python tools/check_distribution.py dist`
+- [ ] Installed-wheel lifecycle passed from an unrelated cwd.
+
+### General evidence
+
 - [ ] Tests cover positive, negative, boundary, and recovery behavior.
 - [ ] Protected paths were resolved through `policy/protected-surfaces.yaml`.
 - [ ] Schema changes include versioned fixtures, migration/recovery, and rollback.
 - [ ] Exact commands, exit codes, and concrete observations are recorded.
+- [ ] GitHub CI is terminal green on the exact published head.
+- [ ] Final accountable approval binds to that exact head before merge.

@@ -1,134 +1,114 @@
-Batch 0 final closure evidence
-date: 2026-08-05
+Batch 0 final-closure release-gate evidence
+date: 2026-08-06
 reviewed base: eb0ba661b52bcc8004733471c9409b6795d59772
-frozen candidate: 3fb4a712cf362b9ddaedfc0d7e3d5b19e1c708e0
-clean detached checkout: /private/tmp/unrest-batch0-fourthgate.3o1WAW/candidate
+gated implementation candidate: b00747480a50ed0ab6f3f202f7957035db770655
+candidate parent: 6dc49460a83b5d70aa4e8e6a36aa6ec617404bd7
+clean detached checkout: /private/tmp/unrest-batch0-tiered-release.6WLkR7/candidate
 
-Original ancestry and approved implementation scope
+Candidate identity and preserved history
 
-`git merge-base --is-ancestor eb0ba661b52bcc8004733471c9409b6795d59772 3fb4a712cf362b9ddaedfc0d7e3d5b19e1c708e0`
-exit: 0
+The gated candidate is the sole provisional combined commit, directly parented
+by 6dc49460a83b5d70aa4e8e6a36aa6ec617404bd7. Its subject is
+`fix(release): close capability gaps and enforce tiered verification`, and it
+has exactly one `Human-Reviewers: maintainer` trailer.
 
-`git rev-list --count eb0ba661b52bcc8004733471c9409b6795d59772..3fb4a712cf362b9ddaedfc0d7e3d5b19e1c708e0`
-exit: 0
-count: 5
-
-The first three approved implementation commits and intervening release-evidence
-commit retain their exact object IDs, parents, and trees:
+The reviewed-base range contains six commits. The five prior object IDs,
+parents, and trees were preserved exactly:
 
 1. 0821003c82e6d4eae6135b1314aada7163983faa
    subject: fix(governance): adopt solo-maintainer review policy
-   Human-Reviewers: maintainer
 2. cc384cba34767965b393fe16360a9110ff95242d
    subject: fix(security): bound capability closure over reachable source graph
-   Human-Reviewers: maintainer
 3. 8843d3ff4969f338e7020bb1c4974f533ac0f622
    subject: fix(security): preserve awaited egress payload structure
-   Human-Reviewers: maintainer
 4. 9cb1472207b14629d420f11a7a6774c4f0b03940
    subject: docs(release): refresh batch 0 closure evidence
-   Human-Reviewers: maintainer
+5. 6dc49460a83b5d70aa4e8e6a36aa6ec617404bd7
+   subject: fix(security): include first-positional egress in closure
 
-The provisional fourth implementation commit is
-3fb4a712cf362b9ddaedfc0d7e3d5b19e1c708e0, directly descended from 9cb1472,
-with subject `fix(security): include first-positional egress in closure` and
-exactly one `Human-Reviewers: maintainer` trailer.
+The provisional combined commit changed exactly 31 tracked paths. The release
+record refresh is authorized to amend only that commit; it does not alter the
+gated product behavior or any prior object. The final published SHA is resolved
+from the branch and PR refs after the metadata-only amend, avoiding a recursive
+self-reference in this artifact.
 
-The reviewed base-to-candidate range changes exactly these 19 tracked paths:
+Ordered clean-detached gate
 
-.github/PULL_REQUEST_TEMPLATE.md
-docs/architecture/capability-policy.md
-docs/architecture/change-governance.md
-docs/architecture/component-map.json
-docs/release/batch-0-closure.md
-docs/templates/adr.md
-evals/baseline/manifest.yaml
-evals/baseline/report.json
-evidence/batch-0/evaluation.json
-evidence/batch-0/full-gate.txt
-policy/protected-surfaces.yaml
-src/unrest_harness/baseline.py
-src/unrest_harness/bundled/policies/capability-sinks.v1.json
-src/unrest_harness/capability_policy.py
-src/unrest_harness/governance.py
-tests/fixtures/governance/valid-protected-commit.txt
-tests/test_baseline.py
-tests/test_capability_closed_model.py
-tests/test_capability_source_graph.py
-tests/test_governance.py
-tests/test_repository_contract.py
-
-Ordered frozen-candidate gate
-
-1. `uv sync --locked`
+1. `uv sync --locked --python 3.13`
    exit: 0
-   result: 87 packages resolved; 81 packages checked
+   result: CPython 3.13.12; 87 packages resolved and 81 installed
 2. `uv run ruff check .`
    exit: 0
+   result: all checks passed
 3. `uv run mypy src`
    exit: 0
    result: no issues in 22 source files
 4. `env -u CODEX_PATH uv run pytest -q`
    exit: 1
-   result: 3046 passed; 7 skipped; exactly 2 failed before product execution
-   because the restricted shell denied `socket.bind(("127.0.0.1", 0))`
-5. Authorized bounded rerun of only the two denied inventory parameterizations
-   in a loopback-capable shell
+   result: 3153 passed, 7 skipped, and exactly 2 failed before product
+   execution because the restricted environment denied
+   `socket.bind(("127.0.0.1", 0))`
+5. Authorized continuation of only the two denied parameterizations in a
+   loopback-capable environment
    exit: 0
-   result: 2 passed in 3.13s; the 3046 prior passes were not rerun
+   result: 2 passed in 3.53s; the full source suite was not repeated
 6. `uv run unrest check-repository`
    exit: 0
-   result: status ok
+   result: status ok; 13 repository families checked
 7. `uv run unrest check-governance --policy policy/protected-surfaces.yaml --component-map docs/architecture/component-map.json`
    exit: 0
-   result: sole accountable role and reviewer maintainer
-8. `uv build`
+   result: schema version 1; sole accountable role `maintainer`
+8. Exact 31-path `uv run unrest check-commit ...`
+   exit: 0
+   result: protected surfaces resolved exactly to capability-policy,
+   evaluation-holdouts, and governance-self-protection
+9. `uv build`
    exit: 0
    result: wheel and source distribution built
-9. Fresh Python 3.13.12 installation of the exact wheel
-   exit: 0
-   result: 69 packages installed; installed unrest-harness version 0.1.0
-10. From unrelated fresh working directory
-    `/private/tmp/unrest-batch0-wheel-cwd.rS0mHK`, installed `unrest --help`,
-    `unrest-server --help`, `python -m unrest_harness --help`, policy discovery,
-    and credential-cleared installed-wheel lifecycle checks
+10. `uv run python tools/check_distribution.py dist`
     exit: 0
-11. Unsupported installed-wheel profile
+    result: 47 source/package members byte-matched; metadata, assets, entry
+    points, and RECORD hashes verified
+11. Fresh Python 3.13.12 installation of the exact wheel, exercised from
+    unrelated cwd `/private/tmp/unrest-batch0-wheel-cwd.YBcOTf`
+    exit: 0
+    result: all three entry surfaces, packaged policy discovery, and the
+    restart/persistence lifecycle passed
+12. Unsupported installed-wheel capability profile
     exit: 1
-    result: both required fail-closed diagnostics were present
+    result: fail-closed `CAP-POLICY-001` diagnostic present
 
-The effective source result is 3048 passed, 7 skipped, and 0 failed. The
-vanished earlier 84% run is excluded. Build and install each required one
-network-capable retry after a restricted-shell DNS failure; the successful
-commands and artifact inputs were unchanged.
+The effective source result is 3155 passed, 7 skipped, and 0 product failures.
+The sole full source suite was not repeated. Sandbox cache misses required
+authorized network retries for sync, build isolation, and fresh wheel
+installation; command inputs and candidate content were unchanged.
 
-Installed wheel identity and integrity
+Built artifact identity and integrity
 
-filename: unrest_harness-0.1.0-py3-none-any.whl
-distribution: unrest-harness
-version: 0.1.0
-python tag: py3
-ABI tag: none
-platform tag: any
-SHA-256: 5f25a16535568aa17e6a3864ca9d27dfb83d5a211e0d1b3655cf75e49a030986
-sdist SHA-256: f5b74299cb7297d013c2435ee52c689c555999713e26c4f1d9ce58c8a940fa42
-RECORD hashes verified: 53
-packaged source/package byte matches: 47
+wheel filename: unrest_harness-0.1.0-py3-none-any.whl
+wheel size: 290992 bytes
+wheel SHA-256: 9fdea75b9d0a9ba9c0e3ed6b50ae0e0cf96831b0672f1e26a1cc972addb2745f
+sdist filename: unrest_harness-0.1.0.tar.gz
+sdist size: 401566 bytes
+sdist SHA-256: d99bee79b2a438ff53a422fc222420b643153d232c05dc5f6215195d5bbcdc12
+wheel members: 54 total; 47 package members
+RECORD rows: 54 total; 53 hashed and verified
 
 Retained execution evidence
 
-full pytest log SHA-256: 6ca54b232f8ba718bf1d174b7ccfbe29b1556934d4b1e5c71733e42988117de0
-bounded loopback log SHA-256: 3b60ce5db0f06189262b608030cfbeb8533d4fa534762ba296d3cc18efa76617
-durable gate record SHA-256: 91e57eac7665f95cb467968dadbee5c70c009d7f79ef5862a4175d081909d0c2
+durable gate record: work-finalize-release-gate-v2-m2-b0074748.md
+durable gate record SHA-256: dc62c7eb92e33dbd4ca34e6b8a679bb4f616f32e465e0018102a3e448ffc4ead
 
 Final integrity observations
 
-candidate SHA after the gate: 3fb4a712cf362b9ddaedfc0d7e3d5b19e1c708e0
-tracked candidate status: clean
-candidate `git diff --check`: clean
-protected-path metadata: absent from the detached candidate
-full suite repeated after durable gate: no
-fifth implementation commit: not created
+candidate SHA after the gate: b00747480a50ed0ab6f3f202f7957035db770655
+candidate and original tracked/index state after the gate: clean
+protected paths in detached candidate: absent
+full source suite repeated: no
+push, PR mutation, merge, or owner approval performed by the gate: no
+
+This evidence proves the local release gate for the implementation candidate.
+It does not claim final published-head CI or owner merge approval.
 
 No credential values, environment values, prompts, source bodies, sentinels,
 or raw command transcripts are included in this artifact.

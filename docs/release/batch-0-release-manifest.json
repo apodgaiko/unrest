@@ -1,6 +1,13 @@
 {
-  "base_sha": "9ebed0a",
+  "base_sha": "9ebed0a9007289d419dae476f0dd582e8a21a550",
   "branch": "codex/batch-0-recommended-fixes",
+  "contract_targets": [
+    "VAL-CAP-013",
+    "VAL-REL-005",
+    "VAL-TIER-001",
+    "VAL-TIER-002",
+    "VAL-TIER-003"
+  ],
   "excluded_paths": [
     ".validation/",
     "validator-regressions/"
@@ -21,6 +28,10 @@
   ],
   "manifest_version": 1,
   "mission_scope": "Batch 0 recommended fixes and reviewed merge blockers only",
+  "release_evidence": "evidence/batch-0/evaluation.json",
+  "release_gate_candidate": "b00747480a50ed0ab6f3f202f7957035db770655",
+  "release_gate_candidate_parent": "6dc49460a83b5d70aa4e8e6a36aa6ec617404bd7",
+  "release_state": "implementation-complete-awaiting-published-head-ci-and-owner-approval",
   "protected_categories": [
     "capability-policy",
     "coordinator-semantics",
@@ -28,8 +39,7 @@
     "governance-self-protection",
     "storage-migrations"
   ],
-  "reviewed_blocker_head": "858d617dbce69ae3bc683f608465c8f899eadcae",
   "rollback_plan": "docs/release/batch-0-rollback.md",
   "schema_compatibility": "No versioned wire or persisted schema version changes",
-  "task_id": "B0-MERGE-BLOCKERS"
+  "task_id": "B0-TIERED-TESTING"
 }

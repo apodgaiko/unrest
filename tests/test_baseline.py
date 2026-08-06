@@ -161,6 +161,19 @@ def test_manifest_matches_kickoff_and_hashes_every_classified_fixture() -> None:
     assert manifest["kickoff_record"] == KICKOFF_RECORD
     assert manifest["kickoff_record"]["protected_reviewers"] == ["maintainer"]
     assert manifest["classification_vocabulary"] == list(CLASSIFICATIONS)
+    assert manifest["candidate_verification_expectations"] == {
+        "change": "focused tests plus changed-path Ruff and mypy",
+        "milestone": (
+            "exact root Ruff, mypy src, repository contract, and focused tests"
+        ),
+        "release": (
+            "one Python 3.13 full source suite plus focused archives and "
+            "unrelated-cwd installed wheel"
+        ),
+        "compatibility": (
+            "Python 3.11 and 3.12 imports, focused contracts, repository, and CLI"
+        ),
+    }
     assert manifest["provider_independent_configuration"] == {
         "node_dispatch": "in-process controlled dispatcher",
         "terminal_review": "in-process controlled reviewer",

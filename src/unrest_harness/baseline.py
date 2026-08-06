@@ -940,6 +940,19 @@ def _manifest(fixtures: list[dict[str, str]]) -> dict[str, Any]:
             "providers": "in-process controlled dispatcher/reviewer only",
         },
         "classification_vocabulary": list(CLASSIFICATIONS),
+        "candidate_verification_expectations": {
+            "change": "focused tests plus changed-path Ruff and mypy",
+            "milestone": (
+                "exact root Ruff, mypy src, repository contract, and focused tests"
+            ),
+            "release": (
+                "one Python 3.13 full source suite plus focused archives and "
+                "unrelated-cwd installed wheel"
+            ),
+            "compatibility": (
+                "Python 3.11 and 3.12 imports, focused contracts, repository, and CLI"
+            ),
+        },
         "commands_used": [
             "uv sync --locked",
             "uv run ruff check .",

@@ -129,7 +129,9 @@ uv run unrest check-repository
 uv run pytest -q tests/test_documentation_contract.py
 ```
 
-Then run the common repository gate.
+At a completed implementation slice, also run the milestone checks in the root
+`AGENTS.md`; this focused documentation check does not consume the single
+frozen-candidate full-suite checkpoint.
 
 ## Related decisions
 

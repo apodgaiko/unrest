@@ -101,8 +101,10 @@ uv run pytest -q tests/test_coordinator.py tests/test_storage.py \
   tests/test_server.py tests/test_terminal_review.py tests/test_baseline.py
 ```
 
-Also run the common repository gate and installed-wheel smoke when entry points
-or package data change.
+At a completed implementation slice, also run the milestone checks in the root
+`AGENTS.md`. When CLI entry points, bundled assets, package data, or MCP surfaces
+change, run the focused archive check and unrelated-cwd installed-wheel lifecycle
+required by the package tier; do not rerun the full source suite after build.
 
 ## Related decisions
 

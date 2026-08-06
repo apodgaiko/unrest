@@ -155,7 +155,9 @@ uv run pytest -q tests/test_storage.py tests/test_terminal_review.py \
 uv run python -m unrest_harness.baseline --check --output evals/baseline
 ```
 
-Also run the common repository gate.
+At a completed implementation slice, also run the milestone checks in the root
+`AGENTS.md`; this focused storage check does not consume the single
+frozen-candidate full-suite checkpoint.
 
 ## Related decisions
 

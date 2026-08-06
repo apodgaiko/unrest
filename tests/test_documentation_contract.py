@@ -126,6 +126,95 @@ def _load_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _normalized_words(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
+def test_operator_guidance_defines_one_consistent_verification_lifecycle() -> None:
+    paths = (
+        "AGENTS.md",
+        "README.md",
+        "CONTRIBUTING.md",
+        "docs/architecture/change-governance.md",
+        "docs/architecture/repository-contract.md",
+    )
+    documents = {
+        path: (ROOT / path).read_text(encoding="utf-8")
+        for path in paths
+    }
+
+    normalized = {
+        path: _normalized_words(text) for path, text in documents.items()
+    }
+    for path, text in normalized.items():
+        assert "focused" in text, path
+        assert "milestone" in text, path
+        assert "python 3.13" in text, path
+
+    focused_commands = (
+        "uv run pytest -q <focused-test-paths>",
+        "uv run ruff check <changed-product-paths>",
+        "uv run mypy <changed-typed-paths>",
+    )
+    milestone_commands = (
+        "uv run ruff check .",
+        "uv run mypy src",
+        "uv run unrest check-repository",
+    )
+    for path in ("AGENTS.md", "README.md", "CONTRIBUTING.md"):
+        for command in focused_commands + milestone_commands:
+            assert command in normalized[path], (path, command)
+
+    release_command = "env -u codex_path uv run pytest -q"
+    for path in documents:
+        assert release_command in normalized[path], path
+    for path in ("AGENTS.md", "README.md", "CONTRIBUTING.md"):
+        for trigger in (
+            "cli entry points",
+            "bundled assets",
+            "package data",
+            "mcp surfaces",
+            "uv build",
+            "uv run python tools/check_distribution.py dist",
+            "unrelated",
+        ):
+            assert trigger in normalized[path], (path, trigger)
+
+    contributing = normalized["CONTRIBUTING.md"]
+    assert "do not rerun the source suite after build" in contributing
+
+    subtree_guidance = _normalized_words(
+        (ROOT / "tests/AGENTS.md").read_text(encoding="utf-8")
+        + " "
+        + (ROOT / "evals/AGENTS.md").read_text(encoding="utf-8")
+    )
+    assert "focused" in subtree_guidance
+    assert "milestone" in subtree_guidance
+    assert "single frozen-candidate release checkpoint" in subtree_guidance
+
+    template_text = (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").read_text(
+        encoding="utf-8"
+    )
+    template = parse_commonmark(template_text)
+    verification_headings = {
+        _normalized_words(heading.text): heading.level
+        for heading in template.headings
+        if "tier" in heading.text.casefold()
+    }
+    assert verification_headings == {
+        "focused/change tier": 3,
+        "milestone tier": 3,
+        "frozen-candidate release tier (once, python 3.13)": 3,
+    }
+    normalized_template = _normalized_words(template_text)
+    assert normalized_template.count(release_command) == 1
+    assert re.search(
+        r"-\s*\[\s*\]\s*`uv run unrest check-repository`",
+        template_text,
+        flags=re.IGNORECASE,
+    )
+
+
 def _repo_path(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 

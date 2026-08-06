@@ -40,20 +40,38 @@ reasoning, and temporary handoff notes out of source and documentation.
 
 ## Verification
 
-Run focused tests first, then the common gate from the repository root:
+Use three verification tiers. During a focused change, run the narrow tests and
+static checks that exercise the edited behavior:
 
 ```bash
-uv sync --locked
-uv run ruff check .
-uv run mypy src
-uv run pytest -q
-uv run unrest check-repository
-uv build
+uv run pytest -q <focused-test-paths>
+uv run ruff check <changed-product-paths>
+uv run mypy <changed-typed-paths>
 ```
 
-The provider-independent suite assumes provider discovery controls
-`CODEX_PATH`; if the host injects that variable, run the full test command as
-`env -u CODEX_PATH uv run pytest -q`.
+Use only the applicable changed paths, and record a stable reason when one of
+the three check types does not apply. Escalate to the milestone tier when a
+coherent implementation slice is complete; do not escalate a minor edit to the
+release tier unless it is part of the frozen candidate.
+
+At an implementation milestone, run the exact recursive repository checks plus
+the focused tests for the completed slice:
+
+```bash
+uv run ruff check .
+uv run mypy src
+uv run unrest check-repository
+uv run pytest -q <milestone-test-paths>
+```
+
+Reserve one full source-suite run for the frozen release candidate on Python
+3.13. The release checkpoint is `env -u CODEX_PATH uv run pytest -q`; do not
+repeat it after build or require it after minor edits. Python 3.11 and 3.12 are
+compatibility lanes for package imports, focused contracts, repository
+validation, and supported CLI surfaces, not duplicate full-suite lanes.
 
 When CLI entry points, bundled assets, package data, or MCP surfaces change,
-also exercise the installed wheel from an unrelated temporary directory.
+also run `uv build`, `uv run python tools/check_distribution.py dist`, and the
+installed-wheel lifecycle from an unrelated temporary directory. Post-build
+verification is focused on archive membership/hashes/metadata/assets, entry
+points, policy discovery, persistence/restart behavior, and fail-closed startup.

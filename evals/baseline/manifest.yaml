@@ -42,6 +42,13 @@ classification_vocabulary:
 - observed_legacy
 - intended
 - known_defect
+candidate_verification_expectations:
+  change: focused tests plus changed-path Ruff and mypy
+  milestone: exact root Ruff, mypy src, repository contract, and focused tests
+  release: one Python 3.13 full source suite plus focused archives and unrelated-cwd
+    installed wheel
+  compatibility: Python 3.11 and 3.12 imports, focused contracts, repository, and
+    CLI
 commands_used:
 - uv sync --locked
 - uv run ruff check .

@@ -85,21 +85,28 @@ The command checks:
   dynamic callback, ACP wire write, request, and cancellation to a canonical
   sink or exact delegation omission. Primitive omission effects are pinned,
   and reversible codec operations must remain inside their declared transform
-  owners;
+  owners. Its deterministic external-egress projection covers module and
+  function scopes, constant and parameter-derived payloads, and unknown
+  callback results in discarded, assigned, returned, awaited, and nested
+  contexts. Unresolved argument bindings fail closed without requiring literal
+  provenance, while argument-free calls and fixed command, URL, receiver, and
+  proven-pure computation controls remain benign;
 - all three checked-in packaged capability documents through their runtime
   strict loaders and canonical schemas. Role policy, security model, and sink
   catalog reject missing or unknown fields, unsupported versions, and
   duplicate object members at any depth (including equal-valued duplicates)
   before ordinary JSON decoding could collapse them. Semantically equivalent
   serialization drift also fails the canonical sorted UTF-8 JSON check;
-- the exact command's presence before build in every Python test/build job and
-  matrix, with effective (post-include/exclude) versions exactly matching
-  project classifiers, reachable dependency chains, and no conditional or
-  continue-on-error path that skips or softens a supported lane. Test,
-  coverage-driven pytest, option-bearing build/package/publish, and equivalent
-  Python module commands are classified from tokenized shell commands rather
-  than exact command strings. Static dependency failures include any explicit
-  nonzero `exit` and path-qualified `false`.
+- exactly one Python 3.11/3.12 compatibility matrix with package import,
+  focused asset/config/model contracts, supported CLI surfaces, and the exact
+  repository command; exactly one fixed Python 3.13 primary job with the sole
+  full source-suite invocation, repository command, build, focused archive
+  check, and installed-wheel lifecycle. All supported versions remain declared
+  and enforcing, dependencies remain reachable, and no conditional or
+  continue-on-error path may skip a required step. Test, coverage-driven
+  pytest, option-bearing build/package/publish, and equivalent Python module
+  commands are classified from tokenized shell commands. Post-build pytest and
+  compatibility-lane build/full-suite work are rejected.
 
 Diagnostics use `REPO-*` or the protected policy's stable `GOV-*` reason code
 and a repository-relative location. Inputs and diagnostics are sorted before
@@ -137,7 +144,9 @@ partial source references exit nonzero; external URL references remain
 external. Duplicate required template headings or YAML keys, quoted/listed
 example fields, conditional CI invocation, supported-version matrix exclusion,
 unreachable or statically failing dependencies, alternate Python test/build
-matrices without enforcement, option-bearing build/publish ordering, and
+matrices without enforcement, missing lightweight compatibility surfaces,
+multiple or misplaced full-suite invocations, post-build pytest, missing or
+late distribution/wheel checks, option-bearing build/publish ordering, and
 tolerated repository-contract failures also exit nonzero.
 
 ## Change protocol
@@ -151,11 +160,15 @@ schema against that metaschema.
 ## Required verification
 
 ```bash
+uv run ruff check .
+uv run mypy src
 uv run pytest -q tests/test_repository_contract.py
 uv run unrest check-repository
 ```
 
-Then run the common repository gate.
+This is the milestone tier. The full source suite is not part of this check; the
+frozen-candidate release checkpoint runs
+`env -u CODEX_PATH uv run pytest -q` once on Python 3.13.
 
 ## Related decisions
 

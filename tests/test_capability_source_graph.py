@@ -273,13 +273,12 @@ def test_fixed_leading_literals_and_method_receivers_are_not_payloads(
 
 
 def test_pure_callable_provenance_is_not_external_egress() -> None:
-    source = """def calculate(owner, attribute, value, predicate):
+    source = """def calculate(owner, attribute, value):
     import math
     magnitude = abs
     dynamic = getattr(owner, attribute)
     square_root = getattr(math, "sqrt")
     increment = lambda item: item + 1
-    accepted = predicate
 
     def adjust(item):
         return item + 2
@@ -291,7 +290,6 @@ def test_pure_callable_provenance_is_not_external_egress() -> None:
         square_root(value),
         increment(value),
         invoke(value),
-        accepted(value),
     )
 """
 
@@ -480,6 +478,164 @@ def test_external_egress_projection_is_independent_of_result_context(
 
     assert records
     assert records == discarded_records
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        'import httpx\npayload = b"module-secret"\n'
+        'httpx.post("https://example.invalid", content=payload)\n',
+        'import httpx\nURL = "https://example.invalid"\n'
+        'PAYLOAD = b"module-secret"\nhttpx.post(URL, content=PAYLOAD)\n',
+        'import httpx\nURL = "https://example.invalid"\n'
+        'PAYLOAD = b"module-secret"\ndef publish():\n'
+        '    return httpx.post(URL, content=PAYLOAD)\n',
+        'import subprocess\nCOMMAND = ["consumer"]\nPAYLOAD = b"module-secret"\n'
+        'subprocess.run(COMMAND, input=PAYLOAD)\n',
+        'import httpx\nURL = "https://example.invalid"\nURL_ALIAS = URL\n'
+        'PAYLOAD = b"module-secret"\nPAYLOAD_ALIAS = PAYLOAD\n'
+        'httpx.post(URL_ALIAS, content=PAYLOAD_ALIAS)\n',
+        'import httpx\nURL = "https://example.invalid"\nURL = choose_url()\n'
+        'PAYLOAD = b"module-secret"\nhttpx.post(URL, content=PAYLOAD)\n',
+        'import httpx\nURL = choose_url()\nPAYLOAD = b"module-secret"\n'
+        'httpx.post(URL, content=PAYLOAD)\n',
+        'import httpx\nURL = "https://example.invalid"\n'
+        'PAYLOAD = b"module-secret"\nPAYLOAD = load_payload()\n'
+        'httpx.post(URL, content=PAYLOAD)\n',
+        'import httpx\nURL = "https://example.invalid"\nURL = choose_url()\n'
+        'PAYLOAD = b"module-secret"\nPAYLOAD = load_payload()\n'
+        'httpx.post(URL, content=PAYLOAD)\n',
+        'import httpx\nURL = choose_url()\nPAYLOAD = load_payload()\n'
+        'httpx.post(URL, content=PAYLOAD)\n',
+        'import httpx\nURL = choose_url() if enabled() else alternate_url()\n'
+        'PAYLOAD = load_payload() if enabled() else alternate_payload()\n'
+        'httpx.post(URL, content=PAYLOAD)\n',
+        'def publish(channel):\n    payload = load_payload()\n'
+        '    return channel.send(payload)\n',
+        'import httpx\ndef publish():\n'
+        '    return httpx.post("https://example.invalid", content=b"literal-secret")\n',
+        'import httpx\ndef publish():\n'
+        '    payload = "constant-secret"\n'
+        '    return httpx.post("https://example.invalid", content=payload)\n',
+    ),
+    ids=(
+        "module-scope",
+        "named-url-and-payload",
+        "inherited-named-url-and-payload",
+        "named-command-and-payload",
+        "named-aliases",
+        "reassigned-context",
+        "mixed-unknown-context",
+        "reassigned-payload",
+        "both-reassigned",
+        "both-unknown",
+        "mixed-selectors",
+        "bound-unknown-payload",
+        "literal-payload",
+        "constant-binding",
+    ),
+)
+def test_external_egress_covers_module_scope_and_constant_payloads(
+    source: str,
+) -> None:
+    first = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    )
+    repeated = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    )
+
+    assert len(first) == 1
+    assert first == repeated
+
+
+_CALLBACK_RESULT_CONTEXTS = {
+    "discarded": "{call}",
+    "assigned": "result = {call}\n    return result",
+    "returned": "return {call}",
+    "awaited": "result = await {call}\n    return result",
+    "nested": "return consume({call})",
+}
+
+
+def _callback_parameter_source(flavor: str, context: str) -> str:
+    signature = "value, callback=print" if flavor == "default" else "value, callback"
+    setup = "    dispatch = callback\n" if flavor == "aliased" else ""
+    callable_name = "dispatch" if flavor == "aliased" else "callback"
+    statement = _CALLBACK_RESULT_CONTEXTS[context].format(
+        call=f"{callable_name}(value)"
+    )
+    function_kind = "async def" if context == "awaited" else "def"
+    return (
+        "def consume(result):\n"
+        "    return result\n\n"
+        f"{function_kind} publish({signature}):\n"
+        f"{setup}"
+        f"    {statement}\n"
+    )
+
+
+@pytest.mark.parametrize("flavor", ("direct", "aliased", "default"))
+@pytest.mark.parametrize("context", tuple(_CALLBACK_RESULT_CONTEXTS))
+def test_unknown_callback_parameters_fail_closed_in_every_result_context(
+    flavor: str,
+    context: str,
+) -> None:
+    source = _callback_parameter_source(flavor, context)
+    records = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    )
+    returned = normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(_callback_parameter_source(flavor, "returned")),
+    )
+
+    assert len(records) == 1
+    assert records == returned
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        'import httpx\nhttpx.post("https://example.invalid")\n',
+        'import httpx\nURL = "https://example.invalid"\nhttpx.post(URL)\n',
+        'import subprocess\ndef run():\n    subprocess.run(["consumer"])\n',
+        'import subprocess\nCOMMAND = ["consumer"]\nsubprocess.run(COMMAND)\n',
+        "def notify(channel):\n    channel.send()\n",
+        "def notify():\n    external_callback()\n",
+        "def publish(value):\n"
+        "    def local_callback(item):\n"
+        "        return item\n"
+        "    return local_callback(value)\n",
+        "def calculate(value):\n"
+        "    def adjust(item):\n"
+        "        return item + 1\n"
+        "    return adjust(value)\n",
+        "def select(values, predicate):\n"
+        "    return [value for value in values if predicate(value)]\n",
+    ),
+    ids=(
+        "module-fixed-url",
+        "named-fixed-url",
+        "fixed-command",
+        "named-fixed-command",
+        "receiver-only",
+        "external-no-arguments",
+        "local-with-payload",
+        "local",
+        "predicate",
+    ),
+)
+def test_scope_and_callback_completeness_preserves_benign_controls(
+    source: str,
+) -> None:
+    assert normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    ) == ()
 
 
 @pytest.mark.parametrize("mutation", tuple(_ATOMIC_EGRESS_MUTATIONS))

@@ -1,6 +1,6 @@
 {
   "artifact_path": "evidence/batch-0/full-gate.txt",
-  "artifact_sha256": "5254eccafcf5d045758cf9a07bb9101744db6cc234b3134ab1c33b1258379133",
+  "artifact_sha256": "ceb3ef6731b882ce3d719f2677d5ec4e2d739ab5a4b4dcec43d96e9218a3d323",
   "exact_check": "test -s evidence/batch-0/full-gate.txt",
   "exit_code": 0,
   "mode": "evaluation",

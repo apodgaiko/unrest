@@ -181,7 +181,9 @@ uv run pytest -q tests/test_models.py tests/test_task_validation.py \
   tests/test_terminal_review.py
 ```
 
-Also run the common repository gate in the root `AGENTS.md`.
+At a completed implementation slice, also run the milestone checks in the root
+`AGENTS.md`; this focused task-list check does not consume the single
+frozen-candidate full-suite checkpoint.
 
 ## Related decisions
 

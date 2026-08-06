@@ -107,9 +107,12 @@ known nested slots is recorded under the corresponding capability family.
 External-egress completeness treats every positional argument of an
 egress-capable callable as a possible payload, including the first argument of
 direct, imported, aliased, custom, and bound callables. Callable provenance is
-preserved across local assignments: local functions, lambdas, builtins,
-dynamic pure callables, and the side-effect-free standard-library math module
-remain computation rather than becoming unknown external sinks. Composite
+preserved across local assignments: local functions, lambdas, builtins, and
+the side-effect-free standard-library math module remain computation rather
+than becoming unknown external sinks. Unknown callable parameters fail closed
+when invoked with capability-derived data, including direct, aliased, and
+defaulted parameters; calls used only as predicates remain computation.
+Composite
 callable expressions inherit pure provenance only when every supported choice
 or element is structurally proven pure; an unknown factory remains external
 regardless of its arguments. Iteration and comprehension targets inherit pure
@@ -142,7 +145,14 @@ custom Python 3.11-3.13-stable AST representation preserves callable and data
 structure while ignoring locations, comments, formatting, type comments and
 ignores, absent empty fields, and comprehension predicates. Comprehension
 payload expressions, iteration sources, and awaited operands remain
-data-bearing structure. Call
+data-bearing structure. Module and function scopes use the same lexical model;
+scope-local single-assignment literal bindings, their aliases, and inherited
+module constants preserve fixed URL or command provenance. Reassigned,
+selected, or otherwise unresolved argument bindings are not treated as fixed
+and remain fail-closed even when every argument has lost literal provenance.
+An additional argument is conservatively
+data-bearing even when its value is a literal or constant binding, while a sole
+fixed command, URL, or receiver is structural context. Call
 projection is independent of how the
 result is used: discarded, returned, assigned, awaited, and calls nested in
 ordinary expressions have identical capability records. External calls,
@@ -445,8 +455,11 @@ rewritten.
 uv run pytest -q tests/test_capability_policy.py tests/test_acp_runner.py \
   tests/test_acp_sandbox.py tests/test_cli.py tests/test_server.py
 uv build
+uv run python tools/check_distribution.py dist
 ```
 
 Install the wheel in an isolated environment from an unrelated directory, load
 the bundled policy resource, run both entry-point help surfaces, and probe one
 safe default plus one unsupported child profile without launching a child.
+These are focused and package-surface checks; do not repeat the full source suite
+after build.

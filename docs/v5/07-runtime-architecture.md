@@ -177,7 +177,8 @@ uv run pytest -q tests/test_coordinator.py tests/test_coordinator_parallel.py \
   tests/test_server.py tests/test_acp_runner.py
 ```
 
-Also run the common repository gate.
+At a completed implementation slice, also run the milestone checks in the root
+`AGENTS.md`; do not treat this focused test list as a full-suite checkpoint.
 
 ## Related decisions
 

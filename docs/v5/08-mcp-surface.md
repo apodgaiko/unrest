@@ -113,10 +113,13 @@ incompatibility requires an ADR and explicit version/error behavior.
 uv run pytest -q tests/test_server.py tests/test_models.py \
   tests/test_acp_runner.py
 uv build
+uv run python tools/check_distribution.py dist
 ```
 
 For packaging changes, install the wheel and run `unrest-server --help` plus
-`python -m unrest_harness --help` from an unrelated directory.
+`python -m unrest_harness --help` from an unrelated directory. These are
+focused package checks; the full source suite runs only at the frozen-candidate
+release checkpoint and is not repeated after build.
 
 ## Related decisions
 

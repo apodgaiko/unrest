@@ -1350,11 +1350,11 @@ def _unrelated_local_flow(
     value,
     predicate: Callable[[int], bool],
     declaration,
-):
-    import math as json
-    magnitude = abs
-    accepted = predicate(value)
-    return magnitude(value), accepted, declaration.write, json.sqrt(value)
+    ):
+        import math as json
+        magnitude = abs
+        accepted = value if predicate(value) else 0
+        return magnitude(value), accepted, declaration.write, json.sqrt(value)
 """,
         encoding="utf-8",
     )
@@ -1404,19 +1404,6 @@ def _unrelated_nested_function(value):
 
     invoke = adjust
     return invoke(value)
-
-
-def _unrelated_returned_predicate(value, predicate):
-    return predicate(value)
-
-
-def _unrelated_predicate_defaults(value, predicate):
-    direct = lambda item, fn=predicate: fn(item)
-
-    def nested(item, fn=predicate):
-        return fn(item)
-
-    return direct(value), nested(value)
 
 
 def _unrelated_mapping_lookups(value):

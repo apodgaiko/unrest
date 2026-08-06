@@ -1047,31 +1047,164 @@ def normalized_external_egress_records(
         for item in ast.walk(tree)
         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
     ]
-    for function in functions:
-        parameters = {
-            item.arg
-            for item in (
-                *function.args.posonlyargs,
-                *function.args.args,
-                *function.args.kwonlyargs,
-            )
-        }
+    scopes: list[ast.Module | ast.FunctionDef | ast.AsyncFunctionDef] = [
+        tree,
+        *functions,
+    ]
+    scope_literal_bindings: dict[ast.AST, dict[str, ast.AST]] = {}
+    scope_unknown_literal_names: dict[ast.AST, set[str]] = {}
+    for scope in scopes:
+        function = None if isinstance(scope, ast.Module) else scope
+        parameters = (
+            set()
+            if function is None
+            else {
+                item.arg
+                for item in (
+                    *function.args.posonlyargs,
+                    *function.args.args,
+                    *function.args.kwonlyargs,
+                )
+            }
+        )
         tainted = set(parameters)
         external_aliases: set[str] = set()
         pure_callable_iterables: set[str] = set()
         local_callable_bindings = {
             item.name
-            for item in function.body
+            for item in scope.body
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
         }
-        function_imports: dict[str, tuple[bool, bool]] = {}
-        for item in ast.walk(function):
-            if owner(item) is not function:
+        scope_imports: dict[str, tuple[bool, bool]] = {}
+        if function is None:
+            scope_imports.update(
+                {
+                    name: (
+                        not is_local,
+                        qualified_name.split(".")[0]
+                        in side_effect_free_import_roots,
+                    )
+                    for name, (qualified_name, is_local) in imported.items()
+                }
+            )
+
+        def in_scope(node: ast.AST) -> bool:
+            return owner(node) is function
+
+        def names_in(expression: ast.AST) -> set[str]:
+            return {
+                item.id for item in ast.walk(expression) if isinstance(item, ast.Name)
+            }
+
+        enclosing_scope: ast.AST = tree
+        if function is not None:
+            cursor = parents.get(function)
+            while cursor is not None and not isinstance(
+                cursor, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                cursor = parents.get(cursor)
+            if cursor is not None:
+                enclosing_scope = cursor
+        inherited_literals = dict(scope_literal_bindings.get(enclosing_scope, {}))
+        inherited_unknown_literals = set(
+            scope_unknown_literal_names.get(enclosing_scope, set())
+        )
+        binding_values: dict[str, list[ast.AST | None]] = {}
+
+        def assigned_names(target: ast.AST) -> set[str]:
+            if isinstance(target, ast.Name):
+                return {target.id}
+            if isinstance(target, (ast.List, ast.Tuple)):
+                return {
+                    name
+                    for item in target.elts
+                    for name in assigned_names(item)
+                }
+            return set()
+
+        for item in ast.walk(scope):
+            if not in_scope(item):
+                continue
+            if isinstance(item, ast.Assign):
+                for target in item.targets:
+                    for name in assigned_names(target):
+                        binding_values.setdefault(name, []).append(item.value)
+            elif isinstance(item, ast.AnnAssign):
+                for name in assigned_names(item.target):
+                    binding_values.setdefault(name, []).append(item.value)
+            elif isinstance(item, ast.AugAssign):
+                for name in assigned_names(item.target):
+                    binding_values.setdefault(name, []).append(None)
+            elif isinstance(item, ast.NamedExpr) and isinstance(item.target, ast.Name):
+                binding_values.setdefault(item.target.id, []).append(item.value)
+
+        locally_bound_names = set(binding_values) | parameters
+        literal_bindings = {
+            name: expression
+            for name, expression in inherited_literals.items()
+            if name not in locally_bound_names
+        }
+        literal_bindings.update(
+            {
+                name: values[0]
+                for name, values in binding_values.items()
+                if len(values) == 1 and values[0] is not None
+            }
+        )
+        unknown_literal_names = {
+            name
+            for name in inherited_unknown_literals
+            if name not in locally_bound_names
+        }
+
+        def resolved_literal(
+            expression: ast.AST,
+            resolving: frozenset[str] = frozenset(),
+        ) -> ast.AST | None:
+            if isinstance(expression, ast.Constant):
+                return expression
+            if isinstance(expression, (ast.List, ast.Set, ast.Tuple)):
+                return expression if all(
+                    resolved_literal(item, resolving) is not None
+                    for item in expression.elts
+                ) else None
+            if isinstance(expression, ast.Dict):
+                return expression if all(
+                    key is not None
+                    and resolved_literal(key, resolving) is not None
+                    and resolved_literal(value, resolving) is not None
+                    for key, value in zip(expression.keys, expression.values, strict=True)
+                ) else None
+            if isinstance(expression, ast.Name) and expression.id not in resolving:
+                binding = literal_bindings.get(expression.id)
+                if binding is not None:
+                    return resolved_literal(binding, resolving | {expression.id})
+            return None
+
+        resolved_literal_bindings = {
+            name: literal
+            for name in literal_bindings
+            if (literal := resolved_literal(ast.Name(id=name))) is not None
+        }
+        stable_literal_names = set(resolved_literal_bindings)
+        literal_bindings = resolved_literal_bindings
+        ambiguous_value_names = {
+            name
+            for name in inherited_unknown_literals
+            if name not in locally_bound_names
+        }
+        ambiguous_value_names.update(set(binding_values) - stable_literal_names)
+        unknown_literal_names.update(ambiguous_value_names)
+        scope_literal_bindings[scope] = literal_bindings
+        scope_unknown_literal_names[scope] = unknown_literal_names
+
+        for item in ast.walk(scope):
+            if not in_scope(item):
                 continue
             if isinstance(item, ast.Import):
                 for alias in item.names:
                     root = alias.name.split(".")[0]
-                    function_imports[alias.asname or root] = (
+                    scope_imports[alias.asname or root] = (
                         not (
                             alias.name == "unrest_harness"
                             or alias.name.startswith("unrest_harness.")
@@ -1086,21 +1219,17 @@ def normalized_external_egress_records(
                     or module.startswith("unrest_harness.")
                 )
                 for alias in item.names:
-                    function_imports[alias.asname or alias.name] = (
+                    scope_imports[alias.asname or alias.name] = (
                         is_external,
                         module.split(".")[0] in side_effect_free_import_roots,
                     )
-
-        def names_in(expression: ast.AST) -> set[str]:
-            return {
-                item.id for item in ast.walk(expression) if isinstance(item, ast.Name)
-            }
 
         def local_self_method(expression: ast.AST) -> bool:
             if not (
                 isinstance(expression, ast.Attribute)
                 and isinstance(expression.value, ast.Name)
                 and expression.value.id in {"self", "cls"}
+                and function is not None
             ):
                 return False
             class_node = parents.get(function)
@@ -1116,9 +1245,9 @@ def normalized_external_egress_records(
                 root = root.value
             if not isinstance(root, ast.Name):
                 return False
-            function_binding = function_imports.get(root.id)
-            if function_binding is not None:
-                return function_binding[1]
+            scope_binding = scope_imports.get(root.id)
+            if scope_binding is not None:
+                return scope_binding[1]
             module_binding = imported.get(root.id)
             return module_binding is not None and (
                 module_binding[0].split(".")[0] in side_effect_free_import_roots
@@ -1128,8 +1257,10 @@ def normalized_external_egress_records(
             if isinstance(expression, ast.Name):
                 if expression.id in external_aliases:
                     return True
-                if expression.id in function_imports:
-                    is_external, side_effect_free = function_imports[expression.id]
+                if expression.id in {"self", "cls"}:
+                    return False
+                if expression.id in scope_imports:
+                    is_external, side_effect_free = scope_imports[expression.id]
                     return is_external and not side_effect_free
                 binding = imported.get(expression.id)
                 if binding is not None:
@@ -1141,7 +1272,6 @@ def normalized_external_egress_records(
                 return (
                     expression.id not in local_definitions
                     and expression.id not in local_callable_bindings
-                    and expression.id not in parameters
                     and not hasattr(builtins, expression.id)
                 )
             if isinstance(expression, ast.Attribute):
@@ -1156,8 +1286,8 @@ def normalized_external_egress_records(
                 ):
                     return False
                 if isinstance(root, ast.Name):
-                    if root.id in function_imports:
-                        is_external, side_effect_free = function_imports[root.id]
+                    if root.id in scope_imports:
+                        is_external, side_effect_free = scope_imports[root.id]
                         return is_external and not side_effect_free
                     binding = imported.get(root.id)
                     if binding is not None:
@@ -1192,13 +1322,12 @@ def normalized_external_egress_records(
                     return True
                 if (
                     expression.id in local_definitions
-                    or expression.id in parameters
                     or hasattr(builtins, expression.id)
                 ):
                     return True
-                function_binding = function_imports.get(expression.id)
-                if function_binding is not None:
-                    return function_binding[1]
+                scope_binding = scope_imports.get(expression.id)
+                if scope_binding is not None:
+                    return scope_binding[1]
                 module_binding = imported.get(expression.id)
                 return module_binding is not None and (
                     module_binding[0].split(".")[0]
@@ -1267,25 +1396,71 @@ def normalized_external_egress_records(
 
         data_packets: set[str] = set()
 
+        def fixed_external_context(expression: ast.AST) -> bool:
+            literal = resolved_literal(expression)
+            if isinstance(literal, ast.Constant):
+                return isinstance(literal.value, str) and literal.value.startswith(
+                    ("http://", "https://")
+                )
+            return False
+
+        def fixed_command_context(expression: ast.AST) -> bool:
+            literal = resolved_literal(expression)
+            return isinstance(literal, (ast.List, ast.Tuple)) and bool(literal.elts) and all(
+                isinstance(item, ast.Constant) and isinstance(item.value, str)
+                for item in literal.elts
+            )
+
+        def result_is_predicate(call: ast.Call) -> bool:
+            cursor: ast.AST = call
+            while (parent := parents.get(cursor)) is not None:
+                if isinstance(parent, (ast.If, ast.IfExp, ast.While)):
+                    return cursor is parent.test
+                if isinstance(parent, ast.comprehension):
+                    return cursor in parent.ifs
+                if isinstance(
+                    parent,
+                    (ast.BoolOp, ast.Compare, ast.UnaryOp, ast.NamedExpr),
+                ):
+                    cursor = parent
+                    continue
+                return False
+            return False
+
         def call_carries_data(call: ast.Call) -> bool:
-            if not external_callable(call.func):
+            if not external_callable(call.func) or result_is_predicate(call):
                 return False
             keyword_data = any(
                 names_in(item.value) & tainted for item in call.keywords
             )
             positional_data = any(names_in(item) & tainted for item in call.args)
             packet_data = any(names_in(item) & data_packets for item in call.args)
-            return keyword_data or positional_data or packet_data
+            arguments = [*call.args, *(item.value for item in call.keywords)]
+            unresolved_argument_data = any(
+                names_in(item) & unknown_literal_names for item in arguments
+            )
+            structurally_additional_data = len(arguments) > 1 and (
+                any(fixed_external_context(item) for item in arguments)
+                or bool(call.args)
+                and fixed_command_context(call.args[0])
+            )
+            return (
+                keyword_data
+                or positional_data
+                or packet_data
+                or unresolved_argument_data
+                or structurally_additional_data
+            )
 
         assignments = [
             item
-            for item in ast.walk(function)
-            if owner(item) is function and isinstance(item, (ast.Assign, ast.AnnAssign))
+            for item in ast.walk(scope)
+            if in_scope(item) and isinstance(item, (ast.Assign, ast.AnnAssign))
         ]
         iteration_bindings = [
             (item.target, item.iter)
-            for item in ast.walk(function)
-            if owner(item) is function
+            for item in ast.walk(scope)
+            if in_scope(item)
             and isinstance(item, (ast.For, ast.AsyncFor, ast.comprehension))
         ]
         for _ in range(len(assignments) + len(iteration_bindings) + 1):
@@ -1339,8 +1514,8 @@ def normalized_external_egress_records(
             if not changed:
                 break
 
-        for call in ast.walk(function):
-            if not isinstance(call, ast.Call) or owner(call) is not function:
+        for call in ast.walk(scope):
+            if not isinstance(call, ast.Call) or not in_scope(call):
                 continue
             if not call_carries_data(call):
                 continue
@@ -2478,7 +2653,8 @@ def validate_capability_sink_anchors(
                 )
             )
             is_serializer_channel = serializer_channel(call_name, node)
-            output_effect = (
+            data_bearing_call = bool(node.args or node.keywords)
+            output_effect = data_bearing_call and (
                 leaf_name in stream_methods
                 or leaf_name in direct_channel_functions
                 or call_name in descriptor_functions

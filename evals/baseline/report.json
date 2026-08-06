@@ -94,7 +94,7 @@
       "sha256": "d3a1e0fc4906fccafc64826c766f0151542856daee1a4d5d4f42fc1070f1909c"
     }
   ],
-  "manifest_sha256": "574134e30b017d912bd8b3a53f32ea96549b6201aa444e974f8907180ab94123",
+  "manifest_sha256": "2764c4041fce4e49f22ee2a628184d0047588fd175bbffc4cd2c3e328db21ae5",
   "report_id": "BATCH-0-BASELINE",
   "scenario_results": {
     "gate": {

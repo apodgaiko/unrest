@@ -211,9 +211,22 @@ No step above performs promotion. Release promotion remains blocked until a
 separate runtime or maintainer workflow verifies the required approval and
 evidence.
 
+### Verification tiers
+
+Focused edits use narrow behavior tests and changed-path Ruff/mypy checks.
+Milestones use exact root Ruff, `mypy src`, repository validation, and the
+focused tests for the completed slice. The frozen-candidate release checkpoint
+runs `env -u CODEX_PATH uv run pytest -q` exactly once on Python 3.13; Python
+3.11/3.12 retain meaningful import, focused-contract, repository, and CLI
+compatibility lanes.
+After build, archive membership/hash/metadata/assets and the unrelated-cwd
+installed-wheel lifecycle replace any duplicate full-source-suite run.
+
 ## Required verification
 
 ```bash
+uv run ruff check .
+uv run mypy src
 uv run pytest -q tests/test_governance.py tests/test_documentation_contract.py
 uv run unrest check-repository
 uv run unrest check-governance \
@@ -221,7 +234,8 @@ uv run unrest check-governance \
   --component-map docs/architecture/component-map.json
 ```
 
-Then run the common repository gate.
+These commands are the governance milestone checks. They do not consume
+the single frozen-candidate full-suite checkpoint.
 
 ## Related decisions
 

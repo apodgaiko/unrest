@@ -92,6 +92,15 @@ POLICY_PATH = "policy/protected-surfaces.yaml"
 POLICY_SCHEMA_PATH = "schemas/protected-surfaces.schema.json"
 CI_PATH = ".github/workflows/ci.yml"
 BASELINE_PATH = "evals/baseline"
+FULL_SOURCE_SUITE_COMMAND = "env -u CODEX_PATH uv run pytest -q"
+COMPATIBILITY_TEST_COMMAND = (
+    "uv run pytest -q tests/test_assets.py tests/test_config.py tests/test_models.py"
+)
+COMPATIBILITY_IMPORT_COMMAND = (
+    'uv run python -c "import unrest_harness; from unrest_harness.config import '
+    'HarnessConfig; HarnessConfig.discover()"'
+)
+DISTRIBUTION_CHECK_COMMAND = "uv run python tools/check_distribution.py dist"
 
 HISTORICAL_ACTIVE_ROLE_LOCATORS = (
     {
@@ -785,14 +794,20 @@ def _strip_command_prefixes(command: tuple[str, ...]) -> tuple[str, ...]:
             continue
         if base == "env":
             current = current[1:]
-            while current and (
-                current[0].startswith("-")
-                or re.fullmatch(
+            while current:
+                if current[0] in {"-u", "--unset"} and len(current) >= 2:
+                    current = current[2:]
+                    continue
+                if current[0] == "--":
+                    current = current[1:]
+                    break
+                if current[0].startswith("-") or re.fullmatch(
                     r"[A-Za-z_][A-Za-z0-9_]*=.*",
                     current[0],
-                )
-            ):
-                current = current[1:]
+                ):
+                    current = current[1:]
+                    continue
+                break
             continue
         break
     return current
@@ -805,6 +820,83 @@ def _command_has_sequence(command: tuple[str, ...], sequence: tuple[str, ...]) -
     )
 
 
+_SHELL_BOOLEAN_SHORT_OPTIONS = {
+    "bash": frozenset("abefhiklmnprstuvxBCDEHPT"),
+    "dash": frozenset("abefilmnprstuvxCIEV"),
+    "sh": frozenset("abefilmnprstuvxCIEV"),
+    "zsh": frozenset("dfilrstvx"),
+}
+_BASH_LONG_OPTIONS_WITH_OPERANDS = frozenset({"--init-file", "--rcfile"})
+_BASH_BOOLEAN_LONG_OPTIONS = frozenset(
+    {
+        "--debug",
+        "--debugger",
+        "--login",
+        "--noediting",
+        "--noprofile",
+        "--norc",
+        "--posix",
+        "--protected",
+        "--restricted",
+        "--verbose",
+    }
+)
+
+
+def _shell_command_string(command: tuple[str, ...]) -> str | None:
+    if not command:
+        return None
+    shell = PurePosixPath(command[0]).name
+    boolean_short_options = _SHELL_BOOLEAN_SHORT_OPTIONS.get(shell)
+    if boolean_short_options is None:
+        return None
+    option_operand_flags = frozenset({"o", "O"} if shell == "bash" else {"o"})
+    index = 1
+    while index < len(command):
+        token = command[index]
+        if token in {"--", "-"} or not token.startswith(("-", "+")):
+            return None
+
+        if token.startswith("--"):
+            if shell != "bash":
+                return None
+            option, separator, operand = token.partition("=")
+            if option in _BASH_LONG_OPTIONS_WITH_OPERANDS:
+                if separator:
+                    if not operand:
+                        return None
+                    index += 1
+                else:
+                    if index + 1 >= len(command):
+                        return None
+                    index += 2
+                continue
+            if separator or option not in _BASH_BOOLEAN_LONG_OPTIONS:
+                return None
+            index += 1
+            continue
+
+        short_options = token[1:]
+        if not short_options or any(
+            option not in boolean_short_options
+            and option not in option_operand_flags
+            and option != "c"
+            for option in short_options
+        ):
+            return None
+        command_string_enabled = token.startswith("-") and "c" in short_options
+        if command_string_enabled and short_options.count("c") != 1:
+            return None
+        operand_count = sum(
+            option in option_operand_flags for option in short_options
+        )
+        command_index = index + operand_count + 1
+        if command_string_enabled:
+            return command[command_index] if command_index < len(command) else None
+        index = command_index
+    return None
+
+
 def _ci_python_surface_kinds(step: dict[str, Any]) -> frozenset[str]:
     run = step.get("run")
     if not isinstance(run, str):
@@ -815,12 +907,9 @@ def _ci_python_surface_kinds(step: dict[str, Any]) -> frozenset[str]:
         if not command:
             continue
         base = PurePosixPath(command[0]).name
-        if (
-            base in {"bash", "dash", "sh", "zsh"}
-            and len(command) == 3
-            and command[1] == "-c"
-        ):
-            kinds.update(_ci_python_surface_kinds({"run": command[2]}))
+        command_string = _shell_command_string(command)
+        if command_string is not None:
+            kinds.update(_ci_python_surface_kinds({"run": command_string}))
             continue
         if base == "uv":
             subcommands = {
@@ -873,6 +962,85 @@ def _ci_python_surface_kinds(step: dict[str, Any]) -> frozenset[str]:
         ):
             kinds.add("test")
     return frozenset(kinds)
+
+
+_PYTEST_OPTIONS_WITH_VALUE = frozenset(
+    {
+        "-c",
+        "-k",
+        "-m",
+        "--basetemp",
+        "--capture",
+        "--color",
+        "--confcutdir",
+        "--deselect",
+        "--ignore",
+        "--ignore-glob",
+        "--import-mode",
+        "--junit-prefix",
+        "--junitxml",
+        "--maxfail",
+        "--rootdir",
+        "--show-capture",
+        "--tb",
+    }
+)
+_PYTEST_NARROWING_OPTIONS = frozenset(
+    {"-k", "-m", "--deselect", "--ignore", "--ignore-glob"}
+)
+
+
+def _ci_pytest_invocations(run: str) -> tuple[tuple[str, ...], ...]:
+    invocations: list[tuple[str, ...]] = []
+    for command, _operator in _shell_command_sequence(run):
+        command = _strip_command_prefixes(command)
+        if not command:
+            continue
+        command_string = _shell_command_string(command)
+        if command_string is not None:
+            invocations.extend(_ci_pytest_invocations(command_string))
+            continue
+        test_command = _unwrap_uv_run(command)
+        if not test_command:
+            continue
+        test_base = PurePosixPath(test_command[0]).name
+        if test_base in {"pytest", "py.test"}:
+            invocations.append(test_command[1:])
+            continue
+        pytest_markers = tuple(
+            index
+            for index in range(len(test_command) - 1)
+            if test_command[index : index + 2] == ("-m", "pytest")
+        )
+        if pytest_markers:
+            invocations.append(test_command[pytest_markers[-1] + 2 :])
+    return tuple(invocations)
+
+
+def _ci_is_full_source_suite(arguments: tuple[str, ...]) -> bool:
+    selectors: list[str] = []
+    narrowed = False
+    index = 0
+    while index < len(arguments):
+        token = arguments[index]
+        if token == "--":
+            selectors.extend(arguments[index + 1 :])
+            break
+        option, separator, _value = token.partition("=")
+        if option in _PYTEST_NARROWING_OPTIONS:
+            narrowed = True
+        if token.startswith("-"):
+            if not separator and option in _PYTEST_OPTIONS_WITH_VALUE:
+                index += 2
+                continue
+            index += 1
+            continue
+        selectors.append(token)
+        index += 1
+    normalized_selector = (
+        str(PurePosixPath(selectors[0])) if len(selectors) == 1 else None
+    )
+    return not narrowed and (not selectors or normalized_selector in {".", "tests"})
 
 
 def _static_command_exit_code(command: tuple[str, ...]) -> int | None:
@@ -3309,80 +3477,94 @@ class _RepositoryValidator:
             self._add("REPO-CI-JOBS-MISSING", CI_PATH, "workflow jobs mapping is absent")
             return
         jobs = workflow["jobs"]
-        python_jobs = 0
-        python_matrix_jobs = 0
         covered_versions: set[str] = set()
+        full_suite_locations: list[str] = []
+        workflow_test_runs: list[str] = []
+        primary_jobs = 0
+        compatibility_jobs = 0
         for job_id, job in jobs.items():
             if not isinstance(job, dict):
                 continue
             steps = job.get("steps")
             if not isinstance(steps, list):
                 continue
+            location = f"{CI_PATH}#jobs.{job_id}"
+            for index, step in enumerate(steps):
+                if not isinstance(step, dict) or not isinstance(step.get("run"), str):
+                    continue
+                full_suite_locations.extend(
+                    f"{location}.steps.{index}"
+                    for arguments in _ci_pytest_invocations(step["run"])
+                    if _ci_is_full_source_suite(arguments)
+                )
+            workflow_test_runs.extend(
+                step["run"].strip()
+                for step in steps
+                if isinstance(step, dict)
+                and isinstance(step.get("run"), str)
+                and "test" in _ci_python_surface_kinds(step)
+            )
+            setup_versions: list[str] = []
+            matrix = None
+            dimension = None
+            for step in steps:
+                if not isinstance(step, dict) or not isinstance(step.get("uses"), str):
+                    continue
+                if not step["uses"].startswith("astral-sh/setup-uv@"):
+                    continue
+                with_values = step.get("with")
+                version = (
+                    with_values.get("python-version")
+                    if isinstance(with_values, dict)
+                    else None
+                )
+                if not isinstance(version, str):
+                    continue
+                references = re.findall(r"\bmatrix\.([A-Za-z0-9_-]+)\b", version)
+                if references:
+                    strategy = job.get("strategy")
+                    matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
+                    if not isinstance(matrix, dict) or len(references) != 1:
+                        self._add(
+                            "REPO-CI-MATRIX-INVALID",
+                            location,
+                            "setup-uv Python matrix reference must resolve to one static dimension",
+                        )
+                        continue
+                    dimension = references[0]
+                    effective = _effective_matrix_versions(matrix, dimension)
+                    if effective is None:
+                        self._add(
+                            "REPO-CI-MATRIX-INVALID",
+                            location,
+                            "Python matrix dimensions, include, and exclude must be explicit lists",
+                        )
+                        continue
+                    setup_versions.extend(effective)
+                else:
+                    setup_versions.append(version)
+
+            if not setup_versions:
+                continue
+            versions = tuple(sorted(set(setup_versions)))
+            if declared_versions is not None and not set(versions) <= set(declared_versions):
+                self._add(
+                    "REPO-CI-PYTHON-VERSIONS-MISMATCH",
+                    location,
+                    "Python job versions must be drawn from declared support: "
+                    + ", ".join(declared_versions),
+                )
+            covered_versions.update(
+                version
+                for version in versions
+                if declared_versions is not None and version in declared_versions
+            )
             surface_steps = [
                 (index, step, kinds)
                 for index, step in enumerate(steps)
                 if isinstance(step, dict)
                 and (kinds := _ci_python_surface_kinds(step))
             ]
-            if not surface_steps:
-                continue
-
-            python_jobs += 1
-            location = f"{CI_PATH}#jobs.{job_id}"
-            strategy = job.get("strategy")
-            matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
-            if isinstance(matrix, dict) and declared_versions is not None:
-                dimensions = _python_matrix_dimensions(
-                    matrix,
-                    steps,
-                    declared_versions,
-                )
-                if len(dimensions) != 1:
-                    self._add(
-                        "REPO-CI-PYTHON-DIMENSION-INVALID",
-                        location,
-                        "Python test/build matrices require exactly one explicit "
-                        "Python-version dimension",
-                    )
-                else:
-                    python_matrix_jobs += 1
-                    dimension = dimensions[0]
-                    versions = matrix.get(dimension)
-                    if not isinstance(versions, list) or tuple(versions) != declared_versions:
-                        self._add(
-                            "REPO-CI-PYTHON-VERSIONS-MISMATCH",
-                            location,
-                            "Python matrix versions must exactly match declared support: "
-                            + ", ".join(declared_versions),
-                        )
-                    effective_versions = _effective_matrix_versions(matrix, dimension)
-                    if effective_versions is None:
-                        self._add(
-                            "REPO-CI-MATRIX-INVALID",
-                            location,
-                            "Python matrix dimensions, include, and exclude must "
-                            "be explicit lists",
-                        )
-                    else:
-                        covered_versions.update(
-                            version
-                            for version in effective_versions
-                            if version in declared_versions
-                        )
-                        if set(effective_versions) != set(declared_versions):
-                            self._add(
-                                "REPO-CI-PYTHON-COVERAGE-MISSING",
-                                location,
-                                "effective Python matrix versions must exactly match "
-                                "declared support: "
-                                + ", ".join(declared_versions),
-                            )
-            elif matrix is not None:
-                self._add(
-                    "REPO-CI-MATRIX-INVALID",
-                    location,
-                    "Python matrix must be a static mapping",
-                )
 
             if not _ci_condition_is_always(job.get("if")):
                 self._add(
@@ -3418,6 +3600,13 @@ class _RepositoryValidator:
                 step.get("run", "").strip()
                 for step in steps
                 if isinstance(step, dict) and isinstance(step.get("run"), str)
+            ]
+            full_indexes = [
+                index
+                for index, step in enumerate(steps)
+                if isinstance(step, dict)
+                and isinstance(step.get("run"), str)
+                and step["run"].strip() == FULL_SOURCE_SUITE_COMMAND
             ]
             named_contract_steps = [
                 step
@@ -3498,16 +3687,6 @@ class _RepositoryValidator:
                     location,
                     "repository contract must run before build, package, or publish",
                 )
-            if build_indexes and (
-                not test_indexes
-                or min(test_indexes) >= min(build_indexes)
-                or max(test_indexes) <= max(build_indexes)
-            ):
-                self._add(
-                    "REPO-CI-PRE-POST-BUILD-TESTS-MISSING",
-                    location,
-                    "an enforcing test step is required both before and after build",
-                )
             installed_check_steps = [
                 (index, step)
                 for index, step in enumerate(steps)
@@ -3515,39 +3694,167 @@ class _RepositoryValidator:
                 and isinstance(step.get("run"), str)
                 and "-m unrest_harness.installed_wheel_check" in step["run"]
             ]
-            if len(installed_check_steps) != 1:
-                self._add(
-                    "REPO-CI-INSTALLED-MISSION-MISSING",
-                    location,
-                    "expected exactly one installed-wheel lifecycle mission",
-                )
+
+            if declared_versions is None:
+                continue
+            primary_version = declared_versions[-1]
+            compatibility_versions = declared_versions[:-1]
+            if versions == compatibility_versions:
+                compatibility_jobs += 1
+                if dimension is None or not isinstance(matrix, dict):
+                    self._add(
+                        "REPO-CI-COMPATIBILITY-MATRIX-MISSING",
+                        location,
+                        "compatibility checks must use one explicit Python matrix",
+                    )
+                elif tuple(matrix.get(dimension, ())) != compatibility_versions:
+                    self._add(
+                        "REPO-CI-PYTHON-VERSIONS-MISMATCH",
+                        location,
+                        "compatibility matrix must exactly cover "
+                        + ", ".join(compatibility_versions),
+                    )
+                required_commands = {
+                    COMPATIBILITY_IMPORT_COMMAND,
+                    COMPATIBILITY_TEST_COMMAND,
+                    "uv run unrest --help\nuv run unrest-server --help\nuv run python -m unrest_harness --help",
+                }
+                missing = sorted(required_commands - set(runs))
+                if missing:
+                    self._add(
+                        "REPO-CI-COMPATIBILITY-CHECK-MISSING",
+                        location,
+                        "compatibility lanes must run import, focused contract, and CLI checks",
+                    )
+                if full_indexes or build_indexes or installed_check_steps:
+                    self._add(
+                        "REPO-CI-COMPATIBILITY-TOO-BROAD",
+                        location,
+                        "compatibility lanes cannot run the full suite, build, or wheel lifecycle",
+                    )
+            elif versions == (primary_version,):
+                primary_jobs += 1
+                if len(full_indexes) != 1:
+                    self._add(
+                        "REPO-CI-FULL-SUITE-MISSING",
+                        location,
+                        f"Python {primary_version} must run exactly one full source suite",
+                    )
+                else:
+                    full_step = steps[full_indexes[0]]
+                    if isinstance(full_step, dict) and not _ci_condition_is_always(
+                        full_step.get("if")
+                    ):
+                        self._add(
+                            "REPO-CI-PYTHON-STEP-CONDITIONAL",
+                            location,
+                            "Python test step must run unconditionally",
+                        )
+                    if isinstance(full_step, dict) and not _ci_continue_on_error_is_disabled(
+                        full_step.get("continue-on-error")
+                    ):
+                        self._add(
+                            "REPO-CI-PYTHON-STEP-CONTINUE-ON-ERROR",
+                            location,
+                            "Python test step failures must remain enforcing",
+                        )
+                if len(build_indexes) != 1:
+                    self._add(
+                        "REPO-CI-BUILD-COUNT",
+                        location,
+                        "primary job must build exactly once",
+                    )
+                if len(installed_check_steps) != 1:
+                    self._add(
+                        "REPO-CI-INSTALLED-MISSION-MISSING",
+                        location,
+                        "expected exactly one installed-wheel lifecycle mission",
+                    )
+                else:
+                    check_index, check_step = installed_check_steps[0]
+                    if build_indexes and check_index <= max(build_indexes):
+                        self._add(
+                            "REPO-CI-INSTALLED-MISSION-ORDER",
+                            location,
+                            "installed-wheel lifecycle mission must run after build",
+                        )
+                    if not _ci_condition_is_always(check_step.get("if")):
+                        self._add(
+                            "REPO-CI-INSTALLED-MISSION-CONDITIONAL",
+                            location,
+                            "installed-wheel lifecycle mission must run unconditionally",
+                        )
+                    if not _ci_continue_on_error_is_disabled(
+                        check_step.get("continue-on-error")
+                    ):
+                        self._add(
+                            "REPO-CI-INSTALLED-MISSION-CONTINUE-ON-ERROR",
+                            location,
+                            "installed-wheel lifecycle mission failures must remain enforcing",
+                        )
+                distribution_indexes = [
+                    index
+                    for index, step in enumerate(steps)
+                    if isinstance(step, dict)
+                    and isinstance(step.get("run"), str)
+                    and step["run"].strip() == DISTRIBUTION_CHECK_COMMAND
+                ]
+                if len(distribution_indexes) != 1:
+                    self._add(
+                        "REPO-CI-DISTRIBUTION-CHECK-MISSING",
+                        location,
+                        "primary job must run exactly one focused distribution archive check",
+                    )
+                elif build_indexes and distribution_indexes[0] <= max(build_indexes):
+                    self._add(
+                        "REPO-CI-DISTRIBUTION-CHECK-ORDER",
+                        location,
+                        "distribution archive check must run after build",
+                    )
+                post_build_tests = [
+                    index
+                    for index in test_indexes
+                    if build_indexes and index > max(build_indexes)
+                ]
+                if post_build_tests:
+                    self._add(
+                        "REPO-CI-POST-BUILD-PYTEST",
+                        location,
+                        "post-build verification must use focused archive and installed-wheel checks",
+                    )
             else:
-                check_index, check_step = installed_check_steps[0]
-                if build_indexes and check_index <= max(build_indexes):
-                    self._add(
-                        "REPO-CI-INSTALLED-MISSION-ORDER",
-                        location,
-                        "installed-wheel lifecycle mission must run after build",
-                    )
-                if not _ci_condition_is_always(check_step.get("if")):
-                    self._add(
-                        "REPO-CI-INSTALLED-MISSION-CONDITIONAL",
-                        location,
-                        "installed-wheel lifecycle mission must run unconditionally",
-                    )
-                if not _ci_continue_on_error_is_disabled(
-                    check_step.get("continue-on-error")
-                ):
-                    self._add(
-                        "REPO-CI-INSTALLED-MISSION-CONTINUE-ON-ERROR",
-                        location,
-                        "installed-wheel lifecycle mission failures must remain enforcing",
-                    )
-        if python_jobs == 0 or python_matrix_jobs == 0:
+                self._add(
+                    "REPO-CI-TIER-INVALID",
+                    location,
+                    "Python jobs must be the exact compatibility matrix or sole primary lane",
+                )
+
+        if compatibility_jobs != 1:
             self._add(
-                "REPO-CI-PYTHON-MATRIX-MISSING",
+                "REPO-CI-COMPATIBILITY-MATRIX-MISSING",
                 CI_PATH,
-                "no supported Python matrix lane was found",
+                "expected exactly one Python 3.11/3.12 compatibility matrix",
+            )
+        if primary_jobs != 1:
+            self._add(
+                "REPO-CI-PRIMARY-JOB-MISSING",
+                CI_PATH,
+                "expected exactly one Python 3.13 primary job",
+            )
+        if len(full_suite_locations) != 1:
+            self._add(
+                "REPO-CI-FULL-SUITE-COUNT",
+                CI_PATH,
+                "workflow must contain exactly one full source-suite invocation",
+            )
+        if sorted(workflow_test_runs) != sorted(
+            (COMPATIBILITY_TEST_COMMAND, FULL_SOURCE_SUITE_COMMAND)
+        ):
+            self._add(
+                "REPO-CI-TEST-SURFACES-INVALID",
+                CI_PATH,
+                "workflow must contain only the fixed compatibility tests and "
+                "one full source-suite invocation",
             )
         if (
             declared_versions is not None
