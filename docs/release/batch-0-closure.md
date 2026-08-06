@@ -1,26 +1,22 @@
 # Batch 0 final-closure readiness record
 
-This value-free record covers only Batch 0. It records a completed local release
-gate, but does not itself approve promotion. Detailed command transcripts remain
-in mission evidence and CI; they are not copied into the release document.
+This value-free record covers only Batch 0 and does not itself approve
+promotion. The sealed product repair is
+`740376a505c6c973061614e9a018ba2e21170671`. Its direct child,
+`8113f8afee73a38aece2758c66d2e8be1db1ab93`, is the green test-portability
+follow-up.
 
-| Area | Evidence | Status |
-| --- | --- | --- |
-| Format parent provenance | Declared parent, three padding-free URL-safe Base64 aliases, separate-payload redaction, benign controls | passed locally |
-| Pre-persistence handoffs | Immediate worker/reviewer writes plus crash/restart JSON and Markdown mirrors | passed locally |
-| Installed candidate | Provider-independent work, validation, gate, terminal review, persistence, and two restarts from installed package | passed locally |
-| Post-build hermeticity | Wheel/sdist membership, hash, metadata, asset, entry-point, policy, unrelated-cwd lifecycle, and fail-closed checks | passed locally |
-| Capability closure | Bounded semantic owner/effect projection, including first-positional payloads and precise pure-callable provenance controls | passed locally |
-| Adversarial review | Frozen-candidate contract review after bounded bypass probes | passed locally |
-| Full repository and wheel gates | `evidence/batch-0/evaluation.json`, gated candidate `b00747480a50ed0ab6f3f202f7957035db770655` | passed locally |
-| Pull-request CI | branch PR checks | required on the final published head; not asserted here |
-| Human maintainer approval | `maintainer` | deferred until final published-head CI is terminal green |
-| Security evaluation | strongest-applicable security tier | passed locally |
+GitHub Actions run `31110986266` is evidence for the known test-portability
+child `8113f8afee73a38aece2758c66d2e8be1db1ab93` only. Its Python 3.11 and 3.12
+compatibility lanes and Python 3.13 source/package gate passed; the full source
+suite reported 3214 passed and 7 skipped.
 
-The tiered-testing implementation and local release gate are complete. The
-release is not approved for promotion until PR checks pass on the exact final
-published head and the one human `maintainer` approves that same head. The
-repository owner may self-approve; no second account or team is required.
+The sole later Mission-004 docs-only child cannot embed its own exact SHA, CI,
+or owner approval without making this commit self-referential. Those facts are
+live PR evidence established after publication and must be recorded in PR #4.
+Final owner approval for that exact published docs head remains pending.
+
+The repository owner may self-approve; no second account or team is required.
 Security evaluation is evidence, not another accountability role. Agent or
 provider review cannot satisfy the maintainer requirement, and this record does
 not claim GitHub identity enforcement.

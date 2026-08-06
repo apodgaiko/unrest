@@ -29,9 +29,9 @@
   "manifest_version": 1,
   "mission_scope": "Batch 0 recommended fixes and reviewed merge blockers only",
   "release_evidence": "evidence/batch-0/evaluation.json",
-  "release_gate_candidate": "b00747480a50ed0ab6f3f202f7957035db770655",
-  "release_gate_candidate_parent": "6dc49460a83b5d70aa4e8e6a36aa6ec617404bd7",
-  "release_state": "implementation-complete-awaiting-published-head-ci-and-owner-approval",
+  "release_gate_candidate": "8113f8afee73a38aece2758c66d2e8be1db1ab93",
+  "release_gate_candidate_parent": "740376a505c6c973061614e9a018ba2e21170671",
+  "release_state": "release-records-bound-awaiting-final-head-ci-and-owner-approval",
   "protected_categories": [
     "capability-policy",
     "coordinator-semantics",
