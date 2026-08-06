@@ -255,6 +255,14 @@ def test_check_repository_cli_bounds_transitively_imported_tracked_helper(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _git(repository, "config", "--local", "user.name", "Repository Contract")
+    _git(
+        repository,
+        "config",
+        "--local",
+        "user.email",
+        "contract@example.invalid",
+    )
     package = repository / "src/unrest_harness/egress_helpers"
     package.mkdir()
     (package / "__init__.py").write_text("", encoding="utf-8")
