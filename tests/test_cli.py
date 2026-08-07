@@ -35,13 +35,29 @@ def _expected_server_command() -> str:
     return "unrest-server"
 
 
-def _tree_snapshot(root: Path) -> dict[str, tuple[str, int, bytes]]:
-    snapshot: dict[str, tuple[str, int, bytes]] = {}
+def _tree_snapshot(root: Path) -> dict[str, tuple[str, int, int, bytes]]:
+    snapshot: dict[str, tuple[str, int, int, bytes]] = {}
     for path in (root, *sorted(root.rglob("*"))):
         relative = str(path.relative_to(root))
-        kind = "directory" if path.is_dir() else "file"
-        content = b"" if path.is_dir() else path.read_bytes()
-        snapshot[relative] = (kind, stat.S_IMODE(path.stat().st_mode), content)
+        info = path.lstat()
+        if stat.S_ISDIR(info.st_mode):
+            kind = "directory"
+            content = b""
+        elif stat.S_ISREG(info.st_mode):
+            kind = "file"
+            content = path.read_bytes()
+        elif stat.S_ISLNK(info.st_mode):
+            kind = "symlink"
+            content = os.fsencode(os.readlink(path))
+        else:
+            kind = "other"
+            content = b""
+        snapshot[relative] = (
+            kind,
+            stat.S_IMODE(info.st_mode),
+            info.st_mtime_ns,
+            content,
+        )
     return snapshot
 
 
@@ -1057,3 +1073,249 @@ class TestShowProject:
         r = runner.invoke(cli, ["show-project", "ghost"])
         assert r.exit_code != 0
         assert "not found" in r.output.lower()
+
+
+class TestObserveProject:
+    def test_single_project_json_and_text_are_read_only(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        harness_home: Path,
+        env: dict[str, str],
+    ) -> None:
+        from unrest_harness.config import HarnessConfig
+        from unrest_harness.storage import ProjectStore
+
+        store = ProjectStore(HarnessConfig.discover())
+        store.create_project("observe", workspace, project_id="observe-one")
+        before = _tree_snapshot(store.bucket_root("observe-one"))
+
+        result = runner.invoke(
+            cli,
+            ["observe-project", "observe-one", "--format", "json"],
+        )
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["schema_version"] == 1
+        assert payload["project_id"] == "observe-one"
+        assert payload["persisted_state"] == "draft"
+        assert payload["progress"]["active_task_total"] == 0
+        assert "workspace" not in result.output
+        assert "estimate" not in result.output.lower()
+
+        text_result = runner.invoke(cli, ["observe-project", "observe-one"])
+        assert text_result.exit_code == 0, text_result.output
+        assert "project=observe-one" in text_result.output
+        assert "persisted=draft derived=draft" in text_result.output
+        assert _tree_snapshot(store.bucket_root("observe-one")) == before
+
+    def test_all_json_continues_past_a_malformed_project(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        harness_home: Path,
+        env: dict[str, str],
+    ) -> None:
+        from unrest_harness.config import HarnessConfig
+        from unrest_harness.storage import ProjectStore
+
+        store = ProjectStore(HarnessConfig.discover())
+        store.create_project("good", workspace, project_id="good-one")
+        malformed = harness_home / "projects" / "broken-one" / ".unrest-runtime"
+        malformed.mkdir(parents=True)
+        (malformed / "project.json").write_text("{secret-bad-json}", encoding="utf-8")
+
+        result = runner.invoke(
+            cli,
+            ["observe-project", "--all", "--format", "json"],
+        )
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert [project["project_id"] for project in payload["projects"]] == [
+            "good-one"
+        ]
+        assert payload["failures"] == [
+            {
+                "code": "malformed_cursor",
+                "entry_ref": None,
+                "project_id": "broken-one",
+            }
+        ]
+        assert "secret-bad-json" not in result.output
+
+    def test_all_json_handles_an_empty_projects_root(
+        self,
+        runner: CliRunner,
+        harness_home: Path,
+        env: dict[str, str],
+    ) -> None:
+        (harness_home / "projects").mkdir()
+
+        result = runner.invoke(
+            cli,
+            ["observe-project", "--all", "--format", "json"],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["schema_version"] == 1
+        assert payload["projects"] == []
+        assert payload["failures"] == []
+
+    def test_all_json_handles_a_missing_projects_root(
+        self,
+        runner: CliRunner,
+        harness_home: Path,
+        env: dict[str, str],
+    ) -> None:
+        assert not (harness_home / "projects").exists()
+
+        result = runner.invoke(
+            cli,
+            ["observe-project", "--all", "--format", "json"],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["projects"] == []
+        assert payload["failures"] == []
+
+    @pytest.mark.parametrize(
+        ("field", "unsafe_id"),
+        [
+            ("task_id", "work\nSECRET_CONTROL"),
+            ("task_id", "w" * 129),
+            ("dependency_id", "dependency\nSECRET_CONTROL"),
+            ("task_state_id", "state\nSECRET_CONTROL"),
+            ("mission_id", "mission\nSECRET_CONTROL"),
+        ],
+    )
+    def test_valid_json_with_unsafe_identifiers_fails_without_echoing_values(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+        field: str,
+        unsafe_id: str,
+    ) -> None:
+        from unrest_harness.config import HarnessConfig
+        from unrest_harness.models import MissionRunning, Task, TaskList, TaskStateFile
+        from unrest_harness.storage import ProjectStore
+
+        store = ProjectStore(HarnessConfig.discover())
+        record = store.create_project("unsafe", workspace, project_id="unsafe-id")
+        record.current_mission_id = "mission-001"
+        store.save_project(record)
+        store.save_state("unsafe-id", MissionRunning(mission_id="mission-001"))
+        store.save_task_list(
+            "unsafe-id",
+            "mission-001",
+            TaskList(
+                tasks=[
+                    Task(
+                        id="work-a",
+                        type="work",
+                        body="SECRET_BODY",
+                        targets=["VAL-A"],
+                        skill="worker",
+                    )
+                ]
+            ),
+        )
+        store.save_task_state("unsafe-id", "mission-001", TaskStateFile())
+        mission_root = (
+            store.unrest_runtime_dir("unsafe-id") / "missions" / "mission-001"
+        )
+        if field in {"task_id", "dependency_id"}:
+            task_path = mission_root / "tasks.json"
+            payload = json.loads(task_path.read_text(encoding="utf-8"))
+            if field == "task_id":
+                payload["tasks"][0]["id"] = unsafe_id
+            else:
+                payload["tasks"][0]["depends_on"] = [unsafe_id]
+            task_path.write_text(json.dumps(payload), encoding="utf-8")
+        elif field == "task_state_id":
+            state_path = mission_root / "task-state.json"
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+            payload["tasks"][unsafe_id] = {"status": "pending"}
+            state_path.write_text(json.dumps(payload), encoding="utf-8")
+        else:
+            project_path = store.unrest_runtime_dir("unsafe-id") / "project.json"
+            payload = json.loads(project_path.read_text(encoding="utf-8"))
+            payload["current_mission_id"] = unsafe_id
+            project_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        result = runner.invoke(cli, ["observe-project", "unsafe-id"])
+
+        assert result.exit_code != 0
+        assert "malformed_cursor" in result.output
+        assert "SECRET_" not in result.output
+        assert unsafe_id not in result.output
+
+    def test_valid_long_identifier_is_bounded_in_text_output(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+    ) -> None:
+        from unrest_harness.config import HarnessConfig
+        from unrest_harness.models import MissionRunning, Task, TaskList, TaskStateFile
+        from unrest_harness.storage import ProjectStore
+
+        store = ProjectStore(HarnessConfig.discover())
+        record = store.create_project("long", workspace, project_id="long-id")
+        record.current_mission_id = "mission-001"
+        store.save_project(record)
+        store.save_state("long-id", MissionRunning(mission_id="mission-001"))
+        long_id = "w" * 100
+        store.save_task_list(
+            "long-id",
+            "mission-001",
+            TaskList(
+                tasks=[
+                    Task(
+                        id=long_id,
+                        type="work",
+                        body="body",
+                        targets=["VAL-A"],
+                        skill="worker",
+                    )
+                ]
+            ),
+        )
+        store.save_task_state("long-id", "mission-001", TaskStateFile())
+
+        result = runner.invoke(cli, ["observe-project", "long-id"])
+
+        assert result.exit_code == 0, result.output
+        assert long_id not in result.output
+        assert f"task[0]={'w' * 80}~" in result.output
+
+    @pytest.mark.parametrize(
+        ("arguments", "code"),
+        [
+            ([], "invalid_project_id"),
+            (["one", "--all"], "invalid_project_id"),
+            (["../outside"], "invalid_project_id"),
+            (["ghost"], "project_not_found"),
+            (["--all", "--format", "SECRET_FORMAT"], "invalid_format"),
+            (
+                ["--all", "--stale-after-seconds", "SECRET_THRESHOLD"],
+                "invalid_stale_threshold",
+            ),
+            (["--all", "--stale-after-seconds", "0"], "invalid_stale_threshold"),
+        ],
+    )
+    def test_selector_and_option_errors_are_stable_and_value_free(
+        self,
+        runner: CliRunner,
+        env: dict[str, str],
+        arguments: list[str],
+        code: str,
+    ) -> None:
+        result = runner.invoke(cli, ["observe-project", *arguments])
+
+        assert result.exit_code != 0
+        assert code in result.output
+        assert "SECRET_" not in result.output
+        assert "Traceback" not in result.output

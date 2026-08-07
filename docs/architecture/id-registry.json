@@ -49,6 +49,12 @@
       "statement": "Orchestrator, worker, and terminal-reviewer MCP modes register disjoint tool sets."
     },
     {
+      "id": "ARCH-OBSERVE-001",
+      "kind": "invariant",
+      "source": "docs/v5/07-runtime-architecture.md",
+      "statement": "Operator observation is a coherent read-only cursor projection and does not claim supervision or predict completion."
+    },
+    {
       "id": "ARCH-REPOSITORY-CONTRACT-001",
       "kind": "invariant",
       "source": "docs/architecture/repository-contract.md",

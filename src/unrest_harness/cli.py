@@ -43,6 +43,15 @@ from .repository_contract import (
     check_repository,
     find_repository_root,
 )
+from .runtime_observability import (
+    RuntimeObservationError,
+    observe_all_projects_runtime,
+    observe_project_runtime,
+    observation_json,
+    render_runtime_collection,
+    render_runtime_observation,
+    validate_project_id,
+)
 from .storage import ProjectStore
 
 RUNTIME_ENV_FORWARD_ALLOWLIST = (
@@ -437,6 +446,92 @@ def show_project_cmd(project_id: str) -> None:
                 click.echo(rendered)
         except FileNotFoundError:
             click.echo("  (task list not yet submitted)")
+
+
+# ---------------------------------------------------------------------------
+# observe-project
+# ---------------------------------------------------------------------------
+
+
+def _observation_format(
+    _ctx: click.Context,
+    _param: click.Parameter,
+    value: str,
+) -> str:
+    if value not in {"json", "text"}:
+        raise click.ClickException("invalid_format")
+    return value
+
+
+def _stale_threshold(
+    _ctx: click.Context,
+    _param: click.Parameter,
+    value: str,
+) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise click.ClickException("invalid_stale_threshold") from exc
+    if parsed <= 0:
+        raise click.ClickException("invalid_stale_threshold")
+    return parsed
+
+
+@cli.command("observe-project")
+@click.argument("project_id", required=False)
+@click.option("--all", "all_projects", is_flag=True)
+@click.option(
+    "--format",
+    "output_format",
+    default="text",
+    show_default=True,
+    callback=_observation_format,
+)
+@click.option(
+    "--stale-after-seconds",
+    default="3600",
+    show_default=True,
+    callback=_stale_threshold,
+)
+def observe_project_cmd(
+    project_id: str | None,
+    all_projects: bool,
+    output_format: str,
+    stale_after_seconds: int,
+) -> None:
+    """Print a read-only runtime snapshot for PROJECT_ID or every project."""
+
+    if (project_id is None) == (not all_projects):
+        raise click.ClickException("invalid_project_id")
+    if project_id is not None and not validate_project_id(project_id):
+        raise click.ClickException("invalid_project_id")
+    store = ProjectStore(HarnessConfig.discover())
+    try:
+        if all_projects:
+            collection = observe_all_projects_runtime(
+                store,
+                stale_after_seconds=stale_after_seconds,
+            )
+            rendered = (
+                observation_json(collection)
+                if output_format == "json"
+                else render_runtime_collection(collection)
+            )
+        else:
+            assert project_id is not None
+            observation = observe_project_runtime(
+                store,
+                project_id,
+                stale_after_seconds=stale_after_seconds,
+            )
+            rendered = (
+                observation_json(observation)
+                if output_format == "json"
+                else render_runtime_observation(observation)
+            )
+    except RuntimeObservationError as error:
+        raise click.ClickException(error.code) from error
+    click.echo(rendered, nl=False)
 
 
 # ---------------------------------------------------------------------------

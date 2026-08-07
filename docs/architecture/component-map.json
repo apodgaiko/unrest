@@ -92,7 +92,8 @@
       "decisions": [],
       "id": "COMP-CLI-CONFIG",
       "invariants": [
-        "ARCH-CONFIG-001"
+        "ARCH-CONFIG-001",
+        "ARCH-OBSERVE-001"
       ],
       "paths": [
         "src/unrest_harness/cli.py",
@@ -172,6 +173,23 @@
       ],
       "tests": [
         "tests/test_server.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-OBSERVABILITY",
+      "invariants": [
+        "ARCH-OBSERVE-001"
+      ],
+      "paths": [
+        "src/unrest_harness/runtime_observability.py"
+      ],
+      "specifications": [
+        "docs/v5/07-runtime-architecture.md"
+      ],
+      "tests": [
+        "tests/test_cli.py",
+        "tests/test_runtime_observability.py"
       ]
     },
     {

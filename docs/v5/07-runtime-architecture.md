@@ -7,10 +7,13 @@ applies_to:
   - src/unrest_harness/coordinator.py
   - src/unrest_harness/dispatcher.py
   - src/unrest_harness/envelope.py
+  - src/unrest_harness/runtime_observability.py
 verified_by:
   - tests/test_acp_runner.py
+  - tests/test_cli.py
   - tests/test_coordinator.py
   - tests/test_documentation_contract.py
+  - tests/test_runtime_observability.py
   - tests/test_terminal_review.py
 related_decisions: []
 schema_version: 1
@@ -48,6 +51,8 @@ in-memory coordinator is never authoritative.
   review and a durable closeout.
 - `ARCH-CONFIG-001`: bounded role/provider configuration is explicit and
   invalid values fail instead of being silently broadened.
+- `ARCH-OBSERVE-001`: operator observation is a coherent, read-only projection
+  of existing cursor facts; it never claims supervision or predicts completion.
 ## Components and data flow
 
 ```text
@@ -134,6 +139,73 @@ Public attention exposes only `{id, report}`. Runtime metadata stays in
 `retry` is restricted to transient `node_failed`; changed work and validation
 gaps require a validated patch.
 
+## Read-only runtime observation
+
+`observe_project_runtime(...)` derives an immutable schema-version-1 snapshot
+from the persisted project, state, task, contract, attention, and attempt
+cursors. `unrest observe-project PROJECT_ID` exposes the compact text view;
+`--format json` exposes the public JSON schema. `unrest observe-project --all`
+uses one observation time, sorts projects, and preserves monitoring
+completeness by returning bounded per-project failure records instead of
+silently dropping malformed entries. Exactly one of `PROJECT_ID` and `--all`
+is required. `--stale-after-seconds` is a positive diagnostic threshold and
+defaults to 3600.
+
+The version-1 JSON object has these stable top-level fields, in addition to the
+version and identity fields: `persisted_state`, `derived_state`, `freshness`,
+`progress`, `task_counts`, `assertion_counts`, `attention_counts`,
+`gate_readiness`, `tasks`, `timings`, `anomalies`, and `shadow_scheduler`.
+Task rows preserve authored order and include an ordinal, type, cursor status,
+dependencies, blockers, runnable fact, attempt count, and current/latest
+attempt identifiers. The `--all` object contains `schema_version`, one shared
+`observed_at`, `projects`, and `failures`.
+
+Before reading, every selected project and cursor path component is checked for
+containment, regular type, and absence of symbolic links. The observer compares
+one content capture with a post-read device/inode/size/mtime generation check
+and retries a changing snapshot at most three times. It therefore returns a
+stable coherent snapshot or a closed failure code such as `snapshot_changed`,
+`malformed_cursor`, or `unsafe_cursor`; it does not present a mixed cross-file
+read as authoritative. The operation creates no files and performs no
+reconciliation, recovery, dispatch, gate evaluation, or attention decision.
+
+The snapshot reports structural progress, task/status/type counts,
+attention-kind counts, ready gates, per-task dependency and attempt facts,
+anomalies, and one advisory shadow scheduler action. Active progress excludes
+superseded tasks. It deliberately does not emit an effort percentage, ETA,
+completion projection, or inferred supervision state.
+
+Freshness fields are ages of named cursor or newest-input file modification
+times. Active-attempt elapsed time comes from the filename-safe dispatch cursor
+timestamp. Observed attempt duration is the attempt file modification time
+minus its filename timestamp and is labelled `file_mtime`; it is historical
+file metadata, not an estimate of remaining work. A stale-running label only
+requests inspection: elapsed wall time cannot prove that a provider process is
+dead. Shadow selection is checked against current coordinator selection in
+tests, but never becomes scheduler input. Reports contain identifiers,
+timestamps, structural facts, and closed codes, never task bodies, prompts,
+handoff or attention reports, workspace paths, credentials, or unrelated
+environment values.
+
+The observation failure codebook is `invalid_format`, `invalid_project_id`,
+`invalid_stale_threshold`, `malformed_cursor`, `project_not_found`,
+`snapshot_changed`, `unsafe_cursor`, and `unsafe_project_path`. Runtime anomaly
+codes are `mission_cursor_mismatch`, `failed_task_without_attention`,
+`running_without_attempt_id`, `attempt_cursor_mismatch`,
+`malformed_attempt_handoff`, `completed_attempt_unreconciled`, and
+`stale_running_candidate`. Persisted state, derived state, shadow action, and
+shadow reason are closed categorical fields rather than arbitrary display
+strings.
+
+## Deferred iteration-speed work
+
+This change deliberately measures delay without changing runtime authority.
+The postponed optimization inventory, activation gates, and risks are recorded
+in the proposed [observe-before-optimizing decision](../decisions/ADR-0001-observe-before-optimizing.md).
+Until a separate reviewed change activates an item, Unrest does not reuse
+evidence, wake or dispatch itself from observer output, recover attempts
+automatically, skip gates, or publish an ETA.
+
 ## Terminal review
 
 The caller may persist canonical deliverable roots before closure. Immediately
@@ -174,7 +246,8 @@ real-surface tests. Reclassify baseline observations explicitly.
 ```bash
 uv run pytest -q tests/test_coordinator.py tests/test_coordinator_parallel.py \
   tests/test_runnable_selection.py tests/test_terminal_review.py \
-  tests/test_server.py tests/test_acp_runner.py
+  tests/test_server.py tests/test_acp_runner.py \
+  tests/test_runtime_observability.py
 ```
 
 At a completed implementation slice, also run the milestone checks in the root
