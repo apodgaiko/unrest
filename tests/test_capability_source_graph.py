@@ -644,14 +644,21 @@ def _egress_record(
     callable_expression: list[object],
     arguments: list[list[object]] | None = None,
     keywords: list[list[object]] | None = None,
+    control: list[list[object]] | None = None,
+    via: list[list[object]] | None = None,
 ) -> dict[str, object]:
-    return {
+    record: dict[str, object] = {
         "anchor": anchor,
         "arguments": arguments or [],
         "callable": callable_expression,
         "keywords": keywords or [],
         "path": "src/unrest_harness/helper.py",
     }
+    if control is not None:
+        record["control"] = control
+    if via is not None:
+        record["via"] = via
+    return record
 
 
 _INLINE_BYTES = ["constant", {"bytes_hex": "696e6c696e65"}]
@@ -1362,3 +1369,461 @@ def publish(values):
 
     assert records(original) != records(changed_transform)
     assert records(original) == records(changed_predicate)
+
+
+def _fixed_control_records(source: str) -> tuple[dict[str, object], ...]:
+    return normalized_external_egress_records(
+        "src/unrest_harness/helper.py",
+        ast.parse(source),
+    )
+
+
+def test_guarded_fixed_http_projection_has_exact_branch_semantics() -> None:
+    guarded = """import httpx
+def publish(secret):
+    if secret:
+        httpx.get("https://first.invalid")
+"""
+    expected = _egress_record(
+        anchor="publish",
+        callable_expression=["attribute", ["name", "httpx"], "get"],
+        arguments=[["constant", "https://first.invalid"]],
+        control=[["if", ["name", "secret"], "body"]],
+    )
+    assert _fixed_control_records(guarded) == (expected,)
+    assert _fixed_control_records(guarded) == _fixed_control_records(guarded)
+
+    equal_arms = guarded.replace(
+        '        httpx.get("https://first.invalid")\n',
+        '        httpx.get("https://first.invalid")\n'
+        "    else:\n"
+        '        httpx.get("https://first.invalid")\n',
+    )
+    assert _fixed_control_records(equal_arms) == ()
+
+    different_arms = equal_arms.replace(
+        '        httpx.get("https://first.invalid")\n',
+        '        httpx.get("https://second.invalid")\n',
+        1,
+    )
+    swapped = different_arms.replace("if secret:", "if not secret:")
+    different_records = _fixed_control_records(different_arms)
+    assert len(different_records) == 2
+    assert different_records != _fixed_control_records(swapped)
+    assert {record["control"][0][-1] for record in different_records} == {
+        "body",
+        "else",
+    }
+
+
+def test_equal_helper_and_direct_arms_compare_only_external_effects() -> None:
+    source = """import httpx
+def helper():
+    httpx.get("https://same.invalid")
+def publish(secret):
+    if secret:
+        helper()
+    else:
+        httpx.get("https://same.invalid")
+"""
+    swapped = source.replace(
+        "        helper()\n    else:\n        httpx.get(\"https://same.invalid\")",
+        "        httpx.get(\"https://same.invalid\")\n    else:\n        helper()",
+    )
+
+    assert _fixed_control_records(source) == ()
+    assert _fixed_control_records(swapped) == ()
+    assert _fixed_control_records(source) == _fixed_control_records(swapped)
+
+
+@pytest.mark.parametrize(
+    "changed_else",
+    (
+        'httpx.post("https://same.invalid")',
+        'httpx.get("https://different.invalid")',
+        "pass",
+        'httpx.get("https://same.invalid")\n        httpx.get("https://same.invalid")',
+    ),
+    ids=("callable", "destination", "presence", "static-site-multiplicity"),
+)
+def test_helper_and_direct_arm_observable_differences_remain_guarded(
+    changed_else: str,
+) -> None:
+    source = """import httpx
+def helper():
+    httpx.get("https://same.invalid")
+def publish(secret):
+    if secret:
+        helper()
+    else:
+        REPLACEMENT
+""".replace("REPLACEMENT", changed_else)
+
+    records = _fixed_control_records(source)
+    assert records
+    assert all(record["control"][0][0] == "if" for record in records)
+
+
+@pytest.mark.parametrize(
+    "guard",
+    ("True", "False", "ENABLED"),
+)
+def test_fixed_context_proven_boolean_and_unconditional_controls_stay_clean(
+    guard: str,
+) -> None:
+    prefix = "ENABLED = True\n" if guard == "ENABLED" else ""
+    source = (
+        "import httpx\n"
+        f"{prefix}"
+        "def publish():\n"
+        f"    if {guard}:\n"
+        '        httpx.get("https://example.invalid")\n'
+    )
+    assert _fixed_control_records(source) == ()
+    assert _fixed_control_records(
+        'import httpx\nhttpx.get("https://example.invalid")\n'
+    ) == ()
+
+
+@pytest.mark.parametrize(
+    ("command", "guard", "frame"),
+    (
+        ('["consumer", "--once"]', "if enabled", "if"),
+        ('("consumer", "--once")', "while enabled", "while"),
+        ("COMMAND", "if enabled", "if"),
+    ),
+    ids=("list-if", "tuple-while", "named-list-if"),
+)
+def test_guarded_fixed_command_forms_have_exact_static_records(
+    command: str,
+    guard: str,
+    frame: str,
+) -> None:
+    declaration = 'COMMAND = ["consumer", "--once"]\n' if command == "COMMAND" else ""
+    source = (
+        "import subprocess\n"
+        f"{declaration}"
+        "def publish(enabled):\n"
+        f"    {guard}:\n"
+        f"        subprocess.run({command})\n"
+    )
+    records = _fixed_control_records(source)
+    assert len(records) == 1
+    assert records[0]["callable"] == [
+        "attribute",
+        ["name", "subprocess"],
+        "run",
+    ]
+    assert records[0]["control"][0][0] == frame
+    assert records[0]["arguments"] == [
+        ["list" if command != '("consumer", "--once")' else "tuple", [
+            ["constant", "consumer"],
+            ["constant", "--once"],
+        ]]
+    ]
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_kinds"),
+    (
+        (
+            "if enabled:\n        httpx.get(URL)",
+            ("if",),
+        ),
+        (
+            "for item in values:\n        httpx.get(URL)",
+            ("for",),
+        ),
+        (
+            "while enabled:\n        httpx.get(URL)",
+            ("while",),
+        ),
+        (
+            "enabled and httpx.get(URL)",
+            ("boolean",),
+        ),
+        (
+            "enabled or httpx.get(URL)",
+            ("boolean",),
+        ),
+        (
+            "return httpx.get(URL) if enabled else None",
+            ("if-expression",),
+        ),
+        (
+            "return [httpx.get(URL) for item in values if enabled]",
+            ("comprehension-iterator", "comprehension-filter"),
+        ),
+        (
+            "match enabled:\n"
+            "        case True if values:\n"
+            "            httpx.get(URL)",
+            ("match",),
+        ),
+    ),
+    ids=(
+        "if",
+        "for",
+        "while",
+        "and",
+        "or",
+        "if-expression",
+        "comprehension",
+        "match",
+    ),
+)
+def test_direct_structured_control_forms_project_fixed_egress(
+    body: str,
+    expected_kinds: tuple[str, ...],
+) -> None:
+    source = (
+        "import httpx\n"
+        'URL = "https://example.invalid"\n'
+        "def publish(enabled, values):\n"
+        f"    {body}\n"
+    )
+    records = _fixed_control_records(source)
+    assert len(records) == 1
+    assert tuple(frame[0] for frame in records[0]["control"]) == expected_kinds
+
+
+def test_async_for_iterator_projects_fixed_egress() -> None:
+    source = """import httpx
+async def publish(values):
+    async for value in values:
+        httpx.get("https://example.invalid")
+"""
+    records = _fixed_control_records(source)
+    assert len(records) == 1
+    assert records[0]["control"] == [["async-for", ["name", "values"], "body"]]
+
+
+@pytest.mark.parametrize("subject", ("True", "ENABLED"))
+def test_proven_boolean_match_subject_is_benign(subject: str) -> None:
+    declaration = "ENABLED = True\n" if subject == "ENABLED" else ""
+    source = (
+        "import httpx\n"
+        f"{declaration}"
+        "def publish():\n"
+        f"    match {subject}:\n"
+        "        case True:\n"
+        '            httpx.get("https://example.invalid")\n'
+    )
+    assert _fixed_control_records(source) == ()
+
+
+def test_nested_control_order_and_external_predicate_record_are_preserved() -> None:
+    source = """import httpx
+def publish(secret, callback):
+    if callback(secret):
+        secret and httpx.get("https://example.invalid")
+"""
+    records = _fixed_control_records(source)
+    assert len(records) == 2
+    predicate_record = next(record for record in records if "control" not in record)
+    guarded_record = next(record for record in records if "control" in record)
+    assert predicate_record["callable"] == ["name", "callback"]
+    assert [frame[0] for frame in guarded_record["control"]] == ["if", "boolean"]
+    assert guarded_record["control"][0][1] == [
+        "call",
+        ["name", "callback"],
+        [["name", "secret"]],
+        [],
+    ]
+
+
+@pytest.mark.parametrize(
+    ("setup", "predicate"),
+    (
+        ("", "secret"),
+        ("    condition = secret\n", "condition"),
+        ("", "secret == token"),
+        (
+            "    def local_predicate(value):\n"
+            "        return bool(value)\n",
+            "local_predicate(secret)",
+        ),
+    ),
+    ids=("parameter", "aliased", "derived", "proven-local-predicate"),
+)
+def test_parameter_derived_and_local_predicates_retain_fixed_control(
+    setup: str,
+    predicate: str,
+) -> None:
+    source = (
+        "import httpx\n"
+        "def publish(secret, token):\n"
+        f"{setup}"
+        f"    if {predicate}:\n"
+        '        httpx.get("https://example.invalid")\n'
+    )
+    records = _fixed_control_records(source)
+    assert len(records) == 1
+    assert records[0]["control"][0][0] == "if"
+    if "local_predicate" in predicate:
+        assert all(record["callable"] != ["name", "local_predicate"] for record in records)
+
+
+@pytest.mark.parametrize(
+    ("exit_statement", "expected"),
+    (("return", "return"), ("break", "break"), ("continue", "continue")),
+)
+def test_nonancestor_early_exits_have_exact_continuation_control(
+    exit_statement: str,
+    expected: str,
+) -> None:
+    if exit_statement == "return":
+        body = (
+            "    if secret:\n"
+            "        return\n"
+            '    httpx.get("https://example.invalid")\n'
+        )
+    else:
+        body = (
+            "    for item in values:\n"
+            "        if secret:\n"
+            f"            {exit_statement}\n"
+            '        httpx.get("https://example.invalid")\n'
+        )
+    source = "import httpx\ndef publish(secret, values):\n" + body
+    records = _fixed_control_records(source)
+    assert len(records) == 1
+    early = next(frame for frame in records[0]["control"] if frame[0] == "early-exit")
+    assert early == ["early-exit", expected, ["name", "secret"], "else"]
+
+
+@pytest.mark.parametrize(
+    "callable_setup",
+    (
+        "import httpx\nCALL = httpx.get",
+        "from httpx import get as CALL",
+        "receiver-bound",
+        "def bind(receiver):\n    return receiver.send",
+    ),
+    ids=(
+        "assigned-import",
+        "direct-import-alias",
+        "receiver-bound",
+        "receiver-bound-factory",
+    ),
+)
+def test_guarded_fixed_callable_provenance_fails_closed(
+    callable_setup: str,
+) -> None:
+    if callable_setup == "receiver-bound":
+        source = (
+            "def publish(receiver, secret):\n"
+            "    CALL = receiver.send\n"
+            '    if secret:\n        CALL("https://example.invalid")\n'
+        )
+    elif "bind" in callable_setup:
+        source = (
+            f"{callable_setup}\n"
+            "def publish(receiver, secret):\n"
+            "    CALL = bind(receiver)\n"
+            '    if secret:\n        CALL("https://example.invalid")\n'
+        )
+    else:
+        source = (
+            f"{callable_setup}\n"
+            "def publish(secret):\n"
+            '    if secret:\n        CALL("https://example.invalid")\n'
+        )
+    records = _fixed_control_records(source)
+    assert len(records) == 1
+    assert records[0]["control"] == [["if", ["name", "secret"], "body"]]
+
+
+def test_constant_and_dynamic_getattr_fixed_calls_retain_provenance() -> None:
+    template = """import httpx
+def publish(secret, method):
+    if secret:
+        getattr(httpx, {method})("https://example.invalid")
+"""
+    constant = _fixed_control_records(template.format(method='"get"'))
+    dynamic = _fixed_control_records(template.format(method="method"))
+    assert len(constant) == len(dynamic) == 1
+    assert constant[0]["callable"] != dynamic[0]["callable"]
+    assert constant[0]["control"] == dynamic[0]["control"]
+
+
+def test_guarded_local_helper_summaries_propagate_to_static_callsites() -> None:
+    source = """import httpx
+def leaf():
+    httpx.get("https://example.invalid")
+def bridge():
+    leaf()
+def publish(secret):
+    bridge()
+    if secret:
+        alias = bridge
+        alias()
+"""
+    records = _fixed_control_records(source)
+    assert len(records) == 1
+    assert records[0]["control"] == [["if", ["name", "secret"], "body"]]
+    assert records[0]["via"] == [
+        ["callsite", "publish", ["name", "alias"]],
+        ["callsite", "bridge", ["name", "leaf"]],
+    ]
+
+    nested = """import httpx
+def publish(secret):
+    def helper():
+        httpx.get("https://example.invalid")
+    if secret:
+        helper()
+"""
+    nested_records = _fixed_control_records(nested)
+    assert len(nested_records) == 1
+    assert nested_records[0]["via"] == [
+        ["callsite", "publish", ["name", "helper"]]
+    ]
+
+
+def test_local_helper_multiple_callsites_and_cycles_are_bounded_and_stable() -> None:
+    multiple = """import httpx
+def helper():
+    httpx.get("https://example.invalid")
+def publish(first, second):
+    if first:
+        helper()
+    if second:
+        helper()
+"""
+    records = _fixed_control_records(multiple)
+    assert len(records) == 2
+    assert records[0] != records[1]
+
+    duplicated_site = multiple.replace("if second:", "if first:")
+    duplicate_records = _fixed_control_records(duplicated_site)
+    assert len(duplicate_records) == 2
+    assert duplicate_records[0] == duplicate_records[1]
+
+    cycle = """import httpx
+def first(secret):
+    if secret:
+        httpx.get("https://example.invalid")
+    second(secret)
+def second(secret):
+    first(secret)
+"""
+    assert len(_fixed_control_records(cycle)) == 1
+    assert _fixed_control_records(cycle) == _fixed_control_records(cycle)
+
+
+def test_fixed_control_projection_ignores_formatting_paths_and_locations() -> None:
+    compact = 'import httpx\ndef publish(secret):\n if secret: httpx.get("https://example.invalid")\n'
+    formatted = """import httpx
+
+def publish(secret):
+    # Structural formatting is not semantic.
+    if secret:
+        httpx.get(
+            "https://example.invalid",
+        )
+"""
+    first = _fixed_control_records(compact)
+    second = _fixed_control_records(formatted)
+    assert first == second
+    assert tuple(sorted(first, key=lambda item: json.dumps(item, sort_keys=True))) == first

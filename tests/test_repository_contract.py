@@ -409,6 +409,174 @@ def test_check_repository_cli_accepts_named_fixed_external_context(
 @pytest.mark.parametrize(
     "source",
     (
+        "import httpx\n"
+        "def _guarded_fixed_http(secret):\n"
+        "    if secret:\n"
+        '        httpx.get("https://guarded.invalid")\n',
+        "import subprocess\n"
+        "def _guarded_fixed_command(secret):\n"
+        "    while secret:\n"
+        '        subprocess.run(["consumer", "--once"])\n'
+        "        break\n",
+        "import httpx\n"
+        "def _guarded_match(secret):\n"
+        "    match secret:\n"
+        "        case True:\n"
+        '            httpx.get("https://match.invalid")\n',
+        "import httpx\n"
+        "def _guarded_early_exit(secret):\n"
+        "    if secret:\n"
+        "        return\n"
+        '    httpx.get("https://continuation.invalid")\n',
+        "import httpx\n"
+        "def _fixed_helper():\n"
+        '    httpx.get("https://helper.invalid")\n'
+        "def _guarded_helper(secret):\n"
+        "    if secret:\n"
+        "        _fixed_helper()\n",
+        "import httpx\n"
+        "def _guarded_getattr(secret, method):\n"
+        "    if secret:\n"
+        '        getattr(httpx, method)("https://dynamic.invalid")\n',
+    ),
+    ids=("http", "subprocess", "match", "early-exit", "helper", "getattr"),
+)
+def test_check_repository_cli_rejects_control_dependent_fixed_egress(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    catalog_path = (
+        repository
+        / "src/unrest_harness/bundled/policies/capability-sinks.v1.json"
+    )
+    catalog_before = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+    path.write_text(path.read_text(encoding="utf-8") + "\n" + source, encoding="utf-8")
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == repeated.exit_code == 1
+    assert first.output == repeated.output
+    assert first.output.count("REPO-CAPABILITY-SINK-CATALOG") == 1
+    assert first.output.count("reachable-capability-closure:") == 1
+    assert hashlib.sha256(catalog_path.read_bytes()).hexdigest() == catalog_before
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        'import httpx\nhttpx.get("https://unconditional.invalid")\n',
+        "import subprocess\n"
+        "ENABLED = True\n"
+        "def _constant_fixed_command():\n"
+        "    if ENABLED:\n"
+        '        subprocess.run(["consumer"])\n',
+    ),
+    ids=("unconditional-http", "proven-constant-command"),
+)
+def test_check_repository_cli_accepts_fixed_control_projection_controls(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    path = repository / "src/unrest_harness/capability_policy.py"
+    catalog_path = (
+        repository
+        / "src/unrest_harness/bundled/policies/capability-sinks.v1.json"
+    )
+    catalog_before = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+    path.write_text(path.read_text(encoding="utf-8") + "\n" + source, encoding="utf-8")
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == repeated.exit_code == 0, first.output
+    assert first.output == repeated.output
+    assert json.loads(first.output)["status"] == "ok"
+    assert hashlib.sha256(catalog_path.read_bytes()).hexdigest() == catalog_before
+
+
+@pytest.mark.parametrize("swapped", (False, True), ids=("helper-first", "direct-first"))
+def test_check_repository_cli_accepts_equal_helper_and_direct_fixed_arms(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    swapped: bool,
+) -> None:
+    helper_arm = "_equal_effect_helper()"
+    direct_arm = 'httpx.get("https://equal-effect.invalid")'
+    if swapped:
+        helper_arm, direct_arm = direct_arm, helper_arm
+    source = (
+        "import httpx\n"
+        "def _equal_effect_helper():\n"
+        '    httpx.get("https://equal-effect.invalid")\n'
+        "def _equal_effect_publish(secret):\n"
+        "    if secret:\n"
+        f"        {helper_arm}\n"
+        "    else:\n"
+        f"        {direct_arm}\n"
+    )
+    path = repository / "src/unrest_harness/capability_policy.py"
+    catalog_path = (
+        repository
+        / "src/unrest_harness/bundled/policies/capability-sinks.v1.json"
+    )
+    catalog_before = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+    path.write_text(path.read_text(encoding="utf-8") + "\n" + source, encoding="utf-8")
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == repeated.exit_code == 0, first.output
+    assert first.output == repeated.output
+    assert json.loads(first.output)["status"] == "ok"
+    assert hashlib.sha256(catalog_path.read_bytes()).hexdigest() == catalog_before
+
+
+@pytest.mark.parametrize(
+    "direct_arm",
+    (
+        'httpx.post("https://equal-effect.invalid")',
+        'httpx.get("https://different-effect.invalid")',
+        "pass",
+        'httpx.get("https://equal-effect.invalid"); httpx.get("https://equal-effect.invalid")',
+    ),
+    ids=("callable", "destination", "presence", "static-site-multiplicity"),
+)
+def test_check_repository_cli_rejects_helper_direct_effect_differences(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    direct_arm: str,
+) -> None:
+    source = (
+        "import httpx\n"
+        "def _unequal_effect_helper():\n"
+        '    httpx.get("https://equal-effect.invalid")\n'
+        "def _unequal_effect_publish(secret):\n"
+        "    if secret:\n"
+        "        _unequal_effect_helper()\n"
+        "    else:\n"
+        f"        {direct_arm}\n"
+    )
+    path = repository / "src/unrest_harness/capability_policy.py"
+    catalog_path = (
+        repository
+        / "src/unrest_harness/bundled/policies/capability-sinks.v1.json"
+    )
+    catalog_before = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+    path.write_text(path.read_text(encoding="utf-8") + "\n" + source, encoding="utf-8")
+
+    first = _run_cli(repository, monkeypatch)
+    repeated = _run_cli(repository, monkeypatch)
+    assert first.exit_code == repeated.exit_code == 1
+    assert first.output == repeated.output
+    assert first.output.count("REPO-CAPABILITY-SINK-CATALOG") == 1
+    assert first.output.count("reachable-capability-closure:") == 1
+    assert hashlib.sha256(catalog_path.read_bytes()).hexdigest() == catalog_before
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
         "def _receiver_only(channel):\n    channel.send()\n",
         "def _external_without_payload():\n    external_callback()\n",
         "def _local_with_payload(value):\n"

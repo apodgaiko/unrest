@@ -163,8 +163,35 @@ selected, or otherwise unresolved argument bindings are not treated as fixed
 and remain fail-closed even when every argument has lost literal provenance.
 Every argument is conservatively data-bearing, including a sole inline or
 constant payload, except when the complete call has only one structurally fixed
-URL or fixed list/tuple command. Argument-free external and receiver calls are
-also clean. Dynamic or reassigned `getattr` method selection on an unknown
+URL or fixed list/tuple command and that fixed external effect is independent
+of unresolved control. The bounded control projection records a latent fixed
+effect when a parameter, captured value, derived expression, or fail-closed
+predicate controls its presence, branch/case identity, callable, destination,
+or static effect-site/callsite multiplicity. It covers `if`/`else`, `while`,
+`for`/`async for`, match subjects and guards, conditional expressions,
+short-circuit Boolean operands, comprehension iterators and filters, nested
+combinations, and conditional `return`, `break`, or `continue` statements that
+govern a later fixed effect. Control frames are ordered outermost-first and
+preserve predicate structure, arm/case identity, and static multiplicity while
+remaining independent of source locations and runtime loop counts.
+
+Inline `True` and `False`, plus stable literal bindings resolving exactly to
+those booleans, are the only proven-constant guards. An unreachable constant
+arm is omitted. Equal Boolean arms that each contain exactly the same normalized
+callable, fixed destination, and static multiplicity collapse to their common
+uncontrolled effect, so they add no guarded record. This equality compares the
+observable external effect rather than helper anchors or callsite routes and
+selects retained route metadata deterministically. Callable, destination,
+presence, and static-site multiplicity differences stay observable. Statically
+resolved nested or module-local functions carry latent
+fixed-effect summaries through direct and stable-alias callsites, including one
+transitive acyclic helper chain. Summary expansion is cycle-safe and bounded;
+dynamic or reflection-only helper dispatch is not claimed. Exception-mediated
+control, exception groups, and implicit context-manager suppression are outside
+this structural projection and do not become claims of safety.
+
+Argument-free external and receiver calls are also clean. Dynamic or reassigned
+`getattr` method selection on an unknown
 receiver remains fail-closed; only a structurally pure import receiver such as
 `math` can prove a dynamic attribute callable benign. Call
 projection is independent of how the

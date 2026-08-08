@@ -960,6 +960,45 @@ def _normalized_egress_expression(node: ast.AST) -> Any:
         ]
     if isinstance(node, ast.Lambda):
         return ["lambda", _normalized_egress_expression(node.body)]
+    if isinstance(node, ast.MatchValue):
+        return ["match-value", _normalized_egress_expression(node.value)]
+    if isinstance(node, ast.MatchSingleton):
+        return ["match-singleton", node.value]
+    if isinstance(node, ast.MatchSequence):
+        return [
+            "match-sequence",
+            [_normalized_egress_expression(item) for item in node.patterns],
+        ]
+    if isinstance(node, ast.MatchMapping):
+        return [
+            "match-mapping",
+            [_normalized_egress_expression(item) for item in node.keys],
+            [_normalized_egress_expression(item) for item in node.patterns],
+            node.rest,
+        ]
+    if isinstance(node, ast.MatchClass):
+        return [
+            "match-class",
+            _normalized_egress_expression(node.cls),
+            [_normalized_egress_expression(item) for item in node.patterns],
+            list(node.kwd_attrs),
+            [_normalized_egress_expression(item) for item in node.kwd_patterns],
+        ]
+    if isinstance(node, ast.MatchStar):
+        return ["match-star", node.name]
+    if isinstance(node, ast.MatchAs):
+        return [
+            "match-as",
+            None
+            if node.pattern is None
+            else _normalized_egress_expression(node.pattern),
+            node.name,
+        ]
+    if isinstance(node, ast.MatchOr):
+        return [
+            "match-or",
+            [_normalized_egress_expression(item) for item in node.patterns],
+        ]
     if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
         return [
             type(node).__name__.lower(),
@@ -1073,6 +1112,13 @@ def normalized_external_egress_records(
     scope_literal_bindings: dict[ast.AST, dict[str, ast.AST]] = {}
     scope_unknown_literal_names: dict[ast.AST, set[str]] = {}
     scope_local_callable_names: dict[ast.AST, set[str]] = {}
+    scope_local_callable_targets: dict[
+        ast.AST,
+        dict[str, ast.FunctionDef | ast.AsyncFunctionDef],
+    ] = {}
+    fixed_context_calls: dict[ast.Call, dict[str, Any]] = {}
+    local_helper_calls: dict[ast.Call, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    called_local_functions: set[ast.FunctionDef | ast.AsyncFunctionDef] = set()
     for scope in scopes:
         function = None if isinstance(scope, ast.Module) else scope
         parameters = (
@@ -1550,21 +1596,107 @@ def normalized_external_egress_records(
                 break
         scope_local_callable_names[scope] = set(local_callable_bindings)
 
+        inherited_local_targets = dict(
+            scope_local_callable_targets.get(enclosing_scope, {})
+        )
+        local_callable_targets = {
+            name: target
+            for name, target in inherited_local_targets.items()
+            if name not in locally_bound_names
+        }
+        local_callable_targets.update(
+            {
+                item.name: item
+                for item in scope.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+        )
+        for _ in range(len(assignments) + 1):
+            changed = False
+            for assignment in assignments:
+                value = assignment.value
+                if not isinstance(value, ast.Name):
+                    continue
+                local_function_target = local_callable_targets.get(value.id)
+                if local_function_target is None:
+                    continue
+                targets = (
+                    assignment.targets
+                    if isinstance(assignment, ast.Assign)
+                    else (assignment.target,)
+                )
+                for candidate in targets:
+                    if not isinstance(candidate, ast.Name):
+                        continue
+                    if binding_values.get(candidate.id) != [value]:
+                        continue
+                    if (
+                        local_callable_targets.get(candidate.id)
+                        is not local_function_target
+                    ):
+                        local_callable_targets[candidate.id] = local_function_target
+                        changed = True
+            if not changed:
+                break
+        scope_local_callable_targets[scope] = local_callable_targets
+
+        def resolved_callable(
+            expression: ast.AST,
+            resolving: frozenset[str] = frozenset(),
+        ) -> ast.AST:
+            if isinstance(expression, ast.Name) and expression.id not in resolving:
+                binding = external_alias_bindings.get(expression.id)
+                if binding is not None:
+                    return resolved_callable(binding, resolving | {expression.id})
+            return expression
+
+        for call in ast.walk(scope):
+            if not isinstance(call, ast.Call) or not in_scope(call):
+                continue
+            if isinstance(call.func, ast.Name):
+                local_target = local_callable_targets.get(call.func.id)
+                if local_target is not None:
+                    local_helper_calls[call] = local_target
+                    called_local_functions.add(local_target)
+            arguments = [*call.args, *(item.value for item in call.keywords)]
+            if (
+                len(arguments) != 1
+                or not external_callable(call.func)
+                or result_is_callable_source(call)
+                or not (
+                    fixed_external_context(arguments[0])
+                    or fixed_command_context(arguments[0])
+                )
+            ):
+                continue
+            fixed_context_calls[call] = {
+                "anchor": anchor(call),
+                "arguments": [
+                    _normalized_bound_egress_expression(item, literal_bindings)
+                    for item in call.args
+                ],
+                "callable": _normalized_bound_egress_expression(
+                    resolved_callable(call.func),
+                    literal_bindings,
+                ),
+                "keywords": [
+                    [
+                        item.arg,
+                        _normalized_bound_egress_expression(
+                            item.value,
+                            literal_bindings,
+                        ),
+                    ]
+                    for item in call.keywords
+                ],
+                "path": relative_path,
+            }
+
         for call in ast.walk(scope):
             if not isinstance(call, ast.Call) or not in_scope(call):
                 continue
             if not call_carries_data(call):
                 continue
-
-            def resolved_callable(
-                expression: ast.AST,
-                resolving: frozenset[str] = frozenset(),
-            ) -> ast.AST:
-                if isinstance(expression, ast.Name) and expression.id not in resolving:
-                    binding = external_alias_bindings.get(expression.id)
-                    if binding is not None:
-                        return resolved_callable(binding, resolving | {expression.id})
-                return expression
 
             records.append(
                 {
@@ -1590,6 +1722,681 @@ def normalized_external_egress_records(
                     "path": relative_path,
                 }
             )
+
+    Effect = tuple[dict[str, Any], tuple[Any, ...], tuple[Any, ...]]
+    relevant_fixed_scopes: set[ast.AST] = {
+        owner(call) or tree for call in fixed_context_calls
+    }
+
+    def scope_for(node: ast.AST) -> ast.Module | ast.FunctionDef | ast.AsyncFunctionDef:
+        return owner(node) or tree
+
+    def expression_bindings(
+        node: ast.AST,
+        parameter_bindings: Mapping[str, ast.AST],
+    ) -> dict[str, ast.AST]:
+        return {
+            **scope_literal_bindings.get(scope_for(node), {}),
+            **parameter_bindings,
+        }
+
+    def normalized_control(
+        node: ast.AST,
+        parameter_bindings: Mapping[str, ast.AST],
+    ) -> Any:
+        return _normalized_bound_egress_expression(
+            node,
+            expression_bindings(node, parameter_bindings),
+        )
+
+    def proven_boolean(
+        node: ast.AST,
+        parameter_bindings: Mapping[str, ast.AST],
+        resolving: frozenset[str] = frozenset(),
+    ) -> bool | None:
+        if isinstance(node, ast.Constant) and type(node.value) is bool:
+            return node.value
+        if isinstance(node, ast.Name) and node.id not in resolving:
+            binding = parameter_bindings.get(node.id)
+            if binding is None:
+                binding = scope_literal_bindings.get(scope_for(node), {}).get(node.id)
+            if binding is not None:
+                return proven_boolean(
+                    binding,
+                    parameter_bindings,
+                    resolving | {node.id},
+                )
+        return None
+
+    def add_control(
+        effects: list[Effect],
+        frame: Any,
+        *,
+        after: int,
+    ) -> list[Effect]:
+        return [
+            (
+                record,
+                (*effect_controls[:after], frame, *effect_controls[after:]),
+                via,
+            )
+            for record, effect_controls, via in effects
+        ]
+
+    def canonical_effects(
+        effects: list[Effect],
+        *,
+        observable_only: bool = False,
+    ) -> list[str]:
+        return sorted(
+            json.dumps(
+                [
+                    (
+                        {key: value for key, value in record.items() if key != "anchor"}
+                        if observable_only
+                        else record
+                    ),
+                    controls,
+                    () if observable_only else via,
+                ],
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            for record, controls, via in effects
+        )
+
+    def common_arm_effects(
+        body: list[Effect],
+        orelse: list[Effect],
+    ) -> list[Effect] | None:
+        if canonical_effects(body, observable_only=True) != canonical_effects(
+            orelse,
+            observable_only=True,
+        ):
+            return None
+        return min((body, orelse), key=canonical_effects)
+
+    def helper_parameter_bindings(
+        call: ast.Call,
+        target: ast.FunctionDef | ast.AsyncFunctionDef,
+        inherited: Mapping[str, ast.AST],
+    ) -> dict[str, ast.AST]:
+        bindings = dict(inherited)
+        parameters = [*target.args.posonlyargs, *target.args.args]
+        for parameter, argument in zip(parameters, call.args):
+            bindings[parameter.arg] = argument
+        keyword_arguments = {
+            item.arg: item.value for item in call.keywords if item.arg is not None
+        }
+        for parameter in (*parameters, *target.args.kwonlyargs):
+            keyword_argument = keyword_arguments.get(parameter.arg)
+            if keyword_argument is not None:
+                bindings[parameter.arg] = keyword_argument
+        return bindings
+
+    def expression_effects(
+        node: ast.AST,
+        controls: tuple[Any, ...],
+        via: tuple[Any, ...],
+        parameter_bindings: Mapping[str, ast.AST],
+        call_stack: frozenset[ast.AST],
+    ) -> list[Effect]:
+        effects: list[Effect] = []
+        fixed_record = fixed_context_calls.get(node) if isinstance(node, ast.Call) else None
+        if fixed_record is not None:
+            effects.append((fixed_record, controls, via))
+        if isinstance(node, ast.Call):
+            local_target = local_helper_calls.get(node)
+            if (
+                local_target is not None
+                and local_target in relevant_fixed_scopes
+                and local_target not in call_stack
+                and len(via) < 2
+            ):
+                callsite = [
+                    "callsite",
+                    anchor(node),
+                    normalized_control(node.func, parameter_bindings),
+                ]
+                nested_bindings = helper_parameter_bindings(
+                    node,
+                    local_target,
+                    parameter_bindings,
+                )
+                nested = statement_block_effects(
+                    local_target.body,
+                    controls,
+                    (*via, callsite),
+                    nested_bindings,
+                    call_stack | {local_target},
+                )
+                effects.extend(nested[0])
+            effects.extend(
+                expression_effects(
+                    node.func,
+                    controls,
+                    via,
+                    parameter_bindings,
+                    call_stack,
+                )
+            )
+            for argument in (*node.args, *(item.value for item in node.keywords)):
+                effects.extend(
+                    expression_effects(
+                        argument,
+                        controls,
+                        via,
+                        parameter_bindings,
+                        call_stack,
+                    )
+                )
+            return effects
+        if isinstance(node, ast.IfExp):
+            effects.extend(
+                expression_effects(
+                    node.test,
+                    controls,
+                    via,
+                    parameter_bindings,
+                    call_stack,
+                )
+            )
+            constant = proven_boolean(node.test, parameter_bindings)
+            if constant is not None:
+                selected = node.body if constant else node.orelse
+                effects.extend(
+                    expression_effects(
+                        selected,
+                        controls,
+                        via,
+                        parameter_bindings,
+                        call_stack,
+                    )
+                )
+                return effects
+            body = expression_effects(
+                node.body,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            orelse = expression_effects(
+                node.orelse,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            common = common_arm_effects(body, orelse)
+            if common is not None:
+                effects.extend(common)
+            else:
+                predicate = normalized_control(node.test, parameter_bindings)
+                effects.extend(
+                    add_control(
+                        body,
+                        ["if-expression", predicate, "body"],
+                        after=len(controls),
+                    )
+                )
+                effects.extend(
+                    add_control(
+                        orelse,
+                        ["if-expression", predicate, "else"],
+                        after=len(controls),
+                    )
+                )
+            return effects
+        if isinstance(node, ast.BoolOp):
+            active_controls = controls
+            operator = "and" if isinstance(node.op, ast.And) else "or"
+            preceding: list[Any] = []
+            for value in node.values:
+                effects.extend(
+                    expression_effects(
+                        value,
+                        active_controls,
+                        via,
+                        parameter_bindings,
+                        call_stack,
+                    )
+                )
+                constant = proven_boolean(value, parameter_bindings)
+                if constant is not None:
+                    if (operator == "and" and not constant) or (
+                        operator == "or" and constant
+                    ):
+                        break
+                    continue
+                preceding.append(normalized_control(value, parameter_bindings))
+                active_controls = (
+                    *controls,
+                    ["boolean", operator, list(preceding)],
+                )
+            return effects
+        if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+            active_controls = controls
+            for index, generator in enumerate(node.generators):
+                effects.extend(
+                    expression_effects(
+                        generator.iter,
+                        active_controls,
+                        via,
+                        parameter_bindings,
+                        call_stack,
+                    )
+                )
+                active_controls = (
+                    *active_controls,
+                    [
+                        "comprehension-iterator",
+                        index,
+                        normalized_control(generator.iter, parameter_bindings),
+                        generator.is_async,
+                    ],
+                )
+                for filter_index, condition in enumerate(generator.ifs):
+                    effects.extend(
+                        expression_effects(
+                            condition,
+                            active_controls,
+                            via,
+                            parameter_bindings,
+                            call_stack,
+                        )
+                    )
+                    constant = proven_boolean(condition, parameter_bindings)
+                    if constant is False:
+                        return effects
+                    if constant is None:
+                        active_controls = (
+                            *active_controls,
+                            [
+                                "comprehension-filter",
+                                index,
+                                filter_index,
+                                normalized_control(condition, parameter_bindings),
+                            ],
+                        )
+            result_nodes = (
+                (node.key, node.value) if isinstance(node, ast.DictComp) else (node.elt,)
+            )
+            for result_node in result_nodes:
+                effects.extend(
+                    expression_effects(
+                        result_node,
+                        active_controls,
+                        via,
+                        parameter_bindings,
+                        call_stack,
+                    )
+                )
+            return effects
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.stmt, ast.comprehension)):
+                continue
+            effects.extend(
+                expression_effects(
+                    child,
+                    controls,
+                    via,
+                    parameter_bindings,
+                    call_stack,
+                )
+            )
+        return effects
+
+    def statement_effects(
+        statement: ast.stmt,
+        controls: tuple[Any, ...],
+        via: tuple[Any, ...],
+        parameter_bindings: Mapping[str, ast.AST],
+        call_stack: frozenset[ast.AST],
+    ) -> list[Effect]:
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return []
+        if isinstance(statement, ast.If):
+            effects = expression_effects(
+                statement.test,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            constant = proven_boolean(statement.test, parameter_bindings)
+            if constant is not None:
+                selected = statement.body if constant else statement.orelse
+                selected_effects, _ = statement_block_effects(
+                    selected,
+                    controls,
+                    via,
+                    parameter_bindings,
+                    call_stack,
+                )
+                return [*effects, *selected_effects]
+            body, _ = statement_block_effects(
+                statement.body,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            orelse, _ = statement_block_effects(
+                statement.orelse,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            common = common_arm_effects(body, orelse)
+            if common is not None:
+                return [*effects, *common]
+            predicate = normalized_control(statement.test, parameter_bindings)
+            return [
+                *effects,
+                *add_control(
+                    body,
+                    ["if", predicate, "body"],
+                    after=len(controls),
+                ),
+                *add_control(
+                    orelse,
+                    ["if", predicate, "else"],
+                    after=len(controls),
+                ),
+            ]
+        if isinstance(statement, ast.While):
+            effects = expression_effects(
+                statement.test,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            constant = proven_boolean(statement.test, parameter_bindings)
+            if constant is False:
+                orelse, _ = statement_block_effects(
+                    statement.orelse,
+                    controls,
+                    via,
+                    parameter_bindings,
+                    call_stack,
+                )
+                return [*effects, *orelse]
+            body_controls = controls
+            if constant is None:
+                body_controls = (
+                    *controls,
+                    ["while", normalized_control(statement.test, parameter_bindings), "body"],
+                )
+            body, _ = statement_block_effects(
+                statement.body,
+                body_controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            orelse, _ = statement_block_effects(
+                statement.orelse,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            return [*effects, *body, *orelse]
+        if isinstance(statement, (ast.For, ast.AsyncFor)):
+            effects = expression_effects(
+                statement.iter,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            loop_frame = [
+                "async-for" if isinstance(statement, ast.AsyncFor) else "for",
+                normalized_control(statement.iter, parameter_bindings),
+                "body",
+            ]
+            body, _ = statement_block_effects(
+                statement.body,
+                (*controls, loop_frame),
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            orelse, _ = statement_block_effects(
+                statement.orelse,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            return [*effects, *body, *orelse]
+        if isinstance(statement, ast.Match):
+            effects = expression_effects(
+                statement.subject,
+                controls,
+                via,
+                parameter_bindings,
+                call_stack,
+            )
+            subject = normalized_control(statement.subject, parameter_bindings)
+            subject_boolean = proven_boolean(statement.subject, parameter_bindings)
+            for index, case in enumerate(statement.cases):
+                guard_boolean = (
+                    None
+                    if case.guard is None
+                    else proven_boolean(case.guard, parameter_bindings)
+                )
+                if guard_boolean is False:
+                    continue
+                wildcard = (
+                    isinstance(case.pattern, ast.MatchAs)
+                    and case.pattern.pattern is None
+                    and case.pattern.name is None
+                )
+                boolean_pattern = (
+                    case.pattern.value
+                    if isinstance(case.pattern, ast.MatchSingleton)
+                    and type(case.pattern.value) is bool
+                    else None
+                )
+                statically_selected = subject_boolean is not None and (
+                    wildcard or boolean_pattern is subject_boolean
+                )
+                if subject_boolean is not None and not statically_selected:
+                    continue
+                if wildcard and len(statement.cases) == 1:
+                    statically_selected = True
+                if statically_selected:
+                    case_effects, _ = statement_block_effects(
+                        case.body,
+                        controls,
+                        via,
+                        parameter_bindings,
+                        call_stack,
+                    )
+                    effects.extend(case_effects)
+                    break
+                case_controls = (
+                    *controls,
+                    [
+                        "match",
+                        subject,
+                        index,
+                        _normalized_egress_expression(case.pattern),
+                        None
+                        if case.guard is None or guard_boolean is True
+                        else normalized_control(case.guard, parameter_bindings),
+                    ],
+                )
+                if case.guard is not None:
+                    effects.extend(
+                        expression_effects(
+                            case.guard,
+                            case_controls,
+                            via,
+                            parameter_bindings,
+                            call_stack,
+                        )
+                    )
+                case_effects, _ = statement_block_effects(
+                    case.body,
+                    case_controls,
+                    via,
+                    parameter_bindings,
+                    call_stack,
+                )
+                effects.extend(case_effects)
+            return effects
+        fallback_effects: list[Effect] = []
+        for child in ast.iter_child_nodes(statement):
+            if isinstance(child, ast.expr):
+                fallback_effects.extend(
+                    expression_effects(
+                        child,
+                        controls,
+                        via,
+                        parameter_bindings,
+                        call_stack,
+                    )
+                )
+            elif isinstance(child, ast.stmt):
+                nested, _ = statement_block_effects(
+                    (child,),
+                    controls,
+                    via,
+                    parameter_bindings,
+                    call_stack,
+                )
+                fallback_effects.extend(nested)
+        return fallback_effects
+
+    def terminal_kind(statements: Sequence[ast.stmt]) -> str | None:
+        if not statements:
+            return None
+        final = statements[-1]
+        if isinstance(final, ast.Return):
+            return "return"
+        if isinstance(final, ast.Break):
+            return "break"
+        if isinstance(final, ast.Continue):
+            return "continue"
+        return None
+
+    def statement_block_effects(
+        statements: Sequence[ast.stmt],
+        controls: tuple[Any, ...],
+        via: tuple[Any, ...],
+        parameter_bindings: Mapping[str, ast.AST],
+        call_stack: frozenset[ast.AST],
+    ) -> tuple[list[Effect], str | None]:
+        effects: list[Effect] = []
+        active_controls = controls
+        for statement in statements:
+            effects.extend(
+                statement_effects(
+                    statement,
+                    active_controls,
+                    via,
+                    parameter_bindings,
+                    call_stack,
+                )
+            )
+            if isinstance(statement, (ast.Return, ast.Break, ast.Continue)):
+                return effects, type(statement).__name__.lower()
+            if not isinstance(statement, ast.If):
+                continue
+            constant = proven_boolean(statement.test, parameter_bindings)
+            body_terminal = terminal_kind(statement.body)
+            else_terminal = terminal_kind(statement.orelse)
+            if constant is not None:
+                selected_terminal = body_terminal if constant else else_terminal
+                if selected_terminal is not None:
+                    return effects, selected_terminal
+                continue
+            if body_terminal is not None and else_terminal is not None:
+                return effects, body_terminal
+            terminal = body_terminal or else_terminal
+            if terminal is not None:
+                active_controls = (
+                    *active_controls,
+                    [
+                        "early-exit",
+                        terminal,
+                        normalized_control(statement.test, parameter_bindings),
+                        "else" if body_terminal is not None else "body",
+                    ],
+                )
+        return effects, None
+
+    helper_edges: dict[ast.AST, set[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+    for helper_call, helper_target in local_helper_calls.items():
+        helper_edges.setdefault(scope_for(helper_call), set()).add(helper_target)
+
+    for _ in range(len(functions) + 1):
+        newly_relevant = {
+            caller
+            for caller, targets in helper_edges.items()
+            if targets & relevant_fixed_scopes
+        }
+        before = len(relevant_fixed_scopes)
+        relevant_fixed_scopes.update(newly_relevant)
+        if len(relevant_fixed_scopes) == before:
+            break
+
+    roots: list[ast.Module | ast.FunctionDef | ast.AsyncFunctionDef] = []
+    if tree in relevant_fixed_scopes:
+        roots.append(tree)
+    function_roots = [
+        function
+        for function in functions
+        if function in relevant_fixed_scopes and function not in called_local_functions
+    ]
+    roots.extend(function_roots)
+    covered_functions: set[ast.FunctionDef | ast.AsyncFunctionDef] = set()
+
+    def cover_helpers(start: ast.AST) -> None:
+        pending = list(helper_edges.get(start, set()))
+        while pending:
+            pending_target = pending.pop()
+            if pending_target in covered_functions:
+                continue
+            covered_functions.add(pending_target)
+            pending.extend(helper_edges.get(pending_target, set()))
+
+    cover_helpers(tree)
+    for function in function_roots:
+        covered_functions.add(function)
+        cover_helpers(function)
+    for function in sorted(functions, key=anchor):
+        if function not in relevant_fixed_scopes or function in covered_functions:
+            continue
+        roots.append(function)
+        covered_functions.add(function)
+        cover_helpers(function)
+    guarded_effects: list[Effect] = []
+    for analysis_root in roots:
+        root_effects, _ = statement_block_effects(
+            analysis_root.body,
+            (),
+            (),
+            {},
+            frozenset({analysis_root})
+            if not isinstance(analysis_root, ast.Module)
+            else frozenset(),
+        )
+        guarded_effects.extend(root_effects)
+    for record, controls, via in guarded_effects:
+        if not controls:
+            continue
+        guarded_record = dict(record)
+        guarded_record["control"] = list(controls)
+        if via:
+            guarded_record["via"] = list(via)
+        records.append(guarded_record)
     return tuple(
         sorted(
             records,
