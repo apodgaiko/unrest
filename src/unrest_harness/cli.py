@@ -11,8 +11,26 @@ from pathlib import Path
 import click
 
 from .assets import AssetLoader, iter_skill_directories
+from .capability_policy import (
+    SAFE_PROFILE,
+    UNSAFE_DEVELOPMENT_PROFILE,
+    CapabilityPolicyError,
+    credential_source_values,
+    enforce_persisted_environment_credential_provenance,
+    load_capability_policy,
+    profile_environment,
+    redact_sensitive_value,
+    validate_provider_support,
+)
 from .config import VALID_REASONING_EFFORTS, HarnessConfig
 from .envelope import render_task_list
+from .governance import (
+    GovernanceValidationError,
+    check_commit_message,
+    governance_report,
+    load_component_paths,
+    load_protected_surface_policy,
+)
 from .providers import (
     ProviderDefinition,
     ProviderSelection,
@@ -20,11 +38,14 @@ from .providers import (
     get_provider,
     provider_names_for_role,
 )
+from .repository_contract import (
+    RepositoryContractError,
+    check_repository,
+    find_repository_root,
+)
 from .storage import ProjectStore
 
 RUNTIME_ENV_FORWARD_ALLOWLIST = (
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_BASE_URL",
     "ANTHROPIC_MODEL",
     "ANTHROPIC_DEFAULT_SONNET_MODEL",
@@ -34,14 +55,12 @@ RUNTIME_ENV_FORWARD_ALLOWLIST = (
     "CLAUDE_CODE_EFFORT_LEVEL",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
     "CLAUDE_CODE_SUBAGENT_MODEL",
-    "GLM_API_KEY",
     "GLM_BASE_URL",
     "MAX_THINKING_TOKENS",
     "UNREST_WORKER_MODEL",
     "UNREST_WORKER_REASONING_EFFORT",
     "UNREST_VALIDATOR_REASONING_EFFORT",
     "UNREST_TERMINAL_REVIEWER_REASONING_EFFORT",
-    "ZAI_API_KEY",
     "ZAI_BASE_URL",
 )
 
@@ -51,6 +70,101 @@ USER_SCOPE_ORCHESTRATORS = ("claude", "codex")
 @click.group()
 def cli() -> None:
     """Unrest CLI — set up + inspect long-running coding projects."""
+
+
+# ---------------------------------------------------------------------------
+# governance checks
+# ---------------------------------------------------------------------------
+
+
+@cli.command("check-repository")
+def check_repository_cmd() -> None:
+    """Validate the canonical repository contract without changing the worktree."""
+    try:
+        root = find_repository_root(Path.cwd())
+        report = check_repository(root)
+    except RepositoryContractError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(report.render(), nl=False)
+
+
+@cli.command("check-governance")
+@click.option(
+    "--policy",
+    "policy_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--component-map",
+    "component_map_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option("--path", "paths", multiple=True)
+def check_governance_cmd(
+    policy_path: Path,
+    component_map_path: Path,
+    paths: tuple[str, ...],
+) -> None:
+    """Validate governance policy and print a deterministic resolution report."""
+    try:
+        policy = load_protected_surface_policy(policy_path)
+        component_paths = load_component_paths(component_map_path)
+        report = governance_report(policy, component_paths, paths)
+    except GovernanceValidationError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(json.dumps(report, indent=2, sort_keys=True))
+
+
+@cli.command("check-commit")
+@click.option(
+    "--message-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option("--changed-path", "changed_paths", multiple=True, required=True)
+@click.option(
+    "--policy",
+    "policy_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--component-map",
+    "component_map_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+def check_commit_cmd(
+    message_file: Path,
+    changed_paths: tuple[str, ...],
+    policy_path: Path,
+    component_map_path: Path,
+) -> None:
+    """Check conventional subject, governance trailers, and changed paths."""
+    try:
+        policy = load_protected_surface_policy(policy_path)
+        component_paths = load_component_paths(component_map_path)
+        result = check_commit_message(
+            message_file.read_text(encoding="utf-8"),
+            changed_paths=changed_paths,
+            policy=policy,
+            component_paths=component_paths,
+            repository_root=find_repository_root(policy_path.parent),
+        )
+    except GovernanceValidationError as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(
+        json.dumps(
+            {
+                "protected_surfaces": list(result.protected_surfaces),
+                "status": "ok",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +198,14 @@ def cli() -> None:
 @click.option("--worker-reasoning-effort", type=click.Choice(VALID_REASONING_EFFORTS), default=None)
 @click.option("--validator-reasoning-effort", type=click.Choice(VALID_REASONING_EFFORTS), default=None)
 @click.option("--terminal-reviewer-reasoning-effort", type=click.Choice(VALID_REASONING_EFFORTS), default=None)
+@click.option(
+    "--unsafe-development-unrestricted",
+    is_flag=True,
+    help=(
+        "DANGEROUS development-only opt-in: override the safe default, disable "
+        "provider sandbox/approvals, and grant unrestricted host capabilities."
+    ),
+)
 @click.option("--unrest-home", type=click.Path(), default=None)
 @click.option(
     "--scope",
@@ -106,6 +228,7 @@ def init(
     worker_reasoning_effort: str | None,
     validator_reasoning_effort: str | None,
     terminal_reviewer_reasoning_effort: str | None,
+    unsafe_development_unrestricted: bool,
     unrest_home: str | None,
     scope: str,
     workspace_dir: str | None,
@@ -116,19 +239,62 @@ def init(
     User scope registers Unrest and installs its assets once for every workspace
     in Claude Code or Codex. In both scopes, the project bucket is created lazily
     by `start_project` at the first MCP call.
+
+    Safe default: Claude permissions.defaultMode=default; Codex
+    sandbox_mode=workspace-write and approval_policy=on-request. Only
+    --unsafe-development-unrestricted opts into unrestricted development mode.
     """
-    config = HarnessConfig.discover()
-    loader = AssetLoader(config)
-    selection = _resolve_selection(
-        agent=agent,
-        orchestrator=orchestrator_provider,
-        worker=worker_provider,
-        worker_acp_command=worker_acp_command,
-        validator=validator_provider,
-        validator_acp_command=validator_acp_command,
-        terminal_reviewer=terminal_reviewer_provider,
-        terminal_reviewer_acp_command=terminal_reviewer_acp_command,
+    capability_profile = (
+        UNSAFE_DEVELOPMENT_PROFILE
+        if unsafe_development_unrestricted
+        else SAFE_PROFILE
     )
+    try:
+        config = HarnessConfig.discover()
+        loader = AssetLoader(config)
+        selection = _resolve_selection(
+            agent=agent,
+            orchestrator=orchestrator_provider,
+            worker=worker_provider,
+            worker_acp_command=worker_acp_command,
+            validator=validator_provider,
+            validator_acp_command=validator_acp_command,
+            terminal_reviewer=terminal_reviewer_provider,
+            terminal_reviewer_acp_command=terminal_reviewer_acp_command,
+        )
+        policy = load_capability_policy(config.bundled_dir)
+        role_providers = {
+            "orchestrator": selection.orchestrator,
+            "worker": selection.worker,
+            "validator": selection.resolved_validation_worker,
+            "terminal_reviewer": selection.resolved_terminal_reviewer,
+        }
+        role_policies = {
+            role: validate_provider_support(
+                provider,
+                role=role,  # type: ignore[arg-type]
+                policy=policy,
+                profile=capability_profile,
+            )
+            for role, provider in role_providers.items()
+        }
+        declared_credential_names = tuple(
+            sorted(
+                {
+                    name
+                    for role_policy in role_policies.values()
+                    for name in role_policy.environment.credentials
+                    if name != "*"
+                }
+            )
+        )
+        credentials = credential_source_values(
+            os.environ,
+            declared_names=declared_credential_names,
+        )
+        capability_env = profile_environment(capability_profile)
+    except CapabilityPolicyError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if scope == "user":
         if workspace_dir is not None:
@@ -144,7 +310,13 @@ def init(
             workspace=Path.cwd(),
             selection=selection,
         )
-        _write_user_bootstrap_config(selection, storage_env)
+        _write_user_provider_capability_settings(selection, capability_profile)
+        _write_user_bootstrap_config(
+            selection,
+            {**storage_env, **capability_env},
+            capability_profile,
+            credentials,
+        )
         _setup_user_provider_assets(loader, selection.orchestrator)
         _echo_user_next_steps(selection)
         return
@@ -171,7 +343,19 @@ def init(
         if selection.worker.name != "codex":
             raise click.UsageError("--worker-model currently requires a Codex worker")
         effort_env["UNREST_WORKER_MODEL"] = worker_model
-    _write_bootstrap_config(workspace, selection, storage_env, effort_env)
+    _write_project_provider_capability_settings(
+        workspace,
+        selection.orchestrator,
+        capability_profile,
+    )
+    _write_bootstrap_config(
+        workspace,
+        selection,
+        storage_env,
+        {**effort_env, **capability_env},
+        capability_profile,
+        credentials,
+    )
 
     # 2) Per-provider agents + orchestrator prompt
     for provider in selection.providers():
@@ -373,6 +557,10 @@ def _resolve_selection(
         validation_worker=get_provider(validator) if validator else None,
         worker_acp_command=worker_acp_command,
         validation_worker_acp_command=validator_acp_command,
+        terminal_reviewer=(
+            get_provider(terminal_reviewer) if terminal_reviewer else None
+        ),
+        terminal_reviewer_acp_command=terminal_reviewer_acp_command,
     )
 
 
@@ -406,7 +594,9 @@ def _runtime_mcp_env() -> dict[str, str]:
         for key in ("PATH", "UV_CACHE_DIR")
         if (value := os.environ.get(key))
     }
-    if codex_path := (os.environ.get("CODEX_PATH") or shutil.which("codex")):
+    # Pin discovery from PATH; an ambient CODEX_PATH is a provider override and
+    # cannot broaden or redirect a newly generated safe configuration.
+    if codex_path := shutil.which("codex"):
         env["CODEX_PATH"] = codex_path
     return env
 
@@ -434,7 +624,45 @@ def _user_paths(provider: ProviderDefinition) -> tuple[Path, Path]:
     raise ValueError(f"user-scope paths are not defined for {provider.name}")
 
 
+def _write_project_provider_capability_settings(
+    workspace: Path,
+    provider: ProviderDefinition,
+    profile: str,
+) -> None:
+    if provider.name != "claude":
+        return
+    from .acp_runner import _ensure_claude_settings
+
+    _ensure_claude_settings(
+        workspace,
+        provider,
+        profile,
+        role="orchestrator",
+    )
+
+
+def _write_user_provider_capability_settings(
+    selection: ProviderSelection,
+    profile: str,
+) -> None:
+    provider = selection.orchestrator
+    if provider.name != "claude":
+        return
+    from .acp_runner import _ensure_claude_settings
+
+    settings_root, _ = _user_paths(provider)
+    _ensure_claude_settings(
+        settings_root.parent,
+        provider,
+        profile,
+        role="orchestrator",
+        settings_dir=settings_root,
+    )
+
+
 def _write_text_atomic(path: Path, text: str) -> None:
+    safe_text = redact_sensitive_value(text)
+    assert isinstance(safe_text, str)
     path.parent.mkdir(parents=True, exist_ok=True)
     previous_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
     temp_path: Path | None = None
@@ -446,7 +674,7 @@ def _write_text_atomic(path: Path, text: str) -> None:
             prefix=f".{path.name}.unrest-",
             delete=False,
         ) as handle:
-            handle.write(text)
+            handle.write(safe_text)
             temp_path = Path(handle.name)
         if previous_mode is not None:
             temp_path.chmod(previous_mode)
@@ -456,12 +684,19 @@ def _write_text_atomic(path: Path, text: str) -> None:
             temp_path.unlink()
 
 
-def _user_server_config(selection: ProviderSelection, storage_env: dict[str, str]) -> dict:
+def _user_server_config(
+    selection: ProviderSelection,
+    storage_env: dict[str, str],
+    credentials: dict[str, str] | None = None,
+) -> dict:
     return {
         "type": "stdio",
         "command": "unrest-server",
         "args": _mcp_server_args(),
-        "env": {**selection.env(), **storage_env},
+        "env": enforce_persisted_environment_credential_provenance(
+            {**selection.env(), **storage_env},
+            credentials or {},
+        ),
     }
 
 
@@ -469,6 +704,7 @@ def _write_claude_user_config(
     path: Path,
     selection: ProviderSelection,
     storage_env: dict[str, str],
+    credentials: dict[str, str],
 ) -> None:
     if path.exists():
         try:
@@ -484,7 +720,11 @@ def _write_claude_user_config(
         raise click.ClickException(
             f"Cannot update Claude config {path}: mcpServers must be an object"
         )
-    mcp_servers["unrest"] = _user_server_config(selection, storage_env)
+    mcp_servers["unrest"] = _user_server_config(
+        selection,
+        storage_env,
+        credentials,
+    )
     _write_text_atomic(path, json.dumps(existing, indent=2) + "\n")
     click.echo(f"Wrote {path}")
 
@@ -549,12 +789,107 @@ def _parse_managed_block_lines(
     return lines, (start_lines[0], end_lines[0])
 
 
+_CODEX_CAPABILITY_START = "# BEGIN unrest capability policy v1"
+_CODEX_CAPABILITY_END = "# END unrest capability policy v1"
+_LEGACY_CODEX_PREAMBLE = (
+    'model = "gpt-5.5"\n'
+    'sandbox_mode = "danger-full-access"\n'
+    'model_reasoning_effort = "xhigh"\n'
+    "[features]\n"
+    "memories = true\n"
+)
+
+
+def _apply_codex_capability_policy(text: str, profile: str, path: Path) -> str:
+    # The old project initializer emitted this exact preamble immediately
+    # before its managed MCP marker. Only that byte-identifiable legacy field
+    # is migrated; similar unmanaged user settings are never silently edited.
+    if _CODEX_CAPABILITY_START not in text and "# BEGIN unrest" in text:
+        before, marker, after = text.partition("# BEGIN unrest")
+        if before.rstrip().endswith(_LEGACY_CODEX_PREAMBLE.rstrip()):
+            legacy_start = before.rstrip().rfind(_LEGACY_CODEX_PREAMBLE.rstrip())
+            legacy = _LEGACY_CODEX_PREAMBLE.replace(
+                'sandbox_mode = "danger-full-access"\n',
+                "",
+            )
+            before = before.rstrip()[:legacy_start] + legacy
+            text = before.rstrip() + "\n" + marker + after
+
+    try:
+        lines, span = _parse_managed_block_lines(
+            text,
+            _CODEX_CAPABILITY_START,
+            _CODEX_CAPABILITY_END,
+        )
+    except ValueError as exc:
+        raise click.ClickException(f"Cannot update Codex config {path}: {exc}") from exc
+    unmanaged = text
+    if span is not None:
+        start_line, end_line = span
+        unmanaged = "".join(lines[:start_line] + lines[end_line + 1 :]).lstrip("\n")
+    try:
+        parsed = tomllib.loads(unmanaged)
+    except tomllib.TOMLDecodeError as exc:
+        raise click.ClickException(f"Cannot update invalid Codex config {path}: {exc}") from exc
+
+    sandbox = parsed.get("sandbox_mode")
+    approval = parsed.get("approval_policy")
+    if profile == SAFE_PROFILE:
+        if sandbox not in (None, "read-only", "workspace-write"):
+            raise click.ClickException(
+                f"Cannot update Codex config {path}: unmanaged sandbox_mode={sandbox!r} "
+                "is not safe; remove it or use the explicit "
+                "--unsafe-development-unrestricted opt-in"
+            )
+        if approval not in (None, "on-request", "untrusted"):
+            raise click.ClickException(
+                f"Cannot update Codex config {path}: unmanaged approval_policy={approval!r} "
+                "is not safe"
+            )
+        desired_sandbox = "workspace-write"
+        desired_approval = "on-request"
+    else:
+        if sandbox not in (None, "danger-full-access") or approval not in (None, "never"):
+            raise click.ClickException(
+                f"Cannot update Codex config {path}: unmanaged safe provider settings "
+                "conflict with the explicit unsafe development profile"
+            )
+        desired_sandbox = "danger-full-access"
+        desired_approval = "never"
+
+    # Safe user-owned settings remain user-owned. Unrest owns only whichever
+    # half of the required root authority pair is absent.
+    managed_settings: list[tuple[str, str]] = []
+    if sandbox is None:
+        managed_settings.append(("sandbox_mode", desired_sandbox))
+    if approval is None:
+        managed_settings.append(("approval_policy", desired_approval))
+    if not managed_settings:
+        return unmanaged
+    setting_lines = "".join(
+        f"{name} = {_toml_string(value)}\n"
+        for name, value in managed_settings
+    )
+    block = (
+        f"{_CODEX_CAPABILITY_START}\n"
+        f"{setting_lines}"
+        f"{_CODEX_CAPABILITY_END}\n"
+    )
+    updated = block
+    if unmanaged.strip():
+        updated += "\n" + unmanaged.lstrip("\n")
+    return updated
+
+
 def _write_codex_user_config(
     path: Path,
     selection: ProviderSelection,
     storage_env: dict[str, str],
+    capability_profile: str,
+    credentials: dict[str, str],
 ) -> None:
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    existing = _apply_codex_capability_policy(existing, capability_profile, path)
     try:
         tomllib.loads(existing)
     except tomllib.TOMLDecodeError as exc:
@@ -569,7 +904,11 @@ def _write_codex_user_config(
     if managed_span is None:
         existing = _strip_toml_tables(existing, ("mcp_servers", "unrest"))
 
-    server = _user_server_config(selection, storage_env)
+    server = _user_server_config(
+        selection,
+        storage_env,
+        credentials,
+    )
     env_lines = "\n".join(
         f"{key} = {_toml_string(value)}" for key, value in server["env"].items()
     )
@@ -608,12 +947,25 @@ def _write_codex_user_config(
 def _write_user_bootstrap_config(
     selection: ProviderSelection,
     storage_env: dict[str, str],
+    capability_profile: str,
+    credentials: dict[str, str],
 ) -> None:
     _, config_path = _user_paths(selection.orchestrator)
     if selection.orchestrator.name == "claude":
-        _write_claude_user_config(config_path, selection, storage_env)
+        _write_claude_user_config(
+            config_path,
+            selection,
+            storage_env,
+            credentials,
+        )
     elif selection.orchestrator.name == "codex":
-        _write_codex_user_config(config_path, selection, storage_env)
+        _write_codex_user_config(
+            config_path,
+            selection,
+            storage_env,
+            capability_profile,
+            credentials,
+        )
     else:
         raise ValueError(f"unsupported user-scope provider: {selection.orchestrator.name}")
 
@@ -665,6 +1017,8 @@ def _write_bootstrap_config(
     selection: ProviderSelection,
     storage_env: dict[str, str],
     cli_env: dict[str, str],
+    capability_profile: str,
+    credentials: dict[str, str],
 ) -> None:
     fmt = selection.orchestrator.config_format
     env = {
@@ -674,6 +1028,10 @@ def _write_bootstrap_config(
         **_runtime_mcp_env(),
         **cli_env,
     }
+    env = enforce_persisted_environment_credential_provenance(
+        env,
+        credentials,
+    )
     server_args = _mcp_server_args()
     if fmt == "mcp_json":
         path = workspace / ".mcp.json"
@@ -691,24 +1049,18 @@ def _write_bootstrap_config(
     elif fmt == "codex_config":
         config_path = workspace / ".codex" / "config.toml"
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        env_lines = "\n".join(f'{k} = "{v}"' for k, v in env.items())
-        legacy_preamble = (
-            'model = "gpt-5.5"\n'
-            'sandbox_mode = "danger-full-access"\n'
-            'model_reasoning_effort = "xhigh"\n'
-            '[features]\n'
-            'memories = true\n'
+        env_lines = "\n".join(
+            f"{key} = {_toml_string(value)}" for key, value in env.items()
         )
         existing_text = (
             config_path.read_text(encoding="utf-8") if config_path.exists() else ""
         )
-        before_marker = existing_text.partition("# BEGIN unrest")[0]
-        include_defaults = not existing_text.strip() or (
-            "# BEGIN unrest" in existing_text
-            and before_marker.rstrip().endswith(legacy_preamble.rstrip())
+        existing_text = _apply_codex_capability_policy(
+            existing_text,
+            capability_profile,
+            config_path,
         )
         block = (
-            f"{legacy_preamble if include_defaults else ''}"
             "# BEGIN unrest\n"
             "[mcp_servers.unrest]\n"
             'command = "unrest-server"\n'
@@ -720,13 +1072,19 @@ def _write_bootstrap_config(
             f"{env_lines}\n"
             "# END unrest\n"
         )
-        _replace_managed_block(
-            config_path,
+        updated = _replace_managed_block_text(
+            existing_text,
             "# BEGIN unrest",
             "# END unrest",
             block,
-            legacy_prefix=legacy_preamble if include_defaults else None,
         )
+        try:
+            tomllib.loads(updated)
+        except tomllib.TOMLDecodeError as exc:
+            raise click.ClickException(
+                f"Generated invalid Codex config for {config_path}: {exc}"
+            ) from exc
+        _write_text_atomic(config_path, updated)
         click.echo(f"Wrote {config_path}")
     else:
         raise ValueError(f"unsupported config_format: {fmt}")
@@ -740,22 +1098,18 @@ def _replace_managed_block_text(
     *,
     legacy_prefix: str | None = None,
 ) -> str:
-    if start in existing and end in existing:
-        before, _, tail = existing.partition(start)
-        _, _, after = tail.partition(end)
-        if legacy_prefix and before.rstrip().endswith(legacy_prefix.rstrip()):
-            before = before.rstrip()[: -len(legacy_prefix.rstrip())]
-        updated = before.rstrip()
-        if updated:
-            updated += "\n\n"
-        updated += block.rstrip() + "\n"
-        if after.strip():
-            updated += "\n" + after.lstrip("\n")
+    lines, span = _parse_managed_block_lines(existing, start, end)
+    if span is None:
+        remaining = existing
     else:
-        updated = existing.rstrip()
-        if updated:
-            updated += "\n\n"
-        updated += block.rstrip() + "\n"
+        start_line, end_line = span
+        remaining = "".join(lines[:start_line] + lines[end_line + 1 :])
+    if legacy_prefix and remaining.rstrip().endswith(legacy_prefix.rstrip()):
+        remaining = remaining.rstrip()[: -len(legacy_prefix.rstrip())]
+    updated = remaining.rstrip()
+    if updated:
+        updated += "\n\n"
+    updated += block.rstrip() + "\n"
     return updated
 
 

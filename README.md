@@ -19,7 +19,8 @@ Requirements:
 - Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/)
 - Node.js 22+ and `npm`
-- Claude Code, Codex, or Hermes
+- Claude Code or Codex as the orchestrator host
+- Optionally, Hermes for ACP child roles
 
 Clone the repository and install the Python environment:
 
@@ -55,18 +56,27 @@ the host after setup, then run:
 /unrest <your mission>
 ```
 
-Hermes and repository-local installations use project scope:
+Repository-local installations use project scope:
 
 ```bash
 uv run unrest init --scope project --workspace-dir /path/to/project --agent claude
 uv run unrest init --scope project --workspace-dir /path/to/project --agent codex
-uv run unrest init --scope project --workspace-dir /path/to/project --agent hermes
 ```
 
 Project scope is the default, so `--scope project` may be omitted. Start the
 selected host in the initialized workspace and give it the generated
 orchestrator prompt: `.claude/orchestrator_prompt.md`,
-`.codex/orchestrator_prompt.md`, or `.hermes/orchestrator_prompt.md`.
+or `.codex/orchestrator_prompt.md`.
+
+Hermes is supported for ACP child roles, not as an orchestrator host. Select it
+with `--worker-provider hermes`, `--validator-provider hermes`, or
+`--terminal-reviewer-provider hermes` while using Claude Code or Codex as the
+orchestrator. For example:
+
+```bash
+uv run unrest init --scope project --workspace-dir /path/to/project \
+  --agent claude --worker-provider hermes
+```
 
 ## How it works
 
@@ -87,6 +97,20 @@ Terminal review is bounded to 900 seconds by default. Set
 limit. A timeout stops the ACP reviewer and its MCP server, records a failed
 review, and leaves the mission unsealed for retry.
 
+## Safety and repository contracts
+
+Unrest resolves a versioned capability policy before starting any MCP or ACP
+role. The default `safe` profile limits filesystem, process, environment,
+credential, and approval authority; unrestricted development access requires
+the explicit `--unsafe-development-unrestricted` opt-in. Unsupported provider,
+role, policy, or profile combinations fail closed before mission work starts.
+
+Repository governance is executable rather than advisory. The public
+`check-repository`, `check-governance`, and `check-commit` commands validate
+protected surfaces, canonical schemas and metadata, generated baselines,
+documentation references, and capability-policy assets. CI also exercises the
+built wheel to prove packaged policy discovery and fail-closed startup.
+
 ## Why validation matters
 
 Tests can be green while the requested behavior is absent, incomplete, or only
@@ -106,15 +130,31 @@ is information for the next iteration, not paperwork to route around.
 
 ## Development
 
-Run the same checks as CI from the repository root:
+During a focused edit, run the narrow checks that exercise the changed behavior:
+
+```bash
+uv run pytest -q <focused-test-paths>
+uv run ruff check <changed-product-paths>
+uv run mypy <changed-typed-paths>
+```
+
+Run milestone checks from the repository root:
 
 ```bash
 uv sync --locked
 uv run ruff check .
 uv run mypy src
-uv run pytest -q
-uv build
+uv run unrest check-repository
+uv run pytest -q <milestone-test-paths>
 ```
+
+Record why a focused check type is inapplicable when necessary. A frozen
+release candidate runs the full source suite exactly once on Python 3.13 with
+`env -u CODEX_PATH uv run pytest -q`; Python 3.11 and 3.12 run lightweight
+compatibility checks. Changes to CLI entry points, bundled assets, package data,
+or MCP surfaces additionally run `uv build`,
+`uv run python tools/check_distribution.py dist`, and the installed-wheel
+lifecycle from an unrelated working directory.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.
 

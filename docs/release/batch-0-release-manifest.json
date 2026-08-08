@@ -1,0 +1,51 @@
+{
+  "base_sha": "9ebed0a9007289d419dae476f0dd582e8a21a550",
+  "branch": "codex/batch-0-recommended-fixes",
+  "contract_targets": [
+    "VAL-CAP-018",
+    "VAL-CAP-019",
+    "VAL-CAP-020",
+    "VAL-CAP-021",
+    "VAL-CAP-022",
+    "VAL-CAP-023",
+    "VAL-CAP-024",
+    "VAL-CAP-025",
+    "VAL-REL-015",
+    "VAL-REL-016",
+    "VAL-REL-018"
+  ],
+  "excluded_paths": [
+    ".validation/",
+    "validator-regressions/"
+  ],
+  "included_path_groups": [
+    ".github/workflows/ci.yml",
+    "docs/architecture/",
+    "docs/release/",
+    "evals/baseline/",
+    "evidence/batch-0/",
+    "policy/protected-surfaces.yaml",
+    "pyproject.toml",
+    "schemas/",
+    "specs/",
+    "src/unrest_harness/",
+    "tests/",
+    "uv.lock"
+  ],
+  "manifest_version": 1,
+  "mission_scope": "Batch 0 Mission-005 fixed-context control-dependent egress repair",
+  "release_evidence": ".unrest/missions/mission-005/attempts/2026-08-08T09-25-23Z__work-release-checkpoint-m5.md",
+  "release_gate_candidate": "8584ceb9ce7987d92521416396af1afe971647f4",
+  "release_gate_candidate_parent": "e591ab1ddb1f86fb86bd3a493cd30e579a9a9b4a",
+  "release_state": "release-records-bound-awaiting-final-head-ci-and-owner-approval",
+  "protected_categories": [
+    "capability-policy",
+    "coordinator-semantics",
+    "evaluation-holdouts",
+    "governance-self-protection",
+    "storage-migrations"
+  ],
+  "rollback_plan": "docs/release/batch-0-rollback.md",
+  "schema_compatibility": "No versioned wire or persisted schema version changes",
+  "task_id": "MISSION-005"
+}

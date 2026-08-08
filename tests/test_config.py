@@ -29,6 +29,7 @@ def test_discover_defaults_to_four_parallel_nodes(
     monkeypatch.setenv("UNREST_HOME", str(harness_home))
     monkeypatch.delenv("UNREST_PROJECTS_DIR", raising=False)
     monkeypatch.delenv("UNREST_MAX_PARALLEL_NODES", raising=False)
+    monkeypatch.delenv("UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS", raising=False)
 
     config = HarnessConfig.discover()
 
@@ -115,7 +116,7 @@ def test_discover_invalid_reasoning_effort_rejected(
     monkeypatch.setenv("UNREST_HOME", str(harness_home))
     _clear_effort_env(monkeypatch)
     # Not silently ignored: the value lands in a shell command line, and a
-    # typo'd downgrade would silently keep spending xhigh.
+    # A typo'd override would silently keep spending the medium default.
     monkeypatch.setenv("UNREST_VALIDATOR_REASONING_EFFORT", "extra-high")
 
     with pytest.raises(ValueError, match="UNREST_VALIDATOR_REASONING_EFFORT"):

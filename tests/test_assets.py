@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from unrest_harness.assets import AssetLoader, parse_frontmatter
+from unrest_harness.capability_policy import policy_path
 from unrest_harness.config import HarnessConfig
 from unrest_harness.models import ASSERTION_ID_REGEX
 
@@ -144,6 +145,15 @@ class TestAssetConsistency:
             "Bundled assets still reference removed example-* validator skills:\n"
             + "\n".join(offenders)
         )
+
+    def test_versioned_capability_policy_is_packaged_and_loadable(
+        self,
+        config: HarnessConfig,
+    ) -> None:
+        assert policy_path(config.bundled_dir).is_file()
+        policy = config.capability_policy
+        assert policy.schema_version == 1
+        assert policy.role("safe", "worker").process.enabled is True
 
     def test_no_stale_worker_base_refs(self) -> None:
         # `worker-base/SKILL.md` was removed; bundled assets must not load it

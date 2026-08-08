@@ -9,11 +9,15 @@ import argparse
 import asyncio
 import logging
 import os
-from typing import Annotated, Any
+from typing import Annotated, Any, Mapping
 
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
+from .capability_policy import (
+    SensitiveValueInventory,
+    deserialize_sensitive_value_inventory,
+)
 from .config import HarnessConfig
 from .controller import ProjectController, ToolError
 from .dispatcher import NodeDispatcher, TerminalReviewer
@@ -28,6 +32,23 @@ from .models import (
 from .storage import atomic_write_json
 
 logger = logging.getLogger(__name__)
+_SENSITIVE_INVENTORY_MAX_BYTES = 4 * 1024 * 1024
+
+
+def _read_sensitive_inventory_fd(fd: int | None) -> SensitiveValueInventory:
+    if fd is None:
+        return SensitiveValueInventory()
+    chunks: list[bytes] = []
+    size = 0
+    try:
+        while chunk := os.read(fd, min(65536, _SENSITIVE_INVENTORY_MAX_BYTES + 1 - size)):
+            chunks.append(chunk)
+            size += len(chunk)
+            if size > _SENSITIVE_INVENTORY_MAX_BYTES:
+                raise RuntimeError("sensitive inventory exceeds startup channel limit")
+    finally:
+        os.close(fd)
+    return deserialize_sensitive_value_inventory(b"".join(chunks))
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +61,7 @@ def create_orchestrator_server(
     controller: ProjectController | None = None,
 ) -> FastMCP:
     """7 orchestrator tools, registered on a stdio MCP server."""
+    config.validate_capability_support()
     if controller is None:
         from .dispatcher import MockDispatcher, MockTerminalReviewer
 
@@ -66,7 +88,9 @@ def create_orchestrator_server(
     return mcp
 
 
-def create_worker_server() -> FastMCP:
+def create_worker_server(
+    sensitive_inventory: Mapping[str, str] | None = None,
+) -> FastMCP:
     """1 worker tool. Configured at runtime via env: UNREST_NODE_TYPE,
     UNREST_NODE_ID, UNREST_HANDOFF_PATH.
     """
@@ -77,11 +101,13 @@ def create_worker_server() -> FastMCP:
             "Call exactly once before exiting."
         ),
     )
-    _register_worker_tools(mcp)
+    _register_worker_tools(mcp, sensitive_inventory=sensitive_inventory)
     return mcp
 
 
-def create_terminal_reviewer_server() -> FastMCP:
+def create_terminal_reviewer_server(
+    sensitive_inventory: Mapping[str, str] | None = None,
+) -> FastMCP:
     """1 reviewer tool. Configured via env: UNREST_TERMINAL_REVIEW_PATH."""
     mcp = FastMCP(
         name="unrest-terminal-reviewer",
@@ -90,7 +116,10 @@ def create_terminal_reviewer_server() -> FastMCP:
             "Call exactly once with the structured gap list."
         ),
     )
-    _register_terminal_reviewer_tools(mcp)
+    _register_terminal_reviewer_tools(
+        mcp,
+        sensitive_inventory=sensitive_inventory,
+    )
     return mcp
 
 
@@ -100,6 +129,8 @@ def create_terminal_reviewer_server() -> FastMCP:
 
 
 def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) -> None:
+    # SECURITY[SEC-MCP-001]: Lifecycle tools are registered only on the
+    # orchestrator server; worker and reviewer modes construct disjoint servers.
     # Per-project lock around mutating controller calls. The thread hop in each
     # tool prevents event-loop blocking, but two same-project tool calls could
     # otherwise race on disk state (attention, attempts, task-state, tasks).
@@ -322,7 +353,11 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
 # ---------------------------------------------------------------------------
 
 
-def _register_worker_tools(mcp: FastMCP) -> None:
+def _register_worker_tools(
+    mcp: FastMCP,
+    *,
+    sensitive_inventory: Mapping[str, str] | None = None,
+) -> None:
     @mcp.tool(
         name="end_node",
         description=(
@@ -386,7 +421,11 @@ def _register_worker_tools(mcp: FastMCP) -> None:
                 report=report,
                 request_attention=request_attention,
             )
-        atomic_write_json(handoff_path, handoff.model_dump(mode="json"))
+        atomic_write_json(
+            handoff_path,
+            handoff.model_dump(mode="json"),
+            inventory=sensitive_inventory,
+        )
         return {
             "recorded": True,
             "message": "Session complete, your job is done now; do not call further tools and just end your job now.",
@@ -398,7 +437,11 @@ def _register_worker_tools(mcp: FastMCP) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _register_terminal_reviewer_tools(mcp: FastMCP) -> None:
+def _register_terminal_reviewer_tools(
+    mcp: FastMCP,
+    *,
+    sensitive_inventory: Mapping[str, str] | None = None,
+) -> None:
     @mcp.tool(
         name="submit_terminal_review",
         description=(
@@ -423,7 +466,11 @@ def _register_terminal_reviewer_tools(mcp: FastMCP) -> None:
                 "UNREST_TERMINAL_REVIEW_PATH not set in terminal-reviewer env"
             )
         review = TerminalReviewHandoff(done=done, report=report)
-        atomic_write_json(path, review.model_dump(mode="json"))
+        atomic_write_json(
+            path,
+            review.model_dump(mode="json"),
+            inventory=sensitive_inventory,
+        )
         return {
             "recorded": True,
             "message": "Terminal review submitted; do not call further tools.",
@@ -464,34 +511,29 @@ def main() -> None:
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0)  # 0 → ephemeral
+    parser.add_argument("--sensitive-inventory-fd", type=int, default=None)
     args = parser.parse_args()
 
     if args.mode == "orchestrator":
         config = HarnessConfig.discover()
-        # Production: wire the ACP dispatcher from acp_runner.
-        dispatcher: NodeDispatcher
-        reviewer: TerminalReviewer
-        try:
-            from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer  # noqa: PLC0415
+        # Capability/provider failures are startup errors. They must never
+        # enter the diagnostic mock path because that would hide a denied
+        # child profile behind apparently working lifecycle tools.
+        config.validate_capability_support()
+        from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer  # noqa: PLC0415
 
-            dispatcher = ACPNodeDispatcher(config)
-            reviewer = ACPTerminalReviewer(config)
-        except Exception as exc:  # pragma: no cover — diagnostic
-            logger.warning("Falling back to no-op dispatcher: %s", exc)
-            from .dispatcher import MockDispatcher, MockTerminalReviewer  # noqa: PLC0415
-
-            dispatcher = MockDispatcher(
-                lambda r: WorkHandoff(
-                    node_id=r.task.id, done=False, report="no ACP runtime available"
-                )
-            )
-            reviewer = MockTerminalReviewer(TerminalReviewHandoff(done=True, report=""))
+        dispatcher: NodeDispatcher = ACPNodeDispatcher(config)
+        reviewer: TerminalReviewer = ACPTerminalReviewer(config)
         controller = ProjectController(config, dispatcher, reviewer)
         server = create_orchestrator_server(config, controller)
     elif args.mode == "worker":
-        server = create_worker_server()
+        server = create_worker_server(
+            _read_sensitive_inventory_fd(args.sensitive_inventory_fd)
+        )
     else:
-        server = create_terminal_reviewer_server()
+        server = create_terminal_reviewer_server(
+            _read_sensitive_inventory_fd(args.sensitive_inventory_fd)
+        )
 
     if args.transport == "stdio":
         server.run(transport="stdio")

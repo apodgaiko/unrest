@@ -1,0 +1,10 @@
+docs(governance): document change controls
+
+Task-ID: B0-T3
+Contract-Targets: VAL-GOV-001, VAL-GOV-002
+Decision-IDs: none
+Protected-Surfaces: governance-self-protection
+Human-Reviewers: maintainer
+Evaluation-Evidence: evidence/batch-0/evaluation.json
+Schema-Change: none
+Rollback-Plan: docs/release/batch-0-rollback.md

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from unrest_harness.capability_policy import credential_source_values
 from unrest_harness.config import HarnessConfig
 from unrest_harness.models import (
     AttentionItemInternal,
@@ -292,6 +293,31 @@ class TestTaskState:
 
 
 class TestAttempts:
+    def test_explicit_inventory_redacts_json_and_markdown_mirrors(
+        self, store: ProjectStore, workspace: Path
+    ) -> None:
+        store.create_project("brief", workspace, project_id="p1")
+        secret = "plum"
+        inventory = credential_source_values(
+            {"DECLARED_AUTH": secret},
+            declared_names=("DECLARED_AUTH",),
+        )
+        handoff = WorkHandoff(node_id="w1", done=True, report=secret)
+        ts = utc_now_filesafe()
+        json_path = store.save_attempt(
+            "p1",
+            "mission-001",
+            ts,
+            "w1",
+            handoff,
+            inventory=inventory,
+        )
+        md_path = store.attempt_report_path("p1", "mission-001", ts, "w1")
+        for path in (json_path, md_path):
+            persisted = path.read_text(encoding="utf-8")
+            assert secret not in persisted
+            assert "<redacted:DECLARED_AUTH>" in persisted
+
     def test_roundtrip_work(
         self, store: ProjectStore, workspace: Path
     ) -> None:
@@ -410,6 +436,30 @@ class TestDecisions:
 
 
 class TestTerminalReviews:
+    def test_explicit_inventory_redacts_json_and_markdown_mirrors(
+        self, store: ProjectStore, workspace: Path
+    ) -> None:
+        store.create_project("brief", workspace, project_id="p1")
+        secret = "plum"
+        inventory = credential_source_values(
+            {"DECLARED_AUTH": secret},
+            declared_names=("DECLARED_AUTH",),
+        )
+        review = TerminalReviewHandoff(done=True, report=secret)
+        ts = utc_now_filesafe()
+        md_path = store.save_terminal_review(
+            "p1",
+            "mission-001",
+            ts,
+            review,
+            inventory=inventory,
+        )
+        json_path = store.terminal_review_path("p1", "mission-001", ts)
+        for path in (json_path, md_path):
+            persisted = path.read_text(encoding="utf-8")
+            assert secret not in persisted
+            assert "<redacted:DECLARED_AUTH>" in persisted
+
     def test_save_and_path(
         self, store: ProjectStore, workspace: Path
     ) -> None:

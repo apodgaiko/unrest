@@ -1,0 +1,202 @@
+{
+  "approved_commit": "9ebed0a9007289d419dae476f0dd582e8a21a550",
+  "checks": {
+    "all_fixtures_classified": true,
+    "kickoff_base_matches": true,
+    "known_defects_not_intended": true,
+    "provider_independent": true,
+    "secret_values_serialized": false,
+    "unknown_fields_rejected": true
+  },
+  "contract_coverage": {
+    "VAL-BASE-001": [
+      "BASE-MODELS-001"
+    ],
+    "VAL-BASE-002": [
+      "BASE-STORAGE-001",
+      "BASE-STORAGE-002",
+      "BASE-STORAGE-LEGACY-001"
+    ],
+    "VAL-BASE-003": [
+      "BASE-GATE-001"
+    ],
+    "VAL-BASE-004": [
+      "BASE-SCHEDULER-LEGACY-001",
+      "BASE-SCHEDULER-DEFECT-001",
+      "BASE-CAPABILITY-DEFECT-001"
+    ],
+    "VAL-BASE-005": [
+      "BASE-RESUME-001"
+    ],
+    "VAL-BASE-006": [
+      "BASE-TERMINAL-001"
+    ]
+  },
+  "fixtures": [
+    {
+      "classification": "observed_legacy",
+      "fixture_id": "BASE-STORAGE-LEGACY-001",
+      "path": "fixtures/attempt-kind-heuristic.json",
+      "sha256": "2fb9308fe1c1cc852c6384d7ddf60f4306f7204dc961f44a54c383a3cd776940"
+    },
+    {
+      "classification": "intended",
+      "fixture_id": "BASE-STORAGE-002",
+      "path": "fixtures/attempts-decisions-terminal-storage.json",
+      "sha256": "08d87176da967cb1e3db43e708d17acfc9b235dff381dd1dc61da3e025daacfb"
+    },
+    {
+      "classification": "observed_legacy",
+      "fixture_id": "BASE-SCHEDULER-LEGACY-001",
+      "path": "fixtures/blocking-scheduler-selection.json",
+      "sha256": "6c7389d1e0d75f6babdcaa3c9da391f66f7c4903cedeff86cc6e1f247005b6fe"
+    },
+    {
+      "classification": "known_defect",
+      "fixture_id": "BASE-SCHEDULER-DEFECT-001",
+      "path": "fixtures/concurrent-writers.json",
+      "sha256": "2dddd4f318164990cb587916c1555c15d64c5ee5c348f810d7ba5311585992dc"
+    },
+    {
+      "classification": "intended",
+      "fixture_id": "BASE-GATE-001",
+      "path": "fixtures/gate-aggregation.json",
+      "sha256": "2ab103840e21fae3916d84228dbfd882774f15d5d9f9048d5984367974b28b15"
+    },
+    {
+      "classification": "known_defect",
+      "fixture_id": "BASE-CAPABILITY-DEFECT-001",
+      "path": "fixtures/implicit-unrestricted-defaults.json",
+      "sha256": "c657d89ccf52f54234113330707ef05681f08372fc16034bac263fbb10eba931"
+    },
+    {
+      "classification": "intended",
+      "fixture_id": "BASE-RESUME-001",
+      "path": "fixtures/resume-reconciliation.json",
+      "sha256": "b7c3185211e867cb377781c7dbe98d60225f06cf9d4c6a8cd1470f3ff3199785"
+    },
+    {
+      "classification": "intended",
+      "fixture_id": "BASE-STORAGE-001",
+      "path": "fixtures/storage-state.json",
+      "sha256": "3830b4919cb4ce16caaa8f6cadc08449a32146f37f20da6738f0b9be51fb9378"
+    },
+    {
+      "classification": "intended",
+      "fixture_id": "BASE-TERMINAL-001",
+      "path": "fixtures/terminal-review-closure.json",
+      "sha256": "6a0ccba32ec7bf1ebf31de57ed21ae53b0d93de273aaf167bafa7db48ca941e0"
+    },
+    {
+      "classification": "intended",
+      "fixture_id": "BASE-MODELS-001",
+      "path": "fixtures/typed-handoffs-and-task-list.json",
+      "sha256": "d3a1e0fc4906fccafc64826c766f0151542856daee1a4d5d4f42fc1070f1909c"
+    }
+  ],
+  "manifest_sha256": "2764c4041fce4e49f22ee2a628184d0047588fd175bbffc4cd2c3e328db21ae5",
+  "report_id": "BATCH-0-BASELINE",
+  "scenario_results": {
+    "gate": {
+      "dissent": {
+        "attention_kind": "gate_failed",
+        "gate_status": "failed",
+        "result": "attention_needed"
+      },
+      "missing": {
+        "attention_kind": "gate_failed",
+        "gate_status": "failed",
+        "result": "attention_needed"
+      },
+      "success": {
+        "attention_kind": "gate_checkpoint",
+        "gate_status": "cleared",
+        "result": "attention_needed"
+      }
+    },
+    "resume": {
+      "attempt_and_cursor_missing": {
+        "attention_kinds": [
+          "node_failed"
+        ],
+        "contract_status": "pending",
+        "result": {
+          "detail": "resume_attention",
+          "kind": "attention_needed"
+        },
+        "task_status": "failed"
+      },
+      "attempt_landed": {
+        "attention_kinds": [],
+        "contract_status": "pending",
+        "result": {
+          "detail": "reconciled pending attempts",
+          "kind": "advanced"
+        },
+        "task_status": "cleared"
+      },
+      "attempt_missing": {
+        "attention_kinds": [
+          "node_failed"
+        ],
+        "contract_status": "pending",
+        "result": {
+          "detail": "resume_attention",
+          "kind": "attention_needed"
+        },
+        "task_status": "failed"
+      }
+    },
+    "scheduler": {
+      "overlap_observed": true,
+      "selected": [
+        "work-b",
+        "work-a"
+      ]
+    },
+    "terminal_review": {
+      "crash": {
+        "attention_kinds": [
+          "terminal_review"
+        ],
+        "closeout_written": false,
+        "result": {
+          "detail": "terminal_review_crash",
+          "kind": "attention_needed"
+        }
+      },
+      "false": {
+        "attention_kinds": [
+          "terminal_review"
+        ],
+        "closeout_written": false,
+        "result": {
+          "detail": "terminal_review",
+          "kind": "attention_needed"
+        }
+      },
+      "success": {
+        "attention_kinds": [],
+        "closeout_written": true,
+        "result": {
+          "detail": "done",
+          "kind": "terminal"
+        }
+      }
+    }
+  },
+  "scheduler_boundary": {
+    "characterized_fixture": "BASE-SCHEDULER-DEFECT-001",
+    "classification": "known_defect",
+    "repaired_scheduler_oracle": "VAL-SCHED-*"
+  },
+  "schema_version": 1,
+  "summary": {
+    "classifications": {
+      "intended": 6,
+      "known_defect": 2,
+      "observed_legacy": 2
+    },
+    "fixture_count": 10
+  }
+}

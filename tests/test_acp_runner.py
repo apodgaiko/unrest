@@ -1,9 +1,9 @@
 """ACP runner adaptation tests — direct-to-PROJECT handoff path discipline.
 
-We don't run a real `claude-agent-acp` here; we use the bundled
-`mock_acp_agent.py` to exercise the ACP client + the handoff polling
-mechanic. The worker MCP server subprocess is bypassed: the mock agent
-writes directly to UNREST_HANDOFF_PATH itself.
+Most tests use the bundled ``mock_acp_agent.py`` rather than a live provider.
+The startup-channel regression runs the real worker/reviewer MCP subprocesses;
+the other mock-agent tests bypass those subprocesses and write the handoff
+directly.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from fastmcp import Client
 
 from unrest_harness.acp_runner import (
     ACPTerminalReviewer,
@@ -24,11 +25,30 @@ from unrest_harness.acp_runner import (
     _acp_subprocess_env,
     _augment_acp_command,
 )
+from unrest_harness.capability_policy import (
+    SAFE_PROFILE,
+    credential_values,
+    load_capability_policy,
+    resolve_role_capability,
+)
 from unrest_harness.providers import PROVIDERS
 from unrest_harness.assets import AssetLoader
 from unrest_harness.config import HarnessConfig
 from unrest_harness.models import Task, TerminalReviewHandoff, WorkHandoff
 from unrest_harness.storage import ProjectStore
+
+
+def _safe_policy(provider_name: str):
+    root = Path(__file__).resolve().parents[1]
+    bundled = root / "src" / "unrest_harness" / "bundled"
+    return resolve_role_capability(
+        PROVIDERS[provider_name],  # type: ignore[index]
+        role="worker",
+        policy=load_capability_policy(bundled),
+        profile=SAFE_PROFILE,
+        workspace=root,
+        project_record=root,
+    )
 
 
 @pytest.fixture
@@ -62,6 +82,141 @@ def project_setup(config: HarnessConfig, workspace: Path):
     contract_dir = store.ensure_contract_dir("p1", "mission-001")
     (contract_dir / "VAL-001.md").write_text("# VAL-001\n\nTest.\n")
     return store
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ("worker", "terminal-reviewer"))
+async def test_real_mcp_inventory_fd_redacts_before_crash_and_restart(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    """The private startup FD protects the first durable write, before cleanup."""
+    secret_name = "ANTHROPIC_API_KEY"
+    secret = "plum"
+    monkeypatch.setenv(secret_name, secret)
+
+    store = ProjectStore(config)
+    store.create_project("brief", workspace, project_id=f"p-{mode}")
+    project_id = f"p-{mode}"
+    mission_id = "mission-001"
+    spawn_ts = "2026-08-03T00-00-00Z"
+    runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
+    role = "worker" if mode == "worker" else "terminal_reviewer"
+    policy = resolve_role_capability(
+        PROVIDERS["claude"],
+        role=role,  # type: ignore[arg-type]
+        policy=load_capability_policy(config.bundled_dir),
+        profile=SAFE_PROFILE,
+        workspace=workspace,
+        project_record=store.unrest_dir(project_id),
+    )
+    inventory = credential_values(policy, {secret_name: os.environ[secret_name]})
+    assert inventory == {secret_name: secret}
+
+    mcp_port = runner._find_free_port()
+    base_environment = {
+        "LANG": "C",
+        "PATH": os.environ["PATH"],
+        "UNREST_HOME": str(config.harness_home),
+        "UNREST_MISSION_ID": mission_id,
+        "UNREST_PROJECT_ID": project_id,
+    }
+    if mode == "worker":
+        artifact_path = store.attempt_path(
+            project_id, mission_id, spawn_ts, "w-secret"
+        )
+        base_environment.update(
+            {
+                "UNREST_HANDOFF_PATH": str(artifact_path),
+                "UNREST_NODE_ID": "w-secret",
+                "UNREST_NODE_TYPE": "work",
+            }
+        )
+        process = await runner._start_worker_mcp_server(
+            task=Task(
+                id="w-secret",
+                type="work",
+                body="persist",
+                targets=["VAL-001"],
+                skill="s",
+            ),
+            project_id=project_id,
+            mission_id=mission_id,
+            handoff_path=str(artifact_path),
+            workspace_dir=str(workspace),
+            mcp_port=mcp_port,
+            sensitive_inventory=inventory,
+            environment=base_environment,
+        )
+        tool_name = "end_node"
+    else:
+        artifact_path = store.terminal_review_path(
+            project_id, mission_id, spawn_ts
+        )
+        base_environment["UNREST_TERMINAL_REVIEW_PATH"] = str(artifact_path)
+        process = await runner._start_terminal_reviewer_mcp(
+            project_id=project_id,
+            mission_id=mission_id,
+            report_path=str(artifact_path),
+            workspace_dir=str(workspace),
+            mcp_port=mcp_port,
+            sensitive_inventory=inventory,
+            environment=base_environment,
+        )
+        tool_name = "submit_terminal_review"
+
+    stderr = b""
+    try:
+        await runner._wait_for_server_ready("127.0.0.1", mcp_port)
+        async with Client(f"http://127.0.0.1:{mcp_port}/mcp") as client:
+            await client.call_tool(
+                tool_name,
+                {"done": True, "report": secret},
+            )
+
+            # This is the vulnerable window: the tool has returned, while both
+            # the MCP child and its parent-side runner cleanup are still live.
+            persisted = artifact_path.read_text(encoding="utf-8")
+            assert process.returncode is None
+            assert secret not in persisted
+            assert f"<redacted:{secret_name}>" in persisted
+    finally:
+        # Model a crash immediately after the successful handoff and prove the
+        # inherited FD child is actually terminated before restart recovery.
+        if process.returncode is None:
+            process.terminate()
+        _, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+    assert process.returncode is not None, stderr.decode(errors="replace")
+
+    restarted = ProjectStore(config)
+    if mode == "worker":
+        handoff = restarted.read_attempt(
+            project_id, mission_id, spawn_ts, "w-secret"
+        )
+        assert isinstance(handoff, WorkHandoff)
+        restarted.save_attempt(
+            project_id, mission_id, spawn_ts, "w-secret", handoff
+        )
+        mirror_path = restarted.attempt_report_path(
+            project_id, mission_id, spawn_ts, "w-secret"
+        )
+    else:
+        review = TerminalReviewHandoff.model_validate_json(
+            artifact_path.read_text(encoding="utf-8")
+        )
+        restarted.save_terminal_review(
+            project_id, mission_id, spawn_ts, review
+        )
+        mirror_path = restarted.terminal_review_report_path(
+            project_id, mission_id, spawn_ts
+        )
+
+    for path in (artifact_path, mirror_path):
+        persisted = path.read_text(encoding="utf-8")
+        assert secret not in persisted
+        assert f"<redacted:{secret_name}>" in persisted
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +257,7 @@ def test_run_node_with_mock_agent(config: HarnessConfig, project_setup, workspac
         async def _ready_immediately(*args, **kwargs):
             return None
 
+        runner._find_free_port = lambda: 0  # type: ignore[method-assign]
         runner._start_worker_mcp_server = _no_op_server  # type: ignore[method-assign]
         runner._wait_for_server_ready = _ready_immediately  # type: ignore[method-assign]
 
@@ -124,6 +280,186 @@ def test_run_node_with_mock_agent(config: HarnessConfig, project_setup, workspac
     assert handoff_path.exists()
     data = json.loads(handoff_path.read_text())
     assert data["node_id"] == "w1"
+
+
+@pytest.mark.parametrize("provider_name", ("claude", "codex", "hermes"))
+@pytest.mark.parametrize(
+    "task_type",
+    ("work", "validate"),
+    ids=("worker", "validator"),
+)
+def test_full_jobs_and_handoffs_preserve_complete_format_templates(
+    config: HarnessConfig,
+    project_setup,
+    mock_acp_command: str,
+    monkeypatch: pytest.MonkeyPatch,
+    provider_name: str,
+    task_type: str,
+) -> None:
+    template = (
+        "UNREST_FORMAT_TEST_custom:/v22/"
+        "{mapping[layout}mode]!s:^12}"
+        ";layout={mapping[layout{mode]!s:{width}}"
+        "?region={request.region!a}"
+        "#database={database}"
+    )
+    host_path = f"{template}:relative-tools:local-bin"
+    source_name = (
+        f"PAYMENTS_{provider_name}_{task_type}_DSN_TEMPLATE_URI_V21"
+    ).upper()
+    monkeypatch.setenv("LANG", "C")
+    monkeypatch.setenv("PATH", host_path)
+    monkeypatch.setenv(source_name, template)
+    monkeypatch.delenv("CODEX_PATH", raising=False)
+    role_config = replace(
+        config,
+        worker_provider_name=provider_name,
+        worker_acp_command=mock_acp_command,
+        validator_provider_name=provider_name,
+        validator_acp_command=mock_acp_command,
+    )
+    runner = ACPNodeRunner(
+        config=role_config,
+        loader=AssetLoader(role_config),
+    )
+    mcp_environments: list[dict[str, str]] = []
+
+    async def _no_op_server(*args, **kwargs):
+        mcp_environments.append(kwargs["environment"])
+        return await asyncio.create_subprocess_exec(
+            "/bin/sleep",
+            "30",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+    async def _ready_immediately(*args, **kwargs):
+        return None
+
+    runner._find_free_port = lambda: 0  # type: ignore[method-assign]
+    runner._start_worker_mcp_server = _no_op_server  # type: ignore[method-assign]
+    runner._wait_for_server_ready = _ready_immediately  # type: ignore[method-assign]
+    task = Task(
+        id=f"{provider_name}-{task_type}",
+        type=task_type,  # type: ignore[arg-type]
+        body="observe the environment",
+        targets=["VAL-001"],
+        skill="s",
+    )
+    spawn_ts = f"2026-07-29T05-00-00Z-{provider_name}-{task_type}"
+
+    handoff = asyncio.run(
+        runner.run_node(
+            project_id="p1",
+            mission_id="mission-001",
+            task=task,
+            spawn_ts=spawn_ts,
+            store=project_setup,
+        )
+    )
+    handoff_path = project_setup.attempt_path(
+        "p1",
+        "mission-001",
+        spawn_ts,
+        task.id,
+    )
+
+    assert handoff.done is True
+    assert template in handoff.report
+    assert template in handoff_path.read_text(encoding="utf-8")
+    assert len(mcp_environments) == 1
+    assert mcp_environments[0]["PATH"] == host_path
+
+
+@pytest.mark.parametrize("provider_name", ("claude", "codex", "hermes"))
+@pytest.mark.parametrize(
+    "task_type",
+    ("work", "validate"),
+    ids=("worker", "validator"),
+)
+def test_full_jobs_and_handoffs_filter_credentials_inside_format_fields(
+    config: HarnessConfig,
+    project_setup,
+    mock_acp_command: str,
+    monkeypatch: pytest.MonkeyPatch,
+    provider_name: str,
+    task_type: str,
+) -> None:
+    secret = f"v22-{provider_name}-{task_type}-format-ast-credential"
+    source_name = (
+        f"PAYMENTS_{provider_name}_{task_type}_FORMAT_DSN_TEMPLATE_URI_V22"
+    ).upper()
+    source_value = (
+        "custom:/v22"
+        f";render={{value:password={secret}}}"
+        f"?layout={{mapping[password={secret}]!s:^12}}"
+        f"#meta={{value:token={secret};width={{width}}}}"
+    )
+    monkeypatch.setenv("LANG", "C")
+    monkeypatch.setenv("PATH", f"{os.defpath}:{secret}")
+    monkeypatch.setenv(source_name, source_value)
+    monkeypatch.delenv("CODEX_PATH", raising=False)
+    role_config = replace(
+        config,
+        worker_provider_name=provider_name,
+        worker_acp_command=mock_acp_command,
+        validator_provider_name=provider_name,
+        validator_acp_command=mock_acp_command,
+    )
+    runner = ACPNodeRunner(
+        config=role_config,
+        loader=AssetLoader(role_config),
+    )
+    mcp_environments: list[dict[str, str]] = []
+
+    async def _no_op_server(*args, **kwargs):
+        mcp_environments.append(kwargs["environment"])
+        return await asyncio.create_subprocess_exec(
+            "/bin/sleep",
+            "30",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+    async def _ready_immediately(*args, **kwargs):
+        return None
+
+    runner._find_free_port = lambda: 0  # type: ignore[method-assign]
+    runner._start_worker_mcp_server = _no_op_server  # type: ignore[method-assign]
+    runner._wait_for_server_ready = _ready_immediately  # type: ignore[method-assign]
+    task = Task(
+        id=f"{provider_name}-{task_type}-format-credential",
+        type=task_type,  # type: ignore[arg-type]
+        body="observe the filtered environment",
+        targets=["VAL-001"],
+        skill="s",
+    )
+    spawn_ts = f"2026-07-29T08-00-00Z-{provider_name}-{task_type}"
+
+    handoff = asyncio.run(
+        runner.run_node(
+            project_id="p1",
+            mission_id="mission-001",
+            task=task,
+            spawn_ts=spawn_ts,
+            store=project_setup,
+        )
+    )
+    handoff_path = project_setup.attempt_path(
+        "p1",
+        "mission-001",
+        spawn_ts,
+        task.id,
+    )
+    persisted = handoff_path.read_text(encoding="utf-8")
+
+    assert handoff.done is True
+    assert secret not in handoff.report
+    assert secret not in persisted
+    assert source_value not in persisted
+    assert len(mcp_environments) == 1
+    assert "PATH" not in mcp_environments[0]
+    assert source_name not in mcp_environments[0]
 
 
 def test_synthesize_missing_handoff_records_failure(
@@ -158,22 +494,31 @@ def test_codex_acp_env_uses_documented_config_and_effort(
 ):
     monkeypatch.setenv("CODEX_CONFIG", '{"features":{"memories":true},"model":"kept"}')
 
-    env = _acp_subprocess_env(PROVIDERS["codex"], reasoning_effort="medium")
+    env = _acp_subprocess_env(
+        PROVIDERS["codex"],
+        policy=_safe_policy("codex"),
+        reasoning_effort="medium",
+    )
 
-    assert env["INITIAL_AGENT_MODE"] == "agent-full-access"
+    assert env["INITIAL_AGENT_MODE"] == "agent"
     assert json.loads(env["CODEX_CONFIG"]) == {
         "features": {"memories": True},
         "model": "kept",
         "model_reasoning_effort": "medium",
-        "sandbox_mode": "danger-full-access",
-        "approval_policy": "never",
+        "sandbox_mode": "workspace-write",
+        "approval_policy": "on-request",
     }
 
 
-def test_codex_acp_env_defaults_to_historical_xhigh(monkeypatch: pytest.MonkeyPatch):
+def test_codex_acp_env_defaults_to_medium(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("CODEX_CONFIG", raising=False)
-    config = json.loads(_acp_subprocess_env(PROVIDERS["codex"])["CODEX_CONFIG"])
-    assert config["model_reasoning_effort"] == "xhigh"
+    config = json.loads(
+        _acp_subprocess_env(
+            PROVIDERS["codex"],
+            policy=_safe_policy("codex"),
+        )["CODEX_CONFIG"]
+    )
+    assert config["model_reasoning_effort"] == "medium"
 
 
 def test_codex_acp_env_explicit_work_node_settings_win(
@@ -183,6 +528,7 @@ def test_codex_acp_env_explicit_work_node_settings_win(
     config = json.loads(
         _acp_subprocess_env(
             PROVIDERS["codex"],
+            policy=_safe_policy("codex"),
             reasoning_effort="high",
             model="project-model",
         )["CODEX_CONFIG"]
@@ -196,7 +542,10 @@ def test_codex_acp_env_malformed_inherited_config_fails_closed(
 ):
     monkeypatch.setenv("CODEX_CONFIG", "not-json")
     with pytest.raises(ValueError, match="CODEX_CONFIG must be a valid JSON object"):
-        _acp_subprocess_env(PROVIDERS["codex"])
+        _acp_subprocess_env(
+            PROVIDERS["codex"],
+            policy=_safe_policy("codex"),
+        )
 
 
 @pytest.mark.asyncio
@@ -251,7 +600,10 @@ def test_non_codex_env_removes_inherited_codex_controls(monkeypatch: pytest.Monk
     ):
         monkeypatch.setenv(key, "inherited")
 
-    env = _acp_subprocess_env(PROVIDERS["claude"])
+    env = _acp_subprocess_env(
+        PROVIDERS["claude"],
+        policy=_safe_policy("claude"),
+    )
 
     for key in (
         "CODEX_CONFIG",
@@ -274,11 +626,15 @@ def test_codex_acp_env_preserves_node_path_when_bwrap_is_present(
         path.chmod(0o755)
     monkeypatch.setenv("PATH", str(bin_dir))
 
-    env = _acp_subprocess_env(PROVIDERS["codex"])
+    env = _acp_subprocess_env(
+        PROVIDERS["codex"],
+        policy=_safe_policy("codex"),
+    )
 
     assert str(bin_dir) in env["PATH"].split(os.pathsep)
-    assert env["CODEX_SANDBOX"] == "danger-full-access"
-    assert env["CODEX_DISABLE_SANDBOX"] == "1"
+    assert env["INITIAL_AGENT_MODE"] == "agent"
+    assert "CODEX_SANDBOX" not in env
+    assert "CODEX_DISABLE_SANDBOX" not in env
 
 
 def test_codex_acp_env_prefers_installed_codex_runtime(
@@ -290,7 +646,10 @@ def test_codex_acp_env_prefers_installed_codex_runtime(
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.delenv("CODEX_PATH", raising=False)
 
-    env = _acp_subprocess_env(PROVIDERS["codex"])
+    env = _acp_subprocess_env(
+        PROVIDERS["codex"],
+        policy=_safe_policy("codex"),
+    )
 
     assert env["CODEX_PATH"] == str(codex)
 
@@ -375,7 +734,14 @@ async def test_terminal_review_timeout_cleans_acp_and_mcp_children(
     progress: list[str] = []
 
     class FakeClient:
-        def __init__(self, process, working_dir, session_update_handler=None) -> None:
+        def __init__(
+            self,
+            process,
+            working_dir,
+            policy=None,
+            terminal_environment=None,
+            session_update_handler=None,
+        ) -> None:
             self.session_update_handler = session_update_handler
 
         async def start(self) -> None:
@@ -414,7 +780,7 @@ async def test_terminal_review_timeout_cleans_acp_and_mcp_children(
     monkeypatch.setattr(runner, "_start_terminal_reviewer_mcp", fake_start_mcp)
     monkeypatch.setattr(runner, "_wait_for_server_ready", ready)
     monkeypatch.setattr(runner, "_find_free_port", lambda: 54321)
-    monkeypatch.setattr(asyncio, "create_subprocess_shell", fake_spawn)
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_spawn)
     monkeypatch.setattr(acp_runner_module, "ACPClient", FakeClient)
 
     handoff = await runner.run_terminal_review(

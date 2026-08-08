@@ -1,0 +1,251 @@
+{
+  "components": [
+    {
+      "decisions": [],
+      "id": "COMP-ACP",
+      "invariants": [
+        "ARCH-CONFIG-001"
+      ],
+      "paths": [
+        "src/unrest_harness/acp_runner.py",
+        "src/unrest_harness/providers.py"
+      ],
+      "specifications": [
+        "docs/v5/07-runtime-architecture.md",
+        "docs/v5/08-mcp-surface.md"
+      ],
+      "tests": [
+        "tests/test_acp_runner.py",
+        "tests/test_acp_sandbox.py",
+        "tests/test_smoke_parallel_acp.py",
+        "tests/test_smoke_real_acp.py",
+        "tests/test_smoke_zai_claude.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-ASSETS",
+      "invariants": [
+        "ARCH-ASSET-001"
+      ],
+      "paths": [
+        "src/unrest_harness/assets.py",
+        "src/unrest_harness/bundled/**/*"
+      ],
+      "specifications": [
+        "docs/v5/07-runtime-architecture.md"
+      ],
+      "tests": [
+        "tests/test_assets.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-BASELINE",
+      "invariants": [
+        "ARCH-BASELINE-001"
+      ],
+      "paths": [
+        "evals/baseline/**/*",
+        "src/unrest_harness/baseline.py"
+      ],
+      "specifications": [
+        "docs/v5/10-implementation-plan.md"
+      ],
+      "tests": [
+        "tests/test_baseline.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-CAPABILITY",
+      "invariants": [
+        "COMPAT-CAPABILITY-POLICY-001",
+        "SEC-CAPABILITY-001",
+        "SEC-SENSITIVITY-PROVENANCE-001"
+      ],
+      "paths": [
+        "docs/architecture/capability-policy.md",
+        "schemas/capability-security-model.schema.json",
+        "schemas/capability-sinks.schema.json",
+        "schemas/role-capabilities.schema.json",
+        "src/unrest_harness/acp_runner.py",
+        "src/unrest_harness/bundled/policies/capability-security-model.v1.json",
+        "src/unrest_harness/bundled/policies/capability-sinks.v1.json",
+        "src/unrest_harness/bundled/policies/role-capabilities.v1.json",
+        "src/unrest_harness/capability_policy.py",
+        "src/unrest_harness/cli.py",
+        "src/unrest_harness/config.py",
+        "src/unrest_harness/providers.py",
+        "src/unrest_harness/server.py"
+      ],
+      "specifications": [
+        "docs/architecture/capability-policy.md"
+      ],
+      "tests": [
+        "tests/test_capability_closed_model.py",
+        "tests/test_capability_policy.py",
+        "tests/test_capability_source_graph.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-CLI-CONFIG",
+      "invariants": [
+        "ARCH-CONFIG-001"
+      ],
+      "paths": [
+        "src/unrest_harness/cli.py",
+        "src/unrest_harness/config.py"
+      ],
+      "specifications": [
+        "docs/v5/07-runtime-architecture.md"
+      ],
+      "tests": [
+        "tests/test_cli.py",
+        "tests/test_config.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-COORDINATOR",
+      "invariants": [
+        "ARCH-CLOSURE-001",
+        "ARCH-DISPATCH-001",
+        "ARCH-GATE-001",
+        "ARCH-STATE-001"
+      ],
+      "paths": [
+        "src/unrest_harness/attention.py",
+        "src/unrest_harness/coordinator.py",
+        "src/unrest_harness/dispatcher.py"
+      ],
+      "specifications": [
+        "docs/v5/07-runtime-architecture.md",
+        "docs/v5/10-implementation-plan.md",
+        "specs/task_list/PRODUCT.md"
+      ],
+      "tests": [
+        "tests/test_coordinator.py",
+        "tests/test_coordinator_parallel.py",
+        "tests/test_runnable_selection.py",
+        "tests/test_terminal_review.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-GOVERNANCE",
+      "invariants": [
+        "ARCH-GOVERNANCE-001",
+        "COMPAT-SCHEMA-EVOLUTION-001",
+        "SEC-PROTECTED-REVIEW-001"
+      ],
+      "paths": [
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        "docs/architecture/change-governance.md",
+        "docs/templates/adr.md",
+        "policy/protected-surfaces.yaml",
+        "schemas/protected-surfaces.schema.json",
+        "src/unrest_harness/governance.py"
+      ],
+      "specifications": [
+        "docs/architecture/change-governance.md"
+      ],
+      "tests": [
+        "tests/test_governance.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-MCP",
+      "invariants": [
+        "ARCH-MCP-001",
+        "SEC-MCP-001"
+      ],
+      "paths": [
+        "src/unrest_harness/controller.py",
+        "src/unrest_harness/server.py"
+      ],
+      "specifications": [
+        "docs/v5/07-runtime-architecture.md",
+        "docs/v5/08-mcp-surface.md"
+      ],
+      "tests": [
+        "tests/test_server.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-REPOSITORY-CONTRACT",
+      "invariants": [
+        "ARCH-REPOSITORY-CONTRACT-001"
+      ],
+      "paths": [
+        ".github/workflows/ci.yml",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "README.md",
+        "docs/architecture/annotation-policy.json",
+        "docs/architecture/component-map.json",
+        "docs/architecture/evidence-policy.json",
+        "docs/architecture/historical-record-policy.json",
+        "docs/architecture/repository-contract.md",
+        "docs/architecture/template-heading-policy.json",
+        "pyproject.toml",
+        "src/unrest_harness/repository_contract.py",
+        "uv.lock"
+      ],
+      "specifications": [
+        "docs/architecture/repository-contract.md"
+      ],
+      "tests": [
+        "tests/test_repository_contract.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-STORAGE",
+      "invariants": [
+        "ARCH-STORAGE-001",
+        "ARCH-WRITE-001",
+        "SEC-REVIEW-ROOT-001"
+      ],
+      "paths": [
+        "src/unrest_harness/storage.py"
+      ],
+      "specifications": [
+        "docs/v5/07-runtime-architecture.md",
+        "specs/memory_v2/PRODUCT.md"
+      ],
+      "tests": [
+        "tests/test_storage.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-TASK-MODEL",
+      "invariants": [
+        "ARCH-TASK-001",
+        "COMPAT-ENVELOPE-001",
+        "COMPAT-PATCH-001"
+      ],
+      "paths": [
+        "src/unrest_harness/envelope.py",
+        "src/unrest_harness/models.py",
+        "src/unrest_harness/task_list_patch.py",
+        "src/unrest_harness/task_validation.py"
+      ],
+      "specifications": [
+        "specs/task_list/PRODUCT.md"
+      ],
+      "tests": [
+        "tests/test_envelope.py",
+        "tests/test_models.py",
+        "tests/test_supersede_chain.py",
+        "tests/test_task_list_patch.py",
+        "tests/test_task_validation.py"
+      ]
+    }
+  ],
+  "schema_version": 1
+}
