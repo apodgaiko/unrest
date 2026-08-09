@@ -149,7 +149,11 @@ uses one observation time, sorts projects, and preserves monitoring
 completeness by returning bounded per-project failure records instead of
 silently dropping malformed entries. Exactly one of `PROJECT_ID` and `--all`
 is required. `--stale-after-seconds` is a positive diagnostic threshold and
-defaults to 3600.
+defaults to 3600. `--strict` is an additive `--all` mode: it emits the same
+complete text or schema-v1 JSON payload, then exits 1 when any project failed;
+default degraded collections retain exit 0, and successful collections exit 0
+in either mode. Invalid ambient configuration closes as the value-free
+`invalid_configuration` Click diagnostic.
 
 The version-1 JSON object has these stable top-level fields, in addition to the
 version and identity fields: `persisted_state`, `derived_state`, `freshness`,
@@ -163,17 +167,38 @@ attempt identifiers. The `--all` object contains `schema_version`, one shared
 Before reading, every selected project and cursor path component is checked for
 containment, regular type, and absence of symbolic links. The observer compares
 one content capture with a post-read device/inode/size/mtime generation check
-and retries a changing snapshot at most three times. It therefore returns a
-stable coherent snapshot or a closed failure code such as `snapshot_changed`,
-`malformed_cursor`, or `unsafe_cursor`; it does not present a mixed cross-file
-read as authoritative. The operation creates no files and performs no
-reconciliation, recovery, dispatch, gate evaluation, or attention decision.
+and makes at most three snapshot attempts. Each selected regular file is capped
+at 4 MiB, the captured content total is capped at 16 MiB, at most 4,096 files or
+directory entries are selected, and traversal is capped at depth 6 relative to
+the project root. Selection and enumeration are bytewise sorted. A cursor that
+exceeds a file, total-byte, selected-file, or depth limit closes with the
+value-free `unsafe_cursor` code; an overfull or non-directory projects root
+closes with value-free `unsafe_project_path`. A generation that changes through
+all three attempts closes with `snapshot_changed`. The observer therefore
+returns a stable coherent snapshot or a closed failure code; it does not
+present a mixed cross-file read as authoritative. The operation creates no
+files and performs no reconciliation, recovery, dispatch, gate evaluation, or
+attention decision.
 
 The snapshot reports structural progress, task/status/type counts,
 attention-kind counts, ready gates, per-task dependency and attempt facts,
 anomalies, and one advisory shadow scheduler action. Active progress excludes
-superseded tasks. It deliberately does not emit an effort percentage, ETA,
+superseded tasks. Count category names and order come from the corresponding
+closed model literals, and every emitted count group reconciles to its source
+item total. It deliberately does not emit an effort percentage, ETA,
 completion projection, or inferred supervision state.
+
+Text display identifiers are at most 80 characters. Values requiring
+shortening or control-character normalization use a 16-hex SHA-256 suffix
+inside that bound. Every text line is at most 240 characters; large anomaly ID
+sets emit an exact total and `omitted=0`, followed by one bounded line per ID.
+
+Ready gates use authored task-list order, matching the coordinator's graph
+tie-break. When any task is marked running, the advisory action names the full
+authored-order reconciliation pass; per-task timing and anomaly facts retain
+the distinctions between completed, malformed, missing, stale, and
+cursor-mismatched attempts. A failed-task anomaly is suppressed per task only
+when an open attention cursor has that same mission and node identifier.
 
 Freshness fields are ages of named cursor or newest-input file modification
 times. Active-attempt elapsed time comes from the filename-safe dispatch cursor
@@ -189,7 +214,12 @@ environment values.
 
 The observation failure codebook is `invalid_format`, `invalid_project_id`,
 `invalid_stale_threshold`, `malformed_cursor`, `project_not_found`,
-`snapshot_changed`, `unsafe_cursor`, and `unsafe_project_path`. Runtime anomaly
+`non_current_mission`, `snapshot_changed`, `unsafe_cursor`, and
+`unsafe_project_path`. A supplied mission selector is current-only in schema
+version 1: the current mission is supported, a syntactically invalid selector
+is `malformed_cursor`, and any valid non-current or missing mission is
+`non_current_mission`; historical task, attention, and scheduler attribution is
+not attempted. Runtime anomaly
 codes are `mission_cursor_mismatch`, `failed_task_without_attention`,
 `running_without_attempt_id`, `attempt_cursor_mismatch`,
 `malformed_attempt_handoff`, `completed_attempt_unreconciled`, and

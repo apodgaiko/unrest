@@ -7,22 +7,27 @@ heartbeats or completion estimates.
 """
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import re
 import stat
 from collections import Counter
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from .models import (
     Aborted,
     AttentionFile,
+    AttentionItemInternal,
     AttentionNeeded,
+    ContractStateEntry,
+    ContractStateFile,
     Done,
     Draft,
     Failed,
@@ -33,12 +38,13 @@ from .models import (
     TASK_ID_REGEX,
     Task,
     TaskList,
+    TaskStateEntry,
     TaskStateFile,
-    ContractStateFile,
     WorkHandoff,
     ValidateHandoff,
 )
 from .storage import ProjectStore
+from .task_validation import gates_in_order
 
 
 DerivedRuntimeState = Literal[
@@ -59,6 +65,7 @@ ObservationFailureCode = Literal[
     "invalid_project_id",
     "invalid_stale_threshold",
     "malformed_cursor",
+    "non_current_mission",
     "project_not_found",
     "snapshot_changed",
     "unsafe_cursor",
@@ -112,17 +119,12 @@ ShadowReasonCode = Literal[
 
 PROJECT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 MISSION_ID_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,127}$")
-_TASK_TYPES = ("work", "validate", "gate")
-_TASK_STATUSES = ("pending", "running", "cleared", "failed", "superseded")
-_ASSERTION_STATUSES = ("pending", "passed", "failed")
-_ATTENTION_KINDS = (
-    "node_failed",
-    "node_attention",
-    "gate_failed",
-    "gate_checkpoint",
-    "terminal_review",
-)
 _STATE_ADAPTER: TypeAdapter[ProjectState] = TypeAdapter(ProjectState)
+MAX_DISPLAY_ID_CHARS = 80
+MAX_RENDER_LINE_CHARS = 240
+_DISPLAY_DIGEST_CHARS = 16
+_DISPLAY_PREFIX_CHARS = MAX_DISPLAY_ID_CHARS - _DISPLAY_DIGEST_CHARS - 1
+_DISPLAY_SAFE = re.compile(r"^[A-Za-z0-9._:-]+$")
 
 
 class RuntimeObservationError(RuntimeError):
@@ -276,7 +278,33 @@ class _CapturedFile(_FrozenModel):
     inode: int
     size: int
     mtime_ns: int
-    data: bytes = Field(exclude=True)
+    data: bytes | None = Field(exclude=True)
+
+
+# These bounds cover the fixed cursor layout with ample room for ordinary
+# missions while making every allocation and read in capture auditable.
+MAX_CAPTURE_FILE_BYTES = 4 * 1024 * 1024
+MAX_CAPTURE_TOTAL_BYTES = 16 * 1024 * 1024
+MAX_CAPTURE_FILES = 4096
+MAX_CAPTURE_DEPTH = 6
+CAPTURE_ATTEMPTS = 3
+_READ_CHUNK_BYTES = 64 * 1024
+
+
+@dataclass
+class _CaptureBudget:
+    files: int = 0
+    bytes: int = 0
+
+    def add_file(self) -> None:
+        self.files += 1
+        if self.files > MAX_CAPTURE_FILES:
+            raise RuntimeObservationError("unsafe_cursor")
+
+    def add_bytes(self, count: int) -> None:
+        self.bytes += count
+        if self.bytes > MAX_CAPTURE_TOTAL_BYTES:
+            raise RuntimeObservationError("unsafe_cursor")
 
 
 def validate_project_id(project_id: str) -> bool:
@@ -329,10 +357,19 @@ def _parse_spawn_ts(value: str | None) -> datetime | None:
     )
     if match is None:
         return None
+    timestamp = match.group("timestamp")
+    if not timestamp.isascii():
+        return None
     try:
-        return datetime.strptime(
-            match.group("timestamp"), "%Y-%m-%dT%H-%M-%SZ"
-        ).replace(tzinfo=UTC)
+        return datetime(
+            int(timestamp[0:4]),
+            int(timestamp[5:7]),
+            int(timestamp[8:10]),
+            int(timestamp[11:13]),
+            int(timestamp[14:16]),
+            int(timestamp[17:19]),
+            tzinfo=UTC,
+        )
     except ValueError:
         return None
 
@@ -342,6 +379,8 @@ def _require_real_directory(path: Path, root: Path) -> None:
         info = path.lstat()
     except FileNotFoundError as exc:
         raise RuntimeObservationError("project_not_found") from exc
+    except OSError as exc:
+        raise RuntimeObservationError("unsafe_project_path") from exc
     if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
         raise RuntimeObservationError("unsafe_project_path")
     try:
@@ -357,152 +396,332 @@ def _validated_project_root(store: ProjectStore, project_id: str) -> Path:
         projects_info = store.config.projects_dir.lstat()
     except FileNotFoundError as exc:
         raise RuntimeObservationError("project_not_found") from exc
+    except OSError as exc:
+        raise RuntimeObservationError("unsafe_project_path") from exc
     if stat.S_ISLNK(projects_info.st_mode) or not stat.S_ISDIR(projects_info.st_mode):
         raise RuntimeObservationError("unsafe_project_path")
-    projects_root = store.config.projects_dir.resolve()
+    try:
+        projects_root = store.config.projects_dir.resolve()
+    except OSError as exc:
+        raise RuntimeObservationError("unsafe_project_path") from exc
     project_root = store.config.projects_dir / project_id
     _require_real_directory(project_root, projects_root)
     return project_root
 
 
-def _safe_files_below(
-    root: Path,
-    *,
-    project_root: Path,
-    suffix: str,
-    recursive: bool,
-) -> list[Path]:
+def _cursor_error(exc: OSError) -> RuntimeObservationError:
+    if exc.errno in {errno.ENOENT, errno.ESTALE}:
+        return RuntimeObservationError("snapshot_changed")
+    return RuntimeObservationError("unsafe_cursor")
+
+
+def _same_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    return (
+        left.st_dev,
+        left.st_ino,
+        left.st_size,
+        left.st_mtime_ns,
+    ) == (
+        right.st_dev,
+        right.st_ino,
+        right.st_size,
+        right.st_mtime_ns,
+    )
+
+
+def _relative_cursor_path(path: Path, project_root: Path) -> str:
     try:
-        info = root.lstat()
-    except FileNotFoundError:
-        return []
-    try:
-        root.resolve().relative_to(project_root.resolve())
-    except (OSError, ValueError) as exc:
+        relative = path.relative_to(project_root)
+    except ValueError as exc:
         raise RuntimeObservationError("unsafe_cursor") from exc
+    if len(relative.parts) > MAX_CAPTURE_DEPTH:
+        raise RuntimeObservationError("unsafe_cursor")
+    return relative.as_posix()
+
+
+def _safe_directory(path: Path, project_root: Path, *, optional: bool) -> bool:
+    _relative_cursor_path(path, project_root)
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        if optional:
+            return False
+        raise RuntimeObservationError("snapshot_changed") from None
+    except OSError as exc:
+        raise _cursor_error(exc) from exc
     if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
         raise RuntimeObservationError("unsafe_cursor")
+    return True
 
-    files: list[Path] = []
+
+def _scan_directory(
+    path: Path,
+    project_root: Path,
+    *,
+    optional: bool,
+) -> list[os.DirEntry[str]]:
+    if not _safe_directory(path, project_root, optional=optional):
+        return []
+    entries: list[os.DirEntry[str]] = []
     try:
-        entries = sorted(os.scandir(root), key=lambda item: os.fsencode(item.name))
+        iterator = os.scandir(path)
+        with iterator:
+            for entry in iterator:
+                entries.append(entry)
+                if len(entries) > MAX_CAPTURE_FILES:
+                    raise RuntimeObservationError("unsafe_cursor")
+    except RuntimeObservationError:
+        raise
     except OSError as exc:
-        raise RuntimeObservationError("malformed_cursor") from exc
-    for entry in entries:
-        path = Path(entry.path)
+        raise _cursor_error(exc) from exc
+    return sorted(entries, key=lambda item: os.fsencode(item.name))
+
+
+def _capture_metadata(
+    path: Path,
+    project_root: Path,
+    budget: _CaptureBudget,
+    *,
+    expected: os.stat_result | None = None,
+) -> _CapturedFile:
+    relative_path = _relative_cursor_path(path, project_root)
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise _cursor_error(exc) from exc
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        raise RuntimeObservationError("unsafe_cursor")
+    if expected is not None and not _same_identity(expected, info):
+        raise RuntimeObservationError("snapshot_changed")
+    budget.add_file()
+    return _CapturedFile(
+        relative_path=relative_path,
+        content_sha256="",
+        device=info.st_dev,
+        inode=info.st_ino,
+        size=info.st_size,
+        mtime_ns=info.st_mtime_ns,
+        data=None,
+    )
+
+
+def _capture_file(
+    path: Path,
+    project_root: Path,
+    budget: _CaptureBudget,
+    *,
+    optional: bool = False,
+    expected: os.stat_result | None = None,
+) -> _CapturedFile | None:
+    relative_path = _relative_cursor_path(path, project_root)
+    try:
+        before = path.lstat()
+    except FileNotFoundError:
+        if optional:
+            return None
+        raise RuntimeObservationError("snapshot_changed") from None
+    except OSError as exc:
+        raise _cursor_error(exc) from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise RuntimeObservationError("unsafe_cursor")
+    if expected is not None and not _same_identity(expected, before):
+        raise RuntimeObservationError("snapshot_changed")
+    if before.st_size > MAX_CAPTURE_FILE_BYTES:
+        raise RuntimeObservationError("unsafe_cursor")
+
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    try:
+        descriptor = os.open(path, flags)
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise RuntimeObservationError("unsafe_cursor")
+        if not _same_identity(before, opened):
+            raise RuntimeObservationError("snapshot_changed")
+        data = bytearray()
+        while True:
+            remaining = MAX_CAPTURE_FILE_BYTES + 1 - len(data)
+            if remaining <= 0:
+                raise RuntimeObservationError("unsafe_cursor")
+            chunk = os.read(descriptor, min(_READ_CHUNK_BYTES, remaining))
+            if not chunk:
+                break
+            data.extend(chunk)
+        closed = os.fstat(descriptor)
+        if not _same_identity(opened, closed) or len(data) != closed.st_size:
+            raise RuntimeObservationError("snapshot_changed")
+    except RuntimeObservationError:
+        raise
+    except OSError as exc:
+        raise _cursor_error(exc) from exc
+    finally:
+        if descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+    try:
+        after = path.lstat()
+    except OSError as exc:
+        raise _cursor_error(exc) from exc
+    if not _same_identity(closed, after):
+        raise RuntimeObservationError("snapshot_changed")
+    payload = bytes(data)
+    budget.add_file()
+    budget.add_bytes(len(payload))
+    return _CapturedFile(
+        relative_path=relative_path,
+        content_sha256=hashlib.sha256(payload).hexdigest(),
+        device=closed.st_dev,
+        inode=closed.st_ino,
+        size=closed.st_size,
+        mtime_ns=closed.st_mtime_ns,
+        data=payload,
+    )
+
+
+def _selector_mission(files: list[_CapturedFile]) -> str | None:
+    selected: str | None = None
+    for source in files:
+        if source.data is None:
+            continue
         try:
-            entry_info = path.lstat()
-        except OSError as exc:
-            raise RuntimeObservationError("unsafe_cursor") from exc
-        if stat.S_ISLNK(entry_info.st_mode):
-            raise RuntimeObservationError("unsafe_cursor")
-        if stat.S_ISDIR(entry_info.st_mode):
-            if recursive:
-                files.extend(
-                    _safe_files_below(
-                        path,
-                        project_root=project_root,
-                        suffix=suffix,
-                        recursive=True,
-                    )
-                )
+            value = json.loads(source.data)
+        except (TypeError, ValueError, json.JSONDecodeError):
             continue
-        if path.suffix != suffix:
+        if not isinstance(value, dict):
             continue
-        if not stat.S_ISREG(entry_info.st_mode):
-            raise RuntimeObservationError("unsafe_cursor")
-        files.append(path)
-    return files
+        candidate = value.get("current_mission_id")
+        if isinstance(candidate, str):
+            selected = candidate
+        if value.get("state") in {"mission_planning", "mission_running"}:
+            candidate = value.get("mission_id")
+            if isinstance(candidate, str):
+                selected = candidate
+    return selected
 
 
-def _candidate_input_paths(project_root: Path) -> tuple[Path, ...]:
+def _task_capture_needs(files: list[_CapturedFile], mission_id: str) -> tuple[set[str], set[str]]:
+    sources = {item.relative_path: item for item in files}
+    prefix = f".unrest-runtime/missions/{mission_id}"
+    task_source = sources.get(f"{prefix}/tasks.json")
+    state_source = sources.get(f"{prefix}/task-state.json")
+    if task_source is None or task_source.data is None:
+        return set(), set()
+    try:
+        task_list = TaskList.model_validate_json(task_source.data)
+        task_state = (
+            TaskStateFile.model_validate_json(state_source.data)
+            if state_source is not None and state_source.data is not None
+            else TaskStateFile()
+        )
+    except (ValidationError, ValueError, json.JSONDecodeError):
+        return set(), set()
+    task_ids = {task.id for task in task_list.tasks}
+    running_ids = {
+        task.id for task in task_list.tasks if task_state.status_of(task.id) == "running"
+    }
+    return task_ids, running_ids
+
+
+def _capture_inputs(
+    project_root: Path,
+    *,
+    requested_mission_id: str | None = None,
+) -> tuple[_CapturedFile, ...]:
     try:
         project_info = project_root.lstat()
     except OSError as exc:
         raise RuntimeObservationError("snapshot_changed") from exc
     if stat.S_ISLNK(project_info.st_mode) or not stat.S_ISDIR(project_info.st_mode):
         raise RuntimeObservationError("unsafe_project_path")
-    runtime_root = project_root / ".unrest-runtime"
-    runtime_files = _safe_files_below(
-        runtime_root,
-        project_root=project_root,
-        suffix=".json",
-        recursive=True,
-    )
 
-    contract_files: list[Path] = []
-    durable_root = project_root / ".unrest"
-    try:
-        durable_info = durable_root.lstat()
-    except FileNotFoundError:
-        return tuple(sorted(runtime_files))
-    if stat.S_ISLNK(durable_info.st_mode) or not stat.S_ISDIR(durable_info.st_mode):
-        raise RuntimeObservationError("unsafe_cursor")
-    missions_root = durable_root / "missions"
-    try:
-        missions_root.lstat()
-    except FileNotFoundError:
-        pass
-    else:
-        mission_dirs = _safe_files_below(
-            missions_root,
-            project_root=project_root,
-            suffix=".__never__",
-            recursive=False,
-        )
-        del mission_dirs  # validates the root and its immediate entries
-        for mission_entry in sorted(
-            os.scandir(missions_root), key=lambda item: os.fsencode(item.name)
-        ):
-            mission_path = Path(mission_entry.path)
-            mission_info = mission_path.lstat()
-            if stat.S_ISLNK(mission_info.st_mode):
-                raise RuntimeObservationError("unsafe_cursor")
-            if not stat.S_ISDIR(mission_info.st_mode):
-                continue
-            contract_files.extend(
-                _safe_files_below(
-                    mission_path / "contract",
-                    project_root=project_root,
-                    suffix=".md",
-                    recursive=False,
-                )
-            )
-
-    return tuple(sorted((*runtime_files, *contract_files)))
-
-
-def _capture_inputs(project_root: Path) -> tuple[_CapturedFile, ...]:
+    budget = _CaptureBudget()
     captured: list[_CapturedFile] = []
-    for path in _candidate_input_paths(project_root):
+    runtime_root = project_root / ".unrest-runtime"
+    _safe_directory(runtime_root, project_root, optional=False)
+    for entry in _scan_directory(runtime_root, project_root, optional=False):
+        path = Path(entry.path)
         try:
-            before = path.lstat()
-            if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
-                raise RuntimeObservationError("unsafe_cursor")
-            data = path.read_bytes()
-            after = path.lstat()
-        except RuntimeObservationError:
-            raise
+            info = path.lstat()
         except OSError as exc:
-            raise RuntimeObservationError("snapshot_changed") from exc
-        if (
-            before.st_ino != after.st_ino
-            or before.st_size != after.st_size
-            or before.st_mtime_ns != after.st_mtime_ns
-        ):
-            raise RuntimeObservationError("snapshot_changed")
-        captured.append(
-            _CapturedFile(
-                relative_path=path.relative_to(project_root).as_posix(),
-                content_sha256=hashlib.sha256(data).hexdigest(),
-                device=after.st_dev,
-                inode=after.st_ino,
-                size=after.st_size,
-                mtime_ns=after.st_mtime_ns,
-                data=data,
-            )
+            raise _cursor_error(exc) from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise RuntimeObservationError("unsafe_cursor")
+        if path.suffix == ".json" and not stat.S_ISREG(info.st_mode):
+            raise RuntimeObservationError("unsafe_cursor")
+    for name, optional in (
+        ("project.json", False),
+        ("state.json", True),
+        ("attention.json", True),
+    ):
+        source = _capture_file(runtime_root / name, project_root, budget, optional=optional)
+        if source is not None:
+            captured.append(source)
+
+    mission_id = requested_mission_id or _selector_mission(captured)
+    if mission_id is None or MISSION_ID_PATTERN.fullmatch(mission_id) is None:
+        return tuple(sorted(captured, key=lambda item: item.relative_path))
+
+    mission_runtime = runtime_root / "missions" / mission_id
+    for name in ("tasks.json", "task-state.json", "contract-state.json"):
+        source = _capture_file(
+            mission_runtime / name,
+            project_root,
+            budget,
+            optional=True,
         )
-    return tuple(captured)
+        if source is not None:
+            captured.append(source)
+
+    task_ids, running_ids = _task_capture_needs(captured, mission_id)
+    durable_root = project_root / ".unrest"
+    _safe_directory(durable_root, project_root, optional=True)
+    contract_dir = durable_root / "missions" / mission_id / "contract"
+    for entry in _scan_directory(contract_dir, project_root, optional=True):
+        path = Path(entry.path)
+        try:
+            info = path.lstat()
+        except OSError as exc:
+            raise _cursor_error(exc) from exc
+        if stat.S_ISDIR(info.st_mode):
+            raise RuntimeObservationError("unsafe_cursor")
+        if path.suffix != ".md":
+            continue
+        captured.append(
+            _capture_metadata(path, project_root, budget, expected=info)
+        )
+
+    attempts_dir = mission_runtime / "attempts"
+    attempts_by_task: dict[str, list[tuple[str, Path, os.stat_result]]] = {}
+    for entry in _scan_directory(attempts_dir, project_root, optional=True):
+        path = Path(entry.path)
+        try:
+            info = path.lstat()
+        except OSError as exc:
+            raise _cursor_error(exc) from exc
+        if stat.S_ISDIR(info.st_mode):
+            raise RuntimeObservationError("unsafe_cursor")
+        if path.suffix != ".json" or "__" not in path.stem:
+            continue
+        spawn_ts, task_id = path.stem.split("__", 1)
+        if task_id not in task_ids:
+            continue
+        attempts_by_task.setdefault(task_id, []).append((spawn_ts, path, info))
+
+    for task_id in sorted(attempts_by_task):
+        attempts = sorted(attempts_by_task[task_id], key=lambda item: os.fsencode(item[0]))
+        for index, (_spawn_ts, path, info) in enumerate(attempts):
+            if task_id in running_ids and index == len(attempts) - 1:
+                source = _capture_file(path, project_root, budget, expected=info)
+                assert source is not None
+                captured.append(source)
+            else:
+                captured.append(
+                    _capture_metadata(path, project_root, budget, expected=info)
+                )
+    return tuple(sorted(captured, key=lambda item: item.relative_path))
 
 
 def _identity_generation(
@@ -516,23 +735,72 @@ def _identity_generation(
 
 def _current_identity_generation(
     project_root: Path,
+    *,
+    expected: tuple[_CapturedFile, ...] | None = None,
+    requested_mission_id: str | None = None,
 ) -> tuple[tuple[str, int, int, int, int], ...]:
+    if expected is None:
+        return _identity_generation(
+            _capture_inputs(project_root, requested_mission_id=requested_mission_id)
+        )
+
+    expected_paths = {item.relative_path for item in expected}
+    mission_id = requested_mission_id or _selector_mission(list(expected))
+    task_ids = _task_capture_needs(list(expected), mission_id)[0] if mission_id else set()
+    current_paths: set[str] = set()
+    runtime_root = project_root / ".unrest-runtime"
+    for name in ("project.json", "state.json", "attention.json"):
+        path = runtime_root / name
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise _cursor_error(exc) from exc
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise RuntimeObservationError("unsafe_cursor")
+        current_paths.add(_relative_cursor_path(path, project_root))
+
+    if mission_id is not None:
+        mission_runtime = runtime_root / "missions" / mission_id
+        for name in ("tasks.json", "task-state.json", "contract-state.json"):
+            path = mission_runtime / name
+            try:
+                info = path.lstat()
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise _cursor_error(exc) from exc
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                raise RuntimeObservationError("unsafe_cursor")
+            current_paths.add(_relative_cursor_path(path, project_root))
+        contract_dir = project_root / ".unrest" / "missions" / mission_id / "contract"
+        for entry in _scan_directory(contract_dir, project_root, optional=True):
+            path = Path(entry.path)
+            if path.suffix == ".md":
+                current_paths.add(_relative_cursor_path(path, project_root))
+        attempts_dir = mission_runtime / "attempts"
+        for entry in _scan_directory(attempts_dir, project_root, optional=True):
+            path = Path(entry.path)
+            if path.suffix != ".json" or "__" not in path.stem:
+                continue
+            _spawn_ts, task_id = path.stem.split("__", 1)
+            if task_id in task_ids:
+                current_paths.add(_relative_cursor_path(path, project_root))
+
+    if current_paths != expected_paths:
+        raise RuntimeObservationError("snapshot_changed")
     result: list[tuple[str, int, int, int, int]] = []
-    for path in _candidate_input_paths(project_root):
+    for item in expected:
+        path = project_root / item.relative_path
         try:
             info = path.lstat()
         except OSError as exc:
-            raise RuntimeObservationError("snapshot_changed") from exc
+            raise _cursor_error(exc) from exc
         if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
             raise RuntimeObservationError("unsafe_cursor")
         result.append(
-            (
-                path.relative_to(project_root).as_posix(),
-                info.st_dev,
-                info.st_ino,
-                info.st_size,
-                info.st_mtime_ns,
-            )
+            (item.relative_path, info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
         )
     return tuple(result)
 
@@ -553,6 +821,8 @@ def _parse_json_model(
         if default is not None:
             return default
         raise RuntimeObservationError("malformed_cursor")
+    if source.data is None:
+        raise RuntimeObservationError("malformed_cursor")
     try:
         return model.model_validate_json(source.data)
     except (ValidationError, ValueError, json.JSONDecodeError) as exc:
@@ -565,6 +835,8 @@ def _parse_state(
     source = sources.get(".unrest-runtime/state.json")
     if source is None:
         return None
+    if source.data is None:
+        raise RuntimeObservationError("malformed_cursor")
     try:
         return _STATE_ADAPTER.validate_json(source.data)
     except (ValidationError, ValueError, json.JSONDecodeError) as exc:
@@ -601,6 +873,8 @@ def _attempt_sources(
 
 
 def _parse_handoff(source: _CapturedFile) -> WorkHandoff | ValidateHandoff:
+    if source.data is None:
+        raise RuntimeObservationError("malformed_cursor")
     try:
         data = json.loads(source.data)
         if isinstance(data, dict) and ("items" in data or "passed" in data):
@@ -623,9 +897,8 @@ def _runnable_tasks(task_list: TaskList, task_state: TaskStateFile) -> list[Task
 def _ready_gates(task_list: TaskList, task_state: TaskStateFile) -> list[Task]:
     return [
         task
-        for task in task_list.tasks
-        if task.type == "gate"
-        and task_state.status_of(task.id) == "pending"
+        for task in gates_in_order(task_list)
+        if task_state.status_of(task.id) == "pending"
         and all(task_state.status_of(dep) == "cleared" for dep in task.depends_on)
     ]
 
@@ -695,8 +968,25 @@ def _non_running_decision(
     raise TypeError(f"unsupported state: {state!r}")
 
 
-def _counts(order: tuple[str, ...], values: Counter[str]) -> tuple[NamedCount, ...]:
-    return tuple(NamedCount(name=name, count=values[name]) for name in order)
+def _canonical_counts(
+    model: type[BaseModel],
+    field_name: str,
+    values: Counter[str],
+    *,
+    expected_total: int,
+) -> tuple[NamedCount, ...]:
+    """Render one closed model Literal and reject any reconciliation drift."""
+
+    annotation = model.model_fields[field_name].annotation
+    order = tuple(value for value in get_args(annotation) if isinstance(value, str))
+    if not order or len(order) != len(set(order)):
+        raise RuntimeObservationError("malformed_cursor")
+    if set(values) - set(order) or sum(values.values()) != expected_total:
+        raise RuntimeObservationError("malformed_cursor")
+    counts = tuple(NamedCount(name=name, count=values[name]) for name in order)
+    if sum(item.count for item in counts) != expected_total:
+        raise RuntimeObservationError("malformed_cursor")
+    return counts
 
 
 def _observation_from_capture(
@@ -724,14 +1014,13 @@ def _observation_from_capture(
     _validate_mission_id(mission_id)
     if (
         mission_id is not None
-        and record.current_mission_id is not None
         and mission_id != record.current_mission_id
     ):
-        raise RuntimeObservationError("malformed_cursor")
+        raise RuntimeObservationError("non_current_mission")
     if isinstance(state, (MissionRunning, MissionPlanning)):
         _validate_mission_id(state.mission_id)
         if mission_id is not None and state.mission_id != mission_id:
-            raise RuntimeObservationError("malformed_cursor")
+            raise RuntimeObservationError("non_current_mission")
         selected_mission = state.mission_id
 
     state_source = source_by_path.get(".unrest-runtime/state.json")
@@ -811,7 +1100,7 @@ def _observation_from_capture(
             raise RuntimeObservationError("malformed_cursor")
         completion_observed = False
         malformed_completion = False
-        if latest_source is not None:
+        if status_value == "running" and latest_source is not None:
             try:
                 _parse_handoff(latest_source)
                 completion_observed = True
@@ -840,7 +1129,7 @@ def _observation_from_capture(
             elif active_elapsed is not None and active_elapsed >= stale_after_seconds:
                 stale_ids.append(task.id)
         duration: float | None = None
-        if latest_source is not None:
+        if status_value == "running" and latest_source is not None:
             attempt_started_at = _parse_spawn_ts(latest_attempt_id)
             if attempt_started_at is not None:
                 completed_at = datetime.fromtimestamp(
@@ -896,10 +1185,18 @@ def _observation_from_capture(
     failed_ids = tuple(
         task.task_id for task in task_rows if task.status == "failed"
     )
-    if isinstance(state, MissionRunning) and failed_ids and not attention:
+    attended_failed_ids = {
+        item.node_id
+        for item in attention
+        if item.mission_id == selected_mission and item.node_id in failed_ids
+    }
+    unattended_failed_ids = tuple(
+        task_id for task_id in failed_ids if task_id not in attended_failed_ids
+    )
+    if isinstance(state, MissionRunning) and unattended_failed_ids:
         anomalies.append(
             RuntimeAnomaly(
-                code="failed_task_without_attention", task_ids=failed_ids
+                code="failed_task_without_attention", task_ids=unattended_failed_ids
             )
         )
     for code, ids in (
@@ -925,21 +1222,21 @@ def _observation_from_capture(
         derived = "inconsistent"
         decision = ShadowSchedulerDecision(
             action="inspect_malformed_attempt",
-            task_ids=tuple(malformed_ids),
+            task_ids=running_ids,
             reason_code="malformed_attempt",
         )
     elif completion_ids:
         derived = "recovery_ready"
         decision = ShadowSchedulerDecision(
             action="reconcile_completed_attempt",
-            task_ids=tuple(completion_ids),
+            task_ids=running_ids,
             reason_code="handoff_available",
         )
     elif stale_ids or missing_attempt_ids:
         derived = "stale_running_candidate"
         decision = ShadowSchedulerDecision(
             action="inspect_stale_attempt",
-            task_ids=tuple(dict.fromkeys((*missing_attempt_ids, *stale_ids))),
+            task_ids=running_ids,
             reason_code="running_cursor_needs_inspection",
         )
     elif running_ids:
@@ -1015,14 +1312,34 @@ def _observation_from_capture(
             passed_assertion_total=assertion_status_counts["passed"],
         ),
         task_counts=TaskCountSummary(
-            by_type=_counts(_TASK_TYPES, type_counts),
-            by_status=_counts(_TASK_STATUSES, status_counts),
+            by_type=_canonical_counts(
+                Task,
+                "type",
+                type_counts,
+                expected_total=len(task_rows),
+            ),
+            by_status=_canonical_counts(
+                TaskStateEntry,
+                "status",
+                status_counts,
+                expected_total=len(task_rows),
+            ),
         ),
         assertion_counts=AssertionCountSummary(
-            by_status=_counts(_ASSERTION_STATUSES, assertion_status_counts)
+            by_status=_canonical_counts(
+                ContractStateEntry,
+                "status",
+                assertion_status_counts,
+                expected_total=len(contract_ids),
+            )
         ),
         attention_counts=AttentionCountSummary(
-            by_kind=_counts(_ATTENTION_KINDS, attention_counts)
+            by_kind=_canonical_counts(
+                AttentionItemInternal,
+                "kind",
+                attention_counts,
+                expected_total=len(attention),
+            )
         ),
         gate_readiness=GateReadiness(
             count=len(ready_gates),
@@ -1049,7 +1366,7 @@ def observe_project_runtime(
         raise RuntimeObservationError("invalid_stale_threshold")
     project_root = _validated_project_root(store, project_id)
     observed_at = (now or datetime.now(UTC)).astimezone(UTC)
-    for _attempt in range(3):
+    for _attempt in range(CAPTURE_ATTEMPTS):
         before: tuple[_CapturedFile, ...] | None = None
         try:
             before = _capture_inputs(project_root)
@@ -1061,14 +1378,20 @@ def observe_project_runtime(
                 stale_after_seconds=stale_after_seconds,
                 observed_at=observed_at,
             )
-            after_identity = _current_identity_generation(project_root)
+            after_identity = _current_identity_generation(
+                project_root,
+                expected=before,
+            )
         except RuntimeObservationError as error:
             if error.code == "snapshot_changed":
                 continue
-            if error.code != "malformed_cursor" or before is None:
+            if error.code not in {"malformed_cursor", "non_current_mission"} or before is None:
                 raise
             try:
-                stable = _current_identity_generation(project_root)
+                stable = _current_identity_generation(
+                    project_root,
+                    expected=before,
+                )
             except RuntimeObservationError as recapture_error:
                 if recapture_error.code == "snapshot_changed":
                     continue
@@ -1102,12 +1425,23 @@ def observe_all_projects_runtime(
         root_info = root.lstat()
     except FileNotFoundError:
         return RuntimeObservationCollection(observed_at=_utc_text(observed_at))
-    if stat.S_ISLNK(root_info.st_mode) or not stat.S_ISDIR(root_info.st_mode):
-        raise RuntimeObservationError("unsafe_project_path")
-    try:
-        entries = sorted(os.scandir(root), key=lambda item: os.fsencode(item.name))
     except OSError as exc:
         raise RuntimeObservationError("unsafe_project_path") from exc
+    if stat.S_ISLNK(root_info.st_mode) or not stat.S_ISDIR(root_info.st_mode):
+        raise RuntimeObservationError("unsafe_project_path")
+    entries: list[os.DirEntry[str]] = []
+    try:
+        iterator = os.scandir(root)
+        with iterator:
+            for entry in iterator:
+                entries.append(entry)
+                if len(entries) > MAX_CAPTURE_FILES:
+                    raise RuntimeObservationError("unsafe_project_path")
+    except RuntimeObservationError:
+        raise
+    except OSError as exc:
+        raise RuntimeObservationError("unsafe_project_path") from exc
+    entries.sort(key=lambda item: os.fsencode(item.name))
     projects: list[RuntimeObservation] = []
     failures: list[ObservationFailure] = []
     project_ids: list[str] = []
@@ -1183,27 +1517,66 @@ def observation_json(
 
 
 def _display_id(value: str) -> str:
-    if len(value) <= 80:
+    if len(value) <= MAX_DISPLAY_ID_CHARS and _DISPLAY_SAFE.fullmatch(value):
         return value
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
-    return f"{value[:80]}~{digest}"
+    safe_prefix = "".join(
+        character if _DISPLAY_SAFE.fullmatch(character) else "_"
+        for character in value
+    )[:_DISPLAY_PREFIX_CHARS]
+    return f"{safe_prefix}~{digest}"
 
 
 def _fmt_seconds(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.3f}s"
 
 
+def _append_bounded_tokens(lines: list[str], tokens: tuple[str, ...]) -> None:
+    current = ""
+    for token in tokens:
+        if len(token) > MAX_RENDER_LINE_CHARS:
+            raise RuntimeObservationError("malformed_cursor")
+        candidate = token if not current else f"{current} {token}"
+        if len(candidate) <= MAX_RENDER_LINE_CHARS:
+            current = candidate
+        else:
+            lines.append(current)
+            current = token
+    if current:
+        lines.append(current)
+
+
+def _append_anomaly(lines: list[str], anomaly: RuntimeAnomaly) -> None:
+    display_ids = tuple(_display_id(value) for value in anomaly.task_ids)
+    compact = f"anomaly={anomaly.code} tasks={','.join(display_ids) or '-'}"
+    if len(compact) <= MAX_RENDER_LINE_CHARS:
+        lines.append(compact)
+        return
+    total = len(display_ids)
+    lines.append(f"anomaly={anomaly.code} tasks={total} omitted=0")
+    for index, display_id in enumerate(display_ids, start=1):
+        lines.append(
+            f"anomaly_task={anomaly.code} index={index}/{total} task={display_id}"
+        )
+
+
 def render_runtime_observation(observation: RuntimeObservation) -> str:
     """Render a compact bounded operator view with no free-form cursor text."""
 
-    lines = [
+    lines: list[str] = []
+    _append_bounded_tokens(
+        lines,
         (
-            f"project={_display_id(observation.project_id)} "
-            f"mission={_display_id(observation.mission_id or '-')} "
-            f"persisted={observation.persisted_state} derived={observation.derived_state} "
-            f"next={observation.shadow_scheduler.action}"
+            f"project={_display_id(observation.project_id)}",
+            f"mission={_display_id(observation.mission_id or '-')}",
+            f"persisted={observation.persisted_state}",
+            f"derived={observation.derived_state}",
+            f"next={observation.shadow_scheduler.action}",
         ),
-        (
+    )
+    lines.extend(
+        [
+            (
             f"progress tasks={observation.progress.cleared_task_total}/"
             f"{observation.progress.active_task_total} "
             f"authored={observation.progress.authored_task_total} assertions="
@@ -1216,8 +1589,9 @@ def render_runtime_observation(observation: RuntimeObservation) -> str:
             f"state={_fmt_seconds(observation.freshness.state_cursor_age_seconds)} "
             f"task={_fmt_seconds(observation.freshness.task_cursor_age_seconds)} "
             f"newest={_fmt_seconds(observation.freshness.newest_runtime_input_age_seconds)}"
-        ),
-    ]
+            ),
+        ]
+    )
     for task in observation.tasks:
         if task.status == "superseded":
             continue
@@ -1233,26 +1607,36 @@ def render_runtime_observation(observation: RuntimeObservation) -> str:
             f"observed_duration={_fmt_seconds(timing.observed_attempt_duration_seconds)}"
         )
     for anomaly in observation.anomalies:
-        ids = ",".join(_display_id(value) for value in anomaly.task_ids)
-        lines.append(f"anomaly={anomaly.code} tasks={ids or '-'}")
-    if any(len(line) > 240 for line in lines):
+        _append_anomaly(lines, anomaly)
+    if any(len(line) > MAX_RENDER_LINE_CHARS for line in lines):
         raise RuntimeObservationError("malformed_cursor")
     return "\n".join(lines) + "\n"
 
 
 def render_runtime_collection(collection: RuntimeObservationCollection) -> str:
-    lines = [
-        f"projects={len(collection.projects)} failures={len(collection.failures)}",
-        f"schema=1 observed_at={collection.observed_at}",
-    ]
+    project_lines: list[str] = []
+    rendered_projects = 0
+    failures = list(collection.failures)
     for project in collection.projects:
-        lines.extend(render_runtime_observation(project).rstrip("\n").splitlines())
-    for failure in collection.failures:
+        try:
+            rendered = render_runtime_observation(project)
+        except RuntimeObservationError as error:
+            failures.append(ObservationFailure(code=error.code, project_id=project.project_id))
+            continue
+        project_lines.extend(rendered.rstrip("\n").splitlines())
+        rendered_projects += 1
+    failures.sort(key=lambda item: (item.project_id or "", item.entry_ref or "", item.code))
+    lines = [
+        f"projects={rendered_projects} failures={len(failures)}",
+        f"schema=1 observed_at={collection.observed_at}",
+        *project_lines,
+    ]
+    for failure in failures:
         reference = failure.project_id or failure.entry_ref or "-"
         lines.append(
             f"failure={failure.code} ref={_display_id(reference)}"
         )
-    if any(len(line) > 240 for line in lines):
+    if any(len(line) > MAX_RENDER_LINE_CHARS for line in lines):
         raise RuntimeObservationError("malformed_cursor")
     return "\n".join(lines) + "\n"
 

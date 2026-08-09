@@ -270,8 +270,8 @@ def successors_of(tl: TaskList, task_id: str) -> list[str]:
 
 
 def gates_in_order(tl: TaskList) -> list[Task]:
-    """Gates sorted by id for determinism."""
-    return sorted([t for t in tl.tasks if t.type == "gate"], key=lambda t: t.id)
+    """Gates in authored task-list order, the graph's deterministic tie-break."""
+    return [task for task in tl.tasks if task.type == "gate"]
 
 
 def upstream_tasks(

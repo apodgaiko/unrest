@@ -1289,7 +1289,7 @@ class TestObserveProject:
 
         assert result.exit_code == 0, result.output
         assert long_id not in result.output
-        assert f"task[0]={'w' * 80}~" in result.output
+        assert f"task[0]={'w' * 63}~" in result.output
 
     @pytest.mark.parametrize(
         ("arguments", "code"),
@@ -1318,4 +1318,113 @@ class TestObserveProject:
         assert result.exit_code != 0
         assert code in result.output
         assert "SECRET_" not in result.output
+        assert "Traceback" not in result.output
+
+    @pytest.mark.parametrize("output_format", ["text", "json"])
+    @pytest.mark.parametrize("scenario", ["success", "mixed", "all_failed"])
+    def test_all_default_and_strict_exit_matrix_preserves_complete_payload(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        harness_home: Path,
+        env: dict[str, str],
+        output_format: str,
+        scenario: str,
+    ) -> None:
+        from unrest_harness.config import HarnessConfig
+        from unrest_harness.storage import ProjectStore
+
+        store = ProjectStore(HarnessConfig.discover())
+        if scenario in {"success", "mixed"}:
+            store.create_project("good", workspace, project_id="good-one")
+        if scenario in {"mixed", "all_failed"}:
+            malformed = harness_home / "projects" / "broken-one" / ".unrest-runtime"
+            malformed.mkdir(parents=True)
+            (malformed / "project.json").write_text("{SECRET_BAD_JSON}", encoding="utf-8")
+
+        arguments = ["observe-project", "--all", "--format", output_format]
+        default_result = runner.invoke(cli, arguments)
+        strict_result = runner.invoke(cli, [*arguments, "--strict"])
+        expected_failure = scenario != "success"
+
+        assert default_result.exit_code == 0
+        assert strict_result.exit_code == (1 if expected_failure else 0)
+        for result in (default_result, strict_result):
+            assert "SECRET_BAD_JSON" not in result.output
+            assert "Traceback" not in result.output
+            if output_format == "json":
+                payload = json.loads(result.output)
+                assert [item["project_id"] for item in payload["projects"]] == (
+                    ["good-one"] if scenario in {"success", "mixed"} else []
+                )
+                assert [item["project_id"] for item in payload["failures"]] == (
+                    ["broken-one"] if expected_failure else []
+                )
+            else:
+                assert f"projects={int(scenario != 'all_failed')} failures={int(expected_failure)}" in result.output
+                assert ("project=good-one" in result.output) == (
+                    scenario in {"success", "mixed"}
+                )
+                assert ("failure=malformed_cursor ref=broken-one" in result.output) == expected_failure
+
+    @pytest.mark.parametrize(
+        ("variable", "invalid_value"),
+        [
+            ("UNREST_MAX_PARALLEL_NODES", "SECRET_CONFIG_INTEGER"),
+            ("UNREST_MAX_PARALLEL_NODES", "0"),
+            ("UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS", "SECRET_CONFIG_INTEGER"),
+            ("UNREST_WORKER_REASONING_EFFORT", "SECRET_CONFIG_MODEL"),
+            ("UNREST_VALIDATOR_REASONING_EFFORT", "SECRET_CONFIG_MODEL"),
+            ("UNREST_TERMINAL_REVIEWER_REASONING_EFFORT", "SECRET_CONFIG_MODEL"),
+            ("UNREST_ORCHESTRATOR_PROVIDER", "SECRET_CONFIG_PROVIDER"),
+            ("UNREST_WORKER_PROVIDER", "SECRET_CONFIG_PROVIDER"),
+            ("UNREST_VALIDATOR_PROVIDER", "SECRET_CONFIG_PROVIDER"),
+            ("UNREST_TERMINAL_REVIEWER_PROVIDER", "SECRET_CONFIG_PROVIDER"),
+            ("UNREST_CAPABILITY_POLICY_VERSION", "SECRET_CONFIG_POLICY"),
+            ("UNREST_CAPABILITY_PROFILE", "SECRET_CONFIG_PROFILE"),
+            ("UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED", "SECRET_CONFIG_OPT_IN"),
+            ("UNREST_WORKER_MODEL", "SECRET_CONFIG_MODEL\n"),
+            ("UNREST_HOME", "SECRET_CONFIG_PATH\n"),
+            ("UNREST_PROJECTS_DIR", "SECRET_CONFIG_PATH\n"),
+        ],
+    )
+    def test_invalid_ambient_configuration_is_one_value_free_diagnostic(
+        self,
+        runner: CliRunner,
+        env: dict[str, str],
+        variable: str,
+        invalid_value: str,
+    ) -> None:
+        result = runner.invoke(
+            cli,
+            ["observe-project", "--all", "--format", "json"],
+            env={**env, variable: invalid_value},
+        )
+
+        assert result.exit_code == 1
+        assert result.output == "Error: invalid_configuration\n"
+        assert "SECRET_CONFIG" not in result.output
+        assert "Traceback" not in result.output
+
+    @pytest.mark.parametrize("variable", ["UNREST_HOME", "UNREST_PROJECTS_DIR"])
+    def test_regular_file_ambient_root_is_invalid_configuration(
+        self,
+        runner: CliRunner,
+        env: dict[str, str],
+        tmp_path: Path,
+        variable: str,
+    ) -> None:
+        invalid_root = tmp_path / "SECRET_CONFIG_ROOT"
+        invalid_root.write_text("not a directory", encoding="utf-8")
+
+        result = runner.invoke(
+            cli,
+            ["observe-project", "--all", "--format", "json"],
+            env={**env, variable: str(invalid_root)},
+        )
+
+        assert result.exit_code == 1
+        assert result.output == "Error: invalid_configuration\n"
+        assert str(invalid_root) not in result.output
+        assert "SECRET_CONFIG" not in result.output
         assert "Traceback" not in result.output

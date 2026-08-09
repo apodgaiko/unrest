@@ -149,9 +149,10 @@ def test_capability_source_graph_has_exact_roots_closure_and_initializer() -> No
     catalog = load_capability_sink_catalog(BUNDLED)
     graph = build_reachable_capability_source_graph(ROOT, catalog)
     assert graph == tuple(sorted(graph))
-    assert len(graph) == 21
+    assert len(graph) == 22
     assert "src/unrest_harness/__init__.py" in graph
     assert "src/unrest_harness/capability_policy.py" in graph
+    assert "src/unrest_harness/runtime_observability.py" in graph
     assert "src/unrest_harness/__main__.py" not in graph
 
 

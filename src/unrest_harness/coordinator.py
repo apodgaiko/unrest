@@ -37,6 +37,7 @@ from .models import (
 )
 from .storage import ProjectStore, utc_now_filesafe
 from .envelope import public_attention_items
+from .task_validation import gates_in_order
 
 
 # ---------------------------------------------------------------------------
@@ -497,9 +498,7 @@ class MissionCoordinator:
     def _try_evaluate_a_gate(
         self, tl: TaskList, task_state: TaskStateFile
     ) -> "_GateEvent | None":
-        for gate in sorted(
-            (t for t in tl.tasks if t.type == "gate"), key=lambda t: t.id
-        ):
+        for gate in gates_in_order(tl):
             if task_state.status_of(gate.id) != "pending":
                 continue
             if not all(

@@ -5,6 +5,15 @@ from pathlib import Path
 
 import pytest
 
+from unrest_harness.config import HARNESS_CONFIG_ENV_VARS
+
+
+@pytest.fixture(autouse=True)
+def _isolate_harness_config_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep unrelated tests independent of the caller's Unrest configuration."""
+    for variable in HARNESS_CONFIG_ENV_VARS:
+        monkeypatch.delenv(variable, raising=False)
+
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Path:
