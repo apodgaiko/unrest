@@ -1,0 +1,16 @@
+Final telemetry candidate loopback continuation
+Observed at: 2026-08-09T04:48:20Z
+Environment classification: loopback-capable execution outside the repository sandbox
+Implementation tree: 1f963ef1004b308a82dfc402ebcdec436afeef03
+Product tree: d3da52281b6e10ac692ed88f39848bb65e5f03b5
+Candidate head at execution: ff316acafe9564df712d7b0e63c1e373403bfbdf
+
+Command
+env -u CODEX_PATH UV_CACHE_DIR=/tmp/unrest-final-binding-uv uv run pytest -q tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart
+
+Raw terminal result
+..                                                                       [100%]
+2 passed in 3.00s
+
+Exit code: 0
+Parameterizations: worker, terminal-reviewer

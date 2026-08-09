@@ -1,0 +1,10 @@
+docs(release): bind final telemetry candidate evidence
+
+Task-ID: MISSION-001-RELEASE-BINDING
+Contract-Targets: VAL-RELEASE-BINDING-002
+Decision-IDs: ADR-0001
+Protected-Surfaces: none
+Human-Reviewers: none
+Evaluation-Evidence: evidence/telemetry-cold-start/release-verdict-v2.json
+Schema-Change: none
+Rollback-Plan: docs/release/telemetry-cold-start-rollback-v2.md

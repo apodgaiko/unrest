@@ -1,0 +1,19 @@
+Telemetry provenance-repair rollback reconstruction
+Date: 2026-08-09
+Command class: isolated temporary Git index; no worktree mutation
+Base commit: 2d393cf1e077e081598719292456c20f6bd1a616
+Base tree: f53caa3aebacef998b670597b14254c62af0bfb7
+Implementation commit: d6c253a7d5f1ecb8e0df94efb271bfe8c34df2bd
+Implementation tree: 1f963ef1004b308a82dfc402ebcdec436afeef03
+Product commit: 2e81494d98cc3e1d5c986e138f4dde06d9dedaf2
+Product tree: f52a245d043ca650042ab98e408d795ca3d54b57
+
+Flow:
+1. Read the exact base into a temporary index.
+2. Overlay the 18 product paths from the reachable product commit.
+3. `git write-tree` returned f52a245d043ca650042ab98e408d795ca3d54b57.
+4. Read the exact base back into the same isolated index.
+5. `git write-tree` returned f53caa3aebacef998b670597b14254c62af0bfb7.
+
+Exit code: 0
+Observed result: candidate product and restored base tree identities matched.

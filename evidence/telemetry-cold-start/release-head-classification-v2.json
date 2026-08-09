@@ -1,0 +1,16 @@
+{
+  "authority_classification": "historical-superseded",
+  "classification_version": 2,
+  "excluded_user_paths": [
+    ".validation/",
+    "validator-regressions/"
+  ],
+  "implementation_tree_hash": "1f963ef1004b308a82dfc402ebcdec436afeef03",
+  "input_candidate_head_sha": "ff316acafe9564df712d7b0e63c1e373403bfbdf",
+  "product_tree_hash": "d3da52281b6e10ac692ed88f39848bb65e5f03b5",
+  "release_head_sha": null,
+  "release_head_sha_carrier": "runtime-owned attempt report created after the governed evidence-only commit",
+  "status": "exact-tree-evidence-sealed-for-governed-commit",
+  "summary": "The final implementation and product trees are unchanged from ff316ac. Every tracked path added or modified after ff316ac is evidence or governance material. The evidence-only commit SHA is intentionally not self-referenced inside its own tree.",
+  "superseded_by": "evidence/telemetry-cold-start/release-evidence-index-v3.json"
+}

@@ -1,0 +1,11 @@
+{
+  "artifact_path": "evidence/telemetry-cold-start/package-lifecycle.json",
+  "artifact_sha256": "149cf41b17d1c26a96dd065d7c49ae5953fc81afd8de36609b11a92258e4e89f",
+  "exact_check": "test -s evidence/telemetry-cold-start/package-lifecycle.json",
+  "exit_code": 0,
+  "mode": "evaluation",
+  "observed_result": "checks-passed",
+  "record_type": "evidence",
+  "schema_version": 1,
+  "status": "passed"
+}

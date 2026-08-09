@@ -1,0 +1,59 @@
+Telemetry and cold-start frozen release-candidate v2 checkpoint
+Date: 2026-08-09
+Python: CPython 3.13.12
+Implementation tree: 1f963ef1004b308a82dfc402ebcdec436afeef03
+Product tree: d3da52281b6e10ac692ed88f39848bb65e5f03b5
+
+Pre-freeze capability checks
+- uv run pytest -q tests/test_capability_closed_model.py tests/test_capability_source_graph.py
+  exit 0; 338 passed in 476.99 seconds.
+- Reachable capability closure: exactly 22 sorted modules, including
+  src/unrest_harness/runtime_observability.py.
+
+Milestone checks
+- uv run ruff check .
+  exit 0; all checks passed.
+- uv run mypy src
+  exit 0; no issues in 23 source files.
+- uv run unrest check-repository
+  exit 0; all 13 repository families status ok.
+- uv run pytest -q tests/test_runtime_observability.py tests/test_cli.py
+  tests/test_environment_isolation.py tests/test_coordinator.py
+  tests/test_coordinator_parallel.py tests/test_task_validation.py
+  tests/test_capability_closed_model.py tests/test_capability_source_graph.py
+  tests/test_documentation_contract.py
+  exit 0; 678 passed in 463.93 seconds.
+
+Sole full-source-suite checkpoint
+- env -u CODEX_PATH UV_CACHE_DIR=/tmp/unrest-release-uv-cache uv run pytest -q
+  exit 1; 2 failed, 3432 passed, 7 skipped in 4246.59 seconds.
+- Both failures are the sandbox's PermissionError denial for
+  socket.bind(("127.0.0.1", 0)) in the worker and terminal-reviewer
+  parameterizations of test_real_mcp_inventory_fd_redacts_before_crash_and_restart.
+- Exact independent loopback-capable continuation: exit 0; 2 passed in 3.53s,
+  recorded in evidence/batch-0/full-gate.txt.
+- Classification: passed with environment-only loopback denial. No authority
+  behavior was changed and the full source suite was not repeated.
+
+Build, distribution, and installed lifecycle
+- Initial sandboxed uv build: exit 2; DNS/network denial fetching setuptools.
+- Authorized uv build: exit 0; wheel and sdist built from the frozen product.
+- uv run python tools/check_distribution.py dist: exit 0; 48 package files.
+- Candidate wheel SHA-256:
+  f9b821bb2571ed9ed1ef9dd3cbb940aa13edf5219577d2d98c8d91524f41d53f.
+- Candidate sdist SHA-256:
+  6e50b971f62694171e91415c8e44a35bf61bcfc87862350696bb8908f122a4c3.
+- Python 3.11.15, 3.12.13, and 3.13.12 unrelated-cwd site-packages
+  provenance and text/JSON default/strict/error probes: exit 0 in every lane.
+- Python 3.13 installed persistence/restart lifecycle: exit 0, done state,
+  two attempts, one terminal review.
+
+Rollback and history
+- Exact base wheel SHA-256:
+  4215a3f78cc9300ff5f8ca0ff7243580bcfec1bca6ced05f4f315cf99dff4b46.
+- Isolated candidate overlay tree matched d3da52281b6e10ac692ed88f39848bb65e5f03b5;
+  restore returned exact base tree f53caa3aebacef998b670597b14254c62af0bfb7.
+- Installed candidate/base observations both exited 0 and left project records
+  and runtime cursor bytes unchanged.
+- Historical non-passing record full-suite-limitation.json remains unchanged at
+  SHA-256 48e9fcd925ac117a7a6003b65288df117fca68e85278c29a315f59bbb2521486.

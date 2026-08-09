@@ -1,0 +1,26 @@
+Telemetry and cold-start rollback dry-run
+Date: 2026-08-09
+Base SHA: 2d393cf1e077e081598719292456c20f6bd1a616
+Base tree: f53caa3aebacef998b670597b14254c62af0bfb7
+Candidate product tree: c6450e3a6691ab2c28fef12c330c93f39fee3afc
+
+Isolated tree dry-run
+- Local no-hardlink clone of the exact base: exit 0.
+- Overlay and stage exactly the 17 product paths from product-tree-manifest.json.
+- git write-tree: c6450e3a6691ab2c28fef12c330c93f39fee3afc.
+- git restore --staged --worktree .: exit 0.
+- git status --short: empty.
+- git write-tree: f53caa3aebacef998b670597b14254c62af0bfb7.
+- git rev-parse HEAD^{tree}: f53caa3aebacef998b670597b14254c62af0bfb7.
+
+Installed base/candidate proof on CPython 3.13.12
+- Candidate wheel SHA-256: d240be048c9ff8dd8c3ccdca927cfe2873ecc829b689b53e2f3b171bc5593432.
+- Base wheel SHA-256: 0e8341967a1051b65880ca6dc9b505fe7f434bfe81553e8ca534b57b41da6aeb.
+- Both wheels imported from their isolated site-packages and read the same
+  representative schema-v1 project with exit 0.
+- Project-file digest before observations:
+  5886be386f2143c3d91d0f3dc131bebe3eadc51a3401ed4550c7191533d757cc.
+- Project-file digest after candidate and base observations:
+  5886be386f2143c3d91d0f3dc131bebe3eadc51a3401ed4550c7191533d757cc.
+- No persisted schema migration exists; no .unrest-runtime cursor was created
+  or mutated by observation.

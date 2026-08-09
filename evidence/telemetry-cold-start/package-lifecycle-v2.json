@@ -1,0 +1,43 @@
+{
+  "archive_check": {
+    "command": "uv run python tools/check_distribution.py dist",
+    "exit_code": 0,
+    "inventory_artifact": "evidence/telemetry-cold-start/package-inventory.txt",
+    "inventory_sha256": "339064bcda05fcda2592a08598e39e20654e8d831cad1fac2eeff189bc7ccac3",
+    "package_files": 48,
+    "sdist_sha256": "6e50b971f62694171e91415c8e44a35bf61bcfc87862350696bb8908f122a4c3",
+    "wheel_sha256": "f9b821bb2571ed9ed1ef9dd3cbb940aa13edf5219577d2d98c8d91524f41d53f"
+  },
+  "lanes": [
+    {
+      "cli": {"configuration_error_exit": 1, "default_json_exit": 0, "default_text_exit": 0, "strict_json_exit": 1, "strict_text_exit": 1},
+      "import_path": "/private/tmp/unrest-reseal-py311.NJqshW/lib/python3.11/site-packages/unrest_harness/__init__.py",
+      "python": "3.11.15",
+      "source_checkout_importable": false
+    },
+    {
+      "cli": {"configuration_error_exit": 1, "default_json_exit": 0, "default_text_exit": 0, "strict_json_exit": 1, "strict_text_exit": 1},
+      "import_path": "/private/tmp/unrest-reseal-py312.47tFJl/lib/python3.12/site-packages/unrest_harness/__init__.py",
+      "python": "3.12.13",
+      "source_checkout_importable": false
+    },
+    {
+      "cli": {"configuration_error_exit": 1, "default_json_exit": 0, "default_text_exit": 0, "strict_json_exit": 1, "strict_text_exit": 1},
+      "full_installed_lifecycle": {"attempts": 2, "exit_code": 0, "persistence_restart_checked": true, "state": "done", "terminal_reviews": 1},
+      "import_path": "/private/tmp/unrest-reseal-py313.WX02GX/lib/python3.13/site-packages/unrest_harness/__init__.py",
+      "python": "3.13.12",
+      "source_checkout_importable": false
+    }
+  ],
+  "mixed_fixture_observations": {
+    "default_preserved_success_and_snapshot_changed_failure": true,
+    "invalid_configuration_stderr": "Error: invalid_configuration",
+    "json_schema_version": 1,
+    "representative_persisted_state": "draft",
+    "strict_emitted_complete_payload_before_exit": true,
+    "tree_unchanged_after_observation": true
+  },
+  "product_tree_hash": "d3da52281b6e10ac692ed88f39848bb65e5f03b5",
+  "schema_version": 2,
+  "status": "passed"
+}

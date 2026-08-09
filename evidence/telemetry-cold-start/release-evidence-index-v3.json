@@ -1,0 +1,103 @@
+{
+  "current_authority": true,
+  "current_positive_evidence": {
+    "environment": {
+      "implementation_tree_hash": "1f963ef1004b308a82dfc402ebcdec436afeef03",
+      "path": "evidence/telemetry-cold-start/full-suite-environment-classification-v2.json",
+      "sha256": "aefa152af11bf3f506126167ce92351c8829298c21b152c89250749fad9f9e51",
+      "status": "passed"
+    },
+    "heldout_v3": {
+      "implementation_tree_hash": "1f963ef1004b308a82dfc402ebcdec436afeef03",
+      "path": "evidence/telemetry-cold-start/final-tree-binding-v3/heldout-result.json",
+      "sha256": "8d04e54d0b105bb6cc5ca9474db345b0b85b16dc97a21924d9204da6150d98b1",
+      "status": "passed"
+    },
+    "loopback": {
+      "implementation_tree_hash": "1f963ef1004b308a82dfc402ebcdec436afeef03",
+      "path": "evidence/telemetry-cold-start/final-tree-binding-v3/loopback-result.json",
+      "sha256": "dd03db594930ab369472e9da793ae451431fa69a700126ab120e21ad15fafd6a",
+      "status": "passed"
+    },
+    "package": {
+      "implementation_tree_hash": "1f963ef1004b308a82dfc402ebcdec436afeef03",
+      "path": "evidence/telemetry-cold-start/package-evaluation-v3.json",
+      "sha256": "de3f3043956bdb76fb2cf58ba192171a870dfff41188d47c84dad34e936d0544",
+      "status": "passed"
+    },
+    "rollback": {
+      "implementation_tree_hash": "1f963ef1004b308a82dfc402ebcdec436afeef03",
+      "path": "evidence/telemetry-cold-start/rollback-evaluation-v3.json",
+      "sha256": "762953180e8ab1be1188c0cf434da812788a4ee9e0e732697412a118f27440d4",
+      "status": "passed"
+    }
+  },
+  "excluded_untracked_paths": [
+    ".validation/",
+    "validator-regressions/"
+  ],
+  "historical_records": [
+    {
+      "classification": "historical-predecessor-public-benchmark",
+      "implementation_tree_hash": "42d84aed5c0f96e3ca0e61f1fde1cd750a7fc8db",
+      "used_for_current_verdict": false
+    },
+    {
+      "classification": "historical-superseded-positive-checkpoint",
+      "path": "evidence/telemetry-cold-start/release-verdict-v2.json",
+      "sha256": "388f648fcf7574e796194a27a0d60158f0cb1364a77cc4e741533384f6a40ae0",
+      "used_for_current_verdict": false
+    },
+    {
+      "classification": "historical-non-passing-v1",
+      "path": "evidence/telemetry-cold-start/full-suite-limitation.json",
+      "sha256": "48e9fcd925ac117a7a6003b65288df117fca68e85278c29a315f59bbb2521486",
+      "used_for_current_verdict": false
+    },
+    {
+      "classification": "historical-superseded-product-manifest-v1",
+      "path": "evidence/telemetry-cold-start/product-tree-manifest.json",
+      "used_for_current_verdict": false
+    },
+    {
+      "classification": "historical-superseded-product-manifest-v2",
+      "path": "evidence/telemetry-cold-start/product-tree-manifest-v2.json",
+      "used_for_current_verdict": false
+    },
+    {
+      "classification": "different-candidate-batch-0-continuation",
+      "path": "evidence/batch-0/full-gate.txt",
+      "used_for_current_verdict": false
+    }
+  ],
+  "history": {
+    "base": {
+      "commit_sha": "2d393cf1e077e081598719292456c20f6bd1a616",
+      "tree_hash": "f53caa3aebacef998b670597b14254c62af0bfb7"
+    },
+    "implementation": {
+      "commit_sha": "d6c253a7d5f1ecb8e0df94efb271bfe8c34df2bd",
+      "manifest": "evidence/telemetry-cold-start/implementation-tree-manifest-v3.json",
+      "manifest_sha256": "66c2c4e6fcefbc225f4c4d4096db629b97d2a9a9d2b06d124721d258bd6c0ea3",
+      "parent_commit_sha": "2d393cf1e077e081598719292456c20f6bd1a616",
+      "tree_hash": "1f963ef1004b308a82dfc402ebcdec436afeef03"
+    },
+    "product": {
+      "commit_sha": "2e81494d98cc3e1d5c986e138f4dde06d9dedaf2",
+      "manifest": "evidence/telemetry-cold-start/product-tree-manifest-v3.json",
+      "manifest_sha256": "a57c5ae9a53eb3ea0955af266e4485a5aa22adef1504ef4d09f51309da50d52f",
+      "parent_commit_sha": "d6c253a7d5f1ecb8e0df94efb271bfe8c34df2bd",
+      "tree_hash": "f52a245d043ca650042ab98e408d795ca3d54b57"
+    },
+    "release_head": {
+      "commit_sha": null,
+      "commit_sha_carrier": "the published branch tip containing this index; self-reference is intentionally prohibited",
+      "parent_commit_sha": "2e81494d98cc3e1d5c986e138f4dde06d9dedaf2"
+    }
+  },
+  "record_type": "current-release-evidence-index",
+  "release_note": "docs/release/telemetry-cold-start-hardening.md",
+  "schema_version": 1,
+  "status": "passed",
+  "summary": "Current authority binds only the reachable final implementation tree to final v3, loopback, package, rollback, and environment evidence. Predecessor, v1/v2, and Batch-0 records remain historical and are excluded from the verdict."
+}
