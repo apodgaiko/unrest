@@ -1,0 +1,7 @@
+{
+  "mode": "evaluation",
+  "record_type": "limitation",
+  "schema_version": 1,
+  "status": "non-passing",
+  "summary": "The sole Python 3.13 frozen-candidate full suite exited 1: two sandbox loopback-bind denials and one stale reachable-module-count assertion (expected 21, observed 22). The suite was not rerun and no release head was created."
+}

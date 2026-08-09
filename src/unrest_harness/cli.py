@@ -477,9 +477,29 @@ def _stale_threshold(
     return parsed
 
 
+def _observation_store(config: HarnessConfig) -> ProjectStore:
+    """Construct the CLI observer store only from directory-shaped roots."""
+
+    for root in (config.harness_home, config.projects_dir):
+        try:
+            info = root.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise ValueError("invalid observation root") from exc
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError("invalid observation root")
+    return ProjectStore(config)
+
+
 @cli.command("observe-project")
 @click.argument("project_id", required=False)
 @click.option("--all", "all_projects", is_flag=True)
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="With --all, exit 1 after emitting the complete payload if failures exist.",
+)
 @click.option(
     "--format",
     "output_format",
@@ -496,16 +516,46 @@ def _stale_threshold(
 def observe_project_cmd(
     project_id: str | None,
     all_projects: bool,
+    strict: bool,
     output_format: str,
     stale_after_seconds: int,
 ) -> None:
-    """Print a read-only runtime snapshot for PROJECT_ID or every project."""
+    """Print a read-only runtime snapshot for PROJECT_ID or every project.
 
-    if (project_id is None) == (not all_projects):
+    Capture is limited to 4 MiB per file, 16 MiB total, 4,096 selected files
+    or entries, depth 6, and three snapshot attempts. Cursor limit violations
+    report unsafe_cursor; an invalid projects root reports unsafe_project_path.
+    """
+
+    if (project_id is None) == (not all_projects) or (strict and not all_projects):
         raise click.ClickException("invalid_project_id")
     if project_id is not None and not validate_project_id(project_id):
         raise click.ClickException("invalid_project_id")
-    store = ProjectStore(HarnessConfig.discover())
+    strict_failure = False
+    try:
+        for path_variable in ("UNREST_HOME", "UNREST_PROJECTS_DIR"):
+            ambient_path = os.environ.get(path_variable)
+            if ambient_path is not None and (
+                len(ambient_path) > 4096 or not ambient_path.isprintable()
+            ):
+                raise ValueError("invalid ambient path")
+        ambient_parallelism = os.environ.get("UNREST_MAX_PARALLEL_NODES")
+        if ambient_parallelism is not None:
+            parsed_parallelism = int(ambient_parallelism)
+            if parsed_parallelism <= 0:
+                raise ValueError("invalid ambient parallelism")
+        ambient_worker_model = os.environ.get("UNREST_WORKER_MODEL")
+        if ambient_worker_model is not None and (
+            not ambient_worker_model.strip()
+            or len(ambient_worker_model) > 256
+            or not ambient_worker_model.isprintable()
+        ):
+            raise ValueError("invalid ambient worker model")
+        config = HarnessConfig.discover()
+        config.validate_capability_support()
+        store = _observation_store(config)
+    except (OSError, RuntimeError, ValueError):
+        raise click.ClickException("invalid_configuration") from None
     try:
         if all_projects:
             collection = observe_all_projects_runtime(
@@ -517,6 +567,7 @@ def observe_project_cmd(
                 if output_format == "json"
                 else render_runtime_collection(collection)
             )
+            strict_failure = bool(collection.failures)
         else:
             assert project_id is not None
             observation = observe_project_runtime(
@@ -532,6 +583,8 @@ def observe_project_cmd(
     except RuntimeObservationError as error:
         raise click.ClickException(error.code) from error
     click.echo(rendered, nl=False)
+    if strict and strict_failure:
+        raise click.exceptions.Exit(1)
 
 
 # ---------------------------------------------------------------------------

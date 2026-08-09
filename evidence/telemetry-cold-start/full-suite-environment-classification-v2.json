@@ -1,0 +1,25 @@
+{
+  "candidate_result": {
+    "command": "env -u CODEX_PATH UV_CACHE_DIR=/tmp/unrest-release-uv-cache uv run pytest -q",
+    "duration_seconds": 4246.59,
+    "exit_code": 1,
+    "failed": 2,
+    "passed": 3432,
+    "skipped": 7
+  },
+  "classification": "environment-only-loopback-denial",
+  "independent_loopback_evidence": {
+    "artifact": "evidence/telemetry-cold-start/final-tree-binding-v3/loopback-result.json",
+    "artifact_sha256": "dd03db594930ab369472e9da793ae451431fa69a700126ab120e21ad15fafd6a",
+    "candidate_head_at_execution": "ff316acafe9564df712d7b0e63c1e373403bfbdf",
+    "environment_classification": "loopback-capable-outside-repository-sandbox",
+    "implementation_tree_hash": "1f963ef1004b308a82dfc402ebcdec436afeef03",
+    "result": "2 passed in 3.00s"
+  },
+  "mode": "evaluation",
+  "product_tree_hash": "d3da52281b6e10ac692ed88f39848bb65e5f03b5",
+  "record_type": "environment-classification",
+  "schema_version": 1,
+  "status": "passed",
+  "summary": "The repaired candidate has no product-suite failure. The only two failures are sandbox loopback-bind denials for parameterizations freshly passing 2/2 against the exact final implementation tree in a loopback-capable environment. Historical Batch 0 and predecessor-tree continuations remain negative evidence and are not used for this classification."
+}

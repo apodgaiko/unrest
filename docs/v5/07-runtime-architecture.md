@@ -149,7 +149,11 @@ uses one observation time, sorts projects, and preserves monitoring
 completeness by returning bounded per-project failure records instead of
 silently dropping malformed entries. Exactly one of `PROJECT_ID` and `--all`
 is required. `--stale-after-seconds` is a positive diagnostic threshold and
-defaults to 3600.
+defaults to 3600. `--strict` is an additive `--all` mode: it emits the same
+complete text or schema-v1 JSON payload, then exits 1 when any project failed;
+default degraded collections retain exit 0, and successful collections exit 0
+in either mode. Invalid ambient configuration closes as the value-free
+`invalid_configuration` Click diagnostic.
 
 The version-1 JSON object has these stable top-level fields, in addition to the
 version and identity fields: `persisted_state`, `derived_state`, `freshness`,
@@ -163,17 +167,38 @@ attempt identifiers. The `--all` object contains `schema_version`, one shared
 Before reading, every selected project and cursor path component is checked for
 containment, regular type, and absence of symbolic links. The observer compares
 one content capture with a post-read device/inode/size/mtime generation check
-and retries a changing snapshot at most three times. It therefore returns a
-stable coherent snapshot or a closed failure code such as `snapshot_changed`,
-`malformed_cursor`, or `unsafe_cursor`; it does not present a mixed cross-file
-read as authoritative. The operation creates no files and performs no
-reconciliation, recovery, dispatch, gate evaluation, or attention decision.
+and makes at most three snapshot attempts. Each selected regular file is capped
+at 4 MiB, the captured content total is capped at 16 MiB, at most 4,096 files or
+directory entries are selected, and traversal is capped at depth 6 relative to
+the project root. Selection and enumeration are bytewise sorted. A cursor that
+exceeds a file, total-byte, selected-file, or depth limit closes with the
+value-free `unsafe_cursor` code; an overfull or non-directory projects root
+closes with value-free `unsafe_project_path`. A generation that changes through
+all three attempts closes with `snapshot_changed`. The observer therefore
+returns a stable coherent snapshot or a closed failure code; it does not
+present a mixed cross-file read as authoritative. The operation creates no
+files and performs no reconciliation, recovery, dispatch, gate evaluation, or
+attention decision.
 
 The snapshot reports structural progress, task/status/type counts,
 attention-kind counts, ready gates, per-task dependency and attempt facts,
 anomalies, and one advisory shadow scheduler action. Active progress excludes
-superseded tasks. It deliberately does not emit an effort percentage, ETA,
+superseded tasks. Count category names and order come from the corresponding
+closed model literals, and every emitted count group reconciles to its source
+item total. It deliberately does not emit an effort percentage, ETA,
 completion projection, or inferred supervision state.
+
+Text display identifiers are at most 80 characters. Values requiring
+shortening or control-character normalization use a 16-hex SHA-256 suffix
+inside that bound. Every text line is at most 240 characters; large anomaly ID
+sets emit an exact total and `omitted=0`, followed by one bounded line per ID.
+
+Ready gates use authored task-list order, matching the coordinator's graph
+tie-break. When any task is marked running, the advisory action names the full
+authored-order reconciliation pass; per-task timing and anomaly facts retain
+the distinctions between completed, malformed, missing, stale, and
+cursor-mismatched attempts. A failed-task anomaly is suppressed per task only
+when an open attention cursor has that same mission and node identifier.
 
 Freshness fields are ages of named cursor or newest-input file modification
 times. Active-attempt elapsed time comes from the filename-safe dispatch cursor
@@ -189,7 +214,12 @@ environment values.
 
 The observation failure codebook is `invalid_format`, `invalid_project_id`,
 `invalid_stale_threshold`, `malformed_cursor`, `project_not_found`,
-`snapshot_changed`, `unsafe_cursor`, and `unsafe_project_path`. Runtime anomaly
+`non_current_mission`, `snapshot_changed`, `unsafe_cursor`, and
+`unsafe_project_path`. A supplied mission selector is current-only in schema
+version 1: the current mission is supported, a syntactically invalid selector
+is `malformed_cursor`, and any valid non-current or missing mission is
+`non_current_mission`; historical task, attention, and scheduler attribution is
+not attempted. Runtime anomaly
 codes are `mission_cursor_mismatch`, `failed_task_without_attention`,
 `running_without_attempt_id`, `attempt_cursor_mismatch`,
 `malformed_attempt_handoff`, `completed_attempt_unreconciled`, and
@@ -197,14 +227,53 @@ codes are `mission_cursor_mismatch`, `failed_task_without_attention`,
 shadow reason are closed categorical fields rather than arbitrary display
 strings.
 
+Attempt timing accepts the existing UTC filename timestamp form
+`YYYY-MM-DDTHH-MM-SSZ` with an optional four-digit parallel suffix. The
+timestamp portion is ASCII and calendar-valid. Numeric UTC construction now
+preserves that operator-visible grammar without loading `_strptime` or
+`calendar` during a cold first observation; no attempt-file rename or cursor
+migration is required.
+
+## Validated capture performance
+
+`OPT-OBS-001` compares fixed base `2d393cf1` with the sealed implementation
+tree `42d84aed5c0f96e3ca0e61f1fde1cd750a7fc8db` under CPython 3.13.12. The 19
+public cases and the prospectively committed v3 case produced exact normalized
+output, deterministic fields, and unchanged observed trees. Across the six
+public 10/40-history cases the candidate read no contract prose or irrelevant
+history bodies, reduced read bytes by at least 96.486%, and had a maximum
+median traced peak of 86,889 bytes. The v3 case selected 6 rather than 128
+files, read 1,529 rather than 63,167,217 bytes, and reduced median traced peak
+from 64,846,835 to 85,044 bytes. These are observer capture/cold-start results,
+not mission elapsed-time savings.
+
+The evidence chronology remains part of the result. V1 is incomplete negative
+evidence: it failed the public memory guardrail and lacked a frozen held-out
+derivation, input hash, and oracle. V2 was prospectively reproducible but also
+failed: its candidate held-out peak was 1,221,623 bytes, above the 307,200-byte
+ceiling, because cold `datetime.strptime` loaded `_strptime` and `calendar`
+inside the measured region. Only the later, prospectively frozen v3 result is
+acceptance evidence for the parser repair. Warm-cache latency was recorded as
+a secondary metric and is not generalized beyond the measured cases.
+
+Schema version 1 and persisted cursor formats are unchanged. The hardening
+requires no data migration; rolling back means reverting this release's
+product and documentation changes and reinstalling the preceding wheel.
+Existing projects must then be checked with focused observer/CLI coverage and
+a before/after tree inventory, because observation must not mutate runtime
+cursors in either direction.
+
 ## Deferred iteration-speed work
 
-This change deliberately measures delay without changing runtime authority.
+This change reduces observation cost without changing runtime authority.
 The postponed optimization inventory, activation gates, and risks are recorded
 in the proposed [observe-before-optimizing decision](../decisions/ADR-0001-observe-before-optimizing.md).
 Until a separate reviewed change activates an item, Unrest does not reuse
 evidence, wake or dispatch itself from observer output, recover attempts
-automatically, skip gates, or publish an ETA.
+automatically, skip gates, or publish an ETA. The remaining multi-day issue is
+external wake/checkpoint cadence around host automation, attention,
+gate-checkpoint, and closure boundaries; this release makes no autonomous
+dispatch, recovery, or elapsed-time-saving claim.
 
 ## Terminal review
 

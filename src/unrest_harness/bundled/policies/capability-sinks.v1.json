@@ -162,7 +162,7 @@
       "reason": "Delegates to the cataloged canonical atomic artifact boundary."
     }
   ],
-  "reachable_source_sha256": "0116019154b124cfd4aab4f9c53b18a6bbc1309dba289b97cb0451dc20e0badb",
+  "reachable_source_sha256": "1954ba404686587388bf827361003d52be99d9b2cdba8b11cf89e55221ab5d94",
   "schema_version": 1,
   "sinks": [
     {

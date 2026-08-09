@@ -68,12 +68,50 @@ def test_current_capability_source_graph_has_exact_reviewed_closure() -> None:
         "src/unrest_harness/models.py",
         "src/unrest_harness/providers.py",
         "src/unrest_harness/repository_contract.py",
+        "src/unrest_harness/runtime_observability.py",
         "src/unrest_harness/server.py",
         "src/unrest_harness/storage.py",
         "src/unrest_harness/task_list_patch.py",
         "src/unrest_harness/task_validation.py",
     )
     assert "src/unrest_harness/__main__.py" not in graph
+
+
+def test_observer_gate_order_primitive_adds_no_authority_effect() -> None:
+    task_tree = ast.parse(
+        (ROOT / "src/unrest_harness/task_validation.py").read_text(encoding="utf-8")
+    )
+    primitive = next(
+        node
+        for node in task_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "gates_in_order"
+    )
+    assert not any(isinstance(node, ast.Call) for node in ast.walk(primitive))
+
+    observer_tree = ast.parse(
+        (ROOT / "src/unrest_harness/runtime_observability.py").read_text(
+            encoding="utf-8"
+        )
+    )
+    forbidden_authority_modules = {
+        "acp_runner",
+        "controller",
+        "coordinator",
+        "dispatcher",
+        "server",
+    }
+    imported_local_modules = {
+        (node.module or "").split(".")[0]
+        for node in observer_tree.body
+        if isinstance(node, ast.ImportFrom) and node.level
+    }
+    assert imported_local_modules.isdisjoint(forbidden_authority_modules)
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr.startswith(("save_", "create_", "dispatch", "step"))
+        for node in ast.walk(observer_tree)
+    )
 
 
 def test_new_import_adds_helper_and_executed_package_initializer(

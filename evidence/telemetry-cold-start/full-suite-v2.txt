@@ -1,0 +1,20 @@
+Telemetry and cold-start release-candidate v2 full-suite result
+Date: 2026-08-09
+Python: CPython 3.13.12
+Product tree: d3da52281b6e10ac692ed88f39848bb65e5f03b5
+
+Command
+env -u CODEX_PATH UV_CACHE_DIR=/tmp/unrest-release-uv-cache uv run pytest -q
+
+Raw terminal summary
+2 failed, 3432 passed, 7 skipped in 4246.59s (1:10:46)
+
+Failure ids
+- tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart[worker]
+- tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart[terminal-reviewer]
+
+Both failures occurred at socket.bind(("127.0.0.1", 0)) with
+PermissionError: [Errno 1] Operation not permitted. No other case failed. The
+full suite was not rerun. The independently established loopback-capable result
+for exactly these two parameterizations is 2 passed in 3.53s, recorded in
+evidence/batch-0/full-gate.txt.

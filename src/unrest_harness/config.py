@@ -7,8 +7,11 @@ from pathlib import Path
 from typing import Literal
 
 from .capability_policy import (
+    CAPABILITY_PROFILE_ENV,
     CAPABILITY_POLICY_VERSION,
+    CAPABILITY_VERSION_ENV,
     SAFE_PROFILE,
+    UNSAFE_DEVELOPMENT_ENV,
     CapabilityPolicy,
     CapabilityPolicyError,
     RoleName,
@@ -24,6 +27,35 @@ from .providers import (
 
 DEFAULT_MAX_PARALLEL_NODES = 4
 DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS = 900
+
+_CONFIG_ENV = {
+    "harness_home": "UNREST_HOME",
+    "projects_dir": "UNREST_PROJECTS_DIR",
+    "orchestrator_provider": "UNREST_ORCHESTRATOR_PROVIDER",
+    "worker_provider": "UNREST_WORKER_PROVIDER",
+    "worker_acp_command": "UNREST_WORKER_ACP_COMMAND",
+    "validator_provider": "UNREST_VALIDATOR_PROVIDER",
+    "validator_acp_command": "UNREST_VALIDATOR_ACP_COMMAND",
+    "terminal_reviewer_provider": "UNREST_TERMINAL_REVIEWER_PROVIDER",
+    "terminal_reviewer_acp_command": "UNREST_TERMINAL_REVIEWER_ACP_COMMAND",
+    "max_parallel_nodes": "UNREST_MAX_PARALLEL_NODES",
+    "terminal_review_timeout": "UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS",
+    "worker_reasoning_effort": "UNREST_WORKER_REASONING_EFFORT",
+    "validator_reasoning_effort": "UNREST_VALIDATOR_REASONING_EFFORT",
+    "terminal_reviewer_reasoning_effort": (
+        "UNREST_TERMINAL_REVIEWER_REASONING_EFFORT"
+    ),
+}
+
+# Test isolation derives its scrub set from the same names used by discover().
+HARNESS_CONFIG_ENV_VARS = frozenset(
+    {
+        *_CONFIG_ENV.values(),
+        CAPABILITY_PROFILE_ENV,
+        CAPABILITY_VERSION_ENV,
+        UNSAFE_DEVELOPMENT_ENV,
+    }
+)
 
 # codex-acp `model_reasoning_effort` values. Also a safety allowlist: the
 # resolved value is spliced into a shell command line by acp_runner. Codex's
@@ -110,28 +142,33 @@ class HarnessConfig:
             resolve_profile_from_environment(os.environ)
         )
         harness_home = (
-            Path(os.environ.get("UNREST_HOME") or (Path.home() / ".unrest"))
+            Path(
+                os.environ.get(_CONFIG_ENV["harness_home"])
+                or (Path.home() / ".unrest")
+            )
             .expanduser()
             .resolve()
         )
         projects_dir = (
-            _resolve_optional_path(os.environ.get("UNREST_PROJECTS_DIR"))
+            _resolve_optional_path(os.environ.get(_CONFIG_ENV["projects_dir"]))
             or harness_home / "projects"
         )
         orchestrator_provider_name = os.environ.get(
-            "UNREST_ORCHESTRATOR_PROVIDER", "claude"
+            _CONFIG_ENV["orchestrator_provider"], "claude"
         )
         worker_provider_name = os.environ.get(
-            "UNREST_WORKER_PROVIDER"
+            _CONFIG_ENV["worker_provider"]
         ) or default_worker_provider_name(orchestrator_provider_name)
-        worker_acp_command = os.environ.get("UNREST_WORKER_ACP_COMMAND")
-        validator_provider_name = os.environ.get("UNREST_VALIDATOR_PROVIDER")
-        validator_acp_command = os.environ.get("UNREST_VALIDATOR_ACP_COMMAND")
+        worker_acp_command = os.environ.get(_CONFIG_ENV["worker_acp_command"])
+        validator_provider_name = os.environ.get(_CONFIG_ENV["validator_provider"])
+        validator_acp_command = os.environ.get(
+            _CONFIG_ENV["validator_acp_command"]
+        )
         terminal_reviewer_provider_name = os.environ.get(
-            "UNREST_TERMINAL_REVIEWER_PROVIDER"
+            _CONFIG_ENV["terminal_reviewer_provider"]
         )
         terminal_reviewer_acp_command = os.environ.get(
-            "UNREST_TERMINAL_REVIEWER_ACP_COMMAND"
+            _CONFIG_ENV["terminal_reviewer_acp_command"]
         )
         return cls(
             bundled_dir=_bundled_dir(),
@@ -145,24 +182,24 @@ class HarnessConfig:
             terminal_reviewer_provider_name=terminal_reviewer_provider_name,
             terminal_reviewer_acp_command=terminal_reviewer_acp_command,
             max_parallel_nodes=_resolve_max_parallel(
-                os.environ.get("UNREST_MAX_PARALLEL_NODES")
+                os.environ.get(_CONFIG_ENV["max_parallel_nodes"])
             ),
             terminal_review_timeout_seconds=_resolve_positive_seconds(
-                os.environ.get("UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS"),
-                env_var="UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS",
+                os.environ.get(_CONFIG_ENV["terminal_review_timeout"]),
+                env_var=_CONFIG_ENV["terminal_review_timeout"],
                 default=DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS,
             ),
             worker_reasoning_effort=_resolve_reasoning_effort(
-                os.environ.get("UNREST_WORKER_REASONING_EFFORT"),
-                env_var="UNREST_WORKER_REASONING_EFFORT",
+                os.environ.get(_CONFIG_ENV["worker_reasoning_effort"]),
+                env_var=_CONFIG_ENV["worker_reasoning_effort"],
             ),
             validator_reasoning_effort=_resolve_reasoning_effort(
-                os.environ.get("UNREST_VALIDATOR_REASONING_EFFORT"),
-                env_var="UNREST_VALIDATOR_REASONING_EFFORT",
+                os.environ.get(_CONFIG_ENV["validator_reasoning_effort"]),
+                env_var=_CONFIG_ENV["validator_reasoning_effort"],
             ),
             terminal_reviewer_reasoning_effort=_resolve_reasoning_effort(
-                os.environ.get("UNREST_TERMINAL_REVIEWER_REASONING_EFFORT"),
-                env_var="UNREST_TERMINAL_REVIEWER_REASONING_EFFORT",
+                os.environ.get(_CONFIG_ENV["terminal_reviewer_reasoning_effort"]),
+                env_var=_CONFIG_ENV["terminal_reviewer_reasoning_effort"],
             ),
             capability_policy_version=capability_policy_version,
             capability_profile=capability_profile,

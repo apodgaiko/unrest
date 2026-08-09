@@ -12,10 +12,13 @@ applies_to:
   - src/unrest_harness/capability_policy.py
   - src/unrest_harness/cli.py
   - src/unrest_harness/config.py
+  - src/unrest_harness/coordinator.py
   - src/unrest_harness/providers.py
   - src/unrest_harness/repository_contract.py
+  - src/unrest_harness/runtime_observability.py
   - src/unrest_harness/server.py
   - src/unrest_harness/storage.py
+  - src/unrest_harness/task_validation.py
 verified_by:
   - tests/test_capability_closed_model.py
   - tests/test_capability_policy.py
@@ -202,6 +205,18 @@ without a method-name allowlist; explicit effects retain their precise
 diagnostics.
 Adding an implementation effect, adding an omission, or deleting either side
 of a declaration fails repository validation.
+
+The schema-v1 observability review pins effect-graph SHA-256
+`67f0221a3a31b7fd9be666a2a06e7bac4199ca54223dbf625aab1b03f36c1ca7`.
+Relative to the preceding reviewed graph, the source refactor changes only
+normalized completeness records: the 64 capability effects, including
+multiplicity, are identical and no sink or omission record is added or removed.
+The authority trace is `TaskList -> gates_in_order -> authored gate sequence`.
+Both coordinator evaluation and observer projection consume that returned
+sequence; the primitive performs no call, I/O, mutation, callback, serialization,
+or authority resolution. The observer remains a read-only consumer and gains no
+observer-to-coordinator, dispatcher, controller, server, or ACP authority edge.
+
 `unrest check-repository` runs those same strict loaders against the three
 checked-in packaged documents, including the role policy, and also validates
 each document against its canonical schema. Governance classification alone is

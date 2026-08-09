@@ -1,0 +1,11 @@
+{
+  "artifact_path": "evidence/telemetry-cold-start/rollback-transcript.txt",
+  "artifact_sha256": "0a36ed9ab5a86a564416001ec44dbe631bf165035e28bd84ef37606e57b81070",
+  "exact_check": "test -s evidence/telemetry-cold-start/rollback-transcript.txt",
+  "exit_code": 0,
+  "mode": "rollback",
+  "observed_result": "rollback-complete",
+  "record_type": "evidence",
+  "schema_version": 1,
+  "status": "passed"
+}
