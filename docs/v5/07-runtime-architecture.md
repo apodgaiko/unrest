@@ -227,14 +227,53 @@ codes are `mission_cursor_mismatch`, `failed_task_without_attention`,
 shadow reason are closed categorical fields rather than arbitrary display
 strings.
 
+Attempt timing accepts the existing UTC filename timestamp form
+`YYYY-MM-DDTHH-MM-SSZ` with an optional four-digit parallel suffix. The
+timestamp portion is ASCII and calendar-valid. Numeric UTC construction now
+preserves that operator-visible grammar without loading `_strptime` or
+`calendar` during a cold first observation; no attempt-file rename or cursor
+migration is required.
+
+## Validated capture performance
+
+`OPT-OBS-001` compares fixed base `2d393cf1` with the sealed implementation
+tree `42d84aed5c0f96e3ca0e61f1fde1cd750a7fc8db` under CPython 3.13.12. The 19
+public cases and the prospectively committed v3 case produced exact normalized
+output, deterministic fields, and unchanged observed trees. Across the six
+public 10/40-history cases the candidate read no contract prose or irrelevant
+history bodies, reduced read bytes by at least 96.486%, and had a maximum
+median traced peak of 86,889 bytes. The v3 case selected 6 rather than 128
+files, read 1,529 rather than 63,167,217 bytes, and reduced median traced peak
+from 64,846,835 to 85,044 bytes. These are observer capture/cold-start results,
+not mission elapsed-time savings.
+
+The evidence chronology remains part of the result. V1 is incomplete negative
+evidence: it failed the public memory guardrail and lacked a frozen held-out
+derivation, input hash, and oracle. V2 was prospectively reproducible but also
+failed: its candidate held-out peak was 1,221,623 bytes, above the 307,200-byte
+ceiling, because cold `datetime.strptime` loaded `_strptime` and `calendar`
+inside the measured region. Only the later, prospectively frozen v3 result is
+acceptance evidence for the parser repair. Warm-cache latency was recorded as
+a secondary metric and is not generalized beyond the measured cases.
+
+Schema version 1 and persisted cursor formats are unchanged. The hardening
+requires no data migration; rolling back means reverting this release's
+product and documentation changes and reinstalling the preceding wheel.
+Existing projects must then be checked with focused observer/CLI coverage and
+a before/after tree inventory, because observation must not mutate runtime
+cursors in either direction.
+
 ## Deferred iteration-speed work
 
-This change deliberately measures delay without changing runtime authority.
+This change reduces observation cost without changing runtime authority.
 The postponed optimization inventory, activation gates, and risks are recorded
 in the proposed [observe-before-optimizing decision](../decisions/ADR-0001-observe-before-optimizing.md).
 Until a separate reviewed change activates an item, Unrest does not reuse
 evidence, wake or dispatch itself from observer output, recover attempts
-automatically, skip gates, or publish an ETA.
+automatically, skip gates, or publish an ETA. The remaining multi-day issue is
+external wake/checkpoint cadence around host automation, attention,
+gate-checkpoint, and closure boundaries; this release makes no autonomous
+dispatch, recovery, or elapsed-time-saving claim.
 
 ## Terminal review
 

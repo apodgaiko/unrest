@@ -88,6 +88,12 @@ It must appear in the ADR index and its canonical document must resolve.
 These are the canonical copies. Product prompts may render task or handoff
 content, but do not become competing documentation templates.
 
+## Release records
+
+- [Telemetry and cold-start hardening release notes](../release/telemetry-cold-start-hardening.md)
+  — operator behavior, compatibility, measured performance, rollback, and the
+  remaining iteration-speed boundary for the validated schema-v1 observer.
+
 ## Public contract
 
 Every Markdown document selected by

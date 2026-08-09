@@ -61,6 +61,29 @@ its own accepted contract, benchmark, rollback, and protected review.
 | More mutable work concurrency | Can shorten independent implementation slices | Shared checkout, cursors, fixtures, or generated files can corrupt attribution | 5/5 | Isolated worktrees and evidence roots, deterministic integration, conflict tests, and no shared mutable workers |
 | ETA prediction | Improves operator planning but does not itself speed execution | Sparse and heterogeneous attempts produce confident-looking fiction | 3/5 | Enough labelled timing samples, calibrated error reporting, and an explicit unknown state |
 
+The validated telemetry-hardening release does not activate any row in this
+table. Its disposition of the earlier inventory is:
+
+- already landed before this release: hermetic temporary Git repositories,
+  passive timing telemetry, scheduler/recovery characterization, truthful
+  report-only states, and passive shadow scheduling;
+- landed in this release: bounded capture, corrected schema-v1 rendering and
+  projection, additive strict collection exits, ambient-configuration
+  diagnostics, and removal of the observer's cold timestamp-parser import
+  cost;
+- superseded: the draft capability corpus, which Batch 0 replaced with the
+  formal finite capability policy; and
+- still postponed: event-driven/background wake and dispatch, automated
+  recovery, evidence or gate-result reuse, ETA, coordinator-owned memory
+  semantics, and concurrent mutable work.
+
+Uncapped `advance_project` already proceeds synchronously from one completed
+worker into the next coordinator step. The remaining multi-day iteration issue
+is outside that loop: external host wake cadence plus attention,
+gate-checkpoint, and closure boundaries. Changing that cadence requires a
+persistent cross-process single-writer lease and restart/idempotency evidence;
+observer output does not supply or authorize either.
+
 Priority after telemetry is based on measured wall-time loss, not theoretical
 throughput. Idle-gap removal should be investigated first. Evidence or gate
 reuse must not be activated merely because it offers the largest apparent
@@ -182,6 +205,9 @@ and representative real-project commands.
 - Negative/cost: telemetry alone does not materially shorten a mission.
 - Compatibility/hard cut: observation JSON starts at schema version 1 and uses
   closed, value-free error codes.
+- Compatibility after hardening: schema version 1 is retained. `--strict` is
+  additive and limited to `--all`; without it, degraded collections keep their
+  prior zero exit after emitting the complete payload.
 - Schema/migration impact: none; the observer persists nothing.
 - Security/privacy impact: output is limited to identifiers, counts,
   timestamps, hashes, and closed reason codes; it excludes task bodies,
