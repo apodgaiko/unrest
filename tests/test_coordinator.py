@@ -4,12 +4,13 @@ See `specs/task_list/PRODUCT.md` §Dispatch.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from unrest_harness.config import HarnessConfig
-from unrest_harness.controller import ProjectController, ToolError
+from unrest_harness.controller import MAX_ABORT_REASON_BYTES, ProjectController, ToolError
 from unrest_harness.dispatcher import (
     DispatchRequest,
     MockDispatcher,
@@ -655,6 +656,81 @@ class TestAbortProject:
         assert env.state.state == "aborted"
         assert env.dag is None
 
+    @pytest.mark.parametrize(
+        "reason",
+        (
+            "a" * (MAX_ABORT_REASON_BYTES - 1),
+            "a" * MAX_ABORT_REASON_BYTES,
+            "🚀" * (MAX_ABORT_REASON_BYTES // 4),
+        ),
+        ids=("boundary-minus-one", "boundary", "unicode-byte-boundary"),
+    )
+    def test_abort_reason_utf8_boundary_persists_and_reloads_exactly(
+        self, config: HarnessConfig, workspace: Path, reason: str
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+
+        env = controller.abort_project(pid, reason)
+        reloaded = ProjectController(
+            config, controller.dispatcher, controller.terminal_reviewer
+        ).inspect_project(pid)
+        closeout = controller.store.mission_dir(pid, "mission-001") / "closeout.md"
+
+        assert env.state.reason == reason  # type: ignore[union-attr]
+        assert reloaded.state == env.state
+        assert closeout.read_text().endswith(reason + "\n")
+        assert len(env.state.reason.encode()) <= MAX_ABORT_REASON_BYTES  # type: ignore[union-attr]
+
+    @pytest.mark.parametrize("active", (False, True), ids=("planning", "active"))
+    @pytest.mark.parametrize(
+        "reason",
+        ("a" * (MAX_ABORT_REASON_BYTES + 1), "x" * 200_000),
+        ids=("boundary-plus-one", "two-hundred-thousand"),
+    )
+    def test_oversized_abort_is_rejected_before_any_terminal_write(
+        self, config: HarnessConfig, workspace: Path, active: bool, reason: str
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        if active:
+            controller.submit_plan(pid, _simple_tl())
+        state_path = controller.store.unrest_runtime_dir(pid) / "state.json"
+        before = state_path.read_bytes()
+        closeout = controller.store.mission_dir(pid, "mission-001") / "closeout.md"
+
+        with pytest.raises(ToolError, match="4096 UTF-8 bytes") as exc_info:
+            controller.abort_project(pid, reason)
+
+        assert len(str(exc_info.value).encode()) < 256
+        assert state_path.read_bytes() == before
+        assert not closeout.exists()
+
+    def test_abort_rejects_unencodable_unicode_before_writes(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        state_path = controller.store.unrest_runtime_dir(pid) / "state.json"
+        before = state_path.read_bytes()
+
+        with pytest.raises(ToolError, match="not valid Unicode"):
+            controller.abort_project(pid, "\ud800")
+
+        assert state_path.read_bytes() == before
+
 
 class TestResume:
     def test_resume_picks_up_attempt_landed_while_down(
@@ -684,3 +760,138 @@ class TestResume:
         controller.advance_project(pid)
         ts = store.load_task_state(pid, "mission-001")
         assert ts.status_of("w1") == "cleared"
+
+    @pytest.mark.parametrize(
+        "case",
+        (
+            "malformed_json",
+            "wrong_task",
+            "stale_generation",
+            "replayed_success",
+            "missing_attempt_id",
+            "missing_done",
+        ),
+    )
+    def test_invalid_attempt_provenance_fails_closed_and_is_idempotent(
+        self, config: HarnessConfig, workspace: Path, case: str
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+        store = controller.store
+        generation = "2026-08-10T12-00-00Z"
+        task_state = store.load_task_state(pid, "mission-001")
+        task_state.set_status("w1", "running")
+        task_state.set_last_attempt("w1", generation)
+        store.save_task_state(pid, "mission-001", task_state)
+        expected = store.attempt_path(pid, "mission-001", generation, "w1")
+        expected.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "node_id": "w1",
+            "attempt_id": generation,
+            "done": True,
+            "report": "must not be replayed",
+            "request_attention": False,
+        }
+        if case == "malformed_json":
+            expected.write_text("{")
+        elif case == "wrong_task":
+            payload["node_id"] = "other-task"
+            expected.write_text(json.dumps(payload))
+        elif case == "stale_generation":
+            payload["attempt_id"] = "2026-08-09T12-00-00Z"
+            expected.write_text(json.dumps(payload))
+        elif case == "replayed_success":
+            old = store.attempt_path(
+                pid, "mission-001", "2026-08-09T12-00-00Z", "w1"
+            )
+            payload["attempt_id"] = "2026-08-09T12-00-00Z"
+            old.write_text(json.dumps(payload))
+        elif case == "missing_attempt_id":
+            payload.pop("attempt_id")
+            expected.write_text(json.dumps(payload))
+        else:
+            payload.pop("done")
+            expected.write_text(json.dumps(payload))
+
+        restarted = ProjectController(
+            config, controller.dispatcher, controller.terminal_reviewer
+        )
+        result = restarted.advance_project(pid, max_steps=1)
+
+        assert result.state.state == "attention_needed"
+        assert store.load_task_state(pid, "mission-001").status_of("w1") == "failed"
+        attention = store.load_attention(pid)
+        assert len(attention) == 1
+        assert len(attention[0].report.encode()) < 4096
+        observed = {
+            "state": (store.unrest_runtime_dir(pid) / "state.json").read_bytes(),
+            "tasks": (
+                store.mission_runtime_dir(pid, "mission-001") / "task-state.json"
+            ).read_bytes(),
+            "attention": (
+                store.unrest_runtime_dir(pid) / "attention.json"
+            ).read_bytes(),
+            "attempts": tuple(
+                (path.name, path.read_bytes())
+                for path in sorted(
+                    store.attempts_runtime_dir(pid, "mission-001").glob("*.json")
+                )
+            ),
+        }
+
+        repeated = restarted.advance_project(pid, max_steps=1)
+        assert repeated.state.state == "attention_needed"
+        assert observed["state"] == (
+            store.unrest_runtime_dir(pid) / "state.json"
+        ).read_bytes()
+        assert observed["tasks"] == (
+            store.mission_runtime_dir(pid, "mission-001") / "task-state.json"
+        ).read_bytes()
+        assert observed["attention"] == (
+            store.unrest_runtime_dir(pid) / "attention.json"
+        ).read_bytes()
+        assert observed["attempts"] == tuple(
+            (path.name, path.read_bytes())
+            for path in sorted(
+                store.attempts_runtime_dir(pid, "mission-001").glob("*.json")
+            )
+        )
+
+    def test_valid_current_generation_attempt_resumes_once(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+        store = controller.store
+        generation = "2026-08-10T12-00-00Z"
+        task_state = store.load_task_state(pid, "mission-001")
+        task_state.set_status("w1", "running")
+        task_state.set_last_attempt("w1", generation)
+        store.save_task_state(pid, "mission-001", task_state)
+        store.save_attempt(
+            pid,
+            "mission-001",
+            generation,
+            "w1",
+            WorkHandoff(node_id="w1", done=True, report="current"),
+        )
+
+        restarted = ProjectController(
+            config, controller.dispatcher, controller.terminal_reviewer
+        )
+        restarted.advance_project(pid, max_steps=1)
+        attempts_before = tuple(store.list_attempts(pid, "mission-001", node_id="w1"))
+
+        assert store.load_task_state(pid, "mission-001").status_of("w1") == "cleared"
+        assert store.load_attention(pid) == []
+        assert tuple(store.list_attempts(pid, "mission-001", node_id="w1")) == attempts_before

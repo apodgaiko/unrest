@@ -7,12 +7,6 @@
       "statement": "Skill resolution is deterministic: project, personal, then bundled, with the first unique name winning."
     },
     {
-      "id": "ARCH-BASELINE-001",
-      "kind": "invariant",
-      "source": "docs/architecture/index.md",
-      "statement": "Baseline artifacts are byte-deterministic and every fixture is explicitly classified."
-    },
-    {
       "id": "ARCH-CLOSURE-001",
       "kind": "invariant",
       "source": "docs/v5/07-runtime-architecture.md",
@@ -37,12 +31,6 @@
       "statement": "Every covering upstream validator must pass every gate target; missing evidence and dissent fail."
     },
     {
-      "id": "ARCH-GOVERNANCE-001",
-      "kind": "invariant",
-      "source": "docs/architecture/change-governance.md",
-      "statement": "Protected path-category resolution, schema generation, and diagnostics are deterministic."
-    },
-    {
       "id": "ARCH-MCP-001",
       "kind": "invariant",
       "source": "docs/v5/08-mcp-surface.md",
@@ -58,7 +46,7 @@
       "id": "ARCH-REPOSITORY-CONTRACT-001",
       "kind": "invariant",
       "source": "docs/architecture/repository-contract.md",
-      "statement": "One read-only command deterministically validates repository identity, references, governance, schemas, generated output, and its own CI enforcement."
+      "statement": "One read-only command deterministically validates the finite required-file, reference, component, packaged-policy, and CI-wiring duties."
     },
     {
       "id": "ARCH-STATE-001",
@@ -88,7 +76,7 @@
       "id": "COMPAT-CAPABILITY-POLICY-001",
       "kind": "compatibility",
       "source": "docs/architecture/capability-policy.md",
-      "statement": "Capability policy evolution uses an explicit integer version and stable value-free provider, role, version, capability, model, and sink diagnostics."
+      "statement": "Capability policy evolution uses an explicit integer version and stable value-free provider, role, version, and capability diagnostics."
     },
     {
       "id": "COMPAT-ENVELOPE-001",
@@ -103,12 +91,6 @@
       "statement": "Supersede and cancel rewrite direct dependency edges while decision records preserve audit rationale."
     },
     {
-      "id": "COMPAT-SCHEMA-EVOLUTION-001",
-      "kind": "compatibility",
-      "source": "docs/architecture/change-governance.md",
-      "statement": "Schema readers use explicit versions with tested compatibility or an explicit hard cut and recovery path."
-    },
-    {
       "id": "SEC-CAPABILITY-001",
       "kind": "security",
       "source": "docs/architecture/capability-policy.md",
@@ -121,12 +103,6 @@
       "statement": "Worker and terminal-reviewer servers do not register orchestrator lifecycle tools."
     },
     {
-      "id": "SEC-PROTECTED-REVIEW-001",
-      "kind": "security",
-      "source": "docs/architecture/change-governance.md",
-      "statement": "Agents and providers cannot satisfy accountable review or approve protected promotion."
-    },
-    {
       "id": "SEC-REVIEW-ROOT-001",
       "kind": "security",
       "source": "specs/memory_v2/PRODUCT.md",
@@ -136,7 +112,7 @@
       "id": "SEC-SENSITIVITY-PROVENANCE-001",
       "kind": "security",
       "source": "docs/architecture/capability-policy.md",
-      "statement": "The versioned closed transform and semantic-role model joins sensitivity provenance monotonically into one canonical inventory, enforces exact ceilings, and projects that inventory through every cataloged runtime, protocol, diagnostic, artifact, and package sink."
+      "statement": "Only finite explicitly declared credential names establish exact known-value identity; payload contents never grant credential identity."
     }
   ],
   "kinds": [

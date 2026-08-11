@@ -17,7 +17,7 @@ Provide the canonical registry for repository ADR IDs and accepted status.
 
 ## Accepted decisions
 
-None.
+- [ADR-0002: Define the Lean Core v0.2 compaction perimeter](ADR-0002-lean-core-v0.2.md)
 
 ## Public contract
 
@@ -29,7 +29,7 @@ when:
 3. the document follows the canonical
    [ADR template](../templates/adr.md);
 4. its status is `accepted`;
-5. required protected-surface review and evidence are recorded.
+5. its review and acceptance evidence are recorded.
 
 Draft, proposed, superseded, and rejected decisions do not authorize behavior.
 
@@ -59,9 +59,9 @@ uv run pytest -q tests/test_documentation_contract.py -k decision
 
 ## Related decisions
 
-None.
+- [ADR-0002](ADR-0002-lean-core-v0.2.md)
 
 ## Known limitations
 
-The registry begins empty at Batch 0; lack of an ADR does not convert existing
-implementation into an accepted decision.
+Earlier implementation without a registered ADR does not acquire decision
+authority retroactively.

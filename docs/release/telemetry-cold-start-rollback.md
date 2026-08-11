@@ -1,4 +1,7 @@
-# Telemetry and cold-start rollback procedure
+# Historical telemetry and cold-start rollback record
+
+This is a non-operative record for a retired candidate. Its detailed root
+evidence was intentionally removed by the Lean Core retention decision.
 
 This procedure is bounded to the telemetry and cold-start candidate whose
 product tree is `c6450e3a6691ab2c28fef12c330c93f39fee3afc` and whose base is
@@ -17,9 +20,8 @@ nor authorized.
    no governed commit exists, as in the current blocked state, there is nothing
    to revert.
 3. In an isolated checkout, run `git revert --no-commit <release-commit>` and
-   confirm that only the paths in
-   `evidence/telemetry-cold-start/product-tree-manifest.json` plus reviewed
-   evidence/governance artifacts are reverted.
+   confirm that only the candidate's recorded product paths plus its reviewed
+   release artifacts are reverted.
 4. Confirm the restored product tree is
    `f53caa3aebacef998b670597b14254c62af0bfb7`, then commit the revert through
    ordinary protected review. Do not rewrite shared history.
@@ -30,5 +32,5 @@ nor authorized.
    json` against representative existing projects, and verify their file
    inventory is unchanged.
 
-The isolated dry-run and base/candidate wheel observations are recorded in
-`evidence/telemetry-cold-start/rollback-transcript.txt`.
+The removed detailed transcript recorded a successful isolated dry-run and
+base/candidate wheel observations; this document retains only that conclusion.

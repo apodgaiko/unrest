@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Mapping
 
 from .capability_policy import (
     CAPABILITY_PROFILE_ENV,
@@ -312,6 +312,31 @@ class HarnessConfig:
                 policy=policy,
                 profile=self.capability_profile,
             )
+
+    def credential_inventory(
+        self,
+        environment: Mapping[str, str],
+        *,
+        role: RoleName = "orchestrator",
+    ) -> dict[str, str]:
+        """Snapshot the finite credential set for one selected provider/role."""
+        role_config = self if role == "orchestrator" else self.for_role(role)
+        provider = (
+            role_config.orchestrator_provider
+            if role == "orchestrator"
+            else role_config.worker_provider
+        )
+        declaration = validate_provider_support(
+            provider,
+            role=role,
+            policy=role_config.capability_policy,
+            profile=role_config.capability_profile,
+        ).environment
+        return {
+            name: environment[name]
+            for name in declaration.credentials
+            if environment.get(name)
+        }
 
     # ------------------------------------------------------------------
     # Bucket paths

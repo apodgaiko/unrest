@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "mission_oracle": ".unrest/missions/mission-001/oracles/persistence-schema-v1/corpus.json",
+  "oracle_sha256": "01e3d203a2fe78fe90390febc7fbf6d6834f648f83a6411c59c48bc60a6b5d6e",
+  "scenarios": [
+    "planning",
+    "running",
+    "attention",
+    "quiescent",
+    "done",
+    "failed",
+    "aborted"
+  ],
+  "files": {
+    "corpus.json": "01e3d203a2fe78fe90390febc7fbf6d6834f648f83a6411c59c48bc60a6b5d6e"
+  }
+}

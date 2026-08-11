@@ -29,6 +29,7 @@
         "ARCH-ASSET-001"
       ],
       "paths": [
+        "src/unrest_harness/__init__.py",
         "src/unrest_harness/assets.py",
         "src/unrest_harness/bundled/**/*"
       ],
@@ -40,24 +41,9 @@
       ]
     },
     {
-      "decisions": [],
-      "id": "COMP-BASELINE",
-      "invariants": [
-        "ARCH-BASELINE-001"
+      "decisions": [
+        "ADR-0002"
       ],
-      "paths": [
-        "evals/baseline/**/*",
-        "src/unrest_harness/baseline.py"
-      ],
-      "specifications": [
-        "docs/v5/10-implementation-plan.md"
-      ],
-      "tests": [
-        "tests/test_baseline.py"
-      ]
-    },
-    {
-      "decisions": [],
       "id": "COMP-CAPABILITY",
       "invariants": [
         "COMPAT-CAPABILITY-POLICY-001",
@@ -66,12 +52,7 @@
       ],
       "paths": [
         "docs/architecture/capability-policy.md",
-        "schemas/capability-security-model.schema.json",
-        "schemas/capability-sinks.schema.json",
-        "schemas/role-capabilities.schema.json",
         "src/unrest_harness/acp_runner.py",
-        "src/unrest_harness/bundled/policies/capability-security-model.v1.json",
-        "src/unrest_harness/bundled/policies/capability-sinks.v1.json",
         "src/unrest_harness/bundled/policies/role-capabilities.v1.json",
         "src/unrest_harness/capability_policy.py",
         "src/unrest_harness/cli.py",
@@ -83,19 +64,21 @@
         "docs/architecture/capability-policy.md"
       ],
       "tests": [
-        "tests/test_capability_closed_model.py",
         "tests/test_capability_policy.py",
-        "tests/test_capability_source_graph.py"
+        "tests/test_lean_provider_security_runtime.py"
       ]
     },
     {
-      "decisions": [],
+      "decisions": [
+        "ADR-0002"
+      ],
       "id": "COMP-CLI-CONFIG",
       "invariants": [
         "ARCH-CONFIG-001",
         "ARCH-OBSERVE-001"
       ],
       "paths": [
+        "src/unrest_harness/__main__.py",
         "src/unrest_harness/cli.py",
         "src/unrest_harness/config.py"
       ],
@@ -108,7 +91,9 @@
       ]
     },
     {
-      "decisions": [],
+      "decisions": [
+        "ADR-0002"
+      ],
       "id": "COMP-COORDINATOR",
       "invariants": [
         "ARCH-CLOSURE-001",
@@ -134,30 +119,9 @@
       ]
     },
     {
-      "decisions": [],
-      "id": "COMP-GOVERNANCE",
-      "invariants": [
-        "ARCH-GOVERNANCE-001",
-        "COMPAT-SCHEMA-EVOLUTION-001",
-        "SEC-PROTECTED-REVIEW-001"
+      "decisions": [
+        "ADR-0002"
       ],
-      "paths": [
-        ".github/PULL_REQUEST_TEMPLATE.md",
-        "docs/architecture/change-governance.md",
-        "docs/templates/adr.md",
-        "policy/protected-surfaces.yaml",
-        "schemas/protected-surfaces.schema.json",
-        "src/unrest_harness/governance.py"
-      ],
-      "specifications": [
-        "docs/architecture/change-governance.md"
-      ],
-      "tests": [
-        "tests/test_governance.py"
-      ]
-    },
-    {
-      "decisions": [],
       "id": "COMP-MCP",
       "invariants": [
         "ARCH-MCP-001",
@@ -201,15 +165,13 @@
       "paths": [
         ".github/workflows/ci.yml",
         "AGENTS.md",
-        "CONTRIBUTING.md",
         "README.md",
-        "docs/architecture/annotation-policy.json",
         "docs/architecture/component-map.json",
-        "docs/architecture/evidence-policy.json",
-        "docs/architecture/historical-record-policy.json",
+        "docs/architecture/index.md",
         "docs/architecture/repository-contract.md",
-        "docs/architecture/template-heading-policy.json",
+        "docs/decisions/index.md",
         "pyproject.toml",
+        "src/unrest_harness/installed_wheel_check.py",
         "src/unrest_harness/repository_contract.py",
         "uv.lock"
       ],

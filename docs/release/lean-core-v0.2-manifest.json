@@ -1,0 +1,499 @@
+{
+  "artifact_locators": {
+    "mission_root": "/Users/aleksandrpodgaiko/.unrest/projects/20260809T170516Z-read-only-assessment-of-the-attached-batch-0-5-lean-core-compact/.unrest/missions/mission-001",
+    "package_evidence": "evidence/final-package-evidence-ledger-v2",
+    "repository_root_validation_quarantine_control_manifest": "evidence/repository-root-validation-quarantine-v3/control/payload-manifest-summary.json",
+    "source_evidence": "evidence/final-frozen-evidence-ledger-v3"
+  },
+  "artifacts": {
+    "sdist": {
+      "bytes": 274558,
+      "locator": "evidence/final-package-evidence-ledger-v2/records/24-remediation-scrutiny-dist-unrest_harness-0-1-0-tar-gz.gz",
+      "sha256": "504aa2eeb3c18173c5bc6bd2c1f908b6f6fb59f6e1613fcc10e259368e45a042"
+    },
+    "wheel": {
+      "bytes": 215762,
+      "locator": "evidence/final-package-evidence-ledger-v2/records/23-remediation-scrutiny-dist-unrest_harness-0-1-0-py3-none-any-whl.whl",
+      "sha256": "b0b02bc0820d03b9d7bdd42cb65cb9a624ba65504e553178eddfe4046d8a25b3"
+    }
+  },
+  "candidate": {
+    "commit": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+    "frozen_source_binding_sha256": "54e344233dbe7080bfcf8a4474b2e6ce5ac23cdc1beb7cbed9ab8c5d7f5aff3d",
+    "package_source_binding_sha256": "c420736a1ccba7a3d8891d6ddc6a976302df369d5822709468dc66c8ade385e0",
+    "post_remediation_relevant_diff_sha256": "7d878893731effffb4173bfbeddd96fed3982c6f161a8cfecae1305d3362d00a",
+    "source_file_sha256": {
+      "src/unrest_harness/bundled/policies/role-capabilities.v1.json": "fe436952dd454ef73a652496fa9353ecd909600addba6c615ec4a8c10726ef47",
+      "src/unrest_harness/capability_policy.py": "4338a8964f708657b6a0a66aa71a039b16f03c1d06a244d48b03044d8dfc40b9",
+      "src/unrest_harness/server.py": "ce6e6d7d4363dafa46568cadbdbeaf951049479dd99808bfe68a133755ae722b"
+    },
+    "tree": "35152a4a8c56198664f519691ec952ec9ca519f4"
+  },
+  "contract_gate_status": {
+    "capability": "pass: VAL-CAPABILITY-VALIDATION-002",
+    "frozen": "pass: VAL-FROZEN-VALIDATION-003",
+    "observer": "pass: VAL-OBSERVER-VALIDATION-001",
+    "package": "pass: VAL-PACKAGE-VALIDATION-003 quarantine-portable replay of the accepted package evidence",
+    "release_recovery": "pass: VAL-RELEASE-RECOVERY-002 corrected delivery v7; failed v6 recovery/handoff and VAL-SLICE-001/002 remain failed history",
+    "repository": "pass: 11/11 final repository targets",
+    "security": "pass: VAL-SEC-023 semantic closure",
+    "setup": "pass: VAL-SETUP-001/002/003"
+  },
+  "full_suite": {
+    "command": "env -u CODEX_PATH uv run pytest -q",
+    "elapsed_seconds": 179.024908,
+    "exit_code": 0,
+    "passed": 681,
+    "skipped": 7,
+    "source_binding_sha256": "54e344233dbe7080bfcf8a4474b2e6ce5ac23cdc1beb7cbed9ab8c5d7f5aff3d"
+  },
+  "historical_release_slice_provenance": {
+    "classification": "accepted historical provenance failure; non-passing; outside the final release gate",
+    "classification_locator": "evidence/release-slice-failure-classification-v3/classification.md",
+    "current_candidate_readiness_target": "VAL-RELEASE-RECOVERY-002",
+    "val_slice_001": "fail: the seven-slice provenance ledger did not meet its exact command/timing evidence contract",
+    "val_slice_002": "fail: separately measured observer-v2 Ruff, mypy, and then-current repository-check elapsed times are unrecoverable"
+  },
+  "import_results": {
+    "cli": {
+      "candidate_median_seconds": 0.175514125,
+      "classification": "win",
+      "reference_median_seconds": 0.247623625
+    },
+    "server": {
+      "candidate_median_seconds": 0.625675666,
+      "classification": "neutral_below_hard_ceiling",
+      "reference_median_seconds": 0.630626167
+    }
+  },
+  "loc": {
+    "capability_ceiling": 2500,
+    "capability_classified": 1529,
+    "maintained_first_party": 25958,
+    "maintained_reference": 52351,
+    "production_installed": 12270,
+    "production_reference": 25730
+  },
+  "release": "lean-core-v0.2",
+  "release_recovery": {
+    "accepted_evidence_replay": {
+      "archive_hashes": "pass: accepted wheel b0b02bc0820d03b9d7bdd42cb65cb9a624ba65504e553178eddfe4046d8a25b3 and sdist 504aa2eeb3c18173c5bc6bd2c1f908b6f6fb59f6e1613fcc10e259368e45a042",
+      "distribution_parity": "pass: current tools/check_distribution.py verified 44 package files against the exact accepted archive symlinks",
+      "frozen_verifier": "pass: supported CLI replay verified 48 records and frozen binding 54e344233dbe7080bfcf8a4474b2e6ce5ac23cdc1beb7cbed9ab8c5d7f5aff3d",
+      "package_verifier": "pass: supported CLI replay verified 67 files, 38 records, two quarantine relocations, and the accepted archive/case facts"
+    },
+    "authority_root": "evidence/final-release-recovery-v7",
+    "carrier_closure": {
+      "matrix_c_rows": 4,
+      "post_carrier_guard": "pass: env UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run pytest -q tests/contracts/test_lean_provider_security.py",
+      "retired_literal_hits": 0
+    },
+    "command_matrix_sha256": "56bac287a2f7cff7d4fae5e62221df36b4f4ae72bf87f8fc88438f1563705c70",
+    "fixture_disclosure": "The exact focused provider/security pytest rows performed only intrinsic fixture-controlled temporary build/install work in isolated storage; no accepted archive was rebuilt, replaced, or mutated.",
+    "historical_limit": "VAL-SLICE-001 and VAL-SLICE-002 remain failed historical provenance assertions; the failed v6 recovery and first handoff remain immutable non-authority history because the plain diff gate omitted the then-untracked scheduling contract. The v7 corrected-delivery record is not retroactive proof for any of them.",
+    "matrix_a_rows": 12,
+    "matrix_ab_binding_sha256": "b9b6f9b0fde712819a86e81b9ee8c422627648be29e7cf40f290cb2a289c6075",
+    "matrix_b_rows": 9,
+    "recommendation": "accept the corrected Lean Core v0.2 delivery for the separately governed branch-ready handoff",
+    "safe_cleanup": "pass: exact real directory and exactly two expected symlink targets validated; only those links unlinked; exact empty directory removed; final absence proven"
+  },
+  "retention": {
+    "archive_exclusions": [
+      "docs/release/lean-core-v0.2-manifest.json",
+      "docs/release/lean-core-v0.2-rollback.md",
+      "docs/release/lean-core-v0.2.md"
+    ],
+    "conclusion": "pass: repository-root .validation moved intact and reversibly to external mission quarantine; concise historical and Lean Core carriers retained; package archives contain no release carriers or mission/raw evidence",
+    "historical_carriers": [
+      "docs/release/batch-0-closure.md",
+      "docs/release/batch-0-release-manifest.json",
+      "docs/release/batch-0-rollback.md",
+      "docs/release/telemetry-cold-start-hardening.md",
+      "docs/release/telemetry-cold-start-rollback-v2.md",
+      "docs/release/telemetry-cold-start-rollback-v3.md",
+      "docs/release/telemetry-cold-start-rollback.md"
+    ],
+    "repository_root_validation": {
+      "control_manifest": "evidence/repository-root-validation-quarantine-v3/control/payload-manifest-summary.json",
+      "payload": "evidence/repository-root-validation-quarantine-v3/payload",
+      "payload_inventory_sha256": "4c842e57f2357fa34b63d8727af36d9c8438c3b77bc85df0b233adc6ef8d99ba",
+      "state": "absent from repository root after same-filesystem reversible move; preserved externally, not deleted"
+    },
+    "root_evidence_tree": "absent"
+  },
+  "rollback_locator": "docs/release/lean-core-v0.2-rollback.md",
+  "schema_version": 1,
+  "scoring_reference": {
+    "commit": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+    "measurement_protocol": "docs/proposals/batch-0.5/measurement-protocol.md",
+    "tree": "35152a4a8c56198664f519691ec952ec9ca519f4"
+  },
+  "slice_ledgers": [
+    {
+      "candidate_ref": "93c59e4378407f3d7cfb918cf86c8bdc81daa141:35152a4a8c56198664f519691ec952ec9ca519f4",
+      "changed_files": [
+        "tests/contracts/conftest.py",
+        "tests/contracts/test_lean_lifecycle.py",
+        "tests/contracts/test_lean_package.py",
+        "tests/contracts/test_lean_persistence.py",
+        "tests/contracts/test_lean_provider_security.py",
+        "tests/contracts/test_lean_repository.py",
+        "tests/contracts/test_lean_scheduling.py",
+        "tests/contracts/test_lean_status.py"
+      ],
+      "correctness_results": "51/51 mappings collected and passed; runner rejects skip, deselection, empty selection, timeout, live selection, failure, and non-execution",
+      "focused_assertion_map": [
+        "VAL-SETUP-001",
+        "VAL-SETUP-002",
+        "VAL-SETUP-003"
+      ],
+      "focused_commands_and_times": [
+        "uv run pytest --collect-only -q -p no:cacheprovider tests/contracts -> 51 collected, exit 0",
+        "uv run pytest -q -p no:cacheprovider tests/contracts -> 51 passed in 25.89s, exit 0",
+        "three-run medians: lifecycle 2.419s; package 4.508s; persistence 2.344s; provider/security 6.639s; repository 11.723s; scheduling 1.760s; status 3.451s"
+      ],
+      "import_reference_audit": "real pre-change CLI traps and MCP/status/repository controls established candidate-coupled import boundaries",
+      "maintained_python_loc_after": 52351,
+      "maintained_python_loc_before": 52351,
+      "metric_delta": "test-only setup; production and maintained scoring baselines unchanged",
+      "package_results": "pre-change real wheel/sdist/install used only as adverse setup oracle",
+      "parent_ref": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+      "production_python_loc_after": 25730,
+      "production_python_loc_before": 25730,
+      "recommendation": "accept",
+      "security_sink_results": "setup mappings only; no product authority change",
+      "slice": "setup",
+      "stale_reference_audit": "seven unique manifest owners; no missing or duplicate assertion/scenario IDs",
+      "withdrawn_guarantees": []
+    },
+    {
+      "candidate_ref": "tracked-diff-sha256:5ab516252db7a9b811303d4d0f2741d582706439c220a3d23fb55f5b900610e9",
+      "changed_files": [
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        "AGENTS.md",
+        "MANIFEST.in",
+        "README.md",
+        "docs/architecture/",
+        "docs/decisions/",
+        "docs/proposals/batch-0.5/",
+        "docs/release/batch-0-release-manifest.json",
+        "docs/release/telemetry-cold-start-rollback-v2.md",
+        "docs/release/telemetry-cold-start-rollback-v3.md",
+        "docs/release/telemetry-cold-start-rollback.md",
+        "docs/templates/adr.md",
+        "docs/v5/10-implementation-plan.md",
+        "evals/",
+        "evidence/",
+        "policy/",
+        "pyproject.toml",
+        "schemas/",
+        "src/unrest_harness/baseline.py",
+        "src/unrest_harness/bundled/policies/capability-sinks.v1.json",
+        "src/unrest_harness/capability_policy.py",
+        "src/unrest_harness/cli.py",
+        "src/unrest_harness/governance.py",
+        "src/unrest_harness/repository_contract.py",
+        "tests/test_baseline.py",
+        "tests/test_capability_closed_model.py",
+        "tests/test_capability_source_graph.py",
+        "tests/test_documentation_contract.py",
+        "tests/test_governance.py",
+        "tests/test_repository_contract.py",
+        "uv.lock"
+      ],
+      "correctness_results": "11/11 final repository targets passed; finite checker passed 13 files, 141 references, 10 components; copied-candidate matrix 62/62",
+      "focused_assertion_map": [
+        "VAL-REPO-001",
+        "VAL-REPO-002",
+        "VAL-REPO-003",
+        "VAL-REPO-005",
+        "VAL-IMPORT-001",
+        "VAL-HARDCUT-GOV-001",
+        "VAL-HARDCUT-SCHEMA-001",
+        "VAL-REPO-006",
+        "VAL-REPO-007",
+        "VAL-REPO-008",
+        "VAL-REPO-009"
+      ],
+      "focused_commands_and_times": [
+        "uv run unrest check-repository -> exit 0",
+        "uv run pytest -q tests/test_repository_contract.py tests/test_documentation_contract.py -> 69 passed, exit 0",
+        "uv run pytest -q tests/contracts/test_lean_repository.py -> 10 passed, exit 0",
+        "uv run pytest -q tests/test_capability_closed_model.py tests/test_capability_policy.py tests/test_capability_source_graph.py -> 2059 passed in 417.38s, exit 0",
+        "uv run ruff check .; uv run mypy src -> exit 0"
+      ],
+      "import_reference_audit": "source/installed help, init, list, and MCP avoid retired modules; repository command is the positive control",
+      "maintained_python_loc_after": null,
+      "maintained_python_loc_before": 52351,
+      "metric_delta": "100 tracked paths in the initial cut; 27,070 deletions and 647 insertions before bounded remediations; final LOC deferred to frozen integration",
+      "package_results": "fresh source-identical archives and unrelated-cwd Python 3.13 install passed; removed commands exit 2; retired modules absent",
+      "parent_ref": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+      "production_python_loc_after": null,
+      "production_python_loc_before": 25730,
+      "recommendation": "accept",
+      "security_sink_results": "retained role policy remained loadable; static sink/governance/baseline responsibilities removed only as approved",
+      "slice": "repository_baseline",
+      "stale_reference_audit": "retired commands, baseline, root schemas, governance DSL, protected-surface/trailer rules, and deleted evidence locators absent or explicitly non-operative history",
+      "withdrawn_guarantees": [
+        "historical baseline generation",
+        "governance and commit-policy engine/commands",
+        "duplicate root schemas and direct validators",
+        "recursive repository self-protection",
+        "raw root release-history bulk"
+      ]
+    },
+    {
+      "candidate_ref": "tracked-diff-sha256:ff76d30b3e99934dadcd8fe696f115afdace9bf764f6030de656d8e8a185d455;closure-sha256:5638d12d",
+      "changed_files": [
+        "README.md",
+        "docs/architecture/capability-policy.md",
+        "docs/v5/07-runtime-architecture.md",
+        "docs/v5/08-mcp-surface.md",
+        "specs/task_list/PRODUCT.md",
+        "src/unrest_harness/acp_runner.py",
+        "src/unrest_harness/bundled/policies/role-capabilities.v1.json",
+        "src/unrest_harness/capability_policy.py",
+        "src/unrest_harness/cli.py",
+        "src/unrest_harness/config.py",
+        "src/unrest_harness/coordinator.py",
+        "src/unrest_harness/providers.py",
+        "src/unrest_harness/server.py",
+        "src/unrest_harness/storage.py",
+        "tests/contracts/test_lean_provider_security.py",
+        "tests/test_acp_runner.py",
+        "tests/test_capability_policy.py",
+        "tests/test_cli.py",
+        "tests/test_lean_provider_security_runtime.py"
+      ],
+      "correctness_results": "semantic closure passed; 12/12 authorized critical cases, same identities with two sandbox-only loopback failures, 310/310 path attacks rejected",
+      "focused_assertion_map": [
+        "VAL-PROVIDER-001..007",
+        "VAL-SEC-001..007",
+        "VAL-SEC-009..023"
+      ],
+      "focused_commands_and_times": [
+        "authorized eight-selector pytest command -> 12 passed, exit 0",
+        "generate_closure.py --verify -> exit 0",
+        "v12 integrity tests -> 17 passed, exit 0",
+        "ruff, mypy, and unrest check-repository -> exit 0"
+      ],
+      "import_reference_audit": "unsupported legacy child-provider surface removed across source, CLI, provider config, docs, tests, and archives; Claude/Codex controls retained",
+      "maintained_python_loc_after": null,
+      "maintained_python_loc_before": null,
+      "metric_delta": "security behavior changed before capability compaction; final arithmetic deferred to its owning metric gate",
+      "package_results": "installed provider/security and bounded-startup probes passed on slice archives",
+      "parent_ref": "tracked-diff-sha256:5ab516252db7a9b811303d4d0f2741d582706439c220a3d23fb55f5b900610e9",
+      "production_python_loc_after": null,
+      "production_python_loc_before": null,
+      "recommendation": "accept",
+      "security_sink_results": "finite credential inventory and 17 named sinks retained; same-generation dispatch, bounded child pipes, terminal exclusion, and exact-known redaction passed",
+      "slice": "security_perimeter",
+      "stale_reference_audit": "historical failed/dissenting lanes retained as non-authority; closure binds raw evidence and actual checkout",
+      "withdrawn_guarantees": [
+        "unsupported legacy child-provider surface",
+        "unknown or transformed-secret inference",
+        "network-denial and OS-sandbox claims"
+      ]
+    },
+    {
+      "candidate_ref": "combined-diff-sha256:92d7f6298d6b9bb6509c855fc90fd2d7e451595573ecafac09037139be667df5;inventory-sha256:fba42fab265df8efa7bc2db8f570a3f9127c139358376865d8b6acddc853de9e",
+      "changed_files": [
+        "specs/memory_v2/PRODUCT.md",
+        "specs/task_list/PRODUCT.md",
+        "src/unrest_harness/acp_runner.py",
+        "src/unrest_harness/bundled/policies/capability-security-model.v1.json",
+        "src/unrest_harness/bundled/policies/capability-sinks.v1.json",
+        "src/unrest_harness/bundled/policies/role-capabilities.v1.json",
+        "src/unrest_harness/capability_policy.py",
+        "src/unrest_harness/cli.py",
+        "src/unrest_harness/config.py",
+        "src/unrest_harness/controller.py",
+        "src/unrest_harness/coordinator.py",
+        "src/unrest_harness/models.py",
+        "src/unrest_harness/providers.py",
+        "src/unrest_harness/server.py",
+        "src/unrest_harness/storage.py",
+        "tests/fixtures/persistence_schema_v1/",
+        "tests/test_acp_runner.py",
+        "tests/test_capability_closed_model.py",
+        "tests/test_capability_policy.py",
+        "tests/test_capability_source_graph.py",
+        "tests/test_cli.py",
+        "tests/test_coordinator.py",
+        "tests/test_persistence_schema_v1.py",
+        "tests/test_storage.py"
+      ],
+      "correctness_results": "10/10 scrutiny and 10/10 real assertions plus VAL-METRIC-009 passed; lifecycle, persistence, scheduling, hard-cut, and historical-resolution evidence reconciled",
+      "focused_assertion_map": [
+        "VAL-LIFE-001..007",
+        "VAL-PERSIST-001..011",
+        "VAL-SCHED-001..003",
+        "VAL-SEC-008",
+        "VAL-HARDCUT-CAPABILITY-001",
+        "VAL-METRIC-006..009",
+        "VAL-CAPABILITY-VALIDATION-002"
+      ],
+      "focused_commands_and_times": [
+        "capability-final-evidence-v7/verify.py twice -> exit 0",
+        "all three capability contract manifests -> 36/36 passed",
+        "ruff, mypy, unrest check-repository, build/distribution -> exit 0"
+      ],
+      "import_reference_audit": "retired static analyzer/assets/imports absent; exact finite policy remains packaged and source-identical",
+      "maintained_python_loc_after": 27356,
+      "maintained_python_loc_before": null,
+      "metric_delta": "corrected conservative capability classification 1,514 <= 2,500; installed 12,456 LOC; maintained 27,356 LOC at final capability gate",
+      "package_results": "44 package files; 21 source-identical Python members; exact installed persistence/lifecycle probes passed",
+      "parent_ref": "tracked-diff-sha256:ff76d30b3e99934dadcd8fe696f115afdace9bf764f6030de656d8e8a185d455",
+      "production_python_loc_after": 12456,
+      "production_python_loc_before": null,
+      "recommendation": "accept",
+      "security_sink_results": "finite authority, exact-known boundary protection, 17 sinks, child config, and bounded MCP pipes remained within the classified replacement",
+      "slice": "capability_compaction",
+      "stale_reference_audit": "11 adverse prior units retained and mapped to later passed lanes; no withdrawn assurance responsibility moved elsewhere",
+      "withdrawn_guarantees": [
+        "static capability source graph and semantic digests",
+        "static sink catalog and analyzer mutation suite",
+        "transformed-secret runtime redaction"
+      ]
+    },
+    {
+      "candidate_ref": "tracked-diff-sha256:3de5b8fc866bf12b2435ed4069ead1fb802fd8077ff768bc50abce08fd512656;inventory-sha256:3da252ac6d61c5e3fb6bcfb40e538f009d212f7cebb68a65443189016dfb1d5f",
+      "changed_files": [
+        "README.md",
+        "docs/architecture/capability-policy.md",
+        "docs/v5/07-runtime-architecture.md",
+        "docs/v5/08-mcp-surface.md",
+        "src/unrest_harness/cli.py",
+        "src/unrest_harness/runtime_observability.py",
+        "src/unrest_harness/storage.py",
+        "tests/contracts/test_lean_status.py",
+        "tests/test_cli.py",
+        "tests/test_runtime_observability.py",
+        "tests/test_storage.py",
+        "tools/check_init_output_stability.py"
+      ],
+      "correctness_results": "8/8 scrutiny and 8/8 real assertions passed; five incomplete/dissenting historical records retained with authoritative replacements",
+      "focused_assertion_map": [
+        "VAL-STATUS-001..003",
+        "VAL-HARDCUT-STATUS-001",
+        "VAL-IMPORT-002",
+        "VAL-INIT-001..003",
+        "VAL-OBSERVER-VALIDATION-001"
+      ],
+      "focused_commands_and_times": [
+        "observer-final-evidence-v6/verify.py twice -> exit 0",
+        "observer/init source and exact-wheel real surfaces -> 8/8 per lane",
+        "ruff, mypy, unrest check-repository, build/distribution -> exit 0"
+      ],
+      "import_reference_audit": "ordinary CLI and MCP keep status implementation lazy; status command is the positive import control",
+      "maintained_python_loc_after": null,
+      "maintained_python_loc_before": 27356,
+      "metric_delta": "schema-v2/status and init compaction landed; exact final LOC measured at frozen integration",
+      "package_results": "source and installed schema-v2/status/init matrices passed; managed assets repaired to authoritative bytes and mode 0644",
+      "parent_ref": "combined-diff-sha256:92d7f6298d6b9bb6509c855fc90fd2d7e451595573ecafac09037139be667df5",
+      "production_python_loc_after": null,
+      "production_python_loc_before": 12456,
+      "recommendation": "accept",
+      "security_sink_results": "status remained bounded, privacy-preserving, coherent, isolated, and read-only",
+      "slice": "observer_v2",
+      "stale_reference_audit": "schema-v1 aliases/shadow scheduling/detail fields absent; five dissent/history records explicitly non-authority",
+      "withdrawn_guarantees": [
+        "observer schema version 1",
+        "shadow scheduling and detailed timing reconstruction",
+        "compatibility aliases and nested count projections"
+      ]
+    },
+    {
+      "candidate_ref": "combined-binding-sha256:54e344233dbe7080bfcf8a4474b2e6ce5ac23cdc1beb7cbed9ab8c5d7f5aff3d",
+      "changed_files": [
+        "README.md",
+        "src/unrest_harness/repository_contract.py",
+        "tests/contracts/test_lean_package.py",
+        "tests/test_documentation_contract.py",
+        "tests/test_repository_contract.py"
+      ],
+      "correctness_results": "VAL-REPO-004 and VAL-METRIC-001/002/004/005 adopted from passing rows; refrozen VAL-METRIC-010 passed all three serialized lanes; tainted VAL-METRIC-003 remained non-authority",
+      "focused_assertion_map": [
+        "VAL-REPO-004",
+        "VAL-METRIC-001",
+        "VAL-METRIC-002",
+        "VAL-METRIC-004",
+        "VAL-METRIC-005",
+        "VAL-METRIC-010",
+        "VAL-FROZEN-VALIDATION-003"
+      ],
+      "focused_commands_and_times": [
+        "seven manifests, three measured runs each -> all exit 0; medians 1.87s to 10.39s",
+        "env -u CODEX_PATH uv run pytest -q -> 681 passed, 7 skipped, 179.024908s, exit 0",
+        "uv run ruff check .; uv run mypy src; uv run unrest check-repository -> exit 0",
+        "final-frozen-evidence-ledger-v3 verifier twice -> exit 0; 1,185/1,185 genuine mutations rejected"
+      ],
+      "import_reference_audit": "CLI 0.175514125s win; server 0.625675666s neutral below hard ceiling; retired import boundaries stayed absent",
+      "maintained_python_loc_after": 25776,
+      "maintained_python_loc_before": null,
+      "metric_delta": "production 25,730 -> 12,255 (-52.37%); maintained 52,351 -> 25,776 (-50.76%); max rewritten span 225; max C901 30",
+      "package_results": "post-freeze distribution audit passed 44 files and 21 wheel Python members; no retired-root hits; archives not yet accepted until package slice",
+      "parent_ref": "tracked-diff-sha256:3de5b8fc866bf12b2435ed4069ead1fb802fd8077ff768bc50abce08fd512656",
+      "production_python_loc_after": 12255,
+      "production_python_loc_before": null,
+      "recommendation": "accept",
+      "security_sink_results": "prior security/capability closures retained on the frozen candidate; source suite used one accepted refrozen execution",
+      "slice": "frozen_integration",
+      "stale_reference_audit": "48 records, six assertion maps, four authority roles, exact document closure; old binding and failed VAL-METRIC-003 remain visible non-authority",
+      "withdrawn_guarantees": []
+    },
+    {
+      "candidate_ref": "package-source-binding-sha256:c420736a1ccba7a3d8891d6ddc6a976302df369d5822709468dc66c8ade385e0",
+      "changed_files": [
+        "docs/architecture/capability-policy.md",
+        "src/unrest_harness/server.py",
+        "tests/test_server.py"
+      ],
+      "correctness_results": "VAL-PACKAGE-001/003/004 and remediated VAL-PACKAGE-005 passed; final 65-file evidence bundle and 38 records verified",
+      "focused_assertion_map": [
+        "VAL-PACKAGE-001",
+        "VAL-PACKAGE-003",
+        "VAL-PACKAGE-004",
+        "VAL-PACKAGE-005",
+        "VAL-PACKAGE-VALIDATION-002"
+      ],
+      "focused_commands_and_times": [
+        "uv run pytest -q tests/test_server.py -> 48 passed, exit 0",
+        "uv run ruff check src/unrest_harness/server.py tests/test_server.py; uv run mypy src/unrest_harness/server.py -> exit 0",
+        "fresh build/distribution -> 44 package files, exit 0",
+        "unrelated Python 3.13 installed matrix -> 63/63 passed",
+        "final package verifier twice and shasum -c SHA256SUMS -> exit 0"
+      ],
+      "import_reference_audit": "installed CLI/module/server/startup resolved only from site-packages; rejected configuration failed before FastMCP/dispatcher/reviewer construction",
+      "maintained_python_loc_after": 25958,
+      "maintained_python_loc_before": 25776,
+      "metric_delta": "post-freeze startup remediation adds 15 production lines and 167 test lines: production 12,270; maintained 25,958; conservative capability 1,529",
+      "package_results": "accepted wheel b0b02bc... and sdist 504aa2ee...; 63 passed controls, 54 value-free rejections, 9 supported/hook controls; lifecycle/restart/status/redaction passed",
+      "parent_ref": "combined-binding-sha256:54e344233dbe7080bfcf8a4474b2e6ce5ac23cdc1beb7cbed9ab8c5d7f5aff3d",
+      "production_python_loc_after": 12270,
+      "production_python_loc_before": 12255,
+      "recommendation": "accept",
+      "security_sink_results": "all 54 invalid provider/capability cases exited 2 with fixed value-free stderr before active construction; six supported plus three hook controls reached only intended surfaces",
+      "slice": "package",
+      "stale_reference_audit": "two aggregate-failed real attempts remain immutable non-authority; exact inventory, maps, records, hashes, and case counts closed by v2 bundle",
+      "withdrawn_guarantees": []
+    }
+  ],
+  "validation_commands": [
+    "find src/unrest_harness -name '*.py' -print0 | sort -z | xargs -0 wc -l",
+    "find src tests tools -name '*.py' -print0 | sort -z | xargs -0 wc -l",
+    "env UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run pytest -q tests/contracts/test_lean_repository.py",
+    "env UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run pytest -q tests/contracts/test_lean_lifecycle.py",
+    "env UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run pytest -q tests/contracts/test_lean_persistence.py",
+    "env UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run pytest -q tests/contracts/test_lean_scheduling.py",
+    "env UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run pytest -q tests/contracts/test_lean_provider_security.py",
+    "env UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run pytest -q tests/contracts/test_lean_status.py",
+    "env UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run pytest -q tests/contracts/test_lean_package.py",
+    "env -u CODEX_PATH uv run pytest -q",
+    "uv run ruff check .",
+    "uv run mypy src",
+    "uv run unrest check-repository",
+    "env -u PYTHONPATH UV_CACHE_DIR=/tmp/unrest-worker-uv-cache UV_OFFLINE=1 uv run python tools/check_distribution.py /private/tmp/unrest-val-package-005-validator.iPmkDI/dist",
+    "python3 -B verify.py --bundle ."
+  ]
+}

@@ -8,7 +8,8 @@ verified_by:
   - tests/test_documentation_contract.py
   - tests/test_storage.py
   - tests/test_terminal_review.py
-related_decisions: []
+related_decisions:
+  - ADR-0002
 schema_version: 1
 ---
 
@@ -40,6 +41,14 @@ bucket.
 - `ARCH-STORAGE-001`: durable records and runtime cursors remain separate.
 - `ARCH-WRITE-001`: text and JSON writes use a sibling temporary file followed
   by `os.replace`; JSON is UTF-8, two-space indented, and newline terminated.
+  Failures before replacement reject the write and preserve the prior target.
+  Once replacement is visible, a directory-fsync error does not turn the new
+  generation into a caller-visible rejection. Every writer supplies its
+  lexical trusted persistence root. The root and each existing component from
+  it through the destination parent must be a real directory under `lstat`,
+  never a symlink or another non-directory; this is checked before parent or
+  temporary creation and again before replacement. Lexical containment is
+  structural and the write path is never replaced by a resolved redirect.
 - `ARCH-CLOSURE-001`: `closeout.md` is written only after a successful terminal
   review or an explicit acknowledged-gap transition.
 - `SEC-REVIEW-ROOT-001`: terminal-review deliverable roots are canonicalized and
@@ -104,7 +113,9 @@ means task ID in current handoffs.
 ## Attempts and mirrors
 
 Workers write strict `WorkHandoff` or `ValidateHandoff` JSON to the runtime
-attempt path. The store persists a Markdown mirror under the durable mission.
+attempt path. Each current handoff carries the dispatch `attempt_id`; restart
+accepts it only when both `node_id` and `attempt_id` match the running task and
+its `last_attempt` generation. The store persists a Markdown mirror under the durable mission.
 Terminal review follows the same JSON-runtime/Markdown-durable split.
 
 Current attempt-kind reading treats a payload containing `items` or `passed` as
@@ -134,7 +145,17 @@ valid repository guidance.
 
 - Missing project or task-list paths raise `FileNotFoundError`; callers convert
   relevant failures to stable tool errors or terminal state.
-- A malformed typed JSON cursor fails validation rather than being guessed.
+- A malformed or provenance-mismatched attempt becomes a bounded failed handoff
+  and attention record; it never clears the running task as successful.
+- Atomic replacement preserves an existing regular file's mode and removes the
+  unique sibling temporary file on write, content-fsync, or replace failure.
+  The parent directory is fsynced after replacement as a best-effort durability
+  step. If that post-replace sync fails, the call still accepts the already
+  visible generation so its outcome agrees with restart-visible bytes.
+- A missing ordinary directory below the trusted persistence root is created
+  component by component. A symlink or non-directory root, parent, or ancestor
+  rejects the write before a target or temporary file is created; direct
+  symlink and nonregular targets are likewise rejected.
 - Invalid terminal-review roots fail before reviewer dispatch.
 - Broken, unsafe, or escaping symlinks in a declared review root are rejected.
 - A false or crashed terminal review produces durable evidence and attention;
@@ -151,8 +172,7 @@ records during abort and failure.
 
 ```bash
 uv run pytest -q tests/test_storage.py tests/test_terminal_review.py \
-  tests/test_baseline.py
-uv run python -m unrest_harness.baseline --check --output evals/baseline
+  tests/test_coordinator.py
 ```
 
 At a completed implementation slice, also run the milestone checks in the root
@@ -161,11 +181,11 @@ frozen-candidate full-suite checkpoint.
 
 ## Related decisions
 
-No accepted repository ADR currently changes this contract.
+ADR-0002 removes installed baseline generation without changing schema-version-1
+storage readability.
 
 ## Known limitations
 
 Terminal-review root checks are canonical preflight plus prompt policy for a
-trusted reviewer; they are not an OS filesystem sandbox. The attempt-kind
-heuristic is retained only as an observed legacy behavior in
-[`BASE-STORAGE-LEGACY-001`](../../evals/baseline/fixtures/attempt-kind-heuristic.json).
+trusted reviewer; they are not an OS filesystem sandbox. Historical attempt
+kind observations are not a normative compatibility oracle.

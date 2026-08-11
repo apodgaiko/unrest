@@ -332,7 +332,12 @@
         },
         "environment": {
           "credentials": [
-            "*"
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
           ],
           "forward": [
             "*"
@@ -394,7 +399,12 @@
         },
         "environment": {
           "credentials": [
-            "*"
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
           ],
           "forward": [
             "*"
@@ -452,7 +462,12 @@
         },
         "environment": {
           "credentials": [
-            "*"
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
           ],
           "forward": [
             "*"
@@ -512,7 +527,12 @@
         },
         "environment": {
           "credentials": [
-            "*"
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
           ],
           "forward": [
             "*"

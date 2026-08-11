@@ -5,7 +5,8 @@ applies_to:
   - docs/templates/adr.md
 verified_by:
   - tests/test_documentation_contract.py
-related_decisions: []
+related_decisions:
+  - ADR-0002
 schema_version: 1
 ---
 
@@ -14,8 +15,6 @@ schema_version: 1
 Use filename `ADR-NNNN-short-title.md` and replace every placeholder.
 
 ## Record metadata
-
-<!-- GOV-FIELD:decision-id -->
 
 id: ADR-NNNN
 status: proposed | accepted | rejected | superseded
@@ -26,15 +25,9 @@ contract_targets:
   - VAL-AREA-NNN
 supersedes: []
 superseded_by: null
-protected_surfaces: []
 evaluation_tier: []
 
-<!-- GOV-FIELD:task-ids -->
-<!-- GOV-FIELD:contract-targets -->
-
 ## Scope
-
-<!-- GOV-FIELD:scope -->
 
 - In scope: `<bounded behavior, components, and paths>`
 - Out of scope: `<adjacent behavior deliberately unchanged>`
@@ -49,35 +42,21 @@ evaluation_tier: []
 
 ## Alternatives considered
 
-- `<Alternative and concrete trade-off.>`
+- `<Alternative and concrete trade-off>`
 
 ## Consequences
 
 - Positive: `<outcome>`
 - Negative/cost: `<outcome>`
-- Compatibility/hard cut: `<behavior and stable reason code>`
-- Schema/migration impact: `<version, fixtures, recovery, or none>`
+- Compatibility/hard cut: `<behavior or none>`
+- Schema/migration impact: `<version, recovery, or none>`
 - Security/privacy impact: `<authority and data handling>`
 
-<!-- GOV-FIELD:compatibility-schema -->
+## Review
 
-## Protected-surface review
-
-- Protected categories: `<sorted policy category IDs or none>`
-- Required maintainer reviewer: `<maintainer or none>`
-- Review evidence: `<links/paths>`
-- Evaluation evidence: `<strongest applicable tier and results>`
-
-The repository owner may self-approve as the one human `maintainer`; no second
-account or team is required. Security evaluation remains an evidence tier, not
-a second accountable role. This template does not claim GitHub identity
-enforcement.
-
-For a protected commit, record exactly `Human-Reviewers: maintainer`.
-
-<!-- GOV-FIELD:protected-surfaces -->
-<!-- GOV-FIELD:human-reviewers -->
-<!-- GOV-FIELD:evaluation-evidence -->
+- Reviewer: `<maintainer or none>`
+- Approval date/evidence: `<date and durable locator>`
+- Evaluation evidence: `<commands and concise results>`
 
 ## Rollback
 
@@ -86,12 +65,10 @@ For a protected commit, record exactly `Human-Reviewers: maintainer`.
 - Data recovery: `<steps or none>`
 - Verification: `<exact check>`
 
-<!-- GOV-FIELD:rollback -->
-
 ## Implementation and verification
 
 - Components/paths: `<component IDs and paths>`
-- Normative documents: `<IDs/links>`
+- Canonical documents: `<IDs/links>`
 - Tests/evidence: `<commands and artifacts>`
 
 ## References

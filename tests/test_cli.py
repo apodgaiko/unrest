@@ -1,6 +1,7 @@
 """CLI integration tests — init / list-projects / show-project / install-skills."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -12,6 +13,7 @@ import pytest
 from click.testing import CliRunner
 
 from unrest_harness.cli import cli
+from unrest_harness.config import HarnessConfig
 from unrest_harness.providers import provider_names_for_role
 
 
@@ -61,6 +63,30 @@ def _tree_snapshot(root: Path) -> dict[str, tuple[str, int, int, bytes]]:
     return snapshot
 
 
+def _tree_content_inventory(root: Path) -> dict[str, tuple[str, int, bytes]]:
+    return {
+        path: (kind, mode, content)
+        for path, (kind, mode, _mtime, content) in _tree_snapshot(root).items()
+    }
+
+
+def _tree_content_hash(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path, (kind, mode, content) in sorted(_tree_content_inventory(root).items()):
+        for field in (path.encode(), kind.encode(), str(mode).encode(), content):
+            digest.update(len(field).to_bytes(8, "big"))
+            digest.update(field)
+    return digest.hexdigest()
+
+
+def _config_hash(boundary: Path, scope: str, agent: str) -> str:
+    if scope == "project":
+        path = boundary / (".mcp.json" if agent == "claude" else ".codex/config.toml")
+    else:
+        path = boundary / (".claude.json" if agent == "claude" else ".codex/config.toml")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 class TestInit:
     def test_help_advertises_only_supported_orchestrators(
         self,
@@ -71,7 +97,7 @@ class TestInit:
         assert result.exit_code == 0, result.output
         assert "--agent [claude|codex]" in result.output
         assert "--orchestrator-provider [claude|codex]" in result.output
-        assert "--worker-provider [claude|codex|hermes]" in result.output
+        assert "--worker-provider [claude|codex]" in result.output
         assert provider_names_for_role("orchestrator") == ("claude", "codex")
 
     def test_invalid_authority_is_value_free_without_traceback(
@@ -91,6 +117,59 @@ class TestInit:
         assert "unsupported capability profile" in result.output
         assert invalid not in result.output
         assert "Traceback" not in result.output
+
+    @pytest.mark.parametrize(
+        "option",
+        (
+            "--agent",
+            "--orchestrator-provider",
+            "--worker-provider",
+            "--validator-provider",
+            "--terminal-reviewer-provider",
+            "--worker-reasoning-effort",
+            "--validator-reasoning-effort",
+            "--terminal-reviewer-reasoning-effort",
+            "--scope",
+        ),
+    )
+    def test_precommand_choices_redact_exact_finite_credentials(
+        self,
+        option: str,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        sentinel = "known-cli-choice-sentinel-4c21"
+        callback_called = False
+        init_command = cli.commands["init"]
+
+        def trap_callback(**_kwargs: object) -> None:
+            nonlocal callback_called
+            callback_called = True
+
+        monkeypatch.setattr(init_command, "callback", trap_callback)
+        result = runner.invoke(
+            cli,
+            ["init", option, sentinel],
+            env={"OPENAI_API_KEY": sentinel},
+        )
+
+        assert result.exit_code == 2
+        assert sentinel not in result.output
+        assert "<redacted:OPENAI_API_KEY>" in result.output
+        assert "is not one of" in result.output
+        assert callback_called is False
+
+    def test_precommand_choices_retain_ordinary_rejected_context(
+        self,
+        runner: CliRunner,
+    ) -> None:
+        ordinary = "ordinary-unsupported-provider"
+        result = runner.invoke(cli, ["init", "--worker-provider", ordinary])
+
+        assert result.exit_code == 2
+        assert ordinary in result.output
+        assert "claude" in result.output
+        assert "codex" in result.output
 
     def test_stages_host_agent_surface_only(
         self, runner: CliRunner, workspace: Path, env: dict[str, str]
@@ -542,38 +621,6 @@ class TestInit:
             explicit_result.output.replace(str(explicit_workspace), "<workspace>")
         )
 
-    def test_hermes_remains_available_for_child_roles(
-        self,
-        runner: CliRunner,
-        workspace: Path,
-        env: dict[str, str],
-    ) -> None:
-        result = runner.invoke(
-            cli,
-            [
-                "init",
-                "--workspace-dir",
-                str(workspace),
-                "--agent",
-                "claude",
-                "--worker-provider",
-                "hermes",
-                "--validator-provider",
-                "hermes",
-                "--terminal-reviewer-provider",
-                "hermes",
-            ],
-        )
-
-        assert result.exit_code == 0, result.output
-        generated = json.loads((workspace / ".mcp.json").read_text())
-        generated_env = generated["mcpServers"]["unrest"]["env"]
-        assert generated_env["UNREST_ORCHESTRATOR_PROVIDER"] == "claude"
-        assert generated_env["UNREST_WORKER_PROVIDER"] == "hermes"
-        assert (workspace / ".claude" / "orchestrator_prompt.md").exists()
-        assert not (workspace / ".hermes" / "orchestrator_prompt.md").exists()
-
-
 @pytest.fixture
 def user_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     home = tmp_path / "home"
@@ -1015,10 +1062,10 @@ class TestUserScopeInit:
         assert "--workspace-dir cannot be used with --scope user" in conflicting.output
 
         unsupported = runner.invoke(
-            cli, ["init", "--scope", "user", "--agent", "hermes"]
+            cli, ["init", "--scope", "user", "--agent", "unknown"]
         )
         assert unsupported.exit_code != 0
-        assert "Invalid value for '--agent': 'hermes'" in unsupported.output
+        assert "Invalid value for '--agent': 'unknown'" in unsupported.output
         assert list(user_home.iterdir()) == []
 
     def test_registered_command_launches_from_another_workspace(
@@ -1049,6 +1096,357 @@ class TestUserScopeInit:
         assert not (unrelated / ".unrest").exists()
 
 
+class TestInitManagedRootSafety:
+    @pytest.mark.parametrize("scope", ("project", "user"))
+    @pytest.mark.parametrize("agent", ("claude", "codex"))
+    @pytest.mark.parametrize("root_state", ("absent", "existing"))
+    def test_managed_roots_preserve_unrelated_bytes_and_repeat_exactly(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        user_home: Path,
+        env: dict[str, str],
+        scope: str,
+        agent: str,
+        root_state: str,
+    ) -> None:
+        boundary = workspace if scope == "project" else user_home
+        root = boundary / f".{agent}"
+        unrelated = root / "unrelated" / "keep.bin"
+        if root_state == "existing":
+            unrelated.parent.mkdir(parents=True)
+            unrelated.write_bytes(b"unrelated\x00configuration\n")
+            unrelated.chmod(0o600)
+
+        arguments = ["init", "--agent", agent]
+        if scope == "project":
+            arguments.extend(["--workspace-dir", str(workspace)])
+        else:
+            arguments.extend(["--scope", "user"])
+        first = runner.invoke(cli, arguments)
+        assert first.exit_code == 0, first.output
+        first_inventory_hash = _tree_content_hash(boundary)
+        first_config_hash = _config_hash(boundary, scope, agent)
+
+        second = runner.invoke(cli, arguments)
+        assert second.exit_code == 0, second.output
+        assert _tree_content_hash(boundary) == first_inventory_hash
+        assert _config_hash(boundary, scope, agent) == first_config_hash
+        third = runner.invoke(cli, arguments)
+        assert (third.exit_code, third.stdout_bytes, third.stderr_bytes) == (
+            second.exit_code,
+            second.stdout_bytes,
+            second.stderr_bytes,
+        )
+        assert b"Managed orchestrator prompt at " in first.stdout_bytes
+        assert b"created=1 repaired=0 verified=0" in first.stdout_bytes
+        assert b"created=0 repaired=0 verified=1" in second.stdout_bytes
+        if root_state == "existing":
+            assert unrelated.read_bytes() == b"unrelated\x00configuration\n"
+            assert stat.S_IMODE(unrelated.stat().st_mode) == 0o600
+
+    @pytest.mark.parametrize("scope", ("project", "user"))
+    @pytest.mark.parametrize("agent", ("claude", "codex"))
+    @pytest.mark.parametrize(
+        "asset_kind", ("prompt", "provider-agent", "bundled-skill")
+    )
+    @pytest.mark.parametrize(
+        "mutation", ("absent", "exact", "truncated", "corrupted", "wrong-mode")
+    )
+    def test_managed_assets_are_truthfully_verified_and_atomically_repaired(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        user_home: Path,
+        env: dict[str, str],
+        scope: str,
+        agent: str,
+        asset_kind: str,
+        mutation: str,
+    ) -> None:
+        arguments = ["init", "--agent", agent]
+        if scope == "project":
+            arguments.extend(["--workspace-dir", str(workspace)])
+            boundary = workspace
+        else:
+            arguments.extend(["--scope", "user"])
+            boundary = user_home
+        baseline = runner.invoke(cli, arguments)
+        assert baseline.exit_code == 0, baseline.output
+
+        root = boundary / f".{agent}"
+        if asset_kind == "prompt":
+            source = (
+                HarnessConfig.discover().bundled_dir
+                / "prompts"
+                / "orchestrator"
+                / "system_prompt.md"
+            )
+            destination = root / "orchestrator_prompt.md"
+            output_label = "Managed orchestrator prompt at "
+        elif asset_kind == "provider-agent":
+            extension = "md" if agent == "claude" else "toml"
+            source = (
+                HarnessConfig.discover().bundled_dir
+                / "providers"
+                / agent
+                / "agents"
+                / f"investigator.{extension}"
+            )
+            destination = root / "agents" / source.name
+            output_label = f"Managed {agent} subagents at "
+        else:
+            source = (
+                HarnessConfig.discover().bundled_dir
+                / "skills"
+                / "engineering-mission-playbook"
+                / "SKILL.md"
+            )
+            destination = root / "skills" / "engineering-mission-playbook" / "SKILL.md"
+            output_label = "Managed bundled skills at "
+
+        authoritative = source.read_bytes()
+        if mutation == "absent":
+            destination.unlink()
+            expected_outcome = "created"
+        elif mutation == "truncated":
+            destination.write_bytes(authoritative[: max(1, len(authoritative) // 3)])
+            expected_outcome = "repaired"
+        elif mutation == "corrupted":
+            destination.write_bytes(b"corrupted managed asset\n")
+            expected_outcome = "repaired"
+        elif mutation == "wrong-mode":
+            destination.chmod(0o600)
+            expected_outcome = "repaired"
+        else:
+            expected_outcome = "verified"
+        destination_before = destination.stat() if mutation == "exact" else None
+
+        unrelated = root / "unrelated" / "sentinel.bin"
+        unrelated.parent.mkdir(parents=True, exist_ok=True)
+        unrelated.write_bytes(b"unrelated\x00bytes\n")
+        unrelated.chmod(0o600)
+        config_before = _config_hash(boundary, scope, agent)
+
+        result = runner.invoke(cli, arguments)
+        assert result.exit_code == 0, result.output
+        matching_line = next(
+            line for line in result.output.splitlines() if line.startswith(output_label)
+        )
+        assert f"{expected_outcome}=" in matching_line
+        if asset_kind == "prompt":
+            expected_counts = {
+                "created": "created=1 repaired=0 verified=0",
+                "repaired": "created=0 repaired=1 verified=0",
+                "verified": "created=0 repaired=0 verified=1",
+            }
+            assert expected_counts[expected_outcome] in matching_line
+        else:
+            asset_count = 4 if asset_kind == "provider-agent" else 6
+            expected_value = 1 if expected_outcome != "verified" else asset_count
+            assert f"{expected_outcome}={expected_value}" in matching_line
+
+        assert destination.read_bytes() == authoritative
+        assert hashlib.sha256(destination.read_bytes()).hexdigest() == hashlib.sha256(
+            authoritative
+        ).hexdigest()
+        assert stat.S_IMODE(destination.stat().st_mode) == 0o644
+        if mutation == "exact":
+            assert destination_before is not None
+            destination_after = destination.stat()
+            assert destination_after.st_ino == destination_before.st_ino
+            assert destination_after.st_mtime_ns == destination_before.st_mtime_ns
+        assert unrelated.read_bytes() == b"unrelated\x00bytes\n"
+        assert stat.S_IMODE(unrelated.stat().st_mode) == 0o600
+        assert _config_hash(boundary, scope, agent) == config_before
+
+        verified = runner.invoke(cli, arguments)
+        repeated = runner.invoke(cli, arguments)
+        assert (repeated.exit_code, repeated.stdout_bytes, repeated.stderr_bytes) == (
+            verified.exit_code,
+            verified.stdout_bytes,
+            verified.stderr_bytes,
+        )
+        verified_line = next(
+            line for line in verified.output.splitlines() if line.startswith(output_label)
+        )
+        expected_verified = {
+            "prompt": 1,
+            "provider-agent": 4,
+            "bundled-skill": 6,
+        }[asset_kind]
+        assert f"created=0 repaired=0 verified={expected_verified}" in verified_line
+
+    @pytest.mark.parametrize("scope", ("project", "user"))
+    @pytest.mark.parametrize("agent", ("claude", "codex"))
+    @pytest.mark.parametrize("unsafe_kind", ("symlink", "directory"))
+    def test_unsafe_managed_prompt_targets_fail_before_any_write(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        user_home: Path,
+        env: dict[str, str],
+        tmp_path: Path,
+        scope: str,
+        agent: str,
+        unsafe_kind: str,
+    ) -> None:
+        arguments = ["init", "--agent", agent]
+        if scope == "project":
+            arguments.extend(["--workspace-dir", str(workspace)])
+            boundary = workspace
+        else:
+            arguments.extend(["--scope", "user"])
+            boundary = user_home
+        baseline = runner.invoke(cli, arguments)
+        assert baseline.exit_code == 0, baseline.output
+
+        prompt = boundary / f".{agent}" / "orchestrator_prompt.md"
+        prompt.unlink()
+        outside = tmp_path / f"outside-{scope}-{agent}-{unsafe_kind}"
+        outside.mkdir()
+        outside_file = outside / "prompt.md"
+        outside_file.write_bytes(b"outside sentinel\n")
+        if unsafe_kind == "symlink":
+            prompt.symlink_to(outside_file)
+        else:
+            prompt.mkdir()
+        before_boundary = _tree_content_inventory(boundary)
+        before_outside = _tree_content_inventory(outside)
+
+        result = runner.invoke(cli, arguments)
+
+        assert result.exit_code != 0
+        assert _tree_content_inventory(boundary) == before_boundary
+        assert _tree_content_inventory(outside) == before_outside
+
+    @pytest.mark.parametrize(
+        "arguments",
+        (
+            ("init", "--agent", "unknown"),
+            ("init", "--scope", "user", "--workspace-dir", "."),
+        ),
+    )
+    def test_invalid_init_output_is_explicit_and_repeatable(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        user_home: Path,
+        env: dict[str, str],
+        arguments: tuple[str, ...],
+    ) -> None:
+        first = runner.invoke(cli, arguments)
+        second = runner.invoke(cli, arguments)
+
+        assert first.exit_code != 0
+        assert (second.exit_code, second.stdout_bytes, second.stderr_bytes) == (
+            first.exit_code,
+            first.stdout_bytes,
+            first.stderr_bytes,
+        )
+        assert b"Error:" in first.stderr_bytes
+
+    @pytest.mark.parametrize("agent", ("claude", "codex"))
+    def test_absent_nested_user_config_override_is_created_beneath_home(
+        self,
+        runner: CliRunner,
+        user_home: Path,
+        env: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+        agent: str,
+    ) -> None:
+        root = user_home / "ordinary" / "nested" / agent
+        variable = "CLAUDE_CONFIG_DIR" if agent == "claude" else "CODEX_HOME"
+        monkeypatch.setenv(variable, str(root))
+
+        first = runner.invoke(cli, ["init", "--scope", "user", "--agent", agent])
+        assert first.exit_code == 0, first.output
+        first_inventory = _tree_content_inventory(user_home)
+        second = runner.invoke(cli, ["init", "--scope", "user", "--agent", agent])
+        assert second.exit_code == 0, second.output
+        assert _tree_content_inventory(user_home) == first_inventory
+        config_name = ".claude.json" if agent == "claude" else "config.toml"
+        assert (root / config_name).is_file()
+
+    @pytest.mark.parametrize("agent", ("claude", "codex"))
+    @pytest.mark.parametrize("control", ("root", "parent", "target"))
+    def test_project_symlink_controls_fail_before_any_initialization_write(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+        tmp_path: Path,
+        agent: str,
+        control: str,
+    ) -> None:
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        root = workspace / f".{agent}"
+        if control == "root":
+            root.symlink_to(outside, target_is_directory=True)
+        elif control == "parent":
+            root.mkdir()
+            (root / "skills").symlink_to(outside, target_is_directory=True)
+        elif agent == "claude":
+            (workspace / ".mcp.json").symlink_to(outside / "config.json")
+        else:
+            root.mkdir()
+            (root / "config.toml").symlink_to(outside / "config.toml")
+        before_workspace = _tree_content_inventory(workspace)
+        before_outside = _tree_content_inventory(outside)
+
+        result = runner.invoke(
+            cli,
+            ["init", "--workspace-dir", str(workspace), "--agent", agent],
+        )
+        assert result.exit_code != 0
+        assert _tree_content_inventory(workspace) == before_workspace
+        assert _tree_content_inventory(outside) == before_outside
+
+    @pytest.mark.parametrize("agent", ("claude", "codex"))
+    def test_user_override_symlink_root_is_not_resolved_or_traversed(
+        self,
+        runner: CliRunner,
+        user_home: Path,
+        env: dict[str, str],
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        agent: str,
+    ) -> None:
+        outside = tmp_path / "outside-user-config"
+        outside.mkdir()
+        root = user_home / f"custom-{agent}"
+        root.symlink_to(outside, target_is_directory=True)
+        variable = "CLAUDE_CONFIG_DIR" if agent == "claude" else "CODEX_HOME"
+        monkeypatch.setenv(variable, str(root))
+        before_home = _tree_content_inventory(user_home)
+        before_outside = _tree_content_inventory(outside)
+
+        result = runner.invoke(cli, ["init", "--scope", "user", "--agent", agent])
+        assert result.exit_code != 0
+        assert _tree_content_inventory(user_home) == before_home
+        assert _tree_content_inventory(outside) == before_outside
+
+    @pytest.mark.parametrize("agent", ("claude", "codex"))
+    def test_non_directory_managed_root_fails_without_touching_boundary(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+        agent: str,
+    ) -> None:
+        root = workspace / f".{agent}"
+        root.write_bytes(b"blocking component\n")
+        before = _tree_content_inventory(workspace)
+
+        result = runner.invoke(
+            cli,
+            ["init", "--workspace-dir", str(workspace), "--agent", agent],
+        )
+        assert result.exit_code != 0
+        assert _tree_content_inventory(workspace) == before
+
+
 class TestListProjects:
     def test_empty(self, runner: CliRunner, env: dict[str, str]) -> None:
         r = runner.invoke(cli, ["list-projects"])
@@ -1075,12 +1473,12 @@ class TestShowProject:
         assert "not found" in r.output.lower()
 
 
+
 class TestObserveProject:
-    def test_single_project_json_and_text_are_read_only(
+    def test_single_project_schema_v2_json_and_text_are_read_only(
         self,
         runner: CliRunner,
         workspace: Path,
-        harness_home: Path,
         env: dict[str, str],
     ) -> None:
         from unrest_harness.config import HarnessConfig
@@ -1096,233 +1494,43 @@ class TestObserveProject:
         )
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        assert payload["schema_version"] == 1
+        assert list(payload) == [
+            "schema_version",
+            "observed_at",
+            "project_id",
+            "mission_id",
+            "persisted_state",
+            "derived_state",
+            "attention_count",
+            "running_task_ids",
+            "runnable_task_ids",
+            "failed_task_ids",
+            "last_runtime_change_age_seconds",
+            "codes",
+        ]
+        assert payload["schema_version"] == 2
         assert payload["project_id"] == "observe-one"
-        assert payload["persisted_state"] == "draft"
-        assert payload["progress"]["active_task_total"] == 0
+        assert payload["derived_state"] == "draft"
         assert "workspace" not in result.output
-        assert "estimate" not in result.output.lower()
 
         text_result = runner.invoke(cli, ["observe-project", "observe-one"])
         assert text_result.exit_code == 0, text_result.output
-        assert "project=observe-one" in text_result.output
-        assert "persisted=draft derived=draft" in text_result.output
+        assert text_result.output.startswith("schema_version=2 observed_at=")
+        assert " project_id=observe-one mission_id=- persisted_state=draft derived_state=draft " in text_result.output
+        assert len(text_result.output.splitlines()) == 1
         assert _tree_snapshot(store.bucket_root("observe-one")) == before
 
-    def test_all_json_continues_past_a_malformed_project(
-        self,
-        runner: CliRunner,
-        workspace: Path,
-        harness_home: Path,
-        env: dict[str, str],
-    ) -> None:
-        from unrest_harness.config import HarnessConfig
-        from unrest_harness.storage import ProjectStore
-
-        store = ProjectStore(HarnessConfig.discover())
-        store.create_project("good", workspace, project_id="good-one")
-        malformed = harness_home / "projects" / "broken-one" / ".unrest-runtime"
-        malformed.mkdir(parents=True)
-        (malformed / "project.json").write_text("{secret-bad-json}", encoding="utf-8")
-
-        result = runner.invoke(
-            cli,
-            ["observe-project", "--all", "--format", "json"],
-        )
-        assert result.exit_code == 0, result.output
-        payload = json.loads(result.output)
-        assert [project["project_id"] for project in payload["projects"]] == [
-            "good-one"
-        ]
-        assert payload["failures"] == [
-            {
-                "code": "malformed_cursor",
-                "entry_ref": None,
-                "project_id": "broken-one",
-            }
-        ]
-        assert "secret-bad-json" not in result.output
-
-    def test_all_json_handles_an_empty_projects_root(
-        self,
-        runner: CliRunner,
-        harness_home: Path,
-        env: dict[str, str],
-    ) -> None:
-        (harness_home / "projects").mkdir()
-
-        result = runner.invoke(
-            cli,
-            ["observe-project", "--all", "--format", "json"],
-        )
-
-        assert result.exit_code == 0, result.output
-        payload = json.loads(result.output)
-        assert payload["schema_version"] == 1
-        assert payload["projects"] == []
-        assert payload["failures"] == []
-
-    def test_all_json_handles_a_missing_projects_root(
-        self,
-        runner: CliRunner,
-        harness_home: Path,
-        env: dict[str, str],
-    ) -> None:
-        assert not (harness_home / "projects").exists()
-
-        result = runner.invoke(
-            cli,
-            ["observe-project", "--all", "--format", "json"],
-        )
-
-        assert result.exit_code == 0, result.output
-        payload = json.loads(result.output)
-        assert payload["projects"] == []
-        assert payload["failures"] == []
-
+    @pytest.mark.parametrize("output_format", ["json", "text"])
     @pytest.mark.parametrize(
-        ("field", "unsafe_id"),
+        ("scenario", "default_exit", "strict_exit"),
         [
-            ("task_id", "work\nSECRET_CONTROL"),
-            ("task_id", "w" * 129),
-            ("dependency_id", "dependency\nSECRET_CONTROL"),
-            ("task_state_id", "state\nSECRET_CONTROL"),
-            ("mission_id", "mission\nSECRET_CONTROL"),
+            ("empty", 0, 0),
+            ("success", 0, 0),
+            ("mixed", 0, 1),
+            ("all_failed", 1, 1),
         ],
     )
-    def test_valid_json_with_unsafe_identifiers_fails_without_echoing_values(
-        self,
-        runner: CliRunner,
-        workspace: Path,
-        env: dict[str, str],
-        field: str,
-        unsafe_id: str,
-    ) -> None:
-        from unrest_harness.config import HarnessConfig
-        from unrest_harness.models import MissionRunning, Task, TaskList, TaskStateFile
-        from unrest_harness.storage import ProjectStore
-
-        store = ProjectStore(HarnessConfig.discover())
-        record = store.create_project("unsafe", workspace, project_id="unsafe-id")
-        record.current_mission_id = "mission-001"
-        store.save_project(record)
-        store.save_state("unsafe-id", MissionRunning(mission_id="mission-001"))
-        store.save_task_list(
-            "unsafe-id",
-            "mission-001",
-            TaskList(
-                tasks=[
-                    Task(
-                        id="work-a",
-                        type="work",
-                        body="SECRET_BODY",
-                        targets=["VAL-A"],
-                        skill="worker",
-                    )
-                ]
-            ),
-        )
-        store.save_task_state("unsafe-id", "mission-001", TaskStateFile())
-        mission_root = (
-            store.unrest_runtime_dir("unsafe-id") / "missions" / "mission-001"
-        )
-        if field in {"task_id", "dependency_id"}:
-            task_path = mission_root / "tasks.json"
-            payload = json.loads(task_path.read_text(encoding="utf-8"))
-            if field == "task_id":
-                payload["tasks"][0]["id"] = unsafe_id
-            else:
-                payload["tasks"][0]["depends_on"] = [unsafe_id]
-            task_path.write_text(json.dumps(payload), encoding="utf-8")
-        elif field == "task_state_id":
-            state_path = mission_root / "task-state.json"
-            payload = json.loads(state_path.read_text(encoding="utf-8"))
-            payload["tasks"][unsafe_id] = {"status": "pending"}
-            state_path.write_text(json.dumps(payload), encoding="utf-8")
-        else:
-            project_path = store.unrest_runtime_dir("unsafe-id") / "project.json"
-            payload = json.loads(project_path.read_text(encoding="utf-8"))
-            payload["current_mission_id"] = unsafe_id
-            project_path.write_text(json.dumps(payload), encoding="utf-8")
-
-        result = runner.invoke(cli, ["observe-project", "unsafe-id"])
-
-        assert result.exit_code != 0
-        assert "malformed_cursor" in result.output
-        assert "SECRET_" not in result.output
-        assert unsafe_id not in result.output
-
-    def test_valid_long_identifier_is_bounded_in_text_output(
-        self,
-        runner: CliRunner,
-        workspace: Path,
-        env: dict[str, str],
-    ) -> None:
-        from unrest_harness.config import HarnessConfig
-        from unrest_harness.models import MissionRunning, Task, TaskList, TaskStateFile
-        from unrest_harness.storage import ProjectStore
-
-        store = ProjectStore(HarnessConfig.discover())
-        record = store.create_project("long", workspace, project_id="long-id")
-        record.current_mission_id = "mission-001"
-        store.save_project(record)
-        store.save_state("long-id", MissionRunning(mission_id="mission-001"))
-        long_id = "w" * 100
-        store.save_task_list(
-            "long-id",
-            "mission-001",
-            TaskList(
-                tasks=[
-                    Task(
-                        id=long_id,
-                        type="work",
-                        body="body",
-                        targets=["VAL-A"],
-                        skill="worker",
-                    )
-                ]
-            ),
-        )
-        store.save_task_state("long-id", "mission-001", TaskStateFile())
-
-        result = runner.invoke(cli, ["observe-project", "long-id"])
-
-        assert result.exit_code == 0, result.output
-        assert long_id not in result.output
-        assert f"task[0]={'w' * 63}~" in result.output
-
-    @pytest.mark.parametrize(
-        ("arguments", "code"),
-        [
-            ([], "invalid_project_id"),
-            (["one", "--all"], "invalid_project_id"),
-            (["../outside"], "invalid_project_id"),
-            (["ghost"], "project_not_found"),
-            (["--all", "--format", "SECRET_FORMAT"], "invalid_format"),
-            (
-                ["--all", "--stale-after-seconds", "SECRET_THRESHOLD"],
-                "invalid_stale_threshold",
-            ),
-            (["--all", "--stale-after-seconds", "0"], "invalid_stale_threshold"),
-        ],
-    )
-    def test_selector_and_option_errors_are_stable_and_value_free(
-        self,
-        runner: CliRunner,
-        env: dict[str, str],
-        arguments: list[str],
-        code: str,
-    ) -> None:
-        result = runner.invoke(cli, ["observe-project", *arguments])
-
-        assert result.exit_code != 0
-        assert code in result.output
-        assert "SECRET_" not in result.output
-        assert "Traceback" not in result.output
-
-    @pytest.mark.parametrize("output_format", ["text", "json"])
-    @pytest.mark.parametrize("scenario", ["success", "mixed", "all_failed"])
-    def test_all_default_and_strict_exit_matrix_preserves_complete_payload(
+    def test_all_exit_matrix_and_failure_isolation(
         self,
         runner: CliRunner,
         workspace: Path,
@@ -1330,6 +1538,8 @@ class TestObserveProject:
         env: dict[str, str],
         output_format: str,
         scenario: str,
+        default_exit: int,
+        strict_exit: int,
     ) -> None:
         from unrest_harness.config import HarnessConfig
         from unrest_harness.storage import ProjectStore
@@ -1338,93 +1548,68 @@ class TestObserveProject:
         if scenario in {"success", "mixed"}:
             store.create_project("good", workspace, project_id="good-one")
         if scenario in {"mixed", "all_failed"}:
-            malformed = harness_home / "projects" / "broken-one" / ".unrest-runtime"
-            malformed.mkdir(parents=True)
-            (malformed / "project.json").write_text("{SECRET_BAD_JSON}", encoding="utf-8")
+            broken = harness_home / "projects" / "broken-one" / ".unrest-runtime"
+            broken.mkdir(parents=True)
+            (broken / "project.json").write_text("{PRIVATE_BAD_JSON}", encoding="utf-8")
+        if scenario == "empty":
+            (harness_home / "projects").mkdir()
 
         arguments = ["observe-project", "--all", "--format", output_format]
-        default_result = runner.invoke(cli, arguments)
-        strict_result = runner.invoke(cli, [*arguments, "--strict"])
-        expected_failure = scenario != "success"
-
-        assert default_result.exit_code == 0
-        assert strict_result.exit_code == (1 if expected_failure else 0)
-        for result in (default_result, strict_result):
-            assert "SECRET_BAD_JSON" not in result.output
-            assert "Traceback" not in result.output
-            if output_format == "json":
-                payload = json.loads(result.output)
-                assert [item["project_id"] for item in payload["projects"]] == (
-                    ["good-one"] if scenario in {"success", "mixed"} else []
-                )
-                assert [item["project_id"] for item in payload["failures"]] == (
-                    ["broken-one"] if expected_failure else []
-                )
-            else:
-                assert f"projects={int(scenario != 'all_failed')} failures={int(expected_failure)}" in result.output
-                assert ("project=good-one" in result.output) == (
-                    scenario in {"success", "mixed"}
-                )
-                assert ("failure=malformed_cursor ref=broken-one" in result.output) == expected_failure
+        ordinary = runner.invoke(cli, arguments)
+        strict = runner.invoke(cli, [*arguments, "--strict"])
+        assert ordinary.exit_code == default_exit, ordinary.output
+        assert strict.exit_code == strict_exit, strict.output
+        assert "PRIVATE_BAD_JSON" not in ordinary.output
+        if output_format == "json":
+            payload = json.loads(ordinary.output)
+            assert list(payload) == ["schema_version", "observed_at", "projects", "failures"]
+            assert [item["project_id"] for item in payload["projects"]] == (
+                ["good-one"] if scenario in {"success", "mixed"} else []
+            )
+            assert [item for item in payload["failures"]] == (
+                [{"project_id": "broken-one", "code": "malformed_cursor"}]
+                if scenario in {"mixed", "all_failed"}
+                else []
+            )
+        else:
+            lines = ordinary.output.splitlines()
+            assert sum("project_id=good-one" in line for line in lines) == (
+                1 if scenario in {"success", "mixed"} else 0
+            )
+            assert sum(line == "failure project=broken-one code=malformed_cursor" for line in lines) == (
+                1 if scenario in {"mixed", "all_failed"} else 0
+            )
 
     @pytest.mark.parametrize(
-        ("variable", "invalid_value"),
+        ("arguments", "code"),
         [
-            ("UNREST_MAX_PARALLEL_NODES", "SECRET_CONFIG_INTEGER"),
-            ("UNREST_MAX_PARALLEL_NODES", "0"),
-            ("UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS", "SECRET_CONFIG_INTEGER"),
-            ("UNREST_WORKER_REASONING_EFFORT", "SECRET_CONFIG_MODEL"),
-            ("UNREST_VALIDATOR_REASONING_EFFORT", "SECRET_CONFIG_MODEL"),
-            ("UNREST_TERMINAL_REVIEWER_REASONING_EFFORT", "SECRET_CONFIG_MODEL"),
-            ("UNREST_ORCHESTRATOR_PROVIDER", "SECRET_CONFIG_PROVIDER"),
-            ("UNREST_WORKER_PROVIDER", "SECRET_CONFIG_PROVIDER"),
-            ("UNREST_VALIDATOR_PROVIDER", "SECRET_CONFIG_PROVIDER"),
-            ("UNREST_TERMINAL_REVIEWER_PROVIDER", "SECRET_CONFIG_PROVIDER"),
-            ("UNREST_CAPABILITY_POLICY_VERSION", "SECRET_CONFIG_POLICY"),
-            ("UNREST_CAPABILITY_PROFILE", "SECRET_CONFIG_PROFILE"),
-            ("UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED", "SECRET_CONFIG_OPT_IN"),
-            ("UNREST_WORKER_MODEL", "SECRET_CONFIG_MODEL\n"),
-            ("UNREST_HOME", "SECRET_CONFIG_PATH\n"),
-            ("UNREST_PROJECTS_DIR", "SECRET_CONFIG_PATH\n"),
+            ([], "invalid_project_id"),
+            (["one", "--all"], "invalid_project_id"),
+            (["../outside"], "invalid_project_id"),
+            (["ghost"], "project_not_found"),
+            (["--all", "--format", "PRIVATE_FORMAT"], "invalid_format"),
+            (["--all", "--stale-after-seconds", "PRIVATE_THRESHOLD"], "invalid_stale_threshold"),
+            (["--all", "--stale-after-seconds", "0"], "invalid_stale_threshold"),
         ],
     )
-    def test_invalid_ambient_configuration_is_one_value_free_diagnostic(
+    def test_selector_and_option_errors_are_closed_and_value_free(
         self,
         runner: CliRunner,
         env: dict[str, str],
-        variable: str,
-        invalid_value: str,
+        arguments: list[str],
+        code: str,
     ) -> None:
-        result = runner.invoke(
-            cli,
-            ["observe-project", "--all", "--format", "json"],
-            env={**env, variable: invalid_value},
-        )
-
-        assert result.exit_code == 1
-        assert result.output == "Error: invalid_configuration\n"
-        assert "SECRET_CONFIG" not in result.output
+        result = runner.invoke(cli, ["observe-project", *arguments])
+        assert result.exit_code != 0
+        assert result.output == f"Error: {code}\n"
+        assert "PRIVATE_" not in result.output
         assert "Traceback" not in result.output
 
-    @pytest.mark.parametrize("variable", ["UNREST_HOME", "UNREST_PROJECTS_DIR"])
-    def test_regular_file_ambient_root_is_invalid_configuration(
+    def test_strict_requires_all(
         self,
         runner: CliRunner,
         env: dict[str, str],
-        tmp_path: Path,
-        variable: str,
     ) -> None:
-        invalid_root = tmp_path / "SECRET_CONFIG_ROOT"
-        invalid_root.write_text("not a directory", encoding="utf-8")
-
-        result = runner.invoke(
-            cli,
-            ["observe-project", "--all", "--format", "json"],
-            env={**env, variable: str(invalid_root)},
-        )
-
+        result = runner.invoke(cli, ["observe-project", "one", "--strict"])
         assert result.exit_code == 1
-        assert result.output == "Error: invalid_configuration\n"
-        assert str(invalid_root) not in result.output
-        assert "SECRET_CONFIG" not in result.output
-        assert "Traceback" not in result.output
+        assert result.output == "Error: invalid_project_id\n"

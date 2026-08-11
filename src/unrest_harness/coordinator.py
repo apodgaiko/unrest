@@ -6,11 +6,13 @@ tool loops `step()` until a returnable condition.
 """
 from __future__ import annotations
 
+import os
 import concurrent.futures
 from dataclasses import dataclass, field
 from typing import Literal
 
 from . import attention as attn_factory
+from .capability_policy import redact_credential_values
 from .dispatcher import (
     DispatchRequest,
     NodeDispatcher,
@@ -35,7 +37,7 @@ from .models import (
     ValidateHandoff,
     WorkHandoff,
 )
-from .storage import ProjectStore, utc_now_filesafe
+from .storage import AttemptValidationError, ProjectStore, utc_now_filesafe
 from .envelope import public_attention_items
 from .task_validation import gates_in_order
 
@@ -146,6 +148,7 @@ class MissionCoordinator:
 
     def _dispatch_one(self, mid: str, task: Task) -> StepResult:
         """Dispatch one work task or one validator."""
+        self.store.refresh_inventory(os.environ)
         spawn_ts = utc_now_filesafe()
         task_state = self.store.load_task_state(self.project_id, mid)
         task_state.set_status(task.id, "running")
@@ -171,6 +174,7 @@ class MissionCoordinator:
             )
             return self._apply_handoff(mid, task, synthetic, spawn_ts)
 
+        handoff = self._bind_dispatched_handoff(task, handoff, spawn_ts)
         self.store.save_attempt(self.project_id, mid, spawn_ts, task.id, handoff)
         return self._apply_handoff(mid, task, handoff, spawn_ts)
 
@@ -292,6 +296,7 @@ class MissionCoordinator:
         if any(task.type == "work" for task in batch):
             raise RuntimeError("mutable work must use single-task dispatch")
 
+        self.store.refresh_inventory(os.environ)
         batch_attempts: list[_BatchAttempt] = []
         for index, task in enumerate(batch):
             spawn_ts = self._batch_spawn_ts(index)
@@ -315,7 +320,9 @@ class MissionCoordinator:
 
         attention: list[AttentionItemInternal] = []
         for attempt in sorted(batch_attempts, key=lambda item: item.task.id):
-            handoff = handoffs[attempt.task.id]
+            handoff = self._bind_dispatched_handoff(
+                attempt.task, handoffs[attempt.task.id], attempt.spawn_ts
+            )
             self.store.save_attempt(
                 self.project_id,
                 mid,
@@ -355,10 +362,11 @@ class MissionCoordinator:
                     for request, handoff in zip(requests, handoffs, strict=True)
                 }
             except Exception as exc:  # noqa: BLE001
+                cause = redact_credential_values(str(exc), self.store.inventory)
                 return {
                     request.task.id: self._synthesize_handoff(
                         request.task,
-                        f"Dispatcher batch crashed: {exc}",
+                        f"Dispatcher batch crashed: {cause[:2000]}",
                     )
                     for request in requests
                 }
@@ -367,11 +375,12 @@ class MissionCoordinator:
             try:
                 return request.task.id, self.dispatcher.dispatch(request)
             except Exception as exc:  # noqa: BLE001
+                cause = redact_credential_values(str(exc), self.store.inventory)
                 return (
                     request.task.id,
                     self._synthesize_handoff(
                         request.task,
-                        f"Dispatcher crashed: {exc}",
+                        f"Dispatcher crashed: {cause[:2000]}",
                     ),
                 )
 
@@ -453,6 +462,19 @@ class MissionCoordinator:
             report=report,
             request_attention=False,
         )
+
+    def _bind_dispatched_handoff(
+        self, task: Task, handoff: NodeHandoff, spawn_ts: str
+    ) -> NodeHandoff:
+        if handoff.node_id != task.id:
+            return self._synthesize_handoff(
+                task, "Dispatcher returned a handoff for a different task."
+            ).model_copy(update={"attempt_id": spawn_ts})
+        if handoff.attempt_id not in (None, spawn_ts):
+            return self._synthesize_handoff(
+                task, "Dispatcher returned a handoff for a stale generation."
+            ).model_copy(update={"attempt_id": spawn_ts})
+        return handoff.model_copy(update={"attempt_id": spawn_ts})
 
     def close_mission(
         self, mid: str, *, deliverable_roots: list[str] | None = None
@@ -752,6 +774,7 @@ class MissionCoordinator:
     # ------------------------------------------------------------------
 
     def _enter_terminal_review(self, mid: str) -> StepResult:
+        self.store.refresh_inventory(os.environ)
         config = self.store.load_terminal_review_config(self.project_id, mid)
         # Revalidate persisted roots immediately before dispatch. This is
         # preflight plus prompt policy for a trusted reviewer, not OS sandboxing.
@@ -818,15 +841,13 @@ class MissionCoordinator:
             if task_state.status_of(task.id) != "running":
                 continue
             saw_running = True
-            attempts = self.store.list_attempts(self.project_id, mid, node_id=task.id)
-            if not attempts:
-                entry = task_state.tasks.get(task.id)
-                spawn_ts = entry.last_attempt if entry is not None else None
-                if spawn_ts is None:
-                    spawn_ts = utc_now_filesafe()
+            entry = task_state.tasks.get(task.id)
+            spawn_ts = entry.last_attempt if entry is not None else None
+            if spawn_ts is None:
+                spawn_ts = utc_now_filesafe()
                 handoff = self._synthesize_handoff(
                     task,
-                    "Coordinator resumed with task marked running but no attempt file was present.",
+                    "Coordinator resumed with a running task that has no dispatch generation.",
                 )
                 self.store.save_attempt(
                     self.project_id,
@@ -839,14 +860,42 @@ class MissionCoordinator:
                     self._apply_handoff_collect(mid, task, handoff, spawn_ts)
                 )
                 continue
-            last = attempts[-1]
-            read_handoff = self.store.read_attempt(
-                self.project_id, mid, last.spawn_ts, task.id
-            )
+            try:
+                read_handoff = self.store.read_attempt(
+                    self.project_id, mid, spawn_ts, task.id
+                )
+            except AttemptValidationError as exc:
+                handoff = self._synthesize_handoff(
+                    task,
+                    "Coordinator rejected the persisted attempt: " + str(exc),
+                )
+                rejected_ts = f"{spawn_ts}-rejected"
+                self.store.save_attempt(
+                    self.project_id,
+                    mid,
+                    rejected_ts,
+                    task.id,
+                    handoff,
+                )
+                attention.extend(
+                    self._apply_handoff_collect(mid, task, handoff, rejected_ts)
+                )
+                continue
             if read_handoff is None:
+                handoff = self._synthesize_handoff(
+                    task,
+                    "Coordinator resumed with task marked running but no attempt "
+                    "file was present for its current generation.",
+                )
+                self.store.save_attempt(
+                    self.project_id, mid, spawn_ts, task.id, handoff
+                )
+                attention.extend(
+                    self._apply_handoff_collect(mid, task, handoff, spawn_ts)
+                )
                 continue
             attention.extend(
-                self._apply_handoff_collect(mid, task, read_handoff, last.spawn_ts)
+                self._apply_handoff_collect(mid, task, read_handoff, spawn_ts)
             )
         if not saw_running:
             return None

@@ -34,6 +34,7 @@ def _write_handoff() -> None:
     if not path:
         return
     node_id = os.environ.get("UNREST_NODE_ID", "unknown")
+    attempt_id = Path(path).stem.split("__", 1)[0]
     node_type = os.environ.get("UNREST_NODE_TYPE", "work")
     done = os.environ.get("MOCK_ACP_DONE", "1") != "0"
     request_attention = os.environ.get("MOCK_ACP_REQUEST_ATTENTION") == "1"
@@ -47,6 +48,7 @@ def _write_handoff() -> None:
         passed = os.environ.get("UNREST_VALIDATION_PASSED", "1") != "0"
         payload = {
             "node_id": node_id,
+            "attempt_id": attempt_id,
             "done": done,
             "report": f"mock validate handoff{report_suffix}",
             "items": [{"item_id": "VAL-001", "passed": passed}],
@@ -56,6 +58,7 @@ def _write_handoff() -> None:
     else:
         payload = {
             "node_id": node_id,
+            "attempt_id": attempt_id,
             "done": done,
             "report": f"mock work handoff{report_suffix}",
             "request_attention": request_attention,

@@ -11,9 +11,8 @@ semantic subtree; read the complete root-to-leaf chain before editing.
 - Keep one task to one coherent change. Do not begin an adjacent batch task,
   silently change task/gate/handoff semantics, or self-approve a protected
   change.
-- Treat `evals/baseline/` as evidence about the approved base. An
-  `observed_legacy` or `known_defect` fixture is not a normative behavior
-  oracle.
+- Historical observations and `known_defect` fixtures are evidence, not a
+  normative behavior oracle.
 
 ## Engineering rules
 
@@ -25,18 +24,17 @@ semantic subtree; read the complete root-to-leaf chain before editing.
   `.unrest-runtime/`; do not collapse that boundary.
 - Do not expose secrets, prompts, source bodies, reports, or unrelated command
   output in generated metadata or evidence.
-- Update the canonical normative document and focused tests with any changed
-  invariant, schema, configuration contract, or operator workflow. Normative
-  metadata and stable IDs are governed from
-  `docs/architecture/index.md`.
+- Update the canonical document and focused tests with any changed invariant,
+  configuration contract, or operator workflow. Architecture and accepted
+  decision entry points are listed in `docs/architecture/index.md`.
 
 ## Durable annotations
 
-Use structured permanent annotations only for non-obvious constraints:
-`INVARIANT[ID]`, `SECURITY[ID]`, `COMPAT[ID]`, `WHY[ADR-ID]`, or
-`TODO[#issue; remove-after=condition]`. Every reference must resolve through
-the architecture registries. Keep conversations, agent identity, hidden
-reasoning, and temporary handoff notes out of source and documentation.
+Use permanent comments only for non-obvious constraints and keep them locally
+legible. Existing structured runtime invariant IDs remain documentation aids;
+the repository command does not parse or recursively protect them. Keep
+conversations, agent identity, hidden reasoning, and temporary handoff notes
+out of source and documentation.
 
 ## Verification
 

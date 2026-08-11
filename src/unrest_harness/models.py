@@ -313,6 +313,7 @@ class WorkHandoff(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     node_id: str
+    attempt_id: str | None = None
     done: bool
     report: str
     request_attention: bool = False
@@ -331,6 +332,7 @@ class ValidateHandoff(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     node_id: str
+    attempt_id: str | None = None
     done: bool = True
     report: str = ""
     items: list[ValidationItem] = Field(default_factory=list)

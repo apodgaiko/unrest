@@ -20,6 +20,8 @@ import pytest
 from fastmcp import Client
 
 from unrest_harness.acp_runner import (
+    ACPClient,
+    ACPNodeDispatcher,
     ACPTerminalReviewer,
     ACPNodeRunner,
     _acp_subprocess_env,
@@ -34,7 +36,13 @@ from unrest_harness.capability_policy import (
 from unrest_harness.providers import PROVIDERS
 from unrest_harness.assets import AssetLoader
 from unrest_harness.config import HarnessConfig
-from unrest_harness.models import Task, TerminalReviewHandoff, WorkHandoff
+from unrest_harness.dispatcher import DispatchRequest
+from unrest_harness.models import (
+    Task,
+    TerminalReviewHandoff,
+    ValidateHandoff,
+    WorkHandoff,
+)
 from unrest_harness.storage import ProjectStore
 
 
@@ -167,7 +175,7 @@ async def test_real_mcp_inventory_fd_redacts_before_crash_and_restart(
         )
         tool_name = "submit_terminal_review"
 
-    stderr = b""
+    child_output = ""
     try:
         await runner._wait_for_server_ready("127.0.0.1", mcp_port)
         async with Client(f"http://127.0.0.1:{mcp_port}/mcp") as client:
@@ -187,8 +195,17 @@ async def test_real_mcp_inventory_fd_redacts_before_crash_and_restart(
         # inherited FD child is actually terminated before restart recovery.
         if process.returncode is None:
             process.terminate()
-        _, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
-    assert process.returncode is not None, stderr.decode(errors="replace")
+        child_output = await asyncio.wait_for(
+            runner._close_mcp_process(process, inventory),
+            timeout=10,
+        )
+    assert process.returncode is not None, child_output
+    assert runner._mcp_drains == {}
+    assert not any(
+        task.get_name().startswith("unrest-mcp-")
+        for task in asyncio.all_tasks()
+        if task is not asyncio.current_task()
+    )
 
     restarted = ProjectStore(config)
     if mode == "worker":
@@ -217,6 +234,87 @@ async def test_real_mcp_inventory_fd_redacts_before_crash_and_restart(
         persisted = path.read_text(encoding="utf-8")
         assert secret not in persisted
         assert f"<redacted:{secret_name}>" in persisted
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ("worker", "terminal-reviewer"))
+async def test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    secret_name = "ANTHROPIC_API_KEY"
+    secret = "oversized-child-secret"
+    runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
+    original_spawn = asyncio.create_subprocess_exec
+    spawned_argv: list[str] = []
+
+    async def spawn_chatty(*args, **kwargs):
+        spawned_argv.extend(str(arg) for arg in args)
+        return await original_spawn(
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                f"sys.stdout.write('stdout-cause-{secret}-' + 'o'*524288); "
+                "sys.stdout.flush(); "
+                f"sys.stderr.write('stderr-cause-{secret}-' + 'e'*524288); "
+                "sys.stderr.flush()"
+            ),
+            stdout=kwargs["stdout"],
+            stderr=kwargs["stderr"],
+            cwd=kwargs["cwd"],
+            env=kwargs["env"],
+            limit=kwargs["limit"],
+            pass_fds=kwargs["pass_fds"],
+        )
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn_chatty)
+    common = {
+        "project_id": "p-chatty",
+        "mission_id": "mission-001",
+        "workspace_dir": str(workspace),
+        "mcp_port": 43210,
+        "sensitive_inventory": {secret_name: secret},
+        "environment": {"PATH": os.environ["PATH"]},
+    }
+    if mode == "worker":
+        process = await runner._start_worker_mcp_server(
+            task=Task(
+                id="w-chatty",
+                type="work",
+                body="x",
+                targets=["VAL-SEC-014"],
+                skill="s",
+            ),
+            handoff_path=str(workspace / "attempt.json"),
+            **common,
+        )
+        assert "worker" in spawned_argv
+    else:
+        process = await runner._start_terminal_reviewer_mcp(
+            report_path=str(workspace / "terminal-review.json"),
+            **common,
+        )
+        assert "terminal-reviewer" in spawned_argv
+
+    output = await asyncio.wait_for(
+        runner._close_mcp_process(process, {secret_name: secret}),
+        timeout=5,
+    )
+
+    assert process.returncode == 0
+    assert runner._mcp_drains == {}
+    assert "stdout-cause-<redacted:ANTHROPIC_API_KEY>" in output
+    assert "stderr-cause-<redacted:ANTHROPIC_API_KEY>" in output
+    assert secret not in output
+    assert len(output.encode("utf-8")) <= 2 * 64 * 1024
+    assert not any(
+        task.get_name().startswith("unrest-mcp-")
+        for task in asyncio.all_tasks()
+        if task is not asyncio.current_task()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +380,7 @@ def test_run_node_with_mock_agent(config: HarnessConfig, project_setup, workspac
     assert data["node_id"] == "w1"
 
 
-@pytest.mark.parametrize("provider_name", ("claude", "codex", "hermes"))
+@pytest.mark.parametrize("provider_name", ("claude", "codex"))
 @pytest.mark.parametrize(
     "task_type",
     ("work", "validate"),
@@ -371,13 +469,13 @@ def test_full_jobs_and_handoffs_preserve_complete_format_templates(
     assert mcp_environments[0]["PATH"] == host_path
 
 
-@pytest.mark.parametrize("provider_name", ("claude", "codex", "hermes"))
+@pytest.mark.parametrize("provider_name", ("claude", "codex"))
 @pytest.mark.parametrize(
     "task_type",
     ("work", "validate"),
     ids=("worker", "validator"),
 )
-def test_full_jobs_and_handoffs_filter_credentials_inside_format_fields(
+def test_full_jobs_do_not_infer_credentials_inside_format_fields(
     config: HarnessConfig,
     project_setup,
     mock_acp_command: str,
@@ -458,7 +556,7 @@ def test_full_jobs_and_handoffs_filter_credentials_inside_format_fields(
     assert secret not in persisted
     assert source_value not in persisted
     assert len(mcp_environments) == 1
-    assert "PATH" not in mcp_environments[0]
+    assert mcp_environments[0]["PATH"] == f"{os.defpath}:{secret}"
     assert source_name not in mcp_environments[0]
 
 
@@ -483,6 +581,195 @@ def test_synthesize_missing_handoff_records_failure(
     assert handoff.done is False
     assert "stop_reason=cancelled" in handoff.report
     assert handoff_path.exists()
+
+
+@pytest.mark.parametrize("provider_name", ("claude", "codex"))
+def test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    workspace: Path,
+    mock_acp_command: str,
+    provider_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only MCP startup serializes; the real ACP sessions still overlap."""
+    role_config = replace(
+        config,
+        worker_provider_name=provider_name,
+        worker_acp_command=mock_acp_command,
+        validator_provider_name=provider_name,
+        validator_acp_command=mock_acp_command,
+    )
+    dispatcher = ACPNodeDispatcher(role_config, project_setup)
+    runner = dispatcher.runner
+    active_starts = 0
+    maximum_active_starts = 0
+    active_sessions = 0
+    maximum_active_sessions = 0
+    both_sessions_started = asyncio.Event()
+    next_port = 41000
+
+    def _next_port() -> int:
+        nonlocal next_port
+        next_port += 1
+        return next_port
+
+    async def _start_fixture(**kwargs):
+        nonlocal active_starts, maximum_active_starts
+        active_starts += 1
+        maximum_active_starts = max(maximum_active_starts, active_starts)
+        process = await asyncio.create_subprocess_exec(
+            "/bin/sleep",
+            "30",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        runner._start_mcp_drains(process)
+        return process
+
+    async def _ready_fixture(*args, **kwargs):
+        nonlocal active_starts
+        await asyncio.sleep(0.05)
+        active_starts -= 1
+
+    original_send_request = ACPClient.send_request
+
+    async def _send_request_fixture(self, method, params):
+        nonlocal active_sessions, maximum_active_sessions
+        if method != "session/prompt":
+            return await original_send_request(self, method, params)
+        active_sessions += 1
+        maximum_active_sessions = max(maximum_active_sessions, active_sessions)
+        if active_sessions == 2:
+            both_sessions_started.set()
+        try:
+            await asyncio.wait_for(both_sessions_started.wait(), timeout=1)
+            return await original_send_request(self, method, params)
+        finally:
+            active_sessions -= 1
+
+    runner._find_free_port = _next_port  # type: ignore[method-assign]
+    runner._start_worker_mcp_server = _start_fixture  # type: ignore[method-assign]
+    runner._wait_for_server_ready = _ready_fixture  # type: ignore[method-assign]
+    monkeypatch.setattr(ACPClient, "send_request", _send_request_fixture)
+    requests = [
+        DispatchRequest(
+            project_id="p1",
+            mission_id="mission-001",
+            task=Task(
+                id=f"v{index}",
+                type="validate",
+                body="validate",
+                targets=["VAL-001"],
+                skill="s",
+            ),
+            spawn_ts=f"2026-08-10T07-00-00Z-{index:04d}",
+        )
+        for index in range(2)
+    ]
+
+    handoffs = dispatcher.dispatch_batch(requests)
+
+    assert maximum_active_starts == 1
+    assert maximum_active_sessions == 2
+    assert runner._mcp_drains == {}
+    assert [handoff.node_id for handoff in handoffs] == ["v0", "v1"]
+    assert all(isinstance(handoff, ValidateHandoff) for handoff in handoffs)
+    assert all(handoff.done and handoff.passed for handoff in handoffs)
+
+
+@pytest.mark.parametrize("provider_name", ("claude", "codex"))
+def test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    workspace: Path,
+    mock_acp_command: str,
+    monkeypatch: pytest.MonkeyPatch,
+    provider_name: str,
+) -> None:
+    secret = "batch-crash-known-value"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+    role_config = replace(
+        config,
+        validator_provider_name=provider_name,
+        validator_acp_command=mock_acp_command,
+    )
+    dispatcher = ACPNodeDispatcher(role_config, project_setup)
+    runner = dispatcher.runner
+    mcp_processes: dict[str, asyncio.subprocess.Process] = {}
+
+    async def _start_fixture(**kwargs):
+        process = await asyncio.create_subprocess_exec(
+            "/bin/sleep",
+            "30",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        mcp_processes[kwargs["task"].id] = process
+        runner._start_mcp_drains(process)
+        return process
+
+    async def _ready_fixture(*args, **kwargs):
+        return None
+
+    original_render_prompts = runner._render_prompts
+
+    def _render_prompts_fixture(**kwargs):
+        if kwargs["task"].id == "v-crash":
+            raise RuntimeError(f"prompt-render-neighbor-{secret}")
+        return original_render_prompts(**kwargs)
+
+    runner._find_free_port = lambda: 41001  # type: ignore[method-assign]
+    runner._start_worker_mcp_server = _start_fixture  # type: ignore[method-assign]
+    runner._wait_for_server_ready = _ready_fixture  # type: ignore[method-assign]
+    runner._render_prompts = _render_prompts_fixture  # type: ignore[method-assign]
+    good = DispatchRequest(
+        project_id="p1",
+        mission_id="mission-001",
+        task=Task(
+            id="v-good",
+            type="validate",
+            body="validate",
+            targets=["VAL-001"],
+            skill="s",
+        ),
+        spawn_ts="2026-08-10T07-05-00Z-0000",
+    )
+    bad = DispatchRequest(
+        project_id="p1",
+        mission_id="mission-001",
+        task=Task(
+            id="v-crash",
+            type="validate",
+            body="validate",
+            targets=["VAL-001"],
+            skill="s",
+        ),
+        spawn_ts="2026-08-10T07-05-00Z-0001",
+    )
+
+    good_handoff, crash_handoff = dispatcher.dispatch_batch([good, bad])
+
+    assert isinstance(good_handoff, ValidateHandoff)
+    assert good_handoff.done is True
+    assert good_handoff.passed is True
+    assert isinstance(crash_handoff, ValidateHandoff)
+    assert crash_handoff.done is False
+    assert crash_handoff.passed is False
+    assert "RuntimeError" in crash_handoff.report
+    assert "prompt-render-neighbor-<redacted:ANTHROPIC_API_KEY>" in crash_handoff.report
+    assert secret not in crash_handoff.report
+    assert len(crash_handoff.report) < 2200
+    assert set(mcp_processes) == {"v-good", "v-crash"}
+    assert all(process.returncode is not None for process in mcp_processes.values())
+    assert runner._mcp_drains == {}
+    attempt = project_setup.attempt_path(
+        "p1", "mission-001", bad.spawn_ts, bad.task.id
+    )
+    persisted = attempt.read_text(encoding="utf-8")
+    assert "RuntimeError" in persisted
+    assert "prompt-render-neighbor-<redacted:ANTHROPIC_API_KEY>" in persisted
+    assert secret not in persisted
 
 
 def test_augment_acp_command_codex_untouched():

@@ -34,7 +34,7 @@ handoffs, state preconditions, and error payloads.
 | `end_mission` | `mission_running`; no runnable work or ready gate. | Runs terminal review; returns `done` or attention. |
 | `decide_attention` | `attention_needed`; one decision per open item. | Records decision and returns the next state. |
 | `inspect_project` | Existing project. | Pure read with full textual task view. |
-| `abort_project` | Existing project. | Preserves evidence, seals abort where possible, returns `aborted`. |
+| `abort_project` | Existing project and non-empty reason of at most 4096 UTF-8 bytes. | Rejects an oversized reason before terminal writes; otherwise preserves evidence, seals abort where possible, and returns the same bounded `aborted` reason. |
 
 All successful calls return the typed envelope:
 
@@ -127,8 +127,6 @@ No accepted repository ADR currently changes this surface.
 
 ## Known limitations
 
-The approved base's provider configuration can implicitly select unrestricted
+The approved base's provider configuration could implicitly select unrestricted
 execution. This document records the MCP shape only; it does not bless that
-behavior. The defect is classified in
-[`BASE-CAPABILITY-DEFECT-001`](../../evals/baseline/fixtures/implicit-unrestricted-defaults.json)
-and remains historical characterization.
+historical behavior.

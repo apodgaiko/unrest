@@ -6,7 +6,8 @@ applies_to:
 verified_by:
   - tests/test_documentation_contract.py
   - tests/test_repository_contract.py
-related_decisions: []
+related_decisions:
+  - ADR-0002
 schema_version: 1
 ---
 
@@ -14,10 +15,9 @@ schema_version: 1
 
 ## Purpose
 
-Provide one locally legible entry point to canonical specifications,
-machine-readable architecture records, decisions, policies, and workflow
-templates. A link here is navigation; normative authority comes from each
-document's metadata and the policy below.
+Provide one locally legible entry point to the retained Lean Core architecture,
+specifications, decisions, and repository-development contract. ADR-0002
+withdraws the former repository governance language and duplicate root schemas.
 
 ## Canonical specifications
 
@@ -29,122 +29,62 @@ document's metadata and the policy below.
 
 ## Machine-readable architecture
 
-- [Component map](component-map.json) — deterministic component-to-path,
-  specification, test, invariant, and decision edges.
-- [Protected-surface policy](../../policy/protected-surfaces.yaml) and
-  [schema](../../schemas/protected-surfaces.schema.json) — strict human-review,
-  evaluation, rollback, and governance self-protection requirements.
-- [Role capability policy](capability-policy.md), packaged
-  [authority policy](../../src/unrest_harness/bundled/policies/role-capabilities.v1.json),
-  [closed security model](../../src/unrest_harness/bundled/policies/capability-security-model.v1.json),
-  [sink catalog](../../src/unrest_harness/bundled/policies/capability-sinks.v1.json),
-  and their [authority](../../schemas/role-capabilities.schema.json),
-  [model](../../schemas/capability-security-model.schema.json), and
-  [sink](../../schemas/capability-sinks.schema.json) schemas — fail-closed
-  authority, monotonic provenance, exact bounds, and complete output
-  enforcement for every runtime role.
-- [Normative-document policy](normative-documents.json) — canonical document
-  inventory and strict frontmatter rules.
-- [Stable ID registry](id-registry.json) — invariant, security, and
-  compatibility records.
-- [Historical-record policy](historical-record-policy.json) — candidate
-  baseline IDs/classifications, pinned finite active-role locators, and exact
-  role/reference repair authorizations whose separate current-contract tuples
-  are shared by the role-specific repository validators.
-- [Annotation policy](annotation-policy.json) and
-  [annotation guide](annotations.md) — approved permanent comment vocabulary
-  and the open identity-attribution grammar.
-- [Template-heading policy](template-heading-policy.json) — operative
-  top-level canonical ATX/Setext headings and excluded containers.
-- [Evidence policy](evidence-policy.json) — exhaustive protected evidence
-  locations, typed non-passing records, and the positive tuple schema.
-- [Removal registry](removal-registry.json) — issue and removal-condition
-  records required by structured TODOs.
-- [Repository contract](repository-contract.md) — the canonical deterministic,
-  read-only repository and CI validation command.
+- [Component map](component-map.json) — deterministic component ownership and
+  specification/test edges.
+- [Stable ID registry](id-registry.json) — retained runtime invariant,
+  security, and compatibility identifiers used by locally useful annotations.
+- [Packaged role-capability policy](../../src/unrest_harness/bundled/policies/role-capabilities.v1.json)
+  — runtime authority loaded by the product and finite repository checker.
+- [Repository contract](repository-contract.md) — the finite deterministic,
+  read-only development command.
 
 Machine-readable JSON files are canonical UTF-8 JSON: sorted keys, stable
-record order by ID/kind, two-space indentation, and one trailing newline.
-Generated or edited output must be byte-identical when source enumeration is
-reversed.
+record order, two-space indentation, and one trailing newline.
 
-## Decisions
+## Decisions and accepted scope
 
 - [ADR index](../decisions/index.md)
-- [Change governance](change-governance.md) — proposal, protected review,
-  conventional commit/trailer, and schema-evolution contract.
+- [ADR-0002](../decisions/ADR-0002-lean-core-v0.2.md) — accepted Lean Core v0.2
+  compaction perimeter.
+- [Batch 0.5 accepted scope package](../proposals/batch-0.5/README.md)
 
-No decision is considered accepted merely because an ID is mentioned in prose.
-It must appear in the ADR index and its canonical document must resolve.
+No decision is accepted merely because an ID appears in prose. Its accepted
+ADR must resolve from the decision index.
 
 ## Canonical templates
 
-- [Pull request](../../.github/PULL_REQUEST_TEMPLATE.md)
 - [Task packet](../templates/task-packet.md)
 - [Implementation plan](../templates/implementation-plan.md)
 - [Architecture decision record](../templates/adr.md)
 - [Change closeout](../templates/change-closeout.md)
 
-These are the canonical copies. Product prompts may render task or handoff
-content, but do not become competing documentation templates.
-
-## Release records
-
-- [Telemetry and cold-start hardening release notes](../release/telemetry-cold-start-hardening.md)
-  — operator behavior, compatibility, measured performance, rollback, and the
-  remaining iteration-speed boundary for the validated schema-v1 observer.
-
 ## Public contract
 
-Every Markdown document selected by
-[`normative-documents.json`](normative-documents.json) must:
-
-1. start with parseable `---` YAML frontmatter;
-2. contain exactly the required metadata fields;
-3. use a unique ID, supported status, and supported integer schema version;
-4. use repository-relative, resolving `applies_to` and `verified_by` entries;
-5. reference only accepted, resolving ADR IDs;
-6. keep all relative Markdown links and anchors resolving.
+`unrest check-repository` validates only the finite duties in the repository
+contract: required files, retained references, component ownership, loadable
+packaged runtime policy, and required CI commands. It does not regenerate a
+historical baseline, validate duplicate root schemas, interpret commit or pull
+request policy, prove static capability effects, compare evidence history, or
+protect its own implementation recursively.
 
 ## Invariants
 
-- `ARCH-ASSET-001`: machine-readable inventories and discovery surfaces have a
-  stable deterministic order.
-- `ARCH-BASELINE-001`: legacy observations do not become normative through
-  documentation.
-- Permanent source annotations resolve through the linked registries.
-
-## Failure modes
-
-Missing documents or anchors, duplicate IDs/canonical paths, unsupported
-metadata, absolute or escaping paths, unresolved component edges, unknown
-annotation IDs, malformed TODOs, and generated JSON drift invalidate the
-repository contract.
-
-## Change protocol
-
-Add a normative document to the policy and this index in the same change.
-Register new stable IDs before using them in code. Register an ADR before a
-`WHY` annotation. Register both issue and removal condition before a structured
-TODO. Update component edges and focused tests with path or ownership changes.
+- `ARCH-ASSET-001`: persisted and generated inventories have stable order.
+- Permanent runtime annotations use IDs from the retained registry.
+- Durable project records remain under `.unrest/`; runtime cursors remain under
+  `.unrest-runtime/`.
 
 ## Required verification
 
 ```bash
 uv run unrest check-repository
-uv run pytest -q tests/test_documentation_contract.py
+uv run pytest -q tests/test_documentation_contract.py tests/test_repository_contract.py
 ```
 
 At a completed implementation slice, also run the milestone checks in the root
-`AGENTS.md`; this focused documentation check does not consume the single
-frozen-candidate full-suite checkpoint.
-
-## Related decisions
-
-See the [ADR index](../decisions/index.md). It currently contains no accepted
-repository ADR.
+`AGENTS.md`.
 
 ## Known limitations
 
-The command validates repository state and CI source. It does not approve,
-promote, deploy, or roll back protected changes.
+The repository command validates source state and CI wiring. It does not
+approve, promote, deploy, or roll back changes.

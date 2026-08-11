@@ -15,6 +15,11 @@ CONSOLE_SCRIPTS = {
     "unrest": "unrest_harness.cli:cli",
     "unrest-server": "unrest_harness.server:main",
 }
+SDIST_RESTART_ORACLE_FILES = {
+    "tests/test_persistence_schema_v1.py",
+    "tests/fixtures/persistence_schema_v1/corpus.json",
+    "tests/fixtures/persistence_schema_v1/manifest.json",
+}
 
 
 def _source_package(root: Path) -> dict[str, bytes]:
@@ -70,7 +75,7 @@ def _wheel_payload(path: Path) -> tuple[dict[str, bytes], str, str, str]:
     return package, metadata, entry_points, record
 
 
-def _sdist_payload(path: Path) -> dict[str, bytes]:
+def _sdist_payload(path: Path) -> tuple[dict[str, bytes], dict[str, bytes]]:
     with tarfile.open(path, "r:gz") as archive:
         members = archive.getmembers()
         names = [member.name for member in members]
@@ -81,14 +86,19 @@ def _sdist_payload(path: Path) -> dict[str, bytes]:
         root = next(iter(roots))
         prefix = f"{root}/src/{PACKAGE}/"
         package: dict[str, bytes] = {}
+        source_files: dict[str, bytes] = {}
         for member in members:
-            if not member.isfile() or not member.name.startswith(prefix):
+            if not member.isfile():
                 continue
             extracted = archive.extractfile(member)
             if extracted is None:
                 raise RuntimeError(f"cannot read sdist member {member.name}")
-            package[f"{PACKAGE}/{member.name.removeprefix(prefix)}"] = extracted.read()
-        return package
+            payload = extracted.read()
+            relative = member.name.removeprefix(f"{root}/")
+            source_files[relative] = payload
+            if member.name.startswith(prefix):
+                package[f"{PACKAGE}/{member.name.removeprefix(prefix)}"] = payload
+        return package, source_files
 
 
 def check_distribution(root: Path, dist: Path) -> dict[str, object]:
@@ -99,7 +109,7 @@ def check_distribution(root: Path, dist: Path) -> dict[str, object]:
 
     source = _source_package(root)
     wheel, metadata, entry_points, _record = _wheel_payload(wheels[0])
-    sdist = _sdist_payload(sdists[0])
+    sdist, sdist_source_files = _sdist_payload(sdists[0])
     if wheel != source:
         missing = sorted(source.keys() - wheel.keys())
         extra = sorted(wheel.keys() - source.keys())
@@ -114,6 +124,17 @@ def check_distribution(root: Path, dist: Path) -> dict[str, object]:
         raise RuntimeError(
             f"sdist/source package mismatch: missing={missing}, extra={extra}, changed={changed}"
         )
+    missing_oracle_files = sorted(SDIST_RESTART_ORACLE_FILES - sdist_source_files.keys())
+    changed_oracle_files = sorted(
+        name
+        for name in SDIST_RESTART_ORACLE_FILES & sdist_source_files.keys()
+        if sdist_source_files[name] != (root / name).read_bytes()
+    )
+    if missing_oracle_files or changed_oracle_files:
+        raise RuntimeError(
+            "sdist restart oracle inventory mismatch: "
+            f"missing={missing_oracle_files}, changed={changed_oracle_files}"
+        )
     if "Requires-Python: >=3.11\n" not in metadata.replace("\r\n", "\n"):
         raise RuntimeError("wheel metadata does not preserve Requires-Python >=3.11")
     normalized_entries = {
@@ -126,12 +147,10 @@ def check_distribution(root: Path, dist: Path) -> dict[str, object]:
         raise RuntimeError(f"wheel console scripts mismatch: {normalized_entries}")
     required_assets = {
         f"{PACKAGE}/py.typed",
-        f"{PACKAGE}/bundled/policies/capability-sinks.v1.json",
         f"{PACKAGE}/bundled/policies/role-capabilities.v1.json",
-        f"{PACKAGE}/bundled/policies/capability-security-model.v1.json",
     }
     if not required_assets <= wheel.keys():
-        raise RuntimeError("wheel is missing governed type or policy assets")
+        raise RuntimeError("wheel is missing typed marker or runtime policy asset")
     return {
         "package_files": len(source),
         "sdist": sdists[0].name,

@@ -1,4 +1,7 @@
-# Telemetry and cold-start provenance-repaired rollback
+# Historical telemetry and cold-start provenance-repaired rollback record
+
+This is a non-operative record for a retired candidate. Its detailed root
+evidence was intentionally removed by the Lean Core retention decision.
 
 This procedure is bounded to product commit
 `2e81494d98cc3e1d5c986e138f4dde06d9dedaf2`, product tree
@@ -16,9 +19,8 @@ readable by the base wheel, passive observation does not mutate
 1. Stop candidate processes before replacing the installation.
 2. Revert the release-evidence, corrected-product, and implementation commits
    through ordinary protected review; do not rewrite shared history.
-3. Confirm the product delta contains exactly the 18 paths reconstructed by
-   `implementation-tree-manifest-v3.json` and
-   `product-tree-manifest-v3.json`, plus classified evidence/governance paths.
+3. Confirm the product delta contains exactly the recorded 18 product paths
+   plus the candidate's classified release artifacts.
 4. Confirm the restored tree is
    `f53caa3aebacef998b670597b14254c62af0bfb7` at exact base commit
    `2d393cf1e077e081598719292456c20f6bd1a616`.
@@ -27,5 +29,5 @@ readable by the base wheel, passive observation does not mutate
    observe representative existing projects, and confirm project and runtime
    cursor inventories are unchanged.
 
-The isolated index reconstruction is recorded in
-`evidence/telemetry-cold-start/rollback-transcript-v3.txt`.
+The removed detailed transcript recorded a successful isolated index
+reconstruction; this document retains only that conclusion.

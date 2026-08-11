@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "source_reference": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+  "scenarios": {
+    "planning": {
+      ".unrest-runtime/project.json": {"id": "fixture", "workspace_dir": "__WORKSPACE__", "created_at": "2026-08-10T00:00:00Z", "current_mission_id": "mission-001"},
+      ".unrest-runtime/state.json": {"state": "mission_planning", "mission_id": "mission-001"}
+    },
+    "running": {
+      ".unrest-runtime/project.json": {"id": "fixture", "workspace_dir": "__WORKSPACE__", "created_at": "2026-08-10T00:00:00Z", "current_mission_id": "mission-001"},
+      ".unrest-runtime/state.json": {"state": "mission_running", "mission_id": "mission-001"},
+      ".unrest-runtime/missions/mission-001/tasks.json": {"tasks": [{"id": "w1", "type": "work", "body": "fixture work", "targets": ["VAL-001"], "skill": "s", "auto_merge": true, "depends_on": []}]},
+      ".unrest-runtime/missions/mission-001/task-state.json": {"tasks": {"w1": {"status": "running", "last_attempt": "2026-08-10T12-00-00Z"}}},
+      ".unrest-runtime/missions/mission-001/contract-state.json": {"items": {"VAL-001": {"status": "pending"}}},
+      ".unrest-runtime/missions/mission-001/attempts/2026-08-10T12-00-00Z__w1.json": {"node_id": "w1", "attempt_id": "2026-08-10T12-00-00Z", "done": true, "report": "fixed landed handoff", "request_attention": false},
+      ".unrest/missions/mission-001/contract/VAL-001.md": "# VAL-001: Fixed fixture\n\nSurface: library.\nNeeds: none.\nBehavior: fixed fixture.\nEvidence: fixed fixture.\n"
+    },
+    "attention": {
+      ".unrest-runtime/project.json": {"id": "fixture", "workspace_dir": "__WORKSPACE__", "created_at": "2026-08-10T00:00:00Z", "current_mission_id": "mission-001"},
+      ".unrest-runtime/state.json": {"state": "attention_needed", "items": [{"id": "att-fixture", "report": "fixture attention"}]},
+      ".unrest-runtime/attention.json": {"items": [{"id": "att-fixture", "report": "fixture attention", "kind": "node_failed", "mission_id": "mission-001", "node_id": "w1"}]}
+    },
+    "quiescent": {
+      ".unrest-runtime/project.json": {"id": "fixture", "workspace_dir": "__WORKSPACE__", "created_at": "2026-08-10T00:00:00Z", "current_mission_id": "mission-001"},
+      ".unrest-runtime/state.json": {"state": "mission_running", "mission_id": "mission-001"},
+      ".unrest-runtime/missions/mission-001/tasks.json": {"tasks": [{"id": "w1", "type": "work", "body": "fixture work", "targets": ["VAL-001"], "skill": "s", "auto_merge": true, "depends_on": []}]},
+      ".unrest-runtime/missions/mission-001/task-state.json": {"tasks": {"w1": {"status": "cleared", "last_attempt": "2026-08-10T12-00-00Z"}}},
+      ".unrest-runtime/missions/mission-001/contract-state.json": {"items": {"VAL-001": {"status": "pending"}}},
+      ".unrest/missions/mission-001/contract/VAL-001.md": "# VAL-001: Fixed fixture\n\nSurface: library.\nNeeds: none.\nBehavior: fixed fixture.\nEvidence: fixed fixture.\n"
+    },
+    "done": {
+      ".unrest-runtime/project.json": {"id": "fixture", "workspace_dir": "__WORKSPACE__", "created_at": "2026-08-10T00:00:00Z", "current_mission_id": "mission-001"},
+      ".unrest-runtime/state.json": {"state": "done"}
+    },
+    "failed": {
+      ".unrest-runtime/project.json": {"id": "fixture", "workspace_dir": "__WORKSPACE__", "created_at": "2026-08-10T00:00:00Z", "current_mission_id": "mission-001"},
+      ".unrest-runtime/state.json": {"state": "failed", "reason": "fixed terminal failure"}
+    },
+    "aborted": {
+      ".unrest-runtime/project.json": {"id": "fixture", "workspace_dir": "__WORKSPACE__", "created_at": "2026-08-10T00:00:00Z", "current_mission_id": "mission-001"},
+      ".unrest-runtime/state.json": {"state": "aborted", "reason": "fixed terminal abort"}
+    }
+  }
+}
