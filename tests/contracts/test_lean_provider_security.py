@@ -132,7 +132,11 @@ def _candidate_responsibility_inventory(
     hits: set[str] = set()
     for base in (root / "src", root / "tests"):
         for path in sorted(base.rglob("*")):
-            if not path.is_file() or "tests/contracts" in path.as_posix():
+            if (
+                not path.is_file()
+                or "__pycache__" in path.parts
+                or "tests/contracts" in path.as_posix()
+            ):
                 continue
             relative = path.relative_to(root).as_posix()
             text = path.read_text(encoding="utf-8", errors="replace").lower()
@@ -209,9 +213,10 @@ def test_reference_contract_scenario(
             "capability-sinks",
         )
         actual = _candidate_responsibility_inventory(repository_root, forbidden)
+        _assert_capability_inventory_is_lean(actual, forbidden)
         with pytest.raises(AssertionError, match="closed_model"):
             _assert_capability_inventory_is_lean(
-                actual,
+                (*actual, "src/unrest_harness/closed_model.py"),
                 forbidden,
             )
     assert lean_reference_run.returncode == 0, lean_reference_run.output
