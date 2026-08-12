@@ -71,5 +71,4 @@ jobs:
           status=$?
           set -e
           test "$status" -ne 0
-          grep -F "CAP-POLICY-001 provider=unresolved role=unresolved version=1 capability=" <<< "$output"
-          grep -F "unsupported capability profile" <<< "$output"
+          test "$output" = "unrest-server: startup configuration rejected"
