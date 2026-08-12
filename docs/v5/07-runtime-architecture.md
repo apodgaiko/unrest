@@ -31,9 +31,11 @@ review.
 
 The orchestrator sees strict MCP payloads and an `Envelope` containing project
 identity, state, durable/harness roots, and an optional textual task view.
-Workers and terminal reviewers see disjoint one-tool MCP servers. Runtime truth
-is reconstructed from persisted typed cursors for every controller call; an
-in-memory coordinator is never authoritative.
+Workers, validators, and terminal reviewers see role-specific one-tool MCP
+servers. Worker and validator modes share the strict `end_node` completion
+implementation, but each of the four modes has its own server identity and
+instructions. Runtime truth is reconstructed from persisted typed cursors for
+every controller call; an in-memory coordinator is never authoritative.
 
 ## Invariants
 
@@ -45,8 +47,10 @@ in-memory coordinator is never authoritative.
   contract coverage.
 - `ARCH-GATE-001`: gate results are derived from persisted validator handoffs,
   with missing evidence failing closed.
-- `ARCH-MCP-001`: orchestrator, worker, and terminal-reviewer tool sets are
-  structurally disjoint.
+- `ARCH-MCP-001`: orchestrator, worker, validator, and terminal-reviewer modes
+  are isolated by separate server construction. Worker and validator share
+  only the strict `end_node` completion protocol, not role identity or
+  authority.
 - `ARCH-CLOSURE-001`: runtime completion requires a fresh successful terminal
   review and a durable closeout.
 - `ARCH-CONFIG-001`: bounded role/provider configuration is explicit and

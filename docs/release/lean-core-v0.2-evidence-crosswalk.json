@@ -1,6 +1,20 @@
 {
   "schema_version": 1,
-  "candidate": "current tracked worktree",
+  "candidate": {
+    "files": 105,
+    "sha256": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e",
+    "paths": [
+      "pyproject.toml",
+      "uv.lock",
+      "src/**",
+      "tests/**",
+      "tools/**"
+    ]
+  },
+  "superseded_candidate": {
+    "sha256": "cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a",
+    "status": "historical-only after validator MCP identity product change"
+  },
   "result_semantics": "pass means the exact node was collected and executed successfully by tests/contracts/test_lean_evidence_crosswalk.py; mappings do not replace behavioral passage",
   "hard_cut_results": [
     {"surface": "removed-commands", "node": "tests/test_repository_contract.py::test_withdrawn_commands_are_unknown_and_absent_from_help", "candidate_result": "pass"},

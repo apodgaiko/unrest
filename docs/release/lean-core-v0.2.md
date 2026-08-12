@@ -1,91 +1,107 @@
-# Lean Core v0.2 release candidate
+# Lean Core v0.2 final release checkpoint
 
-This carrier records the local frozen-candidate result for Unrest Harness
-`0.2.0`. It does not certify the final pull-request head: GitHub CI supplies
-that separately through the run and artifact metadata named below.
+This carrier binds the final local Unrest Harness `0.2.0` candidate after the
+validator MCP identity correction. It preserves the earlier checkpoint as
+chronology, but that checkpoint and all archives produced from it are
+historical and superseded.
 
-## Frozen identities
+## Provenance chronology
+
+The first Python 3.13 checkpoint ran on 2026-08-12 while `6cf713c` was the
+checked-out commit. That commit was not the content identity of the candidate:
+the tested worktree already contained later compaction changes and was bound
+separately as 105 product/package/test files at
+`cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a`.
+Its 892-pass transcript and local wheel/sdist hashes remain in the manifest for
+audit, not release selection.
+
+Commit `d5fff4dbdfecb9124f86958c4cd188dfff218d6e` subsequently published that
+earlier bound tree. Exact-head run `31641194261` and artifact `9158990376`
+qualified it at the time. The validator-specific MCP server identity then
+changed `src/`, tests, and canonical documentation. That product change retires
+the earlier local checkpoint, local archives, publication run, and artifact as
+final evidence. A commit-range diff beginning at `6cf713c` describes publication
+chronology; it is not a measure of mutation after the first checkpoint.
+
+The new final checkpoint ran with `d5fff4d` as the checked-out predecessor while
+the validator identity correction and this carrier work were present in the
+worktree. Again, the checked-out commit is not the content identity. The final
+product/package/test identity is the explicit binding below. Publication must
+commit exactly this candidate and qualify that publication commit with a new
+successful exact-head GitHub run and artifact.
+
+## Final local candidate binding
 
 - Fixed comparison base: commit
   `93c59e4378407f3d7cfb918cf86c8bdc81daa141`, tree
   `35152a4a8c56198664f519691ec952ec9ca519f4`.
-- Repository HEAD when the checkpoint ran:
-  `6cf713cb855ff77f372c008bc249064a03a2ca35`.
-- Pre-carrier delivery binding: 150 files,
-  `2c971c79f3afbfe8ddf11422ca0e666a00ab9ffde044349057a2f705d6149f47`.
-- Frozen product/package/test binding: 105 files,
-  `cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a`.
+- Product/package/test surface: `pyproject.toml`, `uv.lock`, and regular files
+  under `src/`, `tests/`, and `tools/`, excluding cache files.
+- Binding algorithm: SHA-256 over each sorted UTF-8 repository-relative path,
+  NUL, raw file bytes, NUL.
+- Final binding: 105 files,
+  `24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e`.
 
-Both bindings are SHA-256 over each sorted UTF-8 repository-relative path,
-NUL, raw file bytes, NUL. The narrower binding covers `pyproject.toml`,
-`uv.lock`, and regular files under `src/`, `tests/`, and `tools/`, excluding
-cache directories. No file in that surface changed after the checkpoint.
+The binding was measured before and after the one final Python 3.13 source-suite
+run and after package verification. Carrier-only edits do not enter this
+surface.
 
-## Local checkpoint and archives
+## Final local checkpoint and archives
 
-The sole Python 3.13 checkpoint ran on 2026-08-12:
+The sole full-suite run for this new candidate ran once on CPython 3.13.12 with
+uv 0.11.0 on macOS arm64, from 2026-08-12T21:59:42Z through
+2026-08-12T22:02:59Z:
 
 ```text
 env -u CODEX_PATH uv run pytest -q
-892 passed, 7 skipped, 0 failed in 179.78s; exit 0
+893 passed, 7 skipped, 0 failed in 172.15s; exit 0; no rerun
 ```
 
-The reviewed local candidate archives built from the frozen source are:
+The final isolated local archives built after that checkpoint are:
 
-- `unrest_harness-0.2.0-py3-none-any.whl` — 217,773 bytes — SHA-256
-  `44808498624b50bf7e44eff8c80ecc5fe0021b445f6e4a8204ff8387addbab97`.
-- `unrest_harness-0.2.0.tar.gz` — 293,800 bytes — SHA-256
-  `ed9da36e1591f627486a728fc0db8dec696961460b90df6c53e57a76ee1793c9`.
+- `unrest_harness-0.2.0-py3-none-any.whl` — 217,860 bytes — SHA-256
+  `60bef82f6ecc939a91273280be58da1dcf97d688847b05a3aac6ae694292b269`.
+- `unrest_harness-0.2.0.tar.gz` — 295,185 bytes — SHA-256
+  `dc5f17071f08f3f4f49386fdec05a7d9b02c081d18ad94a36a0942fee5c548d2`.
 
-The exact wheel passed the installed entry-point, bundled policy/assets,
-create/restart/abort, genuine legacy handoff, configuration rejection,
-provider-role projection, and terminal-credential-exclusion probes from an
-unrelated directory. These hashes identify the reviewed local archives only.
-Archive timestamps can change bytes between independent builds, so they are
-not expected CI hashes and this release makes no reproducibility claim.
+The exact wheel passed distribution, entry-point, bundled asset, lifecycle,
+strict configuration, provider-role, terminal-credential, and validator MCP
+identity checks after installation from an unrelated directory. Local archive
+hashes identify only this reviewed build; archive timestamps mean independent
+CI builds are not expected to reproduce those bytes.
 
-## Scope and CI handoff
+## Publication and CI binding
+
+The local candidate becomes releasable only after its exact publication commit
+and successful exact-head CI are established. Publication must satisfy all of
+the following without filling speculative identifiers into this carrier:
+
+1. the publication commit contains the final product/package/test binding;
+2. local HEAD, the tracking ref, and the live PR head resolve to that exact SHA;
+3. the selected successful `ci.yml` run reports the same `headSha`;
+4. the run's `lean-core-v0.2.0-python313` artifact contains the wheel, sdist,
+   and its run-local `SHA256SUMS`; and
+5. both downloaded checksum rows and the installed-wheel lifecycle pass.
+
+The [manifest](lean-core-v0.2-manifest.json) keeps final-publication identifiers
+null until that external state exists. The publication worker and exact-head
+validator record the commit, run, artifact, checksum, and ref-equality evidence;
+branch name or recency alone is never release evidence. The
+[rollback carrier](lean-core-v0.2-rollback.md) gives the portable retrieval
+flow.
+
+## Scope and known limits
 
 Lean Core retains the contract-backed lifecycle, schema-v1 persistence,
 single mutable-work scheduling, Claude and Codex providers, finite authority
-and credential boundaries, schema-v2 read-only status, repository validation,
-and the installed-wheel lifecycle. It cuts the historical baseline generator,
-governance/commit-policy engine, duplicate root schemas, static capability
-source/sink proof, transformed-secret inference, detailed observer-v1 schema,
-the unsupported legacy child-provider surface, and raw root release-history
-bulk.
+and credential boundaries, role-specific MCP identities, schema-v2 read-only
+status, repository validation, and the installed-wheel lifecycle. Python 3.11
+and 3.12 remain focused compatibility lanes and do not duplicate the Python
+3.13 full suite or installed lifecycle.
 
-Python 3.11 and 3.12 remain focused source-compatibility lanes: locked install,
-package/policy import, assets plus configuration/model contracts, supported CLI
-help, and repository validation. They do not repeat either the Python 3.13 full
-source suite or its installed lifecycle.
-
-The final Python 3.13 job preserves the archive filename, version, member,
-distribution, and installed-wheel gates. It then generates `SHA256SUMS` from
-the two archives produced by that run, verifies the checksum file against those
-same bytes, and uploads all three files as the single GitHub Actions artifact
-`lean-core-v0.2.0-python313` with 90-day retention.
-
-Consumers must select a successful `ci.yml` run by the exact final-head SHA,
-confirm that the selected run's `headSha` equals that SHA and its conclusion is
-`success`, download the named artifact, and run
-`shasum -a 256 -c SHA256SUMS` inside the downloaded directory before using an
-archive. Selection by branch or recency is insufficient. The run URL, head
-SHA, artifact ID, creation time, expiry, and CI-run hashes from `SHA256SUMS` are
-external final-head evidence.
-See the [manifest](lean-core-v0.2-manifest.json) for structured facts and the
-[rollback carrier](lean-core-v0.2-rollback.md) for portable retrieval.
-
-The only permitted post-checkpoint repository edits are these three concise
-release carriers and `.github/workflows/ci.yml`. No GitHub Release is created.
-
-## Known limits
-
-- For the removed duplicate root schemas, external publication unverified;
+- For removed duplicate root schemas, external publication is unverified;
   repository-only absence does not establish external absence.
-- For observer-v1, external publication and consumers unverified; any external
-  consumer must migrate to the read-only schema-v2 projection or remain on
-  v0.1.
+- For observer-v1, external publication and consumers are unverified.
 - Protection covers exact-known credential values at documented boundaries,
   not transformed secrets, intentional exfiltration, network denial, or an OS
   sandbox.

@@ -60,6 +60,11 @@ async def _tool_names(server) -> set[str]:
     return {t.name for t in await server.list_tools()}
 
 
+async def _tool_contract(server, name: str) -> tuple[str | None, dict[str, object]]:
+    tool = next(tool for tool in await server.list_tools() if tool.name == name)
+    return tool.description, tool.parameters
+
+
 # ---------------------------------------------------------------------------
 # Tool surface per mode (structural isolation)
 # ---------------------------------------------------------------------------
@@ -81,8 +86,21 @@ async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
 
 
 @pytest.mark.asyncio
-async def test_validator_tool_surface_matches_handoff_protocol() -> None:
-    assert await _tool_names(create_validator_server()) == {"end_node"}
+async def test_validator_has_role_specific_identity_and_shared_strict_protocol() -> None:
+    worker = create_worker_server()
+    validator = create_validator_server()
+
+    assert worker.name == "unrest-worker"
+    assert worker.instructions is not None
+    assert "Mode: worker" in worker.instructions
+    assert validator.name == "unrest-validator"
+    assert validator.instructions is not None
+    assert "Mode: validator" in validator.instructions
+    assert "Mode: worker" not in validator.instructions
+    assert await _tool_names(validator) == {"end_node"}
+    assert await _tool_contract(validator, "end_node") == await _tool_contract(
+        worker, "end_node"
+    )
 
 
 @pytest.mark.asyncio
@@ -480,7 +498,7 @@ async def test_end_node_validate_writes_items(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setenv("UNREST_HANDOFF_PATH", str(handoff_path))
     monkeypatch.setenv("UNREST_NODE_TYPE", "validate")
     monkeypatch.setenv("UNREST_NODE_ID", "v1")
-    server = create_worker_server()
+    server = create_validator_server()
     await server.call_tool(
         "end_node",
         {

@@ -1,7 +1,9 @@
-"""v5 MCP server. 3 modes: orchestrator / worker / terminal-reviewer.
+"""v5 MCP server. 4 modes: orchestrator / worker / validator / terminal-reviewer.
 
 See docs/v5/08-mcp-surface.md. Tool-surface isolation is structural:
-each mode registers a disjoint tool set on its own MCP server.
+each mode constructs its own MCP server. Worker and validator modes share the
+strict ``end_node`` completion protocol, but retain role-specific identities
+and instructions.
 """
 from __future__ import annotations
 
@@ -113,8 +115,17 @@ def create_worker_server(
 def create_validator_server(
     sensitive_inventory: Mapping[str, str] | None = None,
 ) -> FastMCP:
-    """Validator handoffs use the worker protocol with an isolated mode name."""
-    return create_worker_server(sensitive_inventory)
+    """1 validator tool using the shared strict node-completion protocol."""
+    mcp = FastMCP(
+        name="unrest-validator",
+        instructions=(
+            "Validator MCP server. Mode: validator. 1 tool: end_node. "
+            "Call exactly once before exiting. Include `items` (one per assigned "
+            "contract target) and the aggregate `passed`."
+        ),
+    )
+    _register_worker_tools(mcp, sensitive_inventory=sensitive_inventory)
+    return mcp
 
 
 def create_terminal_reviewer_server(
@@ -144,7 +155,8 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     def safe_payload(value: Any) -> dict[str, Any]:
         return _to_payload(value, inventory=controller.store.inventory)
     # SECURITY[SEC-MCP-001]: Lifecycle tools are registered only on the
-    # orchestrator server; worker and reviewer modes construct disjoint servers.
+    # orchestrator server; worker, validator, and reviewer modes construct
+    # authority-limited servers.
     # Per-project lock around mutating controller calls. The thread hop in each
     # tool prevents event-loop blocking, but two same-project tool calls could
     # otherwise race on disk state (attention, attempts, task-state, tasks).

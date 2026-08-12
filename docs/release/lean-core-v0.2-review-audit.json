@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "audit_date": "2026-08-12",
-  "candidate_binding": "current tracked worktree; executable tests reject inventory drift",
+  "audit_date": "2026-08-13",
+  "candidate_binding": {
+    "files": 105,
+    "sha256": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e",
+    "paths": [
+      "pyproject.toml",
+      "uv.lock",
+      "src/**",
+      "tests/**",
+      "tools/**"
+    ]
+  },
+  "checkpoint_provenance": {
+    "repository_head_at_checkpoint": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",
+    "head_is_content_identity": false,
+    "publication_status": "awaiting exact publication commit and successful exact-head CI",
+    "superseded_binding": "cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a",
+    "superseded_checkpoint_head_role": "6cf713c was only the checked-out commit for a dirty-worktree checkpoint"
+  },
   "authoritative_sources": [
     "docs/decisions/ADR-0002-lean-core-v0.2.md",
     "docs/proposals/batch-0.5/deletion-ledger.md",

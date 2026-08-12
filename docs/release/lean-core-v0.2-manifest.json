@@ -1,22 +1,19 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "release": "lean-core-v0.2",
   "version": "0.2.0",
-  "status": "local-frozen-candidate",
+  "status": "final-local-candidate-awaiting-publication",
   "base": {
     "commit": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
     "tree": "35152a4a8c56198664f519691ec952ec9ca519f4"
   },
   "source": {
-    "checkpoint_head": "6cf713cb855ff77f372c008bc249064a03a2ca35",
+    "repository_head_at_checkpoint": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",
+    "repository_head_role": "checked-out predecessor while final candidate changes were present in the worktree; not the candidate content identity",
     "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
-    "pre_carrier_delivery": {
-      "files": 150,
-      "sha256": "2c971c79f3afbfe8ddf11422ca0e666a00ab9ffde044349057a2f705d6149f47"
-    },
-    "product_package_test": {
+    "final_product_package_test": {
       "files": 105,
-      "sha256": "cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a",
+      "sha256": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e",
       "paths": [
         "pyproject.toml",
         "uv.lock",
@@ -24,66 +21,101 @@
         "tests/**",
         "tools/**"
       ]
-    },
-    "final_head_proof": "external GitHub pull-request and CI metadata"
+    }
   },
   "local_checkpoint": {
     "command": "env -u CODEX_PATH uv run pytest -q",
     "python": "3.13.12",
     "uv": "0.11.0",
+    "platform": "macOS arm64",
     "lock_sha256": "cab1a7e534d0dcb9e60142fc94a46efb40ea1b5a5c1ccc70d2d0a3b6311026e6",
-    "started_utc": "2026-08-12T18:26:16Z",
-    "ended_utc": "2026-08-12T18:29:17Z",
-    "pytest_seconds": 179.78,
+    "started_utc": "2026-08-12T21:59:42Z",
+    "ended_utc": "2026-08-12T22:02:59Z",
+    "pytest_seconds": 172.15,
+    "wall_seconds": 197,
     "exit_code": 0,
-    "passed": 892,
+    "passed": 893,
     "skipped": 7,
     "failed": 0,
-    "reruns": 0
-  },
-  "reviewed_local_artifact_provenance": {
-    "scope": "reviewed local isolated build; not CI-run hashes",
-    "reproducible_across_builds": false
+    "reruns": 0,
+    "transcript_format": "newline-delimited command, environment, UTC interval, pytest result, exit, reruns, and final binding fields in manifest order",
+    "transcript_sha256": "d0d2685b0068ffcb6424db8ecb1a8ee1868b6ea5d9b9307bc9c541879b8eb2e6"
   },
   "artifacts": {
+    "scope": "final local isolated build from final_product_package_test; CI hashes are run-local",
+    "reproducible_across_builds": false,
     "wheel": {
       "filename": "unrest_harness-0.2.0-py3-none-any.whl",
-      "bytes": 217773,
-      "sha256": "44808498624b50bf7e44eff8c80ecc5fe0021b445f6e4a8204ff8387addbab97"
+      "bytes": 217860,
+      "sha256": "60bef82f6ecc939a91273280be58da1dcf97d688847b05a3aac6ae694292b269"
     },
     "sdist": {
       "filename": "unrest_harness-0.2.0.tar.gz",
-      "bytes": 293800,
-      "sha256": "ed9da36e1591f627486a728fc0db8dec696961460b90df6c53e57a76ee1793c9"
+      "bytes": 295185,
+      "sha256": "dc5f17071f08f3f4f49386fdec05a7d9b02c081d18ad94a36a0942fee5c548d2"
     }
   },
-  "github_artifact": {
+  "superseded_evidence": {
+    "status": "historical-superseded",
+    "reason": "validator MCP identity changed product source and tests after this checkpoint and its publication",
+    "repository_head_at_checkpoint": "6cf713cb855ff77f372c008bc249064a03a2ca35",
+    "repository_head_role": "checked-out commit while the bound candidate existed as dirty-worktree content; not the checkpoint content identity",
+    "pre_carrier_delivery": {
+      "files": 150,
+      "sha256": "2c971c79f3afbfe8ddf11422ca0e666a00ab9ffde044349057a2f705d6149f47"
+    },
+    "product_package_test": {
+      "files": 105,
+      "sha256": "cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a"
+    },
+    "checkpoint": {
+      "started_utc": "2026-08-12T18:26:16Z",
+      "ended_utc": "2026-08-12T18:29:17Z",
+      "passed": 892,
+      "skipped": 7,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "artifacts": {
+      "wheel": {
+        "bytes": 217773,
+        "sha256": "44808498624b50bf7e44eff8c80ecc5fe0021b445f6e4a8204ff8387addbab97"
+      },
+      "sdist": {
+        "bytes": 293800,
+        "sha256": "ed9da36e1591f627486a728fc0db8dec696961460b90df6c53e57a76ee1793c9"
+      }
+    },
+    "publication": {
+      "commit": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",
+      "github_run_id": 31641194261,
+      "github_artifact_id": 9158990376,
+      "wheel_sha256": "c90bbe43f2f4a3263178ccfadd9a8b05d990a92881715a15dbad8625b86a4b81",
+      "sdist_sha256": "a84bbcb930a23adc143c68e79c6dc84d2f14009c4adb65b9cfc43ec7e6d93fe9"
+    }
+  },
+  "publication": {
+    "status": "awaiting-exact-head-ci",
+    "head_sha": null,
+    "github_run_id": null,
+    "github_artifact_id": null,
+    "required_relation": "the publication commit must contain the final candidate binding, local/origin/live PR refs must equal that commit, and the selected successful CI run headSha must equal it",
     "workflow": ".github/workflows/ci.yml",
     "job": "primary",
-    "name": "lean-core-v0.2.0-python313",
+    "artifact_name": "lean-core-v0.2.0-python313",
     "retention_days": 90,
-    "contents": [
+    "artifact_contents": [
       "unrest_harness-0.2.0-py3-none-any.whl",
       "unrest_harness-0.2.0.tar.gz",
       "SHA256SUMS"
     ],
-    "upload_paths": [
-      "dist/unrest_harness-0.2.0-py3-none-any.whl",
-      "dist/unrest_harness-0.2.0.tar.gz",
-      "dist/SHA256SUMS"
-    ],
-    "checksum_provenance": "generated from the two archives produced in the selected CI run",
-    "pre_upload_check": "cd dist && sha256sum --check --strict SHA256SUMS",
+    "checksum_provenance": "generated from the two archives produced by the selected exact-head CI run",
     "run_locator": "gh run list --repo OWNER/REPO --workflow ci.yml --commit FINAL_HEAD_SHA --status success --json databaseId,headSha,conclusion,url",
-    "run_requirement": "selected headSha must equal FINAL_HEAD_SHA and conclusion must equal success",
     "download": "gh run download RUN_ID --repo OWNER/REPO --name lean-core-v0.2.0-python313 --dir lean-core-v0.2.0",
     "downloaded_checksum_verification": "cd lean-core-v0.2.0 && shasum -a 256 -c SHA256SUMS"
   },
   "compatibility_lanes": {
-    "python": [
-      "3.11",
-      "3.12"
-    ],
+    "python": ["3.11", "3.12"],
     "surface": [
       "locked source install",
       "package and policy/assets import",
@@ -95,21 +127,5 @@
       "full source suite",
       "Python 3.13 installed-wheel lifecycle"
     ]
-  },
-  "hard_cuts": [
-    "historical baseline generator",
-    "governance and commit-policy engine",
-    "duplicate root schemas",
-    "static capability source/sink proof",
-    "transformed-secret inference",
-    "detailed observer schema v1",
-    "unsupported legacy child-provider surface",
-    "raw root release-history bulk"
-  ],
-  "post_checkpoint_mutable_paths": [
-    ".github/workflows/ci.yml",
-    "docs/release/lean-core-v0.2.md",
-    "docs/release/lean-core-v0.2-manifest.json",
-    "docs/release/lean-core-v0.2-rollback.md"
-  ]
+  }
 }

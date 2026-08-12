@@ -15,12 +15,13 @@ schema_version: 1
 
 ## Purpose
 
-Define the three structurally isolated MCP server modes, their tools, typed
+Define the four structurally isolated MCP server modes, their tools, typed
 handoffs, state preconditions, and error payloads.
 
 ## Public contract
 
-`unrest-server` accepts `--mode orchestrator|worker|terminal-reviewer` and
+`unrest-server` accepts
+`--mode orchestrator|worker|validator|terminal-reviewer` and
 `--transport stdio|streamable-http|sse`. Each mode constructs a separate
 `FastMCP` instance and registers only its role's tools.
 
@@ -67,10 +68,17 @@ Worker mode registers only `end_node`. Runtime configuration comes from:
 - `UNREST_HANDOFF_PATH`
 
 Work calls provide `done`, `report`, and optional `request_attention`.
-Validation calls additionally provide one `items[]` verdict per assigned
-target and aggregate `passed`. The tool atomically writes one strict JSON
-handoff and returns an instruction to stop. Missing path or task ID is a hard
-runtime error.
+The tool atomically writes one strict JSON handoff and returns an instruction
+to stop. Missing path or task ID is a hard runtime error.
+
+### Validator mode
+
+Validator mode has the server identity `unrest-validator`, accurate
+`Mode: validator` instructions, and registers only `end_node`. It shares the
+worker mode's strict node-completion implementation and handoff transport, but
+does not inherit worker identity, instructions, or authority. Validation calls
+provide `done`, `report`, optional `request_attention`, one `items[]` verdict
+per assigned target, and aggregate `passed`.
 
 ### Terminal-reviewer mode
 
@@ -83,8 +91,8 @@ coordinator; the tool itself does not seal a mission.
 
 - `ARCH-MCP-001`: tool authority is separated by server construction, not
   prompt convention.
-- `SEC-MCP-001`: worker and reviewer modes cannot call orchestrator lifecycle
-  tools through their server.
+- `SEC-MCP-001`: worker, validator, and reviewer modes cannot call orchestrator
+  lifecycle tools through their server.
 - `ARCH-STATE-001`: mutating orchestrator calls are serialized per project and
   execute blocking controller work in a thread.
 - `COMPAT-ENVELOPE-001`: envelope field names and strict typed handoff fields
@@ -96,7 +104,8 @@ coordinator; the tool itself does not seal a mission.
 - Invalid plans, patches, and decisions return stable top-level errors plus
   stable validation details.
 - Invalid worker overrides fail before project creation.
-- Missing worker/reviewer environment paths fail instead of inventing output.
+- Missing worker/validator/reviewer environment paths fail instead of inventing
+  output.
 - Exceptions in production dispatch/review are handled by the runtime as
   persisted failure evidence.
 
@@ -104,8 +113,8 @@ coordinator; the tool itself does not seal a mission.
 
 Adding or changing a tool requires updates to this document, the server
 registration tests, installed-wheel help/smoke checks, and the component map.
-Do not expose orchestrator tools on worker or reviewer servers. Schema
-incompatibility requires an ADR and explicit version/error behavior.
+Do not expose orchestrator tools on worker, validator, or reviewer servers.
+Schema incompatibility requires an ADR and explicit version/error behavior.
 
 ## Required verification
 
