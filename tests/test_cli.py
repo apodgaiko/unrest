@@ -12,9 +12,10 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+import unrest_harness.cli as cli_module
 from unrest_harness.cli import cli
 from unrest_harness.config import HarnessConfig
-from unrest_harness.providers import provider_names_for_role
+from unrest_harness.providers import PROVIDERS, ProviderSelection, provider_names_for_role
 
 
 @pytest.fixture
@@ -77,6 +78,103 @@ def _tree_content_hash(root: Path) -> str:
             digest.update(len(field).to_bytes(8, "big"))
             digest.update(field)
     return digest.hexdigest()
+
+
+def test_bootstrap_writer_redacts_exact_credential_before_persistence(
+    workspace: Path,
+) -> None:
+    sentinel = "bootstrap-persistence-credential-c8e2"
+    bootstrap_path = workspace / ".mcp.json"
+    selection = ProviderSelection(
+        orchestrator=PROVIDERS["claude"],
+        worker=PROVIDERS["claude"],
+    )
+    assert not bootstrap_path.exists()
+
+    cli_module._write_bootstrap_config(
+        workspace,
+        selection,
+        {"UNREST_HOME": str(workspace / ".unrest-home")},
+        {
+            "UNREST_WORKER_MODEL": sentinel,
+            "ORDINARY_BOOTSTRAP_CONTROL": "kept",
+        },
+        "safe",
+        {"ANTHROPIC_API_KEY": sentinel},
+    )
+
+    persisted = bootstrap_path.read_bytes()
+    assert sentinel.encode() not in persisted
+    document = json.loads(persisted)
+    environment = document["mcpServers"]["unrest"]["env"]
+    assert "UNREST_WORKER_MODEL" not in environment
+    assert environment["ORDINARY_BOOTSTRAP_CONTROL"] == "kept"
+
+
+def test_lifecycle_commands_ignore_stale_dispatch_provider_and_abort_redacts(
+    runner: CliRunner,
+    env: dict[str, str],
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unrest_harness.controller import ProjectController
+    from unrest_harness.dispatcher import MockDispatcher, MockTerminalReviewer
+    from unrest_harness.models import Task, TaskList, TerminalReviewHandoff, WorkHandoff
+
+    config = HarnessConfig.discover()
+    controller = ProjectController(
+        config,
+        MockDispatcher(
+            lambda request: WorkHandoff(node_id=request.task.id, done=True, report="ok")
+        ),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
+    )
+    controller.start_project("stale provider lifecycle", str(workspace))
+    project_id = controller.store.list_projects()[0].id
+    contract_dir = controller.store.ensure_contract_dir(project_id, "mission-001")
+    (contract_dir / "VAL-001.md").write_text("# VAL-001\n")
+    controller.submit_plan(
+        project_id,
+        TaskList(
+            tasks=[Task(id="w1", type="work", body="body", targets=["VAL-001"], skill="s")]
+        ),
+    )
+
+    monkeypatch.setenv("UNREST_WORKER_PROVIDER", "removed-provider")
+    credentials = {
+        name: f"sentinel-{index}-{name.lower()}"
+        for index, name in enumerate(
+            (
+                "ANTHROPIC_API_KEY",
+                "ANTHROPIC_AUTH_TOKEN",
+                "CODEX_API_KEY",
+                "GLM_API_KEY",
+                "OPENAI_API_KEY",
+                "ZAI_API_KEY",
+            )
+        )
+    }
+    for name, value in credentials.items():
+        monkeypatch.setenv(name, value)
+
+    commands = (
+        ["list-projects"],
+        ["show-project", project_id],
+        ["inspect-tasks", "--project", project_id],
+        ["abort-project", project_id, "--reason", "|".join(credentials.values())],
+    )
+    for command in commands:
+        result = runner.invoke(cli, command, env=env)
+        assert result.exit_code == 0, result.output
+        assert "removed-provider" not in result.output
+        for value in credentials.values():
+            assert value not in result.output
+
+    for path in config.bucket_root(project_id).rglob("*"):
+        if path.is_file():
+            content = path.read_text(errors="replace")
+            for value in credentials.values():
+                assert value not in content
 
 
 def _config_hash(boundary: Path, scope: str, agent: str) -> str:
@@ -1475,6 +1573,77 @@ class TestShowProject:
 
 
 class TestObserveProject:
+    @pytest.mark.parametrize("output_format", ("json", "text"))
+    def test_failed_task_anomaly_is_active_only_on_real_cli_surfaces(
+        self,
+        runner: CliRunner,
+        workspace: Path,
+        env: dict[str, str],
+        output_format: str,
+    ) -> None:
+        from unrest_harness.config import HarnessConfig
+        from unrest_harness.models import (
+            Aborted,
+            Done,
+            MissionRunning,
+            Task,
+            TaskList,
+            TaskStateEntry,
+            TaskStateFile,
+        )
+        from unrest_harness.storage import ProjectStore
+
+        store = ProjectStore(HarnessConfig.discover())
+        task = Task(
+            id="failed-work",
+            type="work",
+            body="body",
+            targets=["VAL-STATUS-001"],
+            skill="worker",
+        )
+        for project_id, state in (
+            ("running-status", MissionRunning(mission_id="mission-001")),
+            ("done-status", Done()),
+            ("aborted-status", Aborted(reason="operator")),
+        ):
+            record = store.create_project("status", workspace, project_id=project_id)
+            record.current_mission_id = "mission-001"
+            store.save_project(record)
+            store.save_task_list(
+                project_id,
+                "mission-001",
+                TaskList(tasks=[task]),
+            )
+            store.save_task_state(
+                project_id,
+                "mission-001",
+                TaskStateFile(
+                    tasks={"failed-work": TaskStateEntry(status="failed")}
+                ),
+            )
+            store.save_state(project_id, state)
+
+        def codes_for(project_id: str) -> str:
+            result = runner.invoke(
+                cli,
+                ["observe-project", project_id, "--format", output_format],
+            )
+            assert result.exit_code == 0, result.output
+            if output_format == "json":
+                return " ".join(json.loads(result.output)["codes"])
+            return result.output
+
+        assert "failed_task_without_attention" in codes_for("running-status")
+        assert "failed_task_without_attention" not in codes_for("done-status")
+        assert "failed_task_without_attention" not in codes_for("aborted-status")
+
+        all_result = runner.invoke(
+            cli,
+            ["observe-project", "--all", "--strict", "--format", output_format],
+        )
+        assert all_result.exit_code == 0, all_result.output
+        assert all_result.output.count("failed_task_without_attention") == 1
+
     def test_single_project_schema_v2_json_and_text_are_read_only(
         self,
         runner: CliRunner,

@@ -8,7 +8,7 @@ labels: bug
 A clear description of what went wrong.
 
 **To reproduce**
-1. Environment (OS, Python version, agent: Claude Code / Codex / Hermes)
+1. Environment (OS, Python version, agent: Claude Code / Codex)
 2. Command or mission that triggered the issue
 3. What happened, including any error output
 
@@ -16,4 +16,6 @@ A clear description of what went wrong.
 What you expected to happen instead.
 
 **Additional context**
-Logs, `.unrest` state, or screenshots if relevant.
+Sanitized screenshots or bounded error codes if relevant. Do not attach raw
+logs, `.unrest` state, prompts, environment dumps, settings bodies, reports, or
+credential values.

@@ -4,8 +4,8 @@ title: "Unrest"
 type: software
 authors:
   - name: "apodgaiko"
-version: 0.1.0
-date-released: 2026-07-21
+version: 0.2.0
+date-released: 2026-08-12
 url: "https://github.com/apodgaiko/unrest"
 repository-code: "https://github.com/apodgaiko/unrest"
 license: Apache-2.0

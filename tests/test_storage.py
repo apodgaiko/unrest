@@ -1,6 +1,7 @@
 """Storage layer tests. See specs/memory_v2/PRODUCT.md for layout."""
 from __future__ import annotations
 
+import json
 import stat
 import subprocess
 import sys
@@ -25,6 +26,7 @@ from unrest_harness.models import (
     WorkHandoff,
 )
 from unrest_harness.storage import (
+    AttemptValidationError,
     ProjectStore,
     atomic_write_text,
     slugify,
@@ -297,6 +299,58 @@ class TestAtomicWriteText:
             _redact=False,
         )
         assert target.read_bytes() == b"accepted\n"
+
+    def test_atomic_containment_matrix_preserves_inside_and_outside_hashes(
+        self, tmp_path: Path
+    ) -> None:
+        import hashlib
+
+        allowed = tmp_path / "allowed"
+        allowed.mkdir()
+        outside = tmp_path / "outside.txt"
+        outside.write_bytes(b"outside-generation\n")
+        outside_hash = hashlib.sha256(outside.read_bytes()).hexdigest()
+        target = allowed / "missing" / "parents" / "state.json"
+
+        atomic_write_text(
+            target,
+            "inside-generation\n",
+            trusted_root=allowed / "missing",
+            allowed_ancestor=allowed,
+            _redact=False,
+        )
+        inside_hash = hashlib.sha256(target.read_bytes()).hexdigest()
+        assert inside_hash == hashlib.sha256(b"inside-generation\n").hexdigest()
+
+        escape = allowed / "escape"
+        escape.symlink_to(tmp_path, target_is_directory=True)
+        rejected = (
+            (allowed / ".." / "outside.txt", "beneath its trusted root"),
+            (escape / "outside.txt", "path component"),
+        )
+        for candidate, message in rejected:
+            with pytest.raises(OSError, match=message):
+                atomic_write_text(
+                    candidate,
+                    "escaped-generation\n",
+                    trusted_root=allowed,
+                    allowed_ancestor=allowed,
+                    _redact=False,
+                )
+
+        symlink_root = tmp_path / "root-link"
+        symlink_root.symlink_to(allowed, target_is_directory=True)
+        with pytest.raises(OSError, match="trusted-root component"):
+            atomic_write_text(
+                symlink_root / "state.json",
+                "escaped-generation\n",
+                trusted_root=symlink_root,
+                allowed_ancestor=tmp_path,
+                _redact=False,
+            )
+
+        assert hashlib.sha256(target.read_bytes()).hexdigest() == inside_hash
+        assert hashlib.sha256(outside.read_bytes()).hexdigest() == outside_hash
 
     @pytest.mark.parametrize("control", ("outside", "missing", "symlink", "file"))
     def test_allowed_ancestor_is_a_validated_creation_boundary(
@@ -690,6 +744,67 @@ class TestTaskState:
 
 
 class TestAttempts:
+    @pytest.mark.parametrize(
+        ("mutation", "message"),
+        (
+            ({"attempt_id": None}, "attempt_id must not be null"),
+            ({"attempt_id": "older"}, "attempt_id does not match"),
+            ({"node_id": "w2"}, "node_id does not match"),
+            ({"done": "not-a-boolean"}, "payload is malformed"),
+        ),
+        ids=("present-null", "stale-generation", "wrong-task", "malformed"),
+    )
+    def test_current_attempt_identity_rejections_preserve_bytes(
+        self,
+        store: ProjectStore,
+        workspace: Path,
+        mutation: dict[str, object],
+        message: str,
+    ) -> None:
+        store.create_project("brief", workspace, project_id="p1")
+        generation = "2026-08-10T12-00-00Z"
+        path = store.attempt_path("p1", "mission-001", generation, "w1")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict[str, object] = {
+            "node_id": "w1",
+            "attempt_id": generation,
+            "done": True,
+            "report": "current",
+            "request_attention": False,
+        }
+        payload.update(mutation)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        before = path.read_bytes()
+
+        with pytest.raises(AttemptValidationError, match=message):
+            store.read_attempt("p1", "mission-001", generation, "w1")
+
+        assert path.read_bytes() == before
+
+    def test_replay_under_another_attempt_filename_preserves_both_files(
+        self, store: ProjectStore, workspace: Path
+    ) -> None:
+        store.create_project("brief", workspace, project_id="p1")
+        old_generation = "2026-08-09T12-00-00Z"
+        new_generation = "2026-08-10T12-00-00Z"
+        old = store.save_attempt(
+            "p1",
+            "mission-001",
+            old_generation,
+            "w1",
+            WorkHandoff(node_id="w1", done=True, report="old"),
+        )
+        replay = store.attempt_path(
+            "p1", "mission-001", new_generation, "w1"
+        )
+        replay.write_bytes(old.read_bytes())
+        before = {path: path.read_bytes() for path in (old, replay)}
+
+        with pytest.raises(AttemptValidationError, match="generation"):
+            store.read_attempt("p1", "mission-001", new_generation, "w1")
+
+        assert {path: path.read_bytes() for path in (old, replay)} == before
+
     def test_explicit_inventory_redacts_json_and_markdown_mirrors(
         self, store: ProjectStore, workspace: Path
     ) -> None:

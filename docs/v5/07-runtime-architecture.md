@@ -95,6 +95,19 @@ resolved or traversed. Calls without `allowed_ancestor` retain the normal rule
 that their trusted persistence root must already exist, including all project
 bucket persistence.
 
+ACP batch dispatch uses an event-loop-local startup lock. The free-port probe,
+role MCP child spawn, and readiness check serialize for contending nodes in one
+batch, while completed event loops do not retain lock affinity or serialize a
+later batch globally. Claude callers validate both managed settings targets
+against the real workspace before reading them. Missing settings are created
+atomically; exact legacy managed settings and current marked settings are the
+only existing files Unrest migrates. Safe unmanaged settings remain unchanged,
+and malformed, unsafe, or symlinked settings reject before any child spawn.
+
+ACP `terminal/create` treats explicit JSON null for optional `args`, `env`, and
+`outputByteLimit` exactly like omission. Non-null values retain strict list and
+positive-integer validation, including rejection of booleans.
+
 ## State transitions
 
 ```text
@@ -127,6 +140,11 @@ it refuses when work is runnable or a gate is ready.
 Before dispatch, task state records `running` and the spawn timestamp. A
 dispatcher exception becomes a typed failed handoff. On a later invocation,
 every `running` cursor is reconciled:
+
+Spawn timestamps used by schema-v2 observation have the fixed ASCII UTC form
+`YYYY-MM-DDTHH-MM-SSZ` with an optional `-NNNN` parallel suffix. Calendar and
+clock fields must be valid; offsets, Unicode digit lookalikes, and other forms
+are not accepted.
 
 - only the exact `last_attempt` path is considered, and a landed handoff is
   applied only when its `node_id` and `attempt_id` match that task and dispatch
@@ -198,6 +216,9 @@ The only diagnostic codes are `mission_cursor_mismatch`,
 `malformed_attempt`, and `stale_running_candidate`. Staleness is diagnostic
 only; it never authorizes recovery or changes an active project to a
 recovery-ready state.
+`failed_task_without_attention` is an active-mission diagnostic: completed,
+failed, and aborted project states retain failed task IDs but omit that stale
+running-only anomaly.
 
 The age is `observed_at - max(mtime)` across the current state, task,
 attention, and contract cursors plus current-mission attempt and terminal-review

@@ -72,3 +72,22 @@ jobs:
           set -e
           test "$status" -ne 0
           test "$output" = "unrest-server: startup configuration rejected"
+      - name: Generate and verify Lean Core v0.2 build-local checksums
+        run: |
+          test -f dist/unrest_harness-0.2.0-py3-none-any.whl
+          test -f dist/unrest_harness-0.2.0.tar.gz
+          cd dist
+          sha256sum \
+            unrest_harness-0.2.0-py3-none-any.whl \
+            unrest_harness-0.2.0.tar.gz > SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+      - name: Upload Lean Core v0.2 archives and checksums
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: lean-core-v0.2.0-python313
+          path: |
+            dist/unrest_harness-0.2.0-py3-none-any.whl
+            dist/unrest_harness-0.2.0.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90

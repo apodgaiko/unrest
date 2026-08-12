@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Mapping
 
@@ -16,6 +17,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from .capability_policy import (
+    CapabilityPolicy,
     CapabilityPolicyError,
     SensitiveValueInventory,
     deserialize_sensitive_value_inventory,
@@ -106,6 +108,13 @@ def create_worker_server(
     )
     _register_worker_tools(mcp, sensitive_inventory=sensitive_inventory)
     return mcp
+
+
+def create_validator_server(
+    sensitive_inventory: Mapping[str, str] | None = None,
+) -> FastMCP:
+    """Validator handoffs use the worker protocol with an isolated mode name."""
+    return create_worker_server(sensitive_inventory)
 
 
 def create_terminal_reviewer_server(
@@ -516,11 +525,15 @@ def _to_payload(
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+def main(
+    *,
+    bundled_dir: Path | None = None,
+    policy_loader: Callable[[Path], CapabilityPolicy] | None = None,
+) -> None:
     parser = argparse.ArgumentParser(description="Unrest MCP Server (v5)")
     parser.add_argument(
         "--mode",
-        choices=["orchestrator", "worker", "terminal-reviewer"],
+        choices=["orchestrator", "worker", "validator", "terminal-reviewer"],
         default="orchestrator",
     )
     parser.add_argument(
@@ -536,7 +549,10 @@ def main() -> None:
     config: HarnessConfig | None = None
     startup_rejected = False
     try:
-        config = HarnessConfig.discover()
+        config = HarnessConfig.discover(
+            bundled_dir=bundled_dir,
+            policy_loader=policy_loader,
+        )
         if args.mode == "orchestrator":
             # The orchestrator constructs every child role, so all selected
             # providers must be resolved before either dispatcher exists.
@@ -545,7 +561,7 @@ def main() -> None:
             # Worker and reviewer servers do not select or spawn providers, but
             # their process authority still comes from the packaged profile.
             _ = config.capability_policy
-    except CapabilityPolicyError:
+    except (CapabilityPolicyError, ValueError):
         startup_rejected = True
 
     if startup_rejected:
@@ -563,6 +579,10 @@ def main() -> None:
         server = create_worker_server(
             _read_sensitive_inventory_fd(args.sensitive_inventory_fd)
         )
+    elif args.mode == "validator":
+        server = create_validator_server(
+            _read_sensitive_inventory_fd(args.sensitive_inventory_fd)
+        )
     else:
         server = create_terminal_reviewer_server(
             _read_sensitive_inventory_fd(args.sensitive_inventory_fd)
@@ -578,5 +598,6 @@ __all__ = [
     "create_orchestrator_server",
     "create_worker_server",
     "create_terminal_reviewer_server",
+    "create_validator_server",
     "main",
 ]

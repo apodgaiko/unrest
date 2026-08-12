@@ -12,7 +12,16 @@
       ".unrest-runtime/missions/mission-001/tasks.json": {"tasks": [{"id": "w1", "type": "work", "body": "fixture work", "targets": ["VAL-001"], "skill": "s", "auto_merge": true, "depends_on": []}]},
       ".unrest-runtime/missions/mission-001/task-state.json": {"tasks": {"w1": {"status": "running", "last_attempt": "2026-08-10T12-00-00Z"}}},
       ".unrest-runtime/missions/mission-001/contract-state.json": {"items": {"VAL-001": {"status": "pending"}}},
-      ".unrest-runtime/missions/mission-001/attempts/2026-08-10T12-00-00Z__w1.json": {"node_id": "w1", "attempt_id": "2026-08-10T12-00-00Z", "done": true, "report": "fixed landed handoff", "request_attention": false},
+      ".unrest-runtime/missions/mission-001/attempts/2026-08-10T12-00-00Z__w1.json": {"node_id": "w1", "done": true, "report": "ok", "request_attention": false},
+      ".unrest/missions/mission-001/contract/VAL-001.md": "# VAL-001: Fixed fixture\n\nSurface: library.\nNeeds: none.\nBehavior: fixed fixture.\nEvidence: fixed fixture.\n"
+    },
+    "running_validation": {
+      ".unrest-runtime/project.json": {"id": "fixture", "workspace_dir": "__WORKSPACE__", "created_at": "2026-08-10T00:00:00Z", "current_mission_id": "mission-001"},
+      ".unrest-runtime/state.json": {"state": "mission_running", "mission_id": "mission-001"},
+      ".unrest-runtime/missions/mission-001/tasks.json": {"tasks": [{"id": "w1", "type": "work", "body": "fixture work", "targets": ["VAL-001"], "skill": "s", "auto_merge": true, "depends_on": []}, {"id": "v1", "type": "validate", "body": "fixture validation", "targets": ["VAL-001"], "skill": "aud", "auto_merge": true, "depends_on": ["w1"]}]},
+      ".unrest-runtime/missions/mission-001/task-state.json": {"tasks": {"w1": {"status": "cleared", "last_attempt": "2026-08-10T11-00-00Z"}, "v1": {"status": "running", "last_attempt": "2026-08-10T12-00-00Z"}}},
+      ".unrest-runtime/missions/mission-001/contract-state.json": {"items": {"VAL-001": {"status": "pending"}}},
+      ".unrest-runtime/missions/mission-001/attempts/2026-08-10T12-00-00Z__v1.json": {"node_id": "v1", "done": true, "report": "audited", "items": [{"item_id": "VAL-001", "passed": true}], "passed": true, "request_attention": false},
       ".unrest/missions/mission-001/contract/VAL-001.md": "# VAL-001: Fixed fixture\n\nSurface: library.\nNeeds: none.\nBehavior: fixed fixture.\nEvidence: fixed fixture.\n"
     },
     "attention": {

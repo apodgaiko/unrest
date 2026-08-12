@@ -94,3 +94,27 @@ def test_withdrawn_governance_and_deleted_evidence_bindings_are_retired() -> Non
         assert "rollback-transcript" not in text
         assert "product-tree-manifest" not in text
         assert "implementation-tree-manifest" not in text
+
+
+def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
+    audit = json.loads(
+        (ROOT / "docs/release/lean-core-v0.2-review-audit.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    crosswalk = json.loads(
+        (ROOT / "docs/release/lean-core-v0.2-evidence-crosswalk.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert audit["audit_date"] == "2026-08-12"
+    assert "external publication unverified" in audit["compatibility_disposition"][
+        "root_schemas"
+    ].lower()
+    assert len(
+        [identifier for identifier in crosswalk["mappings"] if identifier.startswith("SEC-SINK-")]
+    ) == 17
+    assert all(
+        record["candidate_result"] == "pass"
+        for record in crosswalk["mappings"].values()
+    )

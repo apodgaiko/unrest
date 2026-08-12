@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, cast
@@ -25,6 +27,7 @@ from unrest_harness.capability_policy import (
     build_role_environment,
     credential_source_values,
     credential_values,
+    finite_credential_values,
     load_capability_policy,
     redact_credential_values,
     redact_sensitive_value,
@@ -37,6 +40,12 @@ from unrest_harness.providers import PROVIDERS
 
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLED = ROOT / "src" / "unrest_harness" / "bundled"
+
+
+def _copied_bundled_root(tmp_path: Path, name: str) -> Path:
+    root = tmp_path / name
+    shutil.copytree(BUNDLED, root)
+    return root
 
 
 def _resolved(
@@ -86,6 +95,60 @@ def test_unsupported_profile_has_stable_provider_role_version_error(profile: str
     assert "provider=claude role=worker version=1 capability=opaque#" in str(
         caught.value
     )
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ("unknown-field", "unsupported-version", "duplicate-member", "malformed-type"),
+)
+def test_public_loader_rejects_strict_malformed_fixture_matrix(
+    tmp_path: Path,
+    variant: str,
+) -> None:
+    root = _copied_bundled_root(tmp_path, variant)
+    path = root / "policies" / "role-capabilities.v1.json"
+    text = path.read_text(encoding="utf-8")
+    if variant == "duplicate-member":
+        text = text.replace(
+            '"schema_version": 1',
+            '"schema_version": 1,\n  "schema_version": 1',
+            1,
+        )
+    else:
+        document = json.loads(text)
+        if variant == "unknown-field":
+            document["unknown"] = True
+        elif variant == "unsupported-version":
+            document["schema_version"] = 2
+        else:
+            document["profiles"]["safe"]["worker"]["process"]["enabled"] = "true"
+        text = json.dumps(document, indent=2) + "\n"
+    path.write_text(text, encoding="utf-8")
+
+    with pytest.raises(CapabilityPolicyError) as caught:
+        load_capability_policy(root)
+
+    assert str(caught.value) == (
+        "CAP-POLICY-001 provider=unresolved role=unresolved version=1 "
+        "capability=policy-document: cannot load strict policy resource "
+        "role-capabilities.v1.json"
+    )
+
+
+@pytest.mark.parametrize("variant", ("symlink-root", "dot-dot-root"))
+def test_public_loader_rejects_ambiguous_fixture_paths(
+    tmp_path: Path,
+    variant: str,
+) -> None:
+    root = _copied_bundled_root(tmp_path, "canonical")
+    if variant == "symlink-root":
+        supplied = tmp_path / "linked"
+        supplied.symlink_to(root, target_is_directory=True)
+    else:
+        supplied = root / "policies" / ".."
+
+    with pytest.raises(CapabilityPolicyError, match="cannot load strict policy resource"):
+        load_capability_policy(supplied)
 
 
 def test_safe_codex_subprocess_settings_override_ambient_unrestricted(
@@ -206,6 +269,168 @@ async def test_progress_redaction_spans_chunks_callbacks_and_message_ids() -> No
             }
         )
     assert progress == ["Agent: <redacted:ZAI_API_KEY> ordinary=kept"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("role", "kind", "options", "expected"),
+    (
+        (
+            "worker",
+            "edit",
+            [
+                {"optionId": "always", "name": "Always", "kind": "allow_always"},
+                {"optionId": "once", "name": "Once", "kind": "allow_once"},
+                {"optionId": "reject", "name": "Reject", "kind": "reject_once"},
+            ],
+            {"outcome": {"optionId": "once", "outcome": "selected"}},
+        ),
+        (
+            "validator",
+            "edit",
+            [
+                {"optionId": "once", "name": "Once", "kind": "allow_once"},
+                {"optionId": "reject", "name": "Reject", "kind": "reject_once"},
+            ],
+            {"outcome": {"optionId": "reject", "outcome": "selected"}},
+        ),
+        (
+            "worker",
+            "edit",
+            [{"optionId": "always", "name": "Always", "kind": "allow_always"}],
+            {"outcome": {"outcome": "cancelled"}},
+        ),
+        (
+            "worker",
+            "edit",
+            [
+                {"optionId": "same", "name": "Once", "kind": "allow_once"},
+                {"optionId": "same", "name": "Reject", "kind": "reject_once"},
+            ],
+            {"outcome": {"outcome": "cancelled"}},
+        ),
+        (
+            "worker",
+            "edit",
+            [
+                {"optionId": "one", "name": "One", "kind": "allow_once"},
+                {"optionId": "two", "name": "Two", "kind": "allow_once"},
+            ],
+            {"outcome": {"outcome": "cancelled"}},
+        ),
+        (
+            "worker",
+            "edit",
+            [{"optionId": "once", "name": "Once", "kind": "persistent"}],
+            {"outcome": {"outcome": "cancelled"}},
+        ),
+        (
+            "worker",
+            "edit",
+            [{"optionId": "", "name": "Once", "kind": "allow_once"}],
+            {"outcome": {"outcome": "cancelled"}},
+        ),
+        (
+            "worker",
+            "edit",
+            ["not-an-option"],
+            {"outcome": {"outcome": "cancelled"}},
+        ),
+    ),
+    ids=(
+        "authorized-allow-once",
+        "forbidden-selects-reject-once",
+        "persistent-only",
+        "duplicate-id",
+        "ambiguous-allow-once",
+        "unsupported-kind",
+        "malformed-fields",
+        "malformed-option",
+    ),
+)
+async def test_permission_request_handler_is_finite_and_fail_closed(
+    tmp_path: Path,
+    role: str,
+    kind: str,
+    options: list[Any],
+    expected: dict[str, Any],
+) -> None:
+    client = _client(tmp_path, role=role)
+    written: list[dict[str, Any]] = []
+
+    async def capture(message: dict[str, Any]) -> None:
+        written.append(json.loads(json.dumps(message)))
+
+    client._write = capture  # type: ignore[method-assign]
+    await client._handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 41,
+            "method": "session/request_permission",
+            "params": {
+                "toolCall": {"toolCallId": "contract", "kind": kind},
+                "options": options,
+            },
+        }
+    )
+
+    assert written == [
+        {"jsonrpc": "2.0", "id": 41, "result": expected}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_callback_result_error_and_workspace_write_redact_inventory(
+    tmp_path: Path,
+) -> None:
+    client = _client(tmp_path)
+    secret = "callback-secret-credential-8fd1"
+    client.set_credential_inventory({"OPENAI_API_KEY": secret})
+    written: list[dict[str, Any]] = []
+
+    async def capture(message: dict[str, Any]) -> None:
+        written.append(json.loads(json.dumps(message)))
+
+    client._write = capture  # type: ignore[method-assign]
+
+    async def return_secret(_method: str, _params: dict[str, Any]) -> Any:
+        return {"callbackResult": f"accepted:{secret}"}
+
+    dispatch = client._dispatch
+    client._dispatch = return_secret  # type: ignore[method-assign]
+    await client._handle_request(
+        {"jsonrpc": "2.0", "id": 1, "method": "synthetic", "params": {}}
+    )
+    assert written[-1] == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {"callbackResult": "accepted:<redacted:OPENAI_API_KEY>"},
+    }
+
+    client._dispatch = dispatch  # type: ignore[method-assign]
+    await client._handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "fs/write_text_file",
+            "params": {"path": "nested/result.txt", "content": secret},
+        }
+    )
+    assert (tmp_path / "workspace/nested/result.txt").read_text(encoding="utf-8") == (
+        "<redacted:OPENAI_API_KEY>"
+    )
+    assert written[-1] == {"jsonrpc": "2.0", "id": 2, "result": {}}
+
+    async def fail_with_secret(_method: str, _params: dict[str, Any]) -> Any:
+        raise RuntimeError(f"callback failed: {secret}")
+
+    client._dispatch = fail_with_secret  # type: ignore[method-assign]
+    await client._handle_request(
+        {"jsonrpc": "2.0", "id": 3, "method": "synthetic", "params": {}}
+    )
+    serialized = json.dumps(written, sort_keys=True)
+    assert secret not in serialized
+    assert "callback failed: <redacted:OPENAI_API_KEY>" in serialized
 
 
 @pytest.mark.parametrize("kind", ("list", "mapping"))
@@ -330,6 +555,87 @@ async def test_raw_acp_terminal_protocol_redacts_credential_values(
     await client.cleanup(close_main_process=False)
     assert secret not in output
     assert "<redacted:ZAI_API_KEY>" in output
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider_name", ("claude", "codex"))
+@pytest.mark.parametrize(
+    "role", ("orchestrator", "worker", "validator", "terminal_reviewer")
+)
+async def test_real_unsafe_terminal_create_excludes_exact_finite_value_aliases(
+    tmp_path: Path,
+    provider_name: str,
+    role: str,
+) -> None:
+    policy = _resolved(
+        tmp_path,
+        provider_name=provider_name,
+        role=role,
+        profile=UNSAFE_DEVELOPMENT_PROFILE,
+    )
+    aliases = {
+        f"UNRELATED_ALIAS_{index}": f"terminal-sentinel-{index}-{name.lower()}"
+        for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
+    }
+    host = {
+        "PATH": os.environ["PATH"],
+        **{
+            name: f"terminal-sentinel-{index}-{name.lower()}"
+            for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
+        },
+        **aliases,
+        "ORDINARY_CONTROL": "ordinary-equal-free-value",
+        "TRANSFORMED_CONTROL": "wrapped::terminal-sentinel-0-anthropic_api_key",
+    }
+    terminal_environment = build_role_environment(
+        policy,
+        host,
+        include_credentials=False,
+    )
+    client = ACPClient(
+        cast(Any, object()),
+        str(tmp_path / "workspace"),
+        policy=policy,
+        terminal_environment=terminal_environment,
+    )
+    client.set_credential_inventory(finite_credential_values(host))
+    script = (
+        "import base64, json, os; "
+        "names = "
+        f"{(*FINITE_CREDENTIAL_NAMES, *aliases)!r}; "
+        "print(json.dumps({name: os.environ.get(name) for name in names} | "
+        "{'ORDINARY_CONTROL': os.environ.get('ORDINARY_CONTROL'), "
+        "'TRANSFORMED_CONTROL': base64.b64encode("
+        "os.environ['TRANSFORMED_CONTROL'].encode()).decode()}))"
+    )
+    created = await client._handle_terminal_create(
+        {
+            "command": sys.executable,
+            "args": ["-c", script],
+            "env": [
+                *(
+                    {"name": name, "value": value}
+                    for name, value in aliases.items()
+                ),
+                {"name": "ORDINARY_CONTROL", "value": "ordinary-equal-free-value"},
+                {
+                    "name": "TRANSFORMED_CONTROL",
+                    "value": "wrapped::terminal-sentinel-0-anthropic_api_key",
+                },
+            ],
+        }
+    )
+    terminal_id = created["terminalId"]
+    await client._handle_terminal_wait({"terminalId": terminal_id})
+    output = client._handle_terminal_output({"terminalId": terminal_id})["output"]
+    await client.cleanup(close_main_process=False)
+    observed = json.loads(output)
+    for name in (*FINITE_CREDENTIAL_NAMES, *aliases):
+        assert observed[name] is None
+    assert observed["ORDINARY_CONTROL"] == "ordinary-equal-free-value"
+    assert base64.b64decode(observed["TRANSFORMED_CONTROL"]).decode() == (
+        "wrapped::terminal-sentinel-0-anthropic_api_key"
+    )
 
 
 def test_cli_safe_init_round_trips_policy_and_never_persists_secrets(

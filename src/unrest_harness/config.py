@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, replace
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal, Mapping
 
@@ -14,8 +15,10 @@ from .capability_policy import (
     UNSAFE_DEVELOPMENT_ENV,
     CapabilityPolicy,
     CapabilityPolicyError,
+    FINITE_CREDENTIAL_NAMES,
     RoleName,
     load_capability_policy,
+    credential_source_values,
     resolve_profile_from_environment,
     validate_provider_support,
 )
@@ -135,9 +138,46 @@ class HarnessConfig:
     terminal_reviewer_reasoning_effort: str | None = None
     capability_policy_version: int = CAPABILITY_POLICY_VERSION
     capability_profile: str = SAFE_PROFILE
+    _capability_policy: CapabilityPolicy | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+    _capability_policy_bundled_dir: Path | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+
+    def __post_init__(self) -> None:
+        policy = (
+            self._capability_policy
+            if self._capability_policy_bundled_dir == self.bundled_dir
+            else load_capability_policy(self.bundled_dir)
+        )
+        assert policy is not None
+        if policy.schema_version != self.capability_policy_version:
+            raise CapabilityPolicyError(
+                provider="unresolved",
+                role="unresolved",
+                version=self.capability_policy_version,
+                capability="policy-version",
+                reason="does not match the bundled policy resource",
+            )
+        object.__setattr__(self, "_capability_policy", policy)
+        object.__setattr__(
+            self,
+            "_capability_policy_bundled_dir",
+            self.bundled_dir,
+        )
 
     @classmethod
-    def discover(cls) -> HarnessConfig:
+    def discover(
+        cls,
+        *,
+        bundled_dir: Path | None = None,
+        policy_loader: Callable[[Path], CapabilityPolicy] | None = None,
+    ) -> HarnessConfig:
         capability_policy_version, capability_profile = (
             resolve_profile_from_environment(os.environ)
         )
@@ -170,8 +210,11 @@ class HarnessConfig:
         terminal_reviewer_acp_command = os.environ.get(
             _CONFIG_ENV["terminal_reviewer_acp_command"]
         )
+        resolved_bundled_dir = bundled_dir or _bundled_dir()
+        loader = policy_loader or load_capability_policy
+        policy = loader(resolved_bundled_dir)
         return cls(
-            bundled_dir=_bundled_dir(),
+            bundled_dir=resolved_bundled_dir,
             harness_home=harness_home,
             projects_dir=projects_dir,
             orchestrator_provider_name=orchestrator_provider_name,
@@ -203,6 +246,8 @@ class HarnessConfig:
             ),
             capability_policy_version=capability_policy_version,
             capability_profile=capability_profile,
+            _capability_policy=policy,
+            _capability_policy_bundled_dir=resolved_bundled_dir,
         )
 
     # ------------------------------------------------------------------
@@ -286,16 +331,8 @@ class HarnessConfig:
 
     @property
     def capability_policy(self) -> CapabilityPolicy:
-        policy = load_capability_policy(self.bundled_dir)
-        if policy.schema_version != self.capability_policy_version:
-            raise CapabilityPolicyError(
-                provider="unresolved",
-                role="unresolved",
-                version=self.capability_policy_version,
-                capability="policy-version",
-                reason="does not match the bundled policy resource",
-            )
-        return policy
+        assert self._capability_policy is not None
+        return self._capability_policy
 
     def validate_capability_support(self) -> None:
         policy = self.capability_policy
@@ -337,6 +374,23 @@ class HarnessConfig:
             for name in declaration.credentials
             if environment.get(name)
         }
+
+    @staticmethod
+    def protected_persistence_inventory(
+        environment: Mapping[str, str],
+    ) -> dict[str, str]:
+        """Snapshot all finite ambient credentials for Unrest-owned persistence.
+
+        Persistence protection is deliberately independent of dispatch authority:
+        lifecycle inspection and abort must remain usable when a stored provider
+        selection is stale or unsupported.
+        """
+        return dict(
+            credential_source_values(
+                environment,
+                declared_names=FINITE_CREDENTIAL_NAMES,
+            )
+        )
 
     # ------------------------------------------------------------------
     # Bucket paths

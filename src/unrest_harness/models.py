@@ -313,6 +313,8 @@ class WorkHandoff(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     node_id: str
+    # Optional only for decoding base-era JSON where the member is absent.
+    # Storage distinguishes raw absence from an explicit JSON null.
     attempt_id: str | None = None
     done: bool
     report: str
@@ -332,6 +334,8 @@ class ValidateHandoff(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     node_id: str
+    # Optional only for decoding base-era JSON where the member is absent.
+    # Storage distinguishes raw absence from an explicit JSON null.
     attempt_id: str | None = None
     done: bool = True
     report: str = ""

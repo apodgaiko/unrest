@@ -400,6 +400,12 @@ class AttemptRecord:
     path: Path
 
 
+@dataclass(frozen=True)
+class _ParsedAttempt:
+    handoff: WorkHandoff | ValidateHandoff
+    attempt_id_present: bool
+
+
 class AttemptValidationError(ValueError):
     """A persisted handoff is not attributable to its expected dispatch."""
 
@@ -423,15 +429,8 @@ class ProjectStore:
         self.refresh_inventory(os.environ)
 
     def refresh_inventory(self, environment: Mapping[str, str]) -> None:
-        """Capture the finite selected-role values at child-creation time."""
-        self.inventory = {
-            name: value
-            for role in ("orchestrator", "worker", "validator", "terminal_reviewer")
-            for name, value in self.config.credential_inventory(
-                environment,
-                role=role,  # type: ignore[arg-type]
-            ).items()
-        }
+        """Capture the finite protected persistence inventory."""
+        self.inventory = self.config.protected_persistence_inventory(environment)
 
     # ------------------------------------------------------------------
     # Bucket path accessors
@@ -793,12 +792,19 @@ class ProjectStore:
         path = self.attempt_path(project_id, mission_id, spawn_ts, node_id)
         if not path.exists():
             return None
-        handoff = self._parse_attempt(path)
+        parsed = self._parse_attempt(path)
+        handoff = parsed.handoff
         if handoff.node_id != node_id:
             raise AttemptValidationError("attempt node_id does not match running task")
-        if handoff.attempt_id != spawn_ts:
+        if parsed.attempt_id_present and handoff.attempt_id is None:
+            raise AttemptValidationError("attempt_id must not be null")
+        if parsed.attempt_id_present and handoff.attempt_id != spawn_ts:
             raise AttemptValidationError("attempt_id does not match running generation")
-        return handoff
+        if parsed.attempt_id_present:
+            return handoff
+        # Base-era handoffs predate attempt_id. Their filename and requested task
+        # are the generation identity; bind that identity in memory only.
+        return handoff.model_copy(update={"attempt_id": spawn_ts})
 
     def list_attempts(
         self,
@@ -821,15 +827,23 @@ class ProjectStore:
         return results
 
     @staticmethod
-    def _parse_attempt(path: Path) -> WorkHandoff | ValidateHandoff:
+    def _parse_attempt(path: Path) -> _ParsedAttempt:
         try:
             raw = path.read_text(encoding="utf-8")
             data = json.loads(raw)
             if not isinstance(data, dict):
                 raise AttemptValidationError("attempt payload must be an object")
+            attempt_id_present = "attempt_id" in data
             if "items" in data or "passed" in data:
-                return ValidateHandoff.model_validate(data)
-            return WorkHandoff.model_validate(data)
+                handoff: WorkHandoff | ValidateHandoff = (
+                    ValidateHandoff.model_validate(data)
+                )
+            else:
+                handoff = WorkHandoff.model_validate(data)
+            return _ParsedAttempt(
+                handoff=handoff,
+                attempt_id_present=attempt_id_present,
+            )
         except AttemptValidationError:
             raise
         except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:

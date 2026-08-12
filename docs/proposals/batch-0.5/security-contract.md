@@ -2,6 +2,11 @@
 
 Status: accepted 2026-08-09 as the security scope for ADR-0002.
 
+All seventeen `SEC-SINK-*` rows below have individual candidate results and
+collecting pytest nodes in
+`docs/release/lean-core-v0.2-evidence-crosswalk.json`; no aggregate sink result
+stands in for a missing row.
+
 ## Proposed contract
 
 Safe mode is the default. Unrestricted provider settings are emitted only after

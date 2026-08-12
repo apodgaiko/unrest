@@ -184,6 +184,15 @@ not merely one aggregate pass. The security run includes safe and unsafe
 finite-inventory cases and records transformed-secret non-redaction as an
 approved runtime behavior cut rather than a regression.
 
+The frozen-candidate evidence crosswalk is
+`docs/release/lean-core-v0.2-evidence-crosswalk.json`. Its focused contract test
+derives the authoritative `LEAN-*`, ADR `VAL-LEAN-*`, and `SEC-SINK-*` catalogs,
+checks completeness and exact node collection, and executes every unique mapped
+node. Candidate source, import, package-input/archive, and direct-dependency
+inventories are recorded separately in
+`docs/release/lean-core-v0.2-review-audit.json` and checked against the current
+tree and a freshly built distribution.
+
 ## Per-slice ledger
 
 Every implementation slice reports:

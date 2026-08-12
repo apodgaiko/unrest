@@ -7,6 +7,7 @@ import csv
 import hashlib
 import io
 import tarfile
+import tomllib
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -108,6 +109,16 @@ def check_distribution(root: Path, dist: Path) -> dict[str, object]:
         raise RuntimeError("distribution directory must contain exactly one wheel and one sdist")
 
     source = _source_package(root)
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    version = project["version"]
+    expected_wheel = f"unrest_harness-{version}-py3-none-any.whl"
+    expected_sdist = f"unrest_harness-{version}.tar.gz"
+    if wheels[0].name != expected_wheel or sdists[0].name != expected_sdist:
+        raise RuntimeError(
+            "distribution filenames do not match project version: "
+            f"expected={[expected_wheel, expected_sdist]}, "
+            f"actual={[wheels[0].name, sdists[0].name]}"
+        )
     wheel, metadata, entry_points, _record = _wheel_payload(wheels[0])
     sdist, sdist_source_files = _sdist_payload(sdists[0])
     if wheel != source:
@@ -137,6 +148,8 @@ def check_distribution(root: Path, dist: Path) -> dict[str, object]:
         )
     if "Requires-Python: >=3.11\n" not in metadata.replace("\r\n", "\n"):
         raise RuntimeError("wheel metadata does not preserve Requires-Python >=3.11")
+    if f"Version: {version}\n" not in metadata.replace("\r\n", "\n"):
+        raise RuntimeError("wheel metadata version does not match project version")
     normalized_entries = {
         name.strip(): value.strip()
         for line in entry_points.splitlines()

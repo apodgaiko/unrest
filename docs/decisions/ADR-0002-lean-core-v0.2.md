@@ -145,9 +145,10 @@ The supporting review drafts are under `docs/proposals/batch-0.5/`.
 - Positive: security claims become finite and testable at named boundaries.
 - Positive: focused changes and the provider-independent release suite receive
   explicit time budgets.
-- Negative/cost: repository checks lose several public guarantees. No in-tree
-  schema-v1 observer consumer exists; any out-of-tree consumer must adopt
-  schema version 2 or remain on v0.1.
+- Negative/cost: repository checks lose several public guarantees. The
+  2026-08-12 repository audit found no in-tree schema-v1 observer consumer.
+  External publication and consumers are unverified; any such consumer must
+  adopt schema version 2 or remain on v0.1.
 - Compatibility/runtime hard cuts: `check-governance`, `check-commit`, terminal
   credential inheritance, transformed-secret redaction, detailed observer
   schema version 1, and the unsupported third child-provider surface are
@@ -199,9 +200,11 @@ status, and the frozen-candidate Python 3.13 source-suite checkpoint.
 - Slice dependency: historical baseline deletion and retirement of every
   baseline sink anchor/affected repository-contract section land atomically so
   `check-repository` passes at each intermediate commit.
-- External acceptance checks: determine whether the `unrest.dev` root-schema
-  identifiers are published and record any out-of-tree observer schema-v1
-  migration requirement. These questions do not justify retaining an unknown
+- External compatibility disposition: the dated audit in
+  `docs/release/lean-core-v0.2-review-audit.json` found no repository, package,
+  or accepted-release consumer of the former root schemas or observer-v1
+  aliases. External publication and consumers are unverified. This uncertainty
+  is recorded as a compatibility consequence and does not restore an unknown
   compatibility layer.
 
 ## References

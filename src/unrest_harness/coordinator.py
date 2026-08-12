@@ -164,7 +164,9 @@ class MissionCoordinator:
         try:
             handoff = self.dispatcher.dispatch(request)
         except Exception as exc:  # noqa: BLE001
-            synthetic = self._synthesize_handoff(task, f"Dispatcher crashed: {exc}")
+            synthetic = self._synthesize_handoff(
+                task, self._bounded_dispatch_failure("Dispatcher crashed: ", exc)
+            )
             self.store.save_attempt(
                 self.project_id,
                 mid,
@@ -362,11 +364,12 @@ class MissionCoordinator:
                     for request, handoff in zip(requests, handoffs, strict=True)
                 }
             except Exception as exc:  # noqa: BLE001
-                cause = redact_credential_values(str(exc), self.store.inventory)
                 return {
                     request.task.id: self._synthesize_handoff(
                         request.task,
-                        f"Dispatcher batch crashed: {cause[:2000]}",
+                        self._bounded_dispatch_failure(
+                            "Dispatcher batch crashed: ", exc
+                        ),
                     )
                     for request in requests
                 }
@@ -375,17 +378,20 @@ class MissionCoordinator:
             try:
                 return request.task.id, self.dispatcher.dispatch(request)
             except Exception as exc:  # noqa: BLE001
-                cause = redact_credential_values(str(exc), self.store.inventory)
                 return (
                     request.task.id,
                     self._synthesize_handoff(
                         request.task,
-                        f"Dispatcher crashed: {cause[:2000]}",
+                        self._bounded_dispatch_failure("Dispatcher crashed: ", exc),
                     ),
                 )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(requests)) as pool:
             return dict(pool.map(_run, requests))
+
+    def _bounded_dispatch_failure(self, prefix: str, exc: Exception) -> str:
+        cause = redact_credential_values(str(exc), self.store.inventory)
+        return f"{prefix}{cause}"[:2000]
 
     @staticmethod
     def _batch_spawn_ts(index: int) -> str:
@@ -470,7 +476,11 @@ class MissionCoordinator:
             return self._synthesize_handoff(
                 task, "Dispatcher returned a handoff for a different task."
             ).model_copy(update={"attempt_id": spawn_ts})
-        if handoff.attempt_id not in (None, spawn_ts):
+        if handoff.attempt_id is None:
+            return self._synthesize_handoff(
+                task, "Dispatcher returned a handoff with a null attempt identity."
+            ).model_copy(update={"attempt_id": spawn_ts})
+        if handoff.attempt_id != spawn_ts:
             return self._synthesize_handoff(
                 task, "Dispatcher returned a handoff for a stale generation."
             ).model_copy(update={"attempt_id": spawn_ts})
@@ -527,10 +537,15 @@ class MissionCoordinator:
                 task_state.status_of(dep) == "cleared" for dep in gate.depends_on
             ):
                 continue
-            return _GateEvent(gate=gate, result=self._evaluate_gate(tl, gate))
+            return _GateEvent(
+                gate=gate,
+                result=self._evaluate_gate(tl, task_state, gate),
+            )
         return None
 
-    def _evaluate_gate(self, tl: TaskList, gate: Task) -> "_GateResult":
+    def _evaluate_gate(
+        self, tl: TaskList, task_state: TaskStateFile, gate: Task
+    ) -> "_GateResult":
         """AND-semantics gate evaluation.
 
         For each gate target, every covering validator must report
@@ -553,20 +568,39 @@ class MissionCoordinator:
             if not expected:
                 continue
 
-            attempts = self.store.list_attempts(
-                self.project_id, mid, node_id=v_task_id
+            state_entry = task_state.tasks.get(v_task_id)
+            generation = (
+                state_entry.last_attempt if state_entry is not None else None
             )
-            if not attempts:
+            if generation is None:
                 validator_verdicts[v_task_id] = {t: False for t in expected}
                 missing_items[v_task_id] = list(expected)
                 continue
-            last = attempts[-1]
-            handoff = self.store.read_attempt(
-                self.project_id, mid, last.spawn_ts, v_task_id
-            )
+            try:
+                handoff = self.store.read_attempt(
+                    self.project_id, mid, generation, v_task_id
+                )
+            except AttemptValidationError as exc:
+                validator_verdicts[v_task_id] = {t: False for t in expected}
+                missing_items[v_task_id] = list(expected)
+                attempt_paths[v_task_id] = str(
+                    self.store.attempt_path(
+                        self.project_id, mid, generation, v_task_id
+                    )
+                )
+                return _GateResult(
+                    cleared=False,
+                    reason=(
+                        f"validator evidence rejected for {v_task_id}: {exc}"
+                    )[:2000],
+                    failed_items=list(expected),
+                    validator_verdicts=validator_verdicts,
+                    attempt_paths=attempt_paths,
+                    missing_items=missing_items,
+                )
             attempt_paths[v_task_id] = str(
                 self.store.attempt_report_path(
-                    self.project_id, mid, last.spawn_ts, v_task_id
+                    self.project_id, mid, generation, v_task_id
                 )
             )
             if not isinstance(handoff, ValidateHandoff):

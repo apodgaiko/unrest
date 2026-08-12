@@ -13,6 +13,7 @@ from pydantic import ValidationError
 import unrest_harness.runtime_observability as runtime_observability
 from unrest_harness.config import HarnessConfig
 from unrest_harness.models import (
+    Aborted,
     AttentionItemInternal,
     AttentionNeeded,
     Done,
@@ -246,6 +247,36 @@ def test_stale_code_is_diagnostic_and_does_not_change_active_state(tmp_path: Pat
     assert observation.codes == ("stale_running_candidate",)
 
 
+@pytest.mark.parametrize("terminal_state", (Done(), Aborted(reason="operator")))
+def test_terminal_state_omits_failed_task_without_attention(
+    tmp_path: Path,
+    terminal_state: object,
+) -> None:
+    store, workspace = _store(tmp_path)
+    task = Task(
+        id="failed-work",
+        type="work",
+        body="body",
+        targets=["VAL-STATUS-001"],
+        skill="worker",
+    )
+    _project(
+        store,
+        workspace,
+        "terminal-failure",
+        state=MissionRunning(mission_id="mission-001"),
+        tasks=[task],
+        statuses={"failed-work": TaskStateEntry(status="failed")},
+    )
+    store.save_state("terminal-failure", terminal_state)  # type: ignore[arg-type]
+
+    observation = observe_project_runtime(store, "terminal-failure", now=FIXED_NOW)
+
+    assert observation.derived_state == "terminal"
+    assert observation.failed_task_ids == ("failed-work",)
+    assert "failed_task_without_attention" not in observation.codes
+
+
 def test_age_uses_exact_runtime_inputs_half_even_and_clock_skew(tmp_path: Path) -> None:
     store, workspace = _store(tmp_path)
     _project(
@@ -360,6 +391,113 @@ def test_observation_retries_one_changed_snapshot(
     assert calls == 4
     assert observation.persisted_state == "done"
     assert observation.derived_state == "terminal"
+
+
+def test_capture_budget_boundaries_are_exact(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    target = root / "cursor.json"
+    payload = b'{"schema_version":2}'
+    target.write_bytes(payload)
+
+    monkeypatch.setattr(runtime_observability, "MAX_CAPTURE_FILE_BYTES", len(payload))
+    budget = runtime_observability._CaptureBudget()
+    captured = runtime_observability._capture_file(target, root, budget)
+    assert captured is not None
+    assert (budget.files, budget.bytes, captured.size) == (1, len(payload), len(payload))
+
+    monkeypatch.setattr(runtime_observability, "MAX_CAPTURE_FILE_BYTES", len(payload) - 1)
+    with pytest.raises(RuntimeObservationError, match="unsafe_cursor"):
+        runtime_observability._capture_file(
+            target, root, runtime_observability._CaptureBudget()
+        )
+
+    byte_budget = runtime_observability._CaptureBudget()
+    byte_budget.bytes = runtime_observability.MAX_CAPTURE_TOTAL_BYTES
+    byte_budget.add_bytes(0)
+    with pytest.raises(RuntimeObservationError, match="unsafe_cursor"):
+        byte_budget.add_bytes(1)
+    file_budget = runtime_observability._CaptureBudget()
+    file_budget.files = runtime_observability.MAX_CAPTURE_FILES - 1
+    file_budget.add_file()
+    with pytest.raises(RuntimeObservationError, match="unsafe_cursor"):
+        file_budget.add_file()
+
+
+def test_observation_exhausts_exactly_three_changed_snapshot_retries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, workspace = _store(tmp_path)
+    _project(store, workspace, "changing")
+    calls = 0
+
+    def always_changed(_project_root: Path):
+        nonlocal calls
+        calls += 1
+        raise RuntimeObservationError("snapshot_changed")
+
+    monkeypatch.setattr(runtime_observability, "_capture_inputs", always_changed)
+    with pytest.raises(RuntimeObservationError, match="snapshot_changed"):
+        observe_project_runtime(store, "changing", now=FIXED_NOW)
+    assert calls == runtime_observability.CAPTURE_ATTEMPTS == 3
+
+
+def test_capture_identity_mutation_and_descriptor_inventory_are_safe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    target = root / "cursor.json"
+    target.write_text("{}", encoding="utf-8")
+    identity = target.stat()
+    for field in ("st_dev", "st_ino", "st_size", "st_mtime_ns"):
+        values = list(identity)
+        index = {"st_dev": 2, "st_ino": 1, "st_size": 6, "st_mtime_ns": 9}[field]
+        values[index] += 1
+        changed = os.stat_result(values)
+        assert not runtime_observability._same_identity(identity, changed)
+
+    descriptor_root = Path("/dev/fd")
+    before = len(tuple(descriptor_root.iterdir())) if descriptor_root.is_dir() else None
+    real_close = runtime_observability.os.close
+    closed: list[int] = []
+
+    def tracked_close(descriptor: int) -> None:
+        closed.append(descriptor)
+        real_close(descriptor)
+
+    monkeypatch.setattr(runtime_observability.os, "close", tracked_close)
+    for _ in range(8):
+        captured = runtime_observability._capture_file(
+            target, root, runtime_observability._CaptureBudget()
+        )
+        assert captured is not None and captured.data == b"{}"
+    after = len(tuple(descriptor_root.iterdir())) if descriptor_root.is_dir() else None
+    assert len(closed) == 8
+    assert before is None or after is not None and after <= before + 1
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    (
+        ("0001-01-01T00-00-00Z", datetime(1, 1, 1, tzinfo=UTC)),
+        ("2000-02-29T23-59-59Z-0000", datetime(2000, 2, 29, 23, 59, 59, tzinfo=UTC)),
+        ("9999-12-31T23-59-59Z-9999", datetime(9999, 12, 31, 23, 59, 59, tzinfo=UTC)),
+        ("1900-02-29T00-00-00Z", None),
+        ("2024-02-30T00-00-00Z", None),
+        ("2024-01-01T24-00-00Z", None),
+        ("2024-01-01T00-00-00+00:00", None),
+        ("２０２４-０１-０１T００-００-００Z", None),
+        ("2024-01-01T00-00-00Z-０００１", None),
+    ),
+)
+def test_spawn_timestamp_parser_uses_fixed_ascii_utc_calendar_grammar(
+    value: str,
+    expected: datetime | None,
+) -> None:
+    assert runtime_observability._parse_spawn_ts(value) == expected
 
 
 def test_fresh_entrypoint_import_boundary(tmp_path: Path) -> None:

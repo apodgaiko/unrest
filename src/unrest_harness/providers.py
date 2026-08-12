@@ -20,6 +20,7 @@ WORKER_PROVIDER_NAMES: tuple[ProviderName, ...] = (
 @dataclass(frozen=True)
 class ProviderDefinition:
     name: ProviderName
+    credential_names: tuple[str, ...] = ()
     skill_dirs: tuple[str, ...] = ()
     skill_alias_dirs: tuple[str, ...] = ()
     config_format: ConfigFormat = "mcp_json"
@@ -166,6 +167,12 @@ def _dedupe_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
 PROVIDERS: dict[ProviderName, ProviderDefinition] = {
     "claude": ProviderDefinition(
         name="claude",
+        credential_names=(
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "GLM_API_KEY",
+            "ZAI_API_KEY",
+        ),
         skill_dirs=(".claude/skills", ".agents/skills"),
         skill_alias_dirs=(".claude/skills", ".agents/skills"),
         config_format="mcp_json",
@@ -176,6 +183,7 @@ PROVIDERS: dict[ProviderName, ProviderDefinition] = {
     ),
     "codex": ProviderDefinition(
         name="codex",
+        credential_names=("CODEX_API_KEY", "OPENAI_API_KEY"),
         skill_dirs=(".codex/skills", ".agents/skills"),
         skill_alias_dirs=(".codex/skills", ".agents/skills"),
         config_format="codex_config",

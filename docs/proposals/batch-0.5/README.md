@@ -139,8 +139,9 @@ The maintainer should explicitly answer these before implementation:
   floors, with 50% and 40% respectively as stretch goals.
 - Accept that the initial contract-test change may increase test LOC.
 - Accept risk-separated changes rather than an absolute PR-count quota.
-- Resolve whether `unrest.dev` publishes the root schemas and whether any
-  out-of-tree observer schema-v1 consumer requires a migration notice.
+- Record the 2026-08-12 repository/package audit result: no in-tree consumer of
+  the former root schemas or observer-v1 aliases was found; external
+  publication and consumers are unverified, so no broader absence is claimed.
 
 ## Proposed execution topology after approval
 

@@ -26,9 +26,11 @@ from unrest_harness.acp_runner import (
     ACPNodeRunner,
     _acp_subprocess_env,
     _augment_acp_command,
+    _ensure_claude_settings,
 )
 from unrest_harness.capability_policy import (
     SAFE_PROFILE,
+    CapabilityPolicyError,
     credential_values,
     load_capability_policy,
     resolve_role_capability,
@@ -315,6 +317,37 @@ async def test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained(
         for task in asyncio.all_tasks()
         if task is not asyncio.current_task()
     )
+
+
+@pytest.mark.asyncio
+async def test_adapter_stderr_and_log_sink_redact_before_emission(
+    config: HarnessConfig,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    secret = "adapter-stderr-secret-credential"
+    runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        (
+            "import sys; "
+            f"sys.stderr.write('adapter failed: {secret}'); "
+            "raise SystemExit(2)"
+        ),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    runner._start_mcp_drains(process)
+
+    with caplog.at_level("WARNING", logger="unrest_harness.acp_runner"):
+        output = await runner._close_mcp_process(
+            process, {"OPENAI_API_KEY": secret}
+        )
+
+    assert secret not in output
+    assert secret not in caplog.text
+    assert "adapter failed: <redacted:OPENAI_API_KEY>" in output
+    assert "adapter failed: <redacted:OPENAI_API_KEY>" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -676,6 +709,226 @@ def test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success(
     assert [handoff.node_id for handoff in handoffs] == ["v0", "v1"]
     assert all(isinstance(handoff, ValidateHandoff) for handoff in handoffs)
     assert all(handoff.done and handoff.passed for handoff in handoffs)
+
+
+def test_reused_dispatcher_serializes_startup_in_each_fresh_event_loop(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+) -> None:
+    dispatcher = ACPNodeDispatcher(config, project_setup)
+    runner = dispatcher.runner
+    active_starts = 0
+    maximum_active_starts: list[int] = []
+
+    async def run_node(**kwargs):
+        nonlocal active_starts
+        async with runner._mcp_start_lock():
+            active_starts += 1
+            maximum_active_starts.append(active_starts)
+            await asyncio.sleep(0.01)
+            active_starts -= 1
+        task = kwargs["task"]
+        return WorkHandoff(node_id=task.id, done=True, report="complete")
+
+    runner.run_node = run_node  # type: ignore[method-assign]
+
+    for batch in range(2):
+        requests = [
+            DispatchRequest(
+                project_id="p1",
+                mission_id="mission-001",
+                task=Task(
+                    id=f"w{batch}-{index}",
+                    type="work",
+                    body="work",
+                    targets=["VAL-BATCH-001"],
+                    skill="s",
+                ),
+                spawn_ts=f"2026-08-12T12-00-0{batch}Z-{index:04d}",
+            )
+            for index in range(2)
+        ]
+        handoffs = dispatcher.dispatch_batch(requests)
+        assert [handoff.node_id for handoff in handoffs] == [
+            f"w{batch}-0",
+            f"w{batch}-1",
+        ]
+        assert all(handoff.done for handoff in handoffs)
+
+    assert maximum_active_starts == [1, 1, 1, 1]
+
+
+def test_claude_settings_create_migrate_preserve_and_reject_symlink(
+    tmp_path: Path,
+) -> None:
+    provider = PROVIDERS["claude"]
+
+    missing_workspace = tmp_path / "missing"
+    missing_workspace.mkdir()
+    _ensure_claude_settings(
+        missing_workspace,
+        provider,
+        SAFE_PROFILE,
+        allowed_ancestor=missing_workspace,
+    )
+    assert json.loads(
+        (missing_workspace / ".claude/settings.json").read_text(encoding="utf-8")
+    ) == {"permissions": {"defaultMode": "default"}}
+
+    legacy_workspace = tmp_path / "legacy"
+    legacy_settings = legacy_workspace / ".claude/settings.json"
+    legacy_settings.parent.mkdir(parents=True)
+    legacy_settings.write_text(
+        '{"permissions":{"defaultMode":"bypassPermissions"}}\n',
+        encoding="utf-8",
+    )
+    _ensure_claude_settings(
+        legacy_workspace,
+        provider,
+        SAFE_PROFILE,
+        allowed_ancestor=legacy_workspace,
+    )
+    assert json.loads(legacy_settings.read_text(encoding="utf-8")) == {
+        "permissions": {"defaultMode": "default"}
+    }
+
+    unmanaged_workspace = tmp_path / "unmanaged"
+    unmanaged_settings = unmanaged_workspace / ".claude/settings.json"
+    unmanaged_settings.parent.mkdir(parents=True)
+    unmanaged_bytes = b'{"permissions":{"defaultMode":"default"},"theme":"dark"}\n'
+    unmanaged_settings.write_bytes(unmanaged_bytes)
+    _ensure_claude_settings(
+        unmanaged_workspace,
+        provider,
+        SAFE_PROFILE,
+        allowed_ancestor=unmanaged_workspace,
+    )
+    assert unmanaged_settings.read_bytes() == unmanaged_bytes
+    assert not (unmanaged_settings.parent / ".unrest-managed-settings.json").exists()
+
+    current_workspace = tmp_path / "current"
+    current_root = current_workspace / ".claude"
+    current_root.mkdir(parents=True)
+    current_settings = current_root / "settings.json"
+    current_marker = current_root / ".unrest-managed-settings.json"
+    current_settings.write_text(
+        '{\n  "permissions": {\n    "defaultMode": "default"\n  }\n}\n',
+        encoding="utf-8",
+    )
+    current_marker.write_text(
+        '{\n  "managed_fields": [\n    "permissions.defaultMode"\n  ],\n'
+        '  "schema_version": 1\n}\n',
+        encoding="utf-8",
+    )
+    current_bytes = (current_settings.read_bytes(), current_marker.read_bytes())
+    _ensure_claude_settings(
+        current_workspace,
+        provider,
+        SAFE_PROFILE,
+        allowed_ancestor=current_workspace,
+    )
+    assert (current_settings.read_bytes(), current_marker.read_bytes()) == current_bytes
+
+    unsafe_workspace = tmp_path / "unsafe"
+    unsafe_settings = unsafe_workspace / ".claude/settings.json"
+    unsafe_settings.parent.mkdir(parents=True)
+    unsafe_bytes = b'{"permissions":{"defaultMode":"plan"}}\n'
+    unsafe_settings.write_bytes(unsafe_bytes)
+    with pytest.raises(CapabilityPolicyError, match="unmanaged ambient permission"):
+        _ensure_claude_settings(
+            unsafe_workspace,
+            provider,
+            SAFE_PROFILE,
+            allowed_ancestor=unsafe_workspace,
+        )
+    assert unsafe_settings.read_bytes() == unsafe_bytes
+
+    external = tmp_path / "external"
+    external.mkdir()
+    external_settings = external / "settings.json"
+    external_settings.write_bytes(b'{"external":true}\n')
+    symlink_workspace = tmp_path / "symlink"
+    symlink_workspace.mkdir()
+    (symlink_workspace / ".claude").symlink_to(external, target_is_directory=True)
+    before = external_settings.read_bytes()
+    with pytest.raises(CapabilityPolicyError, match="safe regular workspace path"):
+        _ensure_claude_settings(
+            symlink_workspace,
+            provider,
+            SAFE_PROFILE,
+            allowed_ancestor=symlink_workspace,
+        )
+    assert external_settings.read_bytes() == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "params",
+    (
+        {"command": "/usr/bin/true"},
+        {
+            "command": "/usr/bin/true",
+            "args": None,
+            "env": None,
+            "outputByteLimit": None,
+        },
+    ),
+)
+async def test_terminal_create_optional_nulls_use_omission_defaults(
+    params: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = _safe_policy("claude")
+    spawned: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    original_spawn = asyncio.create_subprocess_exec
+
+    async def capture_spawn(*args, **kwargs):
+        spawned.append((args, kwargs))
+        return await original_spawn(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", capture_spawn)
+    client = ACPClient(
+        None,  # type: ignore[arg-type]
+        str(Path(__file__).resolve().parents[1]),
+        policy=policy,
+        terminal_environment={"PATH": os.environ["PATH"]},
+    )
+
+    response = await client._handle_terminal_create(params)  # type: ignore[arg-type]
+    terminal = client._terminals[response["terminalId"]]
+    await terminal.process.wait()
+
+    assert spawned[0][0] == ("/usr/bin/true",)
+    assert terminal.output_limit == 1024 * 1024
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("args", False),
+        ("args", "bad"),
+        ("env", False),
+        ("env", {}),
+        ("outputByteLimit", False),
+        ("outputByteLimit", "1024"),
+    ),
+)
+async def test_terminal_create_rejects_non_null_wrong_types(
+    field: str,
+    value: object,
+) -> None:
+    client = ACPClient(
+        None,  # type: ignore[arg-type]
+        str(Path(__file__).resolve().parents[1]),
+        policy=_safe_policy("claude"),
+        terminal_environment={"PATH": os.environ["PATH"]},
+    )
+
+    with pytest.raises(ValueError):
+        await client._handle_terminal_create(
+            {"command": "/usr/bin/true", field: value}
+        )
 
 
 @pytest.mark.parametrize("provider_name", ("claude", "codex"))

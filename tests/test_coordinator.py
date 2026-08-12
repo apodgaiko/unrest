@@ -4,6 +4,7 @@ See `specs/task_list/PRODUCT.md` §Dispatch.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -102,6 +103,49 @@ def _seed_project(
         f"# {assertion}\n\nStatement body.\n"
     )
     return pid
+
+
+def test_serial_dispatch_crash_is_bounded_and_redacted_in_reachable_sinks(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    credentials = {
+        "ANTHROPIC_API_KEY": "short-key",
+        "ANTHROPIC_AUTH_TOKEN": "overlap-known-value",
+        "CODEX_API_KEY": "known-value",
+        "GLM_API_KEY": "known-value-suffix",
+        "OPENAI_API_KEY": "colliding-known-value",
+        "ZAI_API_KEY": "punctuation@known",
+    }
+    for name, value in credentials.items():
+        monkeypatch.setenv(name, value)
+
+    def crash(_request: DispatchRequest) -> NodeHandoff:
+        raise RuntimeError("|".join(credentials.values()) + "-" + "x" * 5000)
+
+    controller = ProjectController(
+        config,
+        MockDispatcher(crash),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
+    )
+    pid = _seed_project(controller, workspace)
+    controller.submit_plan(pid, _simple_tl())
+    controller.advance_project(pid, max_steps=1)
+
+    attempt_path = next(controller.store.attempts_runtime_dir(pid, "mission-001").glob("*.json"))
+    attempt = json.loads(attempt_path.read_text())
+    assert len(attempt["report"]) <= 2000
+    reachable = [
+        attempt_path,
+        next(controller.store.attempts_dir(pid, "mission-001").glob("*.md")),
+        controller.store.unrest_runtime_dir(pid) / "attention.json",
+        controller.store.unrest_runtime_dir(pid) / "state.json",
+    ]
+    for path in reachable:
+        content = path.read_text()
+        for value in credentials.values():
+            assert value not in content
 
 
 class TestHappyPath:
@@ -251,6 +295,122 @@ class TestGateFailed:
         assert env.state.state == "attention_needed"
         items = controller.store.load_attention(pid)
         assert items[0].kind == "gate_failed"
+
+    @pytest.mark.parametrize(
+        "invalid_kind", ("corrupt", "wrong-task", "stale-generation")
+    )
+    def test_invalid_gate_evidence_routes_to_attention_then_new_generation(
+        self,
+        config: HarnessConfig,
+        workspace: Path,
+        invalid_kind: str,
+    ) -> None:
+        def responder(request: DispatchRequest) -> NodeHandoff:
+            return ValidateHandoff(
+                node_id=request.task.id,
+                attempt_id=request.spawn_ts,
+                done=True,
+                report="fresh validation",
+                items=[ValidationItem(item_id="VAL-001", passed=True)],
+                passed=True,
+            )
+
+        controller = ProjectController(
+            config,
+            MockDispatcher(responder),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+        store = controller.store
+        generation = "2026-08-10T12-00-00Z"
+        task_state = store.load_task_state(pid, "mission-001")
+        task_state.set_status("w1", "cleared")
+        task_state.set_status("v1", "cleared")
+        task_state.set_last_attempt("v1", generation)
+        store.save_task_state(pid, "mission-001", task_state)
+        rejected = store.attempt_path(
+            pid, "mission-001", generation, "v1"
+        )
+        rejected.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict[str, object] = {
+            "node_id": "v1",
+            "attempt_id": generation,
+            "done": True,
+            "report": "forensic-sentinel-must-not-escape",
+            "items": [{"item_id": "VAL-001", "passed": True}],
+            "passed": True,
+            "request_attention": False,
+        }
+        if invalid_kind == "corrupt":
+            rejected.write_text("{forensic-sentinel-must-not-escape")
+        else:
+            if invalid_kind == "wrong-task":
+                payload["node_id"] = "other-validator"
+            else:
+                payload["attempt_id"] = "2026-08-09T12-00-00Z"
+            rejected.write_text(json.dumps(payload), encoding="utf-8")
+        rejected_before = rejected.read_bytes()
+        rejected_hash = hashlib.sha256(rejected_before).hexdigest()
+
+        failed = controller.advance_project(pid, max_steps=1)
+
+        assert failed.state.state == "attention_needed"
+        attention = store.load_attention(pid)
+        assert len(attention) == 1
+        assert attention[0].kind == "gate_failed"
+        assert "validator evidence rejected for v1" in attention[0].report
+        assert len(attention[0].report.encode()) < 4096
+        assert "forensic-sentinel" not in attention[0].report
+        for sink in (
+            store.unrest_runtime_dir(pid) / "attention.json",
+            store.unrest_runtime_dir(pid) / "state.json",
+        ):
+            assert "forensic-sentinel" not in sink.read_text(encoding="utf-8")
+        assert rejected.read_bytes() == rejected_before
+        assert hashlib.sha256(rejected.read_bytes()).hexdigest() == rejected_hash
+
+        replacement = TaskListPatch(
+            supersede={"g1": "g1-v2"},
+            add=[
+                _task(
+                    "v1-v2",
+                    "validate",
+                    ["VAL-001"],
+                    skill="aud",
+                    depends_on=["w1"],
+                ),
+                _task(
+                    "g1-v2",
+                    "gate",
+                    ["VAL-001"],
+                    depends_on=["v1-v2"],
+                ),
+            ],
+        )
+        controller.decide_attention(
+            pid,
+            [
+                Decision(
+                    item_id=attention[0].id,
+                    action="patch",
+                    patch=replacement,
+                    justification="collect fresh validator evidence",
+                )
+            ],
+        )
+        recovered = controller.advance_project(pid)
+
+        assert recovered.state.state == "attention_needed"
+        final_attention = store.load_attention(pid)
+        assert len(final_attention) == 1
+        assert final_attention[0].kind == "gate_checkpoint"
+        final_state = store.load_task_state(pid, "mission-001")
+        assert final_state.status_of("g1-v2") == "cleared"
+        new_generation = final_state.tasks["v1-v2"].last_attempt
+        assert new_generation is not None and new_generation != generation
+        assert rejected.read_bytes() == rejected_before
+        assert hashlib.sha256(rejected.read_bytes()).hexdigest() == rejected_hash
 
 
 class TestGateOptional:
@@ -768,7 +928,7 @@ class TestResume:
             "wrong_task",
             "stale_generation",
             "replayed_success",
-            "missing_attempt_id",
+            "null_attempt_id",
             "missing_done",
         ),
     )
@@ -811,8 +971,8 @@ class TestResume:
             )
             payload["attempt_id"] = "2026-08-09T12-00-00Z"
             old.write_text(json.dumps(payload))
-        elif case == "missing_attempt_id":
-            payload.pop("attempt_id")
+        elif case == "null_attempt_id":
+            payload["attempt_id"] = None
             expected.write_text(json.dumps(payload))
         else:
             payload.pop("done")
@@ -895,3 +1055,32 @@ class TestResume:
         assert store.load_task_state(pid, "mission-001").status_of("w1") == "cleared"
         assert store.load_attention(pid) == []
         assert tuple(store.list_attempts(pid, "mission-001", node_id="w1")) == attempts_before
+
+    def test_dispatched_explicit_null_attempt_id_fails_closed(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(
+                lambda request: WorkHandoff(
+                    node_id=request.task.id,
+                    attempt_id=None,
+                    done=True,
+                    report="explicit null must not bind",
+                )
+            ),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+
+        result = controller.advance_project(pid, max_steps=1)
+
+        assert result.state.state == "attention_needed"
+        attempt = controller.store.list_attempts(
+            pid, "mission-001", node_id="w1"
+        )[0]
+        persisted = json.loads(attempt.path.read_text(encoding="utf-8"))
+        assert persisted["done"] is False
+        assert persisted["attempt_id"] == attempt.spawn_ts
+        assert "null attempt identity" in persisted["report"]

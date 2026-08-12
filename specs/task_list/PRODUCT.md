@@ -133,16 +133,24 @@ reconciled completely before any fresh selection: landed attempts are consumed,
 missing attempts fail, and the reconciliation step returns without dispatching
 new work.
 
+Base-era attempt JSON that physically lacks `attempt_id` is bound in memory to
+the requested task and filename generation during restart reconciliation; it is
+never rewritten merely by reading it. Current handoffs are strict: an explicit
+null or a value that differs from the dispatched generation is invalid.
+
 Concurrent validators use independent MCP child lifecycles. The production
 runner serializes the advisory free-port probe through confirmed MCP readiness,
 then runs the agent sessions concurrently. A request that crashes before its
 handoff retains a bounded, known-credential-redacted cause in its own failed
 attempt; a successful sibling remains independently applicable.
 
-Gate coverage is transitive over upstream validate tasks. Missing attempt
-files, wrong handoff type, missing expected target items, explicit dissent, or
-no covering validator all count as failure. A cleared gate still emits a
-`gate_checkpoint` attention item.
+Gate coverage is transitive over upstream validate tasks and reads each cleared
+validator's cursor-bound generation, never whichever filename sorts last.
+Missing or invalid attempt evidence, wrong handoff type, missing expected target
+items, explicit dissent, or no covering validator all count as failure. Invalid
+evidence remains unchanged and produces bounded `gate_failed` attention; a
+replacement validator/gate lane must produce a new valid generation before the
+gate can clear. A cleared gate still emits a `gate_checkpoint` attention item.
 
 ## Failure modes
 
@@ -153,8 +161,10 @@ no covering validator all count as failure. A cleared gate still emits a
   opens when no gate owns the failure.
 - Gate failure: gate becomes failed and requires a decision.
 - Running cursor without its exact generation attempt after resume, or with a
-  malformed/mismatched attempt: the runtime persists a synthetic failed
-  handoff rather than guessing success.
+  malformed/mismatched current attempt: the runtime persists a synthetic failed
+  handoff rather than guessing success. The sole exception is a base-era JSON
+  object where `attempt_id` is absent, which binds to the requested filename
+  generation without rewriting; explicit null remains invalid.
 
 ## Edge Cases
 

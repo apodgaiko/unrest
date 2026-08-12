@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "generator_command": "uv run python tools/generate_legacy_handoff_fixtures.py --reference-checkout <reference-checkout> --output-dir <output-dir>",
+  "reference": {
+    "commit": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+    "tree": "35152a4a8c56198664f519691ec952ec9ca519f4",
+    "tracked_status": "clean",
+    "models_path": "src/unrest_harness/models.py",
+    "producer_path": "src/unrest_harness/server.py:create_worker_server/end_node"
+  },
+  "inputs": [
+    {
+      "filename": "legacy-work-handoff.json",
+      "environment": {
+        "UNREST_NODE_ID": "w1",
+        "UNREST_NODE_TYPE": "work"
+      },
+      "arguments": {
+        "done": true,
+        "report": "ok"
+      }
+    },
+    {
+      "filename": "legacy-validation-handoff.json",
+      "environment": {
+        "UNREST_NODE_ID": "v1",
+        "UNREST_NODE_TYPE": "validate"
+      },
+      "arguments": {
+        "done": true,
+        "report": "audited",
+        "items": [
+          {
+            "item_id": "VAL-001",
+            "passed": true
+          }
+        ],
+        "passed": true
+      }
+    }
+  ],
+  "outputs": {
+    "legacy-work-handoff.json": {
+      "bytes": 86,
+      "sha256": "63fb00c29bfc60211a3d17bb62ded917c34a124f174d8a5bcf231003296f7051"
+    },
+    "legacy-validation-handoff.json": {
+      "bytes": 188,
+      "sha256": "c935afe0a7f87476aae67b72f87bdd35d85c633840cff3bffb8d98fc774b7551"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 """Parallel coordinator behaviour (task-list shape)."""
 from __future__ import annotations
 
+import json
 import threading
 import time
 from collections.abc import Callable
@@ -78,7 +79,10 @@ class _FallbackDispatcher:
 
     def dispatch(self, request: DispatchRequest) -> NodeHandoff:
         self.calls.append(request)
-        return self._responder(request)
+        handoff = self._responder(request)
+        if "attempt_id" not in handoff.model_fields_set:
+            return handoff.model_copy(update={"attempt_id": request.spawn_ts})
+        return handoff
 
 
 def _dispatcher(
@@ -88,6 +92,81 @@ def _dispatcher(
     if kind == "batch":
         return _BatchTrackingDispatcher(responder)
     return _FallbackDispatcher(responder)
+
+
+def test_batch_dispatch_crash_matches_serial_bounded_redaction(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel = "batch-overlap-known-value-86e2"
+    monkeypatch.setenv("OPENAI_API_KEY", sentinel)
+
+    def crash(_request: DispatchRequest) -> NodeHandoff:
+        raise RuntimeError(f"{sentinel}|{sentinel}-suffix|" + "y" * 5000)
+
+    class BatchCrashDispatcher:
+        def dispatch(self, request: DispatchRequest) -> NodeHandoff:
+            return crash(request)
+
+        def dispatch_batch(self, _requests: list[DispatchRequest]) -> list[NodeHandoff]:
+            raise RuntimeError(f"{sentinel}|{sentinel}-suffix|" + "y" * 5000)
+
+    controller = ProjectController(
+        _parallel_config(config, n=2),
+        BatchCrashDispatcher(),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
+    )
+    controller.start_project("batch diagnostic", str(workspace))
+    pid = controller.store.list_projects()[0].id
+    for target in ("VAL-A", "VAL-B"):
+        _write_contract(controller.store, pid, "mission-001", target)
+    controller.submit_plan(
+        pid,
+        TaskList(
+            tasks=[
+                Task(id="work-a", type="work", body="b", targets=["VAL-A"], skill="s"),
+                Task(id="work-b", type="work", body="b", targets=["VAL-B"], skill="s"),
+                Task(
+                    id="validator-a",
+                    type="validate",
+                    body="b",
+                    targets=["VAL-A"],
+                    skill="s",
+                    depends_on=["work-a"],
+                ),
+                Task(
+                    id="validator-b",
+                    type="validate",
+                    body="b",
+                    targets=["VAL-B"],
+                    skill="s",
+                    depends_on=["work-b"],
+                ),
+            ]
+        ),
+    )
+    task_state = controller.store.load_task_state(pid, "mission-001")
+    task_state.set_status("work-a", "cleared")
+    task_state.set_status("work-b", "cleared")
+    controller.store.save_task_state(pid, "mission-001", task_state)
+    controller.advance_project(pid, max_steps=1)
+
+    runtime_attempts = sorted(
+        controller.store.attempts_runtime_dir(pid, "mission-001").glob("*.json")
+    )
+    assert len(runtime_attempts) == 2
+    for path in runtime_attempts:
+        report = json.loads(path.read_text())["report"]
+        assert len(report) <= 2000
+        assert sentinel not in report
+    for root in (
+        controller.store.unrest_dir(pid),
+        controller.store.unrest_runtime_dir(pid),
+    ):
+        for path in root.rglob("*"):
+            if path.is_file():
+                assert sentinel not in path.read_text(errors="replace")
 
 
 def test_max_parallel_one_uses_current_workspace(

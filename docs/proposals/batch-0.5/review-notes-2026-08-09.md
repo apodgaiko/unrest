@@ -196,8 +196,8 @@ slice 2.
 ## Suggested acceptance order
 
 1. Fix B1–B3 and the six major revisions in the proposal documents.
-2. Answer the remaining genuinely-open externals (unrest.dev schema
-   publication; any out-of-tree observer consumer).
+2. Preserve the later 2026-08-12 disposition: repository/package consumers
+   were not found, while external publication and consumers remain unverified.
 3. Then accept: the retained perimeter, evidence rules, measurement anchors,
    stop rules, and rollback triggers are otherwise in good shape and better
    specified than most compaction plans of this size.

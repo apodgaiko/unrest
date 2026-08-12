@@ -10,7 +10,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    ValidationError,
+    model_validator,
+)
 
 if TYPE_CHECKING:
     from .providers import ProviderDefinition
@@ -51,8 +58,8 @@ class StrictPolicyModel(BaseModel):
 
 class RootCapability(StrictPolicyModel):
     name: RootName
-    read: bool
-    write: bool
+    read: StrictBool
+    write: StrictBool
 
     @model_validator(mode="after")
     def write_requires_read(self) -> RootCapability:
@@ -62,7 +69,7 @@ class RootCapability(StrictPolicyModel):
 
 
 class ProcessCapability(StrictPolicyModel):
-    enabled: bool
+    enabled: StrictBool
     commands: tuple[str, ...]
 
     @model_validator(mode="after")
@@ -85,7 +92,7 @@ class EnvironmentCapability(StrictPolicyModel):
     credentials: tuple[str, ...]
     terminal_injection: tuple[str, ...]
     internal: tuple[str, ...]
-    inherit_all: bool = False
+    inherit_all: StrictBool = False
 
     @model_validator(mode="after")
     def names_are_finite_and_deterministic(self) -> EnvironmentCapability:
@@ -345,7 +352,26 @@ def policy_path(bundled_dir: Path) -> Path:
 
 
 def load_capability_policy(bundled_dir: Path) -> CapabilityPolicy:
-    return _load_strict_policy_asset(policy_path(bundled_dir), model=CapabilityPolicy)
+    path = policy_path(bundled_dir)
+    try:
+        canonical_bundled_dir = bundled_dir.resolve(strict=True)
+        canonical_path = path.resolve(strict=True)
+        if (
+            not bundled_dir.is_absolute()
+            or bundled_dir != canonical_bundled_dir
+            or path != canonical_path
+            or not path.is_file()
+        ):
+            raise ValueError("capability policy path must be canonical and regular")
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise CapabilityPolicyError(
+            provider="unresolved",
+            role="unresolved",
+            version=CAPABILITY_POLICY_VERSION,
+            capability="policy-document",
+            reason=f"cannot load strict policy resource {path.name}",
+        ) from exc
+    return _load_strict_policy_asset(path, model=CapabilityPolicy)
 
 
 def resolve_profile_from_environment(environment: Mapping[str, str]) -> tuple[int, str]:
@@ -514,7 +540,18 @@ def validate_provider_support(
                 capability="approvals",
                 reason="provider lacks ACP permission enforcement",
             )
-    return role_policy
+    selected_credentials = tuple(
+        name
+        for name in role_policy.environment.credentials
+        if name in provider.credential_names
+    )
+    return role_policy.model_copy(
+        update={
+            "environment": role_policy.environment.model_copy(
+                update={"credentials": selected_credentials}
+            )
+        }
+    )
 
 
 def resolve_role_capability(
@@ -656,6 +693,16 @@ def credential_values(
     return declared_credential_values(policy.environment, environment)
 
 
+def finite_credential_values(
+    environment: Mapping[str, str],
+) -> SensitiveValueInventory:
+    """Inventory every exact ambient value in the finite credential catalog."""
+    return credential_source_values(
+        environment,
+        declared_names=FINITE_CREDENTIAL_NAMES,
+    )
+
+
 def serialize_sensitive_value_inventory(inventory: Mapping[str, str]) -> bytes:
     """Serialize the explicit inventory for the private inherited-FD channel."""
     values = SensitiveValueInventory(inventory)
@@ -689,13 +736,14 @@ def build_role_environment(
     include_credentials: bool = True,
 ) -> dict[str, str]:
     declaration = policy.environment
-    known = credential_values(policy, host_environment)
+    known = finite_credential_values(host_environment)
     if declaration.inherit_all:
         result = dict(sorted(host_environment.items()))
-        if not include_credentials:
-            for name in declaration.credentials:
+        selected_credentials = set(declaration.credentials)
+        for name in FINITE_CREDENTIAL_NAMES:
+            if not include_credentials or name not in selected_credentials:
                 result.pop(name, None)
-            result = enforce_environment_credential_provenance(result, known)
+        result = enforce_environment_credential_provenance(result, known)
     else:
         names = set(declaration.forward)
         if include_credentials:
@@ -749,9 +797,11 @@ def enforce_environment_credential_provenance(
     *,
     inherit_all: bool = False,
 ) -> dict[str, str]:
-    """Keep exact authorized pairs and omit aliases containing known values."""
-    if inherit_all:
-        return dict(sorted(environment.items()))
+    """Keep exact authorized pairs and omit exact-value aliases."""
+    # Wildcard forwarding broadens names, never finite credential identity.
+    # Keep the keyword for callers that describe their projection mode, but do
+    # not let it bypass the exact-value provenance boundary.
+    del inherit_all
     names_by_value: dict[str, set[str]] = {}
     for name, value in credentials.items():
         if value:
@@ -760,7 +810,7 @@ def enforce_environment_credential_provenance(
         name: value
         for name, value in sorted(environment.items())
         if name in names_by_value.get(value, set())
-        or not any(contains_credential_token(value, known) for known in credentials.values())
+        or value not in names_by_value
     }
 
 
@@ -1006,6 +1056,7 @@ __all__ = [
     "deserialize_sensitive_value_inventory",
     "enforce_environment_credential_provenance",
     "enforce_persisted_environment_credential_provenance",
+    "finite_credential_values",
     "load_capability_policy",
     "policy_path",
     "profile_environment",

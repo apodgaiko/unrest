@@ -10,6 +10,11 @@ surface. Source inspection may support but cannot replace real-surface evidence.
 The eventual contract-test change may add test lines; test reduction is judged
 after withdrawn guarantees and their tests are removed.
 
+The candidate mapping and individual results are recorded in
+`docs/release/lean-core-v0.2-evidence-crosswalk.json`. Its focused test collects
+and executes every unique mapped pytest node; the mapping does not substitute
+for the mapped behavioral test passing.
+
 ## Lifecycle
 
 ### LEAN-LIFECYCLE-001: Create a project

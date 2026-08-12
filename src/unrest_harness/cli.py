@@ -290,8 +290,11 @@ def init(
             workspace=Path.cwd(),
             selection=selection,
         )
-        _preflight_user_initialization(loader, selection.orchestrator)
-        _write_user_provider_capability_settings(selection, capability_profile)
+        try:
+            _preflight_user_initialization(loader, selection.orchestrator)
+            _write_user_provider_capability_settings(selection, capability_profile)
+        except (CapabilityPolicyError, OSError) as exc:
+            raise click.ClickException("provider settings configuration rejected") from exc
         _write_user_bootstrap_config(
             selection,
             {**storage_env, **capability_env},
@@ -303,7 +306,10 @@ def init(
         return
 
     workspace = Path(os.path.abspath(workspace_dir or "."))
-    _preflight_project_initialization(loader, selection, workspace)
+    try:
+        _preflight_project_initialization(loader, selection, workspace)
+    except OSError as exc:
+        raise click.ClickException("provider settings configuration rejected") from exc
 
     # 1) MCP / Codex config
     storage_env = _storage_env(unrest_home=unrest_home, workspace=workspace, selection=selection)
@@ -325,11 +331,14 @@ def init(
         if selection.worker.name != "codex":
             raise click.UsageError("--worker-model currently requires a Codex worker")
         effort_env["UNREST_WORKER_MODEL"] = worker_model
-    _write_project_provider_capability_settings(
-        workspace,
-        selection.orchestrator,
-        capability_profile,
-    )
+    try:
+        _write_project_provider_capability_settings(
+            workspace,
+            selection.orchestrator,
+            capability_profile,
+        )
+    except (CapabilityPolicyError, OSError) as exc:
+        raise click.ClickException("provider settings configuration rejected") from exc
     _write_bootstrap_config(
         workspace,
         selection,

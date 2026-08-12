@@ -121,6 +121,16 @@ startup. The former governance/commit-message commands, generated historical
 baseline, duplicate root schemas, and protected-surface policy are withdrawn in
 v0.2 rather than compatibility-shimmed.
 
+## Troubleshooting host setup
+
+Initialization fails closed when a managed Claude path, including
+`.claude/settings.json`, is a symlink, malformed, or not a regular file. Remove
+or replace the unsafe filesystem entry yourself, then rerun `unrest init`; Unrest
+does not follow the link or overwrite its target. Report the path kind and the
+bounded error code, never credential values, environment dumps, settings file
+bodies, prompts, or generated reports. The same value-free rule applies to bug
+reports and release evidence.
+
 ## Why validation matters
 
 Tests can be green while the requested behavior is absent, incomplete, or only

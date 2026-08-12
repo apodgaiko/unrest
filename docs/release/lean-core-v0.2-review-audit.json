@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-08-12",
+  "candidate_binding": "current tracked worktree; executable tests reject inventory drift",
+  "authoritative_sources": [
+    "docs/decisions/ADR-0002-lean-core-v0.2.md",
+    "docs/proposals/batch-0.5/deletion-ledger.md",
+    "docs/proposals/batch-0.5/behavior-contract.md",
+    "docs/proposals/batch-0.5/security-contract.md",
+    "docs/proposals/batch-0.5/measurement-protocol.md",
+    "docs/release/lean-core-v0.2.md",
+    "docs/release/lean-core-v0.2-manifest.json",
+    "pyproject.toml",
+    "uv.lock"
+  ],
+  "compatibility_disposition": {
+    "root_schemas": "No current repository, direct dependency, source import, or built-package consumer found; external publication unverified.",
+    "observer_v1": "No current repository or built-package consumer found; external publication and consumers unverified.",
+    "removed_legacy_child_provider": "Absent from supported provider, CLI, package, issue-template, and retained-contract inventories; external reliance unverified.",
+    "policy": "Do not restore a compatibility layer without new accepted authority and evidence."
+  },
+  "source_inventory": [
+    "src/unrest_harness/__init__.py",
+    "src/unrest_harness/__main__.py",
+    "src/unrest_harness/acp_runner.py",
+    "src/unrest_harness/assets.py",
+    "src/unrest_harness/attention.py",
+    "src/unrest_harness/capability_policy.py",
+    "src/unrest_harness/cli.py",
+    "src/unrest_harness/config.py",
+    "src/unrest_harness/controller.py",
+    "src/unrest_harness/coordinator.py",
+    "src/unrest_harness/dispatcher.py",
+    "src/unrest_harness/envelope.py",
+    "src/unrest_harness/installed_wheel_check.py",
+    "src/unrest_harness/models.py",
+    "src/unrest_harness/providers.py",
+    "src/unrest_harness/repository_contract.py",
+    "src/unrest_harness/runtime_observability.py",
+    "src/unrest_harness/server.py",
+    "src/unrest_harness/storage.py",
+    "src/unrest_harness/task_list_patch.py",
+    "src/unrest_harness/task_validation.py"
+  ],
+  "first_party_import_inventory": [
+    "acp_runner",
+    "assets",
+    "capability_policy",
+    "config",
+    "controller",
+    "coordinator",
+    "dispatcher",
+    "envelope",
+    "models",
+    "providers",
+    "repository_contract",
+    "runtime_observability",
+    "storage",
+    "task_list_patch",
+    "task_validation",
+    "unrest_harness"
+  ],
+  "package_input_inventory": {
+    "python_sources": "source_inventory",
+    "typed_marker": "src/unrest_harness/py.typed",
+    "bundled_roots": [
+      "src/unrest_harness/bundled/AGENTS.md",
+      "src/unrest_harness/bundled/policies",
+      "src/unrest_harness/bundled/prompts",
+      "src/unrest_harness/bundled/providers",
+      "src/unrest_harness/bundled/skills"
+    ],
+    "forbidden_archive_fragments": [
+      "baseline.py",
+      "governance.py",
+      "schemas/",
+      "capability-sinks",
+      "capability-security-model",
+      "observer_v1",
+      "removed legacy child provider"
+    ]
+  },
+  "direct_dependency_inventory": {
+    "runtime": [
+      "click",
+      "fastmcp",
+      "jinja2",
+      "pydantic",
+      "pyyaml"
+    ],
+    "development": [
+      "mypy",
+      "pytest",
+      "pytest-asyncio",
+      "pytest-mock",
+      "ruff",
+      "types-pyyaml"
+    ],
+    "removed_direct": [
+      "jsonschema",
+      "markdown-it-py",
+      "types-jsonschema"
+    ],
+    "lockfile_note": "Transitive packages in uv.lock are not direct Unrest dependencies; the executable audit derives direct names from pyproject.toml."
+  },
+  "hard_cut_absence_inventory": [
+    "evals/baseline",
+    "evidence",
+    "policy/protected-surfaces.yaml",
+    "schemas",
+    "src/unrest_harness/baseline.py",
+    "src/unrest_harness/governance.py",
+    "tests/fixtures/governance",
+    "tests/test_baseline.py",
+    "tests/test_governance.py"
+  ]
+}

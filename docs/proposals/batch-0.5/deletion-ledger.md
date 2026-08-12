@@ -19,6 +19,7 @@ to another maintained first-party path does not count as deletion.
 | `repository_contract.py` broad validator | Validate repository identity, documentation, CI topology, schemas, generated output, evidence, capability proof, and self-enforcement | Replace narrowly | Implement small direct helpers for guidance, important references, component ownership, packaged runtime policy loadability, and installed-wheel CI wiring; do not rehome the generic governance/CommonMark machinery, and count replacement LOC |
 | `governance.load_component_paths` and CommonMark helper imports retained by the narrow checker | Retained-to-deleted import edge from `repository_contract.py` | Replace explicitly, not rehome | Narrow stdlib/data-shape helpers local to the checker; no generic protected-surface or CommonMark parser |
 | `governance.py` policy engine | Protected selectors, commit trailers, schema packets, workflow templates, evidence records, custom Markdown interpretation | Delete | Human maintainer review plus ordinary focused CI; retained product invariants move to direct tests/docs |
+| `tests/test_governance.py` | Exercise the withdrawn governance policy engine, schemas, trailers, and Markdown DSL | Delete with `governance.py`; do not rehome | Direct retained documentation and repository checks live in `tests/test_documentation_contract.py` and `tests/test_repository_contract.py`; the executable crosswalk records `LEAN-REPOSITORY-001` |
 | Public `check-governance` | Render and validate governance policy | Remove | v0.2 migration note |
 | Public `check-commit` | Enforce structured commit trailers | Remove | v0.2 migration note; repository hosting policy may remain external |
 | Mandatory commit trailers and PR/ADR mini-languages | Repository self-governance | Withdraw | No replacement DSL |
@@ -47,7 +48,7 @@ to another maintained first-party path does not count as deletion.
 | Baseline-linked architecture index, component map, normative/release documents, and `test_baseline.py` references | Keep stable IDs and links pointed at the current baseline surface | Update/delete atomically with baseline | No accepted document, registry, guidance file, or retained test points at `evals/baseline/` or deleted baseline code |
 | Root `evidence/` detailed release history | Store raw benchmark, logs, manifests, rollback transcripts, and repeated bindings in product tree | Remove from current tree | Concise release conclusion, commands, hashes, artifact locator, and Git history |
 | Per-mission `.unrest` evidence | Supply current mission validation/terminal-review artifacts | Retain | Explicitly outside root evidence cleanup |
-| Duplicate root JSON schemas generated from internal models | Repository-checker/docs/test self-validation; not packaged in the wheel | Delete after explicit compatibility decision | No packaged/runtime consumer was found in-tree; verify or withdraw any external publication implied by `https://unrest.dev/schemas/...` IDs |
+| Duplicate root JSON schemas generated from internal models | Repository-checker/docs/test self-validation; not packaged in the wheel | Delete after explicit compatibility decision | The 2026-08-12 audit found no in-tree or packaged consumer; external publication is unverified, so no broader absence is claimed and the accepted hard cut stands |
 | `jsonschema==4.26.0` | Validate root schemas in `repository_contract.py`; tests also import it directly | Remove after every direct source/test root-schema consumer is deleted or rewritten | Accept that a transitive distribution may remain; removal is not caused by governance parsing |
 | `types-jsonschema==4.26.0.20260518` | Type support for the typed `jsonschema` source consumer | Remove with the last typed source import | Verify lockfile/direct-dependency state after the narrow checker lands |
 | `markdown-it-py` direct runtime declaration | Support governance CommonMark parsing | Remove after governance/parser consumer deletion | The narrow checker uses direct lightweight rules rather than rehoming the parser |
@@ -76,18 +77,21 @@ to another maintained first-party path does not count as deletion.
 - Deleting evidence from the current tree is repository-context cleanup; it
   does not count toward installed production Python, wheel, or Git-history size.
 
-## Unresolved review items
+## Review disposition audit (2026-08-12)
 
-- Name any baseline scenarios that are not already covered by the proposed
-  retained-behavior contract.
-- Determine whether the `https://unrest.dev/schemas/...` identifiers correspond
-  to published root schemas; no in-tree schema/governance-command consumer was
-  found.
-- Identify any out-of-tree observer schema-v1 consumer and the required
-  migration notice; no in-tree consumer was found.
-- The unsupported third child provider has no active in-tree consumer and is
-  now a proposed hard cut; record
-  any out-of-tree reliance as a compatibility consequence, not a retention
-  presumption.
-- Confirm retention and location policy for release artifacts outside the
-  current product tree.
+- The current tracked source, tests, package inputs, direct dependencies, and
+  accepted release carriers were audited in
+  `docs/release/lean-core-v0.2-review-audit.json`.
+- No retained baseline scenario is backed only by the deleted baseline
+  generator; retained identifiers are bound to collecting candidate tests by
+  `docs/release/lean-core-v0.2-evidence-crosswalk.json`.
+- No in-tree or packaged consumer of the deleted root schemas or observer-v1
+  aliases was found. External publication and consumers are unverified; this
+  is the explicit compatibility disposition, not an absence claim.
+- The removed legacy child provider has no supported provider, CLI, package,
+  issue-template, or retained
+  contract surface. External reliance is unverified and does not authorize a
+  compatibility shim.
+- Raw release artifacts remain external mission/CI/release-attachment material;
+  only the concise current conclusion, audit, crosswalk, and rollback locator
+  remain in the product tree.

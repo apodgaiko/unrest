@@ -18,6 +18,7 @@ from unrest_harness.models import TerminalReviewHandoff, WorkHandoff
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "persistence_schema_v1"
 CORPUS_PATH = FIXTURE_DIR / "corpus.json"
 MANIFEST_PATH = FIXTURE_DIR / "manifest.json"
+TRANSCRIPT_PATH = FIXTURE_DIR / "generation-transcript.json"
 
 
 def _config(home: Path) -> HarnessConfig:
@@ -77,15 +78,16 @@ def _inventory(root: Path) -> tuple[tuple[str, bytes], ...]:
 def test_frozen_fixture_hash_and_candidate_binding() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     assert manifest["schema_version"] == 1
-    assert manifest["mission_oracle"] == (
+    assert manifest["reference_oracle"]["path"] == (
         ".unrest/missions/mission-001/oracles/persistence-schema-v1/corpus.json"
     )
-    assert manifest["oracle_sha256"] == (
+    assert manifest["reference_oracle"]["sha256"] == (
         "01e3d203a2fe78fe90390febc7fbf6d6834f648f83a6411c59c48bc60a6b5d6e"
     )
     assert manifest["scenarios"] == [
         "planning",
         "running",
+        "running_validation",
         "attention",
         "quiescent",
         "done",
@@ -93,9 +95,44 @@ def test_frozen_fixture_hash_and_candidate_binding() -> None:
         "aborted",
     ]
     assert manifest["files"] == {
-        "corpus.json": hashlib.sha256(CORPUS_PATH.read_bytes()).hexdigest()
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(FIXTURE_DIR.iterdir())
+        if path.name != "manifest.json"
     }
-    assert manifest["oracle_sha256"] == manifest["files"]["corpus.json"]
+    assert manifest["handoff_provenance"] == {
+        "source_reference": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+        "source_tree": "35152a4a8c56198664f519691ec952ec9ca519f4",
+        "work_schema": "src/unrest_harness/models.py:WorkHandoff",
+        "validation_schema": "src/unrest_harness/models.py:ValidateHandoff",
+        "producer": "src/unrest_harness/server.py:create_worker_server/end_node",
+        "identity_member_at_source": "absent",
+        "generator": "tools/generate_legacy_handoff_fixtures.py",
+        "generator_sha256": hashlib.sha256(
+            (Path(__file__).parents[1] / "tools/generate_legacy_handoff_fixtures.py").read_bytes()
+        ).hexdigest(),
+        "generation_transcript": "generation-transcript.json",
+        "models_source_sha256": (
+            "812a62fd41170f1b4d7307cfd731b329f194165325d67f6d1a101061e73596e5"
+        ),
+        "server_source_sha256": (
+            "e21bcbebad4d551facdb59b3b968fa2cac7c3c5ae5bd4a990832a38acc6af9b8"
+        ),
+    }
+    transcript = json.loads(TRANSCRIPT_PATH.read_text(encoding="utf-8"))
+    assert transcript["reference"] == {
+        "commit": manifest["handoff_provenance"]["source_reference"],
+        "tree": manifest["handoff_provenance"]["source_tree"],
+        "tracked_status": "clean",
+        "models_path": "src/unrest_harness/models.py",
+        "producer_path": manifest["handoff_provenance"]["producer"],
+    }
+    assert transcript["outputs"] == {
+        filename: {
+            "bytes": (path := FIXTURE_DIR / filename).stat().st_size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+        for filename in ("legacy-work-handoff.json", "legacy-validation-handoff.json")
+    }
 
 
 @pytest.mark.parametrize(
@@ -103,6 +140,7 @@ def test_frozen_fixture_hash_and_candidate_binding() -> None:
     (
         ("planning", "mission_planning", None),
         ("running", "mission_running", "cleared"),
+        ("running_validation", "mission_running", "cleared"),
         ("attention", "attention_needed", None),
         ("quiescent", "mission_running", "cleared"),
         ("done", "done", None),
@@ -130,9 +168,10 @@ def test_fixed_reference_load_restart_resume_matrix_is_repeatable(
         result = controller.advance_project("fixture", max_steps=1)
         task_status = None
         if expected_task_status is not None:
+            task_id = "v1" if scenario == "running_validation" else "w1"
             task_status = controller.store.load_task_state(
                 "fixture", "mission-001"
-            ).status_of("w1")
+            ).status_of(task_id)
         outcomes.append(
             (
                 result.state.state,
@@ -154,6 +193,51 @@ def test_fixed_reference_load_restart_resume_matrix_is_repeatable(
         for run, (*_, inventory) in enumerate(outcomes)
     ]
     assert normalized[0] == normalized[1]
+
+
+@pytest.mark.parametrize(
+    ("scenario", "task_id", "fixture_name"),
+    (
+        ("running", "w1", "legacy-work-handoff.json"),
+        ("running_validation", "v1", "legacy-validation-handoff.json"),
+    ),
+    ids=("legacy-work", "legacy-validation"),
+)
+def test_absent_member_handoffs_bind_once_across_two_restarts_without_rewrite(
+    tmp_path: Path, scenario: str, task_id: str, fixture_name: str
+) -> None:
+    corpus = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
+    root = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    first = _materialize(root, workspace, corpus["scenarios"][scenario])
+    generation = "2026-08-10T12-00-00Z"
+    attempt_path = first.store.attempt_path(
+        "fixture", "mission-001", generation, task_id
+    )
+    fixture_bytes = (FIXTURE_DIR / fixture_name).read_bytes()
+    attempt_path.write_bytes(fixture_bytes)
+    before_bytes = attempt_path.read_bytes()
+    before_hash = hashlib.sha256(before_bytes).hexdigest()
+    assert "attempt_id" not in json.loads(before_bytes)
+
+    first_result = first.advance_project("fixture", max_steps=1)
+    after_first = _inventory(root)
+    second = ProjectController(
+        _config(root), first.dispatcher, first.terminal_reviewer
+    )
+    second_result = second.advance_project("fixture", max_steps=1)
+
+    assert first_result.state.state == "mission_running"
+    assert second_result.state.state == "mission_running"
+    assert second.store.load_task_state(
+        "fixture", "mission-001"
+    ).status_of(task_id) == "cleared"
+    assert len(second.dispatcher.calls) == 0  # type: ignore[attr-defined]
+    assert attempt_path.read_bytes() == before_bytes
+    assert attempt_path.read_bytes() == fixture_bytes
+    assert hashlib.sha256(attempt_path.read_bytes()).hexdigest() == before_hash
+    assert _inventory(root) == after_first
 
 
 @pytest.mark.parametrize(

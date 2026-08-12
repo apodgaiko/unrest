@@ -196,7 +196,8 @@ def _parse_spawn_ts(value: str | None) -> datetime | None:
     if value is None:
         return None
     match = re.fullmatch(
-        r"(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)(?:-\d{4})?",
+        r"(?P<timestamp>[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+        r"[0-9]{2}-[0-9]{2}-[0-9]{2}Z)(?:-[0-9]{4})?",
         value,
     )
     if match is None:
@@ -779,7 +780,9 @@ def _observation_from_capture(
         for item in attention
         if item.mission_id == selected_mission and item.node_id in failed_raw
     }
-    if any(task_id not in attended_failed_ids for task_id in failed_raw):
+    if isinstance(state, (MissionRunning, AttentionNeeded)) and any(
+        task_id not in attended_failed_ids for task_id in failed_raw
+    ):
         codes.add("failed_task_without_attention")
 
     if inconsistent:

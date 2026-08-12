@@ -11,10 +11,13 @@ import shlex
 import socket
 import subprocess
 import sys
+import threading
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, ClassVar, Coroutine, Literal
 
+from . import __version__
 from .assets import AssetLoader
 from .capability_policy import (
     SAFE_PROFILE,
@@ -25,9 +28,9 @@ from .capability_policy import (
     RoleName,
     StreamingCredentialRedactor,
     build_role_environment,
-    credential_values,
     enforce_environment_credential_provenance,
     enforce_persisted_environment_credential_provenance,
+    finite_credential_values,
     profile_environment,
     redact_credential_values,
     redact_sensitive_value,
@@ -47,6 +50,7 @@ from .storage import (
     ProjectStore,
     atomic_write_json,
     trusted_persistence_root,
+    validate_atomic_write_destination,
 )
 
 logger = logging.getLogger(__name__)
@@ -234,7 +238,7 @@ def _acp_subprocess_env(
 ) -> dict[str, str]:
     """Build the least-privilege environment handed to an ACP agent."""
     host = dict(os.environ if host_environment is None else host_environment)
-    credentials = credential_values(policy, host)
+    credentials = finite_credential_values(host)
     env = build_role_environment(
         policy,
         host,
@@ -469,8 +473,8 @@ class ACPClient:
         self._working_dir = working_dir
         self._policy = policy
         self._terminal_environment = terminal_environment
-        self._credentials: dict[str, str] = credential_values(
-            policy, terminal_environment
+        self._credentials: dict[str, str] = finite_credential_values(
+            terminal_environment
         )
         self._session_update_handler = session_update_handler
         self._request_id = 0
@@ -666,7 +670,8 @@ class ACPClient:
         command = params.get("command", "")
         if not isinstance(command, str) or not command:
             raise ValueError("terminal command must be a non-empty string")
-        args = params["args"] if "args" in params else []
+        raw_args = params.get("args")
+        args = [] if raw_args is None else raw_args
         if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
             raise ValueError("terminal args must be a list of strings")
         self._policy.authorize_command(command)
@@ -675,7 +680,8 @@ class ACPClient:
             access="cwd",
             working_dir=Path(self._working_dir),
         )
-        env_list = params["env"] if "env" in params else []
+        raw_env = params.get("env")
+        env_list = [] if raw_env is None else raw_env
         if not isinstance(env_list, list):
             raise ValueError("terminal env must be a list")
         requested_environment: dict[str, str] = {}
@@ -694,11 +700,8 @@ class ACPClient:
         for name in self._credentials:
             requested_environment.pop(name, None)
 
-        output_limit = (
-            params["outputByteLimit"]
-            if "outputByteLimit" in params
-            else 1024 * 1024
-        )
+        raw_output_limit = params.get("outputByteLimit")
+        output_limit = 1024 * 1024 if raw_output_limit is None else raw_output_limit
         if (
             not isinstance(output_limit, int)
             or isinstance(output_limit, bool)
@@ -871,11 +874,28 @@ class ACPNodeRunner:
     _mcp_drains: dict[
         int, tuple[asyncio.Task[str], asyncio.Task[str]]
     ] = field(default_factory=dict, init=False, repr=False)
-    _mcp_start_lock: asyncio.Lock = field(
-        default_factory=asyncio.Lock,
+    _mcp_start_locks: weakref.WeakKeyDictionary[
+        asyncio.AbstractEventLoop, asyncio.Lock
+    ] = field(
+        default_factory=weakref.WeakKeyDictionary,
         init=False,
         repr=False,
     )
+    _mcp_start_locks_guard: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+    )
+
+    def _mcp_start_lock(self) -> asyncio.Lock:
+        """Return the startup serializer owned by the current event loop."""
+        loop = asyncio.get_running_loop()
+        with self._mcp_start_locks_guard:
+            lock = self._mcp_start_locks.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._mcp_start_locks[loop] = lock
+            return lock
 
     def _start_mcp_drains(self, process: asyncio.subprocess.Process) -> None:
         if id(process) in self._mcp_drains:
@@ -989,7 +1009,7 @@ class ACPNodeRunner:
             "UNREST_NODE_TYPE": task.type,
             "UNREST_PROJECT_ID": project_id,
         }
-        credentials = credential_values(policy, os.environ)
+        credentials = finite_credential_values(os.environ)
         return _NodeRuntime(
             role=role,
             role_config=role_config,
@@ -1060,13 +1080,14 @@ class ACPNodeRunner:
             role_config.worker_provider,
             role_config.capability_profile,
             role=runtime.role,
+            allowed_ancestor=workspace_path,
         )
 
         # A free-port probe is only advisory after its socket closes. Keep the
         # probe, child spawn, and readiness confirmation atomic within this
         # runner so concurrent nodes cannot select and connect to one sibling's
         # MCP endpoint.
-        async with self._mcp_start_lock:
+        async with self._mcp_start_lock():
             mcp_port = self._find_free_port()
             mcp_process = await self._start_worker_mcp_server(
                 task=task,
@@ -1173,7 +1194,7 @@ class ACPNodeRunner:
                         },
                         "terminal": resolved_policy.process.enabled,
                     },
-                    "clientInfo": {"name": "unrest", "version": "0.1.0"},
+                    "clientInfo": {"name": "unrest", "version": __version__},
                 },
             )
             session_params: dict[str, Any] = {
@@ -1338,7 +1359,7 @@ class ACPNodeRunner:
             os.environ,
             include_credentials=False,
         )
-        secrets = credential_values(resolved_policy, os.environ)
+        secrets = finite_credential_values(os.environ)
 
         def redact(text: str) -> str:
             return redact_credential_values(text, secrets)
@@ -1350,6 +1371,7 @@ class ACPNodeRunner:
             role_config.worker_provider,
             role_config.capability_profile,
             role="terminal_reviewer",
+            allowed_ancestor=workspace_path,
         )
 
         mcp_port = self._find_free_port()
@@ -1436,7 +1458,7 @@ class ACPNodeRunner:
                         },
                         "terminal": resolved_policy.process.enabled,
                     },
-                    "clientInfo": {"name": "unrest", "version": "0.1.0"},
+                    "clientInfo": {"name": "unrest", "version": __version__},
                 },
             )
             session_params: dict[str, Any] = {
@@ -1524,7 +1546,7 @@ class ACPNodeRunner:
             "-m",
             "unrest_harness",
             "--mode",
-            "worker",
+            "validator" if task.type == "validate" else "worker",
             "--transport",
             "streamable-http",
             "--host",
@@ -1896,16 +1918,16 @@ class ACPNodeDispatcher:
             handoffs: list[NodeHandoff] = []
             for request, result in zip(requests, results, strict=True):
                 if isinstance(result, BaseException):
-                    cause = _truncate_text(
-                        redact_credential_values(
-                            f"{type(result).__name__}: {result}",
-                            self.store.inventory,
+                    summary = _truncate_text(
+                        "Dispatcher crashed before a handoff: "
+                        + redact_credential_values(
+                            f"{type(result).__name__}: {result}", self.store.inventory
                         ),
                         limit=2000,
                     )
                     handoff = self.runner._synthesize_missing_handoff(
                         request.task,
-                        summary=f"Dispatcher crashed before a handoff: {cause}",
+                        summary=summary,
                     )
                     self.store.save_attempt(
                         request.project_id,
@@ -1967,6 +1989,22 @@ def _ensure_claude_settings(
     claude_dir = settings_dir or workspace / ".claude"
     settings_path = claude_dir / "settings.json"
     marker_path = claude_dir / ".unrest-managed-settings.json"
+    creation_boundary = allowed_ancestor or workspace
+    try:
+        for target in (settings_path, marker_path):
+            validate_atomic_write_destination(
+                target,
+                trusted_root=claude_dir,
+                allowed_ancestor=creation_boundary,
+            )
+    except OSError as exc:
+        raise CapabilityPolicyError(
+            provider="claude",
+            role=role,
+            version=1,
+            capability="host-settings",
+            reason="Claude settings path is not a safe regular workspace path",
+        ) from exc
     existing: dict[str, Any]
     if settings_path.exists():
         try:
@@ -2048,16 +2086,27 @@ def _ensure_claude_settings(
             provider="claude",
             role=role,
             version=1,
-            capability=f"host-settings:permissions.defaultMode={current_mode}",
+            capability="host-settings:permissions.defaultMode",
             reason="unmanaged ambient permission mode is not safe",
+        )
+    if (
+        profile == UNSAFE_DEVELOPMENT_PROFILE
+        and settings_path.exists()
+        and not marker_managed
+        and not legacy_managed
+    ):
+        raise CapabilityPolicyError(
+            provider="claude",
+            role=role,
+            version=1,
+            capability="host-settings:permissions.defaultMode",
+            reason="unmanaged Claude settings cannot be changed for unrestricted mode",
         )
 
     should_manage = (
         not settings_path.exists()
-        or current_mode is None
         or marker_managed
         or legacy_managed
-        or profile == UNSAFE_DEVELOPMENT_PROFILE
     )
     if not should_manage:
         return
@@ -2066,7 +2115,7 @@ def _ensure_claude_settings(
         settings_path,
         existing,
         trusted_root=settings_path.parent,
-        allowed_ancestor=allowed_ancestor,
+        allowed_ancestor=creation_boundary,
     )
     atomic_write_json(
         marker_path,
@@ -2075,7 +2124,7 @@ def _ensure_claude_settings(
             "schema_version": 1,
         },
         trusted_root=marker_path.parent,
-        allowed_ancestor=allowed_ancestor,
+        allowed_ancestor=creation_boundary,
     )
 
 

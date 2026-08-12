@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import codecs
+import json
 import os
 import sys
 from pathlib import Path
 
 import pytest
 
-from unrest_harness.acp_runner import ACPNodeRunner
+from unrest_harness.acp_runner import ACPNodeRunner, _acp_subprocess_env
 from unrest_harness.assets import AssetLoader
 from unrest_harness.capability_policy import (
     FINITE_CREDENTIAL_NAMES,
@@ -18,6 +20,7 @@ from unrest_harness.capability_policy import (
     build_role_environment,
     credential_values,
     enforce_environment_credential_provenance,
+    finite_credential_values,
     load_capability_policy,
     redact_sensitive_value,
     resolve_role_capability,
@@ -29,6 +32,7 @@ from unrest_harness.models import Task, TaskList, TerminalReviewHandoff, WorkHan
 from unrest_harness.providers import PROVIDERS, provider_names_for_role
 from unrest_harness.storage import ProjectStore
 from unrest_harness.server import _to_payload
+from unrest_harness.task_validation import ValidationError
 
 
 def test_supported_provider_set_is_claude_and_codex_only() -> None:
@@ -74,24 +78,50 @@ def test_finite_inventory_and_adapter_mcp_terminal_projection(
     )
     host = {
         "PATH": "/bin",
-        "ANTHROPIC_API_KEY": "known-value",
+        **{
+            name: f"sentinel-{index}-{name.lower()}"
+            for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
+        },
         "UNDECLARED_SECRET": "unsafe-only-value",
+        **{
+            f"UNRELATED_ALIAS_{index}": f"sentinel-{index}-{name.lower()}"
+            for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
+        },
+        "TRANSFORMED_CONTROL": "wrapped::sentinel-0-anthropic_api_key",
     }
 
-    assert policy.environment.credentials == FINITE_CREDENTIAL_NAMES
+    expected_names = PROVIDERS[provider_name].credential_names
+    assert policy.environment.credentials == expected_names
     assert "*" not in policy.environment.credentials
     assert credential_values(policy, host) == {
-        "ANTHROPIC_API_KEY": "known-value"
+        name: host[name] for name in expected_names
     }
-    adapter = build_role_environment(policy, host, include_credentials=True)
+    adapter = _acp_subprocess_env(
+        PROVIDERS[provider_name],
+        policy=policy,
+        host_environment=host,
+    )
     child = build_role_environment(policy, host, include_credentials=False)
-    assert adapter["ANTHROPIC_API_KEY"] == "known-value"
-    assert "ANTHROPIC_API_KEY" not in child
+    for name in FINITE_CREDENTIAL_NAMES:
+        if name in expected_names:
+            assert adapter[name] == host[name]
+        else:
+            assert name not in adapter
+        assert name not in child
     if profile == SAFE_PROFILE:
         assert "UNDECLARED_SECRET" not in adapter
     else:
         assert adapter["UNDECLARED_SECRET"] == "unsafe-only-value"
         assert child["UNDECLARED_SECRET"] == "unsafe-only-value"
+        assert adapter["TRANSFORMED_CONTROL"] == "wrapped::sentinel-0-anthropic_api_key"
+        assert child["TRANSFORMED_CONTROL"] == "wrapped::sentinel-0-anthropic_api_key"
+        for index in range(len(FINITE_CREDENTIAL_NAMES)):
+            assert f"UNRELATED_ALIAS_{index}" not in adapter
+            assert f"UNRELATED_ALIAS_{index}" not in child
+
+    assert finite_credential_values(host) == {
+        name: host[name] for name in FINITE_CREDENTIAL_NAMES
+    }
 
 
 def test_exact_redaction_short_guard_structures_transforms_and_every_split() -> None:
@@ -128,20 +158,79 @@ def test_exact_redaction_short_guard_structures_transforms_and_every_split() -> 
     assert enforce_environment_credential_provenance(
         {"ALIAS": "long-known-value", "ORDINARY": "kept"}, inventory
     ) == {"ORDINARY": "kept"}
+    assert enforce_environment_credential_provenance(
+        {"ALIAS": "long-known-value", "ORDINARY": "kept"},
+        inventory,
+        inherit_all=True,
+    ) == {"ORDINARY": "kept"}
+
+
+def test_streaming_redactor_handles_empty_flush_overlap_collisions_and_unicode_bytes(
+) -> None:
+    inventory = {
+        "LONG": "credential-overlap",
+        "SHORT": "credential",
+        "TOKEN": "KEY",
+        "UNICODE": "密钥-credential",
+    }
+    source = "KEY MONKEY credential-overlap 密钥-credential ordinary"
+    expected = (
+        "<redacted:TOKEN> MONKEY <redacted:LONG> "
+        "<redacted:UNICODE> ordinary"
+    )
+    encoded = source.encode("utf-8")
+
+    for split in range(len(encoded) + 1):
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        redactor = StreamingCredentialRedactor(inventory)
+        output = redactor.feed("")
+        output += redactor.feed(decoder.decode(encoded[:split], final=False))
+        output += redactor.feed("")
+        output += redactor.feed(decoder.decode(encoded[split:], final=True))
+        output += redactor.finish()
+        assert output == expected
+
+    assert redact_sensitive_value(
+        {
+            "credential": "kept",
+            "prefix-credential-suffix": "credential-overlap",
+        },
+        inventory,
+    ) == {
+        "<redacted:SHORT>": "kept",
+        "prefix-<redacted:SHORT>-suffix": "<redacted:LONG>",
+    }
+    assert redact_sensitive_value(source, {}) == source
 
 
 def test_tool_error_message_and_details_use_explicit_inventory() -> None:
+    message_secret = "diagnostic-message-credential-61b4"
+    details_secret = "diagnostic-details-credential-90ce"
     payload = _to_payload(
         ToolError(
             code="invalid_request",
-            message="left diagnostic-known-value right",
+            message=f"left {message_secret} right",
+            details=[
+                ValidationError(
+                    "invalid_target",
+                    f"detail contains {details_secret}",
+                )
+            ],
         ),
-        inventory={"OPENAI_API_KEY": "diagnostic-known-value"},
+        inventory={
+            "OPENAI_API_KEY": message_secret,
+            "ANTHROPIC_API_KEY": details_secret,
+        },
     )
+    response_bytes = json.dumps(payload, sort_keys=True).encode()
+    assert message_secret.encode() not in response_bytes
+    assert details_secret.encode() not in response_bytes
     assert payload == {
         "error": "invalid_request",
         "message": "left <redacted:OPENAI_API_KEY> right",
-        "details": [],
+        "details": [
+            "invalid_target: detail contains <redacted:ANTHROPIC_API_KEY>"
+        ],
     }
 
 

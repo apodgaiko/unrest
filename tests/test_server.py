@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -31,6 +32,7 @@ from unrest_harness.models import (
 from unrest_harness.server import (
     create_orchestrator_server,
     create_terminal_reviewer_server,
+    create_validator_server,
     create_worker_server,
 )
 from unrest_harness.storage import ProjectStore
@@ -76,6 +78,11 @@ async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
         "inspect_project",
         "abort_project",
     }
+
+
+@pytest.mark.asyncio
+async def test_validator_tool_surface_matches_handoff_protocol() -> None:
+    assert await _tool_names(create_validator_server()) == {"end_node"}
 
 
 @pytest.mark.asyncio
@@ -187,6 +194,78 @@ def _install_startup_rejection_traps(
     monkeypatch.setattr(acp_runner, "ACPTerminalReviewer", dispatcher_trap)
 
 
+def _invalid_policy_fixture(tmp_path: Path, variant: str) -> Path:
+    source = Path(__file__).resolve().parents[1] / "src" / "unrest_harness" / "bundled"
+    root = tmp_path / "bundled"
+    shutil.copytree(source, root)
+    path = root / "policies" / "role-capabilities.v1.json"
+    if variant == "symlink-root":
+        linked = tmp_path / "linked"
+        linked.symlink_to(root, target_is_directory=True)
+        return linked
+    if variant == "dot-dot-root":
+        return root / "policies" / ".."
+    text = path.read_text(encoding="utf-8")
+    if variant == "duplicate-member":
+        text = text.replace(
+            '"schema_version": 1',
+            '"schema_version": 1,\n  "schema_version": 1',
+            1,
+        )
+    else:
+        document = json.loads(text)
+        if variant == "unknown-field":
+            document["unknown"] = True
+        elif variant == "unsupported-version":
+            document["schema_version"] = 2
+        else:
+            document["profiles"]["safe"]["worker"]["process"]["enabled"] = "true"
+        text = json.dumps(document, indent=2) + "\n"
+    path.write_text(text, encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize(
+    "mode", ("orchestrator", "worker", "validator", "terminal-reviewer")
+)
+@pytest.mark.parametrize(
+    "variant",
+    (
+        "unknown-field",
+        "unsupported-version",
+        "duplicate-member",
+        "malformed-type",
+        "symlink-root",
+        "dot-dot-root",
+    ),
+)
+def test_every_mode_rejects_malformed_injected_policy_before_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    variant: str,
+) -> None:
+    markers: list[str] = []
+    _install_startup_rejection_traps(monkeypatch, markers)
+    root = _invalid_policy_fixture(tmp_path, variant)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["unrest-server", "--mode", mode, "--transport", "stdio"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        server_module.main(bundled_dir=root)
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert captured.err == _STARTUP_REJECTION
+    assert "Traceback" not in captured.err
+    assert markers == []
+
+
 @pytest.mark.parametrize(
     "provider_selector",
     (
@@ -224,7 +303,9 @@ def test_orchestrator_rejects_every_unknown_provider_before_construction(
     assert markers == []
 
 
-@pytest.mark.parametrize("mode", ("orchestrator", "worker", "terminal-reviewer"))
+@pytest.mark.parametrize(
+    "mode", ("orchestrator", "worker", "validator", "terminal-reviewer")
+)
 @pytest.mark.parametrize(
     "invalid_environment",
     (
@@ -267,6 +348,47 @@ def test_every_mode_rejects_invalid_capability_startup_before_construction(
     assert markers == []
 
 
+@pytest.mark.parametrize(
+    "mode", ("orchestrator", "worker", "validator", "terminal-reviewer")
+)
+@pytest.mark.parametrize(
+    "variable",
+    (
+        "UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS",
+        "UNREST_WORKER_REASONING_EFFORT",
+        "UNREST_VALIDATOR_REASONING_EFFORT",
+        "UNREST_TERMINAL_REVIEWER_REASONING_EFFORT",
+    ),
+)
+def test_every_mode_bounds_value_configuration_rejection_before_construction(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    variable: str,
+) -> None:
+    markers: list[str] = []
+    _install_startup_rejection_traps(monkeypatch, markers)
+    sentinel = f"invalid-{mode}-{variable.lower()}-sentinel"
+    monkeypatch.setenv(variable, sentinel)
+    monkeypatch.setenv("OPENAI_API_KEY", sentinel)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["unrest-server", "--mode", mode, "--transport", "stdio"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        server_module.main()
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert captured.err == _STARTUP_REJECTION
+    assert sentinel not in captured.out + captured.err
+    assert "Traceback" not in captured.err
+    assert markers == []
+
+
 class _RunRecordingServer:
     def __init__(self, markers: list[str], mode: str) -> None:
         self._markers = markers
@@ -276,7 +398,9 @@ class _RunRecordingServer:
         self._markers.append(f"run:{self._mode}:{kwargs['transport']}")
 
 
-@pytest.mark.parametrize("mode", ("orchestrator", "worker", "terminal-reviewer"))
+@pytest.mark.parametrize(
+    "mode", ("orchestrator", "worker", "validator", "terminal-reviewer")
+)
 @pytest.mark.parametrize("profile", ("safe", UNSAFE_DEVELOPMENT_PROFILE))
 def test_every_mode_reaches_server_run_for_supported_profiles(
     monkeypatch: pytest.MonkeyPatch,
@@ -457,7 +581,7 @@ async def test_redacted_mcp_handoffs_survive_restart_and_mirroring(
     workspace: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    secret = "plum"
+    secret = "validate-handoff-credential-a17f"
     inventory = credential_source_values(
         {"DECLARED_AUTH": secret},
         declared_names=("DECLARED_AUTH",),
@@ -466,24 +590,34 @@ async def test_redacted_mcp_handoffs_survive_restart_and_mirroring(
     store.create_project("brief", workspace, project_id="p-secret")
     spawn_ts = "2026-08-03T00-00-00Z"
 
-    attempt_path = store.attempt_path(
-        "p-secret", "mission-001", spawn_ts, "w-secret"
-    )
+    attempt_path = store.attempt_path("p-secret", "mission-001", spawn_ts, "v-secret")
+    assert not attempt_path.exists()
     monkeypatch.setenv("UNREST_HANDOFF_PATH", str(attempt_path))
-    monkeypatch.setenv("UNREST_NODE_TYPE", "work")
-    monkeypatch.setenv("UNREST_NODE_ID", "w-secret")
+    monkeypatch.setenv("UNREST_NODE_TYPE", "validate")
+    monkeypatch.setenv("UNREST_NODE_ID", "v-secret")
     await create_worker_server(inventory).call_tool(
         "end_node",
-        {"done": True, "report": secret},
+        {
+            "done": True,
+            "report": f"validate result: {secret}",
+            "items": [{"item_id": "VAL-SINK-001", "passed": True}],
+            "passed": True,
+        },
     )
+
+    attempt_bytes = attempt_path.read_bytes()
+    assert secret.encode() not in attempt_bytes
+    assert b"validate result: <redacted:DECLARED_AUTH>" in attempt_bytes
 
     restarted = ProjectStore(config)
     handoff = restarted.read_attempt(
-        "p-secret", "mission-001", spawn_ts, "w-secret"
+        "p-secret", "mission-001", spawn_ts, "v-secret"
     )
-    assert isinstance(handoff, WorkHandoff)
+    assert isinstance(handoff, ValidateHandoff)
+    assert handoff.items == [ValidationItem(item_id="VAL-SINK-001", passed=True)]
+    assert handoff.passed is True
     restarted.save_attempt(
-        "p-secret", "mission-001", spawn_ts, "w-secret", handoff
+        "p-secret", "mission-001", spawn_ts, "v-secret", handoff
     )
 
     review_path = restarted.terminal_review_path(
@@ -505,7 +639,7 @@ async def test_redacted_mcp_handoffs_survive_restart_and_mirroring(
     persisted_paths = (
         attempt_path,
         restarted.attempt_report_path(
-            "p-secret", "mission-001", spawn_ts, "w-secret"
+            "p-secret", "mission-001", spawn_ts, "v-secret"
         ),
         review_path,
         restarted_again.terminal_review_report_path(

@@ -34,6 +34,13 @@ and terminal-reviewer roles. Unknown fields, versions, profiles, roles, roots,
 and unsupported provider combinations fail before child creation with bounded,
 value-free diagnostics.
 
+Configuration discovery parses and validates the canonical regular policy
+asset once. The resulting frozen model is shared by the store and every
+role-specialized configuration in that family; a separately discovered bundled
+root receives a separately parsed model. Non-canonical, symlinked, missing, and
+non-regular policy paths fail closed alongside duplicate JSON members and
+malformed field types.
+
 Every `unrest-server` mode resolves the capability profile, policy version, and
 unsafe-development opt-in before constructing FastMCP. Orchestrator startup
 additionally resolves all four provider roles before dispatcher or reviewer
@@ -62,12 +69,27 @@ The complete credential-name inventory is:
 - `OPENAI_API_KEY`
 - `ZAI_API_KEY`
 
-Only non-empty values selected through those declared names (or a caller's
-equally explicit declared-name list) become known credentials. Safe adapter
+Provider resolution intersects that catalog with the selected provider:
+Claude owns `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `GLM_API_KEY`, and
+`ZAI_API_KEY`; Codex owns `CODEX_API_KEY` and `OPENAI_API_KEY`. Each role is
+resolved independently, so heterogeneous worker and validator selections do
+not share credential authority. Even unrestricted adapter inheritance removes
+finite credentials belonging to an unselected provider, and terminal children
+remove the complete finite catalog.
+
+Provider-selected names alone grant adapter credential authority. Environment
+construction separately inventories every non-empty value under the six finite
+canonical names so unsafe wildcard forwarding cannot move an unselected value
+under an unrelated alias. Exact aliases are removed; selected-provider values
+remain available only through their authorized canonical pairs. Safe adapter
 environments contain only declared forwarded, credential, and internal names.
-Explicit unsafe adapter environments may inherit other ambient values, but the
-finite known set remains distinct. Terminal and ordinary MCP-server children
-exclude known credentials in both profiles.
+Terminal and ordinary MCP-server children exclude exact aliases of the complete
+finite inventory in both profiles.
+
+Unrest-owned persistence snapshots every non-empty value in the finite catalog
+without resolving dispatch providers. This conservative write-only protection
+keeps inspection and abort usable when persisted provider configuration is
+stale; it does not grant any adapter credential authority.
 
 The exact inventory is transported to worker and reviewer MCP servers through
 a bounded inherited file descriptor. Values never appear in argv or ordinary
@@ -107,12 +129,12 @@ mechanically discovered.
 
 ## Deliberate limits
 
-Lean Core does not infer credentials from arbitrary names, entropy, payload
-shape, nested-looking strings, or structured text. It does not parse or redact
-partial, encoded, hashed, encrypted, reordered, or otherwise transformed
-values. In particular, repeated base64 encoding of a known value remains
-visible while the exact value is removed. This is the accepted v0.2 security
-behavior cut.
+Lean Core does not infer environment credential aliases from substrings,
+arbitrary names, entropy, payload shape, nested-looking strings, or structured
+text. It does not parse or redact encoded, hashed, encrypted, reordered, or
+otherwise transformed values. In particular, wrapping or repeatedly base64
+encoding a known value remains outside environment alias inference while the
+exact value is removed. This is the accepted v0.2 security behavior cut.
 
 Static source graphs, AST effect analysis, semantic digests, model or sink
 assets, transform enumeration, mutation-completeness suites, and recursive
