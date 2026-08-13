@@ -26,6 +26,10 @@ UV_CACHE_DIR=<same-populated-offline-cache> uv build --offline --python 3.13 --n
 - CLI import median: 0.259181s → 0.194501s; candidate range 0.190629–0.197637s, passing the 0.20s ceiling.
 - Server import median: 0.611325s → 0.621812s; candidate range 0.603442–0.630230s, below 0.78s and neutral within observed spread.
 
+The machine report carries the complete, path-sorted per-file production and
+maintained inventories for both revisions, not merely their totals. Those four
+inventories contain 23/57 reference rows and 21/70 candidate rows.
+
 The reference wheel/sdist are 309,041/445,080 bytes with SHA-256
 `91848bf7…782ad`/`3977ed94…da41f`. The final candidate wheel/sdist are
 217,860/297,214 bytes with SHA-256 `36358758…41e5`/`077fd548…dc81`.
@@ -39,6 +43,25 @@ The single new frozen-candidate checkpoint passed 899 tests with 7 skipped in
 The exact candidate wheel then passed distribution verification and an
 unrelated-directory Python 3.13 install, all three help surfaces, imports, and
 the installed-wheel lifecycle check.
+
+## Reference-build provenance
+
+The original worker session is bound by SHA-256
+`28271aff67e8087c4c7de0d018bb82303e360aadb48c923d2d1c78cb777f9d6c`.
+Its narrowly extracted, checksum-bound tool events are retained privately in
+`mission evidence/W-FINAL-MEASUREMENT-REPORT-REMEDIATION-20260813T033603Z`;
+the extraction SHA-256 is
+`a32a3ad66ede07caf5918922f031580f6acc89cdb859170b2ce3d54606a246a2`.
+The machine report records exact event IDs and timestamps while replacing
+private cache and output locators with role labels.
+
+The same session observed CPython 3.13.12, uv 0.11.0, and macOS 26.6.1 arm64.
+Reference-build calls `call_UmAOsc64EAV5TqMpzjU0IBg7` and
+`call_TMx8VcrpHLxIpP3CjxKY9mAZ` exited 2 before backend execution because the
+probed offline caches lacked `setuptools>=77`. Accepted call
+`call_yDa4h6JplzildwE52F3uu8ov` used the populated offline cache and exited 0
+after producing both reference archives. The retained reference wheel's
+`WHEEL` metadata identifies the backend generator as `setuptools (84.0.0)`.
 
 ## Deviations
 

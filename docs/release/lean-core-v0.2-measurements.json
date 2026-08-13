@@ -72,6 +72,330 @@
         "name": "_check_normative_documents",
         "complexity": 39
       }
+    ],
+    "production_inventory": [
+      {
+        "lines": 3,
+        "path": "src/unrest_harness/__init__.py"
+      },
+      {
+        "lines": 4,
+        "path": "src/unrest_harness/__main__.py"
+      },
+      {
+        "lines": 1904,
+        "path": "src/unrest_harness/acp_runner.py"
+      },
+      {
+        "lines": 122,
+        "path": "src/unrest_harness/assets.py"
+      },
+      {
+        "lines": 198,
+        "path": "src/unrest_harness/attention.py"
+      },
+      {
+        "lines": 1213,
+        "path": "src/unrest_harness/baseline.py"
+      },
+      {
+        "lines": 7532,
+        "path": "src/unrest_harness/capability_policy.py"
+      },
+      {
+        "lines": 1319,
+        "path": "src/unrest_harness/cli.py"
+      },
+      {
+        "lines": 375,
+        "path": "src/unrest_harness/config.py"
+      },
+      {
+        "lines": 459,
+        "path": "src/unrest_harness/controller.py"
+      },
+      {
+        "lines": 899,
+        "path": "src/unrest_harness/coordinator.py"
+      },
+      {
+        "lines": 104,
+        "path": "src/unrest_harness/dispatcher.py"
+      },
+      {
+        "lines": 380,
+        "path": "src/unrest_harness/envelope.py"
+      },
+      {
+        "lines": 2627,
+        "path": "src/unrest_harness/governance.py"
+      },
+      {
+        "lines": 166,
+        "path": "src/unrest_harness/installed_wheel_check.py"
+      },
+      {
+        "lines": 488,
+        "path": "src/unrest_harness/models.py"
+      },
+      {
+        "lines": 219,
+        "path": "src/unrest_harness/providers.py"
+      },
+      {
+        "lines": 3909,
+        "path": "src/unrest_harness/repository_contract.py"
+      },
+      {
+        "lines": 1659,
+        "path": "src/unrest_harness/runtime_observability.py"
+      },
+      {
+        "lines": 549,
+        "path": "src/unrest_harness/server.py"
+      },
+      {
+        "lines": 1024,
+        "path": "src/unrest_harness/storage.py"
+      },
+      {
+        "lines": 260,
+        "path": "src/unrest_harness/task_list_patch.py"
+      },
+      {
+        "lines": 317,
+        "path": "src/unrest_harness/task_validation.py"
+      }
+    ],
+    "maintained_inventory": [
+      {
+        "lines": 3,
+        "path": "src/unrest_harness/__init__.py"
+      },
+      {
+        "lines": 4,
+        "path": "src/unrest_harness/__main__.py"
+      },
+      {
+        "lines": 1904,
+        "path": "src/unrest_harness/acp_runner.py"
+      },
+      {
+        "lines": 122,
+        "path": "src/unrest_harness/assets.py"
+      },
+      {
+        "lines": 198,
+        "path": "src/unrest_harness/attention.py"
+      },
+      {
+        "lines": 1213,
+        "path": "src/unrest_harness/baseline.py"
+      },
+      {
+        "lines": 7532,
+        "path": "src/unrest_harness/capability_policy.py"
+      },
+      {
+        "lines": 1319,
+        "path": "src/unrest_harness/cli.py"
+      },
+      {
+        "lines": 375,
+        "path": "src/unrest_harness/config.py"
+      },
+      {
+        "lines": 459,
+        "path": "src/unrest_harness/controller.py"
+      },
+      {
+        "lines": 899,
+        "path": "src/unrest_harness/coordinator.py"
+      },
+      {
+        "lines": 104,
+        "path": "src/unrest_harness/dispatcher.py"
+      },
+      {
+        "lines": 380,
+        "path": "src/unrest_harness/envelope.py"
+      },
+      {
+        "lines": 2627,
+        "path": "src/unrest_harness/governance.py"
+      },
+      {
+        "lines": 166,
+        "path": "src/unrest_harness/installed_wheel_check.py"
+      },
+      {
+        "lines": 488,
+        "path": "src/unrest_harness/models.py"
+      },
+      {
+        "lines": 219,
+        "path": "src/unrest_harness/providers.py"
+      },
+      {
+        "lines": 3909,
+        "path": "src/unrest_harness/repository_contract.py"
+      },
+      {
+        "lines": 1659,
+        "path": "src/unrest_harness/runtime_observability.py"
+      },
+      {
+        "lines": 549,
+        "path": "src/unrest_harness/server.py"
+      },
+      {
+        "lines": 1024,
+        "path": "src/unrest_harness/storage.py"
+      },
+      {
+        "lines": 260,
+        "path": "src/unrest_harness/task_list_patch.py"
+      },
+      {
+        "lines": 317,
+        "path": "src/unrest_harness/task_validation.py"
+      },
+      {
+        "lines": 0,
+        "path": "tests/__init__.py"
+      },
+      {
+        "lines": 36,
+        "path": "tests/conftest.py"
+      },
+      {
+        "lines": 60,
+        "path": "tests/fixtures/acp_terminal_emitter.py"
+      },
+      {
+        "lines": 118,
+        "path": "tests/mock_acp_agent.py"
+      },
+      {
+        "lines": 821,
+        "path": "tests/test_acp_runner.py"
+      },
+      {
+        "lines": 80,
+        "path": "tests/test_acp_sandbox.py"
+      },
+      {
+        "lines": 218,
+        "path": "tests/test_assets.py"
+      },
+      {
+        "lines": 477,
+        "path": "tests/test_baseline.py"
+      },
+      {
+        "lines": 1552,
+        "path": "tests/test_capability_closed_model.py"
+      },
+      {
+        "lines": 5978,
+        "path": "tests/test_capability_policy.py"
+      },
+      {
+        "lines": 1867,
+        "path": "tests/test_capability_source_graph.py"
+      },
+      {
+        "lines": 1430,
+        "path": "tests/test_cli.py"
+      },
+      {
+        "lines": 157,
+        "path": "tests/test_config.py"
+      },
+      {
+        "lines": 686,
+        "path": "tests/test_coordinator.py"
+      },
+      {
+        "lines": 823,
+        "path": "tests/test_coordinator_parallel.py"
+      },
+      {
+        "lines": 1029,
+        "path": "tests/test_documentation_contract.py"
+      },
+      {
+        "lines": 122,
+        "path": "tests/test_envelope.py"
+      },
+      {
+        "lines": 133,
+        "path": "tests/test_environment_isolation.py"
+      },
+      {
+        "lines": 1558,
+        "path": "tests/test_governance.py"
+      },
+      {
+        "lines": 13,
+        "path": "tests/test_installed_wheel_check.py"
+      },
+      {
+        "lines": 212,
+        "path": "tests/test_models.py"
+      },
+      {
+        "lines": 3160,
+        "path": "tests/test_repository_contract.py"
+      },
+      {
+        "lines": 339,
+        "path": "tests/test_runnable_selection.py"
+      },
+      {
+        "lines": 2311,
+        "path": "tests/test_runtime_observability.py"
+      },
+      {
+        "lines": 509,
+        "path": "tests/test_server.py"
+      },
+      {
+        "lines": 188,
+        "path": "tests/test_smoke_parallel_acp.py"
+      },
+      {
+        "lines": 404,
+        "path": "tests/test_smoke_real_acp.py"
+      },
+      {
+        "lines": 107,
+        "path": "tests/test_smoke_zai_claude.py"
+      },
+      {
+        "lines": 695,
+        "path": "tests/test_storage.py"
+      },
+      {
+        "lines": 337,
+        "path": "tests/test_supersede_chain.py"
+      },
+      {
+        "lines": 210,
+        "path": "tests/test_task_list_patch.py"
+      },
+      {
+        "lines": 214,
+        "path": "tests/test_task_validation.py"
+      },
+      {
+        "lines": 622,
+        "path": "tests/test_terminal_review.py"
+      },
+      {
+        "lines": 155,
+        "path": "tools/check_distribution.py"
+      }
     ]
   },
   "candidate": {
@@ -141,6 +465,374 @@
         "line": 1047,
         "name": "run_node",
         "complexity": 20
+      }
+    ],
+    "production_inventory": [
+      {
+        "lines": 3,
+        "path": "src/unrest_harness/__init__.py"
+      },
+      {
+        "lines": 4,
+        "path": "src/unrest_harness/__main__.py"
+      },
+      {
+        "lines": 2139,
+        "path": "src/unrest_harness/acp_runner.py"
+      },
+      {
+        "lines": 122,
+        "path": "src/unrest_harness/assets.py"
+      },
+      {
+        "lines": 198,
+        "path": "src/unrest_harness/attention.py"
+      },
+      {
+        "lines": 1070,
+        "path": "src/unrest_harness/capability_policy.py"
+      },
+      {
+        "lines": 1598,
+        "path": "src/unrest_harness/cli.py"
+      },
+      {
+        "lines": 454,
+        "path": "src/unrest_harness/config.py"
+      },
+      {
+        "lines": 475,
+        "path": "src/unrest_harness/controller.py"
+      },
+      {
+        "lines": 982,
+        "path": "src/unrest_harness/coordinator.py"
+      },
+      {
+        "lines": 107,
+        "path": "src/unrest_harness/dispatcher.py"
+      },
+      {
+        "lines": 380,
+        "path": "src/unrest_harness/envelope.py"
+      },
+      {
+        "lines": 166,
+        "path": "src/unrest_harness/installed_wheel_check.py"
+      },
+      {
+        "lines": 494,
+        "path": "src/unrest_harness/models.py"
+      },
+      {
+        "lines": 215,
+        "path": "src/unrest_harness/providers.py"
+      },
+      {
+        "lines": 553,
+        "path": "src/unrest_harness/repository_contract.py"
+      },
+      {
+        "lines": 1024,
+        "path": "src/unrest_harness/runtime_observability.py"
+      },
+      {
+        "lines": 615,
+        "path": "src/unrest_harness/server.py"
+      },
+      {
+        "lines": 1356,
+        "path": "src/unrest_harness/storage.py"
+      },
+      {
+        "lines": 260,
+        "path": "src/unrest_harness/task_list_patch.py"
+      },
+      {
+        "lines": 317,
+        "path": "src/unrest_harness/task_validation.py"
+      }
+    ],
+    "maintained_inventory": [
+      {
+        "lines": 3,
+        "path": "src/unrest_harness/__init__.py"
+      },
+      {
+        "lines": 4,
+        "path": "src/unrest_harness/__main__.py"
+      },
+      {
+        "lines": 2139,
+        "path": "src/unrest_harness/acp_runner.py"
+      },
+      {
+        "lines": 122,
+        "path": "src/unrest_harness/assets.py"
+      },
+      {
+        "lines": 198,
+        "path": "src/unrest_harness/attention.py"
+      },
+      {
+        "lines": 1070,
+        "path": "src/unrest_harness/capability_policy.py"
+      },
+      {
+        "lines": 1598,
+        "path": "src/unrest_harness/cli.py"
+      },
+      {
+        "lines": 454,
+        "path": "src/unrest_harness/config.py"
+      },
+      {
+        "lines": 475,
+        "path": "src/unrest_harness/controller.py"
+      },
+      {
+        "lines": 982,
+        "path": "src/unrest_harness/coordinator.py"
+      },
+      {
+        "lines": 107,
+        "path": "src/unrest_harness/dispatcher.py"
+      },
+      {
+        "lines": 380,
+        "path": "src/unrest_harness/envelope.py"
+      },
+      {
+        "lines": 166,
+        "path": "src/unrest_harness/installed_wheel_check.py"
+      },
+      {
+        "lines": 494,
+        "path": "src/unrest_harness/models.py"
+      },
+      {
+        "lines": 215,
+        "path": "src/unrest_harness/providers.py"
+      },
+      {
+        "lines": 553,
+        "path": "src/unrest_harness/repository_contract.py"
+      },
+      {
+        "lines": 1024,
+        "path": "src/unrest_harness/runtime_observability.py"
+      },
+      {
+        "lines": 615,
+        "path": "src/unrest_harness/server.py"
+      },
+      {
+        "lines": 1356,
+        "path": "src/unrest_harness/storage.py"
+      },
+      {
+        "lines": 260,
+        "path": "src/unrest_harness/task_list_patch.py"
+      },
+      {
+        "lines": 317,
+        "path": "src/unrest_harness/task_validation.py"
+      },
+      {
+        "lines": 0,
+        "path": "tests/__init__.py"
+      },
+      {
+        "lines": 36,
+        "path": "tests/conftest.py"
+      },
+      {
+        "lines": 396,
+        "path": "tests/contracts/conftest.py"
+      },
+      {
+        "lines": 166,
+        "path": "tests/contracts/test_lean_evidence_crosswalk.py"
+      },
+      {
+        "lines": 101,
+        "path": "tests/contracts/test_lean_lifecycle.py"
+      },
+      {
+        "lines": 221,
+        "path": "tests/contracts/test_lean_package.py"
+      },
+      {
+        "lines": 160,
+        "path": "tests/contracts/test_lean_persistence.py"
+      },
+      {
+        "lines": 409,
+        "path": "tests/contracts/test_lean_provider_security.py"
+      },
+      {
+        "lines": 83,
+        "path": "tests/contracts/test_lean_repository.py"
+      },
+      {
+        "lines": 44,
+        "path": "tests/contracts/test_lean_scheduling.py"
+      },
+      {
+        "lines": 58,
+        "path": "tests/contracts/test_lean_status.py"
+      },
+      {
+        "lines": 146,
+        "path": "tests/contracts/test_retained_boundaries.py"
+      },
+      {
+        "lines": 60,
+        "path": "tests/fixtures/acp_terminal_emitter.py"
+      },
+      {
+        "lines": 121,
+        "path": "tests/mock_acp_agent.py"
+      },
+      {
+        "lines": 1361,
+        "path": "tests/test_acp_runner.py"
+      },
+      {
+        "lines": 80,
+        "path": "tests/test_acp_sandbox.py"
+      },
+      {
+        "lines": 218,
+        "path": "tests/test_assets.py"
+      },
+      {
+        "lines": 664,
+        "path": "tests/test_capability_policy.py"
+      },
+      {
+        "lines": 434,
+        "path": "tests/test_claude_settings_callers.py"
+      },
+      {
+        "lines": 1784,
+        "path": "tests/test_cli.py"
+      },
+      {
+        "lines": 288,
+        "path": "tests/test_config.py"
+      },
+      {
+        "lines": 1086,
+        "path": "tests/test_coordinator.py"
+      },
+      {
+        "lines": 902,
+        "path": "tests/test_coordinator_parallel.py"
+      },
+      {
+        "lines": 284,
+        "path": "tests/test_documentation_contract.py"
+      },
+      {
+        "lines": 122,
+        "path": "tests/test_envelope.py"
+      },
+      {
+        "lines": 133,
+        "path": "tests/test_environment_isolation.py"
+      },
+      {
+        "lines": 13,
+        "path": "tests/test_installed_wheel_check.py"
+      },
+      {
+        "lines": 346,
+        "path": "tests/test_lean_provider_security_runtime.py"
+      },
+      {
+        "lines": 212,
+        "path": "tests/test_models.py"
+      },
+      {
+        "lines": 268,
+        "path": "tests/test_persistence_schema_v1.py"
+      },
+      {
+        "lines": 111,
+        "path": "tests/test_release_binding.py"
+      },
+      {
+        "lines": 37,
+        "path": "tests/test_release_identity.py"
+      },
+      {
+        "lines": 582,
+        "path": "tests/test_repository_contract.py"
+      },
+      {
+        "lines": 339,
+        "path": "tests/test_runnable_selection.py"
+      },
+      {
+        "lines": 563,
+        "path": "tests/test_runtime_observability.py"
+      },
+      {
+        "lines": 829,
+        "path": "tests/test_server.py"
+      },
+      {
+        "lines": 188,
+        "path": "tests/test_smoke_parallel_acp.py"
+      },
+      {
+        "lines": 404,
+        "path": "tests/test_smoke_real_acp.py"
+      },
+      {
+        "lines": 107,
+        "path": "tests/test_smoke_zai_claude.py"
+      },
+      {
+        "lines": 1207,
+        "path": "tests/test_storage.py"
+      },
+      {
+        "lines": 337,
+        "path": "tests/test_supersede_chain.py"
+      },
+      {
+        "lines": 210,
+        "path": "tests/test_task_list_patch.py"
+      },
+      {
+        "lines": 214,
+        "path": "tests/test_task_validation.py"
+      },
+      {
+        "lines": 622,
+        "path": "tests/test_terminal_review.py"
+      },
+      {
+        "lines": 187,
+        "path": "tools/check_distribution.py"
+      },
+      {
+        "lines": 359,
+        "path": "tools/check_init_output_stability.py"
+      },
+      {
+        "lines": 141,
+        "path": "tools/generate_legacy_handoff_fixtures.py"
+      },
+      {
+        "lines": 119,
+        "path": "tools/release_binding.py"
+      },
+      {
+        "lines": 130,
+        "path": "tools/release_measurements.py"
       }
     ]
   },
@@ -694,5 +1386,57 @@
     "c901": "pass: candidate maximum 30 <= 30",
     "cli_import": "pass: candidate median 0.194501s <= 0.20s",
     "server_import": "pass: candidate median 0.621812s <= 0.78s; median difference versus fresh reference is inside the combined observed range and classified neutral"
+  },
+  "reference_build_provenance": {
+    "source_session_sha256": "28271aff67e8087c4c7de0d018bb82303e360aadb48c923d2d1c78cb777f9d6c",
+    "raw_evidence_packet": "mission evidence/W-FINAL-MEASUREMENT-REPORT-REMEDIATION-20260813T033603Z",
+    "raw_events_file": "raw-events.jsonl",
+    "raw_events_sha256": "a32a3ad66ede07caf5918922f031580f6acc89cdb859170b2ce3d54606a246a2",
+    "environment_observation": {
+      "call_id": "call_xzj3sjw55QdWPrZNkGaaiTsq",
+      "call_timestamp": "2026-08-13T02:08:09.171Z",
+      "output_timestamp": "2026-08-13T02:08:11.457Z",
+      "python": "Python 3.13.12",
+      "uv": "uv 0.11.0 (1f31f0e9f 2026-03-23 aarch64-apple-darwin)",
+      "platform": "macOS 26.6.1 arm64"
+    },
+    "build_attempts": [
+      {
+        "sequence": 1,
+        "status": "failed-before-backend",
+        "call_id": "call_UmAOsc64EAV5TqMpzjU0IBg7",
+        "call_timestamp": "2026-08-13T02:10:38.580Z",
+        "output_timestamp": "2026-08-13T02:10:40.252Z",
+        "command": "UV_CACHE_DIR=<first-probed-offline-cache> UV_OFFLINE=true uv build --out-dir <reference-output>",
+        "exit_code": 2,
+        "result": "setuptools>=77 absent from the offline cache; backend did not run"
+      },
+      {
+        "sequence": 2,
+        "status": "failed-before-backend",
+        "call_id": "call_TMx8VcrpHLxIpP3CjxKY9mAZ",
+        "call_timestamp": "2026-08-13T02:11:20.938Z",
+        "output_timestamp": "2026-08-13T02:11:22.654Z",
+        "command": "UV_CACHE_DIR=<second-probed-offline-cache> uv build --offline --python 3.13 --no-progress --no-create-gitignore --out-dir <reference-output> .",
+        "exit_code": 2,
+        "result": "setuptools>=77 absent from the offline cache; backend did not run"
+      },
+      {
+        "sequence": 3,
+        "status": "accepted",
+        "call_id": "call_yDa4h6JplzildwE52F3uu8ov",
+        "call_timestamp": "2026-08-13T02:11:29.460Z",
+        "output_timestamp": "2026-08-13T02:11:32.712Z",
+        "command": "UV_CACHE_DIR=<shared-populated-offline-cache> uv build --offline --python 3.13 --no-progress --no-create-gitignore --out-dir <reference-output> .",
+        "exit_code": 0,
+        "result": "reference sdist and wheel built successfully"
+      }
+    ],
+    "backend": {
+      "requirement": "setuptools>=77",
+      "accepted_wheel_generator": "setuptools (84.0.0)",
+      "evidence": "accepted call output plus retained reference wheel WHEEL metadata"
+    },
+    "scope_note": "The committed summary normalizes cache and output locators; the checksum-bound private event extraction preserves exact original commands and outputs."
   }
 }
