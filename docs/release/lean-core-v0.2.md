@@ -1,6 +1,6 @@
 # Lean Core v0.2 immutable release carrier
 
-This carrier binds the final local Unrest Harness `0.2.0` candidate after the
+This carrier binds the current local Unrest Harness `0.2.0` rollback authority after the
 validator MCP identity correction and external-publication contract test. It
 is an immutable procedure and local checkpoint record. The mutable PR #6 body,
 not this committed file, owns the current publication commit, run, artifact,
@@ -38,15 +38,15 @@ superseded after the carrier binding regression test changed the bound test
 surface. Both `24b85e4a…` and `e4c8f246…` remain chronology, not current
 candidate identities.
 
-The final `35e21ed3…` candidate had three distinct checkpoint invocations.
+The superseded `35e21ed3…` candidate had three distinct checkpoint invocations.
 Invocation 1 was the environment-limited 880-pass/14-failure attempt in the
 restricted sandbox (171.68 seconds, exit 1). Invocation 2 passed 894 tests with
 7 skips in 174.83 seconds, exit 0, on the identical binding, but it is
-historical, superseded, and unretained. Invocation 3 is the retained final
-checkpoint described below. Each invocation had zero within-invocation reruns;
+historical, superseded, and unretained. Invocation 3 is also historical and
+superseded, though its evidence remains retained below. Each invocation had zero within-invocation reruns;
 three candidate checkpoint invocations is therefore not a rerun count of zero.
 
-## Final local candidate binding
+## Current rollback-authority binding
 
 - Fixed comparison base: commit
   `93c59e4378407f3d7cfb918cf86c8bdc81daa141`, tree
@@ -63,7 +63,7 @@ The former 105-file filesystem-only digest
 is historical and superseded: it included ignored/generated egg-info and could
 not be reproduced from a publication commit archive.
 
-The binding was measured before and after the retained final Python 3.13
+The binding was measured before and after the authoritative Python 3.13
 source-suite invocation and after package verification. Carrier-only edits do
 not enter this surface.
 
@@ -78,9 +78,9 @@ and a 297,214-byte sdist at
 The complete accepted before/after report is
 [`lean-core-v0.2-measurements.md`](lean-core-v0.2-measurements.md).
 
-## Final local checkpoint and archives
+## Superseded checkpoint and archive chronology
 
-The retained loopback-authorized final checkpoint (candidate invocation 3 of 3)
+The evidence-retained but superseded loopback-authorized checkpoint (candidate invocation 3 of 3)
 ran on CPython 3.13.12 with uv 0.11.0 on macOS arm64 from
 `2026-08-12T23:43:25.569367Z` through `2026-08-12T23:46:20.475041Z`:
 
@@ -96,7 +96,7 @@ Its durable packet is
 the packet's `SHA256SUMS` ledger has SHA-256
 `14788e338d12d1cf4898b2eac8ce1d453bb8cc39e1698cf44f7b48b152f39bb5`.
 
-The final single isolated local build is durably retained in
+The superseded single isolated local build is durably retained as chronology in
 `mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z`:
 
 - `unrest_harness-0.2.0-py3-none-any.whl` — 217,860 bytes — SHA-256
@@ -142,6 +142,16 @@ exact-head validator update PR #6 with the commit, run, artifact, checksum, and
 ref-equality evidence; branch name or recency alone is never release evidence. The
 [rollback carrier](lean-core-v0.2-rollback.md) gives the portable retrieval
 flow.
+
+## Attached review reconciliation
+
+Both independent reviews are identified by source SHA-256 and reconciled
+claim-by-claim in the
+[`attached-review-claims` ledger](lean-core-v0.2-attached-review-claims.json),
+linked from the [review audit](lean-core-v0.2-review-audit.json). Findings that
+were true at a review head are separated from final-head facts; accepted cuts,
+merge conditions and superseded quantitative context are explicit rather than
+collapsed into an aggregate “fixed” label.
 
 ## Scope and known limits
 

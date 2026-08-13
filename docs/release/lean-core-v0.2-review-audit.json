@@ -1,6 +1,14 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "audit_date": "2026-08-13",
+  "attached_review_reconciliation": {
+    "ledger": "docs/release/lean-core-v0.2-attached-review-claims.json",
+    "source_sha256": {
+      "review_one": "afade56fa7693bd0b9c841a8e3c6f7c526cf765bc484f57c430d6ff514ca9e4b",
+      "review_two": "601d8cbe55039a25853ec10eb53560144f95787ee907bd394e6f369857766ef6"
+    },
+    "rule": "Every review claim is dispositioned individually; review-head facts are not final-head authority."
+  },
   "candidate_binding": {
     "files": 102,
     "sha256": "4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199",
@@ -18,7 +26,7 @@
     "status": "historical-superseded; included ignored/generated egg-info and was not commit-reproducible"
   },
   "commit_reproducible_finalization": {
-    "status": "retained-final",
+    "status": "final-current-rollback-authority",
     "binding": {"files": 102, "sha256": "4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199"},
     "checkpoint": {"result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "invocations": 1, "reruns": 0, "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
     "archives": {"wheel": {"bytes": 217860, "sha256": "3635875804fbe512ddbde3b538acad5ddc4ef2f6da854639b48f91bbf60641e5"}, "sdist": {"bytes": 297214, "sha256": "077fd5486867352c078f737e17f0d36e684d24815df18252610c31883f82dc81"}},
@@ -29,7 +37,7 @@
     "repository_head_at_checkpoint": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",
     "head_is_content_identity": false,
     "publication_status": "external-evidence-required; PR #6 body owns the mutable exact-head snapshot",
-    "retained_final_checkpoint": {
+    "superseded_retained_checkpoint": {
       "result": "894 passed, 7 skipped, 0 failed in 174.05s; exit 0",
       "started_utc": "2026-08-12T23:43:25.569367Z",
       "ended_utc": "2026-08-12T23:46:20.475041Z",
@@ -37,6 +45,7 @@
       "candidate_checkpoint_invocations_total": 3,
       "per_invocation_reruns": 0,
       "packet_identity": "mission evidence/W-CHECKPOINT-EVIDENCE-RETENTION-20260813T0342Z",
+      "authority": "historical-superseded; retained as chronology only",
       "status_file": "status.json",
       "status_sha256": "63f279ba8ad2f3b02f6739488956cdad3a021e6c3d3dbf0e568478e95fff9649",
       "transcript_file": "stdout.raw",
@@ -47,7 +56,7 @@
     "candidate_checkpoint_chronology": [
       "invocation 1 of 3: environment-limited and superseded; 880 passed, 7 skipped, 14 failed in 171.68s; exit 1; 0 per-invocation reruns",
       "invocation 2 of 3: historical, superseded, and unretained on the identical binding; 894 passed, 7 skipped, 0 failed in 174.83s; exit 0; 0 per-invocation reruns",
-      "invocation 3 of 3: retained final; 894 passed, 7 skipped, 0 failed in 174.05s; exit 0; 0 per-invocation reruns"
+      "invocation 3 of 3: historical, superseded, and evidence-retained only; 894 passed, 7 skipped, 0 failed in 174.05s; exit 0; 0 per-invocation reruns"
     ],
     "superseded_environment_attempt": "880 passed, 7 skipped, and 14 restricted-sandbox loopback setup failures",
     "superseded_validator_identity_binding": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e",
@@ -56,7 +65,7 @@
     "superseded_checkpoint_head_role": "6cf713c was only the checked-out commit for a dirty-worktree checkpoint"
   },
   "archive_evidence": {
-    "status": "retained-final",
+    "status": "historical-superseded; evidence-retained chronology only",
     "packet_identity": "mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z",
     "wheel": {"bytes": 217860, "sha256": "778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a"},
     "sdist": {"bytes": 295954, "sha256": "0f73d258264f446969b864b0df4828e6fd2f00bd17fdc08accc64648a1c4ce51"},

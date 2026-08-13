@@ -35,15 +35,15 @@ The preceding `24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e`
 binding and its publication evidence, followed by the
 `e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4`
 binding, 894-pass checkpoint, and local archives, are historical and
-superseded. The current loopback-authorized checkpoint passed 894 tests with 7
-skips in 174.05 seconds, exit 0, and is the retained final checkpoint.
+superseded. The evidence-retained loopback-authorized checkpoint passed 894 tests with 7
+skips in 174.05 seconds, exit 0, but is historical chronology only.
 
 The `35e21ed3…` candidate had three distinct checkpoint invocations: (1) the
 environment-limited 880-pass/14-failure restricted-sandbox attempt in 171.68
 seconds, exit 1; (2) the successful 894-pass/7-skip invocation in 174.83
 seconds, exit 0, which is historical, superseded, and unretained despite using
 the identical binding; and (3) the retained 894-pass/7-skip invocation in
-174.05 seconds, exit 0. Every invocation recorded zero within-invocation
+174.05 seconds, exit 0, retained as evidence but superseded as authority. Every invocation recorded zero within-invocation
 reruns; do not mistake that field for the candidate-level invocation count of
 three.
 
@@ -55,7 +55,7 @@ The retained invocation ran from `2026-08-12T23:43:25.569367Z` through
 and the packet's `SHA256SUMS` ledger has SHA-256
 `14788e338d12d1cf4898b2eac8ce1d453bb8cc39e1698cf44f7b48b152f39bb5`.
 
-The final local archive bytes are retained in
+The superseded local archive bytes are retained as chronology in
 `mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z`: wheel
 `778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a`
 (217,860 bytes) and sdist
@@ -100,7 +100,7 @@ uv pip install --force-reinstall --no-deps \
 ```
 
 Both rows must report `OK`. A rebuild is not retrieval. Neither the historical
-superseded hashes nor the final local build hashes substitute for the selected
+superseded hashes nor any local build hashes substitute for the selected
 exact-head CI run's `SHA256SUMS`.
 
 ## Focused verification

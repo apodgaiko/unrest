@@ -17,7 +17,7 @@
     "status": "historical-superseded; included ignored/generated egg-info and was not commit-reproducible"
   },
   "commit_reproducible_finalization": {
-    "status": "retained-final",
+    "status": "final-current-rollback-authority",
     "checkpoint": {"result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "invocations": 1, "reruns": 0, "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
     "archives": {"wheel": {"bytes": 217860, "sha256": "3635875804fbe512ddbde3b538acad5ddc4ef2f6da854639b48f91bbf60641e5"}, "sdist": {"bytes": 297214, "sha256": "077fd5486867352c078f737e17f0d36e684d24815df18252610c31883f82dc81"}},
     "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
@@ -36,9 +36,9 @@
     "status": "historical-only after validator MCP identity product change"
   },
   "checkpoint": {
-    "status": "retained-final",
+    "status": "historical-superseded-evidence-retained",
     "result": "894 passed, 7 skipped, 0 failed in 174.05s; exit 0",
-    "authority": "durable retained loopback-authorized worker checkpoint packet",
+    "authority": "durable evidence packet retained as superseded chronology only",
     "started_utc": "2026-08-12T23:43:25.569367Z",
     "ended_utc": "2026-08-12T23:46:20.475041Z",
     "candidate_checkpoint_invocation": 3,
@@ -59,11 +59,11 @@
     "invocations": [
       {"sequence": 1, "status": "environment-limited-superseded", "result": "880 passed, 7 skipped, 14 failed in 171.68s; exit 1", "per_invocation_reruns": 0, "retained": false},
       {"sequence": 2, "status": "historical-superseded-unretained", "result": "894 passed, 7 skipped, 0 failed in 174.83s; exit 0", "per_invocation_reruns": 0, "retained": false, "binding_relation": "identical candidate binding"},
-      {"sequence": 3, "status": "retained-final", "result": "894 passed, 7 skipped, 0 failed in 174.05s; exit 0", "per_invocation_reruns": 0, "retained": true}
+      {"sequence": 3, "status": "historical-superseded-evidence-retained", "result": "894 passed, 7 skipped, 0 failed in 174.05s; exit 0", "per_invocation_reruns": 0, "retained": true}
     ]
   },
   "archive_evidence": {
-    "status": "retained-final",
+    "status": "historical-superseded-evidence-retained",
     "packet_identity": "mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z",
     "wheel": {"bytes": 217860, "sha256": "778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a"},
     "sdist": {"bytes": 295954, "sha256": "0f73d258264f446969b864b0df4828e6fd2f00bd17fdc08accc64648a1c4ce51"},

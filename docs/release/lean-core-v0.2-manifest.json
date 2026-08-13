@@ -2,7 +2,7 @@
   "schema_version": 2,
   "release": "lean-core-v0.2",
   "version": "0.2.0",
-  "status": "final-local-candidate-external-evidence-required",
+  "status": "final-current-local-rollback-authority; external-exact-head-evidence-required",
   "base": {
     "commit": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
     "tree": "35152a4a8c56198664f519691ec952ec9ca519f4"
@@ -29,7 +29,7 @@
     }
   },
   "commit_reproducible_finalization": {
-    "status": "retained-final",
+    "status": "final-current-rollback-authority",
     "predecessor_commit": "c4394c89d85ae912bea4414a12ea4546753e89da",
     "binding": {"files": 102, "sha256": "4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199"},
     "checkpoint": {"command": "env -u CODEX_PATH uv run pytest -q", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "invocations": 1, "reruns": 0, "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
@@ -98,7 +98,7 @@
       },
       {
         "sequence": 3,
-        "status": "retained-final",
+        "status": "historical-superseded-evidence-retained",
         "pytest_seconds": 174.05,
         "passed": 894,
         "skipped": 7,
@@ -112,7 +112,7 @@
   },
   "artifacts": {
     "status": "historical-superseded-by-commit-reproducible-finalization",
-    "scope": "single final local isolated build from final_product_package_test; exact bytes retained in mission evidence; CI hashes are run-local",
+    "scope": "historical superseded local build from the former filesystem binding; exact bytes remain evidence only; CI hashes are run-local",
     "evidence_packet": "mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z",
     "hash_ledger_file": "SHA256SUMS",
     "reproducible_across_builds": false,
