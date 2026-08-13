@@ -125,10 +125,15 @@ uv build
 uv run python tools/check_distribution.py dist
 ```
 
-For packaging changes, install the wheel and run `unrest-server --help` plus
-`python -m unrest_harness --help` from an unrelated directory. These are
-focused package checks; the full source suite runs only at the frozen-candidate
-release checkpoint and is not repeated after build.
+The distribution checker must prove complete archive membership and bytes,
+safely extract the sdist, and execute all 14 protected
+`tests/test_persistence_schema_v1.py` cases from that extracted tree. Its
+package module, test module, cwd, and effective `sys.path` provenance must
+exclude the checkout. For packaging changes, also install the wheel and run
+`unrest-server --help` plus `python -m unrest_harness --help` from an unrelated
+directory. These are post-build package checks; the full source suite runs
+exactly once at the frozen-candidate release checkpoint and is not repeated
+after build.
 
 ## Related decisions
 

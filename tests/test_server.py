@@ -285,17 +285,18 @@ def test_every_mode_rejects_malformed_injected_policy_before_construction(
 
 
 @pytest.mark.parametrize(
-    "provider_selector",
+    ("mode", "provider_selector"),
     (
-        "UNREST_ORCHESTRATOR_PROVIDER",
-        "UNREST_WORKER_PROVIDER",
-        "UNREST_VALIDATOR_PROVIDER",
-        "UNREST_TERMINAL_REVIEWER_PROVIDER",
+        ("orchestrator", "UNREST_ORCHESTRATOR_PROVIDER"),
+        ("worker", "UNREST_WORKER_PROVIDER"),
+        ("validator", "UNREST_VALIDATOR_PROVIDER"),
+        ("terminal-reviewer", "UNREST_TERMINAL_REVIEWER_PROVIDER"),
     ),
 )
-def test_orchestrator_rejects_every_unknown_provider_before_construction(
+def test_every_mode_rejects_its_unknown_provider_before_construction(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    mode: str,
     provider_selector: str,
 ) -> None:
     secret = "known-provider-credential-value"
@@ -306,7 +307,7 @@ def test_orchestrator_rejects_every_unknown_provider_before_construction(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["unrest-server", "--mode", "orchestrator", "--transport", "stdio"],
+        ["unrest-server", "--mode", mode, "--transport", "stdio"],
     )
 
     with pytest.raises(SystemExit) as raised:

@@ -565,14 +565,7 @@ def main(
             bundled_dir=bundled_dir,
             policy_loader=policy_loader,
         )
-        if args.mode == "orchestrator":
-            # The orchestrator constructs every child role, so all selected
-            # providers must be resolved before either dispatcher exists.
-            config.validate_capability_support()
-        else:
-            # Worker and reviewer servers do not select or spawn providers, but
-            # their process authority still comes from the packaged profile.
-            _ = config.capability_policy
+        config.validate_capability_support()
     except (CapabilityPolicyError, ValueError):
         startup_rejected = True
 

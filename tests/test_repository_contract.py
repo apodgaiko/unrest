@@ -267,6 +267,47 @@ def test_ci_required_executable_and_lane_families_are_candidate_bound(
     ]
 
 
+def _assert_distribution_checker_executes_extracted_oracle(repository: Path) -> None:
+    tree = ast.parse((repository / "tools/check_distribution.py").read_text(encoding="utf-8"))
+    check_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "check_distribution"
+    )
+    calls = {
+        node.func.id
+        for node in ast.walk(check_function)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "_check_extracted_restart_oracle" in calls
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    (
+        "restart_oracle = {'cases': 14}",
+        "restart_oracle = {'membership_only': True}",
+    ),
+)
+def test_membership_only_distribution_checker_mutations_fail_contract(
+    tmp_path: Path, replacement: str
+) -> None:
+    repository = _copy_repository(tmp_path)
+    path = repository / "tools/check_distribution.py"
+    text = path.read_text(encoding="utf-8")
+    target = "restart_oracle = _check_extracted_restart_oracle(root, sdists[0])"
+    assert text.count(target) == 1
+    path.write_text(text.replace(target, replacement), encoding="utf-8")
+
+    with pytest.raises(AssertionError):
+        _assert_distribution_checker_executes_extracted_oracle(repository)
+
+
+def test_distribution_checker_execution_binding_is_current() -> None:
+    _assert_distribution_checker_executes_extracted_oracle(ROOT)
+
+
 @pytest.mark.parametrize(
     "replacement",
     (

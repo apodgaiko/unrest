@@ -105,12 +105,17 @@ uv run pytest -q tests/test_coordinator.py tests/test_storage.py \
 At a completed implementation slice, also run the milestone checks in the root
 `AGENTS.md`. When CLI entry points, bundled assets, package data, or MCP surfaces
 change, run the focused archive check and unrelated-cwd installed-wheel lifecycle
-required by the package tier; do not rerun the full source suite after build.
-The source distribution must also carry
-`tests/test_persistence_schema_v1.py` and both JSON files under
-`tests/fixtures/persistence_schema_v1/`. The adjacent manifest identifies the
-orchestrator-frozen mission oracle and its SHA-256; it must not claim provenance
-from a source revision that did not contain the corpus.
+required by the package tier. That check compares complete archive membership
+and bytes, safely extracts the source distribution, and runs all 14 protected
+`tests/test_persistence_schema_v1.py` cases from the extracted tree while
+proving package module, test module, cwd, and effective `sys.path` provenance
+exclude the checkout. The sdist carries the test, all five JSON fixtures under
+`tests/fixtures/persistence_schema_v1/`, and
+`tools/generate_legacy_handoff_fixtures.py`. The adjacent manifest identifies
+the orchestrator-frozen mission oracle and its SHA-256; it must not claim
+provenance from a source revision that did not contain the corpus. This
+post-build proof follows the frozen candidate's one full source-suite run and
+does not rerun it.
 
 ## Related decisions
 

@@ -12,8 +12,8 @@
     "repository_head_role": "checked-out predecessor while final candidate changes were present in the worktree; not the candidate content identity",
     "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
     "final_product_package_test": {
-      "files": 102,
-      "sha256": "4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199",
+      "files": 103,
+      "sha256": "a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be",
       "paths": [
         "pyproject.toml",
         "uv.lock",
@@ -31,9 +31,14 @@
   "commit_reproducible_finalization": {
     "status": "final-current-rollback-authority",
     "predecessor_commit": "c4394c89d85ae912bea4414a12ea4546753e89da",
-    "binding": {"files": 102, "sha256": "4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199"},
-    "checkpoint": {"command": "env -u CODEX_PATH uv run pytest -q", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "invocations": 1, "reruns": 0, "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
-    "archives": {"wheel": {"bytes": 217860, "sha256": "3635875804fbe512ddbde3b538acad5ddc4ef2f6da854639b48f91bbf60641e5"}, "sdist": {"bytes": 297214, "sha256": "077fd5486867352c078f737e17f0d36e684d24815df18252610c31883f82dc81"}},
+    "binding": {"files": 103, "sha256": "a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be"},
+    "checkpoint_authority": {
+      "decision": "Decision 001",
+      "local_probe": {"status": "failed-ordering-probe", "command": "env -u CODEX_PATH uv run pytest -q", "result": "919 passed, 7 skipped, 2 failed in 220.56s; exit 1", "invocations": 1, "reruns": 0, "failing_nodeids": ["tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers", "tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology"], "evidence_source": "mission attempt W-FREEZE 2026-08-13T13-25-57Z"},
+      "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
+    },
+    "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217889, "sha256": "054ebc22de5aa7387827fe62db12f67c6abbba46469e4f166b2f8c5cf1cfbe40"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 301664, "sha256": "05a82e272ad996330c8f7dfbbe2da29a9d06fd35f3ed0707565aff755d8a8b1a"}},
     "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
     "evidence_packet": "mission evidence/W-COMMIT-BINDING-MEASUREMENT-FINAL-20260813"
   },

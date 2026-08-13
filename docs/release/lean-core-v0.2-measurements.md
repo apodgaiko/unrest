@@ -1,5 +1,9 @@
 # Lean Core v0.2 final measurement report
 
+Status: historical and superseded for candidate binding, archive, and checkpoint
+authority. The quantitative code measurements remain retained context; current
+release authority is in the five Lean Core v0.2 carriers.
+
 This report compares fixed reference
 `93c59e4378407f3d7cfb918cf86c8bdc81daa141` with the final tracked-file
 candidate. The exact machine-readable values, raw arrays, order, arithmetic,
@@ -36,10 +40,12 @@ The reference wheel/sdist are 309,041/445,080 bytes with SHA-256
 The wheel changes from 55 to 51 members and the sdist from 113 to 115; the
 complete membership lists and exact added/removed comparison are in the JSON.
 
-The candidate is 102 tracked regular files at
+The historical, superseded candidate was 102 tracked regular files at
 `4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199`.
-The single new frozen-candidate checkpoint passed 899 tests with 7 skipped in
-170.80 seconds, exit 0. Its pre/post manifests and bound diffs are identical.
+Its superseded checkpoint passed 899 tests with 7 skipped in 170.80 seconds,
+exit 0. This is chronology only, not current rollback or checkpoint authority.
+Decision 001 instead preserves the sole current local run as a failed 919/7/2
+ordering probe and hands the pending clean verdict to `VAL-CI-EXACT`.
 The exact candidate wheel then passed distribution verification and an
 unrelated-directory Python 3.13 install, all three help surfaces, imports, and
 the installed-wheel lifecycle check.

@@ -144,6 +144,28 @@ def test_canonical_mcp_docs_enumerate_all_four_isolated_modes() -> None:
     assert "strict `end_node` completion protocol" in runtime
 
 
+def test_packaging_guidance_requires_executable_extracted_sdist_proof() -> None:
+    carriers = (
+        "AGENTS.md",
+        "README.md",
+        "CONTRIBUTING.md",
+        "docs/v5/08-mcp-surface.md",
+        "docs/v5/10-implementation-plan.md",
+    )
+    for relative in carriers:
+        normalized = " ".join((ROOT / relative).read_text(encoding="utf-8").split()).lower()
+        assert "14" in normalized and "test_persistence_schema_v1.py" in normalized
+        assert "extract" in normalized and "sdist" in normalized
+        assert "package module" in normalized and "test module" in normalized
+        assert "cwd" in normalized and "sys.path" in normalized
+        assert "checkout" in normalized
+        assert "full source suite" in normalized or "full source-suite" in normalized
+        assert any(
+            phrase in normalized
+            for phrase in ("not rerun", "does not rerun", "is not repeated")
+        )
+
+
 def test_maintained_bindings_match_repository_hard_cuts() -> None:
     current_documents = {
         "README.md": ("check-governance", "check-commit", "generated baselines"),

@@ -55,8 +55,8 @@ three candidate checkpoint invocations is therefore not a rerun count of zero.
   under `src/`, `tests/`, and `tools/`, excluding cache files.
 - Binding algorithm: SHA-256 over each sorted UTF-8 repository-relative path,
   NUL, raw file bytes, NUL.
-- Final tracked-file binding: 102 files,
-  `4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199`.
+- Final tracked-file binding: 103 files,
+  `a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be`.
 
 The former 105-file filesystem-only digest
 `35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`
@@ -67,14 +67,24 @@ The binding was measured before and after the authoritative Python 3.13
 source-suite invocation and after package verification. Carrier-only edits do
 not enter this surface.
 
-The commit-reproducible finalization supersedes the filesystem-only checkpoint
-and archive chronology below. Its sole new checkpoint passed 899 tests with 7
-skipped in 170.80 seconds, exit 0, with transcript SHA-256
-`682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a`.
-Its single candidate build produced a 217,860-byte wheel at
-`3635875804fbe512ddbde3b538acad5ddc4ef2f6da854639b48f91bbf60641e5`
-and a 297,214-byte sdist at
-`077fd5486867352c078f737e17f0d36e684d24815df18252610c31883f82dc81`.
+Decision 001 defines checkpoint authority. The sole local invocation of
+`env -u CODEX_PATH uv run pytest -q` is a failed ordering probe: 919 passed, 7
+documented live-provider skips, and exactly 2 carrier-currentness failures in
+220.56 seconds, exit 1, with zero reruns. The two failing nodeids were
+`tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers`
+and `tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology`.
+It is not a clean checkpoint verdict. The clean frozen-candidate verdict is
+pending and belongs to exact-head Python 3.13 `VAL-CI-EXACT`.
+
+The older 899-pass/7-skip/170.80-second result and transcript SHA-256
+`682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a`
+are historical, superseded chronology only and are not current rollback or
+checkpoint authority.
+Its single candidate build produced `unrest_harness-0.2.0-py3-none-any.whl`
+(217,889 bytes) at
+`054ebc22de5aa7387827fe62db12f67c6abbba46469e4f166b2f8c5cf1cfbe40`
+and `unrest_harness-0.2.0.tar.gz` (301,664 bytes) at
+`05a82e272ad996330c8f7dfbbe2da29a9d06fd35f3ed0707565aff755d8a8b1a`.
 The complete accepted before/after report is
 [`lean-core-v0.2-measurements.md`](lean-core-v0.2-measurements.md).
 

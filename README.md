@@ -179,7 +179,12 @@ Do not rerun the suite after build. Python 3.11 and 3.12 run lightweight
 compatibility checks. Changes to CLI entry points, bundled assets, package data,
 or MCP surfaces additionally run `uv build`,
 `uv run python tools/check_distribution.py dist`, and the installed-wheel
-lifecycle from an unrelated working directory.
+lifecycle from an unrelated working directory. The distribution check verifies
+complete archive membership and bytes, safely extracts the sdist, and runs all
+14 protected `tests/test_persistence_schema_v1.py` cases from the extracted
+tree while proving the package module, test module, cwd, and effective
+`sys.path` do not leak the checkout. This executable archive proof follows the
+single full source-suite run and does not repeat it.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.
 
