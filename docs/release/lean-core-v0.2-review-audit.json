@@ -2,8 +2,8 @@
   "schema_version": 1,
   "audit_date": "2026-08-13",
   "candidate_binding": {
-    "files": 105,
-    "sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
+    "files": 102,
+    "sha256": "4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199",
     "paths": [
       "pyproject.toml",
       "uv.lock",
@@ -11,6 +11,19 @@
       "tests/**",
       "tools/**"
     ]
+  },
+  "superseded_filesystem_binding": {
+    "files": 105,
+    "sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
+    "status": "historical-superseded; included ignored/generated egg-info and was not commit-reproducible"
+  },
+  "commit_reproducible_finalization": {
+    "status": "retained-final",
+    "binding": {"files": 102, "sha256": "4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199"},
+    "checkpoint": {"result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "invocations": 1, "reruns": 0, "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
+    "archives": {"wheel": {"bytes": 217860, "sha256": "3635875804fbe512ddbde3b538acad5ddc4ef2f6da854639b48f91bbf60641e5"}, "sdist": {"bytes": 297214, "sha256": "077fd5486867352c078f737e17f0d36e684d24815df18252610c31883f82dc81"}},
+    "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
+    "evidence_packet": "mission evidence/W-COMMIT-BINDING-MEASUREMENT-FINAL-20260813"
   },
   "checkpoint_provenance": {
     "repository_head_at_checkpoint": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",

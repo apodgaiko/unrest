@@ -1,6 +1,6 @@
 """Focused documentation authority checks retained by Lean Core."""
 
-import hashlib
+import importlib.util
 import json
 from pathlib import Path
 
@@ -8,6 +8,12 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+RELEASE_BINDING_SPEC = importlib.util.spec_from_file_location(
+    "release_binding", ROOT / "tools/release_binding.py"
+)
+assert RELEASE_BINDING_SPEC is not None and RELEASE_BINDING_SPEC.loader is not None
+release_binding = importlib.util.module_from_spec(RELEASE_BINDING_SPEC)
+RELEASE_BINDING_SPEC.loader.exec_module(release_binding)
 
 
 def _assert_external_publication_carrier(
@@ -210,28 +216,11 @@ def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
         encoding="utf-8"
     )
 
-    bound_paths = [ROOT / "pyproject.toml", ROOT / "uv.lock"]
-    bound_paths.extend(
-        path
-        for directory in ("src", "tests", "tools")
-        for path in (ROOT / directory).rglob("*")
-        if path.is_file()
-        and "__pycache__" not in path.parts
-        and ".pytest_cache" not in path.parts
-        and path.suffix != ".pyc"
-    )
-    unique_bound_paths = set(bound_paths)
-    digest = hashlib.sha256()
-    for path in sorted(
-        unique_bound_paths, key=lambda item: item.relative_to(ROOT).as_posix()
-    ):
-        digest.update(path.relative_to(ROOT).as_posix().encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
+    tracked_paths = release_binding.tracked_regular_paths(ROOT)
+    computed = release_binding.inventory(ROOT, tracked_paths)
     computed_binding = {
-        "files": len(unique_bound_paths),
-        "sha256": digest.hexdigest(),
+        "files": computed["files"],
+        "sha256": computed["sha256"],
         "paths": ["pyproject.toml", "uv.lock", "src/**", "tests/**", "tools/**"],
     }
 

@@ -18,8 +18,19 @@ validator MCP identity change. Do not retrieve or reinstall those bytes as the
 final v0.2 candidate, and do not interpret a commit-range diff from `6cf713c`
 as post-checkpoint mutation.
 
-The final candidate is 105 product/package/test files at
-`35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`.
+The final candidate is 102 tracked product/package/test files at
+`4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199`.
+The former 105-file filesystem-only digest
+`35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`
+is historical and superseded because it included ignored/generated egg-info
+and was not commit-reproducible.
+
+The commit-reproducible finalization is the rollback authority: 102 tracked
+files at `4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199`,
+with a 899-pass/7-skip/170.80-second checkpoint and retained wheel/sdist hashes
+`3635875804fbe512ddbde3b538acad5ddc4ef2f6da854639b48f91bbf60641e5`
+and `077fd5486867352c078f737e17f0d36e684d24815df18252610c31883f82dc81`.
+The former 105-file checkpoint/archive sequence below is superseded chronology.
 The preceding `24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e`
 binding and its publication evidence, followed by the
 `e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4`

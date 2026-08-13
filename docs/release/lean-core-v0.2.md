@@ -55,12 +55,28 @@ three candidate checkpoint invocations is therefore not a rerun count of zero.
   under `src/`, `tests/`, and `tools/`, excluding cache files.
 - Binding algorithm: SHA-256 over each sorted UTF-8 repository-relative path,
   NUL, raw file bytes, NUL.
-- Final binding: 105 files,
-  `35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`.
+- Final tracked-file binding: 102 files,
+  `4b42b98529c723bc137ffb5ba77c75337f5457a7a390cc960b32acea115e4199`.
+
+The former 105-file filesystem-only digest
+`35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`
+is historical and superseded: it included ignored/generated egg-info and could
+not be reproduced from a publication commit archive.
 
 The binding was measured before and after the retained final Python 3.13
 source-suite invocation and after package verification. Carrier-only edits do
 not enter this surface.
+
+The commit-reproducible finalization supersedes the filesystem-only checkpoint
+and archive chronology below. Its sole new checkpoint passed 899 tests with 7
+skipped in 170.80 seconds, exit 0, with transcript SHA-256
+`682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a`.
+Its single candidate build produced a 217,860-byte wheel at
+`3635875804fbe512ddbde3b538acad5ddc4ef2f6da854639b48f91bbf60641e5`
+and a 297,214-byte sdist at
+`077fd5486867352c078f737e17f0d36e684d24815df18252610c31883f82dc81`.
+The complete accepted before/after report is
+[`lean-core-v0.2-measurements.md`](lean-core-v0.2-measurements.md).
 
 ## Final local checkpoint and archives
 
