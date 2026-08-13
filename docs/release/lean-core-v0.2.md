@@ -1,9 +1,10 @@
-# Lean Core v0.2 final release checkpoint
+# Lean Core v0.2 immutable release carrier
 
 This carrier binds the final local Unrest Harness `0.2.0` candidate after the
-validator MCP identity correction. It preserves the earlier checkpoint as
-chronology, but that checkpoint and all archives produced from it are
-historical and superseded.
+validator MCP identity correction and external-publication contract test. It
+is an immutable procedure and local checkpoint record. The mutable PR #6 body,
+not this committed file, owns the current publication commit, run, artifact,
+and run-local hashes.
 
 ## Provenance chronology
 
@@ -23,12 +24,27 @@ the earlier local checkpoint, local archives, publication run, and artifact as
 final evidence. A commit-range diff beginning at `6cf713c` describes publication
 chronology; it is not a measure of mutation after the first checkpoint.
 
-The new final checkpoint ran with `d5fff4d` as the checked-out predecessor while
-the validator identity correction and this carrier work were present in the
-worktree. Again, the checked-out commit is not the content identity. The final
-product/package/test identity is the explicit binding below. Publication must
-commit exactly this candidate and qualify that publication commit with a new
-successful exact-head GitHub run and artifact.
+The next checkpoint ran with `d5fff4d` as the checked-out predecessor while the
+validator identity correction and carrier work were present in the worktree.
+Its 105-file `24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e`
+binding, 893-pass checkpoint, local archives, and later `f00ac2c` publication
+evidence are also historical and superseded after the focused publication
+contract test changed.
+
+That focused test update produced the 105-file
+`e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4`
+binding, 894-pass checkpoint, and local archives. They are historical and
+superseded after the carrier binding regression test changed the bound test
+surface. Both `24b85e4a…` and `e4c8f246…` remain chronology, not current
+candidate identities.
+
+The final `35e21ed3…` candidate had three distinct checkpoint invocations.
+Invocation 1 was the environment-limited 880-pass/14-failure attempt in the
+restricted sandbox (171.68 seconds, exit 1). Invocation 2 passed 894 tests with
+7 skips in 174.83 seconds, exit 0, on the identical binding, but it is
+historical, superseded, and unretained. Invocation 3 is the retained final
+checkpoint described below. Each invocation had zero within-invocation reruns;
+three candidate checkpoint invocations is therefore not a rerun count of zero.
 
 ## Final local candidate binding
 
@@ -40,29 +56,43 @@ successful exact-head GitHub run and artifact.
 - Binding algorithm: SHA-256 over each sorted UTF-8 repository-relative path,
   NUL, raw file bytes, NUL.
 - Final binding: 105 files,
-  `24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e`.
+  `35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`.
 
-The binding was measured before and after the one final Python 3.13 source-suite
-run and after package verification. Carrier-only edits do not enter this
-surface.
+The binding was measured before and after the retained final Python 3.13
+source-suite invocation and after package verification. Carrier-only edits do
+not enter this surface.
 
 ## Final local checkpoint and archives
 
-The sole full-suite run for this new candidate ran once on CPython 3.13.12 with
-uv 0.11.0 on macOS arm64, from 2026-08-12T21:59:42Z through
-2026-08-12T22:02:59Z:
+The retained loopback-authorized final checkpoint (candidate invocation 3 of 3)
+ran on CPython 3.13.12 with uv 0.11.0 on macOS arm64 from
+`2026-08-12T23:43:25.569367Z` through `2026-08-12T23:46:20.475041Z`:
 
 ```text
 env -u CODEX_PATH uv run pytest -q
-893 passed, 7 skipped, 0 failed in 172.15s; exit 0; no rerun
+894 passed, 7 skipped, 0 failed in 174.05s; exit 0; 0 per-invocation reruns
 ```
 
-The final isolated local archives built after that checkpoint are:
+Its durable packet is
+`mission evidence/W-CHECKPOINT-EVIDENCE-RETENTION-20260813T0342Z`.
+`stdout.raw` has SHA-256
+`ef8e3ec1544e3418aa6e76b5bc05529ddd0ae5bae19a1adc7da9218eabeaeefc`;
+the packet's `SHA256SUMS` ledger has SHA-256
+`14788e338d12d1cf4898b2eac8ce1d453bb8cc39e1698cf44f7b48b152f39bb5`.
+
+The final single isolated local build is durably retained in
+`mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z`:
 
 - `unrest_harness-0.2.0-py3-none-any.whl` — 217,860 bytes — SHA-256
-  `60bef82f6ecc939a91273280be58da1dcf97d688847b05a3aac6ae694292b269`.
-- `unrest_harness-0.2.0.tar.gz` — 295,185 bytes — SHA-256
-  `dc5f17071f08f3f4f49386fdec05a7d9b02c081d18ad94a36a0942fee5c548d2`.
+  `778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a`.
+- `unrest_harness-0.2.0.tar.gz` — 295,954 bytes — SHA-256
+  `0f73d258264f446969b864b0df4828e6fd2f00bd17fdc08accc64648a1c4ce51`.
+
+The earlier disposable, unretained wheel
+`68b44673932c0ac4702bc3c3c0368b52e59ce4eede9db2ee5eeace5949e25e63`
+and sdist
+`b7b19d0ce761d48b30b1112bcb65b9531d9b4224eb66ec7e41db8495f7c56e2f`
+are historical and superseded by these retained bytes.
 
 The exact wheel passed distribution, entry-point, bundled asset, lifecycle,
 strict configuration, provider-role, terminal-credential, and validator MCP
@@ -70,11 +100,18 @@ identity checks after installation from an unrelated directory. Local archive
 hashes identify only this reviewed build; archive timestamps mean independent
 CI builds are not expected to reproduce those bytes.
 
-## Publication and CI binding
+## External publication evidence
 
-The local candidate becomes releasable only after its exact publication commit
-and successful exact-head CI are established. Publication must satisfy all of
-the following without filling speculative identifiers into this carrier:
+Publication status is `external-evidence-required`. This immutable carrier
+deliberately contains no current publication commit, head SHA, GitHub run ID,
+or GitHub artifact ID. PR #6's mutable body owns that snapshot because adding
+the carrier's own final commit or its post-commit CI identifiers here would
+self-reference and immediately make the committed record stale.
+
+Resolve the live PR #6 head SHA; require local HEAD, tracking ref, live PR head,
+and successful `ci.yml` run `headSha` to equal it; download the named artifact
+from that run and verify its `SHA256SUMS` before installation. This deterministic
+procedure establishes the exact publication commit and successful exact-head CI:
 
 1. the publication commit contains the final product/package/test binding;
 2. local HEAD, the tracking ref, and the live PR head resolve to that exact SHA;
@@ -83,10 +120,10 @@ the following without filling speculative identifiers into this carrier:
    and its run-local `SHA256SUMS`; and
 5. both downloaded checksum rows and the installed-wheel lifecycle pass.
 
-The [manifest](lean-core-v0.2-manifest.json) keeps final-publication identifiers
-null until that external state exists. The publication worker and exact-head
-validator record the commit, run, artifact, checksum, and ref-equality evidence;
-branch name or recency alone is never release evidence. The
+The [manifest](lean-core-v0.2-manifest.json) records the same immutable procedure
+without embedding current self identifiers. The publication worker and
+exact-head validator update PR #6 with the commit, run, artifact, checksum, and
+ref-equality evidence; branch name or recency alone is never release evidence. The
 [rollback carrier](lean-core-v0.2-rollback.md) gives the portable retrieval
 flow.
 

@@ -3,7 +3,7 @@
   "audit_date": "2026-08-13",
   "candidate_binding": {
     "files": 105,
-    "sha256": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e",
+    "sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
     "paths": [
       "pyproject.toml",
       "uv.lock",
@@ -15,9 +15,46 @@
   "checkpoint_provenance": {
     "repository_head_at_checkpoint": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",
     "head_is_content_identity": false,
-    "publication_status": "awaiting exact publication commit and successful exact-head CI",
+    "publication_status": "external-evidence-required; PR #6 body owns the mutable exact-head snapshot",
+    "retained_final_checkpoint": {
+      "result": "894 passed, 7 skipped, 0 failed in 174.05s; exit 0",
+      "started_utc": "2026-08-12T23:43:25.569367Z",
+      "ended_utc": "2026-08-12T23:46:20.475041Z",
+      "candidate_checkpoint_invocation": 3,
+      "candidate_checkpoint_invocations_total": 3,
+      "per_invocation_reruns": 0,
+      "packet_identity": "mission evidence/W-CHECKPOINT-EVIDENCE-RETENTION-20260813T0342Z",
+      "status_file": "status.json",
+      "status_sha256": "63f279ba8ad2f3b02f6739488956cdad3a021e6c3d3dbf0e568478e95fff9649",
+      "transcript_file": "stdout.raw",
+      "transcript_sha256": "ef8e3ec1544e3418aa6e76b5bc05529ddd0ae5bae19a1adc7da9218eabeaeefc",
+      "hash_ledger_file": "SHA256SUMS",
+      "hash_ledger_sha256": "14788e338d12d1cf4898b2eac8ce1d453bb8cc39e1698cf44f7b48b152f39bb5"
+    },
+    "candidate_checkpoint_chronology": [
+      "invocation 1 of 3: environment-limited and superseded; 880 passed, 7 skipped, 14 failed in 171.68s; exit 1; 0 per-invocation reruns",
+      "invocation 2 of 3: historical, superseded, and unretained on the identical binding; 894 passed, 7 skipped, 0 failed in 174.83s; exit 0; 0 per-invocation reruns",
+      "invocation 3 of 3: retained final; 894 passed, 7 skipped, 0 failed in 174.05s; exit 0; 0 per-invocation reruns"
+    ],
+    "superseded_environment_attempt": "880 passed, 7 skipped, and 14 restricted-sandbox loopback setup failures",
+    "superseded_validator_identity_binding": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e",
+    "superseded_external_publication_binding": "e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4",
     "superseded_binding": "cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a",
     "superseded_checkpoint_head_role": "6cf713c was only the checked-out commit for a dirty-worktree checkpoint"
+  },
+  "archive_evidence": {
+    "status": "retained-final",
+    "packet_identity": "mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z",
+    "wheel": {"bytes": 217860, "sha256": "778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a"},
+    "sdist": {"bytes": 295954, "sha256": "0f73d258264f446969b864b0df4828e6fd2f00bd17fdc08accc64648a1c4ce51"},
+    "superseded_disposable_wheel_sha256": "68b44673932c0ac4702bc3c3c0368b52e59ce4eede9db2ee5eeace5949e25e63",
+    "superseded_disposable_sdist_sha256": "b7b19d0ce761d48b30b1112bcb65b9531d9b4224eb66ec7e41db8495f7c56e2f"
+  },
+  "external_publication": {
+    "status": "external-evidence-required",
+    "evidence_owner": "pull-request-6-body",
+    "carrier_role": "immutable-procedure-and-local-checkpoint",
+    "exact_head_procedure": "resolve the live PR #6 head SHA; require local HEAD, tracking ref, live PR head, and successful ci.yml run headSha to equal it; download the named artifact from that run and verify its SHA256SUMS before installation"
   },
   "authoritative_sources": [
     "docs/decisions/ADR-0002-lean-core-v0.2.md",

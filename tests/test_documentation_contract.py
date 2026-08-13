@@ -4,8 +4,75 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _assert_external_publication_carrier(
+    publication: dict[str, object], carrier_texts: tuple[str, ...]
+) -> None:
+    assert publication["status"] == "external-evidence-required"
+    assert publication["evidence_owner"] == "pull-request-6-body"
+    assert publication["carrier_role"] == "immutable-procedure-and-local-checkpoint"
+    assert publication["exact_head_procedure"] == (
+        "resolve the live PR #6 head SHA; require local HEAD, tracking ref, live PR "
+        "head, and successful ci.yml run headSha to equal it; download the named "
+        "artifact from that run and verify its SHA256SUMS before installation"
+    )
+    impossible_self_fields = {
+        "head_sha",
+        "publication_commit",
+        "github_run_id",
+        "github_artifact_id",
+    }
+    assert impossible_self_fields.isdisjoint(publication)
+
+    normalized = " ".join(carrier_texts).lower()
+    assert "awaiting-exact-head-ci" not in normalized
+    assert "awaiting exact publication" not in normalized
+    assert "required-null" not in normalized
+
+
+def test_external_publication_carrier_schema_rejects_pending_null_and_self_reference(
+) -> None:
+    external_model: dict[str, object] = {
+        "status": "external-evidence-required",
+        "evidence_owner": "pull-request-6-body",
+        "carrier_role": "immutable-procedure-and-local-checkpoint",
+        "exact_head_procedure": (
+            "resolve the live PR #6 head SHA; require local HEAD, tracking ref, live "
+            "PR head, and successful ci.yml run headSha to equal it; download the "
+            "named artifact from that run and verify its SHA256SUMS before installation"
+        ),
+    }
+    _assert_external_publication_carrier(
+        external_model,
+        (
+            "Immutable carrier; current commit/run/artifact evidence is in PR #6.",
+            "Use the deterministic exact-head procedure.",
+        ),
+    )
+
+    invalid_models = (
+        {**external_model, "status": "awaiting-exact-head-ci"},
+        {**external_model, "head_sha": None},
+        {**external_model, "github_run_id": None},
+        {**external_model, "github_artifact_id": 123456},
+        {**external_model, "publication_commit": "deadbeef"},
+    )
+    for invalid_model in invalid_models:
+        with pytest.raises(AssertionError):
+            _assert_external_publication_carrier(invalid_model, ("carrier",))
+
+    for invalid_text in (
+        "status: awaiting-exact-head-ci",
+        "awaiting exact publication commit",
+        "required-null publication identifiers are final",
+    ):
+        with pytest.raises(AssertionError):
+            _assert_external_publication_carrier(external_model, (invalid_text,))
 
 
 def test_adr_0002_and_scope_package_are_accepted_and_registered() -> None:
@@ -162,12 +229,38 @@ def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")
-    current_binding = manifest["source"]["final_product_package_test"]
-    assert current_binding == {
+    computed_binding = {
         "files": len(unique_bound_paths),
         "sha256": digest.hexdigest(),
         "paths": ["pyproject.toml", "uv.lock", "src/**", "tests/**", "tools/**"],
     }
+
+    def assert_carrier_bindings(
+        candidate_manifest: dict[str, object],
+        candidate_audit: dict[str, object],
+        candidate_crosswalk: dict[str, object],
+    ) -> None:
+        current = candidate_manifest["source"]["final_product_package_test"]  # type: ignore[index]
+        assert current == computed_binding
+        assert candidate_audit["candidate_binding"] == current
+        assert candidate_crosswalk["candidate"] == current
+
+    assert_carrier_bindings(manifest, audit, crosswalk)
+
+    zero_digest = "0" * 64
+    zero_manifest = json.loads(json.dumps(manifest))
+    zero_audit = json.loads(json.dumps(audit))
+    zero_crosswalk = json.loads(json.dumps(crosswalk))
+    zero_manifest["source"]["final_product_package_test"]["sha256"] = zero_digest
+    zero_audit["candidate_binding"]["sha256"] = zero_digest
+    zero_crosswalk["candidate"]["sha256"] = zero_digest
+    with pytest.raises(AssertionError):
+        assert_carrier_bindings(zero_manifest, zero_audit, zero_crosswalk)
+
+    single_carrier_audit = json.loads(json.dumps(audit))
+    single_carrier_audit["candidate_binding"]["sha256"] = zero_digest
+    with pytest.raises(AssertionError):
+        assert_carrier_bindings(manifest, single_carrier_audit, crosswalk)
 
     superseded = manifest["superseded_evidence"]
     assert superseded["repository_head_at_checkpoint"].startswith("6cf713c")
@@ -179,11 +272,6 @@ def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
     )
     assert superseded["status"] == "historical-superseded"
     assert manifest["source"]["repository_head_at_checkpoint"].startswith("d5fff4d")
-    assert manifest["publication"]["status"] == "awaiting-exact-head-ci"
-    assert manifest["publication"]["head_sha"] is None
-    assert manifest["publication"]["github_run_id"] is None
-    assert manifest["publication"]["github_artifact_id"] is None
-
     for carrier in (release, rollback):
         normalized = " ".join(carrier.split())
         assert "6cf713c..HEAD" not in carrier
@@ -195,8 +283,6 @@ def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
     )
 
     assert audit["audit_date"] == "2026-08-13"
-    assert audit["candidate_binding"] == current_binding
-    assert crosswalk["candidate"] == current_binding
     assert "external publication unverified" in audit["compatibility_disposition"][
         "root_schemas"
     ].lower()

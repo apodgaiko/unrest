@@ -19,15 +19,47 @@ final v0.2 candidate, and do not interpret a commit-range diff from `6cf713c`
 as post-checkpoint mutation.
 
 The final candidate is 105 product/package/test files at
-`24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e`.
-The checked-out predecessor at the new checkpoint was `d5fff4d`; it is not the
-content identity or final publication SHA. Use only a later publication commit
-whose exact-head CI run qualifies this binding.
+`35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`.
+The preceding `24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e`
+binding and its publication evidence, followed by the
+`e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4`
+binding, 894-pass checkpoint, and local archives, are historical and
+superseded. The current loopback-authorized checkpoint passed 894 tests with 7
+skips in 174.05 seconds, exit 0, and is the retained final checkpoint.
+
+The `35e21ed3…` candidate had three distinct checkpoint invocations: (1) the
+environment-limited 880-pass/14-failure restricted-sandbox attempt in 171.68
+seconds, exit 1; (2) the successful 894-pass/7-skip invocation in 174.83
+seconds, exit 0, which is historical, superseded, and unretained despite using
+the identical binding; and (3) the retained 894-pass/7-skip invocation in
+174.05 seconds, exit 0. Every invocation recorded zero within-invocation
+reruns; do not mistake that field for the candidate-level invocation count of
+three.
+
+The retained invocation ran from `2026-08-12T23:43:25.569367Z` through
+`2026-08-12T23:46:20.475041Z`. Its durable packet is
+`mission evidence/W-CHECKPOINT-EVIDENCE-RETENTION-20260813T0342Z`;
+`stdout.raw` has SHA-256
+`ef8e3ec1544e3418aa6e76b5bc05529ddd0ae5bae19a1adc7da9218eabeaeefc`,
+and the packet's `SHA256SUMS` ledger has SHA-256
+`14788e338d12d1cf4898b2eac8ce1d453bb8cc39e1698cf44f7b48b152f39bb5`.
+
+The final local archive bytes are retained in
+`mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z`: wheel
+`778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a`
+(217,860 bytes) and sdist
+`0f73d258264f446969b864b0df4828e6fd2f00bd17fdc08accc64648a1c4ce51`
+(295,954 bytes). The disposable, unretained hashes
+`68b44673932c0ac4702bc3c3c0368b52e59ce4eede9db2ee5eeace5949e25e63`
+and `b7b19d0ce761d48b30b1112bcb65b9531d9b4224eb66ec7e41db8495f7c56e2f`
+are historical and superseded; they are not rollback candidates.
 
 ## Locate and download the final candidate
 
-Use the repository slug and exact final pull-request head SHA. Do not pick a run
-by branch name or recency.
+This immutable procedure and local checkpoint carrier has status
+`external-evidence-required`; PR #6's mutable body owns the current commit, run,
+artifact, and run-local hashes. Resolve the repository slug and live PR #6 head
+SHA. Do not pick a run by branch name or recency.
 
 ```bash
 export FINAL_HEAD_SHA=FINAL_HEAD_SHA
