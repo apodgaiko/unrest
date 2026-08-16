@@ -23,6 +23,8 @@ Environment variables read from os.environ:
 Command-line modes:
   --missing-handoff-diagnostics — emit an agent update and stderr, return a
     stop reason, then exit without writing the handoff.
+  --missing-handoff-session-error — emit bounded diagnostics, return an ACP
+    prompt error carrying the stop reason, then exit without writing a handoff.
 """
 
 from __future__ import annotations
@@ -113,6 +115,39 @@ def main() -> None:
         elif method == "session/set_mode":
             resp = _response(req_id, {})
         elif method == "session/prompt":
+            if "--missing-handoff-session-error" in sys.argv:
+                update = {
+                    "jsonrpc": "2.0",
+                    "method": "session/update",
+                    "params": {
+                        "sessionId": "mock-session-1",
+                        "update": {
+                            "sessionUpdate": "agent_message_chunk",
+                            "messageId": "session-error-diagnostic",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "agent diagnostic before ACP prompt failure.\n",
+                                }
+                            ],
+                        },
+                    },
+                }
+                sys.stdout.write(json.dumps(update) + "\n")
+                sys.stdout.write(
+                    json.dumps(
+                        _error(
+                            req_id,
+                            -32042,
+                            "mock ACP prompt failure; stop_reason=refusal",
+                        )
+                    )
+                    + "\n"
+                )
+                sys.stdout.flush()
+                sys.stderr.write("mock ACP stderr before prompt failure\n")
+                sys.stderr.flush()
+                sys.exit(7)
             if "--missing-handoff-diagnostics" in sys.argv:
                 update = {
                     "jsonrpc": "2.0",

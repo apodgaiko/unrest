@@ -22,7 +22,7 @@
   },
   "candidate_binding": {
     "files": 103,
-    "sha256": "8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7",
+    "sha256": "0c6f3d229ff5070110461952334c14109fa0cb3395864efb8b5e23d9ef11c4d9",
     "paths": [
       "pyproject.toml",
       "uv.lock",
@@ -38,14 +38,14 @@
   },
   "commit_reproducible_finalization": {
     "status": "final-current-rollback-authority",
-    "binding": {"files": 103, "sha256": "8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7"},
+    "binding": {"files": 103, "sha256": "0c6f3d229ff5070110461952334c14109fa0cb3395864efb8b5e23d9ef11c4d9"},
     "checkpoint_authority": {
       "decision": "Decision 001",
       "local_probe": {"status": "failed-ordering-probe", "command": "env -u CODEX_PATH uv run pytest -q", "result": "919 passed, 7 skipped, 2 failed in 220.56s; exit 1", "invocations": 1, "reruns": 0, "failing_nodeids": ["tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers", "tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology"], "evidence_source": "mission attempt W-FREEZE 2026-08-13T13-25-57Z"},
       "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
     },
     "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
-    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217917, "sha256": "c8c6ec9f13808703ba99ec1d6fde536df834358c8736fde3d5d105620f154411"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 303526, "sha256": "5f8af7fc1470afb04896e5256b8f49f78edb3913db10f563280ec7727ae45633"}},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217917, "sha256": "5d17d808d2167afc8829060361ae04299b27dce211035887352ff503d959f579"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 303769, "sha256": "5248c95fbb908214d38b03661beaab0ab0bbabb0ea9c54434d0ed0a905053439"}},
     "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
     "evidence_packet": "mission attempt for VAL-LOCAL-RELEASE-SEAL on 2026-08-16"
   },

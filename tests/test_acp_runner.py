@@ -626,10 +626,20 @@ def test_missing_end_node_diagnostics_survive_production_dispatch_and_attention(
 ) -> None:
     role_config = replace(
         config,
-        worker_acp_command=f"{mock_acp_command} --missing-handoff-diagnostics",
+        worker_acp_command=f"{mock_acp_command} --missing-handoff-session-error",
     )
     store = ProjectStore(role_config)
-    dispatcher = ACPNodeDispatcher(role_config, store)
+
+    class RecordingACPNodeDispatcher(ACPNodeDispatcher):
+        returned_handoff: WorkHandoff | None = None
+
+        def dispatch(self, request: DispatchRequest) -> WorkHandoff:
+            handoff = super().dispatch(request)
+            assert isinstance(handoff, WorkHandoff)
+            self.returned_handoff = handoff
+            return handoff
+
+    dispatcher = RecordingACPNodeDispatcher(role_config, store)
 
     class UnusedReviewer:
         def review(
@@ -676,19 +686,33 @@ def test_missing_end_node_diagnostics_survive_production_dispatch_and_attention(
     attention = store.load_attention(project_id)
     assert len(attention) == 1
     assert attention[0].kind == "node_failed"
+    returned = dispatcher.returned_handoff
+    assert returned is not None
+    assert returned.attempt_id == generation
     assert runtime["attempt_id"] == generation
     assert f"attempt_id: {generation}" in durable
 
-    expected_diagnostics = (
-        "stop_reason=refusal",
-        "exit_code=7",
-        "stderr=mock ACP stderr before missing handoff",
-        "agent_output=agent diagnostic before missing handoff.",
+    expected_report = (
+        "Agent session ended without calling end_node. "
+        "acp_error={'code': -32042, 'message': "
+        "'mock ACP prompt failure; stop_reason=refusal'} "
+        "exit_code=7 "
+        "stderr=mock ACP stderr before prompt failure "
+        "agent_output=agent diagnostic before ACP prompt failure."
     )
-    for diagnostic in expected_diagnostics:
-        assert diagnostic in runtime["report"]
-        assert diagnostic in durable
-        assert diagnostic in attention[0].report
+    assert returned.report == expected_report
+    assert runtime["report"] == expected_report
+    assert expected_report in durable
+    assert attention[0].report == (
+        "Task report from w1\n"
+        "type: work\n"
+        "done: False\n"
+        "request_attention: False\n\n"
+        "report:\n"
+        f"{expected_report}"
+    )
+    assert "acp_error=" in expected_report
+    assert "stop_reason=refusal" in expected_report
     assert "null attempt identity" not in attention[0].report
     assert len(runtime["report"]) < 2200
 

@@ -56,7 +56,7 @@ three candidate checkpoint invocations is therefore not a rerun count of zero.
 - Binding algorithm: SHA-256 over each sorted UTF-8 repository-relative path,
   NUL, raw file bytes, NUL.
 - Final tracked-file binding: 103 files,
-  `8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7`.
+  `0c6f3d229ff5070110461952334c14109fa0cb3395864efb8b5e23d9ef11c4d9`.
 
 The former 105-file filesystem-only digest
 `35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`
@@ -83,9 +83,9 @@ checkpoint authority.
 The final local-seal build, performed once after the tracked product, package,
 test, and tool inputs settled, produced
 `unrest_harness-0.2.0-py3-none-any.whl` (217,917 bytes) at
-`c8c6ec9f13808703ba99ec1d6fde536df834358c8736fde3d5d105620f154411`
-and `unrest_harness-0.2.0.tar.gz` (303,526 bytes) at
-`5f8af7fc1470afb04896e5256b8f49f78edb3913db10f563280ec7727ae45633`.
+`5d17d808d2167afc8829060361ae04299b27dce211035887352ff503d959f579`
+and `unrest_harness-0.2.0.tar.gz` (303,769 bytes) at
+`5248c95fbb908214d38b03661beaab0ab0bbabb0ea9c54434d0ed0a905053439`.
 The complete accepted before/after report is
 [`lean-core-v0.2-measurements.md`](lean-core-v0.2-measurements.md).
 
