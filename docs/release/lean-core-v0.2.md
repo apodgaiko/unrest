@@ -56,7 +56,7 @@ three candidate checkpoint invocations is therefore not a rerun count of zero.
 - Binding algorithm: SHA-256 over each sorted UTF-8 repository-relative path,
   NUL, raw file bytes, NUL.
 - Final tracked-file binding: 103 files,
-  `a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be`.
+  `8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7`.
 
 The former 105-file filesystem-only digest
 `35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`
@@ -80,11 +80,12 @@ The older 899-pass/7-skip/170.80-second result and transcript SHA-256
 `682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a`
 are historical, superseded chronology only and are not current rollback or
 checkpoint authority.
-Its single candidate build produced `unrest_harness-0.2.0-py3-none-any.whl`
-(217,889 bytes) at
-`054ebc22de5aa7387827fe62db12f67c6abbba46469e4f166b2f8c5cf1cfbe40`
-and `unrest_harness-0.2.0.tar.gz` (301,664 bytes) at
-`05a82e272ad996330c8f7dfbbe2da29a9d06fd35f3ed0707565aff755d8a8b1a`.
+The final local-seal build, performed once after the tracked product, package,
+test, and tool inputs settled, produced
+`unrest_harness-0.2.0-py3-none-any.whl` (217,917 bytes) at
+`c8c6ec9f13808703ba99ec1d6fde536df834358c8736fde3d5d105620f154411`
+and `unrest_harness-0.2.0.tar.gz` (303,526 bytes) at
+`5f8af7fc1470afb04896e5256b8f49f78edb3913db10f563280ec7727ae45633`.
 The complete accepted before/after report is
 [`lean-core-v0.2-measurements.md`](lean-core-v0.2-measurements.md).
 
@@ -155,13 +156,17 @@ flow.
 
 ## Attached review reconciliation
 
-Both independent reviews are identified by source SHA-256 and reconciled
+All three review rounds are identified by source SHA-256 and reconciled
 claim-by-claim in the
 [`attached-review-claims` ledger](lean-core-v0.2-attached-review-claims.json),
 linked from the [review audit](lean-core-v0.2-review-audit.json). Findings that
 were true at a review head are separated from final-head facts; accepted cuts,
 merge conditions and superseded quantitative context are explicit rather than
-collapsed into an aggregate “fixed” label.
+collapsed into an aggregate “fixed” label. The 2026-08-16 follow-up records N1
+and N2 separately as substantiated fixes with exact code and test citations;
+its exact-head CI condition remains deferred to the final PR #6 snapshot. Its
+SHA-256 is user-authorized from the mission brief, not a claim that the source
+bytes were independently recomputed or retained in this repository.
 
 ## Scope and known limits
 

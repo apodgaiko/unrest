@@ -2,7 +2,7 @@
   "schema_version": 1,
   "candidate": {
     "files": 103,
-    "sha256": "a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be",
+    "sha256": "8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7",
     "paths": [
       "pyproject.toml",
       "uv.lock",
@@ -24,9 +24,9 @@
       "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
     },
     "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
-    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217889, "sha256": "054ebc22de5aa7387827fe62db12f67c6abbba46469e4f166b2f8c5cf1cfbe40"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 301664, "sha256": "05a82e272ad996330c8f7dfbbe2da29a9d06fd35f3ed0707565aff755d8a8b1a"}},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217917, "sha256": "c8c6ec9f13808703ba99ec1d6fde536df834358c8736fde3d5d105620f154411"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 303526, "sha256": "5f8af7fc1470afb04896e5256b8f49f78edb3913db10f563280ec7727ae45633"}},
     "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
-    "evidence_packet": "mission evidence/W-COMMIT-BINDING-MEASUREMENT-FINAL-20260813"
+    "evidence_packet": "mission attempt for VAL-LOCAL-RELEASE-SEAL on 2026-08-16"
   },
   "superseded_candidate": {
     "sha256": "e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4",
@@ -89,7 +89,7 @@
     {"surface": "raw-root-evidence", "node": "tests/test_repository_contract.py::test_root_raw_evidence_is_absent", "candidate_result": "pass"},
     {"surface": "observer-v1-aliases", "node": "tests/test_runtime_observability.py::test_observer_v1_and_detail_surfaces_are_absent", "candidate_result": "pass"},
     {"surface": "removed-legacy-child-provider", "node": "tests/test_lean_provider_security_runtime.py::test_supported_provider_set_is_claude_and_codex_only", "candidate_result": "pass"},
-    {"surface": "terminal-credential-inheritance", "node": "tests/test_lean_provider_security_runtime.py::test_finite_inventory_and_adapter_mcp_terminal_projection", "candidate_result": "pass"},
+    {"surface": "terminal-credential-inheritance", "node": "tests/test_lean_provider_security_runtime.py::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls", "candidate_result": "pass"},
     {"surface": "transformed-secret-inference", "node": "tests/test_lean_provider_security_runtime.py::test_exact_redaction_short_guard_structures_transforms_and_every_split", "candidate_result": "pass"}
   ],
   "mappings": {
@@ -110,15 +110,15 @@
     "LEAN-PROVIDER-001": {"node": "tests/test_capability_policy.py::test_only_explicit_unsafe_profile_emits_unrestricted_provider_settings", "candidate_result": "pass"},
     "LEAN-PROVIDER-002": {"node": "tests/test_capability_policy.py::test_safe_codex_subprocess_settings_override_ambient_unrestricted", "candidate_result": "pass"},
     "LEAN-PROVIDER-003": {"node": "tests/test_capability_policy.py::test_unsupported_profile_has_stable_provider_role_version_error", "candidate_result": "pass"},
-    "LEAN-PROVIDER-004": {"node": "tests/test_lean_provider_security_runtime.py::test_finite_inventory_and_adapter_mcp_terminal_projection", "candidate_result": "pass"},
+    "LEAN-PROVIDER-004": {"node": "tests/test_lean_provider_security_runtime.py::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls", "candidate_result": "pass"},
     "LEAN-PROVIDER-005": {"node": "tests/test_acp_runner.py::test_terminal_review_timeout_cleans_acp_and_mcp_children", "candidate_result": "pass"},
     "LEAN-SECURITY-001": {"node": "tests/test_capability_policy.py::test_filesystem_callbacks_enforce_absolute_traversal_symlink_and_read_only", "candidate_result": "pass"},
     "LEAN-SECURITY-002": {"node": "tests/test_lean_provider_security_runtime.py::test_exact_redaction_short_guard_structures_transforms_and_every_split", "candidate_result": "pass"},
-    "LEAN-SECURITY-003": {"node": "tests/test_lean_provider_security_runtime.py::test_finite_inventory_and_adapter_mcp_terminal_projection", "candidate_result": "pass"},
+    "LEAN-SECURITY-003": {"node": "tests/test_lean_provider_security_runtime.py::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls", "candidate_result": "pass"},
     "LEAN-SECURITY-004": {"node": "tests/test_lean_provider_security_runtime.py::test_exact_redaction_short_guard_structures_transforms_and_every_split", "candidate_result": "pass"},
     "LEAN-SECURITY-005": {"node": "tests/test_lean_provider_security_runtime.py::test_coordinator_refreshes_inventory_at_child_creation", "candidate_result": "pass"},
     "LEAN-SECURITY-006": {"node": "tests/test_capability_policy.py::test_callback_result_error_and_workspace_write_redact_inventory", "candidate_result": "pass"},
-    "LEAN-SECURITY-007": {"node": "tests/test_lean_provider_security_runtime.py::test_finite_inventory_and_adapter_mcp_terminal_projection", "candidate_result": "pass"},
+    "LEAN-SECURITY-007": {"node": "tests/test_lean_provider_security_runtime.py::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls", "candidate_result": "pass"},
     "LEAN-REPOSITORY-001": {"node": "tests/test_repository_contract.py::test_current_repository_passes_deterministically_without_writes", "candidate_result": "pass"},
     "LEAN-PACKAGE-001": {"node": "tests/test_cli.py::TestUserScopeInit::test_registered_command_launches_from_another_workspace", "candidate_result": "pass"},
     "LEAN-STATUS-001": {"node": "tests/test_runtime_observability.py::test_projection_sorts_bounds_ids_and_emits_each_closed_code", "candidate_result": "pass"},

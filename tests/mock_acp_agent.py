@@ -19,6 +19,10 @@ Environment variables read from os.environ:
   MOCK_ACP_CRASH       — '1' to exit immediately without writing
   MOCK_ACP_REQUEST_ATTENTION — '1' to set request_attention=true
   MOCK_ACP_DONE        — '0' to set done=false (default '1')
+
+Command-line modes:
+  --missing-handoff-diagnostics — emit an agent update and stderr, return a
+    stop reason, then exit without writing the handoff.
 """
 
 from __future__ import annotations
@@ -109,6 +113,30 @@ def main() -> None:
         elif method == "session/set_mode":
             resp = _response(req_id, {})
         elif method == "session/prompt":
+            if "--missing-handoff-diagnostics" in sys.argv:
+                update = {
+                    "jsonrpc": "2.0",
+                    "method": "session/update",
+                    "params": {
+                        "sessionId": "mock-session-1",
+                        "update": {
+                            "sessionUpdate": "agent_message_chunk",
+                            "messageId": "diagnostic-message",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "agent diagnostic before missing handoff.\n",
+                                }
+                            ],
+                        },
+                    },
+                }
+                sys.stdout.write(json.dumps(update) + "\n")
+                sys.stdout.write(json.dumps(_response(req_id, {"stopReason": "refusal"})) + "\n")
+                sys.stdout.flush()
+                sys.stderr.write("mock ACP stderr before missing handoff\n")
+                sys.stderr.flush()
+                sys.exit(7)
             _write_handoff()
             resp = _response(req_id, {"stopReason": "end_turn"})
         else:

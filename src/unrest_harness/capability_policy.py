@@ -743,7 +743,6 @@ def build_role_environment(
         for name in FINITE_CREDENTIAL_NAMES:
             if not include_credentials or name not in selected_credentials:
                 result.pop(name, None)
-        result = enforce_environment_credential_provenance(result, known)
     else:
         names = set(declaration.forward)
         if include_credentials:
@@ -753,7 +752,6 @@ def build_role_environment(
             for name in sorted(names)
             if name in host_environment
         }
-        result = enforce_environment_credential_provenance(result, known)
     for name, value in sorted((internal or {}).items()):
         if name not in declaration.internal:
             raise CapabilityPolicyError(
@@ -764,7 +762,7 @@ def build_role_environment(
                 reason="internal runtime name is not declared by policy",
             )
         result[name] = value
-    return dict(sorted(result.items()))
+    return enforce_environment_credential_provenance(result, known)
 
 
 def _is_token_character(character: str | None) -> bool:
@@ -797,7 +795,7 @@ def enforce_environment_credential_provenance(
     *,
     inherit_all: bool = False,
 ) -> dict[str, str]:
-    """Keep exact authorized pairs and omit exact-value aliases."""
+    """Keep authorized exact pairs and omit other raw credential occurrences."""
     # Wildcard forwarding broadens names, never finite credential identity.
     # Keep the keyword for callers that describe their projection mode, but do
     # not let it bypass the exact-value provenance boundary.
@@ -810,7 +808,10 @@ def enforce_environment_credential_provenance(
         name: value
         for name, value in sorted(environment.items())
         if name in names_by_value.get(value, set())
-        or value not in names_by_value
+        or not any(
+            contains_credential_token(value, known)
+            for known in names_by_value
+        )
     }
 
 

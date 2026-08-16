@@ -560,32 +560,40 @@ async def test_raw_acp_terminal_protocol_redacts_credential_values(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider_name", ("claude", "codex"))
 @pytest.mark.parametrize(
-    "role", ("orchestrator", "worker", "validator", "terminal_reviewer")
+    "role", ("worker", "validator", "terminal_reviewer")
 )
-async def test_real_unsafe_terminal_create_excludes_exact_finite_value_aliases(
+@pytest.mark.parametrize("profile", (SAFE_PROFILE, UNSAFE_DEVELOPMENT_PROFILE))
+async def test_real_terminal_create_excludes_raw_wrappers_and_preserves_transform(
     tmp_path: Path,
     provider_name: str,
     role: str,
+    profile: str,
 ) -> None:
     policy = _resolved(
         tmp_path,
         provider_name=provider_name,
         role=role,
-        profile=UNSAFE_DEVELOPMENT_PROFILE,
+        profile=profile,
     )
-    aliases = {
-        f"UNRELATED_ALIAS_{index}": f"terminal-sentinel-{index}-{name.lower()}"
+    credentials = {
+        name: "KEY" if index == 0 else f"terminal-sentinel-{index}-{name.lower()}"
         for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
     }
+    aliases = {
+        f"UNRELATED_ALIAS_{index}": credentials[name]
+        for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
+    }
+    wrapped_credential = credentials[FINITE_CREDENTIAL_NAMES[1]]
+    encoded_control = base64.urlsafe_b64encode(wrapped_credential.encode()).decode()
     host = {
         "PATH": os.environ["PATH"],
-        **{
-            name: f"terminal-sentinel-{index}-{name.lower()}"
-            for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
-        },
+        **credentials,
         **aliases,
-        "ORDINARY_CONTROL": "ordinary-equal-free-value",
-        "TRANSFORMED_CONTROL": "wrapped::terminal-sentinel-0-anthropic_api_key",
+        "HOME": f"prefix::{wrapped_credential}::suffix",
+        "TEMP": "KEY",
+        "SSL_CERT_DIR": "MONKEY",
+        "NO_PROXY": "ordinary-equal-free-value",
+        "TMP": encoded_control,
     }
     terminal_environment = build_role_environment(
         policy,
@@ -599,30 +607,25 @@ async def test_real_unsafe_terminal_create_excludes_exact_finite_value_aliases(
         terminal_environment=terminal_environment,
     )
     client.set_credential_inventory(finite_credential_values(host))
+    observed_names = (
+        *FINITE_CREDENTIAL_NAMES,
+        *aliases,
+        "HOME",
+        "TEMP",
+        "SSL_CERT_DIR",
+        "NO_PROXY",
+        "TMP",
+    )
     script = (
-        "import base64, json, os; "
+        "import json, os; "
         "names = "
-        f"{(*FINITE_CREDENTIAL_NAMES, *aliases)!r}; "
-        "print(json.dumps({name: os.environ.get(name) for name in names} | "
-        "{'ORDINARY_CONTROL': os.environ.get('ORDINARY_CONTROL'), "
-        "'TRANSFORMED_CONTROL': base64.b64encode("
-        "os.environ['TRANSFORMED_CONTROL'].encode()).decode()}))"
+        f"{observed_names!r}; "
+        "print(json.dumps({name: os.environ.get(name) for name in names}))"
     )
     created = await client._handle_terminal_create(
         {
             "command": sys.executable,
             "args": ["-c", script],
-            "env": [
-                *(
-                    {"name": name, "value": value}
-                    for name, value in aliases.items()
-                ),
-                {"name": "ORDINARY_CONTROL", "value": "ordinary-equal-free-value"},
-                {
-                    "name": "TRANSFORMED_CONTROL",
-                    "value": "wrapped::terminal-sentinel-0-anthropic_api_key",
-                },
-            ],
         }
     )
     terminal_id = created["terminalId"]
@@ -632,10 +635,12 @@ async def test_real_unsafe_terminal_create_excludes_exact_finite_value_aliases(
     observed = json.loads(output)
     for name in (*FINITE_CREDENTIAL_NAMES, *aliases):
         assert observed[name] is None
-    assert observed["ORDINARY_CONTROL"] == "ordinary-equal-free-value"
-    assert base64.b64decode(observed["TRANSFORMED_CONTROL"]).decode() == (
-        "wrapped::terminal-sentinel-0-anthropic_api_key"
-    )
+    assert observed["HOME"] is None
+    assert observed["TEMP"] is None
+    assert observed["SSL_CERT_DIR"] == "MONKEY"
+    assert observed["NO_PROXY"] == "ordinary-equal-free-value"
+    assert observed["TMP"] == encoded_control
+    assert base64.urlsafe_b64decode(observed["TMP"]).decode() == wrapped_credential
 
 
 def test_cli_safe_init_round_trips_policy_and_never_persists_secrets(

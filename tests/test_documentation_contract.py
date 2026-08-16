@@ -293,7 +293,7 @@ def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
         release.split()
     )
 
-    assert audit["audit_date"] == "2026-08-13"
+    assert audit["audit_date"] == "2026-08-16"
     assert "external publication unverified" in audit["compatibility_disposition"][
         "root_schemas"
     ].lower()
@@ -304,3 +304,65 @@ def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
         record["candidate_result"] == "pass"
         for record in crosswalk["mappings"].values()
     )
+
+
+def test_follow_up_review_claims_have_exact_individual_authority() -> None:
+    ledger = json.loads(
+        (ROOT / "docs/release/lean-core-v0.2-attached-review-claims.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    audit = json.loads(
+        (ROOT / "docs/release/lean-core-v0.2-review-audit.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    digest = "0b4195a00dac7a2269b08ac78306a6adf8260f58785f8e34cbb7e29188cf666d"
+    source = ledger["sources"]["follow-up-review"]
+    assert source == {
+        "source_identity": (
+            "user-authorized SHA-256 preserved in the 2026-08-16 mission brief; "
+            "no stable source-byte locator was supplied and the digest was not "
+            "independently recomputed"
+        ),
+        "sha256": digest,
+        "audit_date": "2026-08-16",
+        "review_head": "b31157dc54472d3a012c79b09bf454188ea299d7",
+        "base": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+    }
+    reconciliation = audit["attached_review_reconciliation"]
+    assert audit["audit_date"] == source["audit_date"]
+    assert reconciliation["source_sha256"]["follow_up_review"] == digest
+    assert "not independently recomputed" in reconciliation["rule"]
+
+    claims = ledger["claims"]
+    claim_ids = [claim["id"] for claim in claims]
+    assert len(claim_ids) == len(set(claim_ids))
+    follow_up = [claim for claim in claims if claim["source"] == "follow-up-review"]
+    assert [claim["id"] for claim in follow_up] == [
+        "R3-N1",
+        "R3-N2",
+        "R3-EXACT-HEAD-CI",
+    ]
+    assert [claim["disposition"] for claim in follow_up] == [
+        "substantiated-fixed",
+        "substantiated-fixed",
+        "deferred",
+    ]
+    assert all(claim["disposition"] in ledger["allowed_dispositions"] for claim in claims)
+    assert any(
+        citation.endswith("::test_missing_end_node_diagnostics_survive_production_dispatch_and_attention")
+        for citation in follow_up[0]["citations"]
+    )
+    assert any(
+        citation.endswith("::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls")
+        for citation in follow_up[1]["citations"]
+    )
+    assert "PR #6 final exact-head CI snapshot" in follow_up[2]["citations"]
+    mutable_identity_fields = {
+        "head_sha",
+        "publication_commit",
+        "github_run_id",
+        "github_artifact_id",
+    }
+    assert all(mutable_identity_fields.isdisjoint(claim) for claim in follow_up)

@@ -1842,7 +1842,10 @@ class ACPNodeRunner:
         if agent_output:
             parts.append(f"agent_output={_truncate_text(agent_output[-4000:], limit=2000)}")
         summary = redact_credential_values(" ".join(parts), credentials or {})
-        handoff = self._synthesize_missing_handoff(task, summary=summary)
+        attempt_id = handoff_path.stem.split("__", 1)[0]
+        handoff = self._synthesize_missing_handoff(task, summary=summary).model_copy(
+            update={"attempt_id": attempt_id}
+        )
         atomic_write_json(
             handoff_path,
             handoff.model_dump(mode="json"),

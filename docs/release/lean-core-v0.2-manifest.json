@@ -13,7 +13,7 @@
     "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
     "final_product_package_test": {
       "files": 103,
-      "sha256": "a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be",
+      "sha256": "8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7",
       "paths": [
         "pyproject.toml",
         "uv.lock",
@@ -31,16 +31,16 @@
   "commit_reproducible_finalization": {
     "status": "final-current-rollback-authority",
     "predecessor_commit": "c4394c89d85ae912bea4414a12ea4546753e89da",
-    "binding": {"files": 103, "sha256": "a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be"},
+    "binding": {"files": 103, "sha256": "8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7"},
     "checkpoint_authority": {
       "decision": "Decision 001",
       "local_probe": {"status": "failed-ordering-probe", "command": "env -u CODEX_PATH uv run pytest -q", "result": "919 passed, 7 skipped, 2 failed in 220.56s; exit 1", "invocations": 1, "reruns": 0, "failing_nodeids": ["tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers", "tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology"], "evidence_source": "mission attempt W-FREEZE 2026-08-13T13-25-57Z"},
       "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
     },
     "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
-    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217889, "sha256": "054ebc22de5aa7387827fe62db12f67c6abbba46469e4f166b2f8c5cf1cfbe40"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 301664, "sha256": "05a82e272ad996330c8f7dfbbe2da29a9d06fd35f3ed0707565aff755d8a8b1a"}},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217917, "sha256": "c8c6ec9f13808703ba99ec1d6fde536df834358c8736fde3d5d105620f154411"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 303526, "sha256": "5f8af7fc1470afb04896e5256b8f49f78edb3913db10f563280ec7727ae45633"}},
     "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
-    "evidence_packet": "mission evidence/W-COMMIT-BINDING-MEASUREMENT-FINAL-20260813"
+    "evidence_packet": "mission attempt for VAL-LOCAL-RELEASE-SEAL on 2026-08-16"
   },
   "local_checkpoint": {
     "status": "historical-superseded-by-commit-reproducible-finalization",

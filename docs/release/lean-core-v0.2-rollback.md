@@ -19,18 +19,18 @@ final v0.2 candidate, and do not interpret a commit-range diff from `6cf713c`
 as post-checkpoint mutation.
 
 The final candidate is 103 tracked product/package/test files at
-`a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be`.
+`8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7`.
 The former 105-file filesystem-only digest
 `35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`
 is historical and superseded because it included ignored/generated egg-info
 and was not commit-reproducible.
 
 The commit-reproducible finalization is the rollback authority: 103 tracked
-files at `a9e12eb7f210f1e6a005a2d2a3b8b335e9914e43dd53ce7cc737dcf79fe266be`,
-with retained `unrest_harness-0.2.0-py3-none-any.whl` (217,889 bytes) and
-`unrest_harness-0.2.0.tar.gz` (301,664 bytes) hashes
-`054ebc22de5aa7387827fe62db12f67c6abbba46469e4f166b2f8c5cf1cfbe40`
-and `05a82e272ad996330c8f7dfbbe2da29a9d06fd35f3ed0707565aff755d8a8b1a`.
+files at `8e6734f4d046cae6a81f9cd1abf7d99bc5ca5e7dd2f7269f9ceb26786974c7a7`,
+with retained `unrest_harness-0.2.0-py3-none-any.whl` (217,917 bytes) and
+`unrest_harness-0.2.0.tar.gz` (303,526 bytes) hashes
+`c8c6ec9f13808703ba99ec1d6fde536df834358c8736fde3d5d105620f154411`
+and `5f8af7fc1470afb04896e5256b8f49f78edb3913db10f563280ec7727ae45633`.
 Decision 001 defines checkpoint authority: the sole local full-suite invocation
 is a failed ordering probe with 919 passed, 7 documented live-provider skips,
 and exactly 2 carrier-currentness failures in 220.56 seconds, exit 1, with zero

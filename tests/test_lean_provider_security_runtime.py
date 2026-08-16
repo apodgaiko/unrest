@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import codecs
+import hashlib
 import json
 import os
 import sys
@@ -60,13 +61,23 @@ def config(harness_home: Path) -> HarnessConfig:
 
 @pytest.mark.parametrize("profile", (SAFE_PROFILE, UNSAFE_DEVELOPMENT_PROFILE))
 @pytest.mark.parametrize("provider_name", provider_names_for_role("worker"))
-@pytest.mark.parametrize("role", ("orchestrator", "worker", "validator", "terminal_reviewer"))
-def test_finite_inventory_and_adapter_mcp_terminal_projection(
+@pytest.mark.parametrize(
+    ("projection", "role", "include_credentials"),
+    (
+        ("adapter", "worker", True),
+        ("worker-mcp", "worker", False),
+        ("reviewer-mcp", "terminal_reviewer", False),
+        ("terminal", "worker", False),
+    ),
+)
+def test_projection_excludes_raw_wrappers_and_preserves_transformed_controls(
     config: HarnessConfig,
     workspace: Path,
     profile: str,
     provider_name: str,
+    projection: str,
     role: str,
+    include_credentials: bool,
 ) -> None:
     policy = resolve_role_capability(
         PROVIDERS[provider_name],
@@ -76,18 +87,34 @@ def test_finite_inventory_and_adapter_mcp_terminal_projection(
         workspace=workspace,
         project_record=workspace,
     )
+    credential_values_by_name = {
+        name: (
+            "KEY"
+            if index == 0
+            else f"sentinel-{index}-{name.lower()}"
+        )
+        for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
+    }
+    wrapped_credential = credential_values_by_name[FINITE_CREDENTIAL_NAMES[1]]
+    encoded_control = base64.urlsafe_b64encode(wrapped_credential.encode()).decode()
+    hashed_control = hashlib.sha256(wrapped_credential.encode()).hexdigest()
+    reordered_control = wrapped_credential[::-1]
     host = {
         "PATH": "/bin",
-        **{
-            name: f"sentinel-{index}-{name.lower()}"
-            for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
-        },
+        **credential_values_by_name,
+        "HOME": f"prefix::{wrapped_credential}::suffix",
+        "TEMP": "KEY",
+        "SSL_CERT_DIR": "MONKEY",
+        "NO_PROXY": "ordinary-neighboring-text",
+        "TMP": encoded_control,
         "UNDECLARED_SECRET": "unsafe-only-value",
         **{
-            f"UNRELATED_ALIAS_{index}": f"sentinel-{index}-{name.lower()}"
+            f"UNRELATED_ALIAS_{index}": credential_values_by_name[name]
             for index, name in enumerate(FINITE_CREDENTIAL_NAMES)
         },
-        "TRANSFORMED_CONTROL": "wrapped::sentinel-0-anthropic_api_key",
+        "WRAPPED_LONG": f"prefix::{wrapped_credential}::suffix",
+        "HASHED_CONTROL": hashed_control,
+        "REORDERED_CONTROL": reordered_control,
     }
 
     expected_names = PROVIDERS[provider_name].credential_names
@@ -96,28 +123,46 @@ def test_finite_inventory_and_adapter_mcp_terminal_projection(
     assert credential_values(policy, host) == {
         name: host[name] for name in expected_names
     }
-    adapter = _acp_subprocess_env(
-        PROVIDERS[provider_name],
-        policy=policy,
-        host_environment=host,
-    )
-    child = build_role_environment(policy, host, include_credentials=False)
-    for name in FINITE_CREDENTIAL_NAMES:
-        if name in expected_names:
-            assert adapter[name] == host[name]
-        else:
-            assert name not in adapter
-        assert name not in child
-    if profile == SAFE_PROFILE:
-        assert "UNDECLARED_SECRET" not in adapter
+    internal = None
+    if projection in {"adapter", "worker-mcp", "reviewer-mcp"}:
+        internal = {"UNREST_HOME": f"internal::{wrapped_credential}::wrapper"}
+    if projection == "adapter":
+        projected = _acp_subprocess_env(
+            PROVIDERS[provider_name],
+            policy=policy,
+            host_environment=host,
+            internal=internal,
+        )
     else:
-        assert adapter["UNDECLARED_SECRET"] == "unsafe-only-value"
-        assert child["UNDECLARED_SECRET"] == "unsafe-only-value"
-        assert adapter["TRANSFORMED_CONTROL"] == "wrapped::sentinel-0-anthropic_api_key"
-        assert child["TRANSFORMED_CONTROL"] == "wrapped::sentinel-0-anthropic_api_key"
+        projected = build_role_environment(
+            policy,
+            host,
+            internal=internal,
+            include_credentials=include_credentials,
+        )
+
+    for name in FINITE_CREDENTIAL_NAMES:
+        if projection == "adapter" and name in expected_names:
+            assert projected[name] == host[name]
+        else:
+            assert name not in projected
+    assert "HOME" not in projected
+    assert "TEMP" not in projected
+    assert "UNREST_HOME" not in projected
+    assert projected["SSL_CERT_DIR"] == "MONKEY"
+    assert projected["NO_PROXY"] == "ordinary-neighboring-text"
+    assert projected["TMP"] == encoded_control
+    if profile == SAFE_PROFILE:
+        assert "UNDECLARED_SECRET" not in projected
+        assert "HASHED_CONTROL" not in projected
+        assert "REORDERED_CONTROL" not in projected
+    else:
+        assert projected["UNDECLARED_SECRET"] == "unsafe-only-value"
+        assert projected["HASHED_CONTROL"] == hashed_control
+        assert projected["REORDERED_CONTROL"] == reordered_control
+        assert "WRAPPED_LONG" not in projected
         for index in range(len(FINITE_CREDENTIAL_NAMES)):
-            assert f"UNRELATED_ALIAS_{index}" not in adapter
-            assert f"UNRELATED_ALIAS_{index}" not in child
+            assert f"UNRELATED_ALIAS_{index}" not in projected
 
     assert finite_credential_values(host) == {
         name: host[name] for name in FINITE_CREDENTIAL_NAMES
@@ -156,13 +201,26 @@ def test_exact_redaction_short_guard_structures_transforms_and_every_split() -> 
         "unknown-secret-like-value"
     )
     assert enforce_environment_credential_provenance(
-        {"ALIAS": "long-known-value", "ORDINARY": "kept"}, inventory
-    ) == {"ORDINARY": "kept"}
+        {
+            "ALIAS": "long-known-value",
+            "WRAPPED_LONG": "prefix-long-known-value-suffix",
+            "SHORT_BOUNDARY": "KEY",
+            "SHORT_EMBEDDED": "MONKEY",
+            "ORDINARY": "kept",
+        },
+        inventory,
+    ) == {"ORDINARY": "kept", "SHORT_EMBEDDED": "MONKEY"}
     assert enforce_environment_credential_provenance(
-        {"ALIAS": "long-known-value", "ORDINARY": "kept"},
+        {
+            "ALIAS": "long-known-value",
+            "WRAPPED_LONG": "prefix-long-known-value-suffix",
+            "SHORT_BOUNDARY": "KEY",
+            "SHORT_EMBEDDED": "MONKEY",
+            "ORDINARY": "kept",
+        },
         inventory,
         inherit_all=True,
-    ) == {"ORDINARY": "kept"}
+    ) == {"ORDINARY": "kept", "SHORT_EMBEDDED": "MONKEY"}
 
 
 def test_streaming_redactor_handles_empty_flush_overlap_collisions_and_unicode_bytes(

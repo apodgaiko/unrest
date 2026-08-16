@@ -38,9 +38,11 @@ from unrest_harness.capability_policy import (
 from unrest_harness.providers import PROVIDERS
 from unrest_harness.assets import AssetLoader
 from unrest_harness.config import HarnessConfig
+from unrest_harness.controller import ProjectController
 from unrest_harness.dispatcher import DispatchRequest
 from unrest_harness.models import (
     Task,
+    TaskList,
     TerminalReviewHandoff,
     ValidateHandoff,
     WorkHandoff,
@@ -612,8 +614,83 @@ def test_synthesize_missing_handoff_records_failure(
         session_error=None,
     )
     assert handoff.done is False
+    assert handoff.attempt_id == "2026-05-17T00-00-00Z"
     assert "stop_reason=cancelled" in handoff.report
-    assert handoff_path.exists()
+    assert json.loads(handoff_path.read_text())["attempt_id"] == handoff.attempt_id
+
+
+def test_missing_end_node_diagnostics_survive_production_dispatch_and_attention(
+    config: HarnessConfig,
+    workspace: Path,
+    mock_acp_command: str,
+) -> None:
+    role_config = replace(
+        config,
+        worker_acp_command=f"{mock_acp_command} --missing-handoff-diagnostics",
+    )
+    store = ProjectStore(role_config)
+    dispatcher = ACPNodeDispatcher(role_config, store)
+
+    class UnusedReviewer:
+        def review(
+            self, project_id: str, mission_id: str, spawn_ts: str
+        ) -> TerminalReviewHandoff:
+            raise AssertionError("terminal review must not run for a failed work task")
+
+    controller = ProjectController(
+        role_config,
+        dispatcher,
+        UnusedReviewer(),
+        store=store,
+    )
+    started = controller.start_project("missing handoff regression", str(workspace))
+    project_id = started.projectId
+    mission_id = "mission-001"
+    contract_dir = store.ensure_contract_dir(project_id, mission_id)
+    (contract_dir / "VAL-001.md").write_text("# VAL-001\n\nTest.\n")
+    controller.submit_plan(
+        project_id,
+        TaskList(
+            tasks=[
+                Task(
+                    id="w1",
+                    type="work",
+                    body="exit without end_node",
+                    targets=["VAL-001"],
+                    skill="s",
+                )
+            ]
+        ),
+    )
+
+    envelope = controller.advance_project(project_id)
+
+    assert envelope.state.state == "attention_needed"
+    task_state = store.load_task_state(project_id, mission_id)
+    generation = task_state.tasks["w1"].last_attempt
+    assert generation is not None
+    runtime_path = store.attempt_path(project_id, mission_id, generation, "w1")
+    durable_path = store.attempt_report_path(project_id, mission_id, generation, "w1")
+    runtime = json.loads(runtime_path.read_text())
+    durable = durable_path.read_text()
+    attention = store.load_attention(project_id)
+    assert len(attention) == 1
+    assert attention[0].kind == "node_failed"
+    assert runtime["attempt_id"] == generation
+    assert f"attempt_id: {generation}" in durable
+
+    expected_diagnostics = (
+        "stop_reason=refusal",
+        "exit_code=7",
+        "stderr=mock ACP stderr before missing handoff",
+        "agent_output=agent diagnostic before missing handoff.",
+    )
+    for diagnostic in expected_diagnostics:
+        assert diagnostic in runtime["report"]
+        assert diagnostic in durable
+        assert diagnostic in attention[0].report
+    assert "null attempt identity" not in attention[0].report
+    assert len(runtime["report"]) < 2200
 
 
 @pytest.mark.parametrize("provider_name", ("claude", "codex"))
