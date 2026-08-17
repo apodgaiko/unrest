@@ -1,9 +1,8 @@
-"""Read-only, versioned runtime observations for operators.
+"""Read-only schema-v2 runtime status for operators.
 
-The observer reads existing cursors through a content-stable snapshot.  It
-never invokes the coordinator, reconciles an attempt, writes telemetry, or
-dispatches work.  File timestamps are reported as diagnostics, not as
-heartbeats or completion estimates.
+The observer captures existing cursors without importing or invoking runtime
+authority. File ages are diagnostics only: they are not heartbeats, recovery
+signals, or completion estimates.
 """
 from __future__ import annotations
 
@@ -13,21 +12,18 @@ import json
 import os
 import re
 import stat
-from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal, ROUND_HALF_EVEN
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from .models import (
     Aborted,
     AttentionFile,
-    AttentionItemInternal,
     AttentionNeeded,
-    ContractStateEntry,
-    ContractStateFile,
     Done,
     Draft,
     Failed,
@@ -38,46 +34,35 @@ from .models import (
     TASK_ID_REGEX,
     Task,
     TaskList,
-    TaskStateEntry,
     TaskStateFile,
-    WorkHandoff,
     ValidateHandoff,
+    WorkHandoff,
 )
 from .storage import ProjectStore
-from .task_validation import gates_in_order
 
 
 DerivedRuntimeState = Literal[
+    "draft",
+    "planning",
     "active",
     "attention",
-    "draft",
-    "gate_ready",
-    "inconsistent",
-    "planning",
     "quiescent",
-    "recovery_ready",
-    "runnable",
-    "stale_running_candidate",
     "terminal",
+    "inconsistent",
 ]
 ObservationFailureCode = Literal[
-    "invalid_format",
     "invalid_project_id",
-    "invalid_stale_threshold",
     "malformed_cursor",
-    "non_current_mission",
     "project_not_found",
     "snapshot_changed",
     "unsafe_cursor",
     "unsafe_project_path",
 ]
-RuntimeAnomalyCode = Literal[
+StatusCode = Literal[
     "mission_cursor_mismatch",
     "failed_task_without_attention",
-    "running_without_attempt_id",
-    "attempt_cursor_mismatch",
-    "malformed_attempt_handoff",
-    "completed_attempt_unreconciled",
+    "running_without_attempt",
+    "malformed_attempt",
     "stale_running_candidate",
 ]
 PersistedRuntimeState = Literal[
@@ -89,46 +74,18 @@ PersistedRuntimeState = Literal[
     "failed",
     "aborted",
 ]
-ShadowAction = Literal[
-    "none",
-    "wait_for_plan",
-    "attention_decision_required",
-    "inspect_malformed_attempt",
-    "reconcile_completed_attempt",
-    "inspect_stale_attempt",
-    "wait_for_attempt",
-    "evaluate_gate",
-    "dispatch_ready",
-    "diagnose_failed_cursor",
-    "closure_candidate",
-]
-ShadowReasonCode = Literal[
-    "not_planning",
-    "plan_not_submitted",
-    "attention_open",
-    "project_terminal",
-    "malformed_attempt",
-    "handoff_available",
-    "running_cursor_needs_inspection",
-    "running_within_threshold",
-    "gate_dependencies_cleared",
-    "dependencies_cleared",
-    "failed_without_attention",
-    "no_runnable_work",
-]
 
 PROJECT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 MISSION_ID_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,127}$")
 _STATE_ADAPTER: TypeAdapter[ProjectState] = TypeAdapter(ProjectState)
 MAX_DISPLAY_ID_CHARS = 80
-MAX_RENDER_LINE_CHARS = 240
 _DISPLAY_DIGEST_CHARS = 16
 _DISPLAY_PREFIX_CHARS = MAX_DISPLAY_ID_CHARS - _DISPLAY_DIGEST_CHARS - 1
 _DISPLAY_SAFE = re.compile(r"^[A-Za-z0-9._:-]+$")
 
 
 class RuntimeObservationError(RuntimeError):
-    """A bounded observation failure safe to surface to an operator."""
+    """A closed, value-free observation failure safe to show an operator."""
 
     def __init__(self, code: ObservationFailureCode) -> None:
         super().__init__(code)
@@ -139,133 +96,28 @@ class _FrozenModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-class NamedCount(_FrozenModel):
-    name: str
-    count: int = Field(ge=0)
-
-
-class TaskCountSummary(_FrozenModel):
-    by_type: tuple[NamedCount, ...]
-    by_status: tuple[NamedCount, ...]
-
-
-class AssertionCountSummary(_FrozenModel):
-    by_status: tuple[NamedCount, ...]
-
-
-class AttentionCountSummary(_FrozenModel):
-    by_kind: tuple[NamedCount, ...]
-
-
-class StructuralProgress(_FrozenModel):
-    authored_task_total: int = Field(ge=0)
-    active_task_total: int = Field(ge=0)
-    cleared_task_total: int = Field(ge=0)
-    assertion_total: int = Field(ge=0)
-    passed_assertion_total: int = Field(ge=0)
-
-
-class FreshnessObservation(_FrozenModel):
-    source: Literal["file_mtime"] = "file_mtime"
-    state_cursor_age_seconds: float | None
-    task_cursor_age_seconds: float | None
-    newest_runtime_input_age_seconds: float | None
-
-
-class TaskObservation(_FrozenModel):
-    ordinal: int = Field(ge=0)
-    task_id: str
-    task_type: Literal["work", "validate", "gate"]
-    status: Literal["pending", "running", "cleared", "failed", "superseded"]
-    depends_on: tuple[str, ...]
-    blocked_by: tuple[str, ...]
-    runnable: bool
-    attempt_count: int = Field(ge=0)
-    cursor_attempt_id: str | None
-    latest_observed_attempt_id: str | None
-
-
-class AttemptTiming(_FrozenModel):
-    task_id: str
-    cursor_attempt_id: str | None
-    latest_observed_attempt_id: str | None
-    active_attempt_elapsed_seconds: float | None
-    completion_observed: bool
-    malformed_completion: bool
-    observed_attempt_duration_seconds: float | None
-    observed_duration_source: Literal["file_mtime"] | None
-
-    @property
-    def cursor_spawn_ts(self) -> str | None:
-        """Compatibility alias for the unpublic foundation model."""
-
-        return self.cursor_attempt_id
-
-    @property
-    def observed_attempt_ts(self) -> str | None:
-        """Compatibility alias for the unpublic foundation model."""
-
-        return self.latest_observed_attempt_id
-
-    @property
-    def age_seconds(self) -> float | None:
-        """Compatibility alias for the unpublic foundation model."""
-
-        return self.active_attempt_elapsed_seconds
-
-
-class RuntimeAnomaly(_FrozenModel):
-    code: RuntimeAnomalyCode
-    task_ids: tuple[str, ...] = Field(default_factory=tuple)
-
-
-class GateReadiness(_FrozenModel):
-    count: int = Field(ge=0)
-    task_ids: tuple[str, ...]
-
-
-class ShadowSchedulerDecision(_FrozenModel):
-    """What the current scheduler would consider; never an authority input."""
-
-    action: ShadowAction
-    task_ids: tuple[str, ...] = Field(default_factory=tuple)
-    reason_code: ShadowReasonCode
-    dispatch_performed: Literal[False] = False
-
-
 class RuntimeObservation(_FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     observed_at: str
     project_id: str
     mission_id: str | None
     persisted_state: PersistedRuntimeState
     derived_state: DerivedRuntimeState
-    freshness: FreshnessObservation
-    progress: StructuralProgress
-    task_counts: TaskCountSummary
-    assertion_counts: AssertionCountSummary
-    attention_counts: AttentionCountSummary
-    gate_readiness: GateReadiness
-    tasks: tuple[TaskObservation, ...] = Field(default_factory=tuple)
-    timings: tuple[AttemptTiming, ...] = Field(default_factory=tuple)
-    anomalies: tuple[RuntimeAnomaly, ...] = Field(default_factory=tuple)
-    shadow_scheduler: ShadowSchedulerDecision
-
-    @property
-    def state_age_seconds(self) -> float | None:
-        """Compatibility alias for the unpublic foundation model."""
-
-        return self.freshness.state_cursor_age_seconds
+    attention_count: int = Field(ge=0)
+    running_task_ids: tuple[str, ...] = Field(default_factory=tuple)
+    runnable_task_ids: tuple[str, ...] = Field(default_factory=tuple)
+    failed_task_ids: tuple[str, ...] = Field(default_factory=tuple)
+    last_runtime_change_age_seconds: float | None
+    codes: tuple[StatusCode, ...] = Field(default_factory=tuple)
 
 
 class ObservationFailure(_FrozenModel):
+    project_id: str | None
     code: ObservationFailureCode
-    project_id: str | None = None
-    entry_ref: str | None = None
 
 
 class RuntimeObservationCollection(_FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     observed_at: str
     projects: tuple[RuntimeObservation, ...] = Field(default_factory=tuple)
     failures: tuple[ObservationFailure, ...] = Field(default_factory=tuple)
@@ -281,8 +133,6 @@ class _CapturedFile(_FrozenModel):
     data: bytes | None = Field(exclude=True)
 
 
-# These bounds cover the fixed cursor layout with ample room for ordinary
-# missions while making every allocation and read in capture auditable.
 MAX_CAPTURE_FILE_BYTES = 4 * 1024 * 1024
 MAX_CAPTURE_TOTAL_BYTES = 16 * 1024 * 1024
 MAX_CAPTURE_FILES = 4096
@@ -308,11 +158,7 @@ class _CaptureBudget:
 
 
 def validate_project_id(project_id: str) -> bool:
-    return (
-        PROJECT_ID_PATTERN.fullmatch(project_id) is not None
-        and project_id not in {".", ".."}
-        and ".." not in project_id.split("/")
-    )
+    return PROJECT_ID_PATTERN.fullmatch(project_id) is not None
 
 
 def _validate_mission_id(mission_id: str | None) -> None:
@@ -320,39 +166,38 @@ def _validate_mission_id(mission_id: str | None) -> None:
         raise RuntimeObservationError("malformed_cursor")
 
 
-def _validate_task_identifiers(
-    task_list: TaskList,
-    task_state: TaskStateFile,
-) -> None:
-    identifiers = [
-        identifier
-        for task in task_list.tasks
-        for identifier in (task.id, *task.depends_on)
-    ]
-    identifiers.extend(task_state.tasks)
-    if any(
-        len(identifier) > 128 or TASK_ID_REGEX.fullmatch(identifier) is None
-        for identifier in identifiers
-    ):
-        raise RuntimeObservationError("malformed_cursor")
-
-
 def _utc_text(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _datetime_ns(value: datetime) -> int:
+    utc = value.astimezone(UTC)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
+    delta = utc - epoch
+    return (
+        delta.days * 86_400_000_000_000
+        + delta.seconds * 1_000_000_000
+        + delta.microseconds * 1_000
+    )
 
 
 def _age_seconds(now: datetime, mtime_ns: int | None) -> float | None:
     if mtime_ns is None:
         return None
-    modified = datetime.fromtimestamp(mtime_ns / 1_000_000_000, UTC)
-    return max(0.0, round((now - modified).total_seconds(), 3))
+    difference = max(0, _datetime_ns(now) - mtime_ns)
+    rounded = (Decimal(difference) / Decimal(1_000_000_000)).quantize(
+        Decimal("0.001"),
+        rounding=ROUND_HALF_EVEN,
+    )
+    return float(rounded)
 
 
 def _parse_spawn_ts(value: str | None) -> datetime | None:
     if value is None:
         return None
     match = re.fullmatch(
-        r"(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)(?:-\d{4})?",
+        r"(?P<timestamp>[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+        r"[0-9]{2}-[0-9]{2}-[0-9]{2}Z)(?:-[0-9]{4})?",
         value,
     )
     if match is None:
@@ -464,8 +309,7 @@ def _scan_directory(
         return []
     entries: list[os.DirEntry[str]] = []
     try:
-        iterator = os.scandir(path)
-        with iterator:
+        with os.scandir(path) as iterator:
             for entry in iterator:
                 entries.append(entry)
                 if len(entries) > MAX_CAPTURE_FILES:
@@ -602,7 +446,9 @@ def _selector_mission(files: list[_CapturedFile]) -> str | None:
     return selected
 
 
-def _task_capture_needs(files: list[_CapturedFile], mission_id: str) -> tuple[set[str], set[str]]:
+def _task_capture_needs(
+    files: list[_CapturedFile], mission_id: str
+) -> tuple[set[str], set[str]]:
     sources = {item.relative_path: item for item in files}
     prefix = f".unrest-runtime/missions/{mission_id}"
     task_source = sources.get(f"{prefix}/tasks.json")
@@ -625,11 +471,7 @@ def _task_capture_needs(files: list[_CapturedFile], mission_id: str) -> tuple[se
     return task_ids, running_ids
 
 
-def _capture_inputs(
-    project_root: Path,
-    *,
-    requested_mission_id: str | None = None,
-) -> tuple[_CapturedFile, ...]:
+def _capture_inputs(project_root: Path) -> tuple[_CapturedFile, ...]:
     try:
         project_info = project_root.lstat()
     except OSError as exc:
@@ -660,7 +502,7 @@ def _capture_inputs(
         if source is not None:
             captured.append(source)
 
-    mission_id = requested_mission_id or _selector_mission(captured)
+    mission_id = _selector_mission(captured)
     if mission_id is None or MISSION_ID_PATTERN.fullmatch(mission_id) is None:
         return tuple(sorted(captured, key=lambda item: item.relative_path))
 
@@ -676,51 +518,54 @@ def _capture_inputs(
             captured.append(source)
 
     task_ids, running_ids = _task_capture_needs(captured, mission_id)
-    durable_root = project_root / ".unrest"
-    _safe_directory(durable_root, project_root, optional=True)
-    contract_dir = durable_root / "missions" / mission_id / "contract"
-    for entry in _scan_directory(contract_dir, project_root, optional=True):
-        path = Path(entry.path)
-        try:
-            info = path.lstat()
-        except OSError as exc:
-            raise _cursor_error(exc) from exc
-        if stat.S_ISDIR(info.st_mode):
-            raise RuntimeObservationError("unsafe_cursor")
-        if path.suffix != ".md":
-            continue
-        captured.append(
-            _capture_metadata(path, project_root, budget, expected=info)
-        )
-
     attempts_dir = mission_runtime / "attempts"
-    attempts_by_task: dict[str, list[tuple[str, Path, os.stat_result]]] = {}
+    attempts: list[tuple[str, str | None, Path, os.stat_result]] = []
     for entry in _scan_directory(attempts_dir, project_root, optional=True):
         path = Path(entry.path)
         try:
             info = path.lstat()
         except OSError as exc:
             raise _cursor_error(exc) from exc
-        if stat.S_ISDIR(info.st_mode):
+        if stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
             raise RuntimeObservationError("unsafe_cursor")
-        if path.suffix != ".json" or "__" not in path.stem:
+        if path.suffix != ".json":
             continue
-        spawn_ts, task_id = path.stem.split("__", 1)
-        if task_id not in task_ids:
-            continue
-        attempts_by_task.setdefault(task_id, []).append((spawn_ts, path, info))
+        task_id: str | None = None
+        if "__" in path.stem:
+            _spawn_ts, candidate = path.stem.split("__", 1)
+            if candidate in task_ids:
+                task_id = candidate
+        attempts.append((path.stem, task_id, path, info))
+    latest_running_paths: set[Path] = set()
+    for task_id in running_ids:
+        matching = sorted(
+            (item for item in attempts if item[1] == task_id),
+            key=lambda item: os.fsencode(item[0]),
+        )
+        if matching:
+            latest_running_paths.add(matching[-1][2])
+    for _stem, _task_id, path, info in sorted(
+        attempts, key=lambda item: os.fsencode(item[0])
+    ):
+        if path in latest_running_paths:
+            source = _capture_file(path, project_root, budget, expected=info)
+            assert source is not None
+            captured.append(source)
+        else:
+            captured.append(_capture_metadata(path, project_root, budget, expected=info))
 
-    for task_id in sorted(attempts_by_task):
-        attempts = sorted(attempts_by_task[task_id], key=lambda item: os.fsencode(item[0]))
-        for index, (_spawn_ts, path, info) in enumerate(attempts):
-            if task_id in running_ids and index == len(attempts) - 1:
-                source = _capture_file(path, project_root, budget, expected=info)
-                assert source is not None
-                captured.append(source)
-            else:
-                captured.append(
-                    _capture_metadata(path, project_root, budget, expected=info)
-                )
+    terminal_dir = mission_runtime / "terminal-reviews"
+    for entry in _scan_directory(terminal_dir, project_root, optional=True):
+        path = Path(entry.path)
+        try:
+            info = path.lstat()
+        except OSError as exc:
+            raise _cursor_error(exc) from exc
+        if stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+            raise RuntimeObservationError("unsafe_cursor")
+        if path.suffix == ".json":
+            captured.append(_capture_metadata(path, project_root, budget, expected=info))
+
     return tuple(sorted(captured, key=lambda item: item.relative_path))
 
 
@@ -731,78 +576,6 @@ def _identity_generation(
         (item.relative_path, item.device, item.inode, item.size, item.mtime_ns)
         for item in files
     )
-
-
-def _current_identity_generation(
-    project_root: Path,
-    *,
-    expected: tuple[_CapturedFile, ...] | None = None,
-    requested_mission_id: str | None = None,
-) -> tuple[tuple[str, int, int, int, int], ...]:
-    if expected is None:
-        return _identity_generation(
-            _capture_inputs(project_root, requested_mission_id=requested_mission_id)
-        )
-
-    expected_paths = {item.relative_path for item in expected}
-    mission_id = requested_mission_id or _selector_mission(list(expected))
-    task_ids = _task_capture_needs(list(expected), mission_id)[0] if mission_id else set()
-    current_paths: set[str] = set()
-    runtime_root = project_root / ".unrest-runtime"
-    for name in ("project.json", "state.json", "attention.json"):
-        path = runtime_root / name
-        try:
-            info = path.lstat()
-        except FileNotFoundError:
-            continue
-        except OSError as exc:
-            raise _cursor_error(exc) from exc
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-            raise RuntimeObservationError("unsafe_cursor")
-        current_paths.add(_relative_cursor_path(path, project_root))
-
-    if mission_id is not None:
-        mission_runtime = runtime_root / "missions" / mission_id
-        for name in ("tasks.json", "task-state.json", "contract-state.json"):
-            path = mission_runtime / name
-            try:
-                info = path.lstat()
-            except FileNotFoundError:
-                continue
-            except OSError as exc:
-                raise _cursor_error(exc) from exc
-            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-                raise RuntimeObservationError("unsafe_cursor")
-            current_paths.add(_relative_cursor_path(path, project_root))
-        contract_dir = project_root / ".unrest" / "missions" / mission_id / "contract"
-        for entry in _scan_directory(contract_dir, project_root, optional=True):
-            path = Path(entry.path)
-            if path.suffix == ".md":
-                current_paths.add(_relative_cursor_path(path, project_root))
-        attempts_dir = mission_runtime / "attempts"
-        for entry in _scan_directory(attempts_dir, project_root, optional=True):
-            path = Path(entry.path)
-            if path.suffix != ".json" or "__" not in path.stem:
-                continue
-            _spawn_ts, task_id = path.stem.split("__", 1)
-            if task_id in task_ids:
-                current_paths.add(_relative_cursor_path(path, project_root))
-
-    if current_paths != expected_paths:
-        raise RuntimeObservationError("snapshot_changed")
-    result: list[tuple[str, int, int, int, int]] = []
-    for item in expected:
-        path = project_root / item.relative_path
-        try:
-            info = path.lstat()
-        except OSError as exc:
-            raise _cursor_error(exc) from exc
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-            raise RuntimeObservationError("unsafe_cursor")
-        result.append(
-            (item.relative_path, info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
-        )
-    return tuple(result)
 
 
 def _source_map(files: tuple[_CapturedFile, ...]) -> dict[str, _CapturedFile]:
@@ -829,9 +602,7 @@ def _parse_json_model(
         raise RuntimeObservationError("malformed_cursor") from exc
 
 
-def _parse_state(
-    sources: dict[str, _CapturedFile],
-) -> ProjectState | None:
+def _parse_state(sources: dict[str, _CapturedFile]) -> ProjectState | None:
     source = sources.get(".unrest-runtime/state.json")
     if source is None:
         return None
@@ -841,18 +612,6 @@ def _parse_state(
         return _STATE_ADAPTER.validate_json(source.data)
     except (ValidationError, ValueError, json.JSONDecodeError) as exc:
         raise RuntimeObservationError("malformed_cursor") from exc
-
-
-def _contract_ids(sources: dict[str, _CapturedFile], mission_id: str) -> tuple[str, ...]:
-    prefix = f".unrest/missions/{mission_id}/contract/"
-    result: list[str] = []
-    for key in sorted(sources):
-        if not key.startswith(prefix) or not key.endswith(".md"):
-            continue
-        stem = Path(key).stem
-        if stem != "README":
-            result.append(stem)
-    return tuple(result)
 
 
 def _attempt_sources(
@@ -872,16 +631,33 @@ def _attempt_sources(
     return tuple(attempts)
 
 
-def _parse_handoff(source: _CapturedFile) -> WorkHandoff | ValidateHandoff:
+def _attempt_is_malformed(source: _CapturedFile) -> bool:
     if source.data is None:
-        raise RuntimeObservationError("malformed_cursor")
+        return False
     try:
         data = json.loads(source.data)
         if isinstance(data, dict) and ("items" in data or "passed" in data):
-            return ValidateHandoff.model_validate(data)
-        return WorkHandoff.model_validate(data)
-    except (ValidationError, ValueError, json.JSONDecodeError) as exc:
-        raise RuntimeObservationError("malformed_cursor") from exc
+            ValidateHandoff.model_validate(data)
+        else:
+            WorkHandoff.model_validate(data)
+    except (ValidationError, ValueError, json.JSONDecodeError):
+        return True
+    return False
+
+
+def _display_id(value: str) -> str:
+    if len(value) <= MAX_DISPLAY_ID_CHARS and _DISPLAY_SAFE.fullmatch(value):
+        return value
+    digest = hashlib.sha256(value.encode("utf-8", errors="surrogatepass")).hexdigest()[:16]
+    safe_prefix = "".join(
+        character if _DISPLAY_SAFE.fullmatch(character) else "_"
+        for character in value
+    )[:_DISPLAY_PREFIX_CHARS]
+    return f"{safe_prefix}~{digest}"
+
+
+def _display_ids(values: list[str]) -> tuple[str, ...]:
+    return tuple(sorted({_display_id(value) for value in values}, key=os.fsencode))
 
 
 def _runnable_tasks(task_list: TaskList, task_state: TaskStateFile) -> list[Task]:
@@ -894,107 +670,10 @@ def _runnable_tasks(task_list: TaskList, task_state: TaskStateFile) -> list[Task
     ]
 
 
-def _ready_gates(task_list: TaskList, task_state: TaskStateFile) -> list[Task]:
-    return [
-        task
-        for task in gates_in_order(task_list)
-        if task_state.status_of(task.id) == "pending"
-        and all(task_state.status_of(dep) == "cleared" for dep in task.depends_on)
-    ]
-
-
-def shadow_selected_task_ids(
-    task_list: TaskList,
-    task_state: TaskStateFile,
-    *,
-    max_parallel_nodes: int,
-) -> tuple[str, ...]:
-    """Mirror current selection for differential comparison only."""
-
-    runnable = _runnable_tasks(task_list, task_state)
-    capacity = max(1, max_parallel_nodes)
-    by_id = {task.id: task for task in task_list.tasks}
-    runnable_validator_ids = {
-        task.id for task in runnable if task.type == "validate"
-    }
-    for gate in (task for task in task_list.tasks if task.type == "gate"):
-        if task_state.status_of(gate.id) != "pending":
-            continue
-        validator_dep_ids = [
-            dep
-            for dep in gate.depends_on
-            if dep in by_id and by_id[dep].type == "validate"
-        ]
-        if not validator_dep_ids:
-            continue
-        if not all(
-            task_state.status_of(dep) == "cleared"
-            or dep in runnable_validator_ids
-            for dep in gate.depends_on
-        ):
-            continue
-        batch = [
-            task
-            for task in runnable
-            if task.id in runnable_validator_ids and task.id in validator_dep_ids
-        ]
-        return tuple(task.id for task in batch[:capacity])
-
-    candidates = runnable[:capacity]
-    if any(task.type == "work" for task in candidates):
-        candidates = candidates[:1]
-    return tuple(task.id for task in candidates)
-
-
-def _non_running_decision(
-    state: ProjectState | None,
-) -> tuple[DerivedRuntimeState, ShadowSchedulerDecision]:
-    if state is None or isinstance(state, Draft):
-        return "draft", ShadowSchedulerDecision(
-            action="none", reason_code="not_planning"
-        )
-    if isinstance(state, MissionPlanning):
-        return "planning", ShadowSchedulerDecision(
-            action="wait_for_plan", reason_code="plan_not_submitted"
-        )
-    if isinstance(state, AttentionNeeded):
-        return "attention", ShadowSchedulerDecision(
-            action="attention_decision_required", reason_code="attention_open"
-        )
-    if isinstance(state, (Done, Failed, Aborted)):
-        return "terminal", ShadowSchedulerDecision(
-            action="none", reason_code="project_terminal"
-        )
-    raise TypeError(f"unsupported state: {state!r}")
-
-
-def _canonical_counts(
-    model: type[BaseModel],
-    field_name: str,
-    values: Counter[str],
-    *,
-    expected_total: int,
-) -> tuple[NamedCount, ...]:
-    """Render one closed model Literal and reject any reconciliation drift."""
-
-    annotation = model.model_fields[field_name].annotation
-    order = tuple(value for value in get_args(annotation) if isinstance(value, str))
-    if not order or len(order) != len(set(order)):
-        raise RuntimeObservationError("malformed_cursor")
-    if set(values) - set(order) or sum(values.values()) != expected_total:
-        raise RuntimeObservationError("malformed_cursor")
-    counts = tuple(NamedCount(name=name, count=values[name]) for name in order)
-    if sum(item.count for item in counts) != expected_total:
-        raise RuntimeObservationError("malformed_cursor")
-    return counts
-
-
 def _observation_from_capture(
-    store: ProjectStore,
     project_id: str,
     sources: tuple[_CapturedFile, ...],
     *,
-    mission_id: str | None,
     stale_after_seconds: int,
     observed_at: datetime,
 ) -> RuntimeObservation:
@@ -1007,57 +686,54 @@ def _observation_from_capture(
     assert isinstance(record, ProjectRecord)
     if record.id != project_id:
         raise RuntimeObservationError("malformed_cursor")
-    state = _parse_state(source_by_path)
-    persisted_state = state.state if state is not None else "draft"
-    selected_mission = mission_id or record.current_mission_id
     _validate_mission_id(record.current_mission_id)
-    _validate_mission_id(mission_id)
-    if (
-        mission_id is not None
-        and mission_id != record.current_mission_id
-    ):
-        raise RuntimeObservationError("non_current_mission")
+    state = _parse_state(source_by_path)
+    persisted_state: PersistedRuntimeState = state.state if state is not None else "draft"
+    selected_mission = record.current_mission_id
+    codes: set[StatusCode] = set()
+    inconsistent = False
     if isinstance(state, (MissionRunning, MissionPlanning)):
         _validate_mission_id(state.mission_id)
-        if mission_id is not None and state.mission_id != mission_id:
-            raise RuntimeObservationError("non_current_mission")
         selected_mission = state.mission_id
+        if record.current_mission_id != state.mission_id:
+            codes.add("mission_cursor_mismatch")
+            inconsistent = True
 
-    state_source = source_by_path.get(".unrest-runtime/state.json")
     task_list = TaskList()
     task_state = TaskStateFile()
-    contract_state = ContractStateFile()
-    contract_ids: tuple[str, ...] = ()
-    task_state_source: _CapturedFile | None = None
     if selected_mission is not None:
-        mission_prefix = f".unrest-runtime/missions/{selected_mission}"
-        tasks_key = f"{mission_prefix}/tasks.json"
+        prefix = f".unrest-runtime/missions/{selected_mission}"
+        tasks_key = f"{prefix}/tasks.json"
         if tasks_key in source_by_path:
             parsed_tasks = _parse_json_model(source_by_path, tasks_key, TaskList)
             assert isinstance(parsed_tasks, TaskList)
             task_list = parsed_tasks
         elif isinstance(state, MissionRunning):
             raise RuntimeObservationError("malformed_cursor")
-        task_state_key = f"{mission_prefix}/task-state.json"
         parsed_task_state = _parse_json_model(
             source_by_path,
-            task_state_key,
+            f"{prefix}/task-state.json",
             TaskStateFile,
             default=TaskStateFile(),
         )
         assert isinstance(parsed_task_state, TaskStateFile)
         task_state = parsed_task_state
-        _validate_task_identifiers(task_list, task_state)
-        task_state_source = source_by_path.get(task_state_key)
-        parsed_contract_state = _parse_json_model(
-            source_by_path,
-            f"{mission_prefix}/contract-state.json",
-            ContractStateFile,
-            default=ContractStateFile(),
+
+    task_ids = {task.id for task in task_list.tasks}
+    identifiers = [
+        identifier
+        for task in task_list.tasks
+        for identifier in (task.id, *task.depends_on)
+    ]
+    identifiers.extend(task_state.tasks)
+    if (
+        any(
+            len(identifier) > 128 or TASK_ID_REGEX.fullmatch(identifier) is None
+            for identifier in identifiers
         )
-        assert isinstance(parsed_contract_state, ContractStateFile)
-        contract_state = parsed_contract_state
-        contract_ids = _contract_ids(source_by_path, selected_mission)
+        or set(task_state.tasks) - task_ids
+    ):
+        raise RuntimeObservationError("malformed_cursor")
 
     parsed_attention = _parse_json_model(
         source_by_path,
@@ -1068,221 +744,87 @@ def _observation_from_capture(
     assert isinstance(parsed_attention, AttentionFile)
     attention = parsed_attention.items
 
-    type_counts: Counter[str] = Counter(task.type for task in task_list.tasks)
-    status_counts: Counter[str] = Counter(
-        task_state.status_of(task.id) for task in task_list.tasks
-    )
-    assertion_status_counts: Counter[str] = Counter()
-    for assertion_id in contract_ids:
-        assertion_entry = contract_state.items.get(assertion_id)
-        assertion_status_counts[
-            assertion_entry.status if assertion_entry is not None else "pending"
-        ] += 1
-    attention_counts: Counter[str] = Counter(item.kind for item in attention)
+    running_raw = [
+        task.id for task in task_list.tasks if task_state.status_of(task.id) == "running"
+    ]
+    failed_raw = [
+        task.id for task in task_list.tasks if task_state.status_of(task.id) == "failed"
+    ]
+    runnable_raw = [task.id for task in _runnable_tasks(task_list, task_state)]
 
-    task_rows: list[TaskObservation] = []
-    timings: list[AttemptTiming] = []
-    completion_ids: list[str] = []
-    malformed_ids: list[str] = []
-    missing_attempt_ids: list[str] = []
-    mismatch_ids: list[str] = []
-    stale_ids: list[str] = []
-    for ordinal, task in enumerate(task_list.tasks):
-        status_value = task_state.status_of(task.id)
-        entry = task_state.tasks.get(task.id)
+    for task_id in running_raw:
+        entry = task_state.tasks.get(task_id)
         cursor_attempt_id = entry.last_attempt if entry is not None else None
-        if cursor_attempt_id is not None and _parse_spawn_ts(cursor_attempt_id) is None:
-            raise RuntimeObservationError("malformed_cursor")
-        attempts = _attempt_sources(source_by_path, selected_mission or "", task.id)
-        latest_attempt_id = attempts[-1][0] if attempts else None
-        latest_source = attempts[-1][1] if attempts else None
-        if latest_attempt_id is not None and _parse_spawn_ts(latest_attempt_id) is None:
-            raise RuntimeObservationError("malformed_cursor")
-        completion_observed = False
-        malformed_completion = False
-        if status_value == "running" and latest_source is not None:
-            try:
-                _parse_handoff(latest_source)
-                completion_observed = True
-            except RuntimeObservationError:
-                malformed_completion = True
-        active_elapsed: float | None = None
-        if status_value == "running":
-            started_at = _parse_spawn_ts(cursor_attempt_id)
-            if started_at is not None:
-                active_elapsed = max(
-                    0.0,
-                    round((observed_at - started_at).total_seconds(), 3),
-                )
-            if cursor_attempt_id is None:
-                missing_attempt_ids.append(task.id)
-            if (
-                cursor_attempt_id is not None
-                and latest_attempt_id is not None
-                and cursor_attempt_id != latest_attempt_id
-            ):
-                mismatch_ids.append(task.id)
-            if malformed_completion:
-                malformed_ids.append(task.id)
-            elif completion_observed:
-                completion_ids.append(task.id)
-            elif active_elapsed is not None and active_elapsed >= stale_after_seconds:
-                stale_ids.append(task.id)
-        duration: float | None = None
-        if status_value == "running" and latest_source is not None:
-            attempt_started_at = _parse_spawn_ts(latest_attempt_id)
-            if attempt_started_at is not None:
-                completed_at = datetime.fromtimestamp(
-                    latest_source.mtime_ns / 1_000_000_000, UTC
-                )
-                duration = max(
-                    0.0,
-                    round((completed_at - attempt_started_at).total_seconds(), 3),
-                )
-        blocked_by = tuple(
-            dep
-            for dep in task.depends_on
-            if task_state.status_of(dep) != "cleared"
-        )
-        runnable = (
-            task.type != "gate" and status_value == "pending" and not blocked_by
-        )
-        task_rows.append(
-            TaskObservation(
-                ordinal=ordinal,
-                task_id=task.id,
-                task_type=task.type,
-                status=status_value,
-                depends_on=tuple(task.depends_on),
-                blocked_by=blocked_by,
-                runnable=runnable,
-                attempt_count=len(attempts),
-                cursor_attempt_id=cursor_attempt_id,
-                latest_observed_attempt_id=latest_attempt_id,
-            )
-        )
-        if status_value == "running":
-            timings.append(
-                AttemptTiming(
-                    task_id=task.id,
-                    cursor_attempt_id=cursor_attempt_id,
-                    latest_observed_attempt_id=latest_attempt_id,
-                    active_attempt_elapsed_seconds=active_elapsed,
-                    completion_observed=completion_observed,
-                    malformed_completion=malformed_completion,
-                    observed_attempt_duration_seconds=duration,
-                    observed_duration_source=(
-                        "file_mtime" if duration is not None else None
-                    ),
-                )
-            )
+        attempts = _attempt_sources(source_by_path, selected_mission or "", task_id)
+        latest_id, latest_source = attempts[-1] if attempts else (None, None)
+        started_at = _parse_spawn_ts(cursor_attempt_id)
+        if cursor_attempt_id is None:
+            codes.add("running_without_attempt")
+        elif started_at is None:
+            codes.add("malformed_attempt")
+            inconsistent = True
+        if latest_id is not None and _parse_spawn_ts(latest_id) is None:
+            codes.add("malformed_attempt")
+            inconsistent = True
+        if latest_source is not None and _attempt_is_malformed(latest_source):
+            codes.add("malformed_attempt")
+            inconsistent = True
+        if (
+            started_at is not None
+            and (observed_at - started_at).total_seconds() >= stale_after_seconds
+        ):
+            codes.add("stale_running_candidate")
 
-    anomalies: list[RuntimeAnomaly] = []
-    if isinstance(state, (MissionRunning, MissionPlanning)) and (
-        record.current_mission_id != state.mission_id
-    ):
-        anomalies.append(RuntimeAnomaly(code="mission_cursor_mismatch"))
-    failed_ids = tuple(
-        task.task_id for task in task_rows if task.status == "failed"
-    )
     attended_failed_ids = {
         item.node_id
         for item in attention
-        if item.mission_id == selected_mission and item.node_id in failed_ids
+        if item.mission_id == selected_mission and item.node_id in failed_raw
     }
-    unattended_failed_ids = tuple(
-        task_id for task_id in failed_ids if task_id not in attended_failed_ids
-    )
-    if isinstance(state, MissionRunning) and unattended_failed_ids:
-        anomalies.append(
-            RuntimeAnomaly(
-                code="failed_task_without_attention", task_ids=unattended_failed_ids
-            )
-        )
-    for code, ids in (
-        ("running_without_attempt_id", missing_attempt_ids),
-        ("attempt_cursor_mismatch", mismatch_ids),
-        ("malformed_attempt_handoff", malformed_ids),
-        ("completed_attempt_unreconciled", completion_ids),
-        ("stale_running_candidate", stale_ids),
+    if isinstance(state, (MissionRunning, AttentionNeeded)) and any(
+        task_id not in attended_failed_ids for task_id in failed_raw
     ):
-        if ids:
-            anomalies.append(
-                RuntimeAnomaly(code=code, task_ids=tuple(dict.fromkeys(ids)))  # type: ignore[arg-type]
-            )
+        codes.add("failed_task_without_attention")
 
-    ready_gates = _ready_gates(task_list, task_state)
-    runnable_tasks = _runnable_tasks(task_list, task_state)
-    running_ids = tuple(
-        task.task_id for task in task_rows if task.status == "running"
-    )
-    if not isinstance(state, MissionRunning):
-        derived, decision = _non_running_decision(state)
-    elif malformed_ids:
-        derived = "inconsistent"
-        decision = ShadowSchedulerDecision(
-            action="inspect_malformed_attempt",
-            task_ids=running_ids,
-            reason_code="malformed_attempt",
-        )
-    elif completion_ids:
-        derived = "recovery_ready"
-        decision = ShadowSchedulerDecision(
-            action="reconcile_completed_attempt",
-            task_ids=running_ids,
-            reason_code="handoff_available",
-        )
-    elif stale_ids or missing_attempt_ids:
-        derived = "stale_running_candidate"
-        decision = ShadowSchedulerDecision(
-            action="inspect_stale_attempt",
-            task_ids=running_ids,
-            reason_code="running_cursor_needs_inspection",
-        )
-    elif running_ids:
+    if inconsistent:
+        derived: DerivedRuntimeState = "inconsistent"
+    elif isinstance(state, (Done, Failed, Aborted)):
+        derived = "terminal"
+    elif state is None or isinstance(state, Draft):
+        derived = "draft"
+    elif isinstance(state, MissionPlanning):
+        derived = "planning"
+    elif attention or isinstance(state, AttentionNeeded):
+        derived = "attention"
+    elif running_raw or runnable_raw:
         derived = "active"
-        decision = ShadowSchedulerDecision(
-            action="wait_for_attempt",
-            task_ids=running_ids,
-            reason_code="running_within_threshold",
-        )
-    elif ready_gates:
-        derived = "gate_ready"
-        decision = ShadowSchedulerDecision(
-            action="evaluate_gate",
-            task_ids=(ready_gates[0].id,),
-            reason_code="gate_dependencies_cleared",
-        )
-    elif runnable_tasks:
-        derived = "runnable"
-        decision = ShadowSchedulerDecision(
-            action="dispatch_ready",
-            task_ids=shadow_selected_task_ids(
-                task_list,
-                task_state,
-                max_parallel_nodes=store.config.max_parallel_nodes,
-            ),
-            reason_code="dependencies_cleared",
-        )
-    elif failed_ids:
-        derived = "inconsistent"
-        decision = ShadowSchedulerDecision(
-            action="diagnose_failed_cursor",
-            task_ids=failed_ids,
-            reason_code="failed_without_attention",
-        )
     else:
         derived = "quiescent"
-        decision = ShadowSchedulerDecision(
-            action="closure_candidate", reason_code="no_runnable_work"
-        )
 
-    active_rows = tuple(task for task in task_rows if task.status != "superseded")
+    age_paths = {
+        ".unrest-runtime/state.json",
+        ".unrest-runtime/attention.json",
+    }
+    age_prefixes: tuple[str, ...]
+    if selected_mission is not None:
+        prefix = f".unrest-runtime/missions/{selected_mission}"
+        age_paths.update(
+            {
+                f"{prefix}/task-state.json",
+                f"{prefix}/contract-state.json",
+            }
+        )
+        age_prefixes = (
+            f"{prefix}/attempts/",
+            f"{prefix}/terminal-reviews/",
+        )
+    else:
+        age_prefixes = ()
     newest_mtime = max(
         (
             item.mtime_ns
             for item in sources
-            if item.relative_path.startswith(".unrest-runtime/")
+            if item.relative_path in age_paths
+            or any(item.relative_path.startswith(prefix) for prefix in age_prefixes)
         ),
         default=None,
     )
@@ -1292,63 +834,12 @@ def _observation_from_capture(
         mission_id=selected_mission,
         persisted_state=persisted_state,
         derived_state=derived,
-        freshness=FreshnessObservation(
-            state_cursor_age_seconds=_age_seconds(
-                observed_at, state_source.mtime_ns if state_source else None
-            ),
-            task_cursor_age_seconds=_age_seconds(
-                observed_at,
-                task_state_source.mtime_ns if task_state_source else None,
-            ),
-            newest_runtime_input_age_seconds=_age_seconds(
-                observed_at, newest_mtime
-            ),
-        ),
-        progress=StructuralProgress(
-            authored_task_total=len(task_rows),
-            active_task_total=len(active_rows),
-            cleared_task_total=sum(task.status == "cleared" for task in active_rows),
-            assertion_total=len(contract_ids),
-            passed_assertion_total=assertion_status_counts["passed"],
-        ),
-        task_counts=TaskCountSummary(
-            by_type=_canonical_counts(
-                Task,
-                "type",
-                type_counts,
-                expected_total=len(task_rows),
-            ),
-            by_status=_canonical_counts(
-                TaskStateEntry,
-                "status",
-                status_counts,
-                expected_total=len(task_rows),
-            ),
-        ),
-        assertion_counts=AssertionCountSummary(
-            by_status=_canonical_counts(
-                ContractStateEntry,
-                "status",
-                assertion_status_counts,
-                expected_total=len(contract_ids),
-            )
-        ),
-        attention_counts=AttentionCountSummary(
-            by_kind=_canonical_counts(
-                AttentionItemInternal,
-                "kind",
-                attention_counts,
-                expected_total=len(attention),
-            )
-        ),
-        gate_readiness=GateReadiness(
-            count=len(ready_gates),
-            task_ids=tuple(task.id for task in ready_gates),
-        ),
-        tasks=tuple(task_rows),
-        timings=tuple(timings),
-        anomalies=tuple(anomalies),
-        shadow_scheduler=decision,
+        attention_count=len(attention),
+        running_task_ids=_display_ids(running_raw),
+        runnable_task_ids=_display_ids(runnable_raw),
+        failed_task_ids=_display_ids(failed_raw),
+        last_runtime_change_age_seconds=_age_seconds(observed_at, newest_mtime),
+        codes=tuple(sorted(codes)),
     )
 
 
@@ -1356,14 +847,13 @@ def observe_project_runtime(
     store: ProjectStore,
     project_id: str,
     *,
-    mission_id: str | None = None,
     stale_after_seconds: int = 3600,
     now: datetime | None = None,
 ) -> RuntimeObservation:
-    """Return a coherent, immutable snapshot without changing project state."""
+    """Return one coherent schema-v2 snapshot without changing project state."""
 
     if stale_after_seconds <= 0:
-        raise RuntimeObservationError("invalid_stale_threshold")
+        raise ValueError("stale_after_seconds must be positive")
     project_root = _validated_project_root(store, project_id)
     observed_at = (now or datetime.now(UTC)).astimezone(UTC)
     for _attempt in range(CAPTURE_ATTEMPTS):
@@ -1371,42 +861,32 @@ def observe_project_runtime(
         try:
             before = _capture_inputs(project_root)
             observation = _observation_from_capture(
-                store,
                 project_id,
                 before,
-                mission_id=mission_id,
                 stale_after_seconds=stale_after_seconds,
                 observed_at=observed_at,
             )
-            after_identity = _current_identity_generation(
-                project_root,
-                expected=before,
-            )
+            after = _capture_inputs(project_root)
         except RuntimeObservationError as error:
             if error.code == "snapshot_changed":
                 continue
-            if error.code not in {"malformed_cursor", "non_current_mission"} or before is None:
-                raise
-            try:
-                stable = _current_identity_generation(
-                    project_root,
-                    expected=before,
-                )
-            except RuntimeObservationError as recapture_error:
-                if recapture_error.code == "snapshot_changed":
+            if error.code == "malformed_cursor" and before is not None:
+                try:
+                    stable = _capture_inputs(project_root)
+                except RuntimeObservationError as recapture_error:
+                    if recapture_error.code == "snapshot_changed":
+                        continue
+                    raise
+                if _identity_generation(before) != _identity_generation(stable):
                     continue
-                raise
-            if _identity_generation(before) != stable:
-                continue
             raise
-        if _identity_generation(before) == after_identity:
+        if _identity_generation(before) == _identity_generation(after):
             return observation
     raise RuntimeObservationError("snapshot_changed")
 
 
-def _unsafe_entry_ref(name: str) -> str:
-    digest = hashlib.sha256(os.fsencode(name)).hexdigest()[:16]
-    return f"entry-sha256:{digest}"
+def _failure_project_id(value: str) -> str:
+    return _display_id(value)
 
 
 def observe_all_projects_runtime(
@@ -1415,10 +895,10 @@ def observe_all_projects_runtime(
     stale_after_seconds: int = 3600,
     now: datetime | None = None,
 ) -> RuntimeObservationCollection:
-    """Observe every immediate project entry, isolating bounded failures."""
+    """Observe immediate project entries while isolating closed failures."""
 
     if stale_after_seconds <= 0:
-        raise RuntimeObservationError("invalid_stale_threshold")
+        raise ValueError("stale_after_seconds must be positive")
     observed_at = (now or datetime.now(UTC)).astimezone(UTC)
     root = store.config.projects_dir
     try:
@@ -1431,8 +911,7 @@ def observe_all_projects_runtime(
         raise RuntimeObservationError("unsafe_project_path")
     entries: list[os.DirEntry[str]] = []
     try:
-        iterator = os.scandir(root)
-        with iterator:
+        with os.scandir(root) as iterator:
             for entry in iterator:
                 entries.append(entry)
                 if len(entries) > MAX_CAPTURE_FILES:
@@ -1442,9 +921,9 @@ def observe_all_projects_runtime(
     except OSError as exc:
         raise RuntimeObservationError("unsafe_project_path") from exc
     entries.sort(key=lambda item: os.fsencode(item.name))
+
     projects: list[RuntimeObservation] = []
     failures: list[ObservationFailure] = []
-    project_ids: list[str] = []
     for entry in entries:
         path = Path(entry.path)
         try:
@@ -1452,7 +931,8 @@ def observe_all_projects_runtime(
         except OSError:
             failures.append(
                 ObservationFailure(
-                    code="unsafe_project_path", entry_ref=_unsafe_entry_ref(entry.name)
+                    project_id=_failure_project_id(entry.name),
+                    code="unsafe_project_path",
                 )
             )
             continue
@@ -1461,44 +941,33 @@ def observe_all_projects_runtime(
         if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
             failures.append(
                 ObservationFailure(
-                    code="unsafe_project_path", entry_ref=_unsafe_entry_ref(entry.name)
+                    project_id=_failure_project_id(entry.name),
+                    code="unsafe_project_path",
                 )
             )
             continue
         if not validate_project_id(entry.name):
             failures.append(
                 ObservationFailure(
-                    code="invalid_project_id", entry_ref=_unsafe_entry_ref(entry.name)
+                    project_id=_failure_project_id(entry.name),
+                    code="invalid_project_id",
                 )
             )
             continue
-        project_ids.append(entry.name)
-
-    def observe_one(
-        selected_project_id: str,
-    ) -> RuntimeObservation | ObservationFailure:
         try:
-            return observe_project_runtime(
-                store,
-                selected_project_id,
-                stale_after_seconds=stale_after_seconds,
-                now=observed_at,
+            projects.append(
+                observe_project_runtime(
+                    store,
+                    entry.name,
+                    stale_after_seconds=stale_after_seconds,
+                    now=observed_at,
+                )
             )
         except RuntimeObservationError as error:
-            return ObservationFailure(
-                code=error.code, project_id=selected_project_id
-            )
+            failures.append(ObservationFailure(project_id=entry.name, code=error.code))
 
-    for selected_project_id in project_ids:
-        result = observe_one(selected_project_id)
-        if isinstance(result, RuntimeObservation):
-            projects.append(result)
-        else:
-            failures.append(result)
-    projects.sort(key=lambda item: item.project_id)
-    failures.sort(
-        key=lambda item: (item.project_id or "", item.entry_ref or "", item.code)
-    )
+    projects.sort(key=lambda item: os.fsencode(item.project_id))
+    failures.sort(key=lambda item: (os.fsencode(item.project_id or ""), item.code))
     return RuntimeObservationCollection(
         observed_at=_utc_text(observed_at),
         projects=tuple(projects),
@@ -1512,148 +981,44 @@ def observation_json(
     return json.dumps(
         observation.model_dump(mode="json"),
         separators=(",", ":"),
-        sort_keys=True,
     )
 
 
-def _display_id(value: str) -> str:
-    if len(value) <= MAX_DISPLAY_ID_CHARS and _DISPLAY_SAFE.fullmatch(value):
-        return value
-    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
-    safe_prefix = "".join(
-        character if _DISPLAY_SAFE.fullmatch(character) else "_"
-        for character in value
-    )[:_DISPLAY_PREFIX_CHARS]
-    return f"{safe_prefix}~{digest}"
-
-
-def _fmt_seconds(value: float | None) -> str:
-    return "n/a" if value is None else f"{value:.3f}s"
-
-
-def _append_bounded_tokens(lines: list[str], tokens: tuple[str, ...]) -> None:
-    current = ""
-    for token in tokens:
-        if len(token) > MAX_RENDER_LINE_CHARS:
-            raise RuntimeObservationError("malformed_cursor")
-        candidate = token if not current else f"{current} {token}"
-        if len(candidate) <= MAX_RENDER_LINE_CHARS:
-            current = candidate
-        else:
-            lines.append(current)
-            current = token
-    if current:
-        lines.append(current)
-
-
-def _append_anomaly(lines: list[str], anomaly: RuntimeAnomaly) -> None:
-    display_ids = tuple(_display_id(value) for value in anomaly.task_ids)
-    compact = f"anomaly={anomaly.code} tasks={','.join(display_ids) or '-'}"
-    if len(compact) <= MAX_RENDER_LINE_CHARS:
-        lines.append(compact)
-        return
-    total = len(display_ids)
-    lines.append(f"anomaly={anomaly.code} tasks={total} omitted=0")
-    for index, display_id in enumerate(display_ids, start=1):
-        lines.append(
-            f"anomaly_task={anomaly.code} index={index}/{total} task={display_id}"
-        )
+def _text_value(value: object) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, tuple):
+        return ",".join(str(item) for item in value) or "-"
+    if isinstance(value, float):
+        return f"{value:.3f}"
+    return str(value)
 
 
 def render_runtime_observation(observation: RuntimeObservation) -> str:
-    """Render a compact bounded operator view with no free-form cursor text."""
+    """Render the project fields in their schema order on one bounded line."""
 
-    lines: list[str] = []
-    _append_bounded_tokens(
-        lines,
-        (
-            f"project={_display_id(observation.project_id)}",
-            f"mission={_display_id(observation.mission_id or '-')}",
-            f"persisted={observation.persisted_state}",
-            f"derived={observation.derived_state}",
-            f"next={observation.shadow_scheduler.action}",
-        ),
-    )
-    lines.extend(
-        [
-            (
-            f"progress tasks={observation.progress.cleared_task_total}/"
-            f"{observation.progress.active_task_total} "
-            f"authored={observation.progress.authored_task_total} assertions="
-            f"{observation.progress.passed_assertion_total}/"
-            f"{observation.progress.assertion_total} ready_gates="
-            f"{observation.gate_readiness.count}"
-        ),
-        (
-            "freshness source=file_mtime "
-            f"state={_fmt_seconds(observation.freshness.state_cursor_age_seconds)} "
-            f"task={_fmt_seconds(observation.freshness.task_cursor_age_seconds)} "
-            f"newest={_fmt_seconds(observation.freshness.newest_runtime_input_age_seconds)}"
-            ),
-        ]
-    )
-    for task in observation.tasks:
-        if task.status == "superseded":
-            continue
-        lines.append(
-            f"task[{task.ordinal}]={_display_id(task.task_id)} type={task.task_type} "
-            f"status={task.status} runnable={str(task.runnable).lower()} "
-            f"blocked={len(task.blocked_by)} attempts={task.attempt_count}"
-        )
-    for timing in observation.timings:
-        lines.append(
-            f"timing task={_display_id(timing.task_id)} source=file_mtime "
-            f"active_elapsed={_fmt_seconds(timing.active_attempt_elapsed_seconds)} "
-            f"observed_duration={_fmt_seconds(timing.observed_attempt_duration_seconds)}"
-        )
-    for anomaly in observation.anomalies:
-        _append_anomaly(lines, anomaly)
-    if any(len(line) > MAX_RENDER_LINE_CHARS for line in lines):
-        raise RuntimeObservationError("malformed_cursor")
-    return "\n".join(lines) + "\n"
+    fields = observation.model_dump(mode="python")
+    return " ".join(f"{key}={_text_value(value)}" for key, value in fields.items()) + "\n"
 
 
 def render_runtime_collection(collection: RuntimeObservationCollection) -> str:
-    project_lines: list[str] = []
-    rendered_projects = 0
-    failures = list(collection.failures)
-    for project in collection.projects:
-        try:
-            rendered = render_runtime_observation(project)
-        except RuntimeObservationError as error:
-            failures.append(ObservationFailure(code=error.code, project_id=project.project_id))
-            continue
-        project_lines.extend(rendered.rstrip("\n").splitlines())
-        rendered_projects += 1
-    failures.sort(key=lambda item: (item.project_id or "", item.entry_ref or "", item.code))
-    lines = [
-        f"projects={rendered_projects} failures={len(failures)}",
-        f"schema=1 observed_at={collection.observed_at}",
-        *project_lines,
-    ]
-    for failure in failures:
-        reference = failure.project_id or failure.entry_ref or "-"
-        lines.append(
-            f"failure={failure.code} ref={_display_id(reference)}"
-        )
-    if any(len(line) > MAX_RENDER_LINE_CHARS for line in lines):
-        raise RuntimeObservationError("malformed_cursor")
-    return "\n".join(lines) + "\n"
+    lines = [render_runtime_observation(project).rstrip("\n") for project in collection.projects]
+    lines.extend(
+        f"failure project={failure.project_id or '-'} code={failure.code}"
+        for failure in collection.failures
+    )
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 __all__ = [
-    "AttemptTiming",
     "ObservationFailure",
-    "RuntimeAnomaly",
     "RuntimeObservation",
     "RuntimeObservationCollection",
     "RuntimeObservationError",
-    "ShadowSchedulerDecision",
     "observe_all_projects_runtime",
     "observe_project_runtime",
     "observation_json",
     "render_runtime_collection",
     "render_runtime_observation",
-    "shadow_selected_task_ids",
     "validate_project_id",
 ]

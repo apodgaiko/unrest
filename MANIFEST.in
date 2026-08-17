@@ -1,0 +1,3 @@
+include tests/test_persistence_schema_v1.py
+recursive-include tests/fixtures/persistence_schema_v1 *.json
+include tools/generate_legacy_handoff_fixtures.py

@@ -1,6 +1,10 @@
 """Storage layer tests. See specs/memory_v2/PRODUCT.md for layout."""
 from __future__ import annotations
 
+import json
+import stat
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -21,7 +25,454 @@ from unrest_harness.models import (
     ValidationItem,
     WorkHandoff,
 )
-from unrest_harness.storage import ProjectStore, slugify, utc_now_filesafe
+from unrest_harness.storage import (
+    AttemptValidationError,
+    ProjectStore,
+    atomic_write_text,
+    slugify,
+    utc_now_filesafe,
+)
+
+
+class TestAtomicWriteText:
+    def test_explicit_mode_replaces_existing_mode_atomically(self, tmp_path: Path) -> None:
+        target = tmp_path / "managed.txt"
+        target.write_text("corrupt\n")
+        target.chmod(0o600)
+
+        atomic_write_text(
+            target,
+            "authoritative\n",
+            trusted_root=tmp_path,
+            mode=0o644,
+            _redact=False,
+        )
+
+        assert target.read_bytes() == b"authoritative\n"
+        assert stat.S_IMODE(target.stat().st_mode) == 0o644
+
+    @staticmethod
+    def _fresh_process_bytes(target: Path) -> bytes:
+        return subprocess.check_output(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import pathlib,sys; "
+                    "sys.stdout.buffer.write(pathlib.Path(sys.argv[1]).read_bytes())"
+                ),
+                str(target),
+            ]
+        )
+
+    def test_fresh_target_has_intended_mode(self, tmp_path: Path) -> None:
+        target = tmp_path / "fresh.json"
+        atomic_write_text(target, "fresh\n", trusted_root=tmp_path, _redact=False)
+        assert target.read_bytes() == b"fresh\n"
+        assert stat.S_IMODE(target.stat().st_mode) == 0o644
+
+    def test_preserves_mode_and_deterministic_bytes(self, tmp_path: Path) -> None:
+        target = tmp_path / "state.json"
+        target.write_bytes(b"old\n")
+        target.chmod(0o600)
+
+        atomic_write_text(target, "new ☃\n", trusted_root=tmp_path, _redact=False)
+        first = target.read_bytes()
+        atomic_write_text(target, "new ☃\n", trusted_root=tmp_path, _redact=False)
+
+        assert target.read_bytes() == first == "new ☃\n".encode()
+        assert stat.S_IMODE(target.stat().st_mode) == 0o600
+        assert sorted(path.name for path in tmp_path.iterdir()) == ["state.json"]
+
+    @pytest.mark.parametrize("stage", ("write", "content_fsync", "replace"))
+    def test_failure_preserves_target_and_cleans_unique_temp(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+    ) -> None:
+        import unrest_harness.storage as storage
+
+        target = tmp_path / "state.json"
+        target.write_bytes(b"accepted generation\n")
+        target.chmod(0o600)
+        before = target.read_bytes()
+
+        if stage == "write":
+            real_fdopen = storage.os.fdopen
+
+            class RejectingStream:
+                def __init__(self, stream):
+                    self.stream = stream
+
+                def __enter__(self):
+                    self.stream.__enter__()
+                    return self
+
+                def __exit__(self, *args):
+                    return self.stream.__exit__(*args)
+
+                def write(self, value: str) -> int:
+                    raise OSError("injected write failure")
+
+                def flush(self) -> None:
+                    self.stream.flush()
+
+                def fileno(self) -> int:
+                    return self.stream.fileno()
+
+            monkeypatch.setattr(
+                storage.os,
+                "fdopen",
+                lambda *args, **kwargs: RejectingStream(real_fdopen(*args, **kwargs)),
+            )
+        elif stage == "content_fsync":
+            monkeypatch.setattr(
+                storage.os,
+                "fsync",
+                lambda _fd: (_ for _ in ()).throw(
+                    OSError("injected content_fsync failure")
+                ),
+            )
+        else:
+            monkeypatch.setattr(
+                storage.os,
+                "replace",
+                lambda _src, _dst: (_ for _ in ()).throw(
+                    OSError("injected replace failure")
+                ),
+            )
+
+        with pytest.raises(OSError, match=f"injected {stage} failure"):
+            atomic_write_text(
+                target,
+                "rejected generation\n",
+                trusted_root=tmp_path,
+                _redact=False,
+            )
+
+        assert target.read_bytes() == before
+        assert self._fresh_process_bytes(target) == before
+        assert stat.S_IMODE(target.stat().st_mode) == 0o600
+        assert sorted(path.name for path in tmp_path.iterdir()) == ["state.json"]
+
+    def test_directory_fsync_failure_accepts_visible_generation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import unrest_harness.storage as storage
+
+        target = tmp_path / "state.json"
+        target.write_bytes(b'{"generation":1}\n')
+        target.chmod(0o600)
+        calls = 0
+
+        def fail_directory_fsync(_path: Path) -> None:
+            nonlocal calls
+            calls += 1
+            raise OSError("injected directory fsync failure")
+
+        monkeypatch.setattr(storage, "_fsync_directory", fail_directory_fsync)
+
+        for _ in range(2):
+            assert atomic_write_text(
+                target,
+                '{"generation":2}\n',
+                trusted_root=tmp_path,
+                _redact=False,
+            ) is None
+            assert target.read_bytes() == b'{"generation":2}\n'
+            assert self._fresh_process_bytes(target) == b'{"generation":2}\n'
+            assert stat.S_IMODE(target.stat().st_mode) == 0o600
+            assert sorted(path.name for path in tmp_path.iterdir()) == ["state.json"]
+        assert calls == 2
+
+    def test_rejects_symlink_and_nonregular_targets(self, tmp_path: Path) -> None:
+        actual = tmp_path / "actual"
+        actual.write_text("unchanged")
+        link = tmp_path / "link"
+        link.symlink_to(actual)
+        directory = tmp_path / "directory"
+        directory.mkdir()
+
+        for target in (link, directory):
+            with pytest.raises(OSError, match="regular file"):
+                atomic_write_text(
+                    target, "rejected", trusted_root=tmp_path, _redact=False
+                )
+        assert actual.read_text() == "unchanged"
+        assert not any(path.name.endswith(".tmp") for path in tmp_path.iterdir())
+
+        parent_link = tmp_path / "parent-link"
+        parent_link.symlink_to(directory, target_is_directory=True)
+        with pytest.raises(OSError, match="path component"):
+            atomic_write_text(
+                parent_link / "escaped",
+                "rejected",
+                trusted_root=tmp_path,
+                _redact=False,
+            )
+        assert not (directory / "escaped").exists()
+
+    @pytest.mark.parametrize(
+        ("prefix", "suffix"),
+        (
+            ((), ("nested", "deeper")),
+            (("level-1",), ("nested",)),
+            (("level-1", "level-2"), ()),
+        ),
+        ids=("top-level-ancestor", "intermediate-ancestor", "immediate-parent"),
+    )
+    @pytest.mark.parametrize("existing_target", (False, True), ids=("fresh", "existing"))
+    def test_rejects_symlink_at_every_parent_depth_before_writing(
+        self,
+        tmp_path: Path,
+        prefix: tuple[str, ...],
+        suffix: tuple[str, ...],
+        existing_target: bool,
+    ) -> None:
+        trusted = tmp_path / "trusted"
+        trusted.mkdir()
+        outside = tmp_path / "outside"
+        referent_parent = outside.joinpath(*suffix)
+        referent_parent.mkdir(parents=True)
+        referent = referent_parent / "state.json"
+        if existing_target:
+            referent.write_bytes(b"accepted generation\n")
+            referent.chmod(0o600)
+
+        link_parent = trusted.joinpath(*prefix)
+        link_parent.mkdir(parents=True, exist_ok=True)
+        alias = link_parent / "alias"
+        alias.symlink_to(outside, target_is_directory=True)
+        target = alias.joinpath(*suffix, "state.json")
+        before_inventory = sorted(
+            path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*")
+        )
+        before_bytes = referent.read_bytes() if referent.exists() else None
+
+        with pytest.raises(OSError, match="path component"):
+            atomic_write_text(
+                target,
+                "rejected generation\n",
+                trusted_root=trusted,
+                _redact=False,
+            )
+
+        assert (referent.read_bytes() if referent.exists() else None) == before_bytes
+        assert sorted(
+            path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*")
+        ) == before_inventory
+        assert not any(path.name.endswith(".tmp") for path in tmp_path.rglob("*"))
+
+    def test_rejects_symlinked_trusted_root(self, tmp_path: Path) -> None:
+        actual = tmp_path / "actual"
+        actual.mkdir()
+        trusted = tmp_path / "trusted"
+        trusted.symlink_to(actual, target_is_directory=True)
+
+        with pytest.raises(OSError, match="trusted root must be a regular directory"):
+            atomic_write_text(
+                trusted / "state.json",
+                "rejected\n",
+                trusted_root=trusted,
+                _redact=False,
+            )
+        assert list(actual.iterdir()) == []
+
+    def test_absent_trusted_root_requires_explicit_existing_allowed_ancestor(
+        self, tmp_path: Path
+    ) -> None:
+        trusted = tmp_path / "managed" / "nested"
+        target = trusted / "deeper" / "state.json"
+
+        with pytest.raises(OSError, match="trusted root does not exist"):
+            atomic_write_text(
+                target,
+                "rejected\n",
+                trusted_root=trusted,
+                _redact=False,
+            )
+        assert not (tmp_path / "managed").exists()
+
+        atomic_write_text(
+            target,
+            "accepted\n",
+            trusted_root=trusted,
+            allowed_ancestor=tmp_path,
+            _redact=False,
+        )
+        assert target.read_bytes() == b"accepted\n"
+
+    def test_atomic_containment_matrix_preserves_inside_and_outside_hashes(
+        self, tmp_path: Path
+    ) -> None:
+        import hashlib
+
+        allowed = tmp_path / "allowed"
+        allowed.mkdir()
+        outside = tmp_path / "outside.txt"
+        outside.write_bytes(b"outside-generation\n")
+        outside_hash = hashlib.sha256(outside.read_bytes()).hexdigest()
+        target = allowed / "missing" / "parents" / "state.json"
+
+        atomic_write_text(
+            target,
+            "inside-generation\n",
+            trusted_root=allowed / "missing",
+            allowed_ancestor=allowed,
+            _redact=False,
+        )
+        inside_hash = hashlib.sha256(target.read_bytes()).hexdigest()
+        assert inside_hash == hashlib.sha256(b"inside-generation\n").hexdigest()
+
+        escape = allowed / "escape"
+        escape.symlink_to(tmp_path, target_is_directory=True)
+        rejected = (
+            (allowed / ".." / "outside.txt", "beneath its trusted root"),
+            (escape / "outside.txt", "path component"),
+        )
+        for candidate, message in rejected:
+            with pytest.raises(OSError, match=message):
+                atomic_write_text(
+                    candidate,
+                    "escaped-generation\n",
+                    trusted_root=allowed,
+                    allowed_ancestor=allowed,
+                    _redact=False,
+                )
+
+        symlink_root = tmp_path / "root-link"
+        symlink_root.symlink_to(allowed, target_is_directory=True)
+        with pytest.raises(OSError, match="trusted-root component"):
+            atomic_write_text(
+                symlink_root / "state.json",
+                "escaped-generation\n",
+                trusted_root=symlink_root,
+                allowed_ancestor=tmp_path,
+                _redact=False,
+            )
+
+        assert hashlib.sha256(target.read_bytes()).hexdigest() == inside_hash
+        assert hashlib.sha256(outside.read_bytes()).hexdigest() == outside_hash
+
+    @pytest.mark.parametrize("control", ("outside", "missing", "symlink", "file"))
+    def test_allowed_ancestor_is_a_validated_creation_boundary(
+        self, tmp_path: Path, control: str
+    ) -> None:
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        ancestor = tmp_path / "boundary"
+        trusted = ancestor / "managed"
+        if control == "outside":
+            ancestor.mkdir()
+            trusted = outside / "managed"
+            match = "beneath its allowed ancestor"
+        elif control == "missing":
+            match = "allowed ancestor does not exist"
+        elif control == "symlink":
+            ancestor.symlink_to(outside, target_is_directory=True)
+            match = "allowed ancestor must be a regular directory"
+        else:
+            ancestor.write_text("not a directory", encoding="utf-8")
+            match = "allowed ancestor must be a regular directory"
+
+        with pytest.raises(OSError, match=match):
+            atomic_write_text(
+                trusted / "state.json",
+                "rejected\n",
+                trusted_root=trusted,
+                allowed_ancestor=ancestor,
+                _redact=False,
+            )
+        assert list(outside.iterdir()) == []
+
+    @pytest.mark.parametrize("control", ("trusted-root", "intermediate"))
+    def test_allowed_ancestor_never_traverses_existing_symlink_components(
+        self, tmp_path: Path, control: str
+    ) -> None:
+        boundary = tmp_path / "boundary"
+        boundary.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        trusted = boundary / "managed"
+        if control == "trusted-root":
+            trusted.symlink_to(outside, target_is_directory=True)
+            target = trusted / "state.json"
+            match = "trusted-root component"
+        else:
+            trusted.mkdir()
+            (trusted / "nested").symlink_to(outside, target_is_directory=True)
+            target = trusted / "nested" / "state.json"
+            match = "path component"
+
+        with pytest.raises(OSError, match=match):
+            atomic_write_text(
+                target,
+                "rejected\n",
+                trusted_root=trusted,
+                allowed_ancestor=boundary,
+                _redact=False,
+            )
+        assert list(outside.iterdir()) == []
+
+    def test_rejects_non_directory_ancestor_and_out_of_root_target(
+        self, tmp_path: Path
+    ) -> None:
+        trusted = tmp_path / "trusted"
+        trusted.mkdir()
+        blocking_component = trusted / "blocked"
+        blocking_component.write_text("not a directory")
+
+        with pytest.raises(OSError, match="path component"):
+            atomic_write_text(
+                blocking_component / "nested" / "state.json",
+                "rejected\n",
+                trusted_root=trusted,
+                _redact=False,
+            )
+        with pytest.raises(OSError, match="beneath its trusted root"):
+            atomic_write_text(
+                tmp_path / "outside.json",
+                "rejected\n",
+                trusted_root=trusted,
+                _redact=False,
+            )
+
+        assert blocking_component.read_text() == "not a directory"
+        assert not (tmp_path / "outside.json").exists()
+        assert not any(path.name.endswith(".tmp") for path in tmp_path.rglob("*"))
+
+    @pytest.mark.parametrize("relative", (False, True), ids=("absolute", "relative"))
+    @pytest.mark.parametrize("depth", (0, 1, 3))
+    @pytest.mark.parametrize("existing_target", (False, True), ids=("fresh", "existing"))
+    def test_regular_nested_destinations_remain_atomic(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        relative: bool,
+        depth: int,
+        existing_target: bool,
+    ) -> None:
+        trusted = tmp_path / "trusted"
+        trusted.mkdir()
+        target = trusted.joinpath(*(f"level-{index}" for index in range(depth))) / "state.json"
+        if existing_target:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"accepted generation\n")
+            target.chmod(0o600)
+        if relative:
+            monkeypatch.chdir(tmp_path)
+            trusted = Path("trusted")
+            target = target.relative_to(tmp_path)
+
+        atomic_write_text(
+            target,
+            "replacement generation\n",
+            trusted_root=trusted,
+            _redact=False,
+        )
+
+        assert target.read_bytes() == b"replacement generation\n"
+        assert stat.S_IMODE(target.stat().st_mode) == (0o600 if existing_target else 0o644)
+        assert self._fresh_process_bytes(target) == b"replacement generation\n"
+        assert not any(path.name.endswith(".tmp") for path in trusted.rglob("*"))
 
 
 @pytest.fixture
@@ -293,6 +744,67 @@ class TestTaskState:
 
 
 class TestAttempts:
+    @pytest.mark.parametrize(
+        ("mutation", "message"),
+        (
+            ({"attempt_id": None}, "attempt_id must not be null"),
+            ({"attempt_id": "older"}, "attempt_id does not match"),
+            ({"node_id": "w2"}, "node_id does not match"),
+            ({"done": "not-a-boolean"}, "payload is malformed"),
+        ),
+        ids=("present-null", "stale-generation", "wrong-task", "malformed"),
+    )
+    def test_current_attempt_identity_rejections_preserve_bytes(
+        self,
+        store: ProjectStore,
+        workspace: Path,
+        mutation: dict[str, object],
+        message: str,
+    ) -> None:
+        store.create_project("brief", workspace, project_id="p1")
+        generation = "2026-08-10T12-00-00Z"
+        path = store.attempt_path("p1", "mission-001", generation, "w1")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict[str, object] = {
+            "node_id": "w1",
+            "attempt_id": generation,
+            "done": True,
+            "report": "current",
+            "request_attention": False,
+        }
+        payload.update(mutation)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        before = path.read_bytes()
+
+        with pytest.raises(AttemptValidationError, match=message):
+            store.read_attempt("p1", "mission-001", generation, "w1")
+
+        assert path.read_bytes() == before
+
+    def test_replay_under_another_attempt_filename_preserves_both_files(
+        self, store: ProjectStore, workspace: Path
+    ) -> None:
+        store.create_project("brief", workspace, project_id="p1")
+        old_generation = "2026-08-09T12-00-00Z"
+        new_generation = "2026-08-10T12-00-00Z"
+        old = store.save_attempt(
+            "p1",
+            "mission-001",
+            old_generation,
+            "w1",
+            WorkHandoff(node_id="w1", done=True, report="old"),
+        )
+        replay = store.attempt_path(
+            "p1", "mission-001", new_generation, "w1"
+        )
+        replay.write_bytes(old.read_bytes())
+        before = {path: path.read_bytes() for path in (old, replay)}
+
+        with pytest.raises(AttemptValidationError, match="generation"):
+            store.read_attempt("p1", "mission-001", new_generation, "w1")
+
+        assert {path: path.read_bytes() for path in (old, replay)} == before
+
     def test_explicit_inventory_redacts_json_and_markdown_mirrors(
         self, store: ProjectStore, workspace: Path
     ) -> None:
@@ -328,7 +840,7 @@ class TestAttempts:
         assert path.exists()
         back = store.read_attempt("p1", "mission-001", ts, "w1")
         assert isinstance(back, WorkHandoff)
-        assert back == h
+        assert back == h.model_copy(update={"attempt_id": ts})
         # JSON handoff lives in the runtime cursor tree; MD mirror in durable .unrest.
         assert path.parent == store.attempts_runtime_dir("p1", "mission-001")
         assert ".unrest-runtime" in path.parts

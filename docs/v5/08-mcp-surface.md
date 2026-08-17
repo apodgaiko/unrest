@@ -15,12 +15,13 @@ schema_version: 1
 
 ## Purpose
 
-Define the three structurally isolated MCP server modes, their tools, typed
+Define the four structurally isolated MCP server modes, their tools, typed
 handoffs, state preconditions, and error payloads.
 
 ## Public contract
 
-`unrest-server` accepts `--mode orchestrator|worker|terminal-reviewer` and
+`unrest-server` accepts
+`--mode orchestrator|worker|validator|terminal-reviewer` and
 `--transport stdio|streamable-http|sse`. Each mode constructs a separate
 `FastMCP` instance and registers only its role's tools.
 
@@ -34,7 +35,7 @@ handoffs, state preconditions, and error payloads.
 | `end_mission` | `mission_running`; no runnable work or ready gate. | Runs terminal review; returns `done` or attention. |
 | `decide_attention` | `attention_needed`; one decision per open item. | Records decision and returns the next state. |
 | `inspect_project` | Existing project. | Pure read with full textual task view. |
-| `abort_project` | Existing project. | Preserves evidence, seals abort where possible, returns `aborted`. |
+| `abort_project` | Existing project and non-empty reason of at most 4096 UTF-8 bytes. | Rejects an oversized reason before terminal writes; otherwise preserves evidence, seals abort where possible, and returns the same bounded `aborted` reason. |
 
 All successful calls return the typed envelope:
 
@@ -67,10 +68,17 @@ Worker mode registers only `end_node`. Runtime configuration comes from:
 - `UNREST_HANDOFF_PATH`
 
 Work calls provide `done`, `report`, and optional `request_attention`.
-Validation calls additionally provide one `items[]` verdict per assigned
-target and aggregate `passed`. The tool atomically writes one strict JSON
-handoff and returns an instruction to stop. Missing path or task ID is a hard
-runtime error.
+The tool atomically writes one strict JSON handoff and returns an instruction
+to stop. Missing path or task ID is a hard runtime error.
+
+### Validator mode
+
+Validator mode has the server identity `unrest-validator`, accurate
+`Mode: validator` instructions, and registers only `end_node`. It shares the
+worker mode's strict node-completion implementation and handoff transport, but
+does not inherit worker identity, instructions, or authority. Validation calls
+provide `done`, `report`, optional `request_attention`, one `items[]` verdict
+per assigned target, and aggregate `passed`.
 
 ### Terminal-reviewer mode
 
@@ -83,8 +91,8 @@ coordinator; the tool itself does not seal a mission.
 
 - `ARCH-MCP-001`: tool authority is separated by server construction, not
   prompt convention.
-- `SEC-MCP-001`: worker and reviewer modes cannot call orchestrator lifecycle
-  tools through their server.
+- `SEC-MCP-001`: worker, validator, and reviewer modes cannot call orchestrator
+  lifecycle tools through their server.
 - `ARCH-STATE-001`: mutating orchestrator calls are serialized per project and
   execute blocking controller work in a thread.
 - `COMPAT-ENVELOPE-001`: envelope field names and strict typed handoff fields
@@ -96,7 +104,8 @@ coordinator; the tool itself does not seal a mission.
 - Invalid plans, patches, and decisions return stable top-level errors plus
   stable validation details.
 - Invalid worker overrides fail before project creation.
-- Missing worker/reviewer environment paths fail instead of inventing output.
+- Missing worker/validator/reviewer environment paths fail instead of inventing
+  output.
 - Exceptions in production dispatch/review are handled by the runtime as
   persisted failure evidence.
 
@@ -104,8 +113,8 @@ coordinator; the tool itself does not seal a mission.
 
 Adding or changing a tool requires updates to this document, the server
 registration tests, installed-wheel help/smoke checks, and the component map.
-Do not expose orchestrator tools on worker or reviewer servers. Schema
-incompatibility requires an ADR and explicit version/error behavior.
+Do not expose orchestrator tools on worker, validator, or reviewer servers.
+Schema incompatibility requires an ADR and explicit version/error behavior.
 
 ## Required verification
 
@@ -116,10 +125,15 @@ uv build
 uv run python tools/check_distribution.py dist
 ```
 
-For packaging changes, install the wheel and run `unrest-server --help` plus
-`python -m unrest_harness --help` from an unrelated directory. These are
-focused package checks; the full source suite runs only at the frozen-candidate
-release checkpoint and is not repeated after build.
+The distribution checker must prove complete archive membership and bytes,
+safely extract the sdist, and execute all 14 protected
+`tests/test_persistence_schema_v1.py` cases from that extracted tree. Its
+package module, test module, cwd, and effective `sys.path` provenance must
+exclude the checkout. For packaging changes, also install the wheel and run
+`unrest-server --help` plus `python -m unrest_harness --help` from an unrelated
+directory. These are post-build package checks; the full source suite runs
+exactly once at the frozen-candidate release checkpoint and is not repeated
+after build.
 
 ## Related decisions
 
@@ -127,8 +141,6 @@ No accepted repository ADR currently changes this surface.
 
 ## Known limitations
 
-The approved base's provider configuration can implicitly select unrestricted
+The approved base's provider configuration could implicitly select unrestricted
 execution. This document records the MCP shape only; it does not bless that
-behavior. The defect is classified in
-[`BASE-CAPABILITY-DEFECT-001`](../../evals/baseline/fixtures/implicit-unrestricted-defaults.json)
-and remains historical characterization.
+historical behavior.

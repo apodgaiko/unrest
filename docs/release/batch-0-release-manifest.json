@@ -18,7 +18,7 @@
     ".validation/",
     "validator-regressions/"
   ],
-  "included_path_groups": [
+  "historical_included_path_groups": [
     ".github/workflows/ci.yml",
     "docs/architecture/",
     "docs/release/",
@@ -33,6 +33,7 @@
     "uv.lock"
   ],
   "manifest_version": 1,
+  "record_status": "historical-pre-lean-core-candidate; listed path groups are not current product surfaces",
   "mission_scope": "Batch 0 Mission-005 fixed-context control-dependent egress repair",
   "release_evidence": ".unrest/missions/mission-005/attempts/2026-08-08T09-25-23Z__work-release-checkpoint-m5.md",
   "release_gate_candidate": "8584ceb9ce7987d92521416396af1afe971647f4",

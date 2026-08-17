@@ -12,7 +12,8 @@ verified_by:
   - tests/test_runnable_selection.py
   - tests/test_task_list_patch.py
   - tests/test_task_validation.py
-related_decisions: []
+related_decisions:
+  - ADR-0002
 schema_version: 1
 ---
 
@@ -132,10 +133,24 @@ reconciled completely before any fresh selection: landed attempts are consumed,
 missing attempts fail, and the reconciliation step returns without dispatching
 new work.
 
-Gate coverage is transitive over upstream validate tasks. Missing attempt
-files, wrong handoff type, missing expected target items, explicit dissent, or
-no covering validator all count as failure. A cleared gate still emits a
-`gate_checkpoint` attention item.
+Base-era attempt JSON that physically lacks `attempt_id` is bound in memory to
+the requested task and filename generation during restart reconciliation; it is
+never rewritten merely by reading it. Current handoffs are strict: an explicit
+null or a value that differs from the dispatched generation is invalid.
+
+Concurrent validators use independent MCP child lifecycles. The production
+runner serializes the advisory free-port probe through confirmed MCP readiness,
+then runs the agent sessions concurrently. A request that crashes before its
+handoff retains a bounded, known-credential-redacted cause in its own failed
+attempt; a successful sibling remains independently applicable.
+
+Gate coverage is transitive over upstream validate tasks and reads each cleared
+validator's cursor-bound generation, never whichever filename sorts last.
+Missing or invalid attempt evidence, wrong handoff type, missing expected target
+items, explicit dissent, or no covering validator all count as failure. Invalid
+evidence remains unchanged and produces bounded `gate_failed` attention; a
+replacement validator/gate lane must produce a new valid generation before the
+gate can clear. A cleared gate still emits a `gate_checkpoint` attention item.
 
 ## Failure modes
 
@@ -145,8 +160,11 @@ no covering validator all count as failure. A cleared gate still emits a
 - Validator omission or dissent: a downstream gate fails, or node attention
   opens when no gate owns the failure.
 - Gate failure: gate becomes failed and requires a decision.
-- Running cursor without an attempt after resume: the runtime persists a
-  synthetic failed handoff rather than guessing success.
+- Running cursor without its exact generation attempt after resume, or with a
+  malformed/mismatched current attempt: the runtime persists a synthetic failed
+  handoff rather than guessing success. The sole exception is a base-era JSON
+  object where `attempt_id` is absent, which binds to the requested filename
+  generation without rewriting; explicit null remains invalid.
 
 ## Edge Cases
 
@@ -187,12 +205,11 @@ frozen-candidate full-suite checkpoint.
 
 ## Related decisions
 
-No accepted repository ADR currently changes this contract.
+ADR-0002 removes historical baseline generation while retaining this task-list
+contract.
 
-## Baseline characterization
+## Historical characterization
 
-The approved Batch 0 base's overlapping shared-checkout workers remain recorded
-as the non-normative `known_defect`
-[`BASE-SCHEDULER-DEFECT-001`](../../evals/baseline/fixtures/concurrent-writers.json).
-They are characterization evidence only; they are not an invariant or compatibility promise.
+The approved Batch 0 base allowed overlapping shared-checkout workers. That
+historical characterization is not an invariant or compatibility promise.
 `ARCH-DISPATCH-001` defines repaired runtime behavior.

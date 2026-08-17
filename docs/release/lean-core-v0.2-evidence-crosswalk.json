@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "candidate": {
+    "files": 103,
+    "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7",
+    "paths": [
+      "pyproject.toml",
+      "uv.lock",
+      "src/**",
+      "tests/**",
+      "tools/**"
+    ]
+  },
+  "superseded_filesystem_candidate": {
+    "files": 105,
+    "sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
+    "status": "historical-superseded; included ignored/generated egg-info and was not commit-reproducible"
+  },
+  "commit_reproducible_finalization": {
+    "status": "final-current-rollback-authority",
+    "checkpoint_authority": {
+      "decision": "Decision 001",
+      "local_probe": {"status": "failed-ordering-probe", "command": "env -u CODEX_PATH uv run pytest -q", "result": "919 passed, 7 skipped, 2 failed in 220.56s; exit 1", "invocations": 1, "reruns": 0, "failing_nodeids": ["tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers", "tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology"], "evidence_source": "mission attempt W-FREEZE 2026-08-13T13-25-57Z"},
+      "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
+    },
+    "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217993, "sha256": "52962ff2db2598d8ed086b0541ff59fa7f3b146c37ab563fcff29d4053460e51"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 305118, "sha256": "e7b6c59d9c0e148e151774e1b527bfc2c6238fd8721e6556ed24ee15162d0bdf"}},
+    "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
+    "evidence_packet": "mission attempt for VAL-LOCAL-RELEASE-SEAL on 2026-08-16"
+  },
+  "superseded_candidate": {
+    "sha256": "e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4",
+    "status": "historical-only after carrier binding regression test change"
+  },
+  "superseded_validator_identity_candidate": {
+    "sha256": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e",
+    "status": "historical-only after focused external-publication contract test change"
+  },
+  "superseded_initial_candidate": {
+    "sha256": "cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a",
+    "status": "historical-only after validator MCP identity product change"
+  },
+  "checkpoint": {
+    "status": "historical-superseded-evidence-retained",
+    "result": "894 passed, 7 skipped, 0 failed in 174.05s; exit 0",
+    "authority": "durable evidence packet retained as superseded chronology only",
+    "started_utc": "2026-08-12T23:43:25.569367Z",
+    "ended_utc": "2026-08-12T23:46:20.475041Z",
+    "candidate_checkpoint_invocation": 3,
+    "candidate_checkpoint_invocations_total": 3,
+    "per_invocation_reruns": 0,
+    "evidence_packet": "mission evidence/W-CHECKPOINT-EVIDENCE-RETENTION-20260813T0342Z",
+    "status_file": "status.json",
+    "status_sha256": "63f279ba8ad2f3b02f6739488956cdad3a021e6c3d3dbf0e568478e95fff9649",
+    "transcript_file": "stdout.raw",
+    "transcript_sha256": "ef8e3ec1544e3418aa6e76b5bc05529ddd0ae5bae19a1adc7da9218eabeaeefc",
+    "hash_ledger_file": "SHA256SUMS",
+    "hash_ledger_sha256": "14788e338d12d1cf4898b2eac8ce1d453bb8cc39e1698cf44f7b48b152f39bb5"
+  },
+  "candidate_checkpoint_chronology": {
+    "binding_sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
+    "distinct_invocations": 3,
+    "per_invocation_reruns_are_not_candidate_invocations": true,
+    "invocations": [
+      {"sequence": 1, "status": "environment-limited-superseded", "result": "880 passed, 7 skipped, 14 failed in 171.68s; exit 1", "per_invocation_reruns": 0, "retained": false},
+      {"sequence": 2, "status": "historical-superseded-unretained", "result": "894 passed, 7 skipped, 0 failed in 174.83s; exit 0", "per_invocation_reruns": 0, "retained": false, "binding_relation": "identical candidate binding"},
+      {"sequence": 3, "status": "historical-superseded-evidence-retained", "result": "894 passed, 7 skipped, 0 failed in 174.05s; exit 0", "per_invocation_reruns": 0, "retained": true}
+    ]
+  },
+  "archive_evidence": {
+    "status": "historical-superseded-evidence-retained",
+    "packet_identity": "mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z",
+    "wheel": {"bytes": 217860, "sha256": "778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a"},
+    "sdist": {"bytes": 295954, "sha256": "0f73d258264f446969b864b0df4828e6fd2f00bd17fdc08accc64648a1c4ce51"},
+    "superseded_disposable_wheel_sha256": "68b44673932c0ac4702bc3c3c0368b52e59ce4eede9db2ee5eeace5949e25e63",
+    "superseded_disposable_sdist_sha256": "b7b19d0ce761d48b30b1112bcb65b9531d9b4224eb66ec7e41db8495f7c56e2f"
+  },
+  "publication_evidence": {
+    "status": "external-evidence-required",
+    "evidence_owner": "pull-request-6-body",
+    "carrier_role": "immutable-procedure-and-local-checkpoint",
+    "exact_head_procedure": "resolve the live PR #6 head SHA; require local HEAD, tracking ref, live PR head, and successful ci.yml run headSha to equal it; download the named artifact from that run and verify its SHA256SUMS before installation"
+  },
+  "result_semantics": "pass means the exact node was collected and executed successfully by tests/contracts/test_lean_evidence_crosswalk.py; mappings do not replace behavioral passage",
+  "hard_cut_results": [
+    {"surface": "removed-commands", "node": "tests/test_repository_contract.py::test_withdrawn_commands_are_unknown_and_absent_from_help", "candidate_result": "pass"},
+    {"surface": "governance-and-baseline", "node": "tests/test_repository_contract.py::test_governance_responsibility_inventory_is_absent", "candidate_result": "pass"},
+    {"surface": "root-schemas-and-direct-dependencies", "node": "tests/test_repository_contract.py::test_root_schemas_and_obsolete_direct_dependencies_are_absent", "candidate_result": "pass"},
+    {"surface": "raw-root-evidence", "node": "tests/test_repository_contract.py::test_root_raw_evidence_is_absent", "candidate_result": "pass"},
+    {"surface": "observer-v1-aliases", "node": "tests/test_runtime_observability.py::test_observer_v1_and_detail_surfaces_are_absent", "candidate_result": "pass"},
+    {"surface": "removed-legacy-child-provider", "node": "tests/test_lean_provider_security_runtime.py::test_supported_provider_set_is_claude_and_codex_only", "candidate_result": "pass"},
+    {"surface": "terminal-credential-inheritance", "node": "tests/test_lean_provider_security_runtime.py::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls", "candidate_result": "pass"},
+    {"surface": "transformed-secret-inference", "node": "tests/test_lean_provider_security_runtime.py::test_exact_redaction_short_guard_structures_transforms_and_every_split", "candidate_result": "pass"}
+  ],
+  "mappings": {
+    "LEAN-LIFECYCLE-001": {"node": "tests/test_server.py::test_start_project_rejects_invalid_codex_worker_effort_without_persisting", "candidate_result": "pass"},
+    "LEAN-LIFECYCLE-002": {"node": "tests/test_task_validation.py::TestValidateSubmission::test_full_pipeline_clean", "candidate_result": "pass"},
+    "LEAN-LIFECYCLE-003": {"node": "tests/test_coordinator.py::TestHappyPath::test_full_pipeline_to_done", "candidate_result": "pass"},
+    "LEAN-LIFECYCLE-004": {"node": "tests/test_coordinator.py::TestDecideAttentionPatchAddItems::test_add_items_through_decide_attention_succeeds", "candidate_result": "pass"},
+    "LEAN-LIFECYCLE-005": {"node": "tests/test_coordinator.py::TestTerminalReview::test_clean_review_to_done", "candidate_result": "pass"},
+    "LEAN-LIFECYCLE-006": {"node": "tests/test_coordinator.py::TestAbortProject::test_aborts", "candidate_result": "pass"},
+    "LEAN-PERSIST-001": {"node": "tests/test_storage.py::TestProjectLifecycle::test_create_lays_out_bucket", "candidate_result": "pass"},
+    "LEAN-PERSIST-002": {"node": "tests/test_storage.py::TestAtomicWriteText::test_preserves_mode_and_deterministic_bytes", "candidate_result": "pass"},
+    "LEAN-PERSIST-003": {"node": "tests/test_storage.py::TestProjectLifecycle::test_project_worker_overrides_round_trip_and_legacy_defaults", "candidate_result": "pass"},
+    "LEAN-PERSIST-004": {"node": "tests/test_coordinator.py::TestResume::test_resume_picks_up_attempt_landed_while_down", "candidate_result": "pass"},
+    "LEAN-PERSIST-005": {"nodes": ["tests/test_acp_runner.py::test_missing_end_node_diagnostics_survive_production_dispatch_and_attention", "tests/test_acp_runner.py::test_worker_mcp_readiness_timeout_persists_generation_before_dispatch_return", "tests/test_acp_runner.py::test_batch_runner_exception_keeps_request_generation_through_coordinator"], "candidate_result": "pass"},
+    "LEAN-SCHEDULE-001": {"node": "tests/test_runnable_selection.py::TestRunnableSelection::test_capacity_slice_containing_work_selects_one_authored_task", "candidate_result": "pass"},
+    "LEAN-SCHEDULE-002": {"node": "tests/test_runnable_selection.py::TestRunnableSelection::test_validator_only_capacity_is_clamped_and_filled", "candidate_result": "pass"},
+    "LEAN-SCHEDULE-003": {"node": "tests/test_coordinator.py::TestValidatorDissentFailsGate::test_validator_omitting_items_fails_gate", "candidate_result": "pass"},
+    "LEAN-PROVIDER-001": {"node": "tests/test_capability_policy.py::test_only_explicit_unsafe_profile_emits_unrestricted_provider_settings", "candidate_result": "pass"},
+    "LEAN-PROVIDER-002": {"node": "tests/test_capability_policy.py::test_safe_codex_subprocess_settings_override_ambient_unrestricted", "candidate_result": "pass"},
+    "LEAN-PROVIDER-003": {"node": "tests/test_capability_policy.py::test_unsupported_profile_has_stable_provider_role_version_error", "candidate_result": "pass"},
+    "LEAN-PROVIDER-004": {"node": "tests/test_lean_provider_security_runtime.py::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls", "candidate_result": "pass"},
+    "LEAN-PROVIDER-005": {"node": "tests/test_acp_runner.py::test_terminal_review_timeout_cleans_acp_and_mcp_children", "candidate_result": "pass"},
+    "LEAN-SECURITY-001": {"node": "tests/test_capability_policy.py::test_filesystem_callbacks_enforce_absolute_traversal_symlink_and_read_only", "candidate_result": "pass"},
+    "LEAN-SECURITY-002": {"node": "tests/test_lean_provider_security_runtime.py::test_exact_redaction_short_guard_structures_transforms_and_every_split", "candidate_result": "pass"},
+    "LEAN-SECURITY-003": {"node": "tests/test_lean_provider_security_runtime.py::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls", "candidate_result": "pass"},
+    "LEAN-SECURITY-004": {"node": "tests/test_lean_provider_security_runtime.py::test_exact_redaction_short_guard_structures_transforms_and_every_split", "candidate_result": "pass"},
+    "LEAN-SECURITY-005": {"node": "tests/test_lean_provider_security_runtime.py::test_coordinator_refreshes_inventory_at_child_creation", "candidate_result": "pass"},
+    "LEAN-SECURITY-006": {"node": "tests/test_capability_policy.py::test_callback_result_error_and_workspace_write_redact_inventory", "candidate_result": "pass"},
+    "LEAN-SECURITY-007": {"node": "tests/test_lean_provider_security_runtime.py::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls", "candidate_result": "pass"},
+    "LEAN-REPOSITORY-001": {"node": "tests/test_repository_contract.py::test_current_repository_passes_deterministically_without_writes", "candidate_result": "pass"},
+    "LEAN-PACKAGE-001": {"node": "tests/test_cli.py::TestUserScopeInit::test_registered_command_launches_from_another_workspace", "candidate_result": "pass"},
+    "LEAN-STATUS-001": {"node": "tests/test_runtime_observability.py::test_projection_sorts_bounds_ids_and_emits_each_closed_code", "candidate_result": "pass"},
+    "LEAN-STATUS-002": {"node": "tests/test_cli.py::TestObserveProject::test_all_exit_matrix_and_failure_isolation", "candidate_result": "pass"},
+    "LEAN-STATUS-003": {"node": "tests/test_runtime_observability.py::test_observation_is_read_only_and_does_not_import_authority", "candidate_result": "pass"},
+    "VAL-LEAN-LIFECYCLE": {"node": "tests/test_coordinator.py::TestHappyPath::test_full_pipeline_to_done", "candidate_result": "pass"},
+    "VAL-LEAN-PERSISTENCE": {"node": "tests/test_coordinator.py::TestResume::test_resume_picks_up_attempt_landed_while_down", "candidate_result": "pass"},
+    "VAL-LEAN-SCHEDULING": {"node": "tests/test_runnable_selection.py::TestRunnableSelection::test_capacity_slice_containing_work_selects_one_authored_task", "candidate_result": "pass"},
+    "VAL-LEAN-PROVIDERS": {"node": "tests/test_lean_provider_security_runtime.py::test_supported_provider_set_is_claude_and_codex_only", "candidate_result": "pass"},
+    "VAL-LEAN-SECURITY": {"node": "tests/test_lean_provider_security_runtime.py::test_exact_redaction_short_guard_structures_transforms_and_every_split", "candidate_result": "pass"},
+    "VAL-LEAN-PACKAGE": {"node": "tests/test_cli.py::TestUserScopeInit::test_registered_command_launches_from_another_workspace", "candidate_result": "pass"},
+    "VAL-LEAN-STATUS": {"node": "tests/test_cli.py::TestObserveProject::test_all_exit_matrix_and_failure_isolation", "candidate_result": "pass"},
+    "SEC-SINK-CALLBACK-RESULT": {"node": "tests/test_capability_policy.py::test_callback_result_error_and_workspace_write_redact_inventory", "candidate_result": "pass"},
+    "SEC-SINK-CALLBACK-ERROR": {"node": "tests/test_capability_policy.py::test_callback_result_error_and_workspace_write_redact_inventory", "candidate_result": "pass"},
+    "SEC-SINK-PROGRESS": {"node": "tests/test_capability_policy.py::test_progress_redaction_spans_chunks_callbacks_and_message_ids", "candidate_result": "pass"},
+    "SEC-SINK-ADAPTER-STDERR": {"node": "tests/test_acp_runner.py::test_adapter_stderr_and_log_sink_redact_before_emission", "candidate_result": "pass"},
+    "SEC-SINK-TERMINAL-SNAPSHOT": {"node": "tests/test_capability_policy.py::test_raw_acp_terminal_protocol_redacts_credential_values", "candidate_result": "pass"},
+    "SEC-SINK-ACP-WIRE": {"node": "tests/test_capability_policy.py::test_callback_result_error_and_workspace_write_redact_inventory", "candidate_result": "pass"},
+    "SEC-SINK-WORK-HANDOFF": {"node": "tests/test_server.py::test_mcp_handoff_is_redacted_before_tool_return", "candidate_result": "pass"},
+    "SEC-SINK-VALIDATE-HANDOFF": {"node": "tests/test_server.py::test_redacted_mcp_handoffs_survive_restart_and_mirroring", "candidate_result": "pass"},
+    "SEC-SINK-TERMINAL-HANDOFF": {"node": "tests/test_server.py::test_mcp_handoff_is_redacted_before_tool_return", "candidate_result": "pass"},
+    "SEC-SINK-DURABLE-MIRROR": {"node": "tests/test_server.py::test_redacted_mcp_handoffs_survive_restart_and_mirroring", "candidate_result": "pass"},
+    "SEC-SINK-RUNTIME-CURSOR": {"node": "tests/test_lean_provider_security_runtime.py::test_store_snapshot_redacts_attempt_cursor_and_mirror", "candidate_result": "pass"},
+    "SEC-SINK-CLI": {"node": "tests/test_cli.py::test_lifecycle_commands_ignore_stale_dispatch_provider_and_abort_redacts", "candidate_result": "pass"},
+    "SEC-SINK-LOG": {"node": "tests/test_acp_runner.py::test_adapter_stderr_and_log_sink_redact_before_emission", "candidate_result": "pass"},
+    "SEC-SINK-BOOTSTRAP": {"node": "tests/test_cli.py::test_bootstrap_writer_redacts_exact_credential_before_persistence", "candidate_result": "pass"},
+    "SEC-SINK-WORKSPACE-WRITE": {"node": "tests/test_capability_policy.py::test_callback_result_error_and_workspace_write_redact_inventory", "candidate_result": "pass"},
+    "SEC-SINK-CODEX-CONFIG": {"node": "tests/test_capability_policy.py::test_codex_structured_config_drops_exact_aliases_and_preserves_config", "candidate_result": "pass"},
+    "SEC-SINK-DIAGNOSTIC": {"node": "tests/test_lean_provider_security_runtime.py::test_tool_error_message_and_details_use_explicit_inventory", "candidate_result": "pass"}
+  }
+}

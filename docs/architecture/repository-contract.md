@@ -1,183 +1,77 @@
 ---
-id: ARCH-REPOSITORY-CONTRACT-DOC-001
+id: ARCH-REPOSITORY-CONTRACT-001
 status: active
 applies_to:
   - .github/workflows/ci.yml
-  - docs/architecture/*.json
-  - policy/protected-surfaces.yaml
-  - schemas/*.schema.json
+  - AGENTS.md
+  - docs/architecture/component-map.json
   - src/unrest_harness/repository_contract.py
 verified_by:
   - tests/test_repository_contract.py
-related_decisions: []
+related_decisions:
+  - ADR-0002
 schema_version: 1
 ---
 
-# Repository contract
+# Lean repository contract
 
 ## Purpose
 
-Provide one lightweight, deterministic, read-only command for the repository
-identity and governance checks that must run in every supported Python CI lane:
+Keep one small, deterministic, read-only source-checkout command for the
+development duties retained by ADR-0002.
 
-```bash
-uv run unrest check-repository
-```
+## Required files and references
 
-The command discovers the Git toplevel from the current directory. It writes
-only its JSON success report to standard output or stable diagnostics to
-standard error; it does not write beneath the repository root.
+The finite required-file and reference inventory is maintained in the mission
+checker catalog and implemented directly in `repository_contract.py`. Relative
+Markdown links and frontmatter paths from required Markdown documents must be
+repository-relative, non-escaping, and resolve to a file or a non-empty glob.
 
-## Validated surface
+## Component ownership
 
-The command checks:
+Component IDs are unique and sorted. Every retained product Python file is
+owned by at least one component path. Every component path matches, and every
+listed specification and test resolves. Cross-cutting ownership may overlap.
 
-- Git-owned, regular-file `AGENTS.md` guidance and the canonical root-to-leaf
-  hierarchy;
-- CommonMark-parsed operative headings, comments, fences, setext/ATX forms,
-  preserved container ancestry, template multiplicity, and normative Markdown
-  anchors; blockquoted or outer-list examples cannot satisfy top-level
-  template/workflow requirements;
-- Python source/test comment and docstring references parsed with one anchored
-  grammar for normalized, exact-case `docs/` or `specs/`
-  repository-relative `.md` paths plus an optional complete fragment;
-- strict version-1 frontmatter, canonical document paths, stable ID sources,
-  annotation records, removal records, component edges, and baseline
-  defect/legacy non-normativity through
-  `historical-record-policy.json`: exact candidate manifest IDs and
-  classifications are rejected only when linked into one of its finite active
-  registry roles without an exact separate current-contract authorization
-  tuple. The version-1 role identity, registry path, collection field, record
-  filter, and scalar/list value field are pinned by the repository contract;
-  changing any locator is itself invalid and cannot redirect historical-role
-  enforcement. The exact authorized role/reference pair is also recognized by
-  the role's frontmatter, stable-ID, component-edge, template,
-  evidence-location, and canonical-order checks; the exception does not admit
-  uncataloged historical references, unrelated roles, or arbitrary stable-ID
-  forms. Arbitrary historical prose is not classified;
-- `annotation-policy.json`'s open structural identity-attribution grammar over
-  its exhaustively supported Markdown/HTML label, attribute, and tag
-  containers, using HTML entity decoding, Unicode NFKC, format-control removal,
-  case folding, and punctuation-independent tokens; arbitrary prose, comments,
-  fenced examples, link destinations, and unrelated confidential terms are
-  not classified;
-- `template-heading-policy.json`'s required canonical/template headings:
-  operative top-level ATX and Setext headings share normalized rendered
-  visible-label identity, while raw HTML headings, explicit anchor aliases,
-  links with a different visible label, non-canonical sections, block quotes,
-  nested lists, and code containers do not satisfy or duplicate a field;
-- `evidence-policy.json`'s exhaustive protected fields, records, and commit
-  trailers. A positive record requires an allowed check bound to an existing
-  SHA-256-identified artifact, an observed result from the mode's finite
-  enumeration, declared exit zero, and a fresh successful execution. Typed
-  limitation/history records remain explicitly non-passing. Free prose outside
-  a cataloged location neither satisfies evidence nor receives an evidence
-  classification;
-- the protected-surface policy, accountable roles, evaluation requirements,
-  rollback requirements, and self-protection controls;
-- every `schemas/**/*.schema.json` file against its declared supported
-  metaschema;
-- the Pydantic-generated protected-surface schema, canonical architecture JSON,
-  and the complete forward/reverse Batch 0 baseline output;
-- the versioned capability sink catalog in both directions: declared sink and
-  omission anchors must resolve, while the AST effect model assigns every
-  reachable stream/descriptor write, serializer-to-stream call, log emission,
-  dynamic callback, ACP wire write, request, and cancellation to a canonical
-  sink or exact delegation omission. Primitive omission effects are pinned,
-  and reversible codec operations must remain inside their declared transform
-  owners. Its deterministic external-egress projection covers module,
-  function, and nested scopes; transitive imported helpers; inline, stable, and
-  aliased constants; parameter-derived payloads; receiver and bound aliases;
-  factory-produced callables; and literal or stable constant-name `getattr`
-  calls in discarded, assigned, returned, awaited, and nested contexts.
-  Stable literal values and assigned callable provenance enter the normalized
-  record. Reassigned, unresolved, selected, or mixed argument, method, and
-  receiver bindings fail closed without name allowlists. Unknown data-bearing
-  calls remain recorded in `if`, `while`, and list, set, dictionary, or
-  generator comprehension predicates. Proven-local callable bindings override
-  unrelated import provenance in their lexical scope and nested scopes, while
-  unimported helpers, argument-free calls, sole fixed commands or URLs, and
-  structurally proven-pure local, builtin, or math composition, iteration, and
-  predicates remain benign;
-- all three checked-in packaged capability documents through their runtime
-  strict loaders and canonical schemas. Role policy, security model, and sink
-  catalog reject missing or unknown fields, unsupported versions, and
-  duplicate object members at any depth (including equal-valued duplicates)
-  before ordinary JSON decoding could collapse them. Semantically equivalent
-  serialization drift also fails the canonical sorted UTF-8 JSON check;
-- exactly one Python 3.11/3.12 compatibility matrix with package import,
-  focused asset/config/model contracts, supported CLI surfaces, and the exact
-  repository command; exactly one fixed Python 3.13 primary job with the sole
-  full source-suite invocation, repository command, build, focused archive
-  check, and installed-wheel lifecycle. All supported versions remain declared
-  and enforcing, dependencies remain reachable, and no conditional or
-  continue-on-error path may skip a required step. Test, coverage-driven
-  pytest, option-bearing build/package/publish, and equivalent Python module
-  commands are classified from tokenized shell commands. Post-build pytest and
-  compatibility-lane build/full-suite work are rejected.
+## Runtime policy
 
-Diagnostics use `REPO-*` or the protected policy's stable `GOV-*` reason code
-and a repository-relative location. Inputs and diagnostics are sorted before
-reporting, so reversed source enumeration produces identical bytes.
+The exact packaged `role-capabilities.v1.json` is loaded through the runtime
+Pydantic policy model. Provider, role, and profile records remain unique;
+credential names remain finite; wildcard forwarding is authority rather than
+credential identity; and the safe profile does not inherit ambient values.
 
-## Dependency boundary
+## CI wiring
 
-`jsonschema==4.26.0` is a direct runtime dependency because the command must
-validate checked-in schemas against their declared metaschemas, not merely
-parse them as JSON. The exact pin makes this CI contract independent of a
-transitive dependency resolver change. `markdown-it-py>=4.0.0` is a direct
-runtime dependency because operative Markdown structure follows its CommonMark
-token stream rather than repository-specific fence and heading heuristics. No
-documentation site generator is required.
+CI keeps Python 3.11 and 3.12 import/help lanes and a Python 3.13 primary lane
+with Ruff, mypy, one full source-suite run, this repository command, build,
+distribution inspection, and installed-wheel validation from an unrelated
+directory. Commands in a job or step guarded by a constant-false expression do
+not count. The deliberately finite expression grammar is boolean literals,
+`!`, `&&`, `||`, and parentheses; expressions containing any dynamic term are
+not treated as constant. Commands inside a line-bounded literal
+`if false; then` ... `fi` block without nested or alternate branches also do
+not count. This is not general shell or GitHub expression evaluation.
 
-## Invariants
+## Diagnostics
 
-- `ARCH-REPOSITORY-CONTRACT-001`: one read-only command deterministically
-  validates repository identity, references, governance, schemas, generated
-  output, and its own CI enforcement.
+Failures use exactly these bounded codes with a repository-relative path or
+component record ID and no source body or environment value:
 
-## Failure modes
+- `LEAN-REPO-MISSING`
+- `LEAN-REPO-REFERENCE`
+- `LEAN-REPO-COMPONENT`
+- `LEAN-REPO-POLICY`
+- `LEAN-REPO-CI`
 
-Missing or symlinked guidance, unresolved files or anchors, unknown or
-conflicting IDs, invalid frontmatter or annotations, broken component edges,
-component-induced protected-policy ambiguity, protected-catalog
-reclassification, weakened protected policy, invalid protected evidence,
-unauthorized historical role links, malformed or non-exact historical
-authorizations, redirected historical role locators, unsupported or malformed
-schemas, generated drift, and
-uncataloged reachable output/request/callback/cancellation channels,
-missing/substituted/late/incomplete-version CI invocation exit nonzero.
-Absolute-looking, non-normalized, repeated-separator, wrong-case, missing, or
-partial source references exit nonzero; external URL references remain
-external. Duplicate required template headings or YAML keys, quoted/listed
-example fields, conditional CI invocation, supported-version matrix exclusion,
-unreachable or statically failing dependencies, alternate Python test/build
-matrices without enforcement, missing lightweight compatibility surfaces,
-multiple or misplaced full-suite invocations, post-build pytest, missing or
-late distribution/wheel checks, option-bearing build/publish ordering, and
-tolerated repository-contract failures also exit nonzero.
+## Explicit non-goals
 
-## Change protocol
-
-Update this document, its component and stable-ID records, the command, focused
-mutation tests, and CI source in one coherent change. Add a new generated
-artifact only with a deterministic renderer and drift check. Add a schema
-dialect only by explicitly registering its validator and testing an invalid
-schema against that metaschema.
+The command performs no baseline generation, broad root-schema validation,
+governance or commit-message interpretation, static source/sink proof,
+evidence-history comparison, recursive CI self-protection, or write operation.
 
 ## Required verification
 
 ```bash
-uv run ruff check .
-uv run mypy src
-uv run pytest -q tests/test_repository_contract.py
 uv run unrest check-repository
+uv run pytest -q tests/test_repository_contract.py
 ```
-
-This is the milestone tier. The full source suite is not part of this check; the
-frozen-candidate release checkpoint runs
-`env -u CODEX_PATH uv run pytest -q` once on Python 3.13.
-
-## Related decisions
-
-None.

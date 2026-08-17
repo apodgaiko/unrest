@@ -1,0 +1,267 @@
+{
+  "schema_version": 2,
+  "release": "lean-core-v0.2",
+  "version": "0.2.0",
+  "status": "final-current-local-rollback-authority; external-exact-head-evidence-required",
+  "base": {
+    "commit": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+    "tree": "35152a4a8c56198664f519691ec952ec9ca519f4"
+  },
+  "source": {
+    "repository_head_at_checkpoint": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",
+    "repository_head_role": "checked-out predecessor while final candidate changes were present in the worktree; not the candidate content identity",
+    "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
+    "final_product_package_test": {
+      "files": 103,
+      "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7",
+      "paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "src/**",
+        "tests/**",
+        "tools/**"
+      ]
+    },
+    "superseded_filesystem_binding": {
+      "files": 105,
+      "sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
+      "status": "historical-superseded; included ignored/generated egg-info and was not commit-reproducible"
+    }
+  },
+  "commit_reproducible_finalization": {
+    "status": "final-current-rollback-authority",
+    "predecessor_commit": "c4394c89d85ae912bea4414a12ea4546753e89da",
+    "binding": {"files": 103, "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7"},
+    "checkpoint_authority": {
+      "decision": "Decision 001",
+      "local_probe": {"status": "failed-ordering-probe", "command": "env -u CODEX_PATH uv run pytest -q", "result": "919 passed, 7 skipped, 2 failed in 220.56s; exit 1", "invocations": 1, "reruns": 0, "failing_nodeids": ["tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers", "tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology"], "evidence_source": "mission attempt W-FREEZE 2026-08-13T13-25-57Z"},
+      "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
+    },
+    "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217993, "sha256": "52962ff2db2598d8ed086b0541ff59fa7f3b146c37ab563fcff29d4053460e51"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 305118, "sha256": "e7b6c59d9c0e148e151774e1b527bfc2c6238fd8721e6556ed24ee15162d0bdf"}},
+    "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
+    "evidence_packet": "mission attempt for VAL-LOCAL-RELEASE-SEAL on 2026-08-16"
+  },
+  "local_checkpoint": {
+    "status": "historical-superseded-by-commit-reproducible-finalization",
+    "command": "env -u CODEX_PATH uv run pytest -q",
+    "python": "3.13.12",
+    "uv": "0.11.0",
+    "platform": "macOS arm64",
+    "lock_sha256": "cab1a7e534d0dcb9e60142fc94a46efb40ea1b5a5c1ccc70d2d0a3b6311026e6",
+    "evidence_source": "durable retained loopback-authorized worker checkpoint packet",
+    "started_utc": "2026-08-12T23:43:25.569367Z",
+    "ended_utc": "2026-08-12T23:46:20.475041Z",
+    "pytest_seconds": 174.05,
+    "exit_code": 0,
+    "passed": 894,
+    "skipped": 7,
+    "failed": 0,
+    "per_invocation_reruns": 0,
+    "candidate_checkpoint_invocation": 3,
+    "candidate_checkpoint_invocations_total": 3,
+    "evidence_packet": {
+      "identity": "mission evidence/W-CHECKPOINT-EVIDENCE-RETENTION-20260813T0342Z",
+      "status_file": "status.json",
+      "status_sha256": "63f279ba8ad2f3b02f6739488956cdad3a021e6c3d3dbf0e568478e95fff9649",
+      "transcript_file": "stdout.raw",
+      "transcript_sha256": "ef8e3ec1544e3418aa6e76b5bc05529ddd0ae5bae19a1adc7da9218eabeaeefc",
+      "hash_ledger_file": "SHA256SUMS",
+      "hash_ledger_sha256": "14788e338d12d1cf4898b2eac8ce1d453bb8cc39e1698cf44f7b48b152f39bb5",
+      "comparison_file": "comparison.json",
+      "comparison_sha256": "81bc46985d3a566eacf9b2eed3ef0566cc5df4268e8d79ce494fed729c98125a"
+    }
+  },
+  "candidate_checkpoint_chronology": {
+    "binding_sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
+    "distinct_invocations": 3,
+    "per_invocation_reruns_are_not_candidate_invocations": true,
+    "invocations": [
+      {
+        "sequence": 1,
+        "status": "environment-limited-superseded",
+        "pytest_seconds": 171.68,
+        "passed": 880,
+        "skipped": 7,
+        "failed": 14,
+        "exit_code": 1,
+        "per_invocation_reruns": 0,
+        "retained": false,
+        "reason": "restricted worker sandbox denied bounded loopback binding"
+      },
+      {
+        "sequence": 2,
+        "status": "historical-superseded-unretained",
+        "pytest_seconds": 174.83,
+        "passed": 894,
+        "skipped": 7,
+        "failed": 0,
+        "exit_code": 0,
+        "per_invocation_reruns": 0,
+        "retained": false,
+        "reason": "successful earlier invocation on the identical binding; superseded by the retained evidence invocation"
+      },
+      {
+        "sequence": 3,
+        "status": "historical-superseded-evidence-retained",
+        "pytest_seconds": 174.05,
+        "passed": 894,
+        "skipped": 7,
+        "failed": 0,
+        "exit_code": 0,
+        "per_invocation_reruns": 0,
+        "retained": true,
+        "evidence_packet": "mission evidence/W-CHECKPOINT-EVIDENCE-RETENTION-20260813T0342Z"
+      }
+    ]
+  },
+  "artifacts": {
+    "status": "historical-superseded-by-commit-reproducible-finalization",
+    "scope": "historical superseded local build from the former filesystem binding; exact bytes remain evidence only; CI hashes are run-local",
+    "evidence_packet": "mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z",
+    "hash_ledger_file": "SHA256SUMS",
+    "reproducible_across_builds": false,
+    "wheel": {
+      "filename": "unrest_harness-0.2.0-py3-none-any.whl",
+      "bytes": 217860,
+      "sha256": "778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a"
+    },
+    "sdist": {
+      "filename": "unrest_harness-0.2.0.tar.gz",
+      "bytes": 295954,
+      "sha256": "0f73d258264f446969b864b0df4828e6fd2f00bd17fdc08accc64648a1c4ce51"
+    }
+  },
+  "superseded_disposable_archives": {
+    "status": "historical-superseded-unretained",
+    "reason": "the final retained single build produced different timestamp-bearing archive bytes",
+    "wheel": {
+      "bytes": 217860,
+      "sha256": "68b44673932c0ac4702bc3c3c0368b52e59ce4eede9db2ee5eeace5949e25e63"
+    },
+    "sdist": {
+      "bytes": 295969,
+      "sha256": "b7b19d0ce761d48b30b1112bcb65b9531d9b4224eb66ec7e41db8495f7c56e2f"
+    }
+  },
+  "superseded_evidence": {
+    "status": "historical-superseded",
+    "reason": "validator MCP identity changed product source and tests after this checkpoint and its publication",
+    "repository_head_at_checkpoint": "6cf713cb855ff77f372c008bc249064a03a2ca35",
+    "repository_head_role": "checked-out commit while the bound candidate existed as dirty-worktree content; not the checkpoint content identity",
+    "pre_carrier_delivery": {
+      "files": 150,
+      "sha256": "2c971c79f3afbfe8ddf11422ca0e666a00ab9ffde044349057a2f705d6149f47"
+    },
+    "product_package_test": {
+      "files": 105,
+      "sha256": "cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a"
+    },
+    "checkpoint": {
+      "started_utc": "2026-08-12T18:26:16Z",
+      "ended_utc": "2026-08-12T18:29:17Z",
+      "passed": 892,
+      "skipped": 7,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "artifacts": {
+      "wheel": {
+        "bytes": 217773,
+        "sha256": "44808498624b50bf7e44eff8c80ecc5fe0021b445f6e4a8204ff8387addbab97"
+      },
+      "sdist": {
+        "bytes": 293800,
+        "sha256": "ed9da36e1591f627486a728fc0db8dec696961460b90df6c53e57a76ee1793c9"
+      }
+    },
+    "publication": {
+      "commit": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",
+      "github_run_id": 31641194261,
+      "github_artifact_id": 9158990376,
+      "wheel_sha256": "c90bbe43f2f4a3263178ccfadd9a8b05d990a92881715a15dbad8625b86a4b81",
+      "sdist_sha256": "a84bbcb930a23adc143c68e79c6dc84d2f14009c4adb65b9cfc43ec7e6d93fe9"
+    }
+  },
+  "superseded_validator_identity_evidence": {
+    "status": "historical-superseded",
+    "reason": "the focused external-publication contract test changed the bound test surface",
+    "product_package_test": {
+      "files": 105,
+      "sha256": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e"
+    },
+    "checkpoint": {
+      "passed": 893,
+      "skipped": 7,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "publication": {
+      "commit": "f00ac2cfc132088012648d3150ff8360d7abfcbc",
+      "github_run_id": 31646534289,
+      "github_artifact_id": 9161004979
+    }
+  },
+  "superseded_external_publication_evidence": {
+    "status": "historical-superseded",
+    "reason": "the carrier binding regression test changed the bound test surface",
+    "product_package_test": {
+      "files": 105,
+      "sha256": "e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4"
+    },
+    "checkpoint": {
+      "passed": 894,
+      "skipped": 7,
+      "failed": 0,
+      "exit_code": 0,
+      "pytest_seconds": 186.42
+    },
+    "artifacts": {
+      "wheel_sha256": "6b310c88bf378ae2d1f6c3e0a3df7c15eed2eb07a0a0d5a784384f4af9170f6c",
+      "sdist_sha256": "1234c56984a6ea86b62eb29876691e77b63d4edfb76653eabdee921655d4d3e0"
+    }
+  },
+  "superseded_environment_attempt": {
+    "status": "environment-limited-superseded",
+    "command": "env -u CODEX_PATH uv run pytest -q",
+    "passed": 880,
+    "skipped": 7,
+    "failed": 14,
+    "exit_code": 1,
+    "pytest_seconds": 171.68,
+    "reason": "restricted worker sandbox denied bounded loopback binding; the environment-corrected checkpoint passed the identical candidate"
+  },
+  "publication": {
+    "status": "external-evidence-required",
+    "evidence_owner": "pull-request-6-body",
+    "carrier_role": "immutable-procedure-and-local-checkpoint",
+    "exact_head_procedure": "resolve the live PR #6 head SHA; require local HEAD, tracking ref, live PR head, and successful ci.yml run headSha to equal it; download the named artifact from that run and verify its SHA256SUMS before installation",
+    "workflow": ".github/workflows/ci.yml",
+    "job": "primary",
+    "artifact_name": "lean-core-v0.2.0-python313",
+    "retention_days": 90,
+    "artifact_contents": [
+      "unrest_harness-0.2.0-py3-none-any.whl",
+      "unrest_harness-0.2.0.tar.gz",
+      "SHA256SUMS"
+    ],
+    "checksum_provenance": "generated from the two archives produced by the selected exact-head CI run",
+    "run_locator": "gh run list --repo OWNER/REPO --workflow ci.yml --commit FINAL_HEAD_SHA --status success --json databaseId,headSha,conclusion,url",
+    "download": "gh run download RUN_ID --repo OWNER/REPO --name lean-core-v0.2.0-python313 --dir lean-core-v0.2.0",
+    "downloaded_checksum_verification": "cd lean-core-v0.2.0 && shasum -a 256 -c SHA256SUMS"
+  },
+  "compatibility_lanes": {
+    "python": ["3.11", "3.12"],
+    "surface": [
+      "locked source install",
+      "package and policy/assets import",
+      "focused assets/configuration/model contracts",
+      "supported CLI help",
+      "repository validation"
+    ],
+    "excluded": [
+      "full source suite",
+      "Python 3.13 installed-wheel lifecycle"
+    ]
+  }
+}

@@ -11,10 +11,13 @@ import shlex
 import socket
 import subprocess
 import sys
+import threading
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, ClassVar, Coroutine, Literal
 
+from . import __version__
 from .assets import AssetLoader
 from .capability_policy import (
     SAFE_PROFILE,
@@ -25,9 +28,9 @@ from .capability_policy import (
     RoleName,
     StreamingCredentialRedactor,
     build_role_environment,
-    credential_values,
     enforce_environment_credential_provenance,
     enforce_persisted_environment_credential_provenance,
+    finite_credential_values,
     profile_environment,
     redact_credential_values,
     redact_sensitive_value,
@@ -46,6 +49,8 @@ from .models import (
 from .storage import (
     ProjectStore,
     atomic_write_json,
+    trusted_persistence_root,
+    validate_atomic_write_destination,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,6 +61,24 @@ SUBPROCESS_STREAM_LIMIT = int(
         str(8 * 1024 * 1024),
     )
 )
+MCP_STREAM_CAPTURE_LIMIT = 64 * 1024
+MCP_DRAIN_TIMEOUT_SECONDS = 2.0
+
+
+@dataclass(frozen=True)
+class _NodeRuntime:
+    role: Literal["validator", "worker"]
+    role_config: HarnessConfig
+    policy: ResolvedRoleCapability
+    command: str
+    workspace_path: Path
+    workspace_dir: str
+    project_bucket: str
+    handoff_path: Path
+    runtime_environment: dict[str, str]
+    agent_environment: dict[str, str]
+    terminal_environment: dict[str, str]
+    credentials: dict[str, str]
 
 
 def _write_pipe_payload(
@@ -142,7 +165,7 @@ def _load_redacted_json(path: Path, credentials: dict[str, str]) -> Any:
     data = json.loads(path.read_text(encoding="utf-8"))
     redacted = _redact_json_value(data, credentials)
     if redacted != data:
-        atomic_write_json(path, redacted)
+        atomic_write_json(path, redacted, trusted_root=path.parent)
     return redacted
 
 
@@ -215,7 +238,7 @@ def _acp_subprocess_env(
 ) -> dict[str, str]:
     """Build the least-privilege environment handed to an ACP agent."""
     host = dict(os.environ if host_environment is None else host_environment)
-    credentials = credential_values(policy, host)
+    credentials = finite_credential_values(host)
     env = build_role_environment(
         policy,
         host,
@@ -341,23 +364,27 @@ async def _wait_for_process_exit(
             pass
 
 
-async def _drain_stream_chunks(stream: asyncio.StreamReader | None) -> str:
+async def _drain_stream_chunks(
+    stream: asyncio.StreamReader | None,
+    *,
+    capture_limit: int = MCP_STREAM_CAPTURE_LIMIT,
+) -> str:
     if stream is None:
         return ""
-    chunks: list[str] = []
+    captured = bytearray()
     try:
         while True:
             chunk = await stream.read(4096)
             if not chunk:
                 break
-            text = chunk.decode("utf-8", errors="replace")
-            if text:
-                chunks.append(text)
+            if len(captured) < capture_limit:
+                remaining = capture_limit - len(captured)
+                captured.extend(chunk[:remaining])
     except asyncio.CancelledError:
         raise
     except Exception:  # noqa: BLE001
-        return "".join(chunks)
-    return "".join(chunks)
+        return captured.decode("utf-8", errors="replace")
+    return captured.decode("utf-8", errors="replace")
 
 
 @dataclass
@@ -446,7 +473,9 @@ class ACPClient:
         self._working_dir = working_dir
         self._policy = policy
         self._terminal_environment = terminal_environment
-        self._credentials = credential_values(policy, terminal_environment)
+        self._credentials: dict[str, str] = finite_credential_values(
+            terminal_environment
+        )
         self._session_update_handler = session_update_handler
         self._request_id = 0
         self._pending: dict[int, asyncio.Future] = {}
@@ -641,7 +670,8 @@ class ACPClient:
         command = params.get("command", "")
         if not isinstance(command, str) or not command:
             raise ValueError("terminal command must be a non-empty string")
-        args = params.get("args") or []
+        raw_args = params.get("args")
+        args = [] if raw_args is None else raw_args
         if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
             raise ValueError("terminal args must be a list of strings")
         self._policy.authorize_command(command)
@@ -650,7 +680,8 @@ class ACPClient:
             access="cwd",
             working_dir=Path(self._working_dir),
         )
-        env_list = params.get("env") or []
+        raw_env = params.get("env")
+        env_list = [] if raw_env is None else raw_env
         if not isinstance(env_list, list):
             raise ValueError("terminal env must be a list")
         requested_environment: dict[str, str] = {}
@@ -666,17 +697,24 @@ class ACPClient:
                 raise ValueError(f"duplicate terminal environment name: {name}")
             requested_environment[name] = variable["value"]
         self._policy.authorize_terminal_environment(tuple(requested_environment))
+        for name in self._credentials:
+            requested_environment.pop(name, None)
 
-        self._terminal_count += 1
-        terminal_id = f"terminal-{self._terminal_count}"
-        output_limit = params.get("outputByteLimit") or 1024 * 1024
-        if not isinstance(output_limit, int) or output_limit <= 0:
+        raw_output_limit = params.get("outputByteLimit")
+        output_limit = 1024 * 1024 if raw_output_limit is None else raw_output_limit
+        if (
+            not isinstance(output_limit, int)
+            or isinstance(output_limit, bool)
+            or output_limit <= 0
+        ):
             raise ValueError("outputByteLimit must be a positive integer")
         env = enforce_environment_credential_provenance(
             {**self._terminal_environment, **requested_environment},
             self._credentials,
-            inherit_all=self._policy.environment.inherit_all,
+            inherit_all=False,
         )
+        self._terminal_count += 1
+        terminal_id = f"terminal-{self._terminal_count}"
         process = await asyncio.create_subprocess_exec(
             command,
             *args,
@@ -833,12 +871,178 @@ class ACPNodeRunner:
     supports_progress_updates: ClassVar[bool] = True
     config: HarnessConfig
     loader: AssetLoader
+    _mcp_drains: dict[
+        int, tuple[asyncio.Task[str], asyncio.Task[str]]
+    ] = field(default_factory=dict, init=False, repr=False)
+    _mcp_start_locks: weakref.WeakKeyDictionary[
+        asyncio.AbstractEventLoop, asyncio.Lock
+    ] = field(
+        default_factory=weakref.WeakKeyDictionary,
+        init=False,
+        repr=False,
+    )
+    _mcp_start_locks_guard: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+    )
+
+    def _mcp_start_lock(self) -> asyncio.Lock:
+        """Return the startup serializer owned by the current event loop."""
+        loop = asyncio.get_running_loop()
+        with self._mcp_start_locks_guard:
+            lock = self._mcp_start_locks.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._mcp_start_locks[loop] = lock
+            return lock
+
+    def _start_mcp_drains(self, process: asyncio.subprocess.Process) -> None:
+        if id(process) in self._mcp_drains:
+            raise RuntimeError("MCP child streams already have drain owners")
+        self._mcp_drains[id(process)] = (
+            asyncio.create_task(
+                _drain_stream_chunks(process.stdout),
+                name=f"unrest-mcp-stdout-{process.pid}",
+            ),
+            asyncio.create_task(
+                _drain_stream_chunks(process.stderr),
+                name=f"unrest-mcp-stderr-{process.pid}",
+            ),
+        )
+
+    async def _close_mcp_process(
+        self,
+        process: asyncio.subprocess.Process,
+        credentials: dict[str, str],
+    ) -> str:
+        drains = self._mcp_drains.pop(id(process), ())
+        drained: list[str | BaseException] = []
+        try:
+            await _close_subprocess(process, timeout=5)
+        finally:
+            if drains:
+                try:
+                    drained = list(
+                        await asyncio.wait_for(
+                            asyncio.gather(*drains, return_exceptions=True),
+                            timeout=MCP_DRAIN_TIMEOUT_SECONDS,
+                        )
+                    )
+                except asyncio.TimeoutError:
+                    for task in drains:
+                        task.cancel()
+                    drained = list(
+                        await asyncio.gather(*drains, return_exceptions=True)
+                    )
+        output = redact_credential_values(
+            "\n".join(item for item in drained if isinstance(item, str)),
+            credentials,
+        )
+        output_bytes = output.encode("utf-8")[: 2 * MCP_STREAM_CAPTURE_LIMIT]
+        output = output_bytes.decode("utf-8", errors="ignore")
+        if process.returncode not in (None, 0) and output:
+            logger.warning(
+                "MCP child exited with code %s: %s",
+                process.returncode,
+                _truncate_text(output, limit=2000),
+            )
+        return output
 
     @staticmethod
     def _find_free_port() -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
             return s.getsockname()[1]
+
+    def _node_runtime(
+        self,
+        project_id: str,
+        mission_id: str,
+        task: Task,
+        spawn_ts: str,
+        store: ProjectStore,
+        cwd: str | Path | None,
+    ) -> _NodeRuntime:
+        role: Literal["validator", "worker"] = (
+            "validator" if task.type == "validate" else "worker"
+        )
+        role_config = self.config.for_role(role)
+        project_record = store.load_project(project_id)
+        workspace_path = (
+            Path(cwd).expanduser().resolve(strict=True)
+            if cwd
+            else store.workspace_dir(project_id).resolve(strict=True)
+        )
+        project_record_path = store.unrest_dir(project_id).resolve(strict=True)
+        policy = resolve_role_capability(
+            role_config.worker_provider,
+            role=role,
+            policy=role_config.capability_policy,
+            profile=role_config.capability_profile,
+            workspace=workspace_path,
+            project_record=project_record_path,
+        )
+        command = (
+            role_config.worker_acp_command
+            or role_config.resolved_worker_acp_command
+        )
+        if not command:
+            raise RuntimeError(
+                f"No ACP command for role={role}. "
+                f"Set UNREST_{role.upper()}_ACP_COMMAND."
+            )
+        command = _augment_acp_command(
+            command,
+            role_config.worker_provider,
+            role_config.worker_reasoning_effort,
+        )
+        handoff_path = store.attempt_path(
+            project_id, mission_id, spawn_ts, task.id
+        )
+        runtime_environment = {
+            **profile_environment(role_config.capability_profile),
+            "UNREST_HANDOFF_PATH": str(handoff_path),
+            "UNREST_HOME": str(self.config.harness_home),
+            "UNREST_MISSION_ID": mission_id,
+            "UNREST_NODE_ID": task.id,
+            "UNREST_NODE_TYPE": task.type,
+            "UNREST_PROJECT_ID": project_id,
+        }
+        credentials = finite_credential_values(os.environ)
+        return _NodeRuntime(
+            role=role,
+            role_config=role_config,
+            policy=policy,
+            command=command,
+            workspace_path=workspace_path,
+            workspace_dir=str(workspace_path),
+            project_bucket=str(project_record_path),
+            handoff_path=handoff_path,
+            runtime_environment=runtime_environment,
+            agent_environment=_acp_subprocess_env(
+                role_config.worker_provider,
+                policy=policy,
+                reasoning_effort=(
+                    project_record.worker_reasoning_effort
+                    if role == "worker" and project_record.worker_reasoning_effort
+                    else role_config.worker_reasoning_effort
+                ),
+                model=(
+                    project_record.worker_model
+                    or os.environ.get("UNREST_WORKER_MODEL")
+                    if role == "worker"
+                    else None
+                ),
+                internal=runtime_environment,
+            ),
+            terminal_environment=build_role_environment(
+                policy,
+                os.environ,
+                include_credentials=False,
+            ),
+            credentials=credentials,
+        )
 
     async def run_node(
         self,
@@ -852,66 +1056,19 @@ class ACPNodeRunner:
         progress_callback: ProgressCallback | None = None,
     ) -> NodeHandoff:
         """Spawn the worker MCP server + ACP agent; poll the attempt file; return the handoff."""
-        role: Literal["validator", "worker"] = "validator" if task.type == "validate" else "worker"
-        role_config = self.config.for_role(role)
-        project_record = store.load_project(project_id)
-        workspace_path = (
-            Path(cwd).expanduser().resolve(strict=True)
-            if cwd
-            else store.workspace_dir(project_id).resolve(strict=True)
+        runtime = self._node_runtime(
+            project_id, mission_id, task, spawn_ts, store, cwd
         )
-        project_record_path = store.unrest_dir(project_id).resolve(strict=True)
-        resolved_policy = resolve_role_capability(
-            role_config.worker_provider,
-            role=role,
-            policy=role_config.capability_policy,
-            profile=role_config.capability_profile,
-            workspace=workspace_path,
-            project_record=project_record_path,
-        )
-        acp_command = role_config.worker_acp_command or role_config.resolved_worker_acp_command
-        if not acp_command:
-            raise RuntimeError(
-                f"No ACP command for role={role}. Set UNREST_{role.upper()}_ACP_COMMAND."
-            )
-        acp_command = _augment_acp_command(
-            acp_command,
-            role_config.worker_provider,
-            role_config.worker_reasoning_effort,
-        )
-        workspace_dir = str(workspace_path)
-        project_bucket = str(project_record_path)
-        handoff_path = store.attempt_path(project_id, mission_id, spawn_ts, task.id)
-        runtime_environment = {
-            **profile_environment(role_config.capability_profile),
-            "UNREST_HANDOFF_PATH": str(handoff_path),
-            "UNREST_HOME": str(self.config.harness_home),
-            "UNREST_MISSION_ID": mission_id,
-            "UNREST_NODE_ID": task.id,
-            "UNREST_NODE_TYPE": task.type,
-            "UNREST_PROJECT_ID": project_id,
-        }
-        agent_env = _acp_subprocess_env(
-            role_config.worker_provider,
-            policy=resolved_policy,
-            reasoning_effort=(
-                project_record.worker_reasoning_effort
-                if role == "worker" and project_record.worker_reasoning_effort
-                else role_config.worker_reasoning_effort
-            ),
-            model=(
-                project_record.worker_model or os.environ.get("UNREST_WORKER_MODEL")
-                if role == "worker"
-                else None
-            ),
-            internal=runtime_environment,
-        )
-        terminal_environment = build_role_environment(
-            resolved_policy,
-            os.environ,
-            include_credentials=True,
-        )
-        secrets = credential_values(resolved_policy, os.environ)
+        role_config = runtime.role_config
+        resolved_policy = runtime.policy
+        workspace_path = runtime.workspace_path
+        workspace_dir = runtime.workspace_dir
+        project_bucket = runtime.project_bucket
+        handoff_path = runtime.handoff_path
+        runtime_environment = runtime.runtime_environment
+        agent_env = runtime.agent_environment
+        terminal_environment = runtime.terminal_environment
+        secrets = runtime.credentials
 
         def redact(text: str) -> str:
             return redact_credential_values(text, secrets)
@@ -922,35 +1079,53 @@ class ACPNodeRunner:
             workspace_path,
             role_config.worker_provider,
             role_config.capability_profile,
-            role=role,
+            role=runtime.role,
+            allowed_ancestor=workspace_path,
         )
 
-        # 1) Start the worker MCP server subprocess.
-        mcp_port = self._find_free_port()
-        mcp_process = await self._start_worker_mcp_server(
-            task=task,
-            project_id=project_id,
-            mission_id=mission_id,
-            handoff_path=str(handoff_path),
-            workspace_dir=workspace_dir,
-            mcp_port=mcp_port,
-            sensitive_inventory=secrets,
-            environment=build_role_environment(
-                resolved_policy,
-                os.environ,
-                internal=runtime_environment,
-                include_credentials=False,
-            ),
-        )
-        try:
-            await self._wait_for_server_ready("127.0.0.1", mcp_port)
-        except TimeoutError:
-            if mcp_process.returncode is None:
-                mcp_process.terminate()
-            await _close_subprocess(mcp_process, timeout=5)
-            return self._synthesize_missing_handoff(
-                task, summary="Worker MCP server failed to start"
+        # A free-port probe is only advisory after its socket closes. Keep the
+        # probe, child spawn, and readiness confirmation atomic within this
+        # runner so concurrent nodes cannot select and connect to one sibling's
+        # MCP endpoint.
+        async with self._mcp_start_lock():
+            mcp_port = self._find_free_port()
+            mcp_process = await self._start_worker_mcp_server(
+                task=task,
+                project_id=project_id,
+                mission_id=mission_id,
+                handoff_path=str(handoff_path),
+                workspace_dir=workspace_dir,
+                mcp_port=mcp_port,
+                sensitive_inventory=secrets,
+                environment=build_role_environment(
+                    resolved_policy,
+                    os.environ,
+                    internal=runtime_environment,
+                    include_credentials=False,
+                ),
             )
+            try:
+                await self._wait_for_server_ready("127.0.0.1", mcp_port)
+            except TimeoutError:
+                if mcp_process.returncode is None:
+                    mcp_process.terminate()
+                await self._close_mcp_process(mcp_process, secrets)
+                return self._synthesize_and_persist_missing_handoff(
+                    handoff_path=handoff_path,
+                    task=task,
+                    spawn_ts=spawn_ts,
+                    summary="Worker MCP server failed to start",
+                    stop_reason=None,
+                    exit_code=mcp_process.returncode,
+                    stderr="",
+                    session_error=None,
+                    credentials=secrets,
+                )
+            except BaseException:
+                if mcp_process.returncode is None:
+                    mcp_process.terminate()
+                await self._close_mcp_process(mcp_process, secrets)
+                raise
 
         worker_mcp_cfg = {
             "type": "http",
@@ -961,28 +1136,34 @@ class ACPNodeRunner:
         }
 
         # 2) Render the prompt (system + template merged into one first message).
-        first_message = self._render_prompts(
-            task=task,
-            mission_id=mission_id,
-            project_bucket=project_bucket,
-            workspace_dir=workspace_dir,
-            store=store,
-            project_id=project_id,
-        )
+        try:
+            first_message = self._render_prompts(
+                task=task,
+                mission_id=mission_id,
+                project_bucket=project_bucket,
+                workspace_dir=workspace_dir,
+                store=store,
+                project_id=project_id,
+            )
 
-        # 3) Spawn the ACP agent.
-        command_parts = shlex.split(acp_command)
-        if not command_parts:
-            raise ValueError("ACP command cannot be empty")
-        process = await asyncio.create_subprocess_exec(
-            *command_parts,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=workspace_dir,
-            env=agent_env,
-            limit=SUBPROCESS_STREAM_LIMIT,
-        )
+            # 3) Spawn the ACP agent.
+            command_parts = shlex.split(runtime.command)
+            if not command_parts:
+                raise ValueError("ACP command cannot be empty")
+            process = await asyncio.create_subprocess_exec(
+                *command_parts,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=workspace_dir,
+                env=agent_env,
+                limit=SUBPROCESS_STREAM_LIMIT,
+            )
+        except BaseException:
+            if mcp_process.returncode is None:
+                mcp_process.terminate()
+            await self._close_mcp_process(mcp_process, secrets)
+            raise
         progress_tracker = ACPProgressTracker(
             callback=progress_callback,
             redactor=redact,
@@ -1002,7 +1183,6 @@ class ACPNodeRunner:
         )
         if set_credential_inventory is not None:
             set_credential_inventory(secrets)
-        await client.start()
         prompt_stop_reason: str | None = None
         session_error: str | None = None
         worker_exit_code: int | None = None
@@ -1010,6 +1190,7 @@ class ACPNodeRunner:
         stderr_task = asyncio.create_task(_drain_stream_chunks(process.stderr))
 
         try:
+            await client.start()
             await client.send_request(
                 "initialize",
                 {
@@ -1021,7 +1202,7 @@ class ACPNodeRunner:
                         },
                         "terminal": resolved_policy.process.enabled,
                     },
-                    "clientInfo": {"name": "unrest", "version": "0.1.0"},
+                    "clientInfo": {"name": "unrest", "version": __version__},
                 },
             )
             session_params: dict[str, Any] = {
@@ -1078,7 +1259,7 @@ class ACPNodeRunner:
                     mcp_process.terminate()
                 except OSError:
                     pass
-            await _close_subprocess(mcp_process, timeout=5)
+            await self._close_mcp_process(mcp_process, secrets)
 
         # 5) Parse and return.
         if handoff_path.exists():
@@ -1090,6 +1271,7 @@ class ACPNodeRunner:
         return self._synthesize_and_persist_missing_handoff(
             handoff_path=handoff_path,
             task=task,
+            spawn_ts=spawn_ts,
             stop_reason=prompt_stop_reason,
             exit_code=worker_exit_code,
             stderr=worker_stderr,
@@ -1184,9 +1366,9 @@ class ACPNodeRunner:
         terminal_environment = build_role_environment(
             resolved_policy,
             os.environ,
-            include_credentials=True,
+            include_credentials=False,
         )
-        secrets = credential_values(resolved_policy, os.environ)
+        secrets = finite_credential_values(os.environ)
 
         def redact(text: str) -> str:
             return redact_credential_values(text, secrets)
@@ -1198,6 +1380,7 @@ class ACPNodeRunner:
             role_config.worker_provider,
             role_config.capability_profile,
             role="terminal_reviewer",
+            allowed_ancestor=workspace_path,
         )
 
         mcp_port = self._find_free_port()
@@ -1284,7 +1467,7 @@ class ACPNodeRunner:
                         },
                         "terminal": resolved_policy.process.enabled,
                     },
-                    "clientInfo": {"name": "unrest", "version": "0.1.0"},
+                    "clientInfo": {"name": "unrest", "version": __version__},
                 },
             )
             session_params: dict[str, Any] = {
@@ -1338,7 +1521,7 @@ class ACPNodeRunner:
                     mcp_process.terminate()
                 except OSError:
                     pass
-            await _close_subprocess(mcp_process, timeout=5)
+            await self._close_mcp_process(mcp_process, secrets)
 
         if report_path.exists():
             return TerminalReviewHandoff.model_validate(
@@ -1372,7 +1555,7 @@ class ACPNodeRunner:
             "-m",
             "unrest_harness",
             "--mode",
-            "worker",
+            "validator" if task.type == "validate" else "worker",
             "--transport",
             "streamable-http",
             "--host",
@@ -1392,6 +1575,7 @@ class ACPNodeRunner:
                 limit=SUBPROCESS_STREAM_LIMIT,
                 pass_fds=(read_fd,),
             )
+            self._start_mcp_drains(process)
         except BaseException:
             os.close(write_fd)
             raise
@@ -1406,7 +1590,7 @@ class ACPNodeRunner:
         except BaseException:
             if process.returncode is None:
                 process.terminate()
-            await _close_subprocess(process, timeout=5)
+            await self._close_mcp_process(process, sensitive_inventory)
             raise
         return process
 
@@ -1447,6 +1631,7 @@ class ACPNodeRunner:
                 limit=SUBPROCESS_STREAM_LIMIT,
                 pass_fds=(read_fd,),
             )
+            self._start_mcp_drains(process)
         except BaseException:
             os.close(write_fd)
             raise
@@ -1461,7 +1646,7 @@ class ACPNodeRunner:
         except BaseException:
             if process.returncode is None:
                 process.terminate()
-            await _close_subprocess(process, timeout=5)
+            await self._close_mcp_process(process, sensitive_inventory)
             raise
         return process
 
@@ -1619,17 +1804,36 @@ class ACPNodeRunner:
     ) -> NodeHandoff:
         data = _load_redacted_json(path, credentials or {})
         if task.type == "validate":
-            return ValidateHandoff.model_validate(data)
-        return WorkHandoff.model_validate(data)
+            handoff: NodeHandoff = ValidateHandoff.model_validate(data)
+        else:
+            handoff = WorkHandoff.model_validate(data)
+        attempt_id = path.stem.split("__", 1)[0]
+        if handoff.node_id != task.id:
+            raise ValueError("attempt node_id does not match dispatched task")
+        if handoff.attempt_id != attempt_id:
+            raise ValueError("attempt_id does not match dispatched generation")
+        return handoff
 
-    def _synthesize_missing_handoff(self, task: Task, *, summary: str = "") -> NodeHandoff:
+    def _synthesize_missing_handoff(
+        self,
+        task: Task,
+        *,
+        spawn_ts: str,
+        summary: str = "",
+    ) -> NodeHandoff:
         report = summary or "Agent session ended without calling end_node."
         if task.type == "validate":
             return ValidateHandoff(
-                node_id=task.id, done=False, report=report, items=[], passed=False
+                node_id=task.id,
+                attempt_id=spawn_ts,
+                done=False,
+                report=report,
+                items=[],
+                passed=False,
             )
         return WorkHandoff(
             node_id=task.id,
+            attempt_id=spawn_ts,
             done=False,
             report=report,
             request_attention=False,
@@ -1640,6 +1844,8 @@ class ACPNodeRunner:
         *,
         handoff_path: Path,
         task: Task,
+        spawn_ts: str,
+        summary: str = "",
         stop_reason: str | None,
         exit_code: int | None,
         stderr: str,
@@ -1647,7 +1853,12 @@ class ACPNodeRunner:
         agent_output: str = "",
         credentials: dict[str, str] | None = None,
     ) -> NodeHandoff:
-        parts: list[str] = ["Agent session ended without calling end_node."]
+        path_attempt_id = handoff_path.stem.split("__", 1)[0]
+        if path_attempt_id != spawn_ts:
+            raise ValueError("handoff path does not match dispatched generation")
+        parts: list[str] = [
+            summary or "Agent session ended without calling end_node."
+        ]
         if session_error:
             parts.append(f"acp_error={session_error}")
         if stop_reason:
@@ -1659,8 +1870,16 @@ class ACPNodeRunner:
         if agent_output:
             parts.append(f"agent_output={_truncate_text(agent_output[-4000:], limit=2000)}")
         summary = redact_credential_values(" ".join(parts), credentials or {})
-        handoff = self._synthesize_missing_handoff(task, summary=summary)
-        atomic_write_json(handoff_path, handoff.model_dump(mode="json"))
+        handoff = self._synthesize_missing_handoff(
+            task,
+            spawn_ts=spawn_ts,
+            summary=summary,
+        )
+        atomic_write_json(
+            handoff_path,
+            handoff.model_dump(mode="json"),
+            trusted_root=trusted_persistence_root(handoff_path),
+        )
         return handoff
 
 
@@ -1698,6 +1917,7 @@ class ACPNodeDispatcher:
         self.runner = ACPNodeRunner(config=config, loader=self.loader)
 
     def dispatch(self, request: DispatchRequest) -> NodeHandoff:
+        self.store.refresh_inventory(os.environ)
         return _run_coro_blocking(
             self.runner.run_node(
                 project_id=request.project_id,
@@ -1710,6 +1930,8 @@ class ACPNodeDispatcher:
         )
 
     def dispatch_batch(self, requests: list[DispatchRequest]) -> list[NodeHandoff]:
+        self.store.refresh_inventory(os.environ)
+
         async def _run_all() -> list[NodeHandoff]:
             results = await asyncio.gather(
                 *(
@@ -1728,15 +1950,26 @@ class ACPNodeDispatcher:
             handoffs: list[NodeHandoff] = []
             for request, result in zip(requests, results, strict=True):
                 if isinstance(result, BaseException):
-                    handoffs.append(
-                        self.runner._synthesize_missing_handoff(
-                            request.task,
-                            summary=(
-                                "Dispatcher crashed before a handoff; runtime "
-                                "diagnostics were not persisted."
-                            ),
-                        )
+                    summary = _truncate_text(
+                        "Dispatcher crashed before a handoff: "
+                        + redact_credential_values(
+                            f"{type(result).__name__}: {result}", self.store.inventory
+                        ),
+                        limit=2000,
                     )
+                    handoff = self.runner._synthesize_missing_handoff(
+                        request.task,
+                        spawn_ts=request.spawn_ts,
+                        summary=summary,
+                    )
+                    self.store.save_attempt(
+                        request.project_id,
+                        request.mission_id,
+                        request.spawn_ts,
+                        request.task.id,
+                        handoff,
+                    )
+                    handoffs.append(handoff)
                 else:
                     handoffs.append(result)
             return handoffs
@@ -1781,6 +2014,7 @@ def _ensure_claude_settings(
     *,
     role: RoleName = "orchestrator",
     settings_dir: Path | None = None,
+    allowed_ancestor: Path | None = None,
 ) -> None:
     """Install or migrate only Unrest-owned Claude permission defaults."""
     if provider.name != "claude":
@@ -1788,6 +2022,22 @@ def _ensure_claude_settings(
     claude_dir = settings_dir or workspace / ".claude"
     settings_path = claude_dir / "settings.json"
     marker_path = claude_dir / ".unrest-managed-settings.json"
+    creation_boundary = allowed_ancestor or workspace
+    try:
+        for target in (settings_path, marker_path):
+            validate_atomic_write_destination(
+                target,
+                trusted_root=claude_dir,
+                allowed_ancestor=creation_boundary,
+            )
+    except OSError as exc:
+        raise CapabilityPolicyError(
+            provider="claude",
+            role=role,
+            version=1,
+            capability="host-settings",
+            reason="Claude settings path is not a safe regular workspace path",
+        ) from exc
     existing: dict[str, Any]
     if settings_path.exists():
         try:
@@ -1869,27 +2119,45 @@ def _ensure_claude_settings(
             provider="claude",
             role=role,
             version=1,
-            capability=f"host-settings:permissions.defaultMode={current_mode}",
+            capability="host-settings:permissions.defaultMode",
             reason="unmanaged ambient permission mode is not safe",
+        )
+    if (
+        profile == UNSAFE_DEVELOPMENT_PROFILE
+        and settings_path.exists()
+        and not marker_managed
+        and not legacy_managed
+    ):
+        raise CapabilityPolicyError(
+            provider="claude",
+            role=role,
+            version=1,
+            capability="host-settings:permissions.defaultMode",
+            reason="unmanaged Claude settings cannot be changed for unrestricted mode",
         )
 
     should_manage = (
         not settings_path.exists()
-        or current_mode is None
         or marker_managed
         or legacy_managed
-        or profile == UNSAFE_DEVELOPMENT_PROFILE
     )
     if not should_manage:
         return
     permissions["defaultMode"] = desired_mode
-    atomic_write_json(settings_path, existing)
+    atomic_write_json(
+        settings_path,
+        existing,
+        trusted_root=settings_path.parent,
+        allowed_ancestor=creation_boundary,
+    )
     atomic_write_json(
         marker_path,
         {
             "managed_fields": ["permissions.defaultMode"],
             "schema_version": 1,
         },
+        trusted_root=marker_path.parent,
+        allowed_ancestor=creation_boundary,
     )
 
 

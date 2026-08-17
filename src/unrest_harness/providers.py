@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-ProviderName = Literal["claude", "codex", "hermes"]
+ProviderName = Literal["claude", "codex"]
 ConfigFormat = Literal["mcp_json", "codex_config"]
 CapabilityRole = Literal["orchestrator", "worker", "validator", "terminal_reviewer"]
 
@@ -14,13 +14,13 @@ ORCHESTRATOR_PROVIDER_NAMES: tuple[ProviderName, ...] = (
 WORKER_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     "claude",
     "codex",
-    "hermes",
 )
 
 
 @dataclass(frozen=True)
 class ProviderDefinition:
     name: ProviderName
+    credential_names: tuple[str, ...] = ()
     skill_dirs: tuple[str, ...] = ()
     skill_alias_dirs: tuple[str, ...] = ()
     config_format: ConfigFormat = "mcp_json"
@@ -167,6 +167,12 @@ def _dedupe_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
 PROVIDERS: dict[ProviderName, ProviderDefinition] = {
     "claude": ProviderDefinition(
         name="claude",
+        credential_names=(
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "GLM_API_KEY",
+            "ZAI_API_KEY",
+        ),
         skill_dirs=(".claude/skills", ".agents/skills"),
         skill_alias_dirs=(".claude/skills", ".agents/skills"),
         config_format="mcp_json",
@@ -177,6 +183,7 @@ PROVIDERS: dict[ProviderName, ProviderDefinition] = {
     ),
     "codex": ProviderDefinition(
         name="codex",
+        credential_names=("CODEX_API_KEY", "OPENAI_API_KEY"),
         skill_dirs=(".codex/skills", ".agents/skills"),
         skill_alias_dirs=(".codex/skills", ".agents/skills"),
         config_format="codex_config",
@@ -184,17 +191,6 @@ PROVIDERS: dict[ProviderName, ProviderDefinition] = {
         agent_output_dir=".codex/agents",
         orchestrator_prompt_output_path=".codex/orchestrator_prompt.md",
         acp_supports_system_prompt=False,
-    ),
-    "hermes": ProviderDefinition(
-        name="hermes",
-        skill_dirs=(".hermes/skills", ".agents/skills"),
-        skill_alias_dirs=(".hermes/skills", ".agents/skills"),
-        config_format="mcp_json",
-        default_worker_acp_command="hermes acp",
-        agent_output_dir=".hermes/agents",
-        acp_supports_system_prompt=True,
-        acp_runtime_mode=None,
-        capability_roles=("worker", "validator", "terminal_reviewer"),
     ),
 }
 

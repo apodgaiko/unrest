@@ -1,0 +1,217 @@
+{
+  "schema_version": 2,
+  "audit_date": "2026-08-16",
+  "attached_review_reconciliation": {
+    "ledger": "docs/release/lean-core-v0.2-attached-review-claims.json",
+    "source_sha256": {
+      "review_one": "afade56fa7693bd0b9c841a8e3c6f7c526cf765bc484f57c430d6ff514ca9e4b",
+      "review_two": "601d8cbe55039a25853ec10eb53560144f95787ee907bd394e6f369857766ef6",
+      "follow_up_review": "0b4195a00dac7a2269b08ac78306a6adf8260f58785f8e34cbb7e29188cf666d"
+    },
+    "rule": "Every review claim is dispositioned individually; review-head facts are not final-head authority. The follow-up digest is user-authorized from the mission brief and was not independently recomputed because no stable source-byte locator was supplied.",
+    "r3_n1": {
+      "disposition": "substantiated-fixed",
+      "production_regressions": [
+        "tests/test_acp_runner.py::test_missing_end_node_diagnostics_survive_production_dispatch_and_attention",
+        "tests/test_acp_runner.py::test_worker_mcp_readiness_timeout_persists_generation_before_dispatch_return",
+        "tests/test_acp_runner.py::test_batch_runner_exception_keeps_request_generation_through_coordinator"
+      ]
+    }
+  },
+  "workspace_boundary": {
+    "status": "durable-observable-evidence-only",
+    "protected_root": "validator-regressions/",
+    "prompt_attempt_audit": "The persisted mission/task prompts and all six completed attempt reports were audited. They prohibit descendant traversal and contain no claim of mission ownership, ingestion, staging, commit, deletion, or modification.",
+    "root_stat": {"type": "directory", "mode": "drwxr-xr-x", "size": 288, "mtime_ns": 1784912858897834195, "ctime_ns": 1784912858897834195, "relation": "identical to retained pre-work evidence"},
+    "status_observation": "sole untracked entry",
+    "index_observation": "protected root absent; staged inventory contains docs/release/regressions/test_lean_core_v02_release_authority.py and tests/test_distribution_check.py only",
+    "commit_tree_observation": "absent from HEAD",
+    "limitation": "These durable observable surfaces do not prove the impossible claim that no unlogged historical filesystem read occurred."
+  },
+  "candidate_binding": {
+    "files": 103,
+    "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7",
+    "paths": [
+      "pyproject.toml",
+      "uv.lock",
+      "src/**",
+      "tests/**",
+      "tools/**"
+    ]
+  },
+  "superseded_filesystem_binding": {
+    "files": 105,
+    "sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
+    "status": "historical-superseded; included ignored/generated egg-info and was not commit-reproducible"
+  },
+  "commit_reproducible_finalization": {
+    "status": "final-current-rollback-authority",
+    "binding": {"files": 103, "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7"},
+    "checkpoint_authority": {
+      "decision": "Decision 001",
+      "local_probe": {"status": "failed-ordering-probe", "command": "env -u CODEX_PATH uv run pytest -q", "result": "919 passed, 7 skipped, 2 failed in 220.56s; exit 1", "invocations": 1, "reruns": 0, "failing_nodeids": ["tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers", "tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology"], "evidence_source": "mission attempt W-FREEZE 2026-08-13T13-25-57Z"},
+      "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
+    },
+    "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217993, "sha256": "52962ff2db2598d8ed086b0541ff59fa7f3b146c37ab563fcff29d4053460e51"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 305118, "sha256": "e7b6c59d9c0e148e151774e1b527bfc2c6238fd8721e6556ed24ee15162d0bdf"}},
+    "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
+    "evidence_packet": "mission attempt for VAL-LOCAL-RELEASE-SEAL on 2026-08-16"
+  },
+  "checkpoint_provenance": {
+    "repository_head_at_checkpoint": "d5fff4dbdfecb9124f86958c4cd188dfff218d6e",
+    "head_is_content_identity": false,
+    "publication_status": "external-evidence-required; PR #6 body owns the mutable exact-head snapshot",
+    "superseded_retained_checkpoint": {
+      "result": "894 passed, 7 skipped, 0 failed in 174.05s; exit 0",
+      "started_utc": "2026-08-12T23:43:25.569367Z",
+      "ended_utc": "2026-08-12T23:46:20.475041Z",
+      "candidate_checkpoint_invocation": 3,
+      "candidate_checkpoint_invocations_total": 3,
+      "per_invocation_reruns": 0,
+      "packet_identity": "mission evidence/W-CHECKPOINT-EVIDENCE-RETENTION-20260813T0342Z",
+      "authority": "historical-superseded; retained as chronology only",
+      "status_file": "status.json",
+      "status_sha256": "63f279ba8ad2f3b02f6739488956cdad3a021e6c3d3dbf0e568478e95fff9649",
+      "transcript_file": "stdout.raw",
+      "transcript_sha256": "ef8e3ec1544e3418aa6e76b5bc05529ddd0ae5bae19a1adc7da9218eabeaeefc",
+      "hash_ledger_file": "SHA256SUMS",
+      "hash_ledger_sha256": "14788e338d12d1cf4898b2eac8ce1d453bb8cc39e1698cf44f7b48b152f39bb5"
+    },
+    "candidate_checkpoint_chronology": [
+      "invocation 1 of 3: environment-limited and superseded; 880 passed, 7 skipped, 14 failed in 171.68s; exit 1; 0 per-invocation reruns",
+      "invocation 2 of 3: historical, superseded, and unretained on the identical binding; 894 passed, 7 skipped, 0 failed in 174.83s; exit 0; 0 per-invocation reruns",
+      "invocation 3 of 3: historical, superseded, and evidence-retained only; 894 passed, 7 skipped, 0 failed in 174.05s; exit 0; 0 per-invocation reruns"
+    ],
+    "superseded_environment_attempt": "880 passed, 7 skipped, and 14 restricted-sandbox loopback setup failures",
+    "superseded_validator_identity_binding": "24b85e4a3798cd498a08b685940e981f19db47e1d684d6bf0e9990fc166da60e",
+    "superseded_external_publication_binding": "e4c8f24658f7a3299fb3f84b63d7c61e4de2b8fa3dca85db2a69d765f1e398d4",
+    "superseded_binding": "cc9ec091838a4c8ac2845a2bdcba44ed151b50e92e833e6d4531b665e1e2ef3a",
+    "superseded_checkpoint_head_role": "6cf713c was only the checked-out commit for a dirty-worktree checkpoint"
+  },
+  "archive_evidence": {
+    "status": "historical-superseded; evidence-retained chronology only",
+    "packet_identity": "mission evidence/W-ARCHIVE-EVIDENCE-RETENTION-20260813T002050Z",
+    "wheel": {"bytes": 217860, "sha256": "778681c9ea77800bfab3934102d5e7b61ff7965e9262fe7c2501ccaa15b9688a"},
+    "sdist": {"bytes": 295954, "sha256": "0f73d258264f446969b864b0df4828e6fd2f00bd17fdc08accc64648a1c4ce51"},
+    "superseded_disposable_wheel_sha256": "68b44673932c0ac4702bc3c3c0368b52e59ce4eede9db2ee5eeace5949e25e63",
+    "superseded_disposable_sdist_sha256": "b7b19d0ce761d48b30b1112bcb65b9531d9b4224eb66ec7e41db8495f7c56e2f"
+  },
+  "external_publication": {
+    "status": "external-evidence-required",
+    "evidence_owner": "pull-request-6-body",
+    "carrier_role": "immutable-procedure-and-local-checkpoint",
+    "exact_head_procedure": "resolve the live PR #6 head SHA; require local HEAD, tracking ref, live PR head, and successful ci.yml run headSha to equal it; download the named artifact from that run and verify its SHA256SUMS before installation"
+  },
+  "authoritative_sources": [
+    "docs/decisions/ADR-0002-lean-core-v0.2.md",
+    "docs/proposals/batch-0.5/deletion-ledger.md",
+    "docs/proposals/batch-0.5/behavior-contract.md",
+    "docs/proposals/batch-0.5/security-contract.md",
+    "docs/proposals/batch-0.5/measurement-protocol.md",
+    "docs/release/lean-core-v0.2.md",
+    "docs/release/lean-core-v0.2-manifest.json",
+    "pyproject.toml",
+    "uv.lock"
+  ],
+  "compatibility_disposition": {
+    "root_schemas": "No current repository, direct dependency, source import, or built-package consumer found; external publication unverified.",
+    "observer_v1": "No current repository or built-package consumer found; external publication and consumers unverified.",
+    "removed_legacy_child_provider": "Absent from supported provider, CLI, package, issue-template, and retained-contract inventories; external reliance unverified.",
+    "policy": "Do not restore a compatibility layer without new accepted authority and evidence."
+  },
+  "source_inventory": [
+    "src/unrest_harness/__init__.py",
+    "src/unrest_harness/__main__.py",
+    "src/unrest_harness/acp_runner.py",
+    "src/unrest_harness/assets.py",
+    "src/unrest_harness/attention.py",
+    "src/unrest_harness/capability_policy.py",
+    "src/unrest_harness/cli.py",
+    "src/unrest_harness/config.py",
+    "src/unrest_harness/controller.py",
+    "src/unrest_harness/coordinator.py",
+    "src/unrest_harness/dispatcher.py",
+    "src/unrest_harness/envelope.py",
+    "src/unrest_harness/installed_wheel_check.py",
+    "src/unrest_harness/models.py",
+    "src/unrest_harness/providers.py",
+    "src/unrest_harness/repository_contract.py",
+    "src/unrest_harness/runtime_observability.py",
+    "src/unrest_harness/server.py",
+    "src/unrest_harness/storage.py",
+    "src/unrest_harness/task_list_patch.py",
+    "src/unrest_harness/task_validation.py"
+  ],
+  "first_party_import_inventory": [
+    "acp_runner",
+    "assets",
+    "capability_policy",
+    "config",
+    "controller",
+    "coordinator",
+    "dispatcher",
+    "envelope",
+    "models",
+    "providers",
+    "repository_contract",
+    "runtime_observability",
+    "storage",
+    "task_list_patch",
+    "task_validation",
+    "unrest_harness"
+  ],
+  "package_input_inventory": {
+    "python_sources": "source_inventory",
+    "typed_marker": "src/unrest_harness/py.typed",
+    "bundled_roots": [
+      "src/unrest_harness/bundled/AGENTS.md",
+      "src/unrest_harness/bundled/policies",
+      "src/unrest_harness/bundled/prompts",
+      "src/unrest_harness/bundled/providers",
+      "src/unrest_harness/bundled/skills"
+    ],
+    "forbidden_archive_fragments": [
+      "baseline.py",
+      "governance.py",
+      "schemas/",
+      "capability-sinks",
+      "capability-security-model",
+      "observer_v1",
+      "removed legacy child provider"
+    ]
+  },
+  "direct_dependency_inventory": {
+    "runtime": [
+      "click",
+      "fastmcp",
+      "jinja2",
+      "pydantic",
+      "pyyaml"
+    ],
+    "development": [
+      "mypy",
+      "pytest",
+      "pytest-asyncio",
+      "pytest-mock",
+      "ruff",
+      "types-pyyaml"
+    ],
+    "removed_direct": [
+      "jsonschema",
+      "markdown-it-py",
+      "types-jsonschema"
+    ],
+    "lockfile_note": "Transitive packages in uv.lock are not direct Unrest dependencies; the executable audit derives direct names from pyproject.toml."
+  },
+  "hard_cut_absence_inventory": [
+    "evals/baseline",
+    "evidence",
+    "policy/protected-surfaces.yaml",
+    "schemas",
+    "src/unrest_harness/baseline.py",
+    "src/unrest_harness/governance.py",
+    "tests/fixtures/governance",
+    "tests/test_baseline.py",
+    "tests/test_governance.py"
+  ]
+}

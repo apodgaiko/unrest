@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "reference_oracle": {
+    "path": ".unrest/missions/mission-001/oracles/persistence-schema-v1/corpus.json",
+    "sha256": "01e3d203a2fe78fe90390febc7fbf6d6834f648f83a6411c59c48bc60a6b5d6e"
+  },
+  "scenarios": [
+    "planning",
+    "running",
+    "running_validation",
+    "attention",
+    "quiescent",
+    "done",
+    "failed",
+    "aborted"
+  ],
+  "handoff_provenance": {
+    "source_reference": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+    "source_tree": "35152a4a8c56198664f519691ec952ec9ca519f4",
+    "work_schema": "src/unrest_harness/models.py:WorkHandoff",
+    "validation_schema": "src/unrest_harness/models.py:ValidateHandoff",
+    "producer": "src/unrest_harness/server.py:create_worker_server/end_node",
+    "identity_member_at_source": "absent",
+    "generator": "tools/generate_legacy_handoff_fixtures.py",
+    "generator_sha256": "33fbdaa8ef418e2498722e86ed3caf13b975a9169af5c3d20ff6b6af5f42b246",
+    "generation_transcript": "generation-transcript.json",
+    "models_source_sha256": "812a62fd41170f1b4d7307cfd731b329f194165325d67f6d1a101061e73596e5",
+    "server_source_sha256": "e21bcbebad4d551facdb59b3b968fa2cac7c3c5ae5bd4a990832a38acc6af9b8"
+  },
+  "files": {
+    "corpus.json": "3facd3cbe5150f091d0471c8a71b9948982145703d05a7f88439160e8d72d2b4",
+    "generation-transcript.json": "c9ea371d36a03ae6f4cade3f91e4f72484c899bf52db2ee3a315593049d574a1",
+    "legacy-validation-handoff.json": "c935afe0a7f87476aae67b72f87bdd35d85c633840cff3bffb8d98fc774b7551",
+    "legacy-work-handoff.json": "63fb00c29bfc60211a3d17bb62ded917c34a124f174d8a5bcf231003296f7051"
+  }
+}

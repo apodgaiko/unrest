@@ -1,0 +1,13 @@
+{
+  "done": true,
+  "items": [
+    {
+      "item_id": "VAL-001",
+      "passed": true
+    }
+  ],
+  "node_id": "v1",
+  "passed": true,
+  "report": "audited",
+  "request_attention": false
+}

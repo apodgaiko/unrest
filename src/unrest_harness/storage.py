@@ -19,6 +19,8 @@ import json
 import os
 import re
 import shutil
+import stat
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -64,10 +66,189 @@ def slugify(value: str, fallback: str = "item") -> str:
     return slug[:64] or fallback
 
 
+def _fsync_directory(path: Path) -> None:
+    directory_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _lexical_absolute(path: str | Path) -> Path:
+    """Return an absolute lexical path without following filesystem links."""
+    return Path(os.path.abspath(os.fspath(path)))
+
+
+def _prepare_atomic_write_destination(
+    path: str | Path,
+    trusted_root: str | Path,
+    *,
+    create_parents: bool,
+    allowed_ancestor: str | Path | None = None,
+) -> tuple[Path, Path]:
+    """Validate a destination from its trusted root without following links."""
+    target = _lexical_absolute(path)
+    root = _lexical_absolute(trusted_root)
+    try:
+        relative = target.relative_to(root)
+    except ValueError as exc:
+        raise OSError(
+            f"atomic write target must be beneath its trusted root: {target}"
+        ) from exc
+    if relative == Path("."):
+        raise OSError(f"atomic write target must be beneath its trusted root: {target}")
+
+    if allowed_ancestor is None:
+        try:
+            root_stat = root.lstat()
+        except FileNotFoundError as exc:
+            raise OSError(f"atomic write trusted root does not exist: {root}") from exc
+        if not stat.S_ISDIR(root_stat.st_mode):
+            raise OSError(
+                f"atomic write trusted root must be a regular directory: {root}"
+            )
+    else:
+        ancestor = _lexical_absolute(allowed_ancestor)
+        try:
+            root_relative = root.relative_to(ancestor)
+        except ValueError as exc:
+            raise OSError(
+                f"atomic write trusted root must be beneath its allowed ancestor: {root}"
+            ) from exc
+        try:
+            ancestor_stat = ancestor.lstat()
+        except FileNotFoundError as exc:
+            raise OSError(
+                f"atomic write allowed ancestor does not exist: {ancestor}"
+            ) from exc
+        if not stat.S_ISDIR(ancestor_stat.st_mode):
+            raise OSError(
+                "atomic write allowed ancestor must be a regular directory: "
+                f"{ancestor}"
+            )
+        candidate = ancestor
+        for part in root_relative.parts:
+            candidate /= part
+            try:
+                candidate_stat = candidate.lstat()
+            except FileNotFoundError:
+                if not create_parents:
+                    raise OSError(
+                        f"atomic write trusted root does not exist: {root}"
+                    ) from None
+                candidate.mkdir()
+                candidate_stat = candidate.lstat()
+            if not stat.S_ISDIR(candidate_stat.st_mode):
+                raise OSError(
+                    "atomic write trusted-root component must be a regular directory: "
+                    f"{candidate}"
+                )
+
+    parent = root
+    for part in relative.parent.parts:
+        parent /= part
+        try:
+            parent_stat = parent.lstat()
+        except FileNotFoundError:
+            if not create_parents:
+                raise OSError(f"atomic write parent does not exist: {parent}") from None
+            parent.mkdir()
+            parent_stat = parent.lstat()
+        if not stat.S_ISDIR(parent_stat.st_mode):
+            raise OSError(
+                f"atomic write path component must be a regular directory: {parent}"
+            )
+    return target, parent
+
+
+def validate_atomic_write_destination(
+    path: str | Path,
+    *,
+    trusted_root: str | Path,
+    allowed_ancestor: str | Path | None = None,
+) -> None:
+    """Validate an atomic-write path without creating directories or files.
+
+    Initialization uses this as a preflight before its first write. Missing
+    components are allowed only when an existing ``allowed_ancestor`` gives the
+    caller an explicit creation boundary.
+    """
+    target = _lexical_absolute(path)
+    root = _lexical_absolute(trusted_root)
+    try:
+        relative = target.relative_to(root)
+    except ValueError as exc:
+        raise OSError(
+            f"atomic write target must be beneath its trusted root: {target}"
+        ) from exc
+    if relative == Path("."):
+        raise OSError(f"atomic write target must be beneath its trusted root: {target}")
+
+    if allowed_ancestor is None:
+        ancestor = root
+        root_relative = Path(".")
+    else:
+        ancestor = _lexical_absolute(allowed_ancestor)
+        try:
+            root_relative = root.relative_to(ancestor)
+        except ValueError as exc:
+            raise OSError(
+                f"atomic write trusted root must be beneath its allowed ancestor: {root}"
+            ) from exc
+
+    try:
+        ancestor_stat = ancestor.lstat()
+    except FileNotFoundError as exc:
+        label = "trusted root" if allowed_ancestor is None else "allowed ancestor"
+        raise OSError(f"atomic write {label} does not exist: {ancestor}") from exc
+    if not stat.S_ISDIR(ancestor_stat.st_mode):
+        label = "trusted root" if allowed_ancestor is None else "allowed ancestor"
+        raise OSError(
+            f"atomic write {label} must be a regular directory: {ancestor}"
+        )
+
+    current = ancestor
+    for part in (*root_relative.parts, *relative.parent.parts):
+        if part == ".":
+            continue
+        current /= part
+        try:
+            current_stat = current.lstat()
+        except FileNotFoundError:
+            return
+        if not stat.S_ISDIR(current_stat.st_mode):
+            raise OSError(
+                f"atomic write path component must be a regular directory: {current}"
+            )
+    try:
+        target_stat = target.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(target_stat.st_mode):
+        raise OSError(f"atomic write target must be a regular file: {target}")
+
+
+def trusted_persistence_root(path: str | Path) -> Path:
+    """Return the lexical root for a configured persistence destination.
+
+    Normal Unrest paths trust the bucket containing `.unrest` and
+    `.unrest-runtime`. Standalone MCP-server embeddings supply one exact output
+    path, so its already-existing parent is their persistence root.
+    """
+    target = _lexical_absolute(path)
+    for parent in target.parents:
+        if parent.name in {".unrest", ".unrest-runtime"}:
+            return parent.parent
+    return target.parent
+
+
 def atomic_write_text(
     path: str | Path,
     content: str,
     *,
+    trusted_root: str | Path,
+    allowed_ancestor: str | Path | None = None,
+    mode: int | None = None,
     inventory: Mapping[str, str] | None = None,
     _redact: bool = True,
 ) -> None:
@@ -78,23 +259,82 @@ def atomic_write_text(
     )
     if not isinstance(redacted, str):
         raise TypeError("canonical text redaction returned a non-text value")
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = target.with_suffix(target.suffix + ".tmp")
-    tmp_path.write_text(redacted, encoding="utf-8")
-    os.replace(tmp_path, target)
+    target, parent = _prepare_atomic_write_destination(
+        path,
+        trusted_root,
+        create_parents=True,
+        allowed_ancestor=allowed_ancestor,
+    )
+    try:
+        target_stat = target.lstat()
+    except FileNotFoundError:
+        target_stat = None
+    if target_stat is not None and not stat.S_ISREG(target_stat.st_mode):
+        raise OSError(f"atomic write target must be a regular file: {target}")
+
+    target_mode = (
+        mode
+        if mode is not None
+        else stat.S_IMODE(target_stat.st_mode) if target_stat is not None else 0o644
+    )
+    fd, tmp_name = tempfile.mkstemp(
+        dir=parent,
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+    )
+    tmp_path = Path(tmp_name)
+    replaced = False
+    try:
+        os.fchmod(fd, target_mode)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as stream:
+            fd = -1
+            stream.write(redacted)
+            stream.flush()
+            os.fsync(stream.fileno())
+        _prepare_atomic_write_destination(
+            target,
+            trusted_root,
+            create_parents=False,
+            allowed_ancestor=allowed_ancestor,
+        )
+        try:
+            replacement_stat = target.lstat()
+        except FileNotFoundError:
+            replacement_stat = None
+        if replacement_stat is not None and not stat.S_ISREG(replacement_stat.st_mode):
+            raise OSError(f"atomic write target must be a regular file: {target}")
+        os.replace(tmp_path, target)
+        replaced = True
+        try:
+            _fsync_directory(parent)
+        except OSError:
+            # Replacement is already caller- and restart-visible. Reporting
+            # rejection here would contradict the accepted target generation.
+            pass
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        if not replaced:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def atomic_write_json(
     path: str | Path,
     payload: object,
     *,
+    trusted_root: str | Path,
+    allowed_ancestor: str | Path | None = None,
     inventory: Mapping[str, str] | None = None,
 ) -> None:
     redacted = redact_sensitive_value(payload, inventory)
     atomic_write_text(
         path,
         json.dumps(redacted, indent=2, ensure_ascii=False) + "\n",
+        trusted_root=trusted_root,
+        allowed_ancestor=allowed_ancestor,
         _redact=False,
     )
 
@@ -120,6 +360,8 @@ def _symlink_components(path: Path) -> list[Path]:
 def attempt_to_markdown(handoff: WorkHandoff | ValidateHandoff) -> str:
     lines = ["---"]
     lines.append(f"node_id: {handoff.node_id}")
+    if handoff.attempt_id is not None:
+        lines.append(f"attempt_id: {handoff.attempt_id}")
     lines.append(f"done: {str(handoff.done).lower()}")
     if isinstance(handoff, ValidateHandoff):
         lines.append(f"passed: {str(handoff.passed).lower()}")
@@ -158,6 +400,16 @@ class AttemptRecord:
     path: Path
 
 
+@dataclass(frozen=True)
+class _ParsedAttempt:
+    handoff: WorkHandoff | ValidateHandoff
+    attempt_id_present: bool
+
+
+class AttemptValidationError(ValueError):
+    """A persisted handoff is not attributable to its expected dispatch."""
+
+
 # ---------------------------------------------------------------------------
 # ProjectStore
 # ---------------------------------------------------------------------------
@@ -173,6 +425,12 @@ class ProjectStore:
 
     def __init__(self, config: HarnessConfig):
         self.config = config
+        self.inventory: dict[str, str] = {}
+        self.refresh_inventory(os.environ)
+
+    def refresh_inventory(self, environment: Mapping[str, str]) -> None:
+        """Capture the finite protected persistence inventory."""
+        self.inventory = self.config.protected_persistence_inventory(environment)
 
     # ------------------------------------------------------------------
     # Bucket path accessors
@@ -238,7 +496,12 @@ class ProjectStore:
         # 3) brief.md (atomic; do not overwrite if exists)
         brief_path = unrest / "brief.md"
         if not brief_path.exists():
-            atomic_write_text(brief_path, brief.rstrip() + "\n")
+            atomic_write_text(
+                brief_path,
+                brief.rstrip() + "\n",
+                trusted_root=self.bucket_root(pid),
+                inventory=self.inventory,
+            )
 
         # 4) AGENTS.md placeholder
         agents_md = unrest / "AGENTS.md"
@@ -247,6 +510,8 @@ class ProjectStore:
                 agents_md,
                 "# Project operational guidance\n\n"
                 "Edit this file as the project's conventions emerge.\n",
+                trusted_root=self.bucket_root(pid),
+                inventory=self.inventory,
             )
 
         # 5) MEMORY.md placeholder
@@ -256,6 +521,8 @@ class ProjectStore:
                 memory_md,
                 "# Project memory\n\n"
                 "Record concise reusable mission facts here. Do not paste transcripts.\n",
+                trusted_root=self.bucket_root(pid),
+                inventory=self.inventory,
             )
 
         # 6) Import existing repo-native host skills, then seed bundled skills
@@ -275,7 +542,11 @@ class ProjectStore:
             worker_model=worker_model,
             worker_reasoning_effort=worker_reasoning_effort,
         )
-        atomic_write_json(runtime / "project.json", record.model_dump(mode="json"))
+        atomic_write_json(
+            runtime / "project.json", record.model_dump(mode="json"),
+            trusted_root=self.bucket_root(pid),
+            inventory=self.inventory,
+        )
         return record
 
     def load_project(self, project_id: str) -> ProjectRecord:
@@ -288,6 +559,8 @@ class ProjectStore:
         atomic_write_json(
             self.unrest_runtime_dir(record.id) / "project.json",
             record.model_dump(mode="json"),
+            trusted_root=self.bucket_root(record.id),
+            inventory=self.inventory,
         )
 
     def sync_workspace_skill_surfaces(self, project_id: str) -> None:
@@ -342,6 +615,8 @@ class ProjectStore:
         atomic_write_json(
             self.unrest_runtime_dir(project_id) / "state.json",
             state.model_dump(mode="json"),
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
         )
 
     # ------------------------------------------------------------------
@@ -367,6 +642,8 @@ class ProjectStore:
         atomic_write_json(
             self.mission_runtime_dir(project_id, mission_id) / "tasks.json",
             tl.model_dump(mode="json"),
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
         )
 
     def contract_dir(self, project_id: str, mission_id: str) -> Path:
@@ -412,6 +689,8 @@ class ProjectStore:
         atomic_write_json(
             self.mission_runtime_dir(project_id, mission_id) / "task-state.json",
             task_state.model_dump(mode="json"),
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
         )
 
     def load_contract_state(
@@ -433,6 +712,8 @@ class ProjectStore:
             self.mission_runtime_dir(project_id, mission_id)
             / "contract-state.json",
             contract_state.model_dump(mode="json"),
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
         )
 
     # ------------------------------------------------------------------
@@ -484,18 +765,20 @@ class ProjectStore:
         *,
         inventory: Mapping[str, str] | None = None,
     ) -> Path:
+        handoff = handoff.model_copy(update={"attempt_id": spawn_ts})
         json_path = self.attempt_path(project_id, mission_id, spawn_ts, node_id)
-        json_path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(
             json_path,
             handoff.model_dump(mode="json"),
-            inventory=inventory,
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory if inventory is None else inventory,
         )
         md_path = self.attempt_report_path(project_id, mission_id, spawn_ts, node_id)
         atomic_write_text(
             md_path,
             attempt_to_markdown(handoff),
-            inventory=inventory,
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory if inventory is None else inventory,
         )
         return json_path
 
@@ -509,7 +792,19 @@ class ProjectStore:
         path = self.attempt_path(project_id, mission_id, spawn_ts, node_id)
         if not path.exists():
             return None
-        return self._parse_attempt(path)
+        parsed = self._parse_attempt(path)
+        handoff = parsed.handoff
+        if handoff.node_id != node_id:
+            raise AttemptValidationError("attempt node_id does not match running task")
+        if parsed.attempt_id_present and handoff.attempt_id is None:
+            raise AttemptValidationError("attempt_id must not be null")
+        if parsed.attempt_id_present and handoff.attempt_id != spawn_ts:
+            raise AttemptValidationError("attempt_id does not match running generation")
+        if parsed.attempt_id_present:
+            return handoff
+        # Base-era handoffs predate attempt_id. Their filename and requested task
+        # are the generation identity; bind that identity in memory only.
+        return handoff.model_copy(update={"attempt_id": spawn_ts})
 
     def list_attempts(
         self,
@@ -532,12 +827,29 @@ class ProjectStore:
         return results
 
     @staticmethod
-    def _parse_attempt(path: Path) -> WorkHandoff | ValidateHandoff:
-        raw = path.read_text(encoding="utf-8")
-        data = json.loads(raw)
-        if isinstance(data, dict) and ("items" in data or "passed" in data):
-            return ValidateHandoff.model_validate(data)
-        return WorkHandoff.model_validate(data)
+    def _parse_attempt(path: Path) -> _ParsedAttempt:
+        try:
+            raw = path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                raise AttemptValidationError("attempt payload must be an object")
+            attempt_id_present = "attempt_id" in data
+            if "items" in data or "passed" in data:
+                handoff: WorkHandoff | ValidateHandoff = (
+                    ValidateHandoff.model_validate(data)
+                )
+            else:
+                handoff = WorkHandoff.model_validate(data)
+            return _ParsedAttempt(
+                handoff=handoff,
+                attempt_id_present=attempt_id_present,
+            )
+        except AttemptValidationError:
+            raise
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+            raise AttemptValidationError(
+                f"attempt payload is malformed ({type(exc).__name__})"
+            ) from exc
 
     # ------------------------------------------------------------------
     # Regression ledger (validator-owned, appended via Write tool)
@@ -582,6 +894,8 @@ class ProjectStore:
         atomic_write_json(
             self.unrest_runtime_dir(project_id) / "attention.json",
             AttentionFile(items=items).model_dump(mode="json"),
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
         )
 
     def clear_attention(self, project_id: str) -> None:
@@ -645,7 +959,12 @@ class ProjectStore:
                 )
                 parts.append("```")
             parts.append("")
-        atomic_write_text(path, "\n".join(parts).rstrip() + "\n")
+        atomic_write_text(
+            path,
+            "\n".join(parts).rstrip() + "\n",
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
+        )
         return path
 
     # ------------------------------------------------------------------
@@ -691,7 +1010,12 @@ class ProjectStore:
         self, project_id: str, mission_id: str, config: TerminalReviewConfig
     ) -> Path:
         path = self.terminal_review_config_path(project_id, mission_id)
-        atomic_write_json(path, config.model_dump(mode="json"))
+        atomic_write_json(
+            path,
+            config.model_dump(mode="json"),
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
+        )
         return path
 
     def resolve_terminal_review_roots(
@@ -835,17 +1159,18 @@ class ProjectStore:
         # JSON: fallback only (acp_runner's MCP server normally writes this).
         json_path = self.terminal_review_path(project_id, mission_id, spawn_ts)
         if not json_path.exists():
-            json_path.parent.mkdir(parents=True, exist_ok=True)
             atomic_write_json(
                 json_path,
                 review.model_dump(mode="json"),
-                inventory=inventory,
+                trusted_root=self.bucket_root(project_id),
+                inventory=self.inventory if inventory is None else inventory,
             )
         md_path = self.terminal_review_report_path(project_id, mission_id, spawn_ts)
         atomic_write_text(
             md_path,
             terminal_review_to_markdown(review),
-            inventory=inventory,
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory if inventory is None else inventory,
         )
         return md_path
 
@@ -867,7 +1192,12 @@ class ProjectStore:
             f"- status: {status}\n"
             f"- sealed_at: {utc_now_iso()}\n\n"
         )
-        atomic_write_text(path, header + body.rstrip() + "\n")
+        atomic_write_text(
+            path,
+            header + body.rstrip() + "\n",
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
+        )
         return path
 
     # ------------------------------------------------------------------
@@ -1019,6 +1349,8 @@ __all__ = [
     "slugify",
     "atomic_write_text",
     "atomic_write_json",
+    "trusted_persistence_root",
+    "AttemptValidationError",
     "attempt_to_markdown",
     "terminal_review_to_markdown",
 ]

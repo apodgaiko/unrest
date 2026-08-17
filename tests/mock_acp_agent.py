@@ -19,6 +19,12 @@ Environment variables read from os.environ:
   MOCK_ACP_CRASH       — '1' to exit immediately without writing
   MOCK_ACP_REQUEST_ATTENTION — '1' to set request_attention=true
   MOCK_ACP_DONE        — '0' to set done=false (default '1')
+
+Command-line modes:
+  --missing-handoff-diagnostics — emit an agent update and stderr, return a
+    stop reason, then exit without writing the handoff.
+  --missing-handoff-session-error — emit bounded diagnostics, return an ACP
+    prompt error carrying the stop reason, then exit without writing a handoff.
 """
 
 from __future__ import annotations
@@ -34,6 +40,7 @@ def _write_handoff() -> None:
     if not path:
         return
     node_id = os.environ.get("UNREST_NODE_ID", "unknown")
+    attempt_id = Path(path).stem.split("__", 1)[0]
     node_type = os.environ.get("UNREST_NODE_TYPE", "work")
     done = os.environ.get("MOCK_ACP_DONE", "1") != "0"
     request_attention = os.environ.get("MOCK_ACP_REQUEST_ATTENTION") == "1"
@@ -47,6 +54,7 @@ def _write_handoff() -> None:
         passed = os.environ.get("UNREST_VALIDATION_PASSED", "1") != "0"
         payload = {
             "node_id": node_id,
+            "attempt_id": attempt_id,
             "done": done,
             "report": f"mock validate handoff{report_suffix}",
             "items": [{"item_id": "VAL-001", "passed": passed}],
@@ -56,6 +64,7 @@ def _write_handoff() -> None:
     else:
         payload = {
             "node_id": node_id,
+            "attempt_id": attempt_id,
             "done": done,
             "report": f"mock work handoff{report_suffix}",
             "request_attention": request_attention,
@@ -106,6 +115,63 @@ def main() -> None:
         elif method == "session/set_mode":
             resp = _response(req_id, {})
         elif method == "session/prompt":
+            if "--missing-handoff-session-error" in sys.argv:
+                update = {
+                    "jsonrpc": "2.0",
+                    "method": "session/update",
+                    "params": {
+                        "sessionId": "mock-session-1",
+                        "update": {
+                            "sessionUpdate": "agent_message_chunk",
+                            "messageId": "session-error-diagnostic",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "agent diagnostic before ACP prompt failure.\n",
+                                }
+                            ],
+                        },
+                    },
+                }
+                sys.stdout.write(json.dumps(update) + "\n")
+                sys.stdout.write(
+                    json.dumps(
+                        _error(
+                            req_id,
+                            -32042,
+                            "mock ACP prompt failure; stop_reason=refusal",
+                        )
+                    )
+                    + "\n"
+                )
+                sys.stdout.flush()
+                sys.stderr.write("mock ACP stderr before prompt failure\n")
+                sys.stderr.flush()
+                sys.exit(7)
+            if "--missing-handoff-diagnostics" in sys.argv:
+                update = {
+                    "jsonrpc": "2.0",
+                    "method": "session/update",
+                    "params": {
+                        "sessionId": "mock-session-1",
+                        "update": {
+                            "sessionUpdate": "agent_message_chunk",
+                            "messageId": "diagnostic-message",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "agent diagnostic before missing handoff.\n",
+                                }
+                            ],
+                        },
+                    },
+                }
+                sys.stdout.write(json.dumps(update) + "\n")
+                sys.stdout.write(json.dumps(_response(req_id, {"stopReason": "refusal"})) + "\n")
+                sys.stdout.flush()
+                sys.stderr.write("mock ACP stderr before missing handoff\n")
+                sys.stderr.flush()
+                sys.exit(7)
             _write_handoff()
             resp = _response(req_id, {"stopReason": "end_turn"})
         else:

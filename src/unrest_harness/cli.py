@@ -4,18 +4,19 @@ import json
 import os
 import shutil
 import stat
-import tempfile
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import click
 
 from .assets import AssetLoader, iter_skill_directories
 from .capability_policy import (
+    FINITE_CREDENTIAL_NAMES,
     SAFE_PROFILE,
     UNSAFE_DEVELOPMENT_PROFILE,
     CapabilityPolicyError,
-    credential_source_values,
     enforce_persisted_environment_credential_provenance,
     load_capability_policy,
     profile_environment,
@@ -24,13 +25,6 @@ from .capability_policy import (
 )
 from .config import VALID_REASONING_EFFORTS, HarnessConfig
 from .envelope import render_task_list
-from .governance import (
-    GovernanceValidationError,
-    check_commit_message,
-    governance_report,
-    load_component_paths,
-    load_protected_surface_policy,
-)
 from .providers import (
     ProviderDefinition,
     ProviderSelection,
@@ -38,21 +32,11 @@ from .providers import (
     get_provider,
     provider_names_for_role,
 )
-from .repository_contract import (
-    RepositoryContractError,
-    check_repository,
-    find_repository_root,
+from .storage import (
+    ProjectStore,
+    atomic_write_text,
+    validate_atomic_write_destination,
 )
-from .runtime_observability import (
-    RuntimeObservationError,
-    observe_all_projects_runtime,
-    observe_project_runtime,
-    observation_json,
-    render_runtime_collection,
-    render_runtime_observation,
-    validate_project_id,
-)
-from .storage import ProjectStore
 
 RUNTIME_ENV_FORWARD_ALLOWLIST = (
     "ANTHROPIC_BASE_URL",
@@ -74,6 +58,45 @@ RUNTIME_ENV_FORWARD_ALLOWLIST = (
 )
 
 USER_SCOPE_ORCHESTRATORS = ("claude", "codex")
+MANAGED_ASSET_MODE = 0o644
+
+
+ManagedAssetOutcome = Literal["created", "repaired", "verified"]
+
+
+@dataclass
+class _ManagedAssetSummary:
+    created: int = 0
+    repaired: int = 0
+    verified: int = 0
+
+    def record(self, outcome: ManagedAssetOutcome) -> None:
+        setattr(self, outcome, getattr(self, outcome) + 1)
+
+    def render(self, label: str, destination: Path) -> str:
+        return (
+            f"Managed {label} at {destination}: created={self.created} "
+            f"repaired={self.repaired} verified={self.verified}"
+        )
+
+
+class FiniteCredentialChoice(click.Choice):
+    """Keep Click's useful choice error while protecting declared credentials."""
+
+    def get_invalid_choice_message(
+        self,
+        value: object,
+        ctx: click.Context | None,
+    ) -> str:
+        display_value = value
+        if isinstance(value, str):
+            inventory = {
+                name: os.environ[name]
+                for name in FINITE_CREDENTIAL_NAMES
+                if os.environ.get(name)
+            }
+            display_value = redact_sensitive_value(value, inventory)
+        return super().get_invalid_choice_message(value=display_value, ctx=ctx)
 
 
 @click.group()
@@ -89,91 +112,18 @@ def cli() -> None:
 @cli.command("check-repository")
 def check_repository_cmd() -> None:
     """Validate the canonical repository contract without changing the worktree."""
+    from .repository_contract import (  # Repository development code stays command-local.
+        RepositoryContractError,
+        check_repository,
+        find_repository_root,
+    )
+
     try:
         root = find_repository_root(Path.cwd())
         report = check_repository(root)
     except RepositoryContractError as error:
         raise click.ClickException(str(error)) from error
     click.echo(report.render(), nl=False)
-
-
-@cli.command("check-governance")
-@click.option(
-    "--policy",
-    "policy_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
-)
-@click.option(
-    "--component-map",
-    "component_map_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
-)
-@click.option("--path", "paths", multiple=True)
-def check_governance_cmd(
-    policy_path: Path,
-    component_map_path: Path,
-    paths: tuple[str, ...],
-) -> None:
-    """Validate governance policy and print a deterministic resolution report."""
-    try:
-        policy = load_protected_surface_policy(policy_path)
-        component_paths = load_component_paths(component_map_path)
-        report = governance_report(policy, component_paths, paths)
-    except GovernanceValidationError as error:
-        raise click.ClickException(str(error)) from error
-    click.echo(json.dumps(report, indent=2, sort_keys=True))
-
-
-@cli.command("check-commit")
-@click.option(
-    "--message-file",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
-)
-@click.option("--changed-path", "changed_paths", multiple=True, required=True)
-@click.option(
-    "--policy",
-    "policy_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
-)
-@click.option(
-    "--component-map",
-    "component_map_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
-)
-def check_commit_cmd(
-    message_file: Path,
-    changed_paths: tuple[str, ...],
-    policy_path: Path,
-    component_map_path: Path,
-) -> None:
-    """Check conventional subject, governance trailers, and changed paths."""
-    try:
-        policy = load_protected_surface_policy(policy_path)
-        component_paths = load_component_paths(component_map_path)
-        result = check_commit_message(
-            message_file.read_text(encoding="utf-8"),
-            changed_paths=changed_paths,
-            policy=policy,
-            component_paths=component_paths,
-            repository_root=find_repository_root(policy_path.parent),
-        )
-    except GovernanceValidationError as error:
-        raise click.ClickException(str(error)) from error
-    click.echo(
-        json.dumps(
-            {
-                "protected_surfaces": list(result.protected_surfaces),
-                "status": "ok",
-            },
-            indent=2,
-            sort_keys=True,
-        )
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -184,29 +134,49 @@ def check_commit_cmd(
 @cli.command()
 @click.option(
     "--agent",
-    type=click.Choice(provider_names_for_role("orchestrator")),
+    type=FiniteCredentialChoice(provider_names_for_role("orchestrator")),
     default=None,
     help="Convenience: sets orchestrator+worker provider in one shot.",
 )
 @click.option(
     "--orchestrator-provider",
-    type=click.Choice(provider_names_for_role("orchestrator")),
+    type=FiniteCredentialChoice(provider_names_for_role("orchestrator")),
     default=None,
 )
 @click.option(
     "--worker-provider",
-    type=click.Choice(provider_names_for_role("worker")),
+    type=FiniteCredentialChoice(provider_names_for_role("worker")),
     default=None,
 )
 @click.option("--worker-acp-command", default=None)
 @click.option("--worker-model", default=None)
-@click.option("--validator-provider", type=click.Choice(provider_names_for_role("worker")), default=None)
+@click.option(
+    "--validator-provider",
+    type=FiniteCredentialChoice(provider_names_for_role("worker")),
+    default=None,
+)
 @click.option("--validator-acp-command", default=None)
-@click.option("--terminal-reviewer-provider", type=click.Choice(provider_names_for_role("worker")), default=None)
+@click.option(
+    "--terminal-reviewer-provider",
+    type=FiniteCredentialChoice(provider_names_for_role("worker")),
+    default=None,
+)
 @click.option("--terminal-reviewer-acp-command", default=None)
-@click.option("--worker-reasoning-effort", type=click.Choice(VALID_REASONING_EFFORTS), default=None)
-@click.option("--validator-reasoning-effort", type=click.Choice(VALID_REASONING_EFFORTS), default=None)
-@click.option("--terminal-reviewer-reasoning-effort", type=click.Choice(VALID_REASONING_EFFORTS), default=None)
+@click.option(
+    "--worker-reasoning-effort",
+    type=FiniteCredentialChoice(VALID_REASONING_EFFORTS),
+    default=None,
+)
+@click.option(
+    "--validator-reasoning-effort",
+    type=FiniteCredentialChoice(VALID_REASONING_EFFORTS),
+    default=None,
+)
+@click.option(
+    "--terminal-reviewer-reasoning-effort",
+    type=FiniteCredentialChoice(VALID_REASONING_EFFORTS),
+    default=None,
+)
 @click.option(
     "--unsafe-development-unrestricted",
     is_flag=True,
@@ -218,7 +188,7 @@ def check_commit_cmd(
 @click.option("--unrest-home", type=click.Path(), default=None)
 @click.option(
     "--scope",
-    type=click.Choice(("project", "user")),
+    type=FiniteCredentialChoice(("project", "user")),
     default="project",
     show_default=True,
     help="Install into one project or the current user's host configuration.",
@@ -297,10 +267,11 @@ def init(
                 }
             )
         )
-        credentials = credential_source_values(
-            os.environ,
-            declared_names=declared_credential_names,
-        )
+        credentials = {
+            name: os.environ[name]
+            for name in declared_credential_names
+            if os.environ.get(name)
+        }
         capability_env = profile_environment(capability_profile)
     except CapabilityPolicyError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -319,7 +290,11 @@ def init(
             workspace=Path.cwd(),
             selection=selection,
         )
-        _write_user_provider_capability_settings(selection, capability_profile)
+        try:
+            _preflight_user_initialization(loader, selection.orchestrator)
+            _write_user_provider_capability_settings(selection, capability_profile)
+        except (CapabilityPolicyError, OSError) as exc:
+            raise click.ClickException("provider settings configuration rejected") from exc
         _write_user_bootstrap_config(
             selection,
             {**storage_env, **capability_env},
@@ -330,7 +305,11 @@ def init(
         _echo_user_next_steps(selection)
         return
 
-    workspace = Path(workspace_dir or ".").resolve()
+    workspace = Path(os.path.abspath(workspace_dir or "."))
+    try:
+        _preflight_project_initialization(loader, selection, workspace)
+    except OSError as exc:
+        raise click.ClickException("provider settings configuration rejected") from exc
 
     # 1) MCP / Codex config
     storage_env = _storage_env(unrest_home=unrest_home, workspace=workspace, selection=selection)
@@ -352,11 +331,14 @@ def init(
         if selection.worker.name != "codex":
             raise click.UsageError("--worker-model currently requires a Codex worker")
         effort_env["UNREST_WORKER_MODEL"] = worker_model
-    _write_project_provider_capability_settings(
-        workspace,
-        selection.orchestrator,
-        capability_profile,
-    )
+    try:
+        _write_project_provider_capability_settings(
+            workspace,
+            selection.orchestrator,
+            capability_profile,
+        )
+    except (CapabilityPolicyError, OSError) as exc:
+        raise click.ClickException("provider settings configuration rejected") from exc
     _write_bootstrap_config(
         workspace,
         selection,
@@ -492,7 +474,16 @@ def _observation_store(config: HarnessConfig) -> ProjectStore:
     return ProjectStore(config)
 
 
-@cli.command("observe-project")
+class _ObservationCommand(click.Command):
+    """Keep status implementation command-local, including status help."""
+
+    def get_help(self, ctx: click.Context) -> str:
+        from . import runtime_observability as _runtime_observability  # noqa: F401
+
+        return super().get_help(ctx)
+
+
+@cli.command("observe-project", cls=_ObservationCommand)
 @click.argument("project_id", required=False)
 @click.option("--all", "all_projects", is_flag=True)
 @click.option(
@@ -527,11 +518,22 @@ def observe_project_cmd(
     report unsafe_cursor; an invalid projects root reports unsafe_project_path.
     """
 
+    from .runtime_observability import (
+        RuntimeObservationError,
+        observe_all_projects_runtime,
+        observe_project_runtime,
+        observation_json,
+        render_runtime_collection,
+        render_runtime_observation,
+        validate_project_id,
+    )
+
     if (project_id is None) == (not all_projects) or (strict and not all_projects):
         raise click.ClickException("invalid_project_id")
     if project_id is not None and not validate_project_id(project_id):
         raise click.ClickException("invalid_project_id")
     strict_failure = False
+    all_failed = False
     try:
         for path_variable in ("UNREST_HOME", "UNREST_PROJECTS_DIR"):
             ambient_path = os.environ.get(path_variable)
@@ -568,6 +570,7 @@ def observe_project_cmd(
                 else render_runtime_collection(collection)
             )
             strict_failure = bool(collection.failures)
+            all_failed = bool(collection.failures) and not collection.projects
         else:
             assert project_id is not None
             observation = observe_project_runtime(
@@ -583,7 +586,7 @@ def observe_project_cmd(
     except RuntimeObservationError as error:
         raise click.ClickException(error.code) from error
     click.echo(rendered, nl=False)
-    if strict and strict_failure:
+    if strict_failure and (strict or all_failed):
         raise click.exceptions.Exit(1)
 
 
@@ -642,16 +645,171 @@ def abort_project_cmd(project_id: str, reason: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _copy_skills(loader: AssetLoader, target: Path) -> None:
-    target.mkdir(parents=True, exist_ok=True)
+def _bundled_skill_targets(loader: AssetLoader, target: Path) -> list[Path]:
+    bundled = loader.bundled_skills_dir()
+    if not bundled.exists():
+        return []
+    return [
+        target / skill_dir.name / "SKILL.md"
+        for skill_dir in iter_skill_directories(bundled)
+    ]
+
+
+def _bundled_agent_targets(
+    loader: AssetLoader,
+    target: Path,
+    provider_name: str,
+) -> list[Path]:
+    bundled = loader.bundled_agents_dir(provider_name)
+    if not bundled.exists():
+        return []
+    return [
+        target / agent_file.name
+        for agent_file in sorted(bundled.glob("*"))
+        if agent_file.is_file()
+    ]
+
+
+def _preflight_target(
+    target: Path,
+    *,
+    trusted_root: Path,
+    allowed_ancestor: Path | None = None,
+) -> None:
+    validate_atomic_write_destination(
+        target,
+        trusted_root=trusted_root,
+        allowed_ancestor=allowed_ancestor,
+    )
+
+
+def _preflight_project_initialization(
+    loader: AssetLoader,
+    selection: ProviderSelection,
+    workspace: Path,
+) -> None:
+    bootstrap = (
+        workspace / ".mcp.json"
+        if selection.orchestrator.config_format == "mcp_json"
+        else workspace / ".codex" / "config.toml"
+    )
+    bootstrap_root = (
+        workspace
+        if bootstrap.parent == workspace
+        else workspace / bootstrap.relative_to(workspace).parts[0]
+    )
+    _preflight_target(
+        bootstrap,
+        trusted_root=bootstrap_root,
+        allowed_ancestor=None if bootstrap_root == workspace else workspace,
+    )
+    if selection.orchestrator.name == "claude":
+        claude_root = workspace / ".claude"
+        for target in (
+            claude_root / "settings.json",
+            claude_root / ".unrest-managed-settings.json",
+        ):
+            _preflight_target(
+                target,
+                trusted_root=claude_root,
+                allowed_ancestor=workspace,
+            )
+
+    for provider in selection.providers():
+        destinations: list[Path] = []
+        if provider.agent_output_dir:
+            agents_dir = workspace / provider.agent_output_dir
+            destinations.extend(
+                _bundled_agent_targets(loader, agents_dir, provider.name)
+            )
+        for skill_relative in provider.skill_dirs:
+            destinations.extend(
+                _bundled_skill_targets(loader, workspace / skill_relative)
+            )
+        if provider.orchestrator_prompt_output_path:
+            destinations.append(workspace / provider.orchestrator_prompt_output_path)
+        for target in destinations:
+            destination_relative = target.relative_to(workspace)
+            trusted_root = workspace / destination_relative.parts[0]
+            _preflight_target(
+                target,
+                trusted_root=trusted_root,
+                allowed_ancestor=workspace,
+            )
+
+
+def _preflight_user_initialization(
+    loader: AssetLoader,
+    provider: ProviderDefinition,
+) -> None:
+    home = Path(os.path.abspath(Path.home()))
+    root, config_path = _user_paths(provider)
+    _preflight_target(config_path, trusted_root=home)
+    if provider.name == "claude":
+        for target in (
+            root / "settings.json",
+            root / ".unrest-managed-settings.json",
+        ):
+            _preflight_target(
+                target,
+                trusted_root=root,
+                allowed_ancestor=home,
+            )
+
+    destinations = _bundled_agent_targets(loader, root / "agents", provider.name)
+    destinations.extend(_bundled_skill_targets(loader, root / "skills"))
+    destinations.extend(
+        _bundled_skill_targets(loader, home / ".agents" / "skills")
+    )
+    destinations.extend(
+        [
+            root / "orchestrator_prompt.md",
+            root / "skills" / "unrest" / "SKILL.md",
+        ]
+    )
+    for target in destinations:
+        if target.is_relative_to(home / ".agents"):
+            trusted_root = home / ".agents"
+        else:
+            trusted_root = root
+        _preflight_target(
+            target,
+            trusted_root=trusted_root,
+            allowed_ancestor=home,
+        )
+
+
+def _copy_skills(
+    loader: AssetLoader,
+    target: Path,
+    *,
+    trusted_root: Path | None = None,
+    allowed_ancestor: Path | None = None,
+) -> _ManagedAssetSummary:
+    summary = _ManagedAssetSummary()
     bundled = loader.bundled_skills_dir()
     if not bundled.exists():
         click.echo(f"warning: bundled skills not found at {bundled}", err=True)
-        return
+        return summary
     for skill_dir in iter_skill_directories(bundled):
         dest = target / skill_dir.name
-        dest.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(skill_dir / "SKILL.md", dest / "SKILL.md")
+        source = skill_dir / "SKILL.md"
+        destination = dest / "SKILL.md"
+        if trusted_root is None:
+            existed = destination.exists()
+            dest.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+            summary.record("repaired" if existed else "created")
+        else:
+            summary.record(
+                _synchronize_managed_asset(
+                    destination,
+                    source.read_text(encoding="utf-8"),
+                    trusted_root=trusted_root,
+                    allowed_ancestor=allowed_ancestor,
+                )
+            )
+    return summary
 
 
 def _echo_user_next_steps(selection: ProviderSelection) -> None:
@@ -752,15 +910,15 @@ def _runtime_mcp_env() -> dict[str, str]:
 def _claude_user_paths() -> tuple[Path, Path]:
     configured = os.environ.get("CLAUDE_CONFIG_DIR")
     if configured:
-        root = Path(configured).expanduser().resolve()
+        root = Path(os.path.abspath(Path(configured).expanduser()))
         return root, root / ".claude.json"
-    home = Path.home().resolve()
+    home = Path(os.path.abspath(Path.home()))
     return home / ".claude", home / ".claude.json"
 
 
 def _codex_user_paths() -> tuple[Path, Path]:
     root = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
-    root = root.expanduser().resolve()
+    root = Path(os.path.abspath(root.expanduser()))
     return root, root / "config.toml"
 
 
@@ -786,6 +944,7 @@ def _write_project_provider_capability_settings(
         provider,
         profile,
         role="orchestrator",
+        allowed_ancestor=workspace,
     )
 
 
@@ -805,31 +964,67 @@ def _write_user_provider_capability_settings(
         profile,
         role="orchestrator",
         settings_dir=settings_root,
+        allowed_ancestor=Path.home(),
     )
 
 
-def _write_text_atomic(path: Path, text: str) -> None:
-    safe_text = redact_sensitive_value(text)
-    assert isinstance(safe_text, str)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    previous_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
-    temp_path: Path | None = None
+def _write_text_atomic(
+    path: Path,
+    text: str,
+    inventory: dict[str, str] | None = None,
+    *,
+    trusted_root: Path | None = None,
+    allowed_ancestor: Path | None = None,
+    mode: int | None = None,
+) -> None:
+    atomic_write_text(
+        path,
+        text,
+        trusted_root=trusted_root or path.parent,
+        allowed_ancestor=allowed_ancestor,
+        mode=mode,
+        inventory=inventory,
+    )
+
+
+def _synchronize_managed_asset(
+    path: Path,
+    authoritative_text: str,
+    *,
+    trusted_root: Path,
+    allowed_ancestor: Path | None,
+) -> ManagedAssetOutcome:
+    """Make one managed text asset exactly match its bundled authority."""
+    authoritative_bytes = authoritative_text.encode("utf-8")
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=path.parent,
-            prefix=f".{path.name}.unrest-",
-            delete=False,
-        ) as handle:
-            handle.write(safe_text)
-            temp_path = Path(handle.name)
-        if previous_mode is not None:
-            temp_path.chmod(previous_mode)
-        os.replace(temp_path, path)
-    finally:
-        if temp_path is not None and temp_path.exists():
-            temp_path.unlink()
+        current = path.lstat()
+    except FileNotFoundError:
+        outcome: ManagedAssetOutcome = "created"
+    else:
+        if not stat.S_ISREG(current.st_mode):
+            raise OSError(f"managed asset target must be a regular file: {path}")
+        if (
+            path.read_bytes() == authoritative_bytes
+            and stat.S_IMODE(current.st_mode) == MANAGED_ASSET_MODE
+        ):
+            return "verified"
+        outcome = "repaired"
+
+    _write_text_atomic(
+        path,
+        authoritative_text,
+        trusted_root=trusted_root,
+        allowed_ancestor=allowed_ancestor,
+        mode=MANAGED_ASSET_MODE,
+    )
+    installed = path.lstat()
+    if (
+        not stat.S_ISREG(installed.st_mode)
+        or path.read_bytes() != authoritative_bytes
+        or stat.S_IMODE(installed.st_mode) != MANAGED_ASSET_MODE
+    ):
+        raise OSError(f"managed asset verification failed after atomic write: {path}")
+    return outcome
 
 
 def _user_server_config(
@@ -873,7 +1068,12 @@ def _write_claude_user_config(
         storage_env,
         credentials,
     )
-    _write_text_atomic(path, json.dumps(existing, indent=2) + "\n")
+    _write_text_atomic(
+        path,
+        json.dumps(existing, indent=2) + "\n",
+        credentials,
+        trusted_root=Path.home(),
+    )
     click.echo(f"Wrote {path}")
 
 
@@ -1088,7 +1288,7 @@ def _write_codex_user_config(
         tomllib.loads(updated)
     except tomllib.TOMLDecodeError as exc:
         raise click.ClickException(f"Generated invalid Codex config for {path}: {exc}") from exc
-    _write_text_atomic(path, updated)
+    _write_text_atomic(path, updated, credentials, trusted_root=Path.home())
     click.echo(f"Wrote {path}")
 
 
@@ -1138,25 +1338,55 @@ workspace_dir)`.
 
 def _setup_user_provider_assets(loader: AssetLoader, provider: ProviderDefinition) -> None:
     root, _ = _user_paths(provider)
+    home = Path(os.path.abspath(Path.home()))
     agents_dir = root / "agents"
-    _copy_provider_agents(loader, agents_dir, provider.name)
-    click.echo(f"Installed {provider.name} subagents to {agents_dir}")
+    agents_summary = _copy_provider_agents(
+        loader,
+        agents_dir,
+        provider.name,
+        trusted_root=root,
+        allowed_ancestor=home,
+    )
+    click.echo(agents_summary.render(f"{provider.name} subagents", agents_dir))
 
     skills_dir = root / "skills"
-    _copy_skills(loader, skills_dir)
-    click.echo(f"Installed bundled skills to {skills_dir}")
+    skills_summary = _copy_skills(
+        loader,
+        skills_dir,
+        trusted_root=root,
+        allowed_ancestor=home,
+    )
+    click.echo(skills_summary.render("bundled skills", skills_dir))
 
-    shared_skills_dir = Path.home().resolve() / ".agents" / "skills"
-    _copy_skills(loader, shared_skills_dir)
-    click.echo(f"Installed bundled skills to {shared_skills_dir}")
+    shared_root = home / ".agents"
+    shared_skills_dir = shared_root / "skills"
+    shared_skills_summary = _copy_skills(
+        loader,
+        shared_skills_dir,
+        trusted_root=shared_root,
+        allowed_ancestor=home,
+    )
+    click.echo(shared_skills_summary.render("bundled skills", shared_skills_dir))
 
     prompt_path = root / "orchestrator_prompt.md"
     prompt = loader.load_prompt_file("orchestrator", "system_prompt.md")
-    _write_text_atomic(prompt_path, prompt)
-    click.echo(f"Wrote {prompt_path}")
+    prompt_outcome = _synchronize_managed_asset(
+        prompt_path,
+        prompt,
+        trusted_root=root,
+        allowed_ancestor=home,
+    )
+    prompt_summary = _ManagedAssetSummary()
+    prompt_summary.record(prompt_outcome)
+    click.echo(prompt_summary.render("orchestrator prompt", prompt_path))
 
     skill_path = skills_dir / "unrest" / "SKILL.md"
-    _write_text_atomic(skill_path, _unrest_skill_body(prompt_path))
+    _write_text_atomic(
+        skill_path,
+        _unrest_skill_body(prompt_path),
+        trusted_root=root,
+        allowed_ancestor=home,
+    )
     click.echo(f"Wrote {skill_path}")
 
 
@@ -1192,11 +1422,15 @@ def _write_bootstrap_config(
             "args": server_args,
             "env": env,
         }
-        path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+        _write_text_atomic(
+            path,
+            json.dumps(existing, indent=2) + "\n",
+            credentials,
+            trusted_root=workspace,
+        )
         click.echo(f"Wrote {path}")
     elif fmt == "codex_config":
         config_path = workspace / ".codex" / "config.toml"
-        config_path.parent.mkdir(parents=True, exist_ok=True)
         env_lines = "\n".join(
             f"{key} = {_toml_string(value)}" for key, value in env.items()
         )
@@ -1232,7 +1466,13 @@ def _write_bootstrap_config(
             raise click.ClickException(
                 f"Generated invalid Codex config for {config_path}: {exc}"
             ) from exc
-        _write_text_atomic(config_path, updated)
+        _write_text_atomic(
+            config_path,
+            updated,
+            credentials,
+            trusted_root=config_path.parent,
+            allowed_ancestor=workspace,
+        )
         click.echo(f"Wrote {config_path}")
     else:
         raise ValueError(f"unsupported config_format: {fmt}")
@@ -1287,10 +1527,15 @@ def _setup_provider_assets(
 ) -> None:
     if provider.agent_output_dir:
         agents_dir = workspace / provider.agent_output_dir
-        _copy_provider_agents(
-            loader, agents_dir, provider.name
+        trusted_root = workspace / Path(provider.agent_output_dir).parts[0]
+        agents_summary = _copy_provider_agents(
+            loader,
+            agents_dir,
+            provider.name,
+            trusted_root=trusted_root,
+            allowed_ancestor=workspace,
         )
-        click.echo(f"Installed {provider.name} subagents to {agents_dir}")
+        click.echo(agents_summary.render(f"{provider.name} subagents", agents_dir))
     # Install bundled skills into the host-agent skill surface so the
     # orchestrator can discover playbooks/skills at startup — `start_project`
     # runs only after the host agent is already up, so the surface must exist
@@ -1298,22 +1543,56 @@ def _setup_provider_assets(
     # (including project-authored ones) into these dirs.
     for rel in provider.skill_dirs:
         dest = workspace / rel
-        _copy_skills(loader, dest)
-        click.echo(f"Installed bundled skills to {dest}")
+        trusted_root = workspace / Path(rel).parts[0]
+        skills_summary = _copy_skills(
+            loader,
+            dest,
+            trusted_root=trusted_root,
+            allowed_ancestor=workspace,
+        )
+        click.echo(skills_summary.render("bundled skills", dest))
     if provider.orchestrator_prompt_output_path:
         path = workspace / provider.orchestrator_prompt_output_path
-        if not path.exists():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            body = loader.load_prompt_file("orchestrator", "system_prompt.md")
-            path.write_text(body, encoding="utf-8")
-            click.echo(f"Created {path}")
+        body = loader.load_prompt_file("orchestrator", "system_prompt.md")
+        trusted_root = workspace / Path(
+            provider.orchestrator_prompt_output_path
+        ).parts[0]
+        outcome = _synchronize_managed_asset(
+            path,
+            body,
+            trusted_root=trusted_root,
+            allowed_ancestor=workspace,
+        )
+        summary = _ManagedAssetSummary()
+        summary.record(outcome)
+        click.echo(summary.render("orchestrator prompt", path))
 
 
-def _copy_provider_agents(loader: AssetLoader, target: Path, provider_name: str) -> None:
+def _copy_provider_agents(
+    loader: AssetLoader,
+    target: Path,
+    provider_name: str,
+    *,
+    trusted_root: Path | None = None,
+    allowed_ancestor: Path | None = None,
+) -> _ManagedAssetSummary:
+    summary = _ManagedAssetSummary()
     bundled = loader.bundled_agents_dir(provider_name)
     if not bundled.exists():
-        return
-    target.mkdir(parents=True, exist_ok=True)
+        return summary
     for agent_file in sorted(bundled.glob("*")):
         if agent_file.is_file():
-            shutil.copy2(agent_file, target / agent_file.name)
+            destination = target / agent_file.name
+            if trusted_root is None:
+                existed = destination.exists()
+                target.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(agent_file, destination)
+                summary.record("repaired" if existed else "created")
+            else:
+                summary.record(_synchronize_managed_asset(
+                    destination,
+                    agent_file.read_text(encoding="utf-8"),
+                    trusted_root=trusted_root,
+                    allowed_ancestor=allowed_ancestor,
+                ))
+    return summary

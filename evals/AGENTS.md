@@ -10,7 +10,5 @@ This file adds evaluation rules to the root `AGENTS.md`.
   under reversed enumeration.
 - Never persist credential values, prompts, private source bodies, unrelated
   environment values, or raw conversational traces.
-- For the Batch 0 baseline run
-  `uv run python -m unrest_harness.baseline --check --output evals/baseline`
-  and `uv run pytest -q tests/test_baseline.py`. This is a focused baseline
-  check; it does not consume the frozen-candidate full-suite checkpoint.
+- Historical evaluation material must not be reintroduced as an installed
+  baseline generator or a repository-check prerequisite.

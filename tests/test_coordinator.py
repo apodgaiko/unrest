@@ -4,12 +4,14 @@ See `specs/task_list/PRODUCT.md` §Dispatch.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 import pytest
 
 from unrest_harness.config import HarnessConfig
-from unrest_harness.controller import ProjectController, ToolError
+from unrest_harness.controller import MAX_ABORT_REASON_BYTES, ProjectController, ToolError
 from unrest_harness.dispatcher import (
     DispatchRequest,
     MockDispatcher,
@@ -101,6 +103,49 @@ def _seed_project(
         f"# {assertion}\n\nStatement body.\n"
     )
     return pid
+
+
+def test_serial_dispatch_crash_is_bounded_and_redacted_in_reachable_sinks(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    credentials = {
+        "ANTHROPIC_API_KEY": "short-key",
+        "ANTHROPIC_AUTH_TOKEN": "overlap-known-value",
+        "CODEX_API_KEY": "known-value",
+        "GLM_API_KEY": "known-value-suffix",
+        "OPENAI_API_KEY": "colliding-known-value",
+        "ZAI_API_KEY": "punctuation@known",
+    }
+    for name, value in credentials.items():
+        monkeypatch.setenv(name, value)
+
+    def crash(_request: DispatchRequest) -> NodeHandoff:
+        raise RuntimeError("|".join(credentials.values()) + "-" + "x" * 5000)
+
+    controller = ProjectController(
+        config,
+        MockDispatcher(crash),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
+    )
+    pid = _seed_project(controller, workspace)
+    controller.submit_plan(pid, _simple_tl())
+    controller.advance_project(pid, max_steps=1)
+
+    attempt_path = next(controller.store.attempts_runtime_dir(pid, "mission-001").glob("*.json"))
+    attempt = json.loads(attempt_path.read_text())
+    assert len(attempt["report"]) <= 2000
+    reachable = [
+        attempt_path,
+        next(controller.store.attempts_dir(pid, "mission-001").glob("*.md")),
+        controller.store.unrest_runtime_dir(pid) / "attention.json",
+        controller.store.unrest_runtime_dir(pid) / "state.json",
+    ]
+    for path in reachable:
+        content = path.read_text()
+        for value in credentials.values():
+            assert value not in content
 
 
 class TestHappyPath:
@@ -250,6 +295,122 @@ class TestGateFailed:
         assert env.state.state == "attention_needed"
         items = controller.store.load_attention(pid)
         assert items[0].kind == "gate_failed"
+
+    @pytest.mark.parametrize(
+        "invalid_kind", ("corrupt", "wrong-task", "stale-generation")
+    )
+    def test_invalid_gate_evidence_routes_to_attention_then_new_generation(
+        self,
+        config: HarnessConfig,
+        workspace: Path,
+        invalid_kind: str,
+    ) -> None:
+        def responder(request: DispatchRequest) -> NodeHandoff:
+            return ValidateHandoff(
+                node_id=request.task.id,
+                attempt_id=request.spawn_ts,
+                done=True,
+                report="fresh validation",
+                items=[ValidationItem(item_id="VAL-001", passed=True)],
+                passed=True,
+            )
+
+        controller = ProjectController(
+            config,
+            MockDispatcher(responder),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+        store = controller.store
+        generation = "2026-08-10T12-00-00Z"
+        task_state = store.load_task_state(pid, "mission-001")
+        task_state.set_status("w1", "cleared")
+        task_state.set_status("v1", "cleared")
+        task_state.set_last_attempt("v1", generation)
+        store.save_task_state(pid, "mission-001", task_state)
+        rejected = store.attempt_path(
+            pid, "mission-001", generation, "v1"
+        )
+        rejected.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict[str, object] = {
+            "node_id": "v1",
+            "attempt_id": generation,
+            "done": True,
+            "report": "forensic-sentinel-must-not-escape",
+            "items": [{"item_id": "VAL-001", "passed": True}],
+            "passed": True,
+            "request_attention": False,
+        }
+        if invalid_kind == "corrupt":
+            rejected.write_text("{forensic-sentinel-must-not-escape")
+        else:
+            if invalid_kind == "wrong-task":
+                payload["node_id"] = "other-validator"
+            else:
+                payload["attempt_id"] = "2026-08-09T12-00-00Z"
+            rejected.write_text(json.dumps(payload), encoding="utf-8")
+        rejected_before = rejected.read_bytes()
+        rejected_hash = hashlib.sha256(rejected_before).hexdigest()
+
+        failed = controller.advance_project(pid, max_steps=1)
+
+        assert failed.state.state == "attention_needed"
+        attention = store.load_attention(pid)
+        assert len(attention) == 1
+        assert attention[0].kind == "gate_failed"
+        assert "validator evidence rejected for v1" in attention[0].report
+        assert len(attention[0].report.encode()) < 4096
+        assert "forensic-sentinel" not in attention[0].report
+        for sink in (
+            store.unrest_runtime_dir(pid) / "attention.json",
+            store.unrest_runtime_dir(pid) / "state.json",
+        ):
+            assert "forensic-sentinel" not in sink.read_text(encoding="utf-8")
+        assert rejected.read_bytes() == rejected_before
+        assert hashlib.sha256(rejected.read_bytes()).hexdigest() == rejected_hash
+
+        replacement = TaskListPatch(
+            supersede={"g1": "g1-v2"},
+            add=[
+                _task(
+                    "v1-v2",
+                    "validate",
+                    ["VAL-001"],
+                    skill="aud",
+                    depends_on=["w1"],
+                ),
+                _task(
+                    "g1-v2",
+                    "gate",
+                    ["VAL-001"],
+                    depends_on=["v1-v2"],
+                ),
+            ],
+        )
+        controller.decide_attention(
+            pid,
+            [
+                Decision(
+                    item_id=attention[0].id,
+                    action="patch",
+                    patch=replacement,
+                    justification="collect fresh validator evidence",
+                )
+            ],
+        )
+        recovered = controller.advance_project(pid)
+
+        assert recovered.state.state == "attention_needed"
+        final_attention = store.load_attention(pid)
+        assert len(final_attention) == 1
+        assert final_attention[0].kind == "gate_checkpoint"
+        final_state = store.load_task_state(pid, "mission-001")
+        assert final_state.status_of("g1-v2") == "cleared"
+        new_generation = final_state.tasks["v1-v2"].last_attempt
+        assert new_generation is not None and new_generation != generation
+        assert rejected.read_bytes() == rejected_before
+        assert hashlib.sha256(rejected.read_bytes()).hexdigest() == rejected_hash
 
 
 class TestGateOptional:
@@ -655,6 +816,81 @@ class TestAbortProject:
         assert env.state.state == "aborted"
         assert env.dag is None
 
+    @pytest.mark.parametrize(
+        "reason",
+        (
+            "a" * (MAX_ABORT_REASON_BYTES - 1),
+            "a" * MAX_ABORT_REASON_BYTES,
+            "🚀" * (MAX_ABORT_REASON_BYTES // 4),
+        ),
+        ids=("boundary-minus-one", "boundary", "unicode-byte-boundary"),
+    )
+    def test_abort_reason_utf8_boundary_persists_and_reloads_exactly(
+        self, config: HarnessConfig, workspace: Path, reason: str
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+
+        env = controller.abort_project(pid, reason)
+        reloaded = ProjectController(
+            config, controller.dispatcher, controller.terminal_reviewer
+        ).inspect_project(pid)
+        closeout = controller.store.mission_dir(pid, "mission-001") / "closeout.md"
+
+        assert env.state.reason == reason  # type: ignore[union-attr]
+        assert reloaded.state == env.state
+        assert closeout.read_text().endswith(reason + "\n")
+        assert len(env.state.reason.encode()) <= MAX_ABORT_REASON_BYTES  # type: ignore[union-attr]
+
+    @pytest.mark.parametrize("active", (False, True), ids=("planning", "active"))
+    @pytest.mark.parametrize(
+        "reason",
+        ("a" * (MAX_ABORT_REASON_BYTES + 1), "x" * 200_000),
+        ids=("boundary-plus-one", "two-hundred-thousand"),
+    )
+    def test_oversized_abort_is_rejected_before_any_terminal_write(
+        self, config: HarnessConfig, workspace: Path, active: bool, reason: str
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        if active:
+            controller.submit_plan(pid, _simple_tl())
+        state_path = controller.store.unrest_runtime_dir(pid) / "state.json"
+        before = state_path.read_bytes()
+        closeout = controller.store.mission_dir(pid, "mission-001") / "closeout.md"
+
+        with pytest.raises(ToolError, match="4096 UTF-8 bytes") as exc_info:
+            controller.abort_project(pid, reason)
+
+        assert len(str(exc_info.value).encode()) < 256
+        assert state_path.read_bytes() == before
+        assert not closeout.exists()
+
+    def test_abort_rejects_unencodable_unicode_before_writes(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        state_path = controller.store.unrest_runtime_dir(pid) / "state.json"
+        before = state_path.read_bytes()
+
+        with pytest.raises(ToolError, match="not valid Unicode"):
+            controller.abort_project(pid, "\ud800")
+
+        assert state_path.read_bytes() == before
+
 
 class TestResume:
     def test_resume_picks_up_attempt_landed_while_down(
@@ -684,3 +920,167 @@ class TestResume:
         controller.advance_project(pid)
         ts = store.load_task_state(pid, "mission-001")
         assert ts.status_of("w1") == "cleared"
+
+    @pytest.mark.parametrize(
+        "case",
+        (
+            "malformed_json",
+            "wrong_task",
+            "stale_generation",
+            "replayed_success",
+            "null_attempt_id",
+            "missing_done",
+        ),
+    )
+    def test_invalid_attempt_provenance_fails_closed_and_is_idempotent(
+        self, config: HarnessConfig, workspace: Path, case: str
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+        store = controller.store
+        generation = "2026-08-10T12-00-00Z"
+        task_state = store.load_task_state(pid, "mission-001")
+        task_state.set_status("w1", "running")
+        task_state.set_last_attempt("w1", generation)
+        store.save_task_state(pid, "mission-001", task_state)
+        expected = store.attempt_path(pid, "mission-001", generation, "w1")
+        expected.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "node_id": "w1",
+            "attempt_id": generation,
+            "done": True,
+            "report": "must not be replayed",
+            "request_attention": False,
+        }
+        if case == "malformed_json":
+            expected.write_text("{")
+        elif case == "wrong_task":
+            payload["node_id"] = "other-task"
+            expected.write_text(json.dumps(payload))
+        elif case == "stale_generation":
+            payload["attempt_id"] = "2026-08-09T12-00-00Z"
+            expected.write_text(json.dumps(payload))
+        elif case == "replayed_success":
+            old = store.attempt_path(
+                pid, "mission-001", "2026-08-09T12-00-00Z", "w1"
+            )
+            payload["attempt_id"] = "2026-08-09T12-00-00Z"
+            old.write_text(json.dumps(payload))
+        elif case == "null_attempt_id":
+            payload["attempt_id"] = None
+            expected.write_text(json.dumps(payload))
+        else:
+            payload.pop("done")
+            expected.write_text(json.dumps(payload))
+
+        restarted = ProjectController(
+            config, controller.dispatcher, controller.terminal_reviewer
+        )
+        result = restarted.advance_project(pid, max_steps=1)
+
+        assert result.state.state == "attention_needed"
+        assert store.load_task_state(pid, "mission-001").status_of("w1") == "failed"
+        attention = store.load_attention(pid)
+        assert len(attention) == 1
+        assert len(attention[0].report.encode()) < 4096
+        observed = {
+            "state": (store.unrest_runtime_dir(pid) / "state.json").read_bytes(),
+            "tasks": (
+                store.mission_runtime_dir(pid, "mission-001") / "task-state.json"
+            ).read_bytes(),
+            "attention": (
+                store.unrest_runtime_dir(pid) / "attention.json"
+            ).read_bytes(),
+            "attempts": tuple(
+                (path.name, path.read_bytes())
+                for path in sorted(
+                    store.attempts_runtime_dir(pid, "mission-001").glob("*.json")
+                )
+            ),
+        }
+
+        repeated = restarted.advance_project(pid, max_steps=1)
+        assert repeated.state.state == "attention_needed"
+        assert observed["state"] == (
+            store.unrest_runtime_dir(pid) / "state.json"
+        ).read_bytes()
+        assert observed["tasks"] == (
+            store.mission_runtime_dir(pid, "mission-001") / "task-state.json"
+        ).read_bytes()
+        assert observed["attention"] == (
+            store.unrest_runtime_dir(pid) / "attention.json"
+        ).read_bytes()
+        assert observed["attempts"] == tuple(
+            (path.name, path.read_bytes())
+            for path in sorted(
+                store.attempts_runtime_dir(pid, "mission-001").glob("*.json")
+            )
+        )
+
+    def test_valid_current_generation_attempt_resumes_once(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+        store = controller.store
+        generation = "2026-08-10T12-00-00Z"
+        task_state = store.load_task_state(pid, "mission-001")
+        task_state.set_status("w1", "running")
+        task_state.set_last_attempt("w1", generation)
+        store.save_task_state(pid, "mission-001", task_state)
+        store.save_attempt(
+            pid,
+            "mission-001",
+            generation,
+            "w1",
+            WorkHandoff(node_id="w1", done=True, report="current"),
+        )
+
+        restarted = ProjectController(
+            config, controller.dispatcher, controller.terminal_reviewer
+        )
+        restarted.advance_project(pid, max_steps=1)
+        attempts_before = tuple(store.list_attempts(pid, "mission-001", node_id="w1"))
+
+        assert store.load_task_state(pid, "mission-001").status_of("w1") == "cleared"
+        assert store.load_attention(pid) == []
+        assert tuple(store.list_attempts(pid, "mission-001", node_id="w1")) == attempts_before
+
+    def test_dispatched_explicit_null_attempt_id_fails_closed(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        controller = ProjectController(
+            config,
+            MockDispatcher(
+                lambda request: WorkHandoff(
+                    node_id=request.task.id,
+                    attempt_id=None,
+                    done=True,
+                    report="explicit null must not bind",
+                )
+            ),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        pid = _seed_project(controller, workspace)
+        controller.submit_plan(pid, _simple_tl())
+
+        result = controller.advance_project(pid, max_steps=1)
+
+        assert result.state.state == "attention_needed"
+        attempt = controller.store.list_attempts(
+            pid, "mission-001", node_id="w1"
+        )[0]
+        persisted = json.loads(attempt.path.read_text(encoding="utf-8"))
+        assert persisted["done"] is False
+        assert persisted["attempt_id"] == attempt.spawn_ts
+        assert "null attempt identity" in persisted["report"]

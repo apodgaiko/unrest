@@ -1,7 +1,0 @@
-{
-  "issue_id_pattern": "^#[1-9][0-9]*$",
-  "issues": [],
-  "removal_condition_pattern": "^[a-z0-9][a-z0-9-]*$",
-  "removal_conditions": [],
-  "schema_version": 1
-}

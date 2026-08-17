@@ -56,7 +56,10 @@ class MockDispatcher:
 
     def dispatch(self, request: DispatchRequest) -> NodeHandoff:
         self.calls.append(request)
-        return self._responder(request)
+        handoff = self._responder(request)
+        if "attempt_id" not in handoff.model_fields_set:
+            return handoff.model_copy(update={"attempt_id": request.spawn_ts})
+        return handoff
 
     def dispatch_batch(self, requests: list[DispatchRequest]) -> list[NodeHandoff]:
         def _run(request: DispatchRequest) -> NodeHandoff:

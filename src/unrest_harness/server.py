@@ -1,7 +1,9 @@
-"""v5 MCP server. 3 modes: orchestrator / worker / terminal-reviewer.
+"""v5 MCP server. 4 modes: orchestrator / worker / validator / terminal-reviewer.
 
 See docs/v5/08-mcp-surface.md. Tool-surface isolation is structural:
-each mode registers a disjoint tool set on its own MCP server.
+each mode constructs its own MCP server. Worker and validator modes share the
+strict ``end_node`` completion protocol, but retain role-specific identities
+and instructions.
 """
 from __future__ import annotations
 
@@ -9,14 +11,19 @@ import argparse
 import asyncio
 import logging
 import os
+from collections.abc import Callable
+from pathlib import Path
 from typing import Annotated, Any, Mapping
 
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from .capability_policy import (
+    CapabilityPolicy,
+    CapabilityPolicyError,
     SensitiveValueInventory,
     deserialize_sensitive_value_inventory,
+    redact_sensitive_value,
 )
 from .config import HarnessConfig
 from .controller import ProjectController, ToolError
@@ -29,7 +36,7 @@ from .models import (
     ValidationItem,
     WorkHandoff,
 )
-from .storage import atomic_write_json
+from .storage import atomic_write_json, trusted_persistence_root
 
 logger = logging.getLogger(__name__)
 _SENSITIVE_INVENTORY_MAX_BYTES = 4 * 1024 * 1024
@@ -105,6 +112,22 @@ def create_worker_server(
     return mcp
 
 
+def create_validator_server(
+    sensitive_inventory: Mapping[str, str] | None = None,
+) -> FastMCP:
+    """1 validator tool using the shared strict node-completion protocol."""
+    mcp = FastMCP(
+        name="unrest-validator",
+        instructions=(
+            "Validator MCP server. Mode: validator. 1 tool: end_node. "
+            "Call exactly once before exiting. Include `items` (one per assigned "
+            "contract target) and the aggregate `passed`."
+        ),
+    )
+    _register_worker_tools(mcp, sensitive_inventory=sensitive_inventory)
+    return mcp
+
+
 def create_terminal_reviewer_server(
     sensitive_inventory: Mapping[str, str] | None = None,
 ) -> FastMCP:
@@ -129,8 +152,11 @@ def create_terminal_reviewer_server(
 
 
 def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) -> None:
+    def safe_payload(value: Any) -> dict[str, Any]:
+        return _to_payload(value, inventory=controller.store.inventory)
     # SECURITY[SEC-MCP-001]: Lifecycle tools are registered only on the
-    # orchestrator server; worker and reviewer modes construct disjoint servers.
+    # orchestrator server; worker, validator, and reviewer modes construct
+    # authority-limited servers.
     # Per-project lock around mutating controller calls. The thread hop in each
     # tool prevents event-loop blocking, but two same-project tool calls could
     # otherwise race on disk state (attention, attempts, task-state, tasks).
@@ -179,7 +205,7 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     ) -> dict[str, Any]:
         # No per-project lock: project_id does not exist until the call returns.
         try:
-            return _to_payload(
+            return safe_payload(
                 await asyncio.to_thread(
                     controller.start_project,
                     brief,
@@ -189,7 +215,7 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
                 )
             )
         except ToolError as exc:
-            return _to_payload(exc)
+            return safe_payload(exc)
 
     @mcp.tool(
         name="submit_plan",
@@ -215,11 +241,11 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     ) -> dict[str, Any]:
         async with await _project_lock(project_id):
             try:
-                return _to_payload(
+                return safe_payload(
                     await asyncio.to_thread(controller.submit_plan, project_id, task_list)
                 )
             except ToolError as exc:
-                return _to_payload(exc)
+                return safe_payload(exc)
 
     @mcp.tool(
         name="advance_project",
@@ -242,11 +268,11 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     ) -> dict[str, Any]:
         async with await _project_lock(project_id):
             try:
-                return _to_payload(
+                return safe_payload(
                     await asyncio.to_thread(controller.advance_project, project_id, max_steps)
                 )
             except ToolError as exc:
-                return _to_payload(exc)
+                return safe_payload(exc)
 
     @mcp.tool(
         name="end_mission",
@@ -278,13 +304,13 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     ) -> dict[str, Any]:
         async with await _project_lock(project_id):
             try:
-                return _to_payload(
+                return safe_payload(
                     await asyncio.to_thread(
                         controller.end_mission, project_id, deliverable_roots
                     )
                 )
             except ToolError as exc:
-                return _to_payload(exc)
+                return safe_payload(exc)
 
     @mcp.tool(
         name="decide_attention",
@@ -305,11 +331,11 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     ) -> dict[str, Any]:
         async with await _project_lock(project_id):
             try:
-                return _to_payload(
+                return safe_payload(
                     await asyncio.to_thread(controller.decide_attention, project_id, decisions)
                 )
             except ToolError as exc:
-                return _to_payload(exc)
+                return safe_payload(exc)
 
     @mcp.tool(
         name="inspect_project",
@@ -322,11 +348,11 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         project_id: Annotated[str, Field(description="Project id.")],
     ) -> dict[str, Any]:
         try:
-            return _to_payload(
+            return safe_payload(
                 await asyncio.to_thread(controller.inspect_project, project_id)
             )
         except ToolError as exc:
-            return _to_payload(exc)
+            return safe_payload(exc)
 
     @mcp.tool(
         name="abort_project",
@@ -341,11 +367,11 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     ) -> dict[str, Any]:
         async with await _project_lock(project_id):
             try:
-                return _to_payload(
+                return safe_payload(
                     await asyncio.to_thread(controller.abort_project, project_id, reason)
                 )
             except ToolError as exc:
-                return _to_payload(exc)
+                return safe_payload(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -403,11 +429,13 @@ def _register_worker_tools(
         node_id = os.environ.get("UNREST_NODE_ID")
         if not node_id:
             raise RuntimeError("UNREST_NODE_ID not set in worker env")
+        attempt_id = Path(handoff_path).stem.split("__", 1)[0]
 
         handoff: WorkHandoff | ValidateHandoff
         if node_type == "validate":
             handoff = ValidateHandoff(
                 node_id=node_id,
+                attempt_id=attempt_id,
                 done=done,
                 report=report,
                 items=items or [],
@@ -417,6 +445,7 @@ def _register_worker_tools(
         else:
             handoff = WorkHandoff(
                 node_id=node_id,
+                attempt_id=attempt_id,
                 done=done,
                 report=report,
                 request_attention=request_attention,
@@ -424,6 +453,7 @@ def _register_worker_tools(
         atomic_write_json(
             handoff_path,
             handoff.model_dump(mode="json"),
+            trusted_root=trusted_persistence_root(handoff_path),
             inventory=sensitive_inventory,
         )
         return {
@@ -469,6 +499,7 @@ def _register_terminal_reviewer_tools(
         atomic_write_json(
             path,
             review.model_dump(mode="json"),
+            trusted_root=trusted_persistence_root(path),
             inventory=sensitive_inventory,
         )
         return {
@@ -482,14 +513,23 @@ def _register_terminal_reviewer_tools(
 # ---------------------------------------------------------------------------
 
 
-def _to_payload(env_or_err) -> dict[str, Any]:
+def _to_payload(
+    env_or_err: Any,
+    *,
+    inventory: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     if isinstance(env_or_err, ToolError):
-        return {
+        payload = {
             "error": env_or_err.code,
             "message": env_or_err.message,
             "details": [str(d) for d in (env_or_err.details or [])],
         }
-    return env_or_err.model_dump(mode="json", by_alias=True)
+    else:
+        payload = env_or_err.model_dump(mode="json", by_alias=True)
+    redacted = redact_sensitive_value(payload, inventory or {})
+    if not isinstance(redacted, dict):
+        raise TypeError("MCP payload redaction returned a non-object")
+    return redacted
 
 
 # ---------------------------------------------------------------------------
@@ -497,11 +537,15 @@ def _to_payload(env_or_err) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+def main(
+    *,
+    bundled_dir: Path | None = None,
+    policy_loader: Callable[[Path], CapabilityPolicy] | None = None,
+) -> None:
     parser = argparse.ArgumentParser(description="Unrest MCP Server (v5)")
     parser.add_argument(
         "--mode",
-        choices=["orchestrator", "worker", "terminal-reviewer"],
+        choices=["orchestrator", "worker", "validator", "terminal-reviewer"],
         default="orchestrator",
     )
     parser.add_argument(
@@ -514,12 +558,22 @@ def main() -> None:
     parser.add_argument("--sensitive-inventory-fd", type=int, default=None)
     args = parser.parse_args()
 
-    if args.mode == "orchestrator":
-        config = HarnessConfig.discover()
-        # Capability/provider failures are startup errors. They must never
-        # enter the diagnostic mock path because that would hide a denied
-        # child profile behind apparently working lifecycle tools.
+    config: HarnessConfig | None = None
+    startup_rejected = False
+    try:
+        config = HarnessConfig.discover(
+            bundled_dir=bundled_dir,
+            policy_loader=policy_loader,
+        )
         config.validate_capability_support()
+    except (CapabilityPolicyError, ValueError):
+        startup_rejected = True
+
+    if startup_rejected:
+        parser.exit(2, "unrest-server: startup configuration rejected\n")
+    assert config is not None
+
+    if args.mode == "orchestrator":
         from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer  # noqa: PLC0415
 
         dispatcher: NodeDispatcher = ACPNodeDispatcher(config)
@@ -528,6 +582,10 @@ def main() -> None:
         server = create_orchestrator_server(config, controller)
     elif args.mode == "worker":
         server = create_worker_server(
+            _read_sensitive_inventory_fd(args.sensitive_inventory_fd)
+        )
+    elif args.mode == "validator":
+        server = create_validator_server(
             _read_sensitive_inventory_fd(args.sensitive_inventory_fd)
         )
     else:
@@ -545,5 +603,6 @@ __all__ = [
     "create_orchestrator_server",
     "create_worker_server",
     "create_terminal_reviewer_server",
+    "create_validator_server",
     "main",
 ]

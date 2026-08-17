@@ -3,12 +3,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
+import sys
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from unrest_harness.capability_policy import credential_source_values
+import unrest_harness.acp_runner as acp_runner
+import unrest_harness.server as server_module
+from unrest_harness.capability_policy import (
+    UNSAFE_DEVELOPMENT_PROFILE,
+    credential_source_values,
+)
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController, ToolError
 from unrest_harness.dispatcher import (
@@ -25,6 +32,7 @@ from unrest_harness.models import (
 from unrest_harness.server import (
     create_orchestrator_server,
     create_terminal_reviewer_server,
+    create_validator_server,
     create_worker_server,
 )
 from unrest_harness.storage import ProjectStore
@@ -52,6 +60,11 @@ async def _tool_names(server) -> set[str]:
     return {t.name for t in await server.list_tools()}
 
 
+async def _tool_contract(server, name: str) -> tuple[str | None, dict[str, object]]:
+    tool = next(tool for tool in await server.list_tools() if tool.name == name)
+    return tool.description, tool.parameters
+
+
 # ---------------------------------------------------------------------------
 # Tool surface per mode (structural isolation)
 # ---------------------------------------------------------------------------
@@ -70,6 +83,24 @@ async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
         "inspect_project",
         "abort_project",
     }
+
+
+@pytest.mark.asyncio
+async def test_validator_has_role_specific_identity_and_shared_strict_protocol() -> None:
+    worker = create_worker_server()
+    validator = create_validator_server()
+
+    assert worker.name == "unrest-worker"
+    assert worker.instructions is not None
+    assert "Mode: worker" in worker.instructions
+    assert validator.name == "unrest-validator"
+    assert validator.instructions is not None
+    assert "Mode: validator" in validator.instructions
+    assert "Mode: worker" not in validator.instructions
+    assert await _tool_names(validator) == {"end_node"}
+    assert await _tool_contract(validator, "end_node") == await _tool_contract(
+        worker, "end_node"
+    )
 
 
 @pytest.mark.asyncio
@@ -157,6 +188,285 @@ async def test_terminal_reviewer_tool_isolated() -> None:
 
 
 # ---------------------------------------------------------------------------
+# CLI startup boundary
+# ---------------------------------------------------------------------------
+
+
+_STARTUP_REJECTION = "unrest-server: startup configuration rejected\n"
+
+
+def _install_startup_rejection_traps(
+    monkeypatch: pytest.MonkeyPatch,
+    markers: list[str],
+) -> None:
+    def fastmcp_trap(*args, **kwargs):
+        markers.append("fastmcp")
+        raise AssertionError("FastMCP construction reached after startup rejection")
+
+    def dispatcher_trap(*args, **kwargs):
+        markers.append("dispatch")
+        raise AssertionError("dispatch construction reached after startup rejection")
+
+    monkeypatch.setattr(server_module, "FastMCP", fastmcp_trap)
+    monkeypatch.setattr(acp_runner, "ACPNodeDispatcher", dispatcher_trap)
+    monkeypatch.setattr(acp_runner, "ACPTerminalReviewer", dispatcher_trap)
+
+
+def _invalid_policy_fixture(tmp_path: Path, variant: str) -> Path:
+    source = Path(__file__).resolve().parents[1] / "src" / "unrest_harness" / "bundled"
+    root = tmp_path / "bundled"
+    shutil.copytree(source, root)
+    path = root / "policies" / "role-capabilities.v1.json"
+    if variant == "symlink-root":
+        linked = tmp_path / "linked"
+        linked.symlink_to(root, target_is_directory=True)
+        return linked
+    if variant == "dot-dot-root":
+        return root / "policies" / ".."
+    text = path.read_text(encoding="utf-8")
+    if variant == "duplicate-member":
+        text = text.replace(
+            '"schema_version": 1',
+            '"schema_version": 1,\n  "schema_version": 1',
+            1,
+        )
+    else:
+        document = json.loads(text)
+        if variant == "unknown-field":
+            document["unknown"] = True
+        elif variant == "unsupported-version":
+            document["schema_version"] = 2
+        else:
+            document["profiles"]["safe"]["worker"]["process"]["enabled"] = "true"
+        text = json.dumps(document, indent=2) + "\n"
+    path.write_text(text, encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize(
+    "mode", ("orchestrator", "worker", "validator", "terminal-reviewer")
+)
+@pytest.mark.parametrize(
+    "variant",
+    (
+        "unknown-field",
+        "unsupported-version",
+        "duplicate-member",
+        "malformed-type",
+        "symlink-root",
+        "dot-dot-root",
+    ),
+)
+def test_every_mode_rejects_malformed_injected_policy_before_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    variant: str,
+) -> None:
+    markers: list[str] = []
+    _install_startup_rejection_traps(monkeypatch, markers)
+    root = _invalid_policy_fixture(tmp_path, variant)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["unrest-server", "--mode", mode, "--transport", "stdio"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        server_module.main(bundled_dir=root)
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert captured.err == _STARTUP_REJECTION
+    assert "Traceback" not in captured.err
+    assert markers == []
+
+
+@pytest.mark.parametrize(
+    ("mode", "provider_selector"),
+    (
+        ("orchestrator", "UNREST_ORCHESTRATOR_PROVIDER"),
+        ("worker", "UNREST_WORKER_PROVIDER"),
+        ("validator", "UNREST_VALIDATOR_PROVIDER"),
+        ("terminal-reviewer", "UNREST_TERMINAL_REVIEWER_PROVIDER"),
+    ),
+)
+def test_every_mode_rejects_its_unknown_provider_before_construction(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    provider_selector: str,
+) -> None:
+    secret = "known-provider-credential-value"
+    markers: list[str] = []
+    _install_startup_rejection_traps(monkeypatch, markers)
+    monkeypatch.setenv(provider_selector, secret)
+    monkeypatch.setenv("OPENAI_API_KEY", secret)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["unrest-server", "--mode", mode, "--transport", "stdio"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        server_module.main()
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert captured.err == _STARTUP_REJECTION
+    assert secret not in captured.out + captured.err
+    assert "Traceback" not in captured.err
+    assert markers == []
+
+
+@pytest.mark.parametrize(
+    "mode", ("orchestrator", "worker", "validator", "terminal-reviewer")
+)
+@pytest.mark.parametrize(
+    "invalid_environment",
+    (
+        {"UNREST_CAPABILITY_PROFILE": "known-profile-credential-value"},
+        {"UNREST_CAPABILITY_POLICY_VERSION": "known-version-credential-value"},
+        {"UNREST_CAPABILITY_POLICY_VERSION": "2"},
+        {"UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED": "0"},
+        {"UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED": "1"},
+        {"UNREST_CAPABILITY_PROFILE": UNSAFE_DEVELOPMENT_PROFILE},
+        {"UNREST_UNKNOWN_UNSAFE_OPT_IN": "1"},
+    ),
+)
+def test_every_mode_rejects_invalid_capability_startup_before_construction(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    invalid_environment: dict[str, str],
+) -> None:
+    markers: list[str] = []
+    _install_startup_rejection_traps(monkeypatch, markers)
+    for name, value in invalid_environment.items():
+        monkeypatch.setenv(name, value)
+    supplied = next(iter(invalid_environment.values()))
+    monkeypatch.setenv("OPENAI_API_KEY", supplied)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["unrest-server", "--mode", mode, "--transport", "stdio"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        server_module.main()
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert captured.err == _STARTUP_REJECTION
+    assert supplied not in captured.out + captured.err
+    assert "Traceback" not in captured.err
+    assert markers == []
+
+
+@pytest.mark.parametrize(
+    "mode", ("orchestrator", "worker", "validator", "terminal-reviewer")
+)
+@pytest.mark.parametrize(
+    "variable",
+    (
+        "UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS",
+        "UNREST_WORKER_REASONING_EFFORT",
+        "UNREST_VALIDATOR_REASONING_EFFORT",
+        "UNREST_TERMINAL_REVIEWER_REASONING_EFFORT",
+    ),
+)
+def test_every_mode_bounds_value_configuration_rejection_before_construction(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    variable: str,
+) -> None:
+    markers: list[str] = []
+    _install_startup_rejection_traps(monkeypatch, markers)
+    sentinel = f"invalid-{mode}-{variable.lower()}-sentinel"
+    monkeypatch.setenv(variable, sentinel)
+    monkeypatch.setenv("OPENAI_API_KEY", sentinel)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["unrest-server", "--mode", mode, "--transport", "stdio"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        server_module.main()
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 2
+    assert captured.out == ""
+    assert captured.err == _STARTUP_REJECTION
+    assert sentinel not in captured.out + captured.err
+    assert "Traceback" not in captured.err
+    assert markers == []
+
+
+class _RunRecordingServer:
+    def __init__(self, markers: list[str], mode: str) -> None:
+        self._markers = markers
+        self._mode = mode
+
+    def run(self, **kwargs) -> None:
+        self._markers.append(f"run:{self._mode}:{kwargs['transport']}")
+
+
+@pytest.mark.parametrize(
+    "mode", ("orchestrator", "worker", "validator", "terminal-reviewer")
+)
+@pytest.mark.parametrize("profile", ("safe", UNSAFE_DEVELOPMENT_PROFILE))
+def test_every_mode_reaches_server_run_for_supported_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    profile: str,
+) -> None:
+    markers: list[str] = []
+    monkeypatch.setenv("UNREST_CAPABILITY_PROFILE", profile)
+    if profile == UNSAFE_DEVELOPMENT_PROFILE:
+        monkeypatch.setenv("UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED", "1")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["unrest-server", "--mode", mode, "--transport", "stdio"],
+    )
+
+    def server_factory(*args, **kwargs):
+        markers.append(f"construct:{mode}")
+        return _RunRecordingServer(markers, mode)
+
+    monkeypatch.setattr(server_module, f"create_{mode.replace('-', '_')}_server", server_factory)
+    if mode == "orchestrator":
+        monkeypatch.setattr(
+            acp_runner,
+            "ACPNodeDispatcher",
+            lambda config: markers.append("dispatch") or object(),
+        )
+        monkeypatch.setattr(
+            acp_runner,
+            "ACPTerminalReviewer",
+            lambda config: markers.append("reviewer") or object(),
+        )
+
+    server_module.main()
+
+    if mode == "orchestrator":
+        assert markers == [
+            "dispatch",
+            "reviewer",
+            "construct:orchestrator",
+            "run:orchestrator:stdio",
+        ]
+    else:
+        assert markers == [f"construct:{mode}", f"run:{mode}:stdio"]
+
+
+# ---------------------------------------------------------------------------
 # end_node writes to UNREST_HANDOFF_PATH
 # ---------------------------------------------------------------------------
 
@@ -176,6 +486,7 @@ async def test_end_node_writes_handoff_file(tmp_path: Path, monkeypatch) -> None
     data = json.loads(handoff_path.read_text())
     assert data == {
         "node_id": "w1",
+        "attempt_id": "handoff",
         "done": True,
         "report": "ok",
         "request_attention": False,
@@ -188,7 +499,7 @@ async def test_end_node_validate_writes_items(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setenv("UNREST_HANDOFF_PATH", str(handoff_path))
     monkeypatch.setenv("UNREST_NODE_TYPE", "validate")
     monkeypatch.setenv("UNREST_NODE_ID", "v1")
-    server = create_worker_server()
+    server = create_validator_server()
     await server.call_tool(
         "end_node",
         {
@@ -289,7 +600,7 @@ async def test_redacted_mcp_handoffs_survive_restart_and_mirroring(
     workspace: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    secret = "plum"
+    secret = "validate-handoff-credential-a17f"
     inventory = credential_source_values(
         {"DECLARED_AUTH": secret},
         declared_names=("DECLARED_AUTH",),
@@ -298,24 +609,34 @@ async def test_redacted_mcp_handoffs_survive_restart_and_mirroring(
     store.create_project("brief", workspace, project_id="p-secret")
     spawn_ts = "2026-08-03T00-00-00Z"
 
-    attempt_path = store.attempt_path(
-        "p-secret", "mission-001", spawn_ts, "w-secret"
-    )
+    attempt_path = store.attempt_path("p-secret", "mission-001", spawn_ts, "v-secret")
+    assert not attempt_path.exists()
     monkeypatch.setenv("UNREST_HANDOFF_PATH", str(attempt_path))
-    monkeypatch.setenv("UNREST_NODE_TYPE", "work")
-    monkeypatch.setenv("UNREST_NODE_ID", "w-secret")
+    monkeypatch.setenv("UNREST_NODE_TYPE", "validate")
+    monkeypatch.setenv("UNREST_NODE_ID", "v-secret")
     await create_worker_server(inventory).call_tool(
         "end_node",
-        {"done": True, "report": secret},
+        {
+            "done": True,
+            "report": f"validate result: {secret}",
+            "items": [{"item_id": "VAL-SINK-001", "passed": True}],
+            "passed": True,
+        },
     )
+
+    attempt_bytes = attempt_path.read_bytes()
+    assert secret.encode() not in attempt_bytes
+    assert b"validate result: <redacted:DECLARED_AUTH>" in attempt_bytes
 
     restarted = ProjectStore(config)
     handoff = restarted.read_attempt(
-        "p-secret", "mission-001", spawn_ts, "w-secret"
+        "p-secret", "mission-001", spawn_ts, "v-secret"
     )
-    assert isinstance(handoff, WorkHandoff)
+    assert isinstance(handoff, ValidateHandoff)
+    assert handoff.items == [ValidationItem(item_id="VAL-SINK-001", passed=True)]
+    assert handoff.passed is True
     restarted.save_attempt(
-        "p-secret", "mission-001", spawn_ts, "w-secret", handoff
+        "p-secret", "mission-001", spawn_ts, "v-secret", handoff
     )
 
     review_path = restarted.terminal_review_path(
@@ -337,7 +658,7 @@ async def test_redacted_mcp_handoffs_survive_restart_and_mirroring(
     persisted_paths = (
         attempt_path,
         restarted.attempt_report_path(
-            "p-secret", "mission-001", spawn_ts, "w-secret"
+            "p-secret", "mission-001", spawn_ts, "v-secret"
         ),
         review_path,
         restarted_again.terminal_review_report_path(

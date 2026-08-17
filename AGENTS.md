@@ -11,9 +11,8 @@ semantic subtree; read the complete root-to-leaf chain before editing.
 - Keep one task to one coherent change. Do not begin an adjacent batch task,
   silently change task/gate/handoff semantics, or self-approve a protected
   change.
-- Treat `evals/baseline/` as evidence about the approved base. An
-  `observed_legacy` or `known_defect` fixture is not a normative behavior
-  oracle.
+- Historical observations and `known_defect` fixtures are evidence, not a
+  normative behavior oracle.
 
 ## Engineering rules
 
@@ -25,18 +24,17 @@ semantic subtree; read the complete root-to-leaf chain before editing.
   `.unrest-runtime/`; do not collapse that boundary.
 - Do not expose secrets, prompts, source bodies, reports, or unrelated command
   output in generated metadata or evidence.
-- Update the canonical normative document and focused tests with any changed
-  invariant, schema, configuration contract, or operator workflow. Normative
-  metadata and stable IDs are governed from
-  `docs/architecture/index.md`.
+- Update the canonical document and focused tests with any changed invariant,
+  configuration contract, or operator workflow. Architecture and accepted
+  decision entry points are listed in `docs/architecture/index.md`.
 
 ## Durable annotations
 
-Use structured permanent annotations only for non-obvious constraints:
-`INVARIANT[ID]`, `SECURITY[ID]`, `COMPAT[ID]`, `WHY[ADR-ID]`, or
-`TODO[#issue; remove-after=condition]`. Every reference must resolve through
-the architecture registries. Keep conversations, agent identity, hidden
-reasoning, and temporary handoff notes out of source and documentation.
+Use permanent comments only for non-obvious constraints and keep them locally
+legible. Existing structured runtime invariant IDs remain documentation aids;
+the repository command does not parse or recursively protect them. Keep
+conversations, agent identity, hidden reasoning, and temporary handoff notes
+out of source and documentation.
 
 ## Verification
 
@@ -72,6 +70,10 @@ validation, and supported CLI surfaces, not duplicate full-suite lanes.
 
 When CLI entry points, bundled assets, package data, or MCP surfaces change,
 also run `uv build`, `uv run python tools/check_distribution.py dist`, and the
-installed-wheel lifecycle from an unrelated temporary directory. Post-build
-verification is focused on archive membership/hashes/metadata/assets, entry
-points, policy discovery, persistence/restart behavior, and fail-closed startup.
+installed-wheel lifecycle from an unrelated temporary directory. The archive
+check must verify complete member bytes and safely extract the sdist, then run
+all 14 `tests/test_persistence_schema_v1.py` cases from that extracted tree
+with package module, test module, cwd, and `sys.path` provenance excluding the
+checkout. Post-build verification is focused on archive membership and content,
+entry points, policy discovery, persistence/restart behavior, and fail-closed
+startup; it does not rerun the full source suite.

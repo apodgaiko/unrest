@@ -31,9 +31,11 @@ review.
 
 The orchestrator sees strict MCP payloads and an `Envelope` containing project
 identity, state, durable/harness roots, and an optional textual task view.
-Workers and terminal reviewers see disjoint one-tool MCP servers. Runtime truth
-is reconstructed from persisted typed cursors for every controller call; an
-in-memory coordinator is never authoritative.
+Workers, validators, and terminal reviewers see role-specific one-tool MCP
+servers. Worker and validator modes share the strict `end_node` completion
+implementation, but each of the four modes has its own server identity and
+instructions. Runtime truth is reconstructed from persisted typed cursors for
+every controller call; an in-memory coordinator is never authoritative.
 
 ## Invariants
 
@@ -45,8 +47,10 @@ in-memory coordinator is never authoritative.
   contract coverage.
 - `ARCH-GATE-001`: gate results are derived from persisted validator handoffs,
   with missing evidence failing closed.
-- `ARCH-MCP-001`: orchestrator, worker, and terminal-reviewer tool sets are
-  structurally disjoint.
+- `ARCH-MCP-001`: orchestrator, worker, validator, and terminal-reviewer modes
+  are isolated by separate server construction. Worker and validator share
+  only the strict `end_node` completion protocol, not role identity or
+  authority.
 - `ARCH-CLOSURE-001`: runtime completion requires a fresh successful terminal
   review and a durable closeout.
 - `ARCH-CONFIG-001`: bounded role/provider configuration is explicit and
@@ -72,7 +76,41 @@ fresh coordinator per invocation, applies task-list patches, records decisions,
 and builds envelopes. `MissionCoordinator` selects runnable tasks, persists
 `running` before dispatch, applies typed handoffs, evaluates gates, reconciles
 resumed attempts, and invokes terminal review. `ProjectStore` is the sole owner
-of path conventions and normal persistence.
+of path conventions and normal persistence. Its atomic writer uses a unique
+same-directory temporary file, fsyncs content before replacement, preserves an
+existing regular target's mode, and removes rejected temporary generations.
+Write, content-fsync, and replace failures reject while preserving the prior
+generation. Parent-directory fsync is best effort after replacement: its
+failure cannot roll back the visible target, so the call completes successfully
+and restart observes the accepted new generation. Each write also carries a
+lexical trusted persistence root. The root and every destination component
+through the parent are checked with `lstat` before directory or temporary
+creation and again before replacement; symlinks and other non-directories fail
+closed at any nesting depth. Containment uses path components, and the writer
+does not resolve a redirected destination and then write through it.
+
+Initialization is the only caller that may supply an `allowed_ancestor` to the
+atomic writer. This permits an absent managed `.claude`, `.codex`, or `.agents`
+root to be created beneath an existing lexical workspace or user-home boundary.
+The CLI preflights every initialization destination before its first write, and
+both the boundary and every existing root/parent/target component must be a real
+directory or regular file as appropriate; symlinks and non-directories are not
+resolved or traversed. Calls without `allowed_ancestor` retain the normal rule
+that their trusted persistence root must already exist, including all project
+bucket persistence.
+
+ACP batch dispatch uses an event-loop-local startup lock. The free-port probe,
+role MCP child spawn, and readiness check serialize for contending nodes in one
+batch, while completed event loops do not retain lock affinity or serialize a
+later batch globally. Claude callers validate both managed settings targets
+against the real workspace before reading them. Missing settings are created
+atomically; exact legacy managed settings and current marked settings are the
+only existing files Unrest migrates. Safe unmanaged settings remain unchanged,
+and malformed, unsafe, or symlinked settings reject before any child spawn.
+
+ACP `terminal/create` treats explicit JSON null for optional `args`, `env`, and
+`outputByteLimit` exactly like omission. Non-null values retain strict list and
+positive-integer validation, including rejection of booleans.
 
 ## State transitions
 
@@ -107,9 +145,16 @@ Before dispatch, task state records `running` and the spawn timestamp. A
 dispatcher exception becomes a typed failed handoff. On a later invocation,
 every `running` cursor is reconciled:
 
-- a landed attempt is parsed and applied;
-- no attempt produces a synthetic failure using the recorded spawn timestamp
-  when available;
+Spawn timestamps used by schema-v2 observation have the fixed ASCII UTC form
+`YYYY-MM-DDTHH-MM-SSZ` with an optional `-NNNN` parallel suffix. Calendar and
+clock fields must be valid; offsets, Unicode digit lookalikes, and other forms
+are not accepted.
+
+- only the exact `last_attempt` path is considered, and a landed handoff is
+  applied only when its `node_id` and `attempt_id` match that task and dispatch
+  generation;
+- a missing, malformed, stale, replayed, or mismatched attempt produces a
+  bounded synthetic failure rather than inferred success;
 - all recovered attention is raised together.
 
 Ready gate-validator lanes retain priority. Otherwise the coordinator considers
@@ -119,6 +164,13 @@ Selection happens before any task is marked `running`, so work never overlaps
 work or validation through either dispatcher path. Batch handoffs are applied
 in task-ID order for deterministic persistence even when dispatch completion
 order differs.
+
+Within a validator batch, each node keeps independent MCP child and drain
+lifecycle state. Free-port selection, MCP spawn, and readiness confirmation are
+serialized through one runner so a sibling cannot bind or be mistaken for the
+selected endpoint. A pre-handoff exception becomes a per-node failed handoff
+whose bounded, finite-inventory-redacted cause is written through the normal
+attempt path; it is never converted into a cleared validation verdict.
 
 Historical multiple-`running` state is a recovery input, not a scheduling
 permission. The coordinator consumes landed attempts or persists synthetic
@@ -139,129 +191,71 @@ Public attention exposes only `{id, report}`. Runtime metadata stays in
 `retry` is restricted to transient `node_failed`; changed work and validation
 gaps require a validated patch.
 
+
 ## Read-only runtime observation
 
-`observe_project_runtime(...)` derives an immutable schema-version-1 snapshot
-from the persisted project, state, task, contract, attention, and attempt
-cursors. `unrest observe-project PROJECT_ID` exposes the compact text view;
-`--format json` exposes the public JSON schema. `unrest observe-project --all`
-uses one observation time, sorts projects, and preserves monitoring
-completeness by returning bounded per-project failure records instead of
-silently dropping malformed entries. Exactly one of `PROJECT_ID` and `--all`
-is required. `--stale-after-seconds` is a positive diagnostic threshold and
-defaults to 3600. `--strict` is an additive `--all` mode: it emits the same
-complete text or schema-v1 JSON payload, then exits 1 when any project failed;
-default degraded collections retain exit 0, and successful collections exit 0
-in either mode. Invalid ambient configuration closes as the value-free
-`invalid_configuration` Click diagnostic.
-
-The version-1 JSON object has these stable top-level fields, in addition to the
-version and identity fields: `persisted_state`, `derived_state`, `freshness`,
-`progress`, `task_counts`, `assertion_counts`, `attention_counts`,
-`gate_readiness`, `tasks`, `timings`, `anomalies`, and `shadow_scheduler`.
-Task rows preserve authored order and include an ordinal, type, cursor status,
-dependencies, blockers, runnable fact, attempt count, and current/latest
-attempt identifiers. The `--all` object contains `schema_version`, one shared
+`observe_project_runtime(...)` derives the closed schema-v2 status projection
+from a coherent bounded capture of existing cursors. `unrest observe-project
+PROJECT_ID` prints one deterministic key/value line; `--format json` prints
+the same fields as a closed JSON object. `observe-project --all` uses one
+observation time, orders projects bytewise by project ID, isolates each
+project's closed failure, and emits only the wrapper fields `schema_version`,
 `observed_at`, `projects`, and `failures`.
 
-Before reading, every selected project and cursor path component is checked for
-containment, regular type, and absence of symbolic links. The observer compares
-one content capture with a post-read device/inode/size/mtime generation check
-and makes at most three snapshot attempts. Each selected regular file is capped
-at 4 MiB, the captured content total is capped at 16 MiB, at most 4,096 files or
-directory entries are selected, and traversal is capped at depth 6 relative to
-the project root. Selection and enumeration are bytewise sorted. A cursor that
-exceeds a file, total-byte, selected-file, or depth limit closes with the
-value-free `unsafe_cursor` code; an overfull or non-directory projects root
-closes with value-free `unsafe_project_path`. A generation that changes through
-all three attempts closes with `snapshot_changed`. The observer therefore
-returns a stable coherent snapshot or a closed failure code; it does not
-present a mixed cross-file read as authoritative. The operation creates no
-files and performs no reconciliation, recovery, dispatch, gate evaluation, or
-attention decision.
+The project object fields, in order, are:
 
-The snapshot reports structural progress, task/status/type counts,
-attention-kind counts, ready gates, per-task dependency and attempt facts,
-anomalies, and one advisory shadow scheduler action. Active progress excludes
-superseded tasks. Count category names and order come from the corresponding
-closed model literals, and every emitted count group reconciles to its source
-item total. It deliberately does not emit an effort percentage, ETA,
-completion projection, or inferred supervision state.
+1. `schema_version` (the integer `2`);
+2. `observed_at`, `project_id`, and nullable `mission_id`;
+3. `persisted_state` and `derived_state`;
+4. `attention_count`;
+5. sorted unique bounded `running_task_ids`, `runnable_task_ids`, and
+   `failed_task_ids`;
+6. nullable `last_runtime_change_age_seconds`; and
+7. sorted unique `codes`.
 
-Text display identifiers are at most 80 characters. Values requiring
-shortening or control-character normalization use a 16-hex SHA-256 suffix
-inside that bound. Every text line is at most 240 characters; large anomaly ID
-sets emit an exact total and `omitted=0`, followed by one bounded line per ID.
+Derived state precedence is inconsistency, terminal, draft, planning, open
+attention, active running/runnable work, then quiescent mission-running state.
+The only diagnostic codes are `mission_cursor_mismatch`,
+`failed_task_without_attention`, `running_without_attempt`,
+`malformed_attempt`, and `stale_running_candidate`. Staleness is diagnostic
+only; it never authorizes recovery or changes an active project to a
+recovery-ready state.
+`failed_task_without_attention` is an active-mission diagnostic: completed,
+failed, and aborted project states retain failed task IDs but omit that stale
+running-only anomaly.
 
-Ready gates use authored task-list order, matching the coordinator's graph
-tie-break. When any task is marked running, the advisory action names the full
-authored-order reconciliation pass; per-task timing and anomaly facts retain
-the distinctions between completed, malformed, missing, stale, and
-cursor-mismatched attempts. A failed-task anomaly is suppressed per task only
-when an open attention cursor has that same mission and node identifier.
+The age is `observed_at - max(mtime)` across the current state, task,
+attention, and contract cursors plus current-mission attempt and terminal-review
+cursors. Future timestamps clamp to zero and values round half-even to three
+decimal places. It is file-age metadata, not a heartbeat, liveness statement,
+effort percentage, ETA, or completion prediction.
 
-Freshness fields are ages of named cursor or newest-input file modification
-times. Active-attempt elapsed time comes from the filename-safe dispatch cursor
-timestamp. Observed attempt duration is the attempt file modification time
-minus its filename timestamp and is labelled `file_mtime`; it is historical
-file metadata, not an estimate of remaining work. A stale-running label only
-requests inspection: elapsed wall time cannot prove that a provider process is
-dead. Shadow selection is checked against current coordinator selection in
-tests, but never becomes scheduler input. Reports contain identifiers,
-timestamps, structural facts, and closed codes, never task bodies, prompts,
-handoff or attention reports, workspace paths, credentials, or unrelated
-environment values.
+Capture accepts only a real immediate project directory and regular cursor
+files. It rejects traversal, symbolic links, special files, oversized inputs,
+and a generation that changes through all three bounded retries with one closed
+failure code. Observation imports no coordinator or mutation path and performs
+no persistence, dispatch, recovery, gate, attention, scheduler, or liveness
+action.
 
-The observation failure codebook is `invalid_format`, `invalid_project_id`,
-`invalid_stale_threshold`, `malformed_cursor`, `project_not_found`,
-`non_current_mission`, `snapshot_changed`, `unsafe_cursor`, and
-`unsafe_project_path`. A supplied mission selector is current-only in schema
-version 1: the current mission is supported, a syntactically invalid selector
-is `malformed_cursor`, and any valid non-current or missing mission is
-`non_current_mission`; historical task, attention, and scheduler attribution is
-not attempted. Runtime anomaly
-codes are `mission_cursor_mismatch`, `failed_task_without_attention`,
-`running_without_attempt_id`, `attempt_cursor_mismatch`,
-`malformed_attempt_handoff`, `completed_attempt_unreconciled`, and
-`stale_running_candidate`. Persisted state, derived state, shadow action, and
-shadow reason are closed categorical fields rather than arbitrary display
-strings.
+For `--all`, non-strict mode exits zero when at least one project is readable;
+strict mode exits nonzero when any failure exists. Empty roots exit zero in both
+modes. All-failed roots exit nonzero in both modes. JSON failure objects contain
+only bounded nullable `project_id` and a code from `invalid_project_id`,
+`malformed_cursor`, `project_not_found`, `snapshot_changed`,
+`unsafe_cursor`, or `unsafe_project_path`.
 
-Attempt timing accepts the existing UTC filename timestamp form
-`YYYY-MM-DDTHH-MM-SSZ` with an optional four-digit parallel suffix. The
-timestamp portion is ASCII and calendar-valid. Numeric UTC construction now
-preserves that operator-visible grammar without loading `_strptime` or
-`calendar` during a cold first observation; no attempt-file rename or cursor
-migration is required.
+### Schema-v2 migration
 
-## Validated capture performance
+Schema v2 is an approved hard cut, not a compatibility layer. The former
+schema-v1 nested counts, task rows, attempt timing, anomaly bodies, shadow
+scheduling, detail aliases, and alternate modes are removed. Consumers must
+switch atomically to the schema-v2 fields above; there is no version
+negotiation or legacy output flag. The observer remains non-persistent, so this
+requires no cursor or project-data migration.
 
-`OPT-OBS-001` compares fixed base `2d393cf1` with the sealed implementation
-tree `42d84aed5c0f96e3ca0e61f1fde1cd750a7fc8db` under CPython 3.13.12. The 19
-public cases and the prospectively committed v3 case produced exact normalized
-output, deterministic fields, and unchanged observed trees. Across the six
-public 10/40-history cases the candidate read no contract prose or irrelevant
-history bodies, reduced read bytes by at least 96.486%, and had a maximum
-median traced peak of 86,889 bytes. The v3 case selected 6 rather than 128
-files, read 1,529 rather than 63,167,217 bytes, and reduced median traced peak
-from 64,846,835 to 85,044 bytes. These are observer capture/cold-start results,
-not mission elapsed-time savings.
-
-The evidence chronology remains part of the result. V1 is incomplete negative
-evidence: it failed the public memory guardrail and lacked a frozen held-out
-derivation, input hash, and oracle. V2 was prospectively reproducible but also
-failed: its candidate held-out peak was 1,221,623 bytes, above the 307,200-byte
-ceiling, because cold `datetime.strptime` loaded `_strptime` and `calendar`
-inside the measured region. Only the later, prospectively frozen v3 result is
-acceptance evidence for the parser repair. Warm-cache latency was recorded as
-a secondary metric and is not generalized beyond the measured cases.
-
-Schema version 1 and persisted cursor formats are unchanged. The hardening
-requires no data migration; rolling back means reverting this release's
-product and documentation changes and reinstalling the preceding wheel.
-Existing projects must then be checked with focused observer/CLI coverage and
-a before/after tree inventory, because observation must not mutate runtime
-cursors in either direction.
+The CLI imports the status implementation only after `observe-project` is
+selected (including its command help). Global help, initialization, ordinary
+project operations, and MCP startup do not load it.
 
 ## Deferred iteration-speed work
 
@@ -328,12 +322,9 @@ No accepted repository ADR currently changes this architecture.
 
 ## Known limitations
 
-The approved base's overlapping-writer
-[`BASE-SCHEDULER-DEFECT-001`](../../evals/baseline/fixtures/concurrent-writers.json)
-fixture remains historical characterization only; current dispatch behavior is
-governed by `ARCH-DISPATCH-001`.
+The approved base's overlapping-writer behavior remains historical
+characterization only; current dispatch behavior is governed by
+`ARCH-DISPATCH-001`.
 
-Provider adapters at the approved base also select unrestricted modes
-implicitly. That is the non-normative
-[`BASE-CAPABILITY-DEFECT-001`](../../evals/baseline/fixtures/implicit-unrestricted-defaults.json)
-observation.
+Provider adapters at the approved base also selected unrestricted modes
+implicitly. That remains a non-normative historical observation.

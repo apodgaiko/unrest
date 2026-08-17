@@ -20,7 +20,6 @@ Requirements:
 - [`uv`](https://docs.astral.sh/uv/)
 - Node.js 22+ and `npm`
 - Claude Code or Codex as the orchestrator host
-- Optionally, Hermes for ACP child roles
 
 Clone the repository and install the Python environment:
 
@@ -52,6 +51,10 @@ server and installs the `/unrest` skill and its managed assets. Existing model,
 reasoning, sandbox, feature, and unrelated MCP settings are preserved. Restart
 the host after setup, then run:
 
+Fresh homes are supported: the managed `.claude` or `.codex` tree is created
+only beneath the existing home directory after all destination paths pass the
+same symlink and non-directory checks used by atomic persistence.
+
 ```text
 /unrest <your mission>
 ```
@@ -66,17 +69,22 @@ uv run unrest init --scope project --workspace-dir /path/to/project --agent code
 Project scope is the default, so `--scope project` may be omitted. Start the
 selected host in the initialized workspace and give it the generated
 orchestrator prompt: `.claude/orchestrator_prompt.md`,
-or `.codex/orchestrator_prompt.md`.
+or `.codex/orchestrator_prompt.md`. Initialization compares every bundled
+provider asset with its packaged authoritative bytes and `0644` mode. Each
+bounded asset group reports deterministic `created`, `repaired`, and `verified`
+counts; repeated commands against unchanged state produce identical verified
+output without rewriting exact assets. Corrupt, truncated, or wrong-mode
+managed assets are atomically repaired without replacing unrelated host files.
 
-Hermes is supported for ACP child roles, not as an orchestrator host. Select it
-with `--worker-provider hermes`, `--validator-provider hermes`, or
-`--terminal-reviewer-provider hermes` while using Claude Code or Codex as the
-orchestrator. For example:
+## Inspect status
 
-```bash
-uv run unrest init --scope project --workspace-dir /path/to/project \
-  --agent claude --worker-provider hermes
-```
+`unrest observe-project PROJECT_ID` prints a read-only project snapshot;
+`unrest observe-project --all --strict --format json` emits the closed schema-v2
+aggregate and exits nonzero if any project cannot be read. Schema v2 replaces
+the former nested counts, task rows, attempt timing, anomaly bodies, shadow
+scheduling, and detail aliases. Consumers must switch atomically: there is no
+legacy output flag or version negotiation. Existing persisted project and
+mission records remain schema version 1 and require no data migration.
 
 ## How it works
 
@@ -105,11 +113,23 @@ credential, and approval authority; unrestricted development access requires
 the explicit `--unsafe-development-unrestricted` opt-in. Unsupported provider,
 role, policy, or profile combinations fail closed before mission work starts.
 
-Repository governance is executable rather than advisory. The public
-`check-repository`, `check-governance`, and `check-commit` commands validate
-protected surfaces, canonical schemas and metadata, generated baselines,
-documentation references, and capability-policy assets. CI also exercises the
-built wheel to prove packaged policy discovery and fail-closed startup.
+The public `check-repository` development command performs the finite Lean Core
+repository checks: required guidance and references, component ownership,
+packaged runtime-policy loadability, and required CI lanes and commands. CI also
+exercises the built wheel to prove packaged policy discovery and fail-closed
+startup. The former governance/commit-message commands, generated historical
+baseline, duplicate root schemas, and protected-surface policy are withdrawn in
+v0.2 rather than compatibility-shimmed.
+
+## Troubleshooting host setup
+
+Initialization fails closed when a managed Claude path, including
+`.claude/settings.json`, is a symlink, malformed, or not a regular file. Remove
+or replace the unsafe filesystem entry yourself, then rerun `unrest init`; Unrest
+does not follow the link or overwrite its target. Report the path kind and the
+bounded error code, never credential values, environment dumps, settings file
+bodies, prompts, or generated reports. The same value-free rule applies to bug
+reports and release evidence.
 
 ## Why validation matters
 
@@ -123,8 +143,8 @@ is information for the next iteration, not paperwork to route around.
 
 | Path | Purpose |
 | --- | --- |
-| [`src/unrest_harness/`](src/unrest_harness/) | CLI, MCP server, runtime, bundled prompts, skills, and provider definitions |
-| [`tests/`](tests/) | Hermetic unit and integration tests plus opt-in live ACP smoke tests |
+| `src/unrest_harness/` | CLI, MCP server, runtime, bundled prompts, skills, and provider definitions |
+| `tests/` | Hermetic unit and integration tests plus opt-in live ACP smoke tests |
 | [`docs/lineage.md`](docs/lineage.md) | Source lineage, imported baselines, and attribution |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Lint, types, tests, build, and installed-wheel smoke checks |
 
@@ -148,13 +168,23 @@ uv run unrest check-repository
 uv run pytest -q <milestone-test-paths>
 ```
 
-Record why a focused check type is inapplicable when necessary. A frozen
-release candidate runs the full source suite exactly once on Python 3.13 with
-`env -u CODEX_PATH uv run pytest -q`; Python 3.11 and 3.12 run lightweight
+Record why a focused check type is inapplicable when necessary. Before freezing
+a release candidate, verify the Python and uv versions, run focused checks, and
+prove in the intended execution lane that a tiny loopback socket can bind. None
+of these preflights may invoke the full source suite. Freeze the resulting
+tracked and untracked source binding, then run the full source suite exactly
+once on Python 3.13 with `env -u CODEX_PATH uv run pytest -q`, retaining its raw
+stdout, stderr, exit code, timing, environment metadata, and pre/post binding.
+Do not rerun the suite after build. Python 3.11 and 3.12 run lightweight
 compatibility checks. Changes to CLI entry points, bundled assets, package data,
 or MCP surfaces additionally run `uv build`,
 `uv run python tools/check_distribution.py dist`, and the installed-wheel
-lifecycle from an unrelated working directory.
+lifecycle from an unrelated working directory. The distribution check verifies
+complete archive membership and bytes, safely extracts the sdist, and runs all
+14 protected `tests/test_persistence_schema_v1.py` cases from the extracted
+tree while proving the package module, test module, cwd, and effective
+`sys.path` do not leak the checkout. This executable archive proof follows the
+single full source-suite run and does not repeat it.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.
 

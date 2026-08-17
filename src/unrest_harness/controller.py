@@ -40,6 +40,9 @@ from .task_validation import (
 )
 
 
+MAX_ABORT_REASON_BYTES = 4096
+
+
 @dataclass
 class ToolError(Exception):
     code: str
@@ -230,6 +233,19 @@ class ProjectController:
         return self._build_envelope(project_id, dag_mode="full")
 
     def abort_project(self, project_id: str, reason: str) -> Envelope:
+        try:
+            reason_bytes = reason.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ToolError(
+                "invalid_abort_reason", "abort reason is not valid Unicode"
+            ) from exc
+        if not reason.strip():
+            raise ToolError("invalid_abort_reason", "abort reason is empty")
+        if len(reason_bytes) > MAX_ABORT_REASON_BYTES:
+            raise ToolError(
+                "abort_reason_too_large",
+                f"abort reason exceeds {MAX_ABORT_REASON_BYTES} UTF-8 bytes",
+            )
         record = self.store.load_project(project_id)
         state = self.store.load_state(project_id)
         mid = self._current_mission_id(record, state)
