@@ -45,6 +45,7 @@ from unrest_harness.models import (
     TaskList,
     TerminalReviewHandoff,
     ValidateHandoff,
+    ValidationItem,
     WorkHandoff,
 )
 from unrest_harness.storage import ProjectStore
@@ -608,6 +609,7 @@ def test_synthesize_missing_handoff_records_failure(
     handoff = runner._synthesize_and_persist_missing_handoff(
         handoff_path=handoff_path,
         task=task,
+        spawn_ts="2026-05-17T00-00-00Z",
         stop_reason="cancelled",
         exit_code=1,
         stderr="boom",
@@ -715,6 +717,247 @@ def test_missing_end_node_diagnostics_survive_production_dispatch_and_attention(
     assert "stop_reason=refusal" in expected_report
     assert "null attempt identity" not in attention[0].report
     assert len(runtime["report"]) < 2200
+
+
+def test_worker_mcp_readiness_timeout_persists_generation_before_dispatch_return(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ProjectStore(config)
+
+    class RecordingACPNodeDispatcher(ACPNodeDispatcher):
+        returned_handoff: WorkHandoff | None = None
+        persisted_before_return = False
+
+        def dispatch(self, request: DispatchRequest) -> WorkHandoff:
+            handoff = super().dispatch(request)
+            assert isinstance(handoff, WorkHandoff)
+            self.returned_handoff = handoff
+            self.persisted_before_return = store.attempt_path(
+                request.project_id,
+                request.mission_id,
+                request.spawn_ts,
+                request.task.id,
+            ).exists()
+            return handoff
+
+    dispatcher = RecordingACPNodeDispatcher(config, store)
+    started_processes: list[asyncio.subprocess.Process] = []
+    original_start = dispatcher.runner._start_worker_mcp_server
+
+    async def record_worker_mcp_start(**kwargs):
+        process = await original_start(**kwargs)
+        started_processes.append(process)
+        return process
+
+    async def force_readiness_timeout(*_args, **_kwargs):
+        raise TimeoutError
+
+    monkeypatch.setattr(
+        dispatcher.runner,
+        "_start_worker_mcp_server",
+        record_worker_mcp_start,
+    )
+    monkeypatch.setattr(
+        dispatcher.runner,
+        "_wait_for_server_ready",
+        force_readiness_timeout,
+    )
+
+    class UnusedReviewer:
+        def review(
+            self, project_id: str, mission_id: str, spawn_ts: str
+        ) -> TerminalReviewHandoff:
+            raise AssertionError("terminal review must not run for a failed work task")
+
+    controller = ProjectController(config, dispatcher, UnusedReviewer(), store=store)
+    started = controller.start_project("worker MCP timeout regression", str(workspace))
+    project_id = started.projectId
+    mission_id = "mission-001"
+    contract_dir = store.ensure_contract_dir(project_id, mission_id)
+    (contract_dir / "VAL-001.md").write_text("# VAL-001\n\nTest.\n")
+    controller.submit_plan(
+        project_id,
+        TaskList(
+            tasks=[
+                Task(
+                    id="w-timeout",
+                    type="work",
+                    body="wait for worker MCP",
+                    targets=["VAL-001"],
+                    skill="s",
+                )
+            ]
+        ),
+    )
+
+    envelope = controller.advance_project(project_id)
+
+    assert envelope.state.state == "attention_needed"
+    generation = store.load_task_state(project_id, mission_id).tasks[
+        "w-timeout"
+    ].last_attempt
+    assert generation is not None
+    returned = dispatcher.returned_handoff
+    assert returned is not None
+    runtime_path = store.attempt_path(
+        project_id, mission_id, generation, "w-timeout"
+    )
+    durable_path = store.attempt_report_path(
+        project_id, mission_id, generation, "w-timeout"
+    )
+    runtime = json.loads(runtime_path.read_text())
+    durable = durable_path.read_text()
+    attention = store.load_attention(project_id)
+
+    assert len(started_processes) == 1
+    assert started_processes[0].returncode is not None
+    assert dispatcher.persisted_before_return is True
+    assert returned.attempt_id == generation
+    assert runtime["attempt_id"] == generation
+    assert f"attempt_id: {generation}" in durable
+    assert len(attention) == 1
+    assert attention[0].kind == "node_failed"
+    assert attention[0].node_id == "w-timeout"
+    for report in (returned.report, runtime["report"], durable, attention[0].report):
+        assert "Worker MCP server failed to start" in report
+    assert "null attempt identity" not in attention[0].report
+
+
+def test_batch_runner_exception_keeps_request_generation_through_coordinator(
+    config: HarnessConfig,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    role_config = replace(config, max_parallel_nodes=2)
+    store = ProjectStore(role_config)
+
+    class RecordingACPNodeDispatcher(ACPNodeDispatcher):
+        returned_handoffs: list[ValidateHandoff] = []
+
+        def dispatch_batch(
+            self, requests: list[DispatchRequest]
+        ) -> list[ValidateHandoff]:
+            handoffs = super().dispatch_batch(requests)
+            assert all(isinstance(handoff, ValidateHandoff) for handoff in handoffs)
+            self.returned_handoffs = list(handoffs)  # type: ignore[list-item]
+            return self.returned_handoffs
+
+    dispatcher = RecordingACPNodeDispatcher(role_config, store)
+
+    async def run_node_for_batch(**kwargs):
+        task = kwargs["task"]
+        spawn_ts = kwargs["spawn_ts"]
+        if task.id == "v-crash":
+            raise RuntimeError("batch runner exploded before handoff")
+        return ValidateHandoff(
+            node_id=task.id,
+            attempt_id=spawn_ts,
+            done=True,
+            report="sibling passed",
+            items=[ValidationItem(item_id="VAL-GOOD", passed=True)],
+            passed=True,
+        )
+
+    monkeypatch.setattr(dispatcher.runner, "run_node", run_node_for_batch)
+
+    class UnusedReviewer:
+        def review(
+            self, project_id: str, mission_id: str, spawn_ts: str
+        ) -> TerminalReviewHandoff:
+            raise AssertionError("terminal review must not run during batch dispatch")
+
+    controller = ProjectController(
+        role_config,
+        dispatcher,
+        UnusedReviewer(),
+        store=store,
+    )
+    started = controller.start_project("batch runner exception", str(workspace))
+    project_id = started.projectId
+    mission_id = "mission-001"
+    contract_dir = store.ensure_contract_dir(project_id, mission_id)
+    for target in ("VAL-GOOD", "VAL-CRASH"):
+        (contract_dir / f"{target}.md").write_text(f"# {target}\n\nTest.\n")
+    controller.submit_plan(
+        project_id,
+        TaskList(
+            tasks=[
+                Task(
+                    id="w-good",
+                    type="work",
+                    body="prerequisite",
+                    targets=["VAL-GOOD"],
+                    skill="s",
+                ),
+                Task(
+                    id="w-crash",
+                    type="work",
+                    body="prerequisite",
+                    targets=["VAL-CRASH"],
+                    skill="s",
+                ),
+                Task(
+                    id="v-good",
+                    type="validate",
+                    body="validate sibling",
+                    targets=["VAL-GOOD"],
+                    skill="s",
+                    depends_on=["w-good"],
+                ),
+                Task(
+                    id="v-crash",
+                    type="validate",
+                    body="validate crash",
+                    targets=["VAL-CRASH"],
+                    skill="s",
+                    depends_on=["w-crash"],
+                ),
+            ]
+        ),
+    )
+    task_state = store.load_task_state(project_id, mission_id)
+    task_state.set_status("w-good", "cleared")
+    task_state.set_status("w-crash", "cleared")
+    store.save_task_state(project_id, mission_id, task_state)
+
+    envelope = controller.advance_project(project_id, max_steps=1)
+
+    assert envelope.state.state == "attention_needed"
+    task_state = store.load_task_state(project_id, mission_id)
+    generation = task_state.tasks["v-crash"].last_attempt
+    assert generation is not None
+    returned = next(
+        handoff
+        for handoff in dispatcher.returned_handoffs
+        if handoff.node_id == "v-crash"
+    )
+    runtime_path = store.attempt_path(
+        project_id, mission_id, generation, "v-crash"
+    )
+    durable_path = store.attempt_report_path(
+        project_id, mission_id, generation, "v-crash"
+    )
+    runtime = json.loads(runtime_path.read_text())
+    durable = durable_path.read_text()
+    attention = store.load_attention(project_id)
+
+    assert returned.attempt_id == generation
+    assert runtime["attempt_id"] == generation
+    assert f"attempt_id: {generation}" in durable
+    assert len(attention) == 1
+    assert attention[0].kind == "node_attention"
+    assert attention[0].node_id == "v-crash"
+    expected_diagnostic = (
+        "Dispatcher crashed before a handoff: RuntimeError: "
+        "batch runner exploded before handoff"
+    )
+    assert returned.report == expected_diagnostic
+    assert runtime["report"] == expected_diagnostic
+    assert expected_diagnostic in durable
+    assert expected_diagnostic in attention[0].report
+    assert "null attempt identity" not in attention[0].report
 
 
 @pytest.mark.parametrize("provider_name", ("claude", "codex"))
@@ -1304,6 +1547,7 @@ def test_missing_handoff_includes_bounded_agent_diagnostics(config: HarnessConfi
     handoff = runner._synthesize_and_persist_missing_handoff(
         handoff_path=path,
         task=task,
+        spawn_ts="2026-05-17T00-00-01Z",
         stop_reason="end_turn",
         exit_code=0,
         stderr="",

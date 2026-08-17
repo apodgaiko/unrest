@@ -14,9 +14,23 @@ ROOT = Path(__file__).resolve().parents[2]
 CROSSWALK_PATH = ROOT / "docs/release/lean-core-v0.2-evidence-crosswalk.json"
 AUDIT_PATH = ROOT / "docs/release/lean-core-v0.2-review-audit.json"
 CROSSWALK = json.loads(CROSSWALK_PATH.read_text(encoding="utf-8"))
+
+
+def _record_nodes(record: dict[str, object]) -> tuple[str, ...]:
+    if "nodes" in record:
+        nodes = record["nodes"]
+        assert isinstance(nodes, list) and nodes
+        assert all(isinstance(node, str) for node in nodes)
+        return tuple(nodes)
+    node = record["node"]
+    assert isinstance(node, str)
+    return (node,)
+
+
 SCENARIOS = tuple(
-    (identifier, identifier, record["node"])
+    (f"{identifier}:{index}", identifier, node)
     for identifier, record in CROSSWALK["mappings"].items()
+    for index, node in enumerate(_record_nodes(record))
 ) + tuple(
     (f"hard-cut:{record['surface']}", record["surface"], record["node"])
     for record in CROSSWALK["hard_cut_results"]
@@ -50,8 +64,13 @@ def test_crosswalk_is_complete_and_every_mapped_node_passes(lean_reference_run) 
     mappings = CROSSWALK["mappings"]
     assert set(mappings) == behavior | adr | sinks
     assert len(sinks) == 17
-    assert all(record == {"node": record["node"], "candidate_result": "pass"} for record in mappings.values())
-    expected_nodes = {record["node"] for record in mappings.values()}
+    assert all(
+        set(record) in ({"node", "candidate_result"}, {"nodes", "candidate_result"})
+        for record in mappings.values()
+    )
+    expected_nodes = {
+        node for record in mappings.values() for node in _record_nodes(record)
+    }
     expected_nodes.update(record["node"] for record in CROSSWALK["hard_cut_results"])
     assert expected_nodes == set(lean_reference_run.nodes)
     assert all(

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "candidate": {
     "files": 103,
-    "sha256": "0c6f3d229ff5070110461952334c14109fa0cb3395864efb8b5e23d9ef11c4d9",
+    "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7",
     "paths": [
       "pyproject.toml",
       "uv.lock",
@@ -24,7 +24,7 @@
       "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
     },
     "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
-    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217917, "sha256": "5d17d808d2167afc8829060361ae04299b27dce211035887352ff503d959f579"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 303769, "sha256": "5248c95fbb908214d38b03661beaab0ab0bbabb0ea9c54434d0ed0a905053439"}},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217993, "sha256": "52962ff2db2598d8ed086b0541ff59fa7f3b146c37ab563fcff29d4053460e51"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 305118, "sha256": "e7b6c59d9c0e148e151774e1b527bfc2c6238fd8721e6556ed24ee15162d0bdf"}},
     "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
     "evidence_packet": "mission attempt for VAL-LOCAL-RELEASE-SEAL on 2026-08-16"
   },
@@ -103,7 +103,7 @@
     "LEAN-PERSIST-002": {"node": "tests/test_storage.py::TestAtomicWriteText::test_preserves_mode_and_deterministic_bytes", "candidate_result": "pass"},
     "LEAN-PERSIST-003": {"node": "tests/test_storage.py::TestProjectLifecycle::test_project_worker_overrides_round_trip_and_legacy_defaults", "candidate_result": "pass"},
     "LEAN-PERSIST-004": {"node": "tests/test_coordinator.py::TestResume::test_resume_picks_up_attempt_landed_while_down", "candidate_result": "pass"},
-    "LEAN-PERSIST-005": {"node": "tests/test_acp_runner.py::test_synthesize_missing_handoff_records_failure", "candidate_result": "pass"},
+    "LEAN-PERSIST-005": {"nodes": ["tests/test_acp_runner.py::test_missing_end_node_diagnostics_survive_production_dispatch_and_attention", "tests/test_acp_runner.py::test_worker_mcp_readiness_timeout_persists_generation_before_dispatch_return", "tests/test_acp_runner.py::test_batch_runner_exception_keeps_request_generation_through_coordinator"], "candidate_result": "pass"},
     "LEAN-SCHEDULE-001": {"node": "tests/test_runnable_selection.py::TestRunnableSelection::test_capacity_slice_containing_work_selects_one_authored_task", "candidate_result": "pass"},
     "LEAN-SCHEDULE-002": {"node": "tests/test_runnable_selection.py::TestRunnableSelection::test_validator_only_capacity_is_clamped_and_filled", "candidate_result": "pass"},
     "LEAN-SCHEDULE-003": {"node": "tests/test_coordinator.py::TestValidatorDissentFailsGate::test_validator_omitting_items_fails_gate", "candidate_result": "pass"},

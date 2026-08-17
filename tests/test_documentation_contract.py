@@ -335,6 +335,16 @@ def test_follow_up_review_claims_have_exact_individual_authority() -> None:
     assert reconciliation["source_sha256"]["follow_up_review"] == digest
     assert "not independently recomputed" in reconciliation["rule"]
 
+    n1_production_regressions = [
+        "tests/test_acp_runner.py::test_missing_end_node_diagnostics_survive_production_dispatch_and_attention",
+        "tests/test_acp_runner.py::test_worker_mcp_readiness_timeout_persists_generation_before_dispatch_return",
+        "tests/test_acp_runner.py::test_batch_runner_exception_keeps_request_generation_through_coordinator",
+    ]
+    assert reconciliation["r3_n1"] == {
+        "disposition": "substantiated-fixed",
+        "production_regressions": n1_production_regressions,
+    }
+
     claims = ledger["claims"]
     claim_ids = [claim["id"] for claim in claims]
     assert len(claim_ids) == len(set(claim_ids))
@@ -350,10 +360,16 @@ def test_follow_up_review_claims_have_exact_individual_authority() -> None:
         "deferred",
     ]
     assert all(claim["disposition"] in ledger["allowed_dispositions"] for claim in claims)
-    assert any(
-        citation.endswith("::test_missing_end_node_diagnostics_survive_production_dispatch_and_attention")
-        for citation in follow_up[0]["citations"]
+    assert follow_up[0]["citations"][1:] == n1_production_regressions
+    crosswalk = json.loads(
+        (ROOT / "docs/release/lean-core-v0.2-evidence-crosswalk.json").read_text(
+            encoding="utf-8"
+        )
     )
+    assert crosswalk["mappings"]["LEAN-PERSIST-005"] == {
+        "nodes": n1_production_regressions,
+        "candidate_result": "pass",
+    }
     assert any(
         citation.endswith("::test_projection_excludes_raw_wrappers_and_preserves_transformed_controls")
         for citation in follow_up[1]["citations"]

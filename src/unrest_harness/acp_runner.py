@@ -1110,8 +1110,16 @@ class ACPNodeRunner:
                 if mcp_process.returncode is None:
                     mcp_process.terminate()
                 await self._close_mcp_process(mcp_process, secrets)
-                return self._synthesize_missing_handoff(
-                    task, summary="Worker MCP server failed to start"
+                return self._synthesize_and_persist_missing_handoff(
+                    handoff_path=handoff_path,
+                    task=task,
+                    spawn_ts=spawn_ts,
+                    summary="Worker MCP server failed to start",
+                    stop_reason=None,
+                    exit_code=mcp_process.returncode,
+                    stderr="",
+                    session_error=None,
+                    credentials=secrets,
                 )
             except BaseException:
                 if mcp_process.returncode is None:
@@ -1263,6 +1271,7 @@ class ACPNodeRunner:
         return self._synthesize_and_persist_missing_handoff(
             handoff_path=handoff_path,
             task=task,
+            spawn_ts=spawn_ts,
             stop_reason=prompt_stop_reason,
             exit_code=worker_exit_code,
             stderr=worker_stderr,
@@ -1805,14 +1814,26 @@ class ACPNodeRunner:
             raise ValueError("attempt_id does not match dispatched generation")
         return handoff
 
-    def _synthesize_missing_handoff(self, task: Task, *, summary: str = "") -> NodeHandoff:
+    def _synthesize_missing_handoff(
+        self,
+        task: Task,
+        *,
+        spawn_ts: str,
+        summary: str = "",
+    ) -> NodeHandoff:
         report = summary or "Agent session ended without calling end_node."
         if task.type == "validate":
             return ValidateHandoff(
-                node_id=task.id, done=False, report=report, items=[], passed=False
+                node_id=task.id,
+                attempt_id=spawn_ts,
+                done=False,
+                report=report,
+                items=[],
+                passed=False,
             )
         return WorkHandoff(
             node_id=task.id,
+            attempt_id=spawn_ts,
             done=False,
             report=report,
             request_attention=False,
@@ -1823,6 +1844,8 @@ class ACPNodeRunner:
         *,
         handoff_path: Path,
         task: Task,
+        spawn_ts: str,
+        summary: str = "",
         stop_reason: str | None,
         exit_code: int | None,
         stderr: str,
@@ -1830,7 +1853,12 @@ class ACPNodeRunner:
         agent_output: str = "",
         credentials: dict[str, str] | None = None,
     ) -> NodeHandoff:
-        parts: list[str] = ["Agent session ended without calling end_node."]
+        path_attempt_id = handoff_path.stem.split("__", 1)[0]
+        if path_attempt_id != spawn_ts:
+            raise ValueError("handoff path does not match dispatched generation")
+        parts: list[str] = [
+            summary or "Agent session ended without calling end_node."
+        ]
         if session_error:
             parts.append(f"acp_error={session_error}")
         if stop_reason:
@@ -1842,9 +1870,10 @@ class ACPNodeRunner:
         if agent_output:
             parts.append(f"agent_output={_truncate_text(agent_output[-4000:], limit=2000)}")
         summary = redact_credential_values(" ".join(parts), credentials or {})
-        attempt_id = handoff_path.stem.split("__", 1)[0]
-        handoff = self._synthesize_missing_handoff(task, summary=summary).model_copy(
-            update={"attempt_id": attempt_id}
+        handoff = self._synthesize_missing_handoff(
+            task,
+            spawn_ts=spawn_ts,
+            summary=summary,
         )
         atomic_write_json(
             handoff_path,
@@ -1930,6 +1959,7 @@ class ACPNodeDispatcher:
                     )
                     handoff = self.runner._synthesize_missing_handoff(
                         request.task,
+                        spawn_ts=request.spawn_ts,
                         summary=summary,
                     )
                     self.store.save_attempt(

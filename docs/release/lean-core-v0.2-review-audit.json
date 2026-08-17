@@ -8,7 +8,15 @@
       "review_two": "601d8cbe55039a25853ec10eb53560144f95787ee907bd394e6f369857766ef6",
       "follow_up_review": "0b4195a00dac7a2269b08ac78306a6adf8260f58785f8e34cbb7e29188cf666d"
     },
-    "rule": "Every review claim is dispositioned individually; review-head facts are not final-head authority. The follow-up digest is user-authorized from the mission brief and was not independently recomputed because no stable source-byte locator was supplied."
+    "rule": "Every review claim is dispositioned individually; review-head facts are not final-head authority. The follow-up digest is user-authorized from the mission brief and was not independently recomputed because no stable source-byte locator was supplied.",
+    "r3_n1": {
+      "disposition": "substantiated-fixed",
+      "production_regressions": [
+        "tests/test_acp_runner.py::test_missing_end_node_diagnostics_survive_production_dispatch_and_attention",
+        "tests/test_acp_runner.py::test_worker_mcp_readiness_timeout_persists_generation_before_dispatch_return",
+        "tests/test_acp_runner.py::test_batch_runner_exception_keeps_request_generation_through_coordinator"
+      ]
+    }
   },
   "workspace_boundary": {
     "status": "durable-observable-evidence-only",
@@ -22,7 +30,7 @@
   },
   "candidate_binding": {
     "files": 103,
-    "sha256": "0c6f3d229ff5070110461952334c14109fa0cb3395864efb8b5e23d9ef11c4d9",
+    "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7",
     "paths": [
       "pyproject.toml",
       "uv.lock",
@@ -38,14 +46,14 @@
   },
   "commit_reproducible_finalization": {
     "status": "final-current-rollback-authority",
-    "binding": {"files": 103, "sha256": "0c6f3d229ff5070110461952334c14109fa0cb3395864efb8b5e23d9ef11c4d9"},
+    "binding": {"files": 103, "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7"},
     "checkpoint_authority": {
       "decision": "Decision 001",
       "local_probe": {"status": "failed-ordering-probe", "command": "env -u CODEX_PATH uv run pytest -q", "result": "919 passed, 7 skipped, 2 failed in 220.56s; exit 1", "invocations": 1, "reruns": 0, "failing_nodeids": ["tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers", "tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology"], "evidence_source": "mission attempt W-FREEZE 2026-08-13T13-25-57Z"},
       "clean_frozen_candidate_verdict": {"status": "pending", "owner": "VAL-CI-EXACT", "surface": "exact-head Python 3.13 CI"}
     },
     "superseded_checkpoint": {"status": "historical-superseded-chronology-only", "result": "899 passed, 7 skipped, 0 failed in 170.80s; exit 0", "transcript_sha256": "682852deb33039f01ddc84d5004d877dc3c53d56e24e0cbc923bb300d930fc2a"},
-    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217917, "sha256": "5d17d808d2167afc8829060361ae04299b27dce211035887352ff503d959f579"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 303769, "sha256": "5248c95fbb908214d38b03661beaab0ab0bbabb0ea9c54434d0ed0a905053439"}},
+    "archives": {"wheel": {"filename": "unrest_harness-0.2.0-py3-none-any.whl", "bytes": 217993, "sha256": "52962ff2db2598d8ed086b0541ff59fa7f3b146c37ab563fcff29d4053460e51"}, "sdist": {"filename": "unrest_harness-0.2.0.tar.gz", "bytes": 305118, "sha256": "e7b6c59d9c0e148e151774e1b527bfc2c6238fd8721e6556ed24ee15162d0bdf"}},
     "measurement_report": "docs/release/lean-core-v0.2-measurements.md",
     "evidence_packet": "mission attempt for VAL-LOCAL-RELEASE-SEAL on 2026-08-16"
   },
