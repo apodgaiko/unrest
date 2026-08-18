@@ -1,0 +1,2372 @@
+{
+  "common_record_schema": {
+    "$id": "Receipt.v1/common",
+    "additional_properties": false,
+    "properties": {
+      "append_only_disposition": {
+        "const": "immutable",
+        "type": "string"
+      },
+      "artifact_refs": {
+        "items": {
+          "additional_properties": false,
+          "properties": {
+            "artifact_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "artifact_id": {
+              "min_length": 1,
+              "type": "string"
+            },
+            "media_type": {
+              "min_length": 1,
+              "type": "string"
+            },
+            "size_bytes": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "artifact_id",
+            "artifact_digest",
+            "media_type",
+            "size_bytes"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "chronology_is_authority": {
+        "const": false,
+        "type": "boolean"
+      },
+      "consumers": {
+        "items": {
+          "min_length": 1,
+          "type": "string"
+        },
+        "type": "array",
+        "unique_items": true
+      },
+      "cost": {
+        "additional_properties": false,
+        "properties": {
+          "accounting_boundary": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "completeness": {
+            "enum": [
+              "complete",
+              "partial",
+              "not_applicable"
+            ],
+            "type": "string"
+          },
+          "quantities": {
+            "items": {
+              "additional_properties": false,
+              "properties": {
+                "amount": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
+                },
+                "unit": {
+                  "min_length": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amount",
+                "unit"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "accounting_boundary",
+          "completeness",
+          "quantities"
+        ],
+        "type": "object"
+      },
+      "dependencies": {
+        "items": {
+          "additional_properties": false,
+          "properties": {
+            "dependency_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "dependency_id": {
+              "min_length": 1,
+              "type": "string"
+            },
+            "dependency_kind": {
+              "enum": [
+                "accepted_working_point",
+                "artifact",
+                "base",
+                "budget",
+                "candidate",
+                "cleanup_receipt.v1",
+                "context",
+                "environment",
+                "evaluation_receipt.v1",
+                "evaluator",
+                "evidence",
+                "integration_receipt.v1",
+                "patch_receipt.v1",
+                "policy",
+                "promotion_receipt.v1",
+                "provider_configuration",
+                "review",
+                "review_receipt.v1",
+                "rollback_receipt.v1",
+                "route_profile",
+                "run",
+                "run_receipt.v1",
+                "secret_set_version",
+                "seed",
+                "workload",
+                "workspace_lease",
+                "workspace_receipt.v1"
+              ],
+              "type": "string"
+            },
+            "dependency_type": {
+              "enum": [
+                "identity",
+                "receipt"
+              ],
+              "type": "string"
+            },
+            "must_be_fresh": {
+              "type": "boolean"
+            },
+            "role": {
+              "min_length": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "dependency_type",
+            "dependency_kind",
+            "dependency_id",
+            "dependency_digest",
+            "role",
+            "must_be_fresh"
+          ],
+          "type": "object"
+        },
+        "type": "array",
+        "unique_by": [
+          "dependency_type",
+          "dependency_kind",
+          "dependency_id",
+          "role"
+        ]
+      },
+      "deviations": {
+        "items": {
+          "additional_properties": false,
+          "properties": {
+            "code": {
+              "min_length": 1,
+              "type": "string"
+            },
+            "decision_ref": {
+              "min_length": 1,
+              "type": "string"
+            },
+            "interpretation_effect": {
+              "min_length": 1,
+              "type": "string"
+            },
+            "scope": {
+              "min_length": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "decision_ref",
+            "scope",
+            "interpretation_effect"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "freshness_policy": {
+        "additional_properties": false,
+        "properties": {
+          "dependency_mode": {
+            "const": "exact_typed_set",
+            "type": "string"
+          },
+          "expiry": {
+            "one_of": [
+              {
+                "additional_properties": false,
+                "properties": {
+                  "state": {
+                    "const": "absent",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "type": "object"
+              },
+              {
+                "additional_properties": false,
+                "properties": {
+                  "state": {
+                    "const": "present",
+                    "type": "string"
+                  },
+                  "value": {
+                    "additional_properties": false,
+                    "properties": {
+                      "expires_at": {
+                        "format": "rfc3339-utc",
+                        "type": "string"
+                      },
+                      "trusted_clock_id": {
+                        "min_length": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "expires_at",
+                      "trusted_clock_id"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "state",
+                  "value"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "policy_id": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "revocation_authority": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "revocation_view": {
+            "one_of": [
+              {
+                "additional_properties": false,
+                "properties": {
+                  "state": {
+                    "const": "absent",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "type": "object"
+              },
+              {
+                "additional_properties": false,
+                "properties": {
+                  "state": {
+                    "const": "present",
+                    "type": "string"
+                  },
+                  "value": {
+                    "additional_properties": false,
+                    "properties": {
+                      "authority_decision_ref": {
+                        "min_length": 1,
+                        "type": "string"
+                      },
+                      "watermark": {
+                        "min_length": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "authority_decision_ref",
+                      "watermark"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "state",
+                  "value"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "unavailable_dependency": {
+            "const": "unverifiable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_id",
+          "dependency_mode",
+          "expiry",
+          "revocation_authority",
+          "revocation_view",
+          "unavailable_dependency"
+        ],
+        "type": "object"
+      },
+      "integrity": {
+        "additional_properties": false,
+        "properties": {
+          "canonicalization": {
+            "const": "canonical-json-v1",
+            "type": "string"
+          },
+          "detached_signature": {
+            "one_of": [
+              {
+                "additional_properties": false,
+                "properties": {
+                  "state": {
+                    "const": "absent",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "type": "object"
+              },
+              {
+                "additional_properties": false,
+                "properties": {
+                  "state": {
+                    "const": "present",
+                    "type": "string"
+                  },
+                  "value": {
+                    "additional_properties": false,
+                    "properties": {
+                      "public_key_id": {
+                        "min_length": 1,
+                        "type": "string"
+                      },
+                      "public_key_version": {
+                        "min_length": 1,
+                        "type": "string"
+                      },
+                      "signature_artifact_digest": {
+                        "pattern": "^sha256:[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "signature_artifact_id": {
+                        "min_length": 1,
+                        "type": "string"
+                      },
+                      "suite_id": {
+                        "min_length": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "public_key_id",
+                      "public_key_version",
+                      "signature_artifact_digest",
+                      "signature_artifact_id",
+                      "suite_id"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "state",
+                  "value"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "digest_algorithm": {
+            "const": "sha256",
+            "type": "string"
+          },
+          "domain": {
+            "const": "unrest.receipt.v1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "canonicalization",
+          "detached_signature",
+          "digest_algorithm",
+          "domain"
+        ],
+        "type": "object"
+      },
+      "issuer": {
+        "additional_properties": false,
+        "properties": {
+          "identity_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "issuer_id": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "issuer_kind": {
+            "enum": [
+              "accepted_working_point",
+              "artifact",
+              "base",
+              "budget",
+              "candidate",
+              "context",
+              "environment",
+              "evaluator",
+              "evidence",
+              "policy",
+              "provider_configuration",
+              "review",
+              "route_profile",
+              "run",
+              "secret_set_version",
+              "seed",
+              "workload",
+              "workspace_lease"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_digest",
+          "issuer_id",
+          "issuer_kind"
+        ],
+        "type": "object"
+      },
+      "issuer_authority": {
+        "additional_properties": false,
+        "properties": {
+          "authority_class": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "decision_ref": {
+            "min_length": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "authority_class",
+          "decision_ref"
+        ],
+        "type": "object"
+      },
+      "observed_at": {
+        "format": "rfc3339-utc",
+        "type": "string"
+      },
+      "outcome": {
+        "min_length": 1,
+        "type": "string"
+      },
+      "receipt_digest": {
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "receipt_id": {
+        "min_length": 1,
+        "type": "string"
+      },
+      "receipt_kind": {
+        "enum": [
+          "cleanup_receipt.v1",
+          "evaluation_receipt.v1",
+          "integration_receipt.v1",
+          "patch_receipt.v1",
+          "promotion_receipt.v1",
+          "review_receipt.v1",
+          "rollback_receipt.v1",
+          "run_receipt.v1",
+          "workspace_receipt.v1"
+        ],
+        "type": "string"
+      },
+      "schema_version": {
+        "const": 1,
+        "type": "integer"
+      },
+      "sequence": {
+        "maximum": 9007199254740991,
+        "minimum": -9007199254740991,
+        "type": "integer"
+      },
+      "subject": {
+        "additional_properties": false,
+        "properties": {
+          "subject_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "subject_id": {
+            "min_length": 1,
+            "type": "string"
+          },
+          "subject_kind": {
+            "enum": [
+              "accepted_working_point",
+              "artifact",
+              "base",
+              "budget",
+              "candidate",
+              "context",
+              "environment",
+              "evaluator",
+              "evidence",
+              "policy",
+              "provider_configuration",
+              "review",
+              "route_profile",
+              "run",
+              "secret_set_version",
+              "seed",
+              "workload",
+              "workspace_lease"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_digest",
+          "subject_id",
+          "subject_kind"
+        ],
+        "type": "object"
+      },
+      "terminal_disposition": {
+        "min_length": 1,
+        "type": "string"
+      }
+    },
+    "required": [
+      "append_only_disposition",
+      "artifact_refs",
+      "chronology_is_authority",
+      "consumers",
+      "cost",
+      "dependencies",
+      "deviations",
+      "freshness_policy",
+      "integrity",
+      "issuer",
+      "issuer_authority",
+      "observed_at",
+      "outcome",
+      "receipt_digest",
+      "receipt_id",
+      "receipt_kind",
+      "schema_version",
+      "sequence",
+      "subject",
+      "terminal_disposition"
+    ],
+    "type": "object"
+  },
+  "common_required_fields": [
+    "append_only_disposition",
+    "artifact_refs",
+    "chronology_is_authority",
+    "consumers",
+    "cost",
+    "dependencies",
+    "deviations",
+    "freshness_policy",
+    "integrity",
+    "issuer",
+    "issuer_authority",
+    "observed_at",
+    "outcome",
+    "receipt_digest",
+    "receipt_id",
+    "receipt_kind",
+    "schema_version",
+    "sequence",
+    "subject",
+    "terminal_disposition"
+  ],
+  "dependency_record_schema": {
+    "additional_properties": false,
+    "properties": {
+      "dependency_digest": {
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "dependency_id": {
+        "min_length": 1,
+        "type": "string"
+      },
+      "dependency_kind": {
+        "enum": [
+          "accepted_working_point",
+          "artifact",
+          "base",
+          "budget",
+          "candidate",
+          "cleanup_receipt.v1",
+          "context",
+          "environment",
+          "evaluation_receipt.v1",
+          "evaluator",
+          "evidence",
+          "integration_receipt.v1",
+          "patch_receipt.v1",
+          "policy",
+          "promotion_receipt.v1",
+          "provider_configuration",
+          "review",
+          "review_receipt.v1",
+          "rollback_receipt.v1",
+          "route_profile",
+          "run",
+          "run_receipt.v1",
+          "secret_set_version",
+          "seed",
+          "workload",
+          "workspace_lease",
+          "workspace_receipt.v1"
+        ],
+        "type": "string"
+      },
+      "dependency_type": {
+        "enum": [
+          "identity",
+          "receipt"
+        ],
+        "type": "string"
+      },
+      "must_be_fresh": {
+        "type": "boolean"
+      },
+      "role": {
+        "min_length": 1,
+        "type": "string"
+      }
+    },
+    "required": [
+      "dependency_type",
+      "dependency_kind",
+      "dependency_id",
+      "dependency_digest",
+      "role",
+      "must_be_fresh"
+    ],
+    "type": "object"
+  },
+  "foundation_registry_receipt_types": [
+    "cleanup_receipt.v1",
+    "evaluation_receipt.v1",
+    "integration_receipt.v1",
+    "patch_receipt.v1",
+    "promotion_receipt.v1",
+    "review_receipt.v1",
+    "rollback_receipt.v1",
+    "run_receipt.v1",
+    "workspace_receipt.v1"
+  ],
+  "freshness_statuses": [
+    "fresh",
+    "revoked",
+    "stale",
+    "unverifiable"
+  ],
+  "receipt_families": [
+    {
+      "artifact_rule": "cleanup inventory and bounded unresolved-resource references only",
+      "consumers": [
+        "evidence_store",
+        "workspace_authority"
+      ],
+      "expiry_rule": "policy-defined cleanup claim review; chronology cannot prove absence",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "evidence_store",
+            "workspace_authority"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "policy",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "capability_policy_digest"
+            },
+            {
+              "dependency_kind": "environment",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "environment_digest"
+            },
+            {
+              "dependency_kind": "workspace_lease",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "workspace_lease_id"
+            },
+            {
+              "dependency_kind": "workspace_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "workspace_receipt_evidence"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "workspace_cleanup_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "workspace_cleanup_authority"
+        },
+        "outcome": {
+          "enum": [
+            "cleanup_failed",
+            "released",
+            "resources_unsettled"
+          ]
+        },
+        "receipt_kind": {
+          "const": "cleanup_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "workspace_lease"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "attention",
+            "released",
+            "unsettled"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/cleanup_receipt.v1",
+      "golden_record_digest": "sha256:5afab45324fe310b83d2f142924e418e8990c93a638bbbd2731a1f4db9f03a35",
+      "golden_vector_id": "GOLDEN-RECEIPT-CLEANUP-RECEIPT",
+      "id": "cleanup_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "workspace_cleanup_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "policy",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "capability_policy_digest"
+        },
+        {
+          "dependency_kind": "environment",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "environment_digest"
+        },
+        {
+          "dependency_kind": "workspace_lease",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "workspace_lease_id"
+        },
+        {
+          "dependency_kind": "workspace_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "workspace_receipt_evidence"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "capability_policy_digest",
+        "environment_digest",
+        "upstream_receipt_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "released",
+          "terminal_disposition": "released"
+        }
+      ],
+      "outcomes": [
+        "cleanup_failed",
+        "released",
+        "resources_unsettled"
+      ],
+      "revocation_authority": "workspace_cleanup_authority",
+      "signature_policy": "deferred_optional",
+      "subject_kind": "workspace_lease",
+      "terminal_dispositions": [
+        "attention",
+        "released",
+        "unsettled"
+      ]
+    },
+    {
+      "artifact_rule": "typed result, measurement, and bounded failure artifacts without reports or raw output",
+      "consumers": [
+        "evidence_store",
+        "promotion_authority",
+        "reviewer"
+      ],
+      "expiry_rule": "stale on any mandatory identity/upstream change; optional policy expiry",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "evidence_store",
+            "promotion_authority",
+            "reviewer"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "accepted_working_point",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "accepted_working_point_digest"
+            },
+            {
+              "dependency_kind": "artifact",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "artifact_digest"
+            },
+            {
+              "dependency_kind": "budget",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "budget_envelope"
+            },
+            {
+              "dependency_kind": "candidate",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "candidate_digest"
+            },
+            {
+              "dependency_kind": "policy",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "capability_policy_digest"
+            },
+            {
+              "dependency_kind": "context",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "context_digest"
+            },
+            {
+              "dependency_kind": "environment",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "environment_digest"
+            },
+            {
+              "dependency_kind": "evaluator",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "evaluator_digest"
+            },
+            {
+              "dependency_kind": "route_profile",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "route_profile_digest"
+            },
+            {
+              "dependency_kind": "run_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "run_receipt_evidence"
+            },
+            {
+              "dependency_kind": "secret_set_version",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "secret_set_version_id"
+            },
+            {
+              "dependency_kind": "seed",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "seed"
+            },
+            {
+              "dependency_kind": "workload",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "workload_digest"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "independent_evaluation_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "independent_evaluation_authority"
+        },
+        "outcome": {
+          "enum": [
+            "cancelled",
+            "completed_fail",
+            "completed_pass",
+            "contaminated",
+            "evaluator_error",
+            "infrastructure_error",
+            "policy_rejected",
+            "skipped",
+            "stale_input",
+            "suspected_reward_hack",
+            "timed_out"
+          ]
+        },
+        "receipt_kind": {
+          "const": "evaluation_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "candidate"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "invalid",
+            "retained_failure",
+            "retained_result"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/evaluation_receipt.v1",
+      "golden_record_digest": "sha256:5d28938bb9ce4d528e5bb0e2e6db4b4e0101f372a5f9490d8b09fb601e40ba91",
+      "golden_vector_id": "GOLDEN-RECEIPT-EVALUATION-RECEIPT",
+      "id": "evaluation_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "independent_evaluation_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "accepted_working_point",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "accepted_working_point_digest"
+        },
+        {
+          "dependency_kind": "artifact",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "artifact_digest"
+        },
+        {
+          "dependency_kind": "budget",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "budget_envelope"
+        },
+        {
+          "dependency_kind": "candidate",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "candidate_digest"
+        },
+        {
+          "dependency_kind": "policy",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "capability_policy_digest"
+        },
+        {
+          "dependency_kind": "context",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "context_digest"
+        },
+        {
+          "dependency_kind": "environment",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "environment_digest"
+        },
+        {
+          "dependency_kind": "evaluator",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "evaluator_digest"
+        },
+        {
+          "dependency_kind": "route_profile",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "route_profile_digest"
+        },
+        {
+          "dependency_kind": "run_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "run_receipt_evidence"
+        },
+        {
+          "dependency_kind": "secret_set_version",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "secret_set_version_id"
+        },
+        {
+          "dependency_kind": "seed",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "seed"
+        },
+        {
+          "dependency_kind": "workload",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "workload_digest"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "budget_envelope",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "environment_digest",
+        "evaluator_digest",
+        "provider_configuration_digest",
+        "route_profile_digest",
+        "secret_set_version_id",
+        "seed",
+        "upstream_receipt_digest",
+        "workload_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "completed_pass",
+          "terminal_disposition": "retained_result"
+        }
+      ],
+      "outcomes": [
+        "cancelled",
+        "completed_fail",
+        "completed_pass",
+        "contaminated",
+        "evaluator_error",
+        "infrastructure_error",
+        "policy_rejected",
+        "skipped",
+        "stale_input",
+        "suspected_reward_hack",
+        "timed_out"
+      ],
+      "revocation_authority": "independent_evaluation_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "candidate",
+      "terminal_dispositions": [
+        "invalid",
+        "retained_failure",
+        "retained_result"
+      ]
+    },
+    {
+      "artifact_rule": "exact base-bound patch application and integrated validation artifact references",
+      "consumers": [
+        "evidence_store",
+        "promotion_authority",
+        "rollback_authority"
+      ],
+      "expiry_rule": "stale when accepted working point, base, candidate, policy, lease, patch, validation artifact, or upstream receipt changes",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "evidence_store",
+            "promotion_authority",
+            "rollback_authority"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "accepted_working_point",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "accepted_working_point_digest"
+            },
+            {
+              "dependency_kind": "artifact",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "artifact_digest"
+            },
+            {
+              "dependency_kind": "base",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "base_revision"
+            },
+            {
+              "dependency_kind": "candidate",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "candidate_digest"
+            },
+            {
+              "dependency_kind": "policy",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "capability_policy_digest"
+            },
+            {
+              "dependency_kind": "patch_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "patch_receipt_evidence"
+            },
+            {
+              "dependency_kind": "workspace_lease",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "workspace_lease_id"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "parent_integration_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "parent_integration_authority"
+        },
+        "outcome": {
+          "enum": [
+            "integrated_and_validated",
+            "rejected",
+            "rework",
+            "rolled_back_after_validation_failure"
+          ]
+        },
+        "receipt_kind": {
+          "const": "integration_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "accepted_working_point"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "integrated",
+            "rejected",
+            "rework",
+            "rolled_back"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/integration_receipt.v1",
+      "golden_record_digest": "sha256:994bf16df90f39373f9e7b5fa6a63d33e23aafb1cf7454798f2e18285acafe75",
+      "golden_vector_id": "GOLDEN-RECEIPT-INTEGRATION-RECEIPT",
+      "id": "integration_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "parent_integration_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "accepted_working_point",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "accepted_working_point_digest"
+        },
+        {
+          "dependency_kind": "artifact",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "artifact_digest"
+        },
+        {
+          "dependency_kind": "base",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "base_revision"
+        },
+        {
+          "dependency_kind": "candidate",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "candidate_digest"
+        },
+        {
+          "dependency_kind": "policy",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "capability_policy_digest"
+        },
+        {
+          "dependency_kind": "patch_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "patch_receipt_evidence"
+        },
+        {
+          "dependency_kind": "workspace_lease",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "workspace_lease_id"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "environment_digest",
+        "provider_configuration_digest",
+        "route_profile_digest",
+        "secret_set_version_id",
+        "upstream_receipt_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "integrated_and_validated",
+          "terminal_disposition": "integrated"
+        }
+      ],
+      "outcomes": [
+        "integrated_and_validated",
+        "rejected",
+        "rework",
+        "rolled_back_after_validation_failure"
+      ],
+      "revocation_authority": "parent_integration_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "accepted_working_point",
+      "terminal_dispositions": [
+        "integrated",
+        "rejected",
+        "rework",
+        "rolled_back"
+      ]
+    },
+    {
+      "artifact_rule": "patch, predicted/observed writes, focused-test, effect-ledger, and cleanup artifact references",
+      "consumers": [
+        "evidence_store",
+        "parent_integration_authority"
+      ],
+      "expiry_rule": "stale when base, candidate, policy, environment, lease, artifact, or workspace receipt changes",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "evidence_store",
+            "parent_integration_authority"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "artifact",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "artifact_digest"
+            },
+            {
+              "dependency_kind": "base",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "base_revision"
+            },
+            {
+              "dependency_kind": "candidate",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "candidate_digest"
+            },
+            {
+              "dependency_kind": "policy",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "capability_policy_digest"
+            },
+            {
+              "dependency_kind": "environment",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "environment_digest"
+            },
+            {
+              "dependency_kind": "workspace_lease",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "workspace_lease_id"
+            },
+            {
+              "dependency_kind": "workspace_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "workspace_receipt_evidence"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "workspace_return_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "workspace_return_authority"
+        },
+        "outcome": {
+          "enum": [
+            "cancelled_partial_return",
+            "failed_return",
+            "patch_returned",
+            "unsettled_effects"
+          ]
+        },
+        "receipt_kind": {
+          "const": "patch_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "candidate"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "attention",
+            "failed",
+            "returned"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/patch_receipt.v1",
+      "golden_record_digest": "sha256:c294aeb55169a4affa325c54bd27b667f48758af5c19574d28fc850dde6cb238",
+      "golden_vector_id": "GOLDEN-RECEIPT-PATCH-RECEIPT",
+      "id": "patch_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "workspace_return_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "artifact",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "artifact_digest"
+        },
+        {
+          "dependency_kind": "base",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "base_revision"
+        },
+        {
+          "dependency_kind": "candidate",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "candidate_digest"
+        },
+        {
+          "dependency_kind": "policy",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "capability_policy_digest"
+        },
+        {
+          "dependency_kind": "environment",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "environment_digest"
+        },
+        {
+          "dependency_kind": "workspace_lease",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "workspace_lease_id"
+        },
+        {
+          "dependency_kind": "workspace_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "workspace_receipt_evidence"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "environment_digest",
+        "provider_configuration_digest",
+        "route_profile_digest",
+        "secret_set_version_id",
+        "upstream_receipt_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "patch_returned",
+          "terminal_disposition": "returned"
+        }
+      ],
+      "outcomes": [
+        "cancelled_partial_return",
+        "failed_return",
+        "patch_returned",
+        "unsettled_effects"
+      ],
+      "revocation_authority": "workspace_return_authority",
+      "signature_policy": "deferred_optional",
+      "subject_kind": "candidate",
+      "terminal_dispositions": [
+        "attention",
+        "failed",
+        "returned"
+      ]
+    },
+    {
+      "artifact_rule": "promotion decision and exact accepted-point references only",
+      "consumers": [
+        "evidence_store",
+        "maintainer",
+        "rollback_authority"
+      ],
+      "expiry_rule": "stale when candidate, accepted point, evaluation, review, integration, or governing policy changes",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "evidence_store",
+            "maintainer",
+            "rollback_authority"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "accepted_working_point",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "accepted_working_point_digest"
+            },
+            {
+              "dependency_kind": "candidate",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "candidate_digest"
+            },
+            {
+              "dependency_kind": "evaluation_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "evaluation_receipt_evidence"
+            },
+            {
+              "dependency_kind": "integration_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "integration_receipt_evidence"
+            },
+            {
+              "dependency_kind": "review_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "review_receipt_evidence"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "promotion_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "promotion_authority"
+        },
+        "outcome": {
+          "enum": [
+            "inconclusive",
+            "promoted",
+            "rejected",
+            "rework"
+          ]
+        },
+        "receipt_kind": {
+          "const": "promotion_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "candidate"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "inconclusive",
+            "promoted",
+            "rejected",
+            "rework"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/promotion_receipt.v1",
+      "golden_record_digest": "sha256:66db56b815690fafc287cdef3d238e6d88a85f0a923a99b949196a54887e0e19",
+      "golden_vector_id": "GOLDEN-RECEIPT-PROMOTION-RECEIPT",
+      "id": "promotion_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "promotion_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "accepted_working_point",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "accepted_working_point_digest"
+        },
+        {
+          "dependency_kind": "candidate",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "candidate_digest"
+        },
+        {
+          "dependency_kind": "evaluation_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "evaluation_receipt_evidence"
+        },
+        {
+          "dependency_kind": "integration_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "integration_receipt_evidence"
+        },
+        {
+          "dependency_kind": "review_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "review_receipt_evidence"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "budget_envelope",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "environment_digest",
+        "evaluator_digest",
+        "provider_configuration_digest",
+        "review_digest",
+        "route_profile_digest",
+        "secret_set_version_id",
+        "seed",
+        "upstream_receipt_digest",
+        "workload_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "promoted",
+          "terminal_disposition": "promoted"
+        }
+      ],
+      "outcomes": [
+        "inconclusive",
+        "promoted",
+        "rejected",
+        "rework"
+      ],
+      "revocation_authority": "promotion_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "candidate",
+      "terminal_dispositions": [
+        "inconclusive",
+        "promoted",
+        "rejected",
+        "rework"
+      ]
+    },
+    {
+      "artifact_rule": "bounded rationale, dissent, and decision artifact references without report bodies",
+      "consumers": [
+        "evidence_store",
+        "promotion_authority"
+      ],
+      "expiry_rule": "stale when candidate, evidence set, evaluator, reviewer identity/policy, accepted point, or evaluation receipt changes",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "evidence_store",
+            "promotion_authority"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "accepted_working_point",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "accepted_working_point_digest"
+            },
+            {
+              "dependency_kind": "candidate",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "candidate_digest"
+            },
+            {
+              "dependency_kind": "evaluation_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "evaluation_receipt_evidence"
+            },
+            {
+              "dependency_kind": "evaluator",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "evaluator_digest"
+            },
+            {
+              "dependency_kind": "evidence",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "evidence_digest"
+            },
+            {
+              "dependency_kind": "review",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "review_digest"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "independent_review_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "independent_review_authority"
+        },
+        "outcome": {
+          "enum": [
+            "approve",
+            "cancelled",
+            "dissent",
+            "inconclusive",
+            "reject",
+            "rework"
+          ]
+        },
+        "receipt_kind": {
+          "const": "review_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "candidate"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "approved",
+            "inconclusive",
+            "rejected",
+            "rework"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/review_receipt.v1",
+      "golden_record_digest": "sha256:b98b64e922ccb9e3feac14ccddeae3a0cfd947e37173ea75dc8e9f7244515073",
+      "golden_vector_id": "GOLDEN-RECEIPT-REVIEW-RECEIPT",
+      "id": "review_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "independent_review_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "accepted_working_point",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "accepted_working_point_digest"
+        },
+        {
+          "dependency_kind": "candidate",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "candidate_digest"
+        },
+        {
+          "dependency_kind": "evaluation_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "evaluation_receipt_evidence"
+        },
+        {
+          "dependency_kind": "evaluator",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "evaluator_digest"
+        },
+        {
+          "dependency_kind": "evidence",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "evidence_digest"
+        },
+        {
+          "dependency_kind": "review",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "review_digest"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "budget_envelope",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "environment_digest",
+        "evaluator_digest",
+        "provider_configuration_digest",
+        "review_digest",
+        "route_profile_digest",
+        "secret_set_version_id",
+        "seed",
+        "upstream_receipt_digest",
+        "workload_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "approve",
+          "terminal_disposition": "approved"
+        }
+      ],
+      "outcomes": [
+        "approve",
+        "cancelled",
+        "dissent",
+        "inconclusive",
+        "reject",
+        "rework"
+      ],
+      "revocation_authority": "independent_review_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "candidate",
+      "terminal_dispositions": [
+        "approved",
+        "inconclusive",
+        "rejected",
+        "rework"
+      ]
+    },
+    {
+      "artifact_rule": "rollback operation and restored-point validation artifact references",
+      "consumers": [
+        "evidence_store",
+        "maintainer"
+      ],
+      "expiry_rule": "historical result remains about exact restoration; current-action use stales on accepted point, policy, integration, promotion, or artifact changes",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "evidence_store",
+            "maintainer"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "accepted_working_point",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "accepted_working_point_digest"
+            },
+            {
+              "dependency_kind": "artifact",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "artifact_digest"
+            },
+            {
+              "dependency_kind": "policy",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "capability_policy_digest"
+            },
+            {
+              "dependency_kind": "integration_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "integration_receipt_evidence"
+            },
+            {
+              "dependency_kind": "promotion_receipt.v1",
+              "dependency_type": "receipt",
+              "must_be_fresh": true,
+              "role": "promotion_receipt_evidence"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "rollback_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "rollback_authority"
+        },
+        "outcome": {
+          "enum": [
+            "failed_unsettled",
+            "restored_and_validated"
+          ]
+        },
+        "receipt_kind": {
+          "const": "rollback_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "accepted_working_point"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "attention",
+            "restored"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/rollback_receipt.v1",
+      "golden_record_digest": "sha256:6e1f9744c28ea4359ce6ff9a382beb48c87caeef2e18180150d09d9dbbd71a23",
+      "golden_vector_id": "GOLDEN-RECEIPT-ROLLBACK-RECEIPT",
+      "id": "rollback_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "rollback_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "accepted_working_point",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "accepted_working_point_digest"
+        },
+        {
+          "dependency_kind": "artifact",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "artifact_digest"
+        },
+        {
+          "dependency_kind": "policy",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "capability_policy_digest"
+        },
+        {
+          "dependency_kind": "integration_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "integration_receipt_evidence"
+        },
+        {
+          "dependency_kind": "promotion_receipt.v1",
+          "dependency_type": "receipt",
+          "must_be_fresh": true,
+          "role": "promotion_receipt_evidence"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "budget_envelope",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "environment_digest",
+        "evaluator_digest",
+        "provider_configuration_digest",
+        "review_digest",
+        "route_profile_digest",
+        "secret_set_version_id",
+        "seed",
+        "upstream_receipt_digest",
+        "workload_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "restored_and_validated",
+          "terminal_disposition": "restored"
+        }
+      ],
+      "outcomes": [
+        "failed_unsettled",
+        "restored_and_validated"
+      ],
+      "revocation_authority": "rollback_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "accepted_working_point",
+      "terminal_dispositions": [
+        "attention",
+        "restored"
+      ]
+    },
+    {
+      "artifact_rule": "bounded run outcome artifacts only; no prompt, source, report, or raw output",
+      "consumers": [
+        "evaluation_authority",
+        "evidence_store",
+        "workspace_authority"
+      ],
+      "expiry_rule": "stale for replay when any complete RunIdentity dimension changes",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "evaluation_authority",
+            "evidence_store",
+            "workspace_authority"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "accepted_working_point",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "accepted_working_point_digest"
+            },
+            {
+              "dependency_kind": "base",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "base_revision"
+            },
+            {
+              "dependency_kind": "budget",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "budget_envelope"
+            },
+            {
+              "dependency_kind": "candidate",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "candidate_digest"
+            },
+            {
+              "dependency_kind": "policy",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "capability_policy_digest"
+            },
+            {
+              "dependency_kind": "context",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "context_digest"
+            },
+            {
+              "dependency_kind": "environment",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "environment_digest"
+            },
+            {
+              "dependency_kind": "evaluator",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "evaluator_digest"
+            },
+            {
+              "dependency_kind": "provider_configuration",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "provider_configuration_digest"
+            },
+            {
+              "dependency_kind": "route_profile",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "route_profile_digest"
+            },
+            {
+              "dependency_kind": "secret_set_version",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "secret_set_version_id"
+            },
+            {
+              "dependency_kind": "seed",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "seed"
+            },
+            {
+              "dependency_kind": "workload",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "workload_digest"
+            },
+            {
+              "dependency_kind": "workspace_lease",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "workspace_lease_id"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "run_lifecycle_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "run_lifecycle_authority"
+        },
+        "outcome": {
+          "enum": [
+            "cancelled",
+            "failed",
+            "partial",
+            "succeeded"
+          ]
+        },
+        "receipt_kind": {
+          "const": "run_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "run"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "cancelled",
+            "failed",
+            "partial",
+            "succeeded"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/run_receipt.v1",
+      "golden_record_digest": "sha256:13cfe4f3e3013e451c3630749f8f6f8e3ecc58069df58a7f9c226bc2be264fd2",
+      "golden_vector_id": "GOLDEN-RECEIPT-RUN-RECEIPT",
+      "id": "run_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "run_lifecycle_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "accepted_working_point",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "accepted_working_point_digest"
+        },
+        {
+          "dependency_kind": "base",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "base_revision"
+        },
+        {
+          "dependency_kind": "budget",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "budget_envelope"
+        },
+        {
+          "dependency_kind": "candidate",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "candidate_digest"
+        },
+        {
+          "dependency_kind": "policy",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "capability_policy_digest"
+        },
+        {
+          "dependency_kind": "context",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "context_digest"
+        },
+        {
+          "dependency_kind": "environment",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "environment_digest"
+        },
+        {
+          "dependency_kind": "evaluator",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "evaluator_digest"
+        },
+        {
+          "dependency_kind": "provider_configuration",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "provider_configuration_digest"
+        },
+        {
+          "dependency_kind": "route_profile",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "route_profile_digest"
+        },
+        {
+          "dependency_kind": "secret_set_version",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "secret_set_version_id"
+        },
+        {
+          "dependency_kind": "seed",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "seed"
+        },
+        {
+          "dependency_kind": "workload",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "workload_digest"
+        },
+        {
+          "dependency_kind": "workspace_lease",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "workspace_lease_id"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "budget_envelope",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "environment_digest",
+        "evaluator_digest",
+        "provider_configuration_digest",
+        "route_profile_digest",
+        "secret_set_version_id",
+        "seed",
+        "workload_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "succeeded",
+          "terminal_disposition": "succeeded"
+        }
+      ],
+      "outcomes": [
+        "cancelled",
+        "failed",
+        "partial",
+        "succeeded"
+      ],
+      "revocation_authority": "run_lifecycle_authority",
+      "signature_policy": "deferred_optional",
+      "subject_kind": "run",
+      "terminal_dispositions": [
+        "cancelled",
+        "failed",
+        "partial",
+        "succeeded"
+      ]
+    },
+    {
+      "artifact_rule": "allocation/lease inventory and bounded violation references only",
+      "consumers": [
+        "cleanup_authority",
+        "evidence_store",
+        "workspace_return_authority"
+      ],
+      "expiry_rule": "stale when base, policy, environment, lease, accepted point, or allocation artifact changes; explicit lease expiry applies",
+      "family_record_constraints": {
+        "consumers": {
+          "exact_sorted_values": [
+            "cleanup_authority",
+            "evidence_store",
+            "workspace_return_authority"
+          ]
+        },
+        "dependencies": {
+          "exact_specs": [
+            {
+              "dependency_kind": "accepted_working_point",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "accepted_working_point_digest"
+            },
+            {
+              "dependency_kind": "artifact",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "artifact_digest"
+            },
+            {
+              "dependency_kind": "base",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "base_revision"
+            },
+            {
+              "dependency_kind": "policy",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "capability_policy_digest"
+            },
+            {
+              "dependency_kind": "environment",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "environment_digest"
+            },
+            {
+              "dependency_kind": "workspace_lease",
+              "dependency_type": "identity",
+              "must_be_fresh": true,
+              "role": "workspace_lease_id"
+            }
+          ]
+        },
+        "freshness_policy.revocation_authority": {
+          "const": "workspace_lease_authority"
+        },
+        "issuer_authority.authority_class": {
+          "const": "workspace_lease_authority"
+        },
+        "outcome": {
+          "enum": [
+            "active",
+            "allocation_failed",
+            "cancelled",
+            "orphaned",
+            "returned",
+            "timed_out"
+          ]
+        },
+        "receipt_kind": {
+          "const": "workspace_receipt.v1"
+        },
+        "subject.subject_kind": {
+          "const": "workspace_lease"
+        },
+        "terminal_disposition": {
+          "enum": [
+            "active",
+            "attention",
+            "failed",
+            "returned"
+          ]
+        }
+      },
+      "family_schema_id": "Receipt.v1/family/workspace_receipt.v1",
+      "golden_record_digest": "sha256:998ec5741ec38ea05d7edf744b93c2d4a9bf0cb7f965e79941b75cf39e7eced5",
+      "golden_vector_id": "GOLDEN-RECEIPT-WORKSPACE-RECEIPT",
+      "id": "workspace_receipt.v1",
+      "integrity_mechanisms": [
+        "sha256-content-digest-v1"
+      ],
+      "issuer_authority": "workspace_lease_authority",
+      "mandatory_dependencies": [
+        {
+          "dependency_kind": "accepted_working_point",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "accepted_working_point_digest"
+        },
+        {
+          "dependency_kind": "artifact",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "artifact_digest"
+        },
+        {
+          "dependency_kind": "base",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "base_revision"
+        },
+        {
+          "dependency_kind": "policy",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "capability_policy_digest"
+        },
+        {
+          "dependency_kind": "environment",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "environment_digest"
+        },
+        {
+          "dependency_kind": "workspace_lease",
+          "dependency_type": "identity",
+          "must_be_fresh": true,
+          "role": "workspace_lease_id"
+        }
+      ],
+      "material_dependency_closure": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "capability_policy_digest",
+        "environment_digest",
+        "workspace_lease_id"
+      ],
+      "outcome_terminal_examples": [
+        {
+          "outcome": "returned",
+          "terminal_disposition": "returned"
+        }
+      ],
+      "outcomes": [
+        "active",
+        "allocation_failed",
+        "cancelled",
+        "orphaned",
+        "returned",
+        "timed_out"
+      ],
+      "revocation_authority": "workspace_lease_authority",
+      "signature_policy": "deferred_optional",
+      "subject_kind": "workspace_lease",
+      "terminal_dispositions": [
+        "active",
+        "attention",
+        "failed",
+        "returned"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed"
+}

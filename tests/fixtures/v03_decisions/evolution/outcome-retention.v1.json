@@ -1,0 +1,512 @@
+{
+  "closed_record_schemas": [
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(EvolutionOutcome.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "attempt_id": "string",
+        "candidate_digest": "sha256_digest",
+        "cost": "object",
+        "evidence_refs": "array",
+        "observed_at": "string",
+        "outcome_class": "string",
+        "owner_role_id": "closed_role_id",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_EvolutionOutcome.v1",
+        "retention": "object",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "EvolutionOutcome.v1",
+      "required_fields": [
+        "attempt_id",
+        "candidate_digest",
+        "cost",
+        "evidence_refs",
+        "observed_at",
+        "outcome_class",
+        "owner_role_id",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "retention",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(LearningSummary.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "confidence": "string",
+        "counterexample_refs": "array",
+        "domain": "string",
+        "policy": "object",
+        "projection_state": "string",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_LearningSummary.v1",
+        "schema_version": "literal_1",
+        "source_outcome_digests": "array",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "LearningSummary.v1",
+      "required_fields": [
+        "confidence",
+        "counterexample_refs",
+        "domain",
+        "policy",
+        "projection_state",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "schema_version",
+        "source_outcome_digests",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    }
+  ],
+  "closed_role_catalog_ref": "../integration/cross-family-authority.v1.json#/role_catalog",
+  "learning_summary": {
+    "confidence": "bounded_by_source_outcomes",
+    "counterexample_refs": [
+      "outcome-fail-0001",
+      "outcome-suspected_reward_hack-0001"
+    ],
+    "domain": "solver-correctness",
+    "policy": {
+      "expiry": "2026-09-19T00:00:00Z",
+      "invalidation_on": [
+        "contradiction",
+        "rollback",
+        "stale_source"
+      ]
+    },
+    "projection_state": "invalidated",
+    "record_digest": "sha256:dd800c9bcd95549153cf74568ded978fad91e7b358d656f0da3c48c0816a89fb",
+    "record_id": "learning-summary-0001",
+    "record_kind": "LearningSummary.v1",
+    "schema_version": 1,
+    "source_outcome_digests": [
+      "sha256:da79ba6ec6c7aabcc0f50b09275f21c0e3efefb94a634bb91a1f7f7f6feabd7f",
+      "sha256:d377f5bd6ab7292b2a7dee0088853c78c2c09e8a9c4f19027b1b8825bfbddf2d"
+    ],
+    "terminal_disposition": "source_retained_projection_discarded"
+  },
+  "negative_cases": [
+    {
+      "id": "OUTCOME-NEG-SUCCESS-ONLY",
+      "mutation": "remove every outcome except pass",
+      "result": "reject_missing_required_outcome_classes"
+    },
+    {
+      "id": "OUTCOME-NEG-UNKNOWN-OWNER",
+      "mutation": "learning_projection_invalidation.owner_role_id=learning_projection_owner",
+      "result": "reject_unknown_role"
+    },
+    {
+      "id": "OUTCOME-NEG-ZERO-COST-OMISSION",
+      "mutation": "timeout.cost=null",
+      "result": "reject_missing_cost_accounting"
+    },
+    {
+      "id": "OUTCOME-NEG-REWRITE-SOURCE",
+      "mutation": "learning_summary source outcome replaced after invalidation",
+      "result": "reject_non_append_only_history"
+    }
+  ],
+  "outcome_classes": [
+    {
+      "attempt_id": "attempt-0001",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "campaign_stop",
+        "completeness": "partial",
+        "currency": "evaluation_case",
+        "quantity": 1,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "decision:cancel-0001",
+        "identity:evidence-0001"
+      ],
+      "observed_at": "2026-08-19T09:00:00Z",
+      "outcome_class": "cancellation",
+      "owner_role_id": "campaign_stop_authority",
+      "record_digest": "sha256:e8ddc7f714adf8d184fc9a5ec38e75ec08b3de3c8772eba204e26cfed18adc1b",
+      "record_id": "outcome-cancellation-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "cancelled"
+    },
+    {
+      "attempt_id": "attempt-0002",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "evaluation",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 2,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:custody-audit-0001",
+        "identity:evidence-0002"
+      ],
+      "observed_at": "2026-08-19T09:01:00Z",
+      "outcome_class": "contamination",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:283b16fa634a83d5966401042961f60618899395291dae7a574f2fbc6b634ee9",
+      "record_id": "outcome-contamination-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "invalid"
+    },
+    {
+      "attempt_id": "attempt-0003",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "review",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 3,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:minority-report-0001",
+        "identity:evidence-0003"
+      ],
+      "observed_at": "2026-08-19T09:02:00Z",
+      "outcome_class": "dissent",
+      "owner_role_id": "independent_review_authority",
+      "record_digest": "sha256:87fd9089f09aee9e2bae0e2506a84ae9d67d5ce977b2f819833e0bb2d871b596",
+      "record_id": "outcome-dissent-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "inconclusive"
+    },
+    {
+      "attempt_id": "attempt-0004",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "evaluation",
+        "completeness": "partial",
+        "currency": "evaluation_case",
+        "quantity": 4,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:evaluator-error-0001",
+        "identity:evidence-0004"
+      ],
+      "observed_at": "2026-08-19T09:03:00Z",
+      "outcome_class": "evaluator_error",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:16fcf65a1b640c77f61f578902d667cc7521582dd91ceefc9a71bf4d317e3fd2",
+      "record_id": "outcome-evaluator_error-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "invalid"
+    },
+    {
+      "attempt_id": "attempt-0005",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "evaluation",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 5,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:failure-measurement-0001",
+        "identity:evidence-0005"
+      ],
+      "observed_at": "2026-08-19T09:04:00Z",
+      "outcome_class": "fail",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:da79ba6ec6c7aabcc0f50b09275f21c0e3efefb94a634bb91a1f7f7f6feabd7f",
+      "record_id": "outcome-fail-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "retained_failure"
+    },
+    {
+      "attempt_id": "attempt-0006",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "evaluation",
+        "completeness": "partial",
+        "currency": "evaluation_case",
+        "quantity": 6,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:infrastructure-error-0001",
+        "identity:evidence-0006"
+      ],
+      "observed_at": "2026-08-19T09:05:00Z",
+      "outcome_class": "infrastructure_error",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:4a60532879af1a7e76afb09fd7f858770a531735dcd05cdbad44535b5d71b827",
+      "record_id": "outcome-infrastructure_error-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "retained_failure"
+    },
+    {
+      "attempt_id": "attempt-0007",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "learning_projection",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 0,
+        "unit": "projection"
+      },
+      "evidence_refs": [
+        "artifact:invalidation-edge-0001",
+        "identity:evidence-0007"
+      ],
+      "observed_at": "2026-08-19T09:06:00Z",
+      "outcome_class": "learning_projection_invalidation",
+      "owner_role_id": "independent_review_authority",
+      "record_digest": "sha256:bdf7e13083abf699a588349b3ce4984ab4bf13a88e9927e529129f9e5150bb0e",
+      "record_id": "outcome-learning_projection_invalidation-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "source_retained_projection_invalidated"
+    },
+    {
+      "attempt_id": "attempt-0008",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "evaluation",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 8,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:measurement-0001",
+        "identity:evidence-0008"
+      ],
+      "observed_at": "2026-08-19T09:07:00Z",
+      "outcome_class": "pass",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:d377f5bd6ab7292b2a7dee0088853c78c2c09e8a9c4f19027b1b8825bfbddf2d",
+      "record_id": "outcome-pass-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "retained_result"
+    },
+    {
+      "attempt_id": "attempt-0009",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "admission",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 9,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "decision:admission-rejected-0002",
+        "identity:evidence-0009"
+      ],
+      "observed_at": "2026-08-19T09:08:00Z",
+      "outcome_class": "policy_rejection",
+      "owner_role_id": "campaign_authority",
+      "record_digest": "sha256:2169e5c5f294601ee721658bee1b28bb5fa0f5e3e1c8df5321aa5dd027e702ba",
+      "record_id": "outcome-policy_rejection-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "rejected"
+    },
+    {
+      "attempt_id": "attempt-0010",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "evaluation",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 10,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "decision:skip-approved-0001",
+        "identity:evidence-0010"
+      ],
+      "observed_at": "2026-08-19T09:09:00Z",
+      "outcome_class": "skip",
+      "owner_role_id": "retry_exclusion_decision_authority",
+      "record_digest": "sha256:e49b2061ddbc85101f3b8d6468d90c1b1a26ee9c9cc544c02e1a40067ec55175",
+      "record_id": "outcome-skip-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "retained_non_improving"
+    },
+    {
+      "attempt_id": "attempt-0011",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "promotion",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 11,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:freshness-comparison-0001",
+        "identity:evidence-0011"
+      ],
+      "observed_at": "2026-08-19T09:10:00Z",
+      "outcome_class": "stale_evidence_rejection",
+      "owner_role_id": "promotion_authority",
+      "record_digest": "sha256:e296db7071b9a976563db75f6bafd05c6312e602535fb1728d44d97403306d56",
+      "record_id": "outcome-stale_evidence_rejection-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "rejected"
+    },
+    {
+      "attempt_id": "attempt-0012",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "review",
+        "completeness": "complete",
+        "currency": "evaluation_case",
+        "quantity": 12,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:denominator-audit-0001",
+        "identity:evidence-0012"
+      ],
+      "observed_at": "2026-08-19T09:11:00Z",
+      "outcome_class": "suspected_reward_hack",
+      "owner_role_id": "independent_review_authority",
+      "record_digest": "sha256:16d2fd3782a685b7890234f1fb5679904cf33f96993fff7826b565328a5f14ed",
+      "record_id": "outcome-suspected_reward_hack-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "blocked_pending_external_disposition"
+    },
+    {
+      "attempt_id": "attempt-0013",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost": {
+        "accounting_boundary": "evaluation",
+        "completeness": "partial",
+        "currency": "evaluation_case",
+        "quantity": 13,
+        "unit": "case"
+      },
+      "evidence_refs": [
+        "artifact:timeout-0001",
+        "identity:evidence-0013"
+      ],
+      "observed_at": "2026-08-19T09:12:00Z",
+      "outcome_class": "timeout",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:88f69f1c0ded0d6cfa413647e6f5409ac3868b985b0f748bb2e1f9de8e8f2a83",
+      "record_id": "outcome-timeout-0001",
+      "record_kind": "EvolutionOutcome.v1",
+      "retention": {
+        "append_only": true,
+        "expires_at": null,
+        "source_evidence_rewritten": false
+      },
+      "schema_version": 1,
+      "terminal_disposition": "retained_failure"
+    }
+  ],
+  "required_outcome_classes": [
+    "cancellation",
+    "contamination",
+    "dissent",
+    "evaluator_error",
+    "fail",
+    "infrastructure_error",
+    "learning_projection_invalidation",
+    "pass",
+    "policy_rejection",
+    "skip",
+    "stale_evidence_rejection",
+    "suspected_reward_hack",
+    "timeout"
+  ],
+  "retention_invariants": [
+    "all_admitted_attempts_have_exactly_one_terminal_outcome",
+    "cost_and_completeness_are_present_for_every_outcome",
+    "dissent_negative_and_invalidation_evidence_is_append_only",
+    "missing_error_skip_timeout_cancel_exclusion_and_contamination_are_non_improving",
+    "source_evidence_and_genealogy_are_immutable",
+    "success_only_retention_is_invalid"
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

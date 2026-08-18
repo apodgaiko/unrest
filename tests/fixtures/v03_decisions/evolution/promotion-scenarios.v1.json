@@ -1,0 +1,734 @@
+{
+  "automated_canary_policy": {
+    "authority_role_id": null,
+    "disposition": "deferred_gated",
+    "may_emit": "evidence_only",
+    "may_promote_remove_or_rollback": false,
+    "required_future_gate_fields": [
+      "blast_radius",
+      "compatibility",
+      "effect_permissions",
+      "exact_rollback",
+      "identity",
+      "observation_window",
+      "operator_burden",
+      "promotion_authority",
+      "quorum",
+      "stop_authority"
+    ]
+  },
+  "closed_record_schemas": [
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(EvaluationEvidence.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "artifact_refs": "array",
+        "candidate_digest": "sha256_digest",
+        "complete_denominator": "object",
+        "environment_digest": "sha256_digest",
+        "issuer": "object",
+        "outcome": "string",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_EvaluationEvidence.v1",
+        "reward_hack_signal_refs": "array",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string",
+        "workload_digest": "sha256_digest"
+      },
+      "record_kind": "EvaluationEvidence.v1",
+      "required_fields": [
+        "artifact_refs",
+        "candidate_digest",
+        "complete_denominator",
+        "environment_digest",
+        "issuer",
+        "outcome",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "reward_hack_signal_refs",
+        "schema_version",
+        "terminal_disposition",
+        "workload_digest"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "receipt_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(integration_receipt.v1)||0x00||CanonicalJSON-v1(record-without-receipt_digest)",
+      "field_types": {
+        "application_result_digest": "sha256_digest",
+        "candidate_digest": "sha256_digest",
+        "issuer_actor_id": "string",
+        "issuer_role_id": "closed_role_id",
+        "predecessor_digest": "sha256_digest",
+        "receipt_digest": "sha256_digest",
+        "receipt_id": "string",
+        "receipt_kind": "literal_integration_receipt.v1",
+        "resulting_point_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "sequence": "integer",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "integration_receipt.v1",
+      "required_fields": [
+        "application_result_digest",
+        "candidate_digest",
+        "issuer_actor_id",
+        "issuer_role_id",
+        "predecessor_digest",
+        "receipt_digest",
+        "receipt_id",
+        "receipt_kind",
+        "resulting_point_digest",
+        "schema_version",
+        "sequence",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "plan_digest",
+      "digest_preimage": "ASCII(unrest.cross-family-protocol.v1)||0x00||ASCII(ParentApplicationPlan.v1)||0x00||CanonicalJSON-v1(record-without-plan_digest)",
+      "field_types": {
+        "accepted_point_compare_and_swap": "object",
+        "application_grant_digest": "sha256_digest",
+        "candidate_digest": "sha256_digest",
+        "chronology_is_authority": "literal_false",
+        "effect_grant_refs": "array",
+        "owner_role_id": "closed_role_id",
+        "patch_receipt_digest": "sha256_digest",
+        "plan_digest": "sha256_digest",
+        "plan_id": "string",
+        "predecessor_digest": "sha256_digest",
+        "recovery_plan": "object",
+        "required_validation_ids": "array",
+        "schema_version": "literal_1",
+        "staging_point_id": "string",
+        "steps": "array",
+        "workspace_lease_id": "string"
+      },
+      "record_kind": "ParentApplicationPlan.v1",
+      "required_fields": [
+        "accepted_point_compare_and_swap",
+        "application_grant_digest",
+        "candidate_digest",
+        "chronology_is_authority",
+        "effect_grant_refs",
+        "owner_role_id",
+        "patch_receipt_digest",
+        "plan_digest",
+        "plan_id",
+        "predecessor_digest",
+        "recovery_plan",
+        "required_validation_ids",
+        "schema_version",
+        "staging_point_id",
+        "steps",
+        "workspace_lease_id"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(ParentApplicationResult.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "application_grant_digest": "sha256_digest",
+        "application_plan_digest": "sha256_digest",
+        "candidate_digest": "sha256_digest",
+        "integrated_validation_refs": "array",
+        "owner_role_id": "closed_role_id",
+        "predecessor_digest": "sha256_digest",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_ParentApplicationResult.v1",
+        "resulting_point_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "ParentApplicationResult.v1",
+      "required_fields": [
+        "application_grant_digest",
+        "application_plan_digest",
+        "candidate_digest",
+        "integrated_validation_refs",
+        "owner_role_id",
+        "predecessor_digest",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "resulting_point_digest",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "receipt_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(promotion_receipt.v1)||0x00||CanonicalJSON-v1(record-without-receipt_digest)",
+      "field_types": {
+        "candidate_digest": "sha256_digest",
+        "evaluation_evidence_digest": "sha256_digest",
+        "integration_receipt_digest": "sha256_digest",
+        "issuer_actor_id": "string",
+        "issuer_role_id": "closed_role_id",
+        "promotion_grant_digest": "sha256_digest",
+        "receipt_digest": "sha256_digest",
+        "receipt_id": "string",
+        "receipt_kind": "literal_promotion_receipt.v1",
+        "resulting_point_digest": "sha256_digest",
+        "review_evidence_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "sequence": "integer",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "promotion_receipt.v1",
+      "required_fields": [
+        "candidate_digest",
+        "evaluation_evidence_digest",
+        "integration_receipt_digest",
+        "issuer_actor_id",
+        "issuer_role_id",
+        "promotion_grant_digest",
+        "receipt_digest",
+        "receipt_id",
+        "receipt_kind",
+        "resulting_point_digest",
+        "review_evidence_digest",
+        "schema_version",
+        "sequence",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(PromotionDecision.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "campaign_generation": "integer",
+        "candidate_digest": "sha256_digest",
+        "decision": "string",
+        "evaluation_evidence_digest": "sha256_digest",
+        "freshness_results": "object",
+        "issuer_actor_id": "string",
+        "issuer_role_id": "closed_role_id",
+        "predecessor_digest": "sha256_digest",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_PromotionDecision.v1",
+        "review_evidence_digest": "sha256_digest",
+        "rollback_target_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "PromotionDecision.v1",
+      "required_fields": [
+        "campaign_generation",
+        "candidate_digest",
+        "decision",
+        "evaluation_evidence_digest",
+        "freshness_results",
+        "issuer_actor_id",
+        "issuer_role_id",
+        "predecessor_digest",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "review_evidence_digest",
+        "rollback_target_digest",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "grant_digest",
+      "digest_preimage": "ASCII(unrest.cross-family-protocol.v1)||0x00||ASCII(PromotionDecisionGrant.v1)||0x00||CanonicalJSON-v1(record-without-grant_digest)",
+      "field_types": {
+        "authority_role_id": "closed_role_id",
+        "candidate_digest": "sha256_digest",
+        "chronology_is_authority": "literal_false",
+        "decision": "string",
+        "evaluation_receipt_digest": "sha256_digest",
+        "expires_after_sequence": "integer",
+        "grant_digest": "sha256_digest",
+        "grant_id": "string",
+        "integration_operation": "string",
+        "issuer_actor_id": "string",
+        "patch_receipt_digest": "sha256_digest",
+        "predecessor_digest": "sha256_digest",
+        "required_validation_ids": "array",
+        "review_receipt_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "use_limit": "integer",
+        "workspace_lease_id": "string"
+      },
+      "record_kind": "PromotionDecisionGrant.v1",
+      "required_fields": [
+        "authority_role_id",
+        "candidate_digest",
+        "chronology_is_authority",
+        "decision",
+        "evaluation_receipt_digest",
+        "expires_after_sequence",
+        "grant_digest",
+        "grant_id",
+        "integration_operation",
+        "issuer_actor_id",
+        "patch_receipt_digest",
+        "predecessor_digest",
+        "required_validation_ids",
+        "review_receipt_digest",
+        "schema_version",
+        "use_limit",
+        "workspace_lease_id"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(ReviewEvidence.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "candidate_digest": "sha256_digest",
+        "dissent_refs": "array",
+        "evaluation_evidence_digest": "sha256_digest",
+        "issuer": "object",
+        "quorum": "object",
+        "recommendation": "string",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_ReviewEvidence.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "ReviewEvidence.v1",
+      "required_fields": [
+        "candidate_digest",
+        "dissent_refs",
+        "evaluation_evidence_digest",
+        "issuer",
+        "quorum",
+        "recommendation",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    }
+  ],
+  "closed_role_catalog_ref": "../integration/cross-family-authority.v1.json#/role_catalog",
+  "concrete_protocol": {
+    "application_grant": {
+      "authority_role_id": "promotion_authority",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "chronology_is_authority": false,
+      "decision": "promote",
+      "evaluation_receipt_digest": "sha256:ae867a46b033113751b550e3ad6e34805b35bed56238737cf43485f96deb9f9c",
+      "expires_after_sequence": 40,
+      "grant_digest": "sha256:ccd1c1db0956aeda5a40c234f763ae0034db69d4dce5351b6531ef16e9530de2",
+      "grant_id": "promotion-grant-0001",
+      "integration_operation": "stage_apply_validate_atomic_accept",
+      "issuer_actor_id": "actor:promotion-governor-01",
+      "patch_receipt_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "required_validation_ids": [
+        "integrated-contracts",
+        "repository-policy"
+      ],
+      "review_receipt_digest": "sha256:ff0bcf5b487f8cc73d0db664c4e0938b9b3375d4bcfbde07c288750c1f1dbdbe",
+      "schema_version": 1,
+      "use_limit": 1,
+      "workspace_lease_id": "workspace-lease-0001"
+    },
+    "application_plan": {
+      "accepted_point_compare_and_swap": {
+        "expected_predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "resulting_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "application_grant_digest": "sha256:ccd1c1db0956aeda5a40c234f763ae0034db69d4dce5351b6531ef16e9530de2",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "chronology_is_authority": false,
+      "effect_grant_refs": [],
+      "owner_role_id": "parent_integration_authority",
+      "patch_receipt_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "plan_digest": "sha256:0ed6bcae8462c69e5160f66b69c92dd62e0b0441cca06d1071be02d1e95fd8b3",
+      "plan_id": "parent-application-plan-0001",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "recovery_plan": {
+        "action": "reconcile_transaction_or_restore_exact_predecessor",
+        "owner_role_id": "parent_integration_authority",
+        "terminal_outcomes": [
+          "accepted_point_unchanged",
+          "integrated_and_validated",
+          "rolled_back",
+          "unsettled_attention"
+        ]
+      },
+      "required_validation_ids": [
+        "integrated-contracts",
+        "repository-policy"
+      ],
+      "schema_version": 1,
+      "staging_point_id": "parent-stage-0001",
+      "steps": [
+        "XAPP-03-STAGE",
+        "XAPP-04-APPLY-STAGING",
+        "XAPP-05-VALIDATE-STAGING",
+        "XAPP-06-ATOMIC-ACCEPT",
+        "XAPP-07-INTEGRATION-RECEIPT"
+      ],
+      "workspace_lease_id": "workspace-lease-0001"
+    },
+    "evaluation_evidence": {
+      "artifact_refs": [
+        "artifact:evaluation-measurements-0001"
+      ],
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "complete_denominator": {
+        "admitted": 8,
+        "cancelled": 0,
+        "errored": 0,
+        "evaluated": 8,
+        "excluded": 0,
+        "failed": 1,
+        "passed": 7,
+        "skipped": 0,
+        "timed_out": 0
+      },
+      "environment_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "issuer": {
+        "actor_id": "actor:evaluator-01",
+        "role_id": "independent_evaluation_authority"
+      },
+      "outcome": "evaluated",
+      "record_digest": "sha256:ae867a46b033113751b550e3ad6e34805b35bed56238737cf43485f96deb9f9c",
+      "record_id": "evaluation-receipt-0001",
+      "record_kind": "EvaluationEvidence.v1",
+      "reward_hack_signal_refs": [],
+      "schema_version": 1,
+      "terminal_disposition": "evidence_only",
+      "workload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "integration_receipt": {
+      "application_result_digest": "sha256:b0cd445f3390a758ab947fd19efb623d720e6519d19066ce7f682c2334d58692",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "issuer_actor_id": "actor:parent-integrator-01",
+      "issuer_role_id": "parent_integration_authority",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "receipt_digest": "sha256:3ec3ee8e911917be29524befb17585875813a89cec3f244f6b88f0bcb7454bf8",
+      "receipt_id": "integration-receipt-0001",
+      "receipt_kind": "integration_receipt.v1",
+      "resulting_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "schema_version": 1,
+      "sequence": 50,
+      "terminal_disposition": "integrated"
+    },
+    "parent_application_result": {
+      "application_grant_digest": "sha256:ccd1c1db0956aeda5a40c234f763ae0034db69d4dce5351b6531ef16e9530de2",
+      "application_plan_digest": "sha256:0ed6bcae8462c69e5160f66b69c92dd62e0b0441cca06d1071be02d1e95fd8b3",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "integrated_validation_refs": [
+        "artifact:integrated-contracts-0001",
+        "artifact:repository-policy-0001"
+      ],
+      "owner_role_id": "parent_integration_authority",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "record_digest": "sha256:b0cd445f3390a758ab947fd19efb623d720e6519d19066ce7f682c2334d58692",
+      "record_id": "parent-application-0001",
+      "record_kind": "ParentApplicationResult.v1",
+      "resulting_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "schema_version": 1,
+      "terminal_disposition": "integrated_and_validated"
+    },
+    "promotion_decision": {
+      "campaign_generation": 1,
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "decision": "promote",
+      "evaluation_evidence_digest": "sha256:ae867a46b033113751b550e3ad6e34805b35bed56238737cf43485f96deb9f9c",
+      "freshness_results": {
+        "accepted_point": true,
+        "environment": true,
+        "evaluation": true,
+        "patch": true,
+        "policy": true,
+        "review": true
+      },
+      "issuer_actor_id": "actor:promotion-governor-01",
+      "issuer_role_id": "promotion_authority",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "record_digest": "sha256:205b5ec41bf890632b996b21af582a03a0a1c56745aba39b52ec09a9b3d6bf62",
+      "record_id": "promotion-decision-0001",
+      "record_kind": "PromotionDecision.v1",
+      "review_evidence_digest": "sha256:ff0bcf5b487f8cc73d0db664c4e0938b9b3375d4bcfbde07c288750c1f1dbdbe",
+      "rollback_target_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "schema_version": 1,
+      "terminal_disposition": "authorized_for_exact_parent_plan"
+    },
+    "promotion_receipt": {
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "evaluation_evidence_digest": "sha256:ae867a46b033113751b550e3ad6e34805b35bed56238737cf43485f96deb9f9c",
+      "integration_receipt_digest": "sha256:3ec3ee8e911917be29524befb17585875813a89cec3f244f6b88f0bcb7454bf8",
+      "issuer_actor_id": "actor:promotion-governor-01",
+      "issuer_role_id": "promotion_authority",
+      "promotion_grant_digest": "sha256:ccd1c1db0956aeda5a40c234f763ae0034db69d4dce5351b6531ef16e9530de2",
+      "receipt_digest": "sha256:887993bf46f66d49648838afa7487c5cbfc3a4691a92d8399a36a7f490f82e77",
+      "receipt_id": "promotion-receipt-0001",
+      "receipt_kind": "promotion_receipt.v1",
+      "resulting_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "review_evidence_digest": "sha256:ff0bcf5b487f8cc73d0db664c4e0938b9b3375d4bcfbde07c288750c1f1dbdbe",
+      "schema_version": 1,
+      "sequence": 51,
+      "terminal_disposition": "promoted"
+    },
+    "review_evidence": {
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "dissent_refs": [],
+      "evaluation_evidence_digest": "sha256:ae867a46b033113751b550e3ad6e34805b35bed56238737cf43485f96deb9f9c",
+      "issuer": {
+        "actor_id": "actor:review-board-01",
+        "role_id": "independent_review_authority"
+      },
+      "quorum": {
+        "eligible_reviewers": [
+          "actor:reviewer-01",
+          "actor:reviewer-02"
+        ],
+        "required": 2,
+        "satisfied_by": [
+          "actor:reviewer-01",
+          "actor:reviewer-02"
+        ]
+      },
+      "recommendation": "eligible_for_external_promotion_decision",
+      "record_digest": "sha256:ff0bcf5b487f8cc73d0db664c4e0938b9b3375d4bcfbde07c288750c1f1dbdbe",
+      "record_id": "review-receipt-0001",
+      "record_kind": "ReviewEvidence.v1",
+      "schema_version": 1,
+      "terminal_disposition": "evidence_only"
+    }
+  },
+  "ordering": [
+    {
+      "consumes": [
+        "candidate_digest",
+        "EvaluationEvidence.v1",
+        "ReviewEvidence.v1"
+      ],
+      "id": "PROMO-01-DECIDE",
+      "owner_role_id": "promotion_authority",
+      "phase": "pre_application",
+      "produces": [
+        "PromotionDecision.v1",
+        "PromotionDecisionGrant.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "PromotionDecisionGrant.v1",
+        "patch_receipt.v1",
+        "workspace_lease"
+      ],
+      "id": "PROMO-02-PLAN",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "pre_application",
+      "produces": [
+        "ParentApplicationPlan.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "ParentApplicationPlan.v1",
+        "PromotionDecisionGrant.v1"
+      ],
+      "id": "PROMO-03-APPLY",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "application",
+      "produces": [
+        "ParentApplicationResult.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "ParentApplicationResult.v1"
+      ],
+      "id": "PROMO-04-INTEGRATION-RECEIPT",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "post_application",
+      "produces": [
+        "integration_receipt.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "PromotionDecisionGrant.v1",
+        "EvaluationEvidence.v1",
+        "integration_receipt.v1",
+        "ReviewEvidence.v1"
+      ],
+      "id": "PROMO-05-PROMOTION-RECEIPT",
+      "owner_role_id": "promotion_authority",
+      "phase": "post_application",
+      "produces": [
+        "promotion_receipt.v1"
+      ]
+    }
+  ],
+  "pre_apply_prerequisites": [
+    "candidate_digest",
+    "EvaluationEvidence.v1",
+    "patch_receipt.v1",
+    "predecessor_digest",
+    "ReviewEvidence.v1",
+    "workspace_lease"
+  ],
+  "prohibited_pre_apply_prerequisites": [
+    "integration_receipt.v1",
+    "promotion_receipt.v1"
+  ],
+  "promotion_checks": [
+    "complete_non_improving_denominator",
+    "exact_candidate_and_predecessor",
+    "fresh_evaluation_review_patch_policy_and_accepted_point",
+    "independent_quorum_and_dissent_policy",
+    "named_external_promotion_authority",
+    "no_unresolved_contamination_or_reward_hack",
+    "parent_application_plan_precedes_application"
+  ],
+  "scenarios": [
+    {
+      "accepted_point_changes": true,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-ACCEPT-EXACT",
+      "mutated_value": null,
+      "mutation_path": null,
+      "terminal_disposition": "promoted"
+    },
+    {
+      "accepted_point_changes": false,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-REJECT-FLOOR",
+      "mutated_value": false,
+      "mutation_path": "promotion_decision.freshness_results.policy",
+      "terminal_disposition": "rejected"
+    },
+    {
+      "accepted_point_changes": false,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-STALE-ENVIRONMENT",
+      "mutated_value": false,
+      "mutation_path": "promotion_decision.freshness_results.environment",
+      "terminal_disposition": "stale_evidence_rejection"
+    },
+    {
+      "accepted_point_changes": false,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-STALE-PREDECESSOR",
+      "mutated_value": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "mutation_path": "application_plan.accepted_point_compare_and_swap.expected_predecessor_digest",
+      "terminal_disposition": "stale_evidence_rejection"
+    },
+    {
+      "accepted_point_changes": false,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-DISSENT-QUORUM-FAIL",
+      "mutated_value": [
+        "artifact:minority-report-0001"
+      ],
+      "mutation_path": "review_evidence.dissent_refs",
+      "terminal_disposition": "inconclusive_dissent_retained"
+    },
+    {
+      "accepted_point_changes": false,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-REWARD-HACK",
+      "mutated_value": [
+        "artifact:reward-hack-signal-0001"
+      ],
+      "mutation_path": "evaluation_evidence.reward_hack_signal_refs",
+      "terminal_disposition": "suspected_reward_hack"
+    },
+    {
+      "accepted_point_changes": false,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-CANDIDATE-MISMATCH",
+      "mutated_value": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "mutation_path": "review_evidence.candidate_digest",
+      "terminal_disposition": "rejected_candidate_mismatch"
+    },
+    {
+      "accepted_point_changes": false,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-SCORE-CHRONOLOGY-BYPASS",
+      "mutated_value": true,
+      "mutation_path": "application_grant.chronology_is_authority",
+      "terminal_disposition": "unauthorized"
+    },
+    {
+      "accepted_point_changes": false,
+      "baseline_record_refs": [
+        "evaluation_evidence",
+        "review_evidence",
+        "promotion_decision",
+        "application_grant",
+        "application_plan"
+      ],
+      "id": "PROMOTION-CIRCULAR-RECEIPT-PREREQUISITE",
+      "mutated_value": "sha256:future-output",
+      "mutation_path": "application_plan.integration_receipt_digest",
+      "terminal_disposition": "reject_future_output_prerequisite"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

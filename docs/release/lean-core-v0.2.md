@@ -55,8 +55,12 @@ three candidate checkpoint invocations is therefore not a rerun count of zero.
   under `src/`, `tests/`, and `tools/`, excluding cache files.
 - Binding algorithm: SHA-256 over each sorted UTF-8 repository-relative path,
   NUL, raw file bytes, NUL.
-- Final tracked-file binding: 103 files,
-  `a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7`.
+- Final tracked-file binding: 130 files,
+  `f23748c30396799a7b7bdac2c70a9f85459855114a7e85b3674570b0ee577c5b`.
+
+This binding was recomputed after the ADR-0305 compatibility file-link
+correction and is unchanged: `docs/**` is outside the declared
+product/package/test surface.
 
 The former 105-file filesystem-only digest
 `35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1`

@@ -1,0 +1,593 @@
+{
+  "bounded_sequence": [
+    "persist_reason_and_revoke_new_authority",
+    "request_cooperative_stop",
+    "drain_until_lease_bound",
+    "inventory_settled_partial_unknown_state",
+    "retain_permitted_partial_artifacts_and_effects",
+    "terminate_or_quarantine_within_authority",
+    "idempotent_owned_resource_cleanup",
+    "receipt_or_durable_attention"
+  ],
+  "branch_rule": "A released terminal requires cleanup succeeded and effect state absent, settled, compensated, or transferred. Transfer requires an atomic durable receipt naming external_effect_recovery_authority. Partial, unknown, or unsettled effect state ends only in quarantined or unsettled_effect_attention.",
+  "closed_role_catalog_ref": "../integration/cross-family-authority.v1.json#/role_catalog",
+  "closed_schema": {
+    "cleanup": {
+      "attempt_id": "nonempty_ascii_id",
+      "evidence_retained_before_root_removal": "boolean",
+      "result": "failed|not_run|succeeded",
+      "root_removed": "boolean"
+    },
+    "drain": {
+      "bound_seconds": "safe_positive_integer",
+      "claimant_count": "integer_0_or_1",
+      "completed_within_bound": "boolean",
+      "prior_owner_absence_proven": "boolean",
+      "result": "nonempty_ascii_id"
+    },
+    "effect": {
+      "recovery_owner_role_id": "closed_role_id_or_absent",
+      "state": "absent|settled|compensated|partial|unknown|unsettled|transferred",
+      "transfer_authority_role_id": "closed_role_id_or_absent",
+      "transfer_receipt_id": "nonempty_ascii_id_or_absent"
+    },
+    "replay": {
+      "first_terminal_disposition": "terminal_disposition",
+      "identical_result": "literal_true",
+      "second_terminal_disposition": "terminal_disposition"
+    },
+    "scenario": {
+      "branch_class": "cancel|cleanup_failure|cleanup_success|crash|effect_attention|orphan|quarantine|restart|transfer",
+      "cleanup": "cleanup",
+      "drain": "closed_drain_record",
+      "effect": "effect",
+      "evidence": "sorted_unique_nonempty_ascii_id_array",
+      "id": "nonempty_ascii_id",
+      "owner_role_id": "closed_role_id",
+      "replay": "replay",
+      "terminal_disposition": "terminal_disposition"
+    },
+    "unknown_fields": "reject"
+  },
+  "negative_cases": [
+    {
+      "baseline_scenario_id": "WS-RECOVERY-CLEANUP-SUCCESS",
+      "expected_error": "evidence_retention_precedes_root_removal",
+      "id": "WS-RECOVERY-NEG-EARLY-DELETE",
+      "mutation": {
+        "operation": "replace",
+        "path": "/cleanup/evidence_retained_before_root_removal",
+        "value": false
+      }
+    },
+    {
+      "baseline_scenario_id": "WS-RECOVERY-ORPHAN-SETTLED-RELEASE",
+      "expected_error": "owner_absence_not_proven",
+      "id": "WS-RECOVERY-NEG-ORPHAN-GUESS",
+      "mutation": {
+        "operation": "replace",
+        "path": "/drain/prior_owner_absence_proven",
+        "value": false
+      }
+    },
+    {
+      "baseline_scenario_id": "WS-RECOVERY-RESTART-PARTIAL-ATTENTION",
+      "expected_error": "partial_effect_cannot_end_released",
+      "id": "WS-RECOVERY-NEG-PARTIAL-AS-RELEASED",
+      "mutation": {
+        "operation": "replace",
+        "path": "/terminal_disposition",
+        "value": "cancelled_released"
+      }
+    },
+    {
+      "baseline_scenario_id": "WS-RECOVERY-ORPHAN-SETTLED-RELEASE",
+      "expected_error": "single_claimant_required",
+      "id": "WS-RECOVERY-NEG-TWO-CLAIMANTS",
+      "mutation": {
+        "operation": "replace",
+        "path": "/drain/claimant_count",
+        "value": 2
+      }
+    },
+    {
+      "baseline_scenario_id": "WS-RECOVERY-CRASH-UNKNOWN-QUARANTINE",
+      "expected_error": "drain_bound_required",
+      "id": "WS-RECOVERY-NEG-UNBOUNDED-DRAIN",
+      "mutation": {
+        "operation": "replace",
+        "path": "/drain/bound_seconds",
+        "value": 0
+      }
+    },
+    {
+      "baseline_scenario_id": "WS-RECOVERY-CRASH-UNKNOWN-QUARANTINE",
+      "expected_error": "unknown_effect_cannot_end_released",
+      "id": "WS-RECOVERY-NEG-UNKNOWN-AS-RELEASED",
+      "mutation": {
+        "operation": "replace",
+        "path": "/terminal_disposition",
+        "value": "crashed_released"
+      }
+    },
+    {
+      "baseline_scenario_id": "WS-RECOVERY-EFFECT-TRANSFER-RELEASE",
+      "expected_error": "named_transfer_authority_required",
+      "id": "WS-RECOVERY-NEG-UNNAMED-TRANSFER",
+      "mutation": {
+        "operation": "replace",
+        "path": "/effect/transfer_authority_role_id",
+        "value": "absent"
+      }
+    },
+    {
+      "baseline_scenario_id": "WS-RECOVERY-EFFECT-TRANSFER-RELEASE",
+      "expected_error": "durable_transfer_receipt_required",
+      "id": "WS-RECOVERY-NEG-UNRECEIPTED-TRANSFER",
+      "mutation": {
+        "operation": "replace",
+        "path": "/effect/transfer_receipt_id",
+        "value": "absent"
+      }
+    }
+  ],
+  "replay_rule": "The same persisted lease generation, recovery attempt, inventories, cleanup result, effect state, and transfer receipt produce the same owner and terminal disposition without resetting the drain bound or overwriting prior attempts.",
+  "scenarios": [
+    {
+      "branch_class": "cancel",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-cancel-before-work",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 30,
+        "claimant_count": 0,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": false,
+        "result": "no_child_started"
+      },
+      "effect": {
+        "recovery_owner_role_id": "absent",
+        "state": "absent",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "admission_decision",
+        "cancellation_reason",
+        "cleanup_receipt",
+        "lease_record"
+      ],
+      "id": "WS-RECOVERY-CANCEL-BEFORE-WORK",
+      "owner_role_id": "workspace_lease_authority",
+      "replay": {
+        "first_terminal_disposition": "cancelled_released",
+        "identical_result": true,
+        "second_terminal_disposition": "cancelled_released"
+      },
+      "terminal_disposition": "cancelled_released"
+    },
+    {
+      "branch_class": "cancel",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-cancel-during-effect-attention",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": false,
+        "prior_owner_absence_proven": false,
+        "result": "effect_unknown_at_bound"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "unknown",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "cancellation_decision",
+        "cleanup_receipt",
+        "effect_attempt",
+        "missing_effect_receipt",
+        "process_inventory",
+        "resource_inventory"
+      ],
+      "id": "WS-RECOVERY-CANCEL-DURING-EFFECT-ATTENTION",
+      "owner_role_id": "external_effect_recovery_authority",
+      "replay": {
+        "first_terminal_disposition": "unsettled_effect_attention",
+        "identical_result": true,
+        "second_terminal_disposition": "unsettled_effect_attention"
+      },
+      "terminal_disposition": "unsettled_effect_attention"
+    },
+    {
+      "branch_class": "cleanup_failure",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-cleanup-failure",
+        "evidence_retained_before_root_removal": true,
+        "result": "failed",
+        "root_removed": false
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": false,
+        "result": "all_owned_processes_stopped"
+      },
+      "effect": {
+        "recovery_owner_role_id": "absent",
+        "state": "absent",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "cleanup_error_code",
+        "cleanup_failure_receipt",
+        "owned_resource_manifest",
+        "quarantine_reference",
+        "retention_policy"
+      ],
+      "id": "WS-RECOVERY-CLEANUP-FAILURE",
+      "owner_role_id": "workspace_lease_authority",
+      "replay": {
+        "first_terminal_disposition": "cleanup_failed_attention",
+        "identical_result": true,
+        "second_terminal_disposition": "cleanup_failed_attention"
+      },
+      "terminal_disposition": "cleanup_failed_attention"
+    },
+    {
+      "branch_class": "cleanup_success",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-cleanup-success",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": false,
+        "result": "all_owned_resources_stopped"
+      },
+      "effect": {
+        "recovery_owner_role_id": "absent",
+        "state": "absent",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "cleanup_receipt",
+        "owned_resource_manifest",
+        "retained_evidence_snapshot"
+      ],
+      "id": "WS-RECOVERY-CLEANUP-SUCCESS",
+      "owner_role_id": "workspace_lease_authority",
+      "replay": {
+        "first_terminal_disposition": "released",
+        "identical_result": true,
+        "second_terminal_disposition": "released"
+      },
+      "terminal_disposition": "released"
+    },
+    {
+      "branch_class": "crash",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-crash-settled-release",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": false,
+        "result": "descendants_terminated_and_inventoried"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "settled",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "cleanup_receipt",
+        "crash_observation",
+        "effect_settlement_receipt",
+        "lease_generation",
+        "process_inventory"
+      ],
+      "id": "WS-RECOVERY-CRASH-SETTLED-RELEASE",
+      "owner_role_id": "workspace_lease_authority",
+      "replay": {
+        "first_terminal_disposition": "crashed_released",
+        "identical_result": true,
+        "second_terminal_disposition": "crashed_released"
+      },
+      "terminal_disposition": "crashed_released"
+    },
+    {
+      "branch_class": "quarantine",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-crash-unknown-quarantine",
+        "evidence_retained_before_root_removal": true,
+        "result": "not_run",
+        "root_removed": false
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": false,
+        "prior_owner_absence_proven": false,
+        "result": "descendant_or_effect_unknown_at_bound"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "unknown",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "crash_observation",
+        "effect_ledger",
+        "lease_generation",
+        "quarantine_reference",
+        "resource_inventory"
+      ],
+      "id": "WS-RECOVERY-CRASH-UNKNOWN-QUARANTINE",
+      "owner_role_id": "workspace_lease_authority",
+      "replay": {
+        "first_terminal_disposition": "quarantined",
+        "identical_result": true,
+        "second_terminal_disposition": "quarantined"
+      },
+      "terminal_disposition": "quarantined"
+    },
+    {
+      "branch_class": "transfer",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-effect-transfer-release",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": false,
+        "result": "workspace_resources_settled"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "transferred",
+        "transfer_authority_role_id": "external_effect_recovery_authority",
+        "transfer_receipt_id": "effect-transfer-receipt-0001"
+      },
+      "evidence": [
+        "cleanup_receipt",
+        "effect_attempt",
+        "effect_transfer_receipt",
+        "named_transfer_authority_grant",
+        "resource_inventory"
+      ],
+      "id": "WS-RECOVERY-EFFECT-TRANSFER-RELEASE",
+      "owner_role_id": "workspace_lease_authority",
+      "replay": {
+        "first_terminal_disposition": "released",
+        "identical_result": true,
+        "second_terminal_disposition": "released"
+      },
+      "terminal_disposition": "released"
+    },
+    {
+      "branch_class": "orphan",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-orphan-settled-release",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 1,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": true,
+        "result": "atomic_claim_then_reconcile"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "settled",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "atomic_claim_receipt",
+        "cleanup_receipt",
+        "effect_settlement_receipt",
+        "lease_generation",
+        "prior_owner_absence_proof"
+      ],
+      "id": "WS-RECOVERY-ORPHAN-SETTLED-RELEASE",
+      "owner_role_id": "orphan_recovery_supervisor",
+      "replay": {
+        "first_terminal_disposition": "orphan_released",
+        "identical_result": true,
+        "second_terminal_disposition": "orphan_released"
+      },
+      "terminal_disposition": "orphan_released"
+    },
+    {
+      "branch_class": "orphan",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-orphan-unknown-attention",
+        "evidence_retained_before_root_removal": true,
+        "result": "not_run",
+        "root_removed": false
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 1,
+        "completed_within_bound": false,
+        "prior_owner_absence_proven": true,
+        "result": "atomic_claim_effect_unknown_at_bound"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "unknown",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "atomic_claim_receipt",
+        "effect_ledger",
+        "lease_generation",
+        "prior_owner_absence_proof",
+        "quarantine_reference"
+      ],
+      "id": "WS-RECOVERY-ORPHAN-UNKNOWN-ATTENTION",
+      "owner_role_id": "external_effect_recovery_authority",
+      "replay": {
+        "first_terminal_disposition": "unsettled_effect_attention",
+        "identical_result": true,
+        "second_terminal_disposition": "unsettled_effect_attention"
+      },
+      "terminal_disposition": "unsettled_effect_attention"
+    },
+    {
+      "branch_class": "restart",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-restart-partial-attention",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": false,
+        "result": "resumed_existing_bound_without_reset"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "partial",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "cleanup_receipt",
+        "durable_prior_attempts",
+        "effect_partial_result",
+        "lease_generation",
+        "restart_reconciliation"
+      ],
+      "id": "WS-RECOVERY-RESTART-PARTIAL-ATTENTION",
+      "owner_role_id": "external_effect_recovery_authority",
+      "replay": {
+        "first_terminal_disposition": "unsettled_effect_attention",
+        "identical_result": true,
+        "second_terminal_disposition": "unsettled_effect_attention"
+      },
+      "terminal_disposition": "unsettled_effect_attention"
+    },
+    {
+      "branch_class": "restart",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-restart-settled-release",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": false,
+        "result": "resumed_existing_bound_without_reset"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "compensated",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "cleanup_receipt",
+        "compensation_receipt",
+        "durable_prior_attempts",
+        "lease_generation",
+        "restart_reconciliation"
+      ],
+      "id": "WS-RECOVERY-RESTART-SETTLED-RELEASE",
+      "owner_role_id": "workspace_lease_authority",
+      "replay": {
+        "first_terminal_disposition": "cancelled_released",
+        "identical_result": true,
+        "second_terminal_disposition": "cancelled_released"
+      },
+      "terminal_disposition": "cancelled_released"
+    },
+    {
+      "branch_class": "effect_attention",
+      "cleanup": {
+        "attempt_id": "cleanup-ws-recovery-unsettled-effect-attention",
+        "evidence_retained_before_root_removal": true,
+        "result": "succeeded",
+        "root_removed": true
+      },
+      "drain": {
+        "bound_seconds": 120,
+        "claimant_count": 0,
+        "completed_within_bound": true,
+        "prior_owner_absence_proven": false,
+        "result": "workspace_resources_settled_effect_unsettled"
+      },
+      "effect": {
+        "recovery_owner_role_id": "external_effect_recovery_authority",
+        "state": "unsettled",
+        "transfer_authority_role_id": "absent",
+        "transfer_receipt_id": "absent"
+      },
+      "evidence": [
+        "affected_public_resource_ids",
+        "effect_grant_reference",
+        "effect_start_stop_evidence",
+        "missing_effect_receipt",
+        "recovery_attention_reference"
+      ],
+      "id": "WS-RECOVERY-UNSETTLED-EFFECT-ATTENTION",
+      "owner_role_id": "external_effect_recovery_authority",
+      "replay": {
+        "first_terminal_disposition": "unsettled_effect_attention",
+        "identical_result": true,
+        "second_terminal_disposition": "unsettled_effect_attention"
+      },
+      "terminal_disposition": "unsettled_effect_attention"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative",
+  "terminal_dispositions": [
+    "cancelled_released",
+    "cleanup_failed_attention",
+    "crashed_released",
+    "orphan_released",
+    "quarantined",
+    "rejected",
+    "released",
+    "rework",
+    "stale",
+    "unsettled_effect_attention"
+  ]
+}

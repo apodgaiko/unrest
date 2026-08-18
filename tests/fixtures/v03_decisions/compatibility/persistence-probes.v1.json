@@ -1,0 +1,79 @@
+{
+  "base": {
+    "commit": "96d5c0f0b240bd3373809546d7aecc1e407f837b",
+    "tree": "a6746372e3367ee11d974cbe4778f968a38f940f"
+  },
+  "frozen_oracle": {
+    "expected_cases": 14,
+    "files": {
+      "tests/fixtures/persistence_schema_v1/corpus.json": "3facd3cbe5150f091d0471c8a71b9948982145703d05a7f88439160e8d72d2b4",
+      "tests/fixtures/persistence_schema_v1/generation-transcript.json": "c9ea371d36a03ae6f4cade3f91e4f72484c899bf52db2ee3a315593049d574a1",
+      "tests/fixtures/persistence_schema_v1/legacy-validation-handoff.json": "c935afe0a7f87476aae67b72f87bdd35d85c633840cff3bffb8d98fc774b7551",
+      "tests/fixtures/persistence_schema_v1/legacy-work-handoff.json": "63fb00c29bfc60211a3d17bb62ded917c34a124f174d8a5bcf231003296f7051",
+      "tests/fixtures/persistence_schema_v1/manifest.json": "7248010cc7e20ab41f46ee93c1f1f2a3595ce4413bca6ceaa9515e5d88cabb54"
+    },
+    "handoff_provenance": {
+      "current_base_contains_exact_bytes": "96d5c0f0b240bd3373809546d7aecc1e407f837b",
+      "generator": "tools/generate_legacy_handoff_fixtures.py",
+      "identity_member_at_source": "absent",
+      "source_reference": "93c59e4378407f3d7cfb918cf86c8bdc81daa141",
+      "source_tree": "35152a4a8c56198664f519691ec952ec9ca519f4"
+    },
+    "test_file_sha256": "a24076cf17c5e2c4a6abcaae0c5a931ab8edfd2ad9f96cb789bbe968016eb58b"
+  },
+  "kind": "persistence-probes.v1",
+  "probes": [
+    {
+      "attempt_bytes_utf8": "{\"node_id\":\"w1\",\"attempt_id\":null,\"done\":true,\"report\":\"probe\",\"request_attention\":false}\n",
+      "cleanup_owner": "probe runner removes only its fresh temporary root after transcript capture",
+      "expected_error": "AttemptValidationError: attempt_id must not be null",
+      "forbidden_outcomes": [
+        "dispatch",
+        "task cleared",
+        "durable mirror write",
+        "attempt byte rewrite"
+      ],
+      "generation": "2026-08-18T00-00-00Z",
+      "id": "PERSIST-PROBE-NULL",
+      "node_id": "w1",
+      "operation": "ProjectStore.read_attempt(project, mission, generation, node_id)",
+      "precondition": "fresh real ProjectStore and attempt filename matches generation and node",
+      "terminal_disposition": "rejected_unmodified"
+    },
+    {
+      "attempt_bytes_utf8": "{\"node_id\":\"w1\",\"attempt_id\":\"2026-08-18T00-00-01Z\",\"done\":true,\"report\":\"probe\",\"request_attention\":false}\n",
+      "cleanup_owner": "probe runner removes only its fresh temporary root after transcript capture",
+      "expected_error": "AttemptValidationError: attempt_id does not match running generation",
+      "forbidden_outcomes": [
+        "dispatch",
+        "task cleared",
+        "durable mirror write",
+        "attempt byte rewrite"
+      ],
+      "generation": "2026-08-18T00-00-00Z",
+      "id": "PERSIST-PROBE-MISMATCH",
+      "node_id": "w1",
+      "operation": "ProjectStore.read_attempt(project, mission, generation, node_id)",
+      "precondition": "fresh real ProjectStore and explicit non-null attempt_id differs from filename generation",
+      "terminal_disposition": "rejected_unmodified"
+    },
+    {
+      "attempt_bytes_utf8": "{\"node_id\":\"w1\",\"attempt_id\":\"2026-08-18T00-00-00Z\",\"done\":true,\"report\":\"probe\",\"request_attention\":false}\n",
+      "cleanup_owner": "probe runner removes only its fresh temporary root after transcript capture",
+      "expected_error": "AttemptValidationError: attempt_id does not match running generation",
+      "forbidden_outcomes": [
+        "dispatch",
+        "task cleared",
+        "durable mirror write",
+        "attempt byte rewrite"
+      ],
+      "generation": "2026-08-18T00-00-02Z",
+      "id": "PERSIST-PROBE-REPLAY",
+      "node_id": "w1",
+      "operation": "copy valid prior-generation bytes under new-generation filename, then ProjectStore.read_attempt(project, mission, new generation, node_id)",
+      "precondition": "fresh real ProjectStore and otherwise valid handoff bytes bind an earlier generation",
+      "terminal_disposition": "rejected_unmodified"
+    }
+  ],
+  "reader": "src/unrest_harness/storage.py:ProjectStore.read_attempt"
+}

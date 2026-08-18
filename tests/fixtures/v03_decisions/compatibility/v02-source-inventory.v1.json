@@ -1,0 +1,734 @@
+{
+  "base": {
+    "commit": "96d5c0f0b240bd3373809546d7aecc1e407f837b",
+    "tree": "a6746372e3367ee11d974cbe4778f968a38f940f"
+  },
+  "inventory_version": "v02-source-inventory.v1",
+  "kind": "v02-source-inventory.v1",
+  "source_hashes": {
+    ".github/workflows/ci.yml": "5a3e1b3d3fb6e33860664cb885eb6ca2a73ba57abcd6cff77ac4937134f86ea3",
+    "docs/architecture/capability-policy.md": "029d614267cebcfadb00b23d3a1b286fdc1cf77b59a256be83745b33d93e7b4c",
+    "docs/architecture/repository-contract.md": "7ce4fb1b9452659c3c4a001d0df27372aaca0cec6b0b480ae159f6cf36ce51cd",
+    "docs/decisions/ADR-0001-observe-before-optimizing.md": "b80b23a54f30828a450ec69086b62a5611be97a23e8e1674d18a45296e477a09",
+    "docs/decisions/ADR-0002-lean-core-v0.2.md": "c677138eead5ed3359e69c05607848af2ea5a0b755e99241ce1e3523aef43ed5",
+    "docs/v5/08-mcp-surface.md": "e28417cac31478b8e6b0eda8c518dc1846dbe1eba72d31ac57fa2f4f1e5f2591",
+    "pyproject.toml": "2425f4d481426bc065809ad920dc20cb6123c0462705d6f578333e5b3439dda1",
+    "specs/memory_v2/PRODUCT.md": "b345d390a181a9c93b048a44c144dd382e36f933f17ff618a5b1c4e3e92e6424",
+    "src/unrest_harness/acp_runner.py": "1426ed84bc1d512851ca5610f874818137af1bbb461a4bbc85cbf8b4a2bf2f2f",
+    "src/unrest_harness/assets.py": "93facf4aa579a91099bc7dd5387d8132561b706fd752adc8b93e8a67523f3e7e",
+    "src/unrest_harness/capability_policy.py": "4f62a12d592f3407e6a48fba299102dfd1d05e576a2429c4ba3f648f9519576d",
+    "src/unrest_harness/cli.py": "d37458605d0ad0ce8a6f7dc980370fb2a8320a8bbed982505ec39555a5f251d2",
+    "src/unrest_harness/config.py": "27e0fd44dd421b72c41876ff147128ad2d8b5ff3f0522c7075abdb8df2e1d193",
+    "src/unrest_harness/controller.py": "684aa7db09dbcc6b2f02bf42e1667bebf9b16310cc4ce8374e309c2f06306e41",
+    "src/unrest_harness/coordinator.py": "bc337b2d9ccd7c4e83f2ef6e439fb67b318b0c4ab4294a54637dc548cd3fe465",
+    "src/unrest_harness/envelope.py": "227b20e0147f2ec3491fc000ee1d9390880f46d3bd595dfb522ed35ff4f70c7f",
+    "src/unrest_harness/installed_wheel_check.py": "ae175d4da81ffe9a121fdfb87ad288a951fb48c90931e116e2ac6e83f2fe76ac",
+    "src/unrest_harness/models.py": "62154f5ddf82f361b128aacc49ef0039c99fefb0afb2d13c06446ad542947965",
+    "src/unrest_harness/providers.py": "8249451ff51d0cfb30fa68b34adee024d4d1b864602d40df4de9e4ac96ae0a2d",
+    "src/unrest_harness/repository_contract.py": "537d553f69d1ebb45a05e5f1eaae8a90831c474b9ebe2ca1813ff09f6998ab0a",
+    "src/unrest_harness/runtime_observability.py": "53dd39fbd39f1fe23ddfeb469e93e8cf79090e4b55c602588ef46ab009ed5048",
+    "src/unrest_harness/server.py": "13fb882baf3ef4afb589548d87d53e1c924b18f679e7cad45024b4bc50961339",
+    "src/unrest_harness/storage.py": "1e185874ad9b1e03710ea5cf0bad4193bc43bbb0977e360071f7bda8b356af1e",
+    "tests/test_persistence_schema_v1.py": "a24076cf17c5e2c4a6abcaae0c5a931ab8edfd2ad9f96cb789bbe968016eb58b",
+    "tools/check_distribution.py": "3ecf0c97dada55d0c67e9de025a4ab8e5361b61c7224406d97f19443de2f0762"
+  },
+  "surfaces": [
+    {
+      "category": "alias-no-op",
+      "source": [
+        "src/unrest_harness/envelope.py:render_dag"
+      ],
+      "surface": "render_dag compatibility alias",
+      "surface_id": "ALIAS-RENDER-DAG"
+    },
+    {
+      "category": "alias-no-op",
+      "source": [
+        "src/unrest_harness/models.py:Task.auto_merge"
+      ],
+      "surface": "auto_merge serialized legacy no-op",
+      "surface_id": "ALIAS-TASK-AUTO-MERGE"
+    },
+    {
+      "category": "alias-no-op",
+      "source": [
+        "specs/memory_v2/PRODUCT.md:attempt filenames"
+      ],
+      "surface": "node_id filename token meaning task id",
+      "surface_id": "ALIAS-TASK-NODE-ID"
+    },
+    {
+      "category": "capability",
+      "source": [
+        "src/unrest_harness/bundled/policies/role-capabilities.v1.json"
+      ],
+      "surface": "finite capability policy schema v1",
+      "surface_id": "CAP-POLICY-V1"
+    },
+    {
+      "category": "capability",
+      "source": [
+        "docs/architecture/capability-policy.md:safe profile"
+      ],
+      "surface": "safe default profile",
+      "surface_id": "CAP-PROFILE-SAFE"
+    },
+    {
+      "category": "capability",
+      "source": [
+        "docs/architecture/capability-policy.md:unsafe profile"
+      ],
+      "surface": "explicit unsafe development profile",
+      "surface_id": "CAP-PROFILE-UNSAFE"
+    },
+    {
+      "category": "capability",
+      "source": [
+        "src/unrest_harness/capability_policy.py:FINITE_CREDENTIAL_NAMES"
+      ],
+      "surface": "finite exact-known credential inventory and redaction",
+      "surface_id": "CAP-EXACT-CREDENTIALS"
+    },
+    {
+      "category": "capability",
+      "source": [
+        "docs/architecture/capability-policy.md:limitations"
+      ],
+      "surface": "no OS sandbox or network-denial claim",
+      "surface_id": "CAP-NO-SANDBOX-CLAIM"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "pyproject.toml:project.scripts"
+      ],
+      "surface": "unrest console entry point",
+      "surface_id": "CLI-ENTRY-UNREST"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "pyproject.toml:project.scripts"
+      ],
+      "surface": "unrest-server console entry point",
+      "surface_id": "CLI-ENTRY-SERVER"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/__main__.py"
+      ],
+      "surface": "python -m unrest_harness entry point",
+      "surface_id": "CLI-ENTRY-MODULE"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/cli.py:check_repository_cmd"
+      ],
+      "surface": "check-repository command",
+      "surface_id": "CLI-CMD-CHECK-REPOSITORY"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/cli.py:init"
+      ],
+      "surface": "init command",
+      "surface_id": "CLI-CMD-INIT"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/cli.py:install_skills_cmd"
+      ],
+      "surface": "install-skills command",
+      "surface_id": "CLI-CMD-INSTALL-SKILLS"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/cli.py:list_projects_cmd"
+      ],
+      "surface": "list-projects command",
+      "surface_id": "CLI-CMD-LIST-PROJECTS"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/cli.py:show_project_cmd"
+      ],
+      "surface": "show-project command",
+      "surface_id": "CLI-CMD-SHOW-PROJECT"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/cli.py:observe_project_cmd"
+      ],
+      "surface": "observe-project command",
+      "surface_id": "CLI-CMD-OBSERVE-PROJECT"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/cli.py:inspect_tasks_cmd"
+      ],
+      "surface": "inspect-tasks command",
+      "surface_id": "CLI-CMD-INSPECT-TASKS"
+    },
+    {
+      "category": "cli",
+      "source": [
+        "src/unrest_harness/cli.py:abort_project_cmd"
+      ],
+      "surface": "abort-project command",
+      "surface_id": "CLI-CMD-ABORT-PROJECT"
+    },
+    {
+      "category": "config",
+      "source": [
+        "src/unrest_harness/config.py:_CONFIG_ENV"
+      ],
+      "surface": "home and projects directory environment discovery",
+      "surface_id": "CONFIG-STORAGE-ROOTS"
+    },
+    {
+      "category": "config",
+      "source": [
+        "src/unrest_harness/config.py:_CONFIG_ENV"
+      ],
+      "surface": "orchestrator worker validator reviewer provider discovery",
+      "surface_id": "CONFIG-PROVIDER-ROLES"
+    },
+    {
+      "category": "config",
+      "source": [
+        "src/unrest_harness/config.py:_CONFIG_ENV"
+      ],
+      "surface": "role ACP command overrides",
+      "surface_id": "CONFIG-ACP-COMMANDS"
+    },
+    {
+      "category": "config",
+      "source": [
+        "src/unrest_harness/config.py:_CONFIG_ENV"
+      ],
+      "surface": "parallelism and terminal review timeout",
+      "surface_id": "CONFIG-RUNTIME-LIMITS"
+    },
+    {
+      "category": "config",
+      "source": [
+        "src/unrest_harness/acp_runner.py:58-63"
+      ],
+      "surface": "UNREST_SUBPROCESS_STREAM_LIMIT_BYTES bounded ACP subprocess capture",
+      "surface_id": "CONFIG-SUBPROCESS-STREAM-LIMIT"
+    },
+    {
+      "category": "config",
+      "source": [
+        "src/unrest_harness/config.py:VALID_REASONING_EFFORTS"
+      ],
+      "surface": "role reasoning effort allowlist",
+      "surface_id": "CONFIG-REASONING-EFFORT"
+    },
+    {
+      "category": "config",
+      "source": [
+        "src/unrest_harness/cli.py:UNREST_WORKER_MODEL",
+        "src/unrest_harness/models.py:ProjectRecord.worker_model"
+      ],
+      "surface": "optional persisted Codex work-node model override",
+      "surface_id": "CONFIG-WORKER-MODEL"
+    },
+    {
+      "category": "config",
+      "source": [
+        "src/unrest_harness/capability_policy.py:profile environment"
+      ],
+      "surface": "capability version and profile environment",
+      "surface_id": "CONFIG-CAPABILITY-PROFILE"
+    },
+    {
+      "category": "coordinator",
+      "source": [
+        "src/unrest_harness/coordinator.py:MissionCoordinator",
+        "src/unrest_harness/controller.py:ProjectController"
+      ],
+      "surface": "single MissionCoordinator transition authority path",
+      "surface_id": "COORD-SINGLE-AUTHORITY"
+    },
+    {
+      "category": "discovery",
+      "source": [
+        "src/unrest_harness/storage.py:_ensure_symlink_shims"
+      ],
+      "surface": "workspace .agents/skills discovery shim",
+      "surface_id": "DISCOVERY-AGENTS-SKILLS"
+    },
+    {
+      "category": "discovery",
+      "source": [
+        "src/unrest_harness/storage.py:_ensure_symlink_shims"
+      ],
+      "surface": "workspace .claude/skills discovery shim",
+      "surface_id": "DISCOVERY-CLAUDE-SKILLS"
+    },
+    {
+      "category": "discovery",
+      "source": [
+        "src/unrest_harness/storage.py:_ensure_symlink_shims"
+      ],
+      "surface": "workspace .codex/skills discovery shim",
+      "surface_id": "DISCOVERY-CODEX-SKILLS"
+    },
+    {
+      "category": "discovery",
+      "source": [
+        "src/unrest_harness/storage.py:_ensure_agents_surface"
+      ],
+      "surface": "conditional workspace AGENTS.md discovery shim",
+      "surface_id": "DISCOVERY-AGENTS-MD"
+    },
+    {
+      "category": "distribution",
+      "source": [
+        "pyproject.toml:project.name"
+      ],
+      "surface": "distribution name unrest-harness",
+      "surface_id": "DIST-NAME"
+    },
+    {
+      "category": "distribution",
+      "source": [
+        "pyproject.toml:project.version",
+        "src/unrest_harness/__init__.py:__version__"
+      ],
+      "surface": "distribution and package version 0.2.0",
+      "surface_id": "DIST-VERSION"
+    },
+    {
+      "category": "distribution",
+      "source": [
+        "pyproject.toml:build-system",
+        "tools/check_distribution.py"
+      ],
+      "surface": "wheel artifact and membership",
+      "surface_id": "DIST-WHEEL"
+    },
+    {
+      "category": "distribution",
+      "source": [
+        "pyproject.toml:build-system",
+        "tools/check_distribution.py"
+      ],
+      "surface": "sdist artifact and safe extraction",
+      "surface_id": "DIST-SDIST"
+    },
+    {
+      "category": "hard-cut",
+      "source": [
+        "docs/decisions/ADR-0002-lean-core-v0.2.md:decision 4"
+      ],
+      "surface": "removed check-governance command",
+      "surface_id": "CUT-CHECK-GOVERNANCE"
+    },
+    {
+      "category": "hard-cut",
+      "source": [
+        "docs/decisions/ADR-0002-lean-core-v0.2.md:decision 4"
+      ],
+      "surface": "removed check-commit command",
+      "surface_id": "CUT-CHECK-COMMIT"
+    },
+    {
+      "category": "hard-cut",
+      "source": [
+        "docs/decisions/ADR-0002-lean-core-v0.2.md:decision 2"
+      ],
+      "surface": "removed unsupported third child provider",
+      "surface_id": "CUT-THIRD-PROVIDER"
+    },
+    {
+      "category": "hard-cut",
+      "source": [
+        "docs/decisions/ADR-0002-lean-core-v0.2.md:decision 6"
+      ],
+      "surface": "removed terminal child credential inheritance",
+      "surface_id": "CUT-TERMINAL-CREDENTIALS"
+    },
+    {
+      "category": "hard-cut",
+      "source": [
+        "docs/decisions/ADR-0002-lean-core-v0.2.md:decision 5"
+      ],
+      "surface": "removed transformed-secret redaction guarantee",
+      "surface_id": "CUT-TRANSFORMED-REDACTION"
+    },
+    {
+      "category": "hard-cut",
+      "source": [
+        "docs/decisions/ADR-0002-lean-core-v0.2.md:decision 5"
+      ],
+      "surface": "removed duplicate root schemas and baseline generator",
+      "surface_id": "CUT-ROOT-SCHEMAS-BASELINE"
+    },
+    {
+      "category": "hard-cut",
+      "source": [
+        "docs/decisions/ADR-0002-lean-core-v0.2.md:decision 5"
+      ],
+      "surface": "removed static capability graph and recursive repository assurance",
+      "surface_id": "CUT-STATIC-ASSURANCE"
+    },
+    {
+      "category": "install",
+      "source": [
+        "pyproject.toml:project.dependencies"
+      ],
+      "surface": "ordinary core installation dependency set",
+      "surface_id": "INSTALL-CORE"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/server.py:create_orchestrator_server"
+      ],
+      "surface": "orchestrator MCP identity and seven tools",
+      "surface_id": "MCP-ORCHESTRATOR"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/server.py:create_worker_server"
+      ],
+      "surface": "worker MCP identity and strict end_node",
+      "surface_id": "MCP-WORKER"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/server.py:create_validator_server"
+      ],
+      "surface": "validator MCP identity and strict end_node",
+      "surface_id": "MCP-VALIDATOR"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/server.py:create_terminal_reviewer_server"
+      ],
+      "surface": "terminal reviewer MCP identity and strict submit_terminal_review",
+      "surface_id": "MCP-TERMINAL-REVIEWER"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/server.py:_register_orchestrator_tools"
+      ],
+      "surface": "start_project submit_plan advance_project end_mission decide_attention inspect_project abort_project tools",
+      "surface_id": "MCP-ORCHESTRATOR-TOOLS"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/models.py:Envelope"
+      ],
+      "surface": "strict Envelope projectId state projectRoot harnessRoot dag",
+      "surface_id": "MCP-ENVELOPE"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/models.py:WorkHandoff",
+        "src/unrest_harness/models.py:ValidateHandoff",
+        "src/unrest_harness/models.py:TerminalReviewHandoff"
+      ],
+      "surface": "strict work validation and terminal review handoffs",
+      "surface_id": "MCP-HANDOFFS"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/acp_runner.py:1005",
+        "src/unrest_harness/server.py:426-428"
+      ],
+      "surface": "UNREST_HANDOFF_PATH worker and validator handoff destination",
+      "surface_id": "MCP-HANDOFF-PATH"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/acp_runner.py:1008",
+        "src/unrest_harness/server.py:429-431"
+      ],
+      "surface": "UNREST_NODE_ID worker and validator task identity",
+      "surface_id": "MCP-NODE-ID"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/acp_runner.py:1009",
+        "src/unrest_harness/server.py:425"
+      ],
+      "surface": "UNREST_NODE_TYPE work or validation handoff mode",
+      "surface_id": "MCP-NODE-TYPE"
+    },
+    {
+      "category": "mcp",
+      "source": [
+        "src/unrest_harness/acp_runner.py:1358",
+        "src/unrest_harness/server.py:493-497"
+      ],
+      "surface": "UNREST_TERMINAL_REVIEW_PATH terminal-review handoff destination",
+      "surface_id": "MCP-TERMINAL-REVIEW-PATH"
+    },
+    {
+      "category": "observer",
+      "source": [
+        "src/unrest_harness/runtime_observability.py:RuntimeObservation"
+      ],
+      "surface": "compact read-only observer schema v2",
+      "surface_id": "OBSERVER-SCHEMA-V2"
+    },
+    {
+      "category": "observer",
+      "source": [
+        "src/unrest_harness/cli.py:observe_project_cmd"
+      ],
+      "surface": "single-project and all-project strict JSON/text observation",
+      "surface_id": "OBSERVER-CLI-MODES"
+    },
+    {
+      "category": "observer",
+      "source": [
+        "docs/decisions/ADR-0001-observe-before-optimizing.md"
+      ],
+      "surface": "removed observer v1 aliases detail timing counts and shadow scheduling",
+      "surface_id": "OBSERVER-V1-CUT"
+    },
+    {
+      "category": "optional-extra",
+      "source": [
+        "pyproject.toml"
+      ],
+      "surface": "current absence of project.optional-dependencies",
+      "surface_id": "EXTRAS-CURRENT-ABSENCE"
+    },
+    {
+      "category": "optional-extra",
+      "source": [
+        "proposal:03-build-vs-borrow.md:Dependency placement and Lean Core path"
+      ],
+      "surface": "future removable adapter extras",
+      "surface_id": "EXTRAS-FUTURE-GATE"
+    },
+    {
+      "category": "package-data",
+      "source": [
+        "pyproject.toml:tool.setuptools.package-data"
+      ],
+      "surface": "bundled role capability policy",
+      "surface_id": "PKG-POLICY"
+    },
+    {
+      "category": "package-data",
+      "source": [
+        "pyproject.toml:tool.setuptools.package-data"
+      ],
+      "surface": "bundled role prompts",
+      "surface_id": "PKG-PROMPTS"
+    },
+    {
+      "category": "package-data",
+      "source": [
+        "pyproject.toml:tool.setuptools.package-data"
+      ],
+      "surface": "bundled Claude and Codex agent definitions",
+      "surface_id": "PKG-PROVIDER-AGENTS"
+    },
+    {
+      "category": "package-data",
+      "source": [
+        "pyproject.toml:tool.setuptools.package-data"
+      ],
+      "surface": "bundled skill packages",
+      "surface_id": "PKG-SKILLS"
+    },
+    {
+      "category": "package-data",
+      "source": [
+        "pyproject.toml:tool.setuptools.package-data"
+      ],
+      "surface": "py.typed marker",
+      "surface_id": "PKG-PY-TYPED"
+    },
+    {
+      "category": "persistence",
+      "source": [
+        "src/unrest_harness/models.py:ProjectState"
+      ],
+      "surface": "strict schema-v1 project and mission state",
+      "surface_id": "PERSIST-STATE-V1"
+    },
+    {
+      "category": "persistence",
+      "source": [
+        "tests/test_persistence_schema_v1.py"
+      ],
+      "surface": "frozen 14-case schema-v1 oracle",
+      "surface_id": "PERSIST-FROZEN-14"
+    },
+    {
+      "category": "persistence",
+      "source": [
+        "src/unrest_harness/storage.py:read_attempt"
+      ],
+      "surface": "absent attempt_id base-era in-memory binding",
+      "surface_id": "PERSIST-ABSENT-ATTEMPT-ID"
+    },
+    {
+      "category": "persistence",
+      "source": [
+        "src/unrest_harness/storage.py:_parse_attempt"
+      ],
+      "surface": "items-or-passed observed-legacy attempt kind reader",
+      "surface_id": "PERSIST-ATTEMPT-KIND"
+    },
+    {
+      "category": "persistence",
+      "source": [
+        "src/unrest_harness/storage.py:read_attempt"
+      ],
+      "surface": "explicit null mismatched and replayed attempt rejection",
+      "surface_id": "PERSIST-ATTEMPT-REJECTIONS"
+    },
+    {
+      "category": "persistence",
+      "source": [
+        "src/unrest_harness/storage.py:atomic_write_text",
+        "src/unrest_harness/storage.py:atomic_write_json"
+      ],
+      "surface": "centralized atomic text and JSON persistence",
+      "surface_id": "PERSIST-ATOMIC-WRITES"
+    },
+    {
+      "category": "provider",
+      "source": [
+        "src/unrest_harness/providers.py:PROVIDERS"
+      ],
+      "surface": "Claude provider",
+      "surface_id": "PROVIDER-CLAUDE"
+    },
+    {
+      "category": "provider",
+      "source": [
+        "src/unrest_harness/providers.py:PROVIDERS"
+      ],
+      "surface": "Codex provider",
+      "surface_id": "PROVIDER-CODEX"
+    },
+    {
+      "category": "public-api",
+      "source": [
+        "src/unrest_harness/__init__.py:__version__",
+        "README.md"
+      ],
+      "surface": "declared package version and documented command MCP surfaces",
+      "surface_id": "PUBLIC-DECLARED"
+    },
+    {
+      "category": "public-api",
+      "source": [
+        "src/unrest_harness/models.py:__all__",
+        "src/unrest_harness/*"
+      ],
+      "surface": "importable internal Python objects with unverified third-party stability",
+      "surface_id": "PUBLIC-INTERNAL-UNCERTAIN"
+    },
+    {
+      "category": "python",
+      "source": [
+        "pyproject.toml:requires-python",
+        "pyproject.toml:classifiers"
+      ],
+      "surface": "Python 3.11 compatibility lane",
+      "surface_id": "PYTHON-311"
+    },
+    {
+      "category": "python",
+      "source": [
+        "pyproject.toml:requires-python",
+        "pyproject.toml:classifiers"
+      ],
+      "surface": "Python 3.12 compatibility lane",
+      "surface_id": "PYTHON-312"
+    },
+    {
+      "category": "python",
+      "source": [
+        "pyproject.toml:requires-python",
+        "pyproject.toml:classifiers"
+      ],
+      "surface": "Python 3.13 primary release lane",
+      "surface_id": "PYTHON-313"
+    },
+    {
+      "category": "runtime-directory",
+      "source": [
+        "specs/memory_v2/PRODUCT.md:durable layout"
+      ],
+      "surface": "durable .unrest records",
+      "surface_id": "RUNTIME-DIR-DURABLE"
+    },
+    {
+      "category": "runtime-directory",
+      "source": [
+        "specs/memory_v2/PRODUCT.md:runtime layout"
+      ],
+      "surface": "orchestrator-only .unrest-runtime cursors and handoff transport",
+      "surface_id": "RUNTIME-DIR-CURSORS"
+    },
+    {
+      "category": "verification",
+      "source": [
+        "docs/architecture/repository-contract.md"
+      ],
+      "surface": "finite read-only check-repository verification",
+      "surface_id": "VERIFY-REPOSITORY"
+    },
+    {
+      "category": "verification",
+      "source": [
+        ".github/workflows/ci.yml"
+      ],
+      "surface": "Python 3.11 and 3.12 focused compatibility checks",
+      "surface_id": "VERIFY-PY-COMPAT"
+    },
+    {
+      "category": "verification",
+      "source": [
+        "AGENTS.md:release checkpoint"
+      ],
+      "surface": "single Python 3.13 frozen-candidate full suite",
+      "surface_id": "VERIFY-FULL-SUITE"
+    },
+    {
+      "category": "verification",
+      "source": [
+        "tools/check_distribution.py"
+      ],
+      "surface": "build archive membership and extracted-sdist verification",
+      "surface_id": "VERIFY-DISTRIBUTION"
+    },
+    {
+      "category": "verification",
+      "source": [
+        "src/unrest_harness/installed_wheel_check.py"
+      ],
+      "surface": "unrelated-directory installed-wheel lifecycle",
+      "surface_id": "VERIFY-INSTALLED-WHEEL"
+    }
+  ]
+}

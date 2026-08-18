@@ -1,0 +1,248 @@
+{
+  "expected_totals": {
+    "deferred": 14,
+    "proposed": 31,
+    "rejected": 19,
+    "rows": 64
+  },
+  "families": [
+    {
+      "adr": "docs/decisions/ADR-0300-authority.md",
+      "deferred_ids": [
+        "AUTH-A04",
+        "AUTH-A05"
+      ],
+      "family": "authority",
+      "open_questions": [
+        "AUTH-Q01",
+        "AUTH-Q02"
+      ],
+      "proposed_ids": [
+        "AUTH-D01",
+        "AUTH-D02",
+        "AUTH-D03",
+        "AUTH-D04",
+        "AUTH-D05"
+      ],
+      "rejected_ids": [
+        "AUTH-A01",
+        "AUTH-A02",
+        "AUTH-A03"
+      ]
+    },
+    {
+      "adr": "docs/decisions/ADR-0305-compatibility.md",
+      "deferred_ids": [
+        "COMP-A05",
+        "COMP-A06",
+        "COMP-A07"
+      ],
+      "family": "compatibility",
+      "open_questions": [
+        "COMP-Q01",
+        "COMP-Q02",
+        "COMP-Q03"
+      ],
+      "proposed_ids": [
+        "COMP-D01",
+        "COMP-D02",
+        "COMP-D03"
+      ],
+      "rejected_ids": [
+        "COMP-A01",
+        "COMP-A02",
+        "COMP-A03",
+        "COMP-A04"
+      ]
+    },
+    {
+      "adr": "docs/decisions/ADR-0304-evolution.md",
+      "deferred_ids": [
+        "EVO-A04",
+        "EVO-A05"
+      ],
+      "family": "evolution",
+      "open_questions": [
+        "EVO-Q01",
+        "EVO-Q02"
+      ],
+      "proposed_ids": [
+        "EVO-D01",
+        "EVO-D02",
+        "EVO-D03",
+        "EVO-D04",
+        "EVO-D05",
+        "EVO-D06"
+      ],
+      "rejected_ids": [
+        "EVO-A01",
+        "EVO-A02",
+        "EVO-A03"
+      ]
+    },
+    {
+      "adr": "docs/decisions/ADR-0301-identity.md",
+      "deferred_ids": [
+        "ID-A04",
+        "ID-A05"
+      ],
+      "family": "identity",
+      "open_questions": [
+        "ID-Q01",
+        "ID-Q02"
+      ],
+      "proposed_ids": [
+        "ID-D01",
+        "ID-D02",
+        "ID-D03",
+        "ID-D04",
+        "ID-D05"
+      ],
+      "rejected_ids": [
+        "ID-A01",
+        "ID-A02",
+        "ID-A03"
+      ]
+    },
+    {
+      "adr": "docs/decisions/ADR-0302-inquiry.md",
+      "deferred_ids": [
+        "INQ-A04",
+        "INQ-A05"
+      ],
+      "family": "inquiry",
+      "open_questions": [
+        "INQ-Q01",
+        "INQ-Q02"
+      ],
+      "proposed_ids": [
+        "INQ-D01",
+        "INQ-D02",
+        "INQ-D03",
+        "INQ-D04",
+        "INQ-D05"
+      ],
+      "rejected_ids": [
+        "INQ-A01",
+        "INQ-A02",
+        "INQ-A03"
+      ]
+    },
+    {
+      "adr": "docs/decisions/ADR-0303-workspace.md",
+      "deferred_ids": [
+        "WS-A04",
+        "WS-A05",
+        "WS-A06"
+      ],
+      "family": "workspace",
+      "open_questions": [
+        "WS-Q01",
+        "WS-Q02",
+        "WS-Q03"
+      ],
+      "proposed_ids": [
+        "WS-D01",
+        "WS-D02",
+        "WS-D03",
+        "WS-D04",
+        "WS-D05",
+        "WS-D06",
+        "WS-D07"
+      ],
+      "rejected_ids": [
+        "WS-A01",
+        "WS-A02",
+        "WS-A03"
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "deferred_id": "AUTH-A04",
+      "id": "AUTH-Q01",
+      "owner": "future maintainer automation authority decision",
+      "question": "Can any low-risk promotion or canary authority be automated after all gates are proven?"
+    },
+    {
+      "deferred_id": "AUTH-A05",
+      "id": "AUTH-Q02",
+      "owner": "future maintainer workflow-boundary decision",
+      "question": "Should a bounded durable workflow adapter exist, and which non-Mission history may it own?"
+    },
+    {
+      "deferred_id": "COMP-A06",
+      "id": "COMP-Q01",
+      "owner": "future public API decision",
+      "question": "Which internal Python objects, if any, become a versioned public surface?"
+    },
+    {
+      "deferred_id": "COMP-A05",
+      "id": "COMP-Q02",
+      "owner": "future dependency and release decision",
+      "question": "Which future extras exist and what exact removal drill does each require?"
+    },
+    {
+      "deferred_id": "COMP-A07",
+      "id": "COMP-Q03",
+      "owner": "future persistence decision",
+      "question": "Does any future persistence record require migration instead of a new side-by-side version?"
+    },
+    {
+      "deferred_id": "EVO-A04",
+      "id": "EVO-Q01",
+      "owner": "future canary authority decision",
+      "question": "Can an automated canary tier satisfy blast-radius, stop, quorum, effect, observation, rollback, and burden gates?"
+    },
+    {
+      "deferred_id": "EVO-A05",
+      "id": "EVO-Q02",
+      "owner": "future evaluator, custody, retention, and campaign policy decisions",
+      "question": "Which evaluator, holdout, signature, retention, and quorum technologies and values are accepted?"
+    },
+    {
+      "deferred_id": "ID-A04",
+      "id": "ID-Q01",
+      "owner": "future security and key-custody decision",
+      "question": "Which signature suite, trust roots, rotation, custody, and revocation design is accepted?"
+    },
+    {
+      "deferred_id": "ID-A05",
+      "id": "ID-Q02",
+      "owner": "future data-governance and storage decision",
+      "question": "Which retention duration and receipt-store format preserve append-only outcomes?"
+    },
+    {
+      "deferred_id": "INQ-A04",
+      "id": "INQ-Q01",
+      "owner": "future public-surface authorization decision",
+      "question": "Which CLI, MCP, or API surface and actor authorization mechanism exposes Inquiry?"
+    },
+    {
+      "deferred_id": "INQ-A05",
+      "id": "INQ-Q02",
+      "owner": "future data-governance decision",
+      "question": "Which default retention and deletion policies apply to Inquiry records and artifacts?"
+    },
+    {
+      "deferred_id": "WS-A04",
+      "id": "WS-Q01",
+      "owner": "future workspace provider decision",
+      "question": "Which sandbox, container, or VM providers prove each admitted isolation tier?"
+    },
+    {
+      "deferred_id": "WS-A05",
+      "id": "WS-Q02",
+      "owner": "future workload policy decision",
+      "question": "Which finite lease, drain, orphan, cleanup, and retention bounds apply per workload?"
+    },
+    {
+      "deferred_id": "WS-A06",
+      "id": "WS-Q03",
+      "owner": "future parent integration authority decision",
+      "question": "Can any disjoint-patch integration be automated without weakening parent authority or verification?"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

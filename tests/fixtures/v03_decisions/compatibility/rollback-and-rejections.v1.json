@@ -1,0 +1,86 @@
+{
+  "current_optional_extras": {
+    "claim": "none exist in the pinned pyproject.toml",
+    "project_optional_dependencies_present": false,
+    "t2_removal_claim": "not_applicable_and_not_claimed"
+  },
+  "kind": "rollback-and-rejections.v1",
+  "rejections": [
+    {
+      "alternative": "generic migration registry or heuristic legacy reader",
+      "id": "REJECT-GENERIC-MIGRATION",
+      "reason": "would make unsupported bytes authority-bearing",
+      "terminal_disposition": "rejected"
+    },
+    {
+      "alternative": "alias optional package or renamed implementation for any v0.2 hard cut",
+      "id": "REJECT-HARD-CUT-REVIVAL",
+      "reason": "contradicts accepted ADR-0002",
+      "terminal_disposition": "rejected"
+    },
+    {
+      "alternative": "treat explicit attempt_id null as absent",
+      "id": "REJECT-NULL-COERCION",
+      "reason": "erases the only safe raw-byte distinction",
+      "terminal_disposition": "rejected"
+    },
+    {
+      "alternative": "accept a valid handoff under a different generation filename",
+      "id": "REJECT-REPLAY-FALLBACK",
+      "reason": "permits stale completion to clear new work",
+      "terminal_disposition": "rejected"
+    },
+    {
+      "alternative": "compatibility coordinator observer scheduler or adapter transition owner",
+      "id": "REJECT-SHADOW-COORDINATOR",
+      "reason": "breaks the single MissionCoordinator authority path",
+      "terminal_disposition": "rejected"
+    }
+  ],
+  "rollback_path": {
+    "authority": "maintainer/release integrator",
+    "candidate_precondition": "frozen ordinary wheel identity recorded and installed without extras in an isolated environment",
+    "commands": [
+      "unrest --help",
+      "unrest-server --help",
+      "python -m unrest_harness --help",
+      "python -m unrest_harness.installed_wheel_check"
+    ],
+    "fail_closed_probe": "unsupported provider role policy or profile prevents startup without state mutation",
+    "future_extra_rule": "every accepted extra has a core fallback and can be uninstalled with its configuration without changing Mission semantics or authority",
+    "lifecycle": [
+      "create",
+      "plan",
+      "work",
+      "validate",
+      "gate",
+      "attention decision",
+      "restart",
+      "terminal review",
+      "closure",
+      "schema-v1 read"
+    ],
+    "on_failure": "reject candidate; preserve .unrest and .unrest-runtime separately; reinstall last accepted no-extra wheel",
+    "terminal_disposition": "accepted_core_restored_or_attention"
+  },
+  "unresolved": [
+    {
+      "id": "DEFER-FUTURE-EXTRAS",
+      "owner": "FM-390 plus maintainer",
+      "question": "Which optional extras and exact removal drills will be accepted?",
+      "status": "deferred"
+    },
+    {
+      "id": "GATE-PUBLIC-PYTHON-API",
+      "owner": "FM-210 plus maintainer",
+      "question": "Which importable internal Python objects become intentional versioned public API?",
+      "status": "gated"
+    },
+    {
+      "id": "GATE-PERSISTENCE-MIGRATION",
+      "owner": "FM-050 plus maintainer",
+      "question": "Does a concrete future record require migration instead of a new versioned side record?",
+      "status": "gated"
+    }
+  ]
+}

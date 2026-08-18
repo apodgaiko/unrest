@@ -1,0 +1,228 @@
+{
+  "boundary_catalog": [
+    "credential",
+    "database",
+    "external_effect",
+    "filesystem",
+    "home_cache_temp",
+    "network",
+    "port",
+    "process",
+    "service",
+    "working_tree_index"
+  ],
+  "negative_cases": [
+    {
+      "expected_error": "shared_checkout_has_no_isolation_claim",
+      "id": "WS-TIER-NEG-SHARED-MUTATION",
+      "mutation": "describe_canonical_checkout_mutation_as_isolated"
+    },
+    {
+      "expected_error": "worktree_only_is_filesystem_boundary",
+      "id": "WS-TIER-NEG-WORKTREE-OVERCLAIM",
+      "mutation": "claim_process_network_credential_service_database_isolation_from_git_worktree"
+    },
+    {
+      "expected_error": "credential_scope_not_proven",
+      "id": "WS-TIER-NEG-CREDENTIAL-LEAK",
+      "mutation": "inherit_unbounded_host_credentials_at_sandboxed_tier"
+    },
+    {
+      "expected_error": "external_effect_grant_required",
+      "id": "WS-TIER-NEG-UNAUTHORIZED-EFFECT",
+      "mutation": "treat_workspace_admission_as_publication_or_database_effect_authority"
+    },
+    {
+      "expected_error": "required_boundary_absent",
+      "id": "WS-TIER-NEG-SILENT-DOWNGRADE",
+      "mutation": "admit_service_test_at_worktree_tier_without_namespace_or_serialization"
+    }
+  ],
+  "tiers": [
+    {
+      "admitted_effects": [],
+      "admitted_work": [
+        "current_v02_compatibility",
+        "read_only_inspection",
+        "trusted_serial_maintenance"
+      ],
+      "boundaries": {
+        "credential": "shared_not_isolated",
+        "database": "shared_not_isolated",
+        "external_effect": "not_authorized_or_reversed",
+        "filesystem": "shared_not_isolated",
+        "home_cache_temp": "shared_not_isolated",
+        "network": "shared_not_isolated",
+        "port": "shared_not_isolated",
+        "process": "shared_not_isolated",
+        "service": "shared_not_isolated",
+        "working_tree_index": "shared_not_isolated"
+      },
+      "cleanup": [
+        "inventory_writes_and_processes",
+        "retain_compatibility_evidence"
+      ],
+      "guarantees": [],
+      "id": "WS-T0-SHARED",
+      "non_guarantees": [
+        "credential",
+        "database",
+        "external_effect",
+        "filesystem",
+        "home_cache_temp",
+        "network",
+        "port",
+        "process",
+        "service",
+        "working_tree_index"
+      ],
+      "setup": [
+        "record_canonical_root",
+        "record_serial_owner"
+      ]
+    },
+    {
+      "admitted_effects": [],
+      "admitted_work": [
+        "filesystem_only_candidate_work"
+      ],
+      "boundaries": {
+        "credential": "shared_not_isolated",
+        "database": "shared_not_isolated",
+        "external_effect": "not_authorized_or_reversed",
+        "filesystem": "isolated_only_inside_worktree_root",
+        "home_cache_temp": "shared_not_isolated",
+        "network": "shared_not_isolated",
+        "port": "shared_not_isolated",
+        "process": "shared_not_isolated",
+        "service": "shared_not_isolated",
+        "working_tree_index": "separate_verified_git_worktree_and_index"
+      },
+      "cleanup": [
+        "retain_patch_and_porcelain_evidence",
+        "remove_and_prune_after_ownership_settles"
+      ],
+      "guarantees": [
+        "working_tree_index"
+      ],
+      "id": "WS-T1-WORKTREE",
+      "non_guarantees": [
+        "credential",
+        "database",
+        "external_effect",
+        "filesystem_outside_root",
+        "home_cache_temp",
+        "network",
+        "port",
+        "process",
+        "service"
+      ],
+      "setup": [
+        "create_detached_worktree",
+        "record_lock_and_porcelain",
+        "verify_immutable_base_and_unique_root"
+      ]
+    },
+    {
+      "admitted_effects": [
+        "separately_granted_effect_only"
+      ],
+      "admitted_work": [
+        "bounded_build_and_test",
+        "filesystem_candidate_work",
+        "grant_scoped_network_or_credential_work"
+      ],
+      "boundaries": {
+        "credential": "scoped_public_credential_set",
+        "database": "shared_unless_separately_namespaced",
+        "external_effect": "separate_grant_required_not_reversed_by_cleanup",
+        "filesystem": "bounded_writable_roots",
+        "home_cache_temp": "isolated",
+        "network": "explicit_enforced_mode",
+        "port": "shared_unless_separately_namespaced",
+        "process": "sandboxed_with_descendant_inventory",
+        "service": "shared_unless_separately_namespaced",
+        "working_tree_index": "separate_verified_git_worktree_and_index"
+      },
+      "cleanup": [
+        "bounded_descendant_drain",
+        "remove_sandbox_and_worktree_idempotently",
+        "retain_process_and_effect_inventory",
+        "revoke_scoped_credentials"
+      ],
+      "guarantees": [
+        "credential",
+        "filesystem",
+        "home_cache_temp",
+        "network",
+        "process",
+        "working_tree_index"
+      ],
+      "id": "WS-T2-SANDBOXED",
+      "non_guarantees": [
+        "database",
+        "external_effect",
+        "port",
+        "publication_promotion_integration",
+        "service"
+      ],
+      "setup": [
+        "activate_verified_process_sandbox",
+        "bind_network_mode_and_credential_set",
+        "verify_bounded_writable_roots",
+        "verify_isolated_home_cache_temp"
+      ]
+    },
+    {
+      "admitted_effects": [
+        "separately_granted_effect_only"
+      ],
+      "admitted_work": [
+        "grant_scoped_service_or_database_work",
+        "integration_like_tests",
+        "namespaced_mutable_build_and_test"
+      ],
+      "boundaries": {
+        "credential": "scoped_public_credential_set",
+        "database": "exclusive_lease_owned_namespace",
+        "external_effect": "separate_grant_required_not_reversed_by_cleanup",
+        "filesystem": "bounded_writable_roots",
+        "home_cache_temp": "isolated",
+        "network": "explicit_enforced_mode",
+        "port": "exclusive_lease_owned_namespace",
+        "process": "sandboxed_with_descendant_inventory",
+        "service": "exclusive_lease_owned_namespace",
+        "working_tree_index": "separate_verified_git_worktree_and_index"
+      },
+      "cleanup": [
+        "bounded_process_and_service_drain",
+        "destroy_proven_owned_namespaces",
+        "quarantine_unsettled_effects",
+        "retain_cleanup_and_effect_receipts"
+      ],
+      "guarantees": [
+        "credential",
+        "database_namespace",
+        "filesystem",
+        "home_cache_temp",
+        "network",
+        "port_namespace",
+        "process",
+        "service_namespace",
+        "working_tree_index"
+      ],
+      "id": "WS-T3-NAMESPACED",
+      "non_guarantees": [
+        "external_effect",
+        "publication_promotion_integration",
+        "semantic_tenant_isolation_beyond_provider_proof"
+      ],
+      "setup": [
+        "provision_unique_database_service_and_port_namespaces",
+        "record_resource_manifest_and_owners",
+        "verify_sandbox_and_worktree_base"
+      ]
+    }
+  ],
+  "worktree_alone_full_isolation": false
+}

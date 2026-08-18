@@ -1,0 +1,352 @@
+{
+  "classes": [
+    {
+      "class_id": "cancellation_recovery",
+      "family_refs": [
+        {
+          "family": "authority",
+          "locator": "#cancellation-and-recovery",
+          "path": "docs/decisions/ADR-0300-authority.md"
+        },
+        {
+          "family": "compatibility",
+          "locator": "#error-cancellation-and-terminal-disposition",
+          "path": "docs/decisions/ADR-0305-compatibility.md"
+        },
+        {
+          "family": "evolution",
+          "locator": "#authority-preconditions-errors-compatibility-and-rollback",
+          "path": "docs/decisions/ADR-0304-evolution.md"
+        },
+        {
+          "family": "identity",
+          "locator": "#authority-preconditions-outcomes-compatibility-and-rollback",
+          "path": "docs/decisions/ADR-0301-identity.md"
+        },
+        {
+          "family": "inquiry",
+          "locator": "#failure-cancellation-recovery-and-retention",
+          "path": "docs/decisions/ADR-0302-inquiry.md"
+        },
+        {
+          "family": "workspace",
+          "locator": "#cancellation-drain-orphan-claim-and-cleanup",
+          "path": "docs/decisions/ADR-0303-workspace.md"
+        }
+      ],
+      "fixture_refs": [
+        "tests/fixtures/v03_decisions/authority/cancellation-recovery.v1.json#/routes",
+        "tests/fixtures/v03_decisions/inquiry/inquiry-lifecycle.v1.json#/cases",
+        "tests/fixtures/v03_decisions/integration/cancellation-recovery-owners.v1.json#/routes",
+        "tests/fixtures/v03_decisions/workspace/recovery-scenarios.v1.json#/scenarios"
+      ]
+    },
+    {
+      "class_id": "compatibility",
+      "family_refs": [
+        {
+          "family": "authority",
+          "locator": "#preconditions-errors-terminal-outcomes-compatibility-and-rollback",
+          "path": "docs/decisions/ADR-0300-authority.md"
+        },
+        {
+          "family": "compatibility",
+          "locator": "#exact-surface-classification",
+          "path": "docs/decisions/ADR-0305-compatibility.md"
+        },
+        {
+          "family": "evolution",
+          "locator": "#authority-preconditions-errors-compatibility-and-rollback",
+          "path": "docs/decisions/ADR-0304-evolution.md"
+        },
+        {
+          "family": "identity",
+          "locator": "#authority-preconditions-outcomes-compatibility-and-rollback",
+          "path": "docs/decisions/ADR-0301-identity.md"
+        },
+        {
+          "family": "inquiry",
+          "locator": "#authority-identity-preconditions-outcomes-compatibility-and-rollback",
+          "path": "docs/decisions/ADR-0302-inquiry.md"
+        },
+        {
+          "family": "workspace",
+          "locator": "#preconditions-errors-compatibility-and-rollback",
+          "path": "docs/decisions/ADR-0303-workspace.md"
+        }
+      ],
+      "fixture_refs": [
+        "tests/fixtures/v03_decisions/compatibility/compatibility-matrix.v1.json#/rows",
+        "tests/fixtures/v03_decisions/compatibility/persistence-probes.v1.json#/probes",
+        "tests/fixtures/v03_decisions/compatibility/v02-source-inventory.v1.json#/surfaces"
+      ]
+    },
+    {
+      "class_id": "deferred",
+      "family_refs": [
+        {
+          "family": "authority",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0300-authority.md"
+        },
+        {
+          "family": "compatibility",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0305-compatibility.md"
+        },
+        {
+          "family": "evolution",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0304-evolution.md"
+        },
+        {
+          "family": "identity",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0301-identity.md"
+        },
+        {
+          "family": "inquiry",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0302-inquiry.md"
+        },
+        {
+          "family": "workspace",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0303-workspace.md"
+        }
+      ],
+      "fixture_refs": [
+        "tests/fixtures/v03_decisions/compatibility/rollback-and-rejections.v1.json#/unresolved",
+        "tests/fixtures/v03_decisions/evolution/promotion-scenarios.v1.json#/automated_canary_policy",
+        "tests/fixtures/v03_decisions/integration/decision-inventory.v1.json#/questions"
+      ]
+    },
+    {
+      "class_id": "negative",
+      "family_refs": [
+        {
+          "family": "authority",
+          "locator": "#proposed-authority-graph",
+          "path": "docs/decisions/ADR-0300-authority.md"
+        },
+        {
+          "family": "compatibility",
+          "locator": "#alternatives-considered",
+          "path": "docs/decisions/ADR-0305-compatibility.md"
+        },
+        {
+          "family": "evolution",
+          "locator": "#independent-evaluation-review-and-reward-hack-resistance",
+          "path": "docs/decisions/ADR-0304-evolution.md"
+        },
+        {
+          "family": "identity",
+          "locator": "#canonical-bytes-and-fingerprints",
+          "path": "docs/decisions/ADR-0301-identity.md"
+        },
+        {
+          "family": "inquiry",
+          "locator": "#failure-cancellation-recovery-and-retention",
+          "path": "docs/decisions/ADR-0302-inquiry.md"
+        },
+        {
+          "family": "workspace",
+          "locator": "#parent-only-accepted-working-point-integration",
+          "path": "docs/decisions/ADR-0303-workspace.md"
+        }
+      ],
+      "fixture_refs": [
+        "tests/fixtures/v03_decisions/authority/authority-graph.v1.json#/reverse_edge_tests",
+        "tests/fixtures/v03_decisions/compatibility/persistence-probes.v1.json#/probes",
+        "tests/fixtures/v03_decisions/evolution/evaluation-independence.v1.json#/cases",
+        "tests/fixtures/v03_decisions/identity/canonical-vectors.v1.json#/negative_encoding_cases",
+        "tests/fixtures/v03_decisions/inquiry/inquiry-lifecycle.v1.json#/negative_cases",
+        "tests/fixtures/v03_decisions/workspace/integration-scenarios.v1.json#/scenarios"
+      ]
+    },
+    {
+      "class_id": "positive",
+      "family_refs": [
+        {
+          "family": "authority",
+          "locator": "#proposed-v03-decisions-and-dispositions",
+          "path": "docs/decisions/ADR-0300-authority.md"
+        },
+        {
+          "family": "compatibility",
+          "locator": "#decisions-and-dispositions",
+          "path": "docs/decisions/ADR-0305-compatibility.md"
+        },
+        {
+          "family": "evolution",
+          "locator": "#proposed-decisions-and-dispositions",
+          "path": "docs/decisions/ADR-0304-evolution.md"
+        },
+        {
+          "family": "identity",
+          "locator": "#proposed-decisions-and-dispositions",
+          "path": "docs/decisions/ADR-0301-identity.md"
+        },
+        {
+          "family": "inquiry",
+          "locator": "#proposed-decisions-and-dispositions",
+          "path": "docs/decisions/ADR-0302-inquiry.md"
+        },
+        {
+          "family": "workspace",
+          "locator": "#proposed-decisions-and-dispositions",
+          "path": "docs/decisions/ADR-0303-workspace.md"
+        }
+      ],
+      "fixture_refs": [
+        "tests/fixtures/v03_decisions/authority/authority-graph.v1.json#/authority_holders",
+        "tests/fixtures/v03_decisions/compatibility/compatibility-matrix.v1.json#/rows",
+        "tests/fixtures/v03_decisions/evolution/promotion-scenarios.v1.json#/scenarios/0",
+        "tests/fixtures/v03_decisions/identity/canonical-vectors.v1.json#/identity_vectors",
+        "tests/fixtures/v03_decisions/inquiry/inquiry-mission-handoff.v1.json#/positive_case",
+        "tests/fixtures/v03_decisions/workspace/integration-scenarios.v1.json#/scenarios/0"
+      ]
+    },
+    {
+      "class_id": "rejected",
+      "family_refs": [
+        {
+          "family": "authority",
+          "locator": "#alternatives-considered",
+          "path": "docs/decisions/ADR-0300-authority.md"
+        },
+        {
+          "family": "compatibility",
+          "locator": "#alternatives-considered",
+          "path": "docs/decisions/ADR-0305-compatibility.md"
+        },
+        {
+          "family": "evolution",
+          "locator": "#alternatives-considered",
+          "path": "docs/decisions/ADR-0304-evolution.md"
+        },
+        {
+          "family": "identity",
+          "locator": "#alternatives-considered",
+          "path": "docs/decisions/ADR-0301-identity.md"
+        },
+        {
+          "family": "inquiry",
+          "locator": "#alternatives-considered",
+          "path": "docs/decisions/ADR-0302-inquiry.md"
+        },
+        {
+          "family": "workspace",
+          "locator": "#alternatives-considered",
+          "path": "docs/decisions/ADR-0303-workspace.md"
+        }
+      ],
+      "fixture_refs": [
+        "tests/fixtures/v03_decisions/authority/authority-graph.v1.json#/reverse_edge_tests",
+        "tests/fixtures/v03_decisions/compatibility/rollback-and-rejections.v1.json#/rejections",
+        "tests/fixtures/v03_decisions/evolution/promotion-scenarios.v1.json#/scenarios",
+        "tests/fixtures/v03_decisions/identity/secret-safety.v1.json#/leak_cases",
+        "tests/fixtures/v03_decisions/inquiry/inquiry-mission-handoff.v1.json#/negative_cases",
+        "tests/fixtures/v03_decisions/workspace/isolation-tiers.v1.json#/negative_cases"
+      ]
+    },
+    {
+      "class_id": "rollback",
+      "family_refs": [
+        {
+          "family": "authority",
+          "locator": "#rollback",
+          "path": "docs/decisions/ADR-0300-authority.md"
+        },
+        {
+          "family": "compatibility",
+          "locator": "#rollback",
+          "path": "docs/decisions/ADR-0305-compatibility.md"
+        },
+        {
+          "family": "evolution",
+          "locator": "#rollback",
+          "path": "docs/decisions/ADR-0304-evolution.md"
+        },
+        {
+          "family": "identity",
+          "locator": "#rollback",
+          "path": "docs/decisions/ADR-0301-identity.md"
+        },
+        {
+          "family": "inquiry",
+          "locator": "#rollback",
+          "path": "docs/decisions/ADR-0302-inquiry.md"
+        },
+        {
+          "family": "workspace",
+          "locator": "#rollback",
+          "path": "docs/decisions/ADR-0303-workspace.md"
+        }
+      ],
+      "fixture_refs": [
+        "tests/fixtures/v03_decisions/compatibility/rollback-and-rejections.v1.json#/rollback_path",
+        "tests/fixtures/v03_decisions/evolution/rollback-scenarios.v1.json#/scenarios",
+        "tests/fixtures/v03_decisions/workspace/integration-scenarios.v1.json#/scenarios"
+      ]
+    },
+    {
+      "class_id": "unresolved",
+      "family_refs": [
+        {
+          "family": "authority",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0300-authority.md"
+        },
+        {
+          "family": "compatibility",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0305-compatibility.md"
+        },
+        {
+          "family": "evolution",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0304-evolution.md"
+        },
+        {
+          "family": "identity",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0301-identity.md"
+        },
+        {
+          "family": "inquiry",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0302-inquiry.md"
+        },
+        {
+          "family": "workspace",
+          "locator": "#open-questions",
+          "path": "docs/decisions/ADR-0303-workspace.md"
+        }
+      ],
+      "fixture_refs": [
+        "tests/fixtures/v03_decisions/integration/decision-inventory.v1.json#/questions"
+      ]
+    }
+  ],
+  "required_classes": [
+    "cancellation_recovery",
+    "compatibility",
+    "deferred",
+    "negative",
+    "positive",
+    "rejected",
+    "rollback",
+    "unresolved"
+  ],
+  "required_families": [
+    "authority",
+    "compatibility",
+    "evolution",
+    "identity",
+    "inquiry",
+    "workspace"
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

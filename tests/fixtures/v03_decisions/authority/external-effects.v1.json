@@ -1,0 +1,1579 @@
+{
+  "closed_record_schemas": {
+    "EffectGrant.v1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "enum": [
+            "external_effect_authority",
+            "parent_integration_authority",
+            "promotion_authority"
+          ],
+          "type": "string"
+        },
+        "authorization_form": {
+          "const": "externally_authorized",
+          "type": "string"
+        },
+        "expiry_or_use_bound": {
+          "additionalProperties": false,
+          "properties": {
+            "expires_at": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "max_uses": {
+              "const": 1,
+              "type": "integer"
+            },
+            "not_before": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "uses_consumed": {
+              "const": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "expires_at",
+            "max_uses",
+            "not_before",
+            "uses_consumed"
+          ],
+          "type": "object"
+        },
+        "failure_owner": {
+          "enum": [
+            "external_effect_recovery_authority",
+            "parent_integration_authority",
+            "promotion_authority"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "enum": [
+            "credential",
+            "database",
+            "filesystem",
+            "integration",
+            "network",
+            "process",
+            "promotion",
+            "publication",
+            "service"
+          ],
+          "type": "string"
+        },
+        "preconditions": {
+          "additionalProperties": false,
+          "properties": {
+            "evidence_ids": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "satisfied": {
+              "const": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "evidence_ids",
+            "satisfied"
+          ],
+          "type": "object"
+        },
+        "receipt": {
+          "additionalProperties": false,
+          "properties": {
+            "expected_receipt_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "receipt_type": {
+              "enum": [
+                "effect_receipt.v1",
+                "integration_receipt.v1",
+                "promotion_receipt.v1"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "expected_receipt_id",
+            "receipt_type"
+          ],
+          "type": "object"
+        },
+        "recovery": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "non_reversible_disposition": {
+              "const": "typed_attention_and_escalation",
+              "type": "string"
+            },
+            "owner": {
+              "enum": [
+                "external_effect_recovery_authority",
+                "parent_integration_authority",
+                "promotion_authority"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "non_reversible_disposition",
+            "owner"
+          ],
+          "type": "object"
+        },
+        "scope": {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "resource_ids": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "operation",
+            "resource_ids"
+          ],
+          "type": "object"
+        },
+        "subject_identity": {
+          "additionalProperties": false,
+          "properties": {
+            "identity_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "identity_kind": {
+              "enum": [
+                "artifact",
+                "attempt",
+                "candidate",
+                "credential_set",
+                "database_target",
+                "run",
+                "workspace_lease"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "identity_id",
+            "identity_kind"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "authorization_form",
+        "authority",
+        "expiry_or_use_bound",
+        "failure_owner",
+        "id",
+        "preconditions",
+        "receipt",
+        "recovery",
+        "scope",
+        "subject_identity"
+      ],
+      "type": "object"
+    }
+  },
+  "effect_classes": [
+    {
+      "authority": "external_effect_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "external_effect_recovery_authority",
+      "id": "credential",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:credential:policy-v1",
+          "evidence:credential:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:credential:attempt-001",
+        "receipt_type": "effect_receipt.v1"
+      },
+      "recovery": {
+        "action": "revoke_rotate_or_escalate",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "external_effect_recovery_authority"
+      },
+      "scope": {
+        "operation": "credential_use",
+        "resource_ids": [
+          "credential-set:prod-api"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "credential-set:prod-api",
+        "identity_kind": "credential_set"
+      }
+    },
+    {
+      "authority": "external_effect_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "external_effect_recovery_authority",
+      "id": "database",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:database:policy-v1",
+          "evidence:database:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:database:attempt-001",
+        "receipt_type": "effect_receipt.v1"
+      },
+      "recovery": {
+        "action": "rollback_compensate_quarantine_or_escalate",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "external_effect_recovery_authority"
+      },
+      "scope": {
+        "operation": "database_write",
+        "resource_ids": [
+          "database:mission-ledger/table:effects"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "database:mission-ledger/table:effects",
+        "identity_kind": "database_target"
+      }
+    },
+    {
+      "authority": "external_effect_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "external_effect_recovery_authority",
+      "id": "filesystem",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:filesystem:policy-v1",
+          "evidence:filesystem:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:filesystem:attempt-001",
+        "receipt_type": "effect_receipt.v1"
+      },
+      "recovery": {
+        "action": "restore_quarantine_or_escalate",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "external_effect_recovery_authority"
+      },
+      "scope": {
+        "operation": "filesystem_write",
+        "resource_ids": [
+          "workspace:ws-007/path:artifacts/result.json"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "lease:ws-007:generation:3",
+        "identity_kind": "workspace_lease"
+      }
+    },
+    {
+      "authority": "parent_integration_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "parent_integration_authority",
+      "id": "integration",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:integration:policy-v1",
+          "evidence:integration:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:integration:attempt-001",
+        "receipt_type": "integration_receipt.v1"
+      },
+      "recovery": {
+        "action": "discard_stage_restore_predecessor_or_escalate",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "parent_integration_authority"
+      },
+      "scope": {
+        "operation": "apply_candidate_to_parent",
+        "resource_ids": [
+          "parent:sha256:1111/candidate:sha256:2222/patch:sha256:3333"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "candidate:sha256:2222",
+        "identity_kind": "candidate"
+      }
+    },
+    {
+      "authority": "external_effect_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "external_effect_recovery_authority",
+      "id": "network",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:network:policy-v1",
+          "evidence:network:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:network:attempt-001",
+        "receipt_type": "effect_receipt.v1"
+      },
+      "recovery": {
+        "action": "compensate_revoke_or_escalate",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "external_effect_recovery_authority"
+      },
+      "scope": {
+        "operation": "https_post",
+        "resource_ids": [
+          "https://api.example.test/v1/jobs"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "run:mission-007:generation:3",
+        "identity_kind": "run"
+      }
+    },
+    {
+      "authority": "external_effect_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "external_effect_recovery_authority",
+      "id": "process",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:process:policy-v1",
+          "evidence:process:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:process:attempt-001",
+        "receipt_type": "effect_receipt.v1"
+      },
+      "recovery": {
+        "action": "drain_terminate_quarantine_or_escalate",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "external_effect_recovery_authority"
+      },
+      "scope": {
+        "operation": "spawn_process",
+        "resource_ids": [
+          "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "attempt:W-007:generation:3",
+        "identity_kind": "attempt"
+      }
+    },
+    {
+      "authority": "promotion_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "promotion_authority",
+      "id": "promotion",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:promotion:policy-v1",
+          "evidence:promotion:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:promotion:attempt-001",
+        "receipt_type": "promotion_receipt.v1"
+      },
+      "recovery": {
+        "action": "reject_rework_or_inconclusive",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "promotion_authority"
+      },
+      "scope": {
+        "operation": "issue_promotion_decision",
+        "resource_ids": [
+          "predecessor:sha256:1111/candidate:sha256:2222/evaluation:receipt-eval-007/review:receipt-review-007"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "candidate:sha256:2222",
+        "identity_kind": "candidate"
+      }
+    },
+    {
+      "authority": "external_effect_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "external_effect_recovery_authority",
+      "id": "publication",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:publication:policy-v1",
+          "evidence:publication:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:publication:attempt-001",
+        "receipt_type": "effect_receipt.v1"
+      },
+      "recovery": {
+        "action": "withdraw_correct_or_escalate",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "external_effect_recovery_authority"
+      },
+      "scope": {
+        "operation": "publish_artifact",
+        "resource_ids": [
+          "artifact:sha256:4444/channel:internal-review/audience:maintainers"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "artifact:sha256:4444",
+        "identity_kind": "artifact"
+      }
+    },
+    {
+      "authority": "external_effect_authority",
+      "authorization_form": "externally_authorized",
+      "expiry_or_use_bound": {
+        "expires_at": "2030-01-01T00:10:00Z",
+        "max_uses": 1,
+        "not_before": "2030-01-01T00:00:00Z",
+        "uses_consumed": 0
+      },
+      "failure_owner": "external_effect_recovery_authority",
+      "id": "service",
+      "preconditions": {
+        "evidence_ids": [
+          "evidence:service:policy-v1",
+          "evidence:service:scope-v1"
+        ],
+        "satisfied": true
+      },
+      "receipt": {
+        "expected_receipt_id": "receipt:service:attempt-001",
+        "receipt_type": "effect_receipt.v1"
+      },
+      "recovery": {
+        "action": "compensate_quarantine_or_escalate",
+        "non_reversible_disposition": "typed_attention_and_escalation",
+        "owner": "external_effect_recovery_authority"
+      },
+      "scope": {
+        "operation": "invoke_service_operation",
+        "resource_ids": [
+          "service:ticketing/tenant:tenant-007/operation:create-draft"
+        ]
+      },
+      "subject_identity": {
+        "identity_id": "run:mission-007:generation:3",
+        "identity_kind": "run"
+      }
+    }
+  ],
+  "execution_time": "2030-01-01T00:05:00Z",
+  "negative_cases": [
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "missing_authorization_form",
+      "id": "EFFECT-AUTHORIZATION-FORM-MISSING",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "remove",
+        "path": "/authorization_form",
+        "value": null
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "capability_possession_is_not_authority",
+      "id": "EFFECT-AUTHORITY-CAPABILITY-ONLY",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "capability_possession",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/authorization_form",
+        "value": "capability_possession"
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "missing_authority",
+      "id": "EFFECT-AUTHORITY-MISSING",
+      "mutated_grant": {
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "remove",
+        "path": "/authority",
+        "value": null
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "subject_identity_mismatch",
+      "id": "EFFECT-SUBJECT-MISMATCH",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-999:generation:9",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/subject_identity/identity_id",
+        "value": "attempt:W-999:generation:9"
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "operation_outside_exact_scope",
+      "id": "EFFECT-SCOPE-MISMATCH",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "delete_repository",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/scope/operation",
+        "value": "delete_repository"
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "stale_precondition_evidence",
+      "id": "EFFECT-AUTHORITY-STALE",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": false
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/preconditions/satisfied",
+        "value": false
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "grant_expired_before_execution",
+      "id": "EFFECT-AUTHORITY-EXPIRED",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2029-12-31T23:59:59Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/expiry_or_use_bound/expires_at",
+        "value": "2029-12-31T23:59:59Z"
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "single_use_grant_already_consumed",
+      "id": "EFFECT-AUTHORITY-REPLAY",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 1
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/expiry_or_use_bound/uses_consumed",
+        "value": 1
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "scope_is_broader_than_grant",
+      "id": "EFFECT-AUTHORITY-OVERBROAD",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3",
+            "workspace:*"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/scope/resource_ids",
+        "value": [
+          "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3",
+          "workspace:*"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "missing_receipt_plan",
+      "id": "EFFECT-RECEIPT-MISSING",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "remove",
+        "path": "/receipt",
+        "value": null
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "missing_failure_owner",
+      "id": "EFFECT-FAILURE-OWNER-MISSING",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "remove",
+        "path": "/failure_owner",
+        "value": null
+      },
+      "valid": false
+    },
+    {
+      "baseline_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "recovery": {
+          "action": "drain_terminate_quarantine_or_escalate",
+          "non_reversible_disposition": "typed_attention_and_escalation",
+          "owner": "external_effect_recovery_authority"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "expected_failure_reason": "missing_recovery_or_non_reversibility_disposition",
+      "id": "EFFECT-RECOVERY-MISSING",
+      "mutated_grant": {
+        "authority": "external_effect_authority",
+        "authorization_form": "externally_authorized",
+        "expiry_or_use_bound": {
+          "expires_at": "2030-01-01T00:10:00Z",
+          "max_uses": 1,
+          "not_before": "2030-01-01T00:00:00Z",
+          "uses_consumed": 0
+        },
+        "failure_owner": "external_effect_recovery_authority",
+        "id": "process",
+        "preconditions": {
+          "evidence_ids": [
+            "evidence:process:policy-v1",
+            "evidence:process:scope-v1"
+          ],
+          "satisfied": true
+        },
+        "receipt": {
+          "expected_receipt_id": "receipt:process:attempt-001",
+          "receipt_type": "effect_receipt.v1"
+        },
+        "scope": {
+          "operation": "spawn_process",
+          "resource_ids": [
+            "executable:/usr/bin/git argv:[status,--porcelain] cwd:lease:ws-007:generation:3"
+          ]
+        },
+        "subject_identity": {
+          "identity_id": "attempt:W-007:generation:3",
+          "identity_kind": "attempt"
+        }
+      },
+      "mutation": {
+        "operation": "remove",
+        "path": "/recovery",
+        "value": null
+      },
+      "valid": false
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

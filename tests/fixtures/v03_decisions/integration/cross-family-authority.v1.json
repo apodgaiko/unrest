@@ -1,0 +1,790 @@
+{
+  "bypass_cases": [
+    {
+      "id": "XAUTH-BYPASS-CIRCULAR-INTEGRATION-RECEIPT",
+      "mutation": "application plan requires integration_receipt.v1 before atomic acceptance creates it",
+      "result": "reject_future_output_prerequisite",
+      "violates_owner": "parent_integration_authority"
+    },
+    {
+      "id": "XAUTH-BYPASS-COMPOUND-OWNER",
+      "mutation": "one transition names promotion_integration_authority or both promotion_authority and parent_integration_authority",
+      "result": "reject_undefined_or_compound_owner",
+      "violates_owner": "closed_role_catalog"
+    },
+    {
+      "id": "XAUTH-BYPASS-EVALUATOR-PROMOTES",
+      "mutation": "evaluator score directly advances accepted working point",
+      "result": "reject_evidence_as_authority",
+      "violates_owner": "promotion_authority"
+    },
+    {
+      "id": "XAUTH-BYPASS-PROMOTION-RECEIPT-APPLIES",
+      "mutation": "promotion_receipt.v1 is treated as pre-application permission",
+      "result": "reject_post_application_output_as_authorization",
+      "violates_owner": "promotion_authority"
+    },
+    {
+      "id": "XAUTH-BYPASS-WORKER-INTEGRATES",
+      "mutation": "child applies its disjoint patch to accepted working point",
+      "result": "reject_child_integration",
+      "violates_owner": "parent_integration_authority"
+    }
+  ],
+  "circularity_proof": [
+    {
+      "future_outputs_consumed": [],
+      "step_id": "XAPP-01-PROMOTION-DECISION-GRANT"
+    },
+    {
+      "future_outputs_consumed": [],
+      "step_id": "XAPP-02-PARENT-APPLICATION-PLAN"
+    },
+    {
+      "future_outputs_consumed": [],
+      "step_id": "XAPP-03-STAGE"
+    },
+    {
+      "future_outputs_consumed": [],
+      "step_id": "XAPP-04-APPLY-STAGING"
+    },
+    {
+      "future_outputs_consumed": [],
+      "step_id": "XAPP-05-VALIDATE-STAGING"
+    },
+    {
+      "future_outputs_consumed": [],
+      "step_id": "XAPP-06-ATOMIC-ACCEPT"
+    },
+    {
+      "future_outputs_consumed": [],
+      "step_id": "XAPP-07-INTEGRATION-RECEIPT"
+    },
+    {
+      "future_outputs_consumed": [],
+      "step_id": "XAPP-08-PROMOTION-RECEIPT"
+    }
+  ],
+  "closed_record_schemas": [
+    {
+      "digest_field": "grant_digest",
+      "digest_preimage": "ASCII(unrest.cross-family-protocol.v1)||0x00||ASCII(PromotionDecisionGrant.v1)||0x00||CanonicalJSON-v1(record-without-grant_digest)",
+      "field_types": {
+        "authority_role_id": "closed_role_id",
+        "candidate_digest": "sha256_digest",
+        "chronology_is_authority": "literal_false",
+        "decision": "promote|reject|rework|inconclusive",
+        "evaluation_receipt_digest": "sha256_digest",
+        "expires_after_sequence": "safe_positive_integer",
+        "grant_digest": "sha256_digest",
+        "grant_id": "nonempty_ascii_id",
+        "integration_operation": "literal_stage_apply_validate_atomic_accept",
+        "issuer_actor_id": "nonempty_ascii_id",
+        "patch_receipt_digest": "sha256_digest",
+        "predecessor_digest": "sha256_digest",
+        "required_validation_ids": "sorted_unique_nonempty_ascii_id_array",
+        "review_receipt_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "use_limit": "literal_1",
+        "workspace_lease_id": "nonempty_ascii_id"
+      },
+      "record_kind": "PromotionDecisionGrant.v1",
+      "required_fields": [
+        "authority_role_id",
+        "candidate_digest",
+        "chronology_is_authority",
+        "decision",
+        "evaluation_receipt_digest",
+        "expires_after_sequence",
+        "grant_digest",
+        "grant_id",
+        "integration_operation",
+        "issuer_actor_id",
+        "patch_receipt_digest",
+        "predecessor_digest",
+        "required_validation_ids",
+        "review_receipt_digest",
+        "schema_version",
+        "use_limit",
+        "workspace_lease_id"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "plan_digest",
+      "digest_preimage": "ASCII(unrest.cross-family-protocol.v1)||0x00||ASCII(ParentApplicationPlan.v1)||0x00||CanonicalJSON-v1(record-without-plan_digest)",
+      "field_types": {
+        "accepted_point_compare_and_swap": "closed_expected_predecessor_and_result_digest_object",
+        "application_grant_digest": "sha256_digest",
+        "candidate_digest": "sha256_digest",
+        "chronology_is_authority": "literal_false",
+        "effect_grant_refs": "sorted_unique_sha256_digest_array",
+        "owner_role_id": "closed_role_id",
+        "patch_receipt_digest": "sha256_digest",
+        "plan_digest": "sha256_digest",
+        "plan_id": "nonempty_ascii_id",
+        "predecessor_digest": "sha256_digest",
+        "recovery_plan": "closed_role_action_terminal_outcomes_object",
+        "required_validation_ids": "sorted_unique_nonempty_ascii_id_array",
+        "schema_version": "literal_1",
+        "staging_point_id": "nonempty_ascii_id",
+        "steps": "exact_ordered_transition_id_array",
+        "workspace_lease_id": "nonempty_ascii_id"
+      },
+      "record_kind": "ParentApplicationPlan.v1",
+      "required_fields": [
+        "accepted_point_compare_and_swap",
+        "application_grant_digest",
+        "candidate_digest",
+        "chronology_is_authority",
+        "effect_grant_refs",
+        "owner_role_id",
+        "patch_receipt_digest",
+        "plan_digest",
+        "plan_id",
+        "predecessor_digest",
+        "recovery_plan",
+        "required_validation_ids",
+        "schema_version",
+        "staging_point_id",
+        "steps",
+        "workspace_lease_id"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "receipt_digest",
+      "digest_preimage": "ASCII(unrest.receipt.v1)||0x00||ASCII(receipt_kind)||0x00||CanonicalJSON-v1(record-without-receipt_digest)",
+      "field_types": {
+        "append_only_disposition": "literal_immutable",
+        "artifact_refs": "sorted_closed_artifact_ref_array",
+        "chronology_is_authority": "literal_false",
+        "consumers": "catalog_exact_sorted_unique_id_array",
+        "cost": "closed_cost_object",
+        "dependencies": "catalog_exact_sorted_unique_dependency_array",
+        "deviations": "sorted_closed_deviation_array",
+        "freshness_policy": "closed_freshness_policy_object",
+        "integrity": "closed_integrity_object",
+        "issuer": "closed_actor_and_identity_digest_object",
+        "issuer_authority": "closed_role_and_grant_ref_object",
+        "observed_at": "rfc3339_utc_string",
+        "outcome": "receipt_family_catalog_outcome",
+        "receipt_digest": "sha256_digest",
+        "receipt_id": "nonempty_ascii_id",
+        "receipt_kind": "integration_receipt.v1|promotion_receipt.v1",
+        "schema_version": "literal_1",
+        "sequence": "safe_positive_integer",
+        "subject": "closed_kind_public_id_digest_object",
+        "terminal_disposition": "receipt_family_catalog_terminal"
+      },
+      "record_kind": "Receipt.v1",
+      "required_fields": [
+        "append_only_disposition",
+        "artifact_refs",
+        "chronology_is_authority",
+        "consumers",
+        "cost",
+        "dependencies",
+        "deviations",
+        "freshness_policy",
+        "integrity",
+        "issuer",
+        "issuer_authority",
+        "observed_at",
+        "outcome",
+        "receipt_digest",
+        "receipt_id",
+        "receipt_kind",
+        "schema_version",
+        "sequence",
+        "subject",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    }
+  ],
+  "concrete_protocol": {
+    "application_grant": {
+      "authority_role_id": "promotion_authority",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "chronology_is_authority": false,
+      "decision": "promote",
+      "evaluation_receipt_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "expires_after_sequence": 40,
+      "grant_digest": "sha256:21c7d75ea1b085f13aba05c874de162f500e29e5992e759c280d208944dc66b9",
+      "grant_id": "promotion-grant-0001",
+      "integration_operation": "stage_apply_validate_atomic_accept",
+      "issuer_actor_id": "maintainer-0001",
+      "patch_receipt_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "required_validation_ids": [
+        "integrated-contracts",
+        "repository-policy"
+      ],
+      "review_receipt_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "schema_version": 1,
+      "use_limit": 1,
+      "workspace_lease_id": "workspace-lease-0001"
+    },
+    "application_plan": {
+      "accepted_point_compare_and_swap": {
+        "expected_predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "resulting_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "application_grant_digest": "sha256:21c7d75ea1b085f13aba05c874de162f500e29e5992e759c280d208944dc66b9",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "chronology_is_authority": false,
+      "effect_grant_refs": [],
+      "owner_role_id": "parent_integration_authority",
+      "patch_receipt_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "plan_digest": "sha256:f99b0a5bc5685ce9858612c194ff920e0e92080e9c9123eda858aee211c18c85",
+      "plan_id": "parent-application-plan-0001",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "recovery_plan": {
+        "action": "reconcile_transaction_or_restore_exact_predecessor",
+        "owner_role_id": "parent_integration_authority",
+        "terminal_outcomes": [
+          "accepted_point_unchanged",
+          "integrated_and_validated",
+          "rolled_back",
+          "unsettled_attention"
+        ]
+      },
+      "required_validation_ids": [
+        "integrated-contracts",
+        "repository-policy"
+      ],
+      "schema_version": 1,
+      "staging_point_id": "parent-stage-0001",
+      "steps": [
+        "XAPP-03-STAGE",
+        "XAPP-04-APPLY-STAGING",
+        "XAPP-05-VALIDATE-STAGING",
+        "XAPP-06-ATOMIC-ACCEPT",
+        "XAPP-07-INTEGRATION-RECEIPT"
+      ],
+      "workspace_lease_id": "workspace-lease-0001"
+    },
+    "integration_receipt": {
+      "append_only_disposition": "immutable",
+      "artifact_refs": [
+        {
+          "artifact_digest": "sha256:f99b0a5bc5685ce9858612c194ff920e0e92080e9c9123eda858aee211c18c85",
+          "artifact_id": "application-plan-artifact-0001",
+          "media_type": "application/vnd.unrest.parent-application-plan.v1+json",
+          "size": 2048
+        }
+      ],
+      "chronology_is_authority": false,
+      "consumers": [
+        "evidence_store",
+        "promotion_authority",
+        "rollback_authority"
+      ],
+      "cost": {
+        "accounting_boundary": "parent_application",
+        "completeness": "complete",
+        "currency": "none",
+        "quantity": 1,
+        "unit": "application_attempt"
+      },
+      "dependencies": [
+        {
+          "dependency_kind": "accepted_working_point_digest",
+          "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "public_id": "accepted-point-0002",
+          "role": "resulting_point"
+        },
+        {
+          "dependency_kind": "artifact_digest",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "public_id": "integrated-validation-artifact-0001",
+          "role": "integrated_validation"
+        },
+        {
+          "dependency_kind": "base_revision",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "public_id": "accepted-point-0001",
+          "role": "predecessor"
+        },
+        {
+          "dependency_kind": "candidate_digest",
+          "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "public_id": "candidate-0001",
+          "role": "applied_candidate"
+        },
+        {
+          "dependency_kind": "capability_policy_digest",
+          "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "public_id": "capability-policy-0001",
+          "role": "application_policy"
+        },
+        {
+          "dependency_kind": "patch_receipt.v1",
+          "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+          "public_id": "patch-receipt-0001",
+          "role": "patch_return"
+        },
+        {
+          "dependency_kind": "workspace_lease_id",
+          "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+          "public_id": "workspace-lease-0001",
+          "role": "workspace_lease"
+        }
+      ],
+      "deviations": [],
+      "freshness_policy": {
+        "dependency_mode": "exact_all_must_be_fresh",
+        "expiry": {
+          "state": "absent"
+        },
+        "policy_id": "integration-freshness-v1",
+        "revocation_authority_role_id": "parent_integration_authority",
+        "unavailable_dependency": "unverifiable"
+      },
+      "integrity": {
+        "canonicalization_version": "CanonicalJSON-v1",
+        "detached_signature": {
+          "state": "absent"
+        },
+        "digest_algorithm": "sha256",
+        "digest_domain": "unrest.receipt.v1",
+        "mechanism_id": "sha256-content-digest-v1"
+      },
+      "issuer": {
+        "actor_id": "parent-integrator-0001",
+        "identity_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "issuer_authority": {
+        "authority_role_id": "parent_integration_authority",
+        "decision_grant_ref": "sha256:21c7d75ea1b085f13aba05c874de162f500e29e5992e759c280d208944dc66b9"
+      },
+      "observed_at": "2026-08-19T10:00:00Z",
+      "outcome": "integrated_and_validated",
+      "receipt_digest": "sha256:c153591a716955bdba60d0920e97501c204ada4aae7c0af89d9b11bfac6c5e55",
+      "receipt_id": "integration-receipt-0001",
+      "receipt_kind": "integration_receipt.v1",
+      "schema_version": 1,
+      "sequence": 50,
+      "subject": {
+        "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "kind": "accepted_working_point",
+        "public_id": "accepted-point-0002"
+      },
+      "terminal_disposition": "integrated"
+    },
+    "promotion_receipt": {
+      "append_only_disposition": "immutable",
+      "artifact_refs": [
+        {
+          "artifact_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "artifact_id": "promotion-decision-artifact-0001",
+          "media_type": "application/vnd.unrest.promotion-decision-grant.v1+json",
+          "size": 1024
+        }
+      ],
+      "chronology_is_authority": false,
+      "consumers": [
+        "evidence_store",
+        "maintainer",
+        "rollback_authority"
+      ],
+      "cost": {
+        "accounting_boundary": "promotion_completion",
+        "completeness": "not_applicable",
+        "currency": "none",
+        "quantity": 0,
+        "unit": "decision"
+      },
+      "dependencies": [
+        {
+          "dependency_kind": "accepted_working_point_digest",
+          "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "public_id": "accepted-point-0002",
+          "role": "promoted_point"
+        },
+        {
+          "dependency_kind": "candidate_digest",
+          "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "public_id": "candidate-0001",
+          "role": "promoted_candidate"
+        },
+        {
+          "dependency_kind": "evaluation_receipt.v1",
+          "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "public_id": "evaluation-receipt-0001",
+          "role": "evaluation_evidence"
+        },
+        {
+          "dependency_kind": "integration_receipt.v1",
+          "digest": "sha256:c153591a716955bdba60d0920e97501c204ada4aae7c0af89d9b11bfac6c5e55",
+          "public_id": "integration-receipt-0001",
+          "role": "completed_parent_application"
+        },
+        {
+          "dependency_kind": "review_receipt.v1",
+          "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "public_id": "review-receipt-0001",
+          "role": "review_evidence"
+        }
+      ],
+      "deviations": [],
+      "freshness_policy": {
+        "dependency_mode": "exact_all_must_be_fresh",
+        "expiry": {
+          "state": "absent"
+        },
+        "policy_id": "promotion-freshness-v1",
+        "revocation_authority_role_id": "promotion_authority",
+        "unavailable_dependency": "unverifiable"
+      },
+      "integrity": {
+        "canonicalization_version": "CanonicalJSON-v1",
+        "detached_signature": {
+          "state": "absent"
+        },
+        "digest_algorithm": "sha256",
+        "digest_domain": "unrest.receipt.v1",
+        "mechanism_id": "sha256-content-digest-v1"
+      },
+      "issuer": {
+        "actor_id": "maintainer-0001",
+        "identity_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "issuer_authority": {
+        "authority_role_id": "promotion_authority",
+        "decision_grant_ref": "sha256:21c7d75ea1b085f13aba05c874de162f500e29e5992e759c280d208944dc66b9"
+      },
+      "observed_at": "2026-08-19T10:01:00Z",
+      "outcome": "promoted",
+      "receipt_digest": "sha256:b45023727ce7db8ec8b55d8152dd26adcd692275f520f65151f3ea7b4bcdddab",
+      "receipt_id": "promotion-receipt-0001",
+      "receipt_kind": "promotion_receipt.v1",
+      "schema_version": 1,
+      "sequence": 51,
+      "subject": {
+        "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "kind": "candidate",
+        "public_id": "candidate-0001"
+      },
+      "terminal_disposition": "promoted"
+    }
+  },
+  "edges": [
+    {
+      "edge_type": "classifies_surface",
+      "from": "compatibility",
+      "mutation_authority": false,
+      "to": "authority"
+    },
+    {
+      "edge_type": "produces_evidence",
+      "from": "evolution",
+      "mutation_authority": false,
+      "to": "authority"
+    },
+    {
+      "edge_type": "requests_exact_application",
+      "from": "evolution",
+      "mutation_authority": false,
+      "to": "workspace"
+    },
+    {
+      "edge_type": "encodes_typed_reference",
+      "from": "identity",
+      "mutation_authority": false,
+      "to": "authority"
+    },
+    {
+      "edge_type": "encodes_typed_reference",
+      "from": "identity",
+      "mutation_authority": false,
+      "to": "evolution"
+    },
+    {
+      "edge_type": "encodes_typed_reference",
+      "from": "identity",
+      "mutation_authority": false,
+      "to": "inquiry"
+    },
+    {
+      "edge_type": "encodes_typed_reference",
+      "from": "identity",
+      "mutation_authority": false,
+      "to": "workspace"
+    },
+    {
+      "edge_type": "submits_typed_request",
+      "from": "inquiry",
+      "mutation_authority": false,
+      "to": "authority"
+    },
+    {
+      "edge_type": "applies_external_decision",
+      "from": "workspace",
+      "mutation_authority": false,
+      "to": "authority"
+    },
+    {
+      "edge_type": "produces_patch_evidence",
+      "from": "workspace",
+      "mutation_authority": false,
+      "to": "evolution"
+    }
+  ],
+  "ordered_transitions": [
+    {
+      "consumes": [
+        "candidate_digest",
+        "evaluation_receipt.v1",
+        "patch_receipt.v1",
+        "predecessor_digest",
+        "review_receipt.v1"
+      ],
+      "id": "XAPP-01-PROMOTION-DECISION-GRANT",
+      "owner_role_id": "promotion_authority",
+      "phase": "pre_application",
+      "produces": [
+        "PromotionDecisionGrant.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "PatchReturn.v1",
+        "PromotionDecisionGrant.v1",
+        "WorkspaceLease.v1"
+      ],
+      "id": "XAPP-02-PARENT-APPLICATION-PLAN",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "pre_application",
+      "produces": [
+        "ParentApplicationPlan.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "ParentApplicationPlan.v1",
+        "PromotionDecisionGrant.v1"
+      ],
+      "id": "XAPP-03-STAGE",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "parent_application",
+      "produces": [
+        "StagedApplication.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "StagedApplication.v1"
+      ],
+      "id": "XAPP-04-APPLY-STAGING",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "parent_application",
+      "produces": [
+        "AppliedStagingPoint.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "AppliedStagingPoint.v1",
+        "required_validation_ids"
+      ],
+      "id": "XAPP-05-VALIDATE-STAGING",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "parent_application",
+      "produces": [
+        "IntegratedValidationResult.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "IntegratedValidationResult.v1",
+        "ParentApplicationPlan.v1",
+        "PromotionDecisionGrant.v1"
+      ],
+      "id": "XAPP-06-ATOMIC-ACCEPT",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "parent_application",
+      "produces": [
+        "AcceptedPointMutation.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "AcceptedPointMutation.v1",
+        "IntegratedValidationResult.v1"
+      ],
+      "id": "XAPP-07-INTEGRATION-RECEIPT",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "post_application",
+      "produces": [
+        "integration_receipt.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "PromotionDecisionGrant.v1",
+        "evaluation_receipt.v1",
+        "integration_receipt.v1",
+        "review_receipt.v1"
+      ],
+      "id": "XAPP-08-PROMOTION-RECEIPT",
+      "owner_role_id": "promotion_authority",
+      "phase": "post_application",
+      "produces": [
+        "promotion_receipt.v1"
+      ]
+    }
+  ],
+  "primary_owners": [
+    {
+      "concern": "accepted_working_point_decision",
+      "family": "authority"
+    },
+    {
+      "concern": "campaign_evaluation_promotion_policy",
+      "family": "evolution"
+    },
+    {
+      "concern": "canonical_identity_and_freshness",
+      "family": "identity"
+    },
+    {
+      "concern": "common_cancellation_and_effect_authority",
+      "family": "authority"
+    },
+    {
+      "concern": "inquiry_lifecycle_and_handoff",
+      "family": "inquiry"
+    },
+    {
+      "concern": "mission_truth_mutation",
+      "family": "authority"
+    },
+    {
+      "concern": "v02_compatibility_and_no_extra_rollback",
+      "family": "compatibility"
+    },
+    {
+      "concern": "workspace_lease_patch_and_application",
+      "family": "workspace"
+    }
+  ],
+  "recovery_transitions": [
+    {
+      "action": "append_reject_rework_or_inconclusive_decision",
+      "id": "XREC-01-PRE-APPLICATION-REJECT",
+      "owner_role_id": "promotion_authority",
+      "terminal_outcome": "accepted_point_unchanged",
+      "trigger": "grant_or_plan_invalid_stale_mismatched_or_expired"
+    },
+    {
+      "action": "discard_staging_and_retain_failure_evidence",
+      "id": "XREC-02-STAGING-FAILURE",
+      "owner_role_id": "parent_integration_authority",
+      "terminal_outcome": "accepted_point_unchanged",
+      "trigger": "stage_apply_or_validation_failure_before_atomic_accept"
+    },
+    {
+      "action": "reconstruct_exact_transaction_and_emit_delayed_receipt_or_invoke_exact_rollback",
+      "id": "XREC-03-POST-ACCEPT-RECONCILIATION",
+      "owner_role_id": "parent_integration_authority",
+      "terminal_outcome": "integrated_and_validated_or_rolled_back_or_unsettled_attention",
+      "trigger": "crash_after_atomic_accept_before_integration_receipt"
+    },
+    {
+      "action": "append_promotion_receipt_from_exact_grant_and_integration_receipt",
+      "id": "XREC-04-PROMOTION-RECEIPT-RECOVERY",
+      "owner_role_id": "promotion_authority",
+      "terminal_outcome": "promoted_or_rejected_rework_inconclusive",
+      "trigger": "integration_receipt_exists_but_promotion_receipt_missing"
+    },
+    {
+      "action": "compensate_rollback_quarantine_escalate_or_retain_unsettled",
+      "id": "XREC-05-EXTERNAL-EFFECT",
+      "owner_role_id": "external_effect_recovery_authority",
+      "terminal_outcome": "settled_or_unsettled_attention",
+      "trigger": "partial_unknown_or_unsettled_external_effect"
+    }
+  ],
+  "role_catalog": [
+    {
+      "authority_scope": "campaign admission and immutable freeze",
+      "role_id": "campaign_authority"
+    },
+    {
+      "authority_scope": "finite campaign budget decisions",
+      "role_id": "campaign_budget_authority"
+    },
+    {
+      "authority_scope": "campaign cancellation and stop decisions",
+      "role_id": "campaign_stop_authority"
+    },
+    {
+      "authority_scope": "compatibility probe execution and temporary cleanup",
+      "role_id": "compatibility_probe_validator"
+    },
+    {
+      "authority_scope": "external effect decision for exact class and scope",
+      "role_id": "external_effect_authority"
+    },
+    {
+      "authority_scope": "recovery of one grant-bound external effect",
+      "role_id": "external_effect_recovery_authority"
+    },
+    {
+      "authority_scope": "protected holdout custody",
+      "role_id": "holdout_custodian"
+    },
+    {
+      "authority_scope": "canonical Identity.v1 and Receipt.v1 encoding only",
+      "role_id": "identity_encoding_authority"
+    },
+    {
+      "authority_scope": "independent evaluation and evaluation receipt issuance",
+      "role_id": "independent_evaluation_authority"
+    },
+    {
+      "authority_scope": "independent review, dissent, and review receipt issuance",
+      "role_id": "independent_review_authority"
+    },
+    {
+      "authority_scope": "Inquiry lifecycle state only",
+      "role_id": "inquiry_lifecycle_authority"
+    },
+    {
+      "authority_scope": "current Mission lifecycle, work, gate, and seal mutation path",
+      "role_id": "mission_controller_authority"
+    },
+    {
+      "authority_scope": "atomic orphan claim for one workspace lease generation",
+      "role_id": "orphan_recovery_supervisor"
+    },
+    {
+      "authority_scope": "parent staging, application, validation, atomic accepted-point mutation, integration receipt, and transaction reconciliation",
+      "role_id": "parent_integration_authority"
+    },
+    {
+      "authority_scope": "pre-application promotion decision/grant and post-application promotion receipt",
+      "role_id": "promotion_authority"
+    },
+    {
+      "authority_scope": "retry and exclusion decisions under frozen campaign policy",
+      "role_id": "retry_exclusion_decision_authority"
+    },
+    {
+      "authority_scope": "exact-predecessor rollback decision and recovery",
+      "role_id": "rollback_authority"
+    },
+    {
+      "authority_scope": "workspace lease admission, cancellation, drain, and cleanup",
+      "role_id": "workspace_lease_authority"
+    },
+    {
+      "authority_scope": "identity-bound child patch return issuance only",
+      "role_id": "workspace_return_authority"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

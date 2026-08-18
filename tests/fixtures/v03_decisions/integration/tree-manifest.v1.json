@@ -1,0 +1,88 @@
+{
+  "adr_files": [
+    "docs/decisions/ADR-0300-authority.md",
+    "docs/decisions/ADR-0301-identity.md",
+    "docs/decisions/ADR-0302-inquiry.md",
+    "docs/decisions/ADR-0303-workspace.md",
+    "docs/decisions/ADR-0304-evolution.md",
+    "docs/decisions/ADR-0305-compatibility.md"
+  ],
+  "contract_files": [
+    "docs/v03/contracts/authority.md",
+    "docs/v03/contracts/compatibility.md",
+    "docs/v03/contracts/evolution.md",
+    "docs/v03/contracts/foundation-integration.md",
+    "docs/v03/contracts/identity-v1.md",
+    "docs/v03/contracts/inquiry-v1.md",
+    "docs/v03/contracts/receipt-v1.md",
+    "docs/v03/contracts/workspace.md"
+  ],
+  "fixture_files": [
+    "tests/fixtures/v03_decisions/authority/authority-graph.v1.json",
+    "tests/fixtures/v03_decisions/authority/cancellation-recovery.v1.json",
+    "tests/fixtures/v03_decisions/authority/external-effects.v1.json",
+    "tests/fixtures/v03_decisions/compatibility/compatibility-matrix.v1.json",
+    "tests/fixtures/v03_decisions/compatibility/persistence-probes.v1.json",
+    "tests/fixtures/v03_decisions/compatibility/rollback-and-rejections.v1.json",
+    "tests/fixtures/v03_decisions/compatibility/v02-source-inventory.v1.json",
+    "tests/fixtures/v03_decisions/evolution/campaign-freeze.v1.json",
+    "tests/fixtures/v03_decisions/evolution/evaluation-independence.v1.json",
+    "tests/fixtures/v03_decisions/evolution/outcome-retention.v1.json",
+    "tests/fixtures/v03_decisions/evolution/promotion-scenarios.v1.json",
+    "tests/fixtures/v03_decisions/evolution/rollback-scenarios.v1.json",
+    "tests/fixtures/v03_decisions/identity/canonical-vectors.v1.json",
+    "tests/fixtures/v03_decisions/identity/dependency-mutations.v1.json",
+    "tests/fixtures/v03_decisions/identity/identity-catalog.v1.json",
+    "tests/fixtures/v03_decisions/identity/receipt-catalog.v1.json",
+    "tests/fixtures/v03_decisions/identity/secret-safety.v1.json",
+    "tests/fixtures/v03_decisions/inquiry/inquiry-lifecycle.v1.json",
+    "tests/fixtures/v03_decisions/inquiry/inquiry-mission-handoff.v1.json",
+    "tests/fixtures/v03_decisions/integration/cancellation-recovery-owners.v1.json",
+    "tests/fixtures/v03_decisions/integration/cross-family-authority.v1.json",
+    "tests/fixtures/v03_decisions/integration/decision-inventory.v1.json",
+    "tests/fixtures/v03_decisions/integration/scenario-coverage.v1.json",
+    "tests/fixtures/v03_decisions/integration/tree-manifest.v1.json",
+    "tests/fixtures/v03_decisions/workspace/integration-scenarios.v1.json",
+    "tests/fixtures/v03_decisions/workspace/isolation-tiers.v1.json",
+    "tests/fixtures/v03_decisions/workspace/recovery-scenarios.v1.json"
+  ],
+  "metadata_contract": {
+    "accepted_index_entry_forbidden": true,
+    "exact_status": "proposed",
+    "required_fields": [
+      "contract_targets",
+      "date",
+      "evaluation_tier",
+      "id",
+      "status",
+      "superseded_by",
+      "supersedes",
+      "task_ids"
+    ],
+    "required_sections": [
+      "Alternatives considered",
+      "Consequences",
+      "Context",
+      "Current v0.2 truth",
+      "Open questions",
+      "Review",
+      "Rollback",
+      "Scope"
+    ]
+  },
+  "schema_version": 1,
+  "serialization": {
+    "duplicate_keys": "reject",
+    "encoding": "utf-8",
+    "json_indent": 2,
+    "keys": "lexicographically_sorted_recursively",
+    "non_finite_numbers": "reject",
+    "trailing_newline_count": 1
+  },
+  "status": "proposed_non_authoritative",
+  "validation_roots": [
+    "docs/decisions/ADR-03*.md",
+    "docs/v03/contracts",
+    "tests/fixtures/v03_decisions"
+  ]
+}

@@ -1,0 +1,868 @@
+{
+  "closed_record_schemas": {
+    "CancellationRoute.v1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "enum": [
+            "evaluation_error",
+            "evaluation_in_flight",
+            "evaluation_queued",
+            "evaluation_stale_input",
+            "evaluation_timeout",
+            "external_effect_crash_restart",
+            "external_effect_post_effect",
+            "external_effect_retry",
+            "external_effect_timeout",
+            "inquiry_crash_restart",
+            "inquiry_in_flight",
+            "inquiry_pre_start",
+            "inquiry_timeout",
+            "parent_application_apply",
+            "parent_application_atomic_mutation",
+            "parent_application_integrated_validation",
+            "parent_application_plan",
+            "parent_application_receipt_recovery",
+            "parent_application_staging",
+            "pending_work_cancel_patch",
+            "promotion_decision_mismatch",
+            "promotion_decision_pre_apply",
+            "promotion_decision_stale_evidence",
+            "promotion_partial_apply",
+            "promotion_receipt_missing",
+            "promotion_receipt_stale_integration_result",
+            "promotion_stale_evidence",
+            "rollback_failed_validation",
+            "rollback_in_flight",
+            "rollback_partial_effect",
+            "rollback_pre_start",
+            "rollback_unknown_effect",
+            "running_work_crash_restart",
+            "running_work_in_flight",
+            "running_work_stale_attempt",
+            "running_work_timeout",
+            "workspace_active",
+            "workspace_cleanup_retry",
+            "workspace_orphan_claim",
+            "workspace_pre_allocation",
+            "workspace_returned"
+          ],
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "campaign_authority",
+            "campaign_budget_authority",
+            "campaign_stop_authority",
+            "compatibility_probe_validator",
+            "external_effect_authority",
+            "external_effect_recovery_authority",
+            "holdout_custodian",
+            "identity_encoding_authority",
+            "independent_evaluation_authority",
+            "independent_review_authority",
+            "inquiry_lifecycle_authority",
+            "mission_controller_authority",
+            "orphan_recovery_supervisor",
+            "parent_integration_authority",
+            "promotion_authority",
+            "retry_exclusion_decision_authority",
+            "rollback_authority",
+            "workspace_lease_authority",
+            "workspace_return_authority"
+          ],
+          "type": "string"
+        },
+        "subject": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "terminal_dispositions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "action",
+        "evidence",
+        "id",
+        "owner",
+        "subject",
+        "terminal_dispositions"
+      ],
+      "type": "object"
+    }
+  },
+  "current_v02_limitations": [
+    "abort_project_does_not_prove_cooperative_live_worker_stop",
+    "task_graph_cancel_only_rewrites_pending_or_failed_nodes",
+    "terminal_review_teardown_is_not_live_worker_cancellation"
+  ],
+  "negative_cases": [
+    {
+      "expected_failure_reason": "graph_cancellation_does_not_stop_live_worker",
+      "id": "CANCEL-BYPASS-GRAPH-AS-LIVE-STOP",
+      "mutation": "replace bounded action with pending-node graph cancellation",
+      "route_id": "running_work_in_flight",
+      "valid": false
+    },
+    {
+      "expected_failure_reason": "route_requires_exactly_one_owner",
+      "id": "CANCEL-BYPASS-MISSING-OWNER",
+      "mutation": "remove owner",
+      "route_id": "workspace_returned",
+      "valid": false
+    },
+    {
+      "expected_failure_reason": "compound_owner_forbidden",
+      "id": "CANCEL-BYPASS-MULTIPLE-OWNERS",
+      "mutation": "replace owner string with two-owner array",
+      "route_id": "promotion_partial_apply",
+      "valid": false
+    },
+    {
+      "expected_failure_reason": "retry_must_preserve_prior_generation",
+      "id": "CANCEL-BYPASS-RETRY-REWRITES-HISTORY",
+      "mutation": "reuse generation and overwrite prior outcome",
+      "route_id": "external_effect_retry",
+      "valid": false
+    },
+    {
+      "expected_failure_reason": "terminal_review_teardown_does_not_stop_live_worker",
+      "id": "CANCEL-BYPASS-TEARDOWN-AS-STOP",
+      "mutation": "replace bounded drain with terminal review teardown",
+      "route_id": "running_work_timeout",
+      "valid": false
+    },
+    {
+      "expected_failure_reason": "unknown_effect_cannot_be_success",
+      "id": "CANCEL-BYPASS-UNKNOWN-AS-CLEAN",
+      "mutation": "replace explicit uncertainty with settled success",
+      "route_id": "rollback_unknown_effect",
+      "valid": false
+    },
+    {
+      "expected_failure_reason": "workspace_deletion_does_not_reverse_effect",
+      "id": "CANCEL-BYPASS-WORKTREE-DELETE-AS-REVERSAL",
+      "mutation": "replace effect recovery with workspace deletion",
+      "route_id": "rollback_partial_effect",
+      "valid": false
+    }
+  ],
+  "required_route_ids": [
+    "evaluation_error",
+    "evaluation_in_flight",
+    "evaluation_queued",
+    "evaluation_stale_input",
+    "evaluation_timeout",
+    "external_effect_crash_restart",
+    "external_effect_post_effect",
+    "external_effect_retry",
+    "external_effect_timeout",
+    "inquiry_crash_restart",
+    "inquiry_in_flight",
+    "inquiry_pre_start",
+    "inquiry_timeout",
+    "parent_application_apply",
+    "parent_application_atomic_mutation",
+    "parent_application_integrated_validation",
+    "parent_application_plan",
+    "parent_application_receipt_recovery",
+    "parent_application_staging",
+    "pending_work_cancel_patch",
+    "promotion_decision_mismatch",
+    "promotion_decision_pre_apply",
+    "promotion_decision_stale_evidence",
+    "promotion_partial_apply",
+    "promotion_receipt_missing",
+    "promotion_receipt_stale_integration_result",
+    "promotion_stale_evidence",
+    "rollback_failed_validation",
+    "rollback_in_flight",
+    "rollback_partial_effect",
+    "rollback_pre_start",
+    "rollback_unknown_effect",
+    "running_work_crash_restart",
+    "running_work_in_flight",
+    "running_work_stale_attempt",
+    "running_work_timeout",
+    "workspace_active",
+    "workspace_cleanup_retry",
+    "workspace_orphan_claim",
+    "workspace_pre_allocation",
+    "workspace_returned"
+  ],
+  "routes": [
+    {
+      "action": "persist evaluator error and invalidate result",
+      "evidence": [
+        "evaluation_identity",
+        "error_record",
+        "input_digests"
+      ],
+      "id": "evaluation_error",
+      "owner": "independent_evaluation_authority",
+      "subject": "evaluation",
+      "terminal_dispositions": [
+        "failed",
+        "invalid"
+      ]
+    },
+    {
+      "action": "stop launch and bounded drain",
+      "evidence": [
+        "evaluation_identity",
+        "partial_results",
+        "spent_budget"
+      ],
+      "id": "evaluation_in_flight",
+      "owner": "independent_evaluation_authority",
+      "subject": "evaluation",
+      "terminal_dispositions": [
+        "cancelled",
+        "completed_evidence",
+        "failed",
+        "invalid"
+      ]
+    },
+    {
+      "action": "cancel queued evaluation before evaluator activation",
+      "evidence": [
+        "candidate_identity",
+        "queue_record",
+        "zero_evaluator_activation"
+      ],
+      "id": "evaluation_queued",
+      "owner": "independent_evaluation_authority",
+      "subject": "evaluation",
+      "terminal_dispositions": [
+        "cancelled"
+      ]
+    },
+    {
+      "action": "reject mismatched input and retain stale evidence",
+      "evidence": [
+        "candidate_identity",
+        "current_input_digests",
+        "stale_input_digests"
+      ],
+      "id": "evaluation_stale_input",
+      "owner": "independent_evaluation_authority",
+      "subject": "evaluation",
+      "terminal_dispositions": [
+        "invalid",
+        "stale"
+      ]
+    },
+    {
+      "action": "stop launch, bounded drain, and retain partial evidence",
+      "evidence": [
+        "evaluation_identity",
+        "partial_results",
+        "timeout_record"
+      ],
+      "id": "evaluation_timeout",
+      "owner": "independent_evaluation_authority",
+      "subject": "evaluation",
+      "terminal_dispositions": [
+        "cancelled",
+        "failed",
+        "invalid"
+      ]
+    },
+    {
+      "action": "reconstruct exact effect attempt and inventory unsettled resources",
+      "evidence": [
+        "effect_grant",
+        "effect_receipt_or_missing_receipt",
+        "reconciliation_record"
+      ],
+      "id": "external_effect_crash_restart",
+      "owner": "external_effect_recovery_authority",
+      "subject": "partial_external_effect",
+      "terminal_dispositions": [
+        "compensated",
+        "escalated",
+        "explicitly_unsettled",
+        "quarantined",
+        "rolled_back"
+      ]
+    },
+    {
+      "action": "stop new effects and inventory the partial result",
+      "evidence": [
+        "effect_grant",
+        "effect_receipt_or_missing_receipt",
+        "resource_inventory"
+      ],
+      "id": "external_effect_post_effect",
+      "owner": "external_effect_recovery_authority",
+      "subject": "partial_external_effect",
+      "terminal_dispositions": [
+        "compensated",
+        "escalated",
+        "explicitly_unsettled",
+        "quarantined",
+        "rolled_back"
+      ]
+    },
+    {
+      "action": "create a new generation without rewriting the prior outcome",
+      "evidence": [
+        "new_attempt_identity",
+        "prior_attempt_outcome",
+        "retry_decision"
+      ],
+      "id": "external_effect_retry",
+      "owner": "external_effect_recovery_authority",
+      "subject": "partial_external_effect",
+      "terminal_dispositions": [
+        "compensated",
+        "escalated",
+        "explicitly_unsettled",
+        "quarantined",
+        "rolled_back"
+      ]
+    },
+    {
+      "action": "stop new effects, bounded drain, and settle or escalate unknown state",
+      "evidence": [
+        "effect_grant",
+        "process_inventory",
+        "timeout_record"
+      ],
+      "id": "external_effect_timeout",
+      "owner": "external_effect_recovery_authority",
+      "subject": "partial_external_effect",
+      "terminal_dispositions": [
+        "compensated",
+        "escalated",
+        "explicitly_unsettled",
+        "quarantined",
+        "rolled_back"
+      ]
+    },
+    {
+      "action": "reconstruct exact activation and reject mismatched branch output",
+      "evidence": [
+        "activation_receipts",
+        "branch_attempts",
+        "persisted_state"
+      ],
+      "id": "inquiry_crash_restart",
+      "owner": "inquiry_lifecycle_authority",
+      "subject": "inquiry",
+      "terminal_dispositions": [
+        "answered",
+        "budget_exhausted",
+        "cancelled",
+        "failed",
+        "paused"
+      ]
+    },
+    {
+      "action": "persist cancel request, revoke launch, and bounded drain",
+      "evidence": [
+        "branch_outcomes",
+        "budget_ledger",
+        "cancellation_reason"
+      ],
+      "id": "inquiry_in_flight",
+      "owner": "inquiry_lifecycle_authority",
+      "subject": "inquiry",
+      "terminal_dispositions": [
+        "cancelled",
+        "failed",
+        "paused"
+      ]
+    },
+    {
+      "action": "cancel without branch launch",
+      "evidence": [
+        "cancellation_reason",
+        "inquiry_identity",
+        "zero_spend"
+      ],
+      "id": "inquiry_pre_start",
+      "owner": "inquiry_lifecycle_authority",
+      "subject": "inquiry",
+      "terminal_dispositions": [
+        "cancelled"
+      ]
+    },
+    {
+      "action": "stop new launch and run cancellation drain",
+      "evidence": [
+        "branch_outcomes",
+        "budget_ledger",
+        "timeout_record"
+      ],
+      "id": "inquiry_timeout",
+      "owner": "inquiry_lifecycle_authority",
+      "subject": "inquiry",
+      "terminal_dispositions": [
+        "budget_exhausted",
+        "cancelled",
+        "failed",
+        "paused"
+      ]
+    },
+    {
+      "action": "apply exact staged patch in the parent transaction",
+      "evidence": [
+        "application_log",
+        "parent_application_plan",
+        "staged_patch"
+      ],
+      "id": "parent_application_apply",
+      "owner": "parent_integration_authority",
+      "subject": "parent_application",
+      "terminal_dispositions": [
+        "accepted_point_unchanged",
+        "proceed_to_integrated_validation"
+      ]
+    },
+    {
+      "action": "atomically mutate accepted point only after fresh integrated validation",
+      "evidence": [
+        "atomic_write_record",
+        "fresh_integrated_validation",
+        "parent_application_plan"
+      ],
+      "id": "parent_application_atomic_mutation",
+      "owner": "parent_integration_authority",
+      "subject": "parent_application",
+      "terminal_dispositions": [
+        "integrated_and_validated",
+        "unsettled_attention"
+      ]
+    },
+    {
+      "action": "validate the exact applied candidate in parent context",
+      "evidence": [
+        "applied_candidate_identity",
+        "integrated_validation_result",
+        "parent_application_plan"
+      ],
+      "id": "parent_application_integrated_validation",
+      "owner": "parent_integration_authority",
+      "subject": "parent_application",
+      "terminal_dispositions": [
+        "accepted_point_unchanged",
+        "proceed_to_atomic_mutation",
+        "rolled_back"
+      ]
+    },
+    {
+      "action": "validate grant and create parent application plan",
+      "evidence": [
+        "parent_application_plan",
+        "promotion_decision_grant",
+        "workspace_return"
+      ],
+      "id": "parent_application_plan",
+      "owner": "parent_integration_authority",
+      "subject": "parent_application",
+      "terminal_dispositions": [
+        "accepted_point_unchanged",
+        "proceed_to_staging"
+      ]
+    },
+    {
+      "action": "reconcile exact accepted transaction and emit delayed integration receipt or invoke rollback",
+      "evidence": [
+        "accepted_point_record",
+        "parent_application_plan",
+        "transaction_reconciliation"
+      ],
+      "id": "parent_application_receipt_recovery",
+      "owner": "parent_integration_authority",
+      "subject": "parent_application",
+      "terminal_dispositions": [
+        "integrated_and_validated",
+        "rolled_back",
+        "unsettled_attention"
+      ]
+    },
+    {
+      "action": "stage exact base-bound patch without changing accepted point",
+      "evidence": [
+        "parent_application_plan",
+        "staging_record",
+        "workspace_return"
+      ],
+      "id": "parent_application_staging",
+      "owner": "parent_integration_authority",
+      "subject": "parent_application",
+      "terminal_dispositions": [
+        "accepted_point_unchanged",
+        "proceed_to_apply"
+      ]
+    },
+    {
+      "action": "rewrite eligible dependencies and mark pending work superseded",
+      "evidence": [
+        "decision_record",
+        "patched_task_list",
+        "prior_task_state"
+      ],
+      "id": "pending_work_cancel_patch",
+      "owner": "mission_controller_authority",
+      "subject": "pending_work",
+      "terminal_dispositions": [
+        "superseded"
+      ]
+    },
+    {
+      "action": "reject candidate, predecessor, policy, or receipt mismatch before application",
+      "evidence": [
+        "decision_inputs",
+        "mismatch_record",
+        "promotion_decision_grant"
+      ],
+      "id": "promotion_decision_mismatch",
+      "owner": "promotion_authority",
+      "subject": "promotion_decision",
+      "terminal_dispositions": [
+        "inconclusive",
+        "rejected",
+        "rework"
+      ]
+    },
+    {
+      "action": "revoke or reject decision before parent application",
+      "evidence": [
+        "candidate_identity",
+        "decision_record",
+        "predecessor_identity"
+      ],
+      "id": "promotion_decision_pre_apply",
+      "owner": "promotion_authority",
+      "subject": "promotion_decision",
+      "terminal_dispositions": [
+        "inconclusive",
+        "rejected",
+        "rework"
+      ]
+    },
+    {
+      "action": "reject stale evaluation or review evidence before application",
+      "evidence": [
+        "evaluation_receipt",
+        "freshness_record",
+        "review_receipt"
+      ],
+      "id": "promotion_decision_stale_evidence",
+      "owner": "promotion_authority",
+      "subject": "promotion_decision",
+      "terminal_dispositions": [
+        "inconclusive",
+        "rejected",
+        "rework"
+      ]
+    },
+    {
+      "action": "stop parent application, restore predecessor when possible, and retain partial application evidence",
+      "evidence": [
+        "application_log",
+        "partial_effect_ledger",
+        "predecessor_identity"
+      ],
+      "id": "promotion_partial_apply",
+      "owner": "parent_integration_authority",
+      "subject": "parent_application",
+      "terminal_dispositions": [
+        "accepted_point_unchanged",
+        "rolled_back",
+        "unsettled_attention"
+      ]
+    },
+    {
+      "action": "append receipt from exact grant and integration receipt without reapplying",
+      "evidence": [
+        "integration_receipt",
+        "promotion_decision_grant",
+        "receipt_absence_record"
+      ],
+      "id": "promotion_receipt_missing",
+      "owner": "promotion_authority",
+      "subject": "promotion_receipt",
+      "terminal_dispositions": [
+        "inconclusive",
+        "promoted",
+        "rejected",
+        "rework"
+      ]
+    },
+    {
+      "action": "reject stale integration result without another application",
+      "evidence": [
+        "freshness_record",
+        "integration_receipt",
+        "promotion_decision_grant"
+      ],
+      "id": "promotion_receipt_stale_integration_result",
+      "owner": "promotion_authority",
+      "subject": "promotion_receipt",
+      "terminal_dispositions": [
+        "inconclusive",
+        "rejected",
+        "rework"
+      ]
+    },
+    {
+      "action": "reject stale promotion evidence and leave accepted point unchanged",
+      "evidence": [
+        "evaluation_receipt",
+        "freshness_record",
+        "promotion_decision_grant"
+      ],
+      "id": "promotion_stale_evidence",
+      "owner": "promotion_authority",
+      "subject": "promotion_decision",
+      "terminal_dispositions": [
+        "inconclusive",
+        "rejected",
+        "rework"
+      ]
+    },
+    {
+      "action": "retain failed restoration evidence and raise typed attention",
+      "evidence": [
+        "rollback_decision",
+        "rollback_validation_result",
+        "target_predecessor_identity"
+      ],
+      "id": "rollback_failed_validation",
+      "owner": "rollback_authority",
+      "subject": "rollback",
+      "terminal_dispositions": [
+        "failed_unsettled_attention"
+      ]
+    },
+    {
+      "action": "stop rollback application, validate current point, and raise attention if unsettled",
+      "evidence": [
+        "applied_steps",
+        "current_point_identity",
+        "rollback_decision"
+      ],
+      "id": "rollback_in_flight",
+      "owner": "rollback_authority",
+      "subject": "rollback",
+      "terminal_dispositions": [
+        "failed_unsettled_attention",
+        "restored_and_validated"
+      ]
+    },
+    {
+      "action": "compensate, quarantine, or escalate exact partial rollback effect",
+      "evidence": [
+        "effect_grant",
+        "partial_effect_ledger",
+        "rollback_decision"
+      ],
+      "id": "rollback_partial_effect",
+      "owner": "external_effect_recovery_authority",
+      "subject": "rollback_external_effect",
+      "terminal_dispositions": [
+        "compensated",
+        "escalated",
+        "explicitly_unsettled",
+        "quarantined",
+        "rolled_back"
+      ]
+    },
+    {
+      "action": "cancel without parent mutation",
+      "evidence": [
+        "rollback_decision",
+        "target_predecessor_identity",
+        "zero_apply_steps"
+      ],
+      "id": "rollback_pre_start",
+      "owner": "rollback_authority",
+      "subject": "rollback",
+      "terminal_dispositions": [
+        "cancelled"
+      ]
+    },
+    {
+      "action": "inventory unknown rollback effect and fail closed",
+      "evidence": [
+        "effect_grant",
+        "process_inventory",
+        "rollback_decision"
+      ],
+      "id": "rollback_unknown_effect",
+      "owner": "external_effect_recovery_authority",
+      "subject": "rollback_external_effect",
+      "terminal_dispositions": [
+        "compensated",
+        "escalated",
+        "explicitly_unsettled",
+        "quarantined",
+        "rolled_back"
+      ]
+    },
+    {
+      "action": "reconcile exact generation from durable state",
+      "evidence": [
+        "attempt_generation",
+        "handoff_or_failure",
+        "task_state"
+      ],
+      "id": "running_work_crash_restart",
+      "owner": "mission_controller_authority",
+      "subject": "running_work",
+      "terminal_dispositions": [
+        "cancelled_result",
+        "failed_result",
+        "typed_attention_unknown"
+      ]
+    },
+    {
+      "action": "request cooperative stop, bounded drain, and inventory effects",
+      "evidence": [
+        "attempt_generation",
+        "cancellation_reason",
+        "process_and_effect_inventory"
+      ],
+      "id": "running_work_in_flight",
+      "owner": "mission_controller_authority",
+      "subject": "running_work",
+      "terminal_dispositions": [
+        "cancelled_result",
+        "failed_result",
+        "typed_attention_unknown"
+      ]
+    },
+    {
+      "action": "reject mismatched or replayed generation",
+      "evidence": [
+        "current_generation",
+        "rejected_attempt",
+        "task_identity"
+      ],
+      "id": "running_work_stale_attempt",
+      "owner": "mission_controller_authority",
+      "subject": "running_work",
+      "terminal_dispositions": [
+        "failed_result",
+        "typed_attention_unknown"
+      ]
+    },
+    {
+      "action": "request stop, bounded drain, and retain timeout uncertainty",
+      "evidence": [
+        "attempt_generation",
+        "process_and_effect_inventory",
+        "timeout_record"
+      ],
+      "id": "running_work_timeout",
+      "owner": "mission_controller_authority",
+      "subject": "running_work",
+      "terminal_dispositions": [
+        "cancelled_result",
+        "failed_result",
+        "typed_attention_unknown"
+      ]
+    },
+    {
+      "action": "revoke lease use, bounded drain, inventory effects, and cleanup owned resources",
+      "evidence": [
+        "lease_record",
+        "process_inventory",
+        "resource_inventory"
+      ],
+      "id": "workspace_active",
+      "owner": "workspace_lease_authority",
+      "subject": "workspace_lease",
+      "terminal_dispositions": [
+        "cleanup_failed_attention",
+        "released",
+        "unsettled_effect_attention"
+      ]
+    },
+    {
+      "action": "retry idempotent cleanup with a new attempt receipt",
+      "evidence": [
+        "cleanup_attempts",
+        "lease_record",
+        "unsettled_resources"
+      ],
+      "id": "workspace_cleanup_retry",
+      "owner": "workspace_lease_authority",
+      "subject": "workspace_lease",
+      "terminal_dispositions": [
+        "cleanup_failed_attention",
+        "released"
+      ]
+    },
+    {
+      "action": "atomically claim exact orphan generation or quarantine",
+      "evidence": [
+        "claim_decision",
+        "lease_record",
+        "workspace_inventory"
+      ],
+      "id": "workspace_orphan_claim",
+      "owner": "orphan_recovery_supervisor",
+      "subject": "workspace_orphan",
+      "terminal_dispositions": [
+        "claimed_generation",
+        "quarantine_attention"
+      ]
+    },
+    {
+      "action": "cancel reservation without allocation",
+      "evidence": [
+        "cancellation_reason",
+        "lease_request",
+        "zero_allocation"
+      ],
+      "id": "workspace_pre_allocation",
+      "owner": "workspace_lease_authority",
+      "subject": "workspace_lease",
+      "terminal_dispositions": [
+        "released"
+      ]
+    },
+    {
+      "action": "accept immutable return evidence, revoke lease use, and clean owned resources",
+      "evidence": [
+        "cleanup_receipt",
+        "lease_record",
+        "workspace_return_receipt"
+      ],
+      "id": "workspace_returned",
+      "owner": "workspace_lease_authority",
+      "subject": "workspace_lease",
+      "terminal_dispositions": [
+        "cleanup_failed_attention",
+        "released"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

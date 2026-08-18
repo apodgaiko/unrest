@@ -1,0 +1,452 @@
+{
+  "authority_rule": "evaluation_and_review_are_identity_bound_evidence_only_and_never_promotion_or_mission_authority",
+  "cases": [
+    {
+      "baseline_record_refs": [
+        "evaluation_run",
+        "evaluation_evidence",
+        "review_evidence",
+        "custody_evidence"
+      ],
+      "id": "EVAL-NEG-AUTHOR-EVALUATOR-COLLISION",
+      "mutated_value": "actor:candidate-author-01",
+      "mutation_path": "authority_assignments.independent_evaluation_authority.actor_id",
+      "result": "reject_identity_collision"
+    },
+    {
+      "baseline_record_refs": [
+        "evaluation_run",
+        "evaluation_evidence",
+        "review_evidence",
+        "custody_evidence"
+      ],
+      "id": "EVAL-NEG-AUTHOR-REVIEWER-COLLISION",
+      "mutated_value": "actor:candidate-author-01",
+      "mutation_path": "review_evidence.quorum.satisfied_by[0]",
+      "result": "reject_review_collision"
+    },
+    {
+      "baseline_record_refs": [
+        "evaluation_run",
+        "evaluation_evidence",
+        "review_evidence",
+        "custody_evidence"
+      ],
+      "id": "EVAL-NEG-DISSENT",
+      "mutated_value": [
+        "artifact:minority-report-0001"
+      ],
+      "mutation_path": "review_evidence.dissent_refs",
+      "result": "block_promotion_dissent_retained"
+    },
+    {
+      "baseline_record_refs": [
+        "evaluation_run",
+        "evaluation_evidence",
+        "review_evidence",
+        "custody_evidence"
+      ],
+      "id": "EVAL-NEG-EVALUATOR-ONLY-QUORUM",
+      "mutated_value": [
+        "actor:evaluator-01"
+      ],
+      "mutation_path": "review_evidence.quorum.satisfied_by",
+      "result": "reject_quorum"
+    },
+    {
+      "baseline_record_refs": [
+        "evaluation_run",
+        "evaluation_evidence",
+        "review_evidence",
+        "custody_evidence"
+      ],
+      "id": "EVAL-NEG-LEAKED-HOLDOUT",
+      "mutated_value": true,
+      "mutation_path": "custody_evidence.candidate_workspace_access",
+      "result": "contamination_blocks_promotion"
+    },
+    {
+      "baseline_record_refs": [
+        "evaluation_run",
+        "evaluation_evidence",
+        "review_evidence",
+        "custody_evidence"
+      ],
+      "id": "EVAL-NEG-MISSING-WORKLOAD",
+      "mutated_value": null,
+      "mutation_path": "evaluation_run.workload_digest",
+      "result": "reject_unverifiable"
+    },
+    {
+      "baseline_record_refs": [
+        "evaluation_run",
+        "evaluation_evidence",
+        "review_evidence",
+        "custody_evidence"
+      ],
+      "id": "EVAL-NEG-REWARD-HACK",
+      "mutated_value": [
+        "artifact:denominator-suppression-0001"
+      ],
+      "mutation_path": "evaluation_evidence.reward_hack_signal_refs",
+      "result": "suspected_reward_hack_blocks_promotion"
+    },
+    {
+      "baseline_record_refs": [
+        "evaluation_run",
+        "evaluation_evidence",
+        "review_evidence",
+        "custody_evidence"
+      ],
+      "id": "EVAL-NEG-STALE-ENVIRONMENT",
+      "mutated_value": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "mutation_path": "evaluation_run.environment_digest",
+      "result": "stale_evidence_rejection"
+    }
+  ],
+  "closed_record_schemas": [
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(EvaluationEvidence.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "artifact_refs": "array",
+        "candidate_digest": "sha256_digest",
+        "complete_denominator": "object",
+        "environment_digest": "sha256_digest",
+        "issuer": "object",
+        "outcome": "string",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_EvaluationEvidence.v1",
+        "reward_hack_signal_refs": "array",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string",
+        "workload_digest": "sha256_digest"
+      },
+      "record_kind": "EvaluationEvidence.v1",
+      "required_fields": [
+        "artifact_refs",
+        "candidate_digest",
+        "complete_denominator",
+        "environment_digest",
+        "issuer",
+        "outcome",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "reward_hack_signal_refs",
+        "schema_version",
+        "terminal_disposition",
+        "workload_digest"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(EvaluationRun.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "attempt_id": "string",
+        "campaign_generation": "integer",
+        "candidate_digest": "sha256_digest",
+        "context_digest": "sha256_digest",
+        "environment_digest": "sha256_digest",
+        "evaluator_identity_digest": "sha256_digest",
+        "holdout_manifest_digest": "sha256_digest",
+        "owner_role_id": "closed_role_id",
+        "policy_digest": "sha256_digest",
+        "provider_configuration_digest": "sha256_digest",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_EvaluationRun.v1",
+        "route_profile_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "seed_policy_digest": "sha256_digest",
+        "terminal_disposition": "string",
+        "workload_digest": "sha256_digest"
+      },
+      "record_kind": "EvaluationRun.v1",
+      "required_fields": [
+        "attempt_id",
+        "campaign_generation",
+        "candidate_digest",
+        "context_digest",
+        "environment_digest",
+        "evaluator_identity_digest",
+        "holdout_manifest_digest",
+        "owner_role_id",
+        "policy_digest",
+        "provider_configuration_digest",
+        "record_digest",
+        "record_kind",
+        "route_profile_digest",
+        "schema_version",
+        "seed_policy_digest",
+        "terminal_disposition",
+        "workload_digest"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(HoldoutCustodyEvidence.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "access_log_digest": "sha256_digest",
+        "candidate_workspace_access": "boolean",
+        "custodian_actor_id": "string",
+        "holdout_manifest_digest": "sha256_digest",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_HoldoutCustodyEvidence.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "HoldoutCustodyEvidence.v1",
+      "required_fields": [
+        "access_log_digest",
+        "candidate_workspace_access",
+        "custodian_actor_id",
+        "holdout_manifest_digest",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(ReviewEvidence.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "candidate_digest": "sha256_digest",
+        "dissent_refs": "array",
+        "evaluation_evidence_digest": "sha256_digest",
+        "issuer": "object",
+        "quorum": "object",
+        "recommendation": "string",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_ReviewEvidence.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "ReviewEvidence.v1",
+      "required_fields": [
+        "candidate_digest",
+        "dissent_refs",
+        "evaluation_evidence_digest",
+        "issuer",
+        "quorum",
+        "recommendation",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    }
+  ],
+  "closed_role_catalog_ref": "../integration/cross-family-authority.v1.json#/role_catalog",
+  "concrete_records": {
+    "authority_assignments": {
+      "candidate_author": {
+        "actor_id": "actor:candidate-author-01",
+        "control_domains": [
+          "candidate_patch"
+        ],
+        "identity_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "holdout_custodian": {
+        "actor_id": "actor:holdout-custodian-01",
+        "control_domains": [
+          "protected_holdout"
+        ],
+        "identity_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "role_id": "holdout_custodian"
+      },
+      "independent_evaluation_authority": {
+        "actor_id": "actor:evaluator-01",
+        "control_domains": [
+          "evaluation_execution"
+        ],
+        "identity_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "role_id": "independent_evaluation_authority"
+      },
+      "independent_review_authority": {
+        "actor_id": "actor:review-board-01",
+        "control_domains": [
+          "review_quorum"
+        ],
+        "identity_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "role_id": "independent_review_authority"
+      },
+      "mutation_worker": {
+        "actor_id": "actor:mutation-worker-01",
+        "control_domains": [
+          "workspace_patch"
+        ],
+        "identity_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "promotion_authority": {
+        "actor_id": "actor:promotion-governor-01",
+        "control_domains": [
+          "promotion_decision"
+        ],
+        "identity_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "role_id": "promotion_authority"
+      },
+      "retry_exclusion_decision_authority": {
+        "actor_id": "actor:retry-governor-01",
+        "control_domains": [
+          "retry_exclusion_decision"
+        ],
+        "identity_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "role_id": "retry_exclusion_decision_authority"
+      }
+    },
+    "custody_evidence": {
+      "access_log_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "candidate_workspace_access": false,
+      "custodian_actor_id": "actor:holdout-custodian-01",
+      "holdout_manifest_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "record_digest": "sha256:1dbc5a94ecf77f978a0d0e3c176755d8e60dc02664acb12caf6c4bd393c683fc",
+      "record_id": "custody-0001",
+      "record_kind": "HoldoutCustodyEvidence.v1",
+      "schema_version": 1,
+      "terminal_disposition": "custody_intact"
+    },
+    "evaluation_evidence": {
+      "artifact_refs": [
+        "artifact:evaluation-measurements-0001"
+      ],
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "complete_denominator": {
+        "admitted": 8,
+        "cancelled": 0,
+        "errored": 0,
+        "evaluated": 8,
+        "excluded": 0,
+        "failed": 1,
+        "passed": 7,
+        "skipped": 0,
+        "timed_out": 0
+      },
+      "environment_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "issuer": {
+        "actor_id": "actor:evaluator-01",
+        "role_id": "independent_evaluation_authority"
+      },
+      "outcome": "evaluated",
+      "record_digest": "sha256:ae867a46b033113751b550e3ad6e34805b35bed56238737cf43485f96deb9f9c",
+      "record_id": "evaluation-receipt-0001",
+      "record_kind": "EvaluationEvidence.v1",
+      "reward_hack_signal_refs": [],
+      "schema_version": 1,
+      "terminal_disposition": "evidence_only",
+      "workload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "evaluation_run": {
+      "attempt_id": "evaluation-attempt-0001",
+      "campaign_generation": 1,
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "context_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "environment_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "evaluator_identity_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "holdout_manifest_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "owner_role_id": "independent_evaluation_authority",
+      "policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "provider_configuration_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "record_digest": "sha256:fef68c3509261f3edacb0990735da59888063f1377fa4bc872de1a5a7509c61e",
+      "record_kind": "EvaluationRun.v1",
+      "route_profile_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "schema_version": 1,
+      "seed_policy_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "terminal_disposition": "completed",
+      "workload_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "review_evidence": {
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "dissent_refs": [],
+      "evaluation_evidence_digest": "sha256:ae867a46b033113751b550e3ad6e34805b35bed56238737cf43485f96deb9f9c",
+      "issuer": {
+        "actor_id": "actor:review-board-01",
+        "role_id": "independent_review_authority"
+      },
+      "quorum": {
+        "eligible_reviewers": [
+          "actor:reviewer-01",
+          "actor:reviewer-02"
+        ],
+        "required": 2,
+        "satisfied_by": [
+          "actor:reviewer-01",
+          "actor:reviewer-02"
+        ]
+      },
+      "recommendation": "eligible_for_external_promotion_decision",
+      "record_digest": "sha256:ff0bcf5b487f8cc73d0db664c4e0938b9b3375d4bcfbde07c288750c1f1dbdbe",
+      "record_id": "review-receipt-0001",
+      "record_kind": "ReviewEvidence.v1",
+      "schema_version": 1,
+      "terminal_disposition": "evidence_only"
+    }
+  },
+  "independence_policy": {
+    "prohibited_actor_collisions": [
+      [
+        "candidate_author",
+        "holdout_custodian"
+      ],
+      [
+        "candidate_author",
+        "independent_evaluation_authority"
+      ],
+      [
+        "candidate_author",
+        "independent_review_authority"
+      ],
+      [
+        "candidate_author",
+        "promotion_authority"
+      ],
+      [
+        "mutation_worker",
+        "holdout_custodian"
+      ],
+      [
+        "mutation_worker",
+        "independent_evaluation_authority"
+      ],
+      [
+        "mutation_worker",
+        "independent_review_authority"
+      ],
+      [
+        "mutation_worker",
+        "promotion_authority"
+      ]
+    ],
+    "prohibited_shared_control_domains": true,
+    "reviewer_quorum_cannot_be_satisfied_by_evaluator": true
+  },
+  "ownership_resolution": [
+    {
+      "record_ref": "concrete_records.custody_evidence",
+      "role_id": "holdout_custodian"
+    },
+    {
+      "record_ref": "concrete_records.evaluation_run",
+      "role_id": "independent_evaluation_authority"
+    },
+    {
+      "record_ref": "concrete_records.evaluation_evidence",
+      "role_id": "independent_evaluation_authority"
+    },
+    {
+      "record_ref": "concrete_records.review_evidence",
+      "role_id": "independent_review_authority"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

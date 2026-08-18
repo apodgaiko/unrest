@@ -1,0 +1,579 @@
+{
+  "closed_record_schemas": [
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(PromotionOrRemovalDecision.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "candidate_digest": "sha256_digest",
+        "decision": "string",
+        "decision_id": "string",
+        "decision_kind": "string",
+        "issuer_actor_id": "string",
+        "issuer_role_id": "closed_role_id",
+        "predecessor_digest": "sha256_digest",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_PromotionOrRemovalDecision.v1",
+        "resulting_point_digest": "sha256_digest",
+        "rollback_target_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "PromotionOrRemovalDecision.v1",
+      "required_fields": [
+        "candidate_digest",
+        "decision",
+        "decision_id",
+        "decision_kind",
+        "issuer_actor_id",
+        "issuer_role_id",
+        "predecessor_digest",
+        "record_digest",
+        "record_kind",
+        "resulting_point_digest",
+        "rollback_target_digest",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "receipt_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(rollback_receipt.v1)||0x00||CanonicalJSON-v1(record-without-receipt_digest)",
+      "field_types": {
+        "candidate_digest": "sha256_digest",
+        "compatibility_evidence_digest": "sha256_digest",
+        "issuer_actor_id": "string",
+        "issuer_role_id": "closed_role_id",
+        "predecessor_digest": "sha256_digest",
+        "receipt_digest": "sha256_digest",
+        "receipt_id": "string",
+        "receipt_kind": "literal_rollback_receipt.v1",
+        "restored_point_digest": "sha256_digest",
+        "rollback_application_result_digest": "sha256_digest",
+        "rollback_grant_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "sequence": "integer",
+        "terminal_disposition": "string",
+        "trigger_evidence_digest": "sha256_digest"
+      },
+      "record_kind": "rollback_receipt.v1",
+      "required_fields": [
+        "candidate_digest",
+        "compatibility_evidence_digest",
+        "issuer_actor_id",
+        "issuer_role_id",
+        "predecessor_digest",
+        "receipt_digest",
+        "receipt_id",
+        "receipt_kind",
+        "restored_point_digest",
+        "rollback_application_result_digest",
+        "rollback_grant_digest",
+        "schema_version",
+        "sequence",
+        "terminal_disposition",
+        "trigger_evidence_digest"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(RollbackApplicationResult.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "application_id": "string",
+        "current_point_before_digest": "sha256_digest",
+        "integrated_validation_refs": "array",
+        "owner_role_id": "closed_role_id",
+        "procedure_digest": "sha256_digest",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_RollbackApplicationResult.v1",
+        "restored_point_digest": "sha256_digest",
+        "rollback_grant_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "RollbackApplicationResult.v1",
+      "required_fields": [
+        "application_id",
+        "current_point_before_digest",
+        "integrated_validation_refs",
+        "owner_role_id",
+        "procedure_digest",
+        "record_digest",
+        "record_kind",
+        "restored_point_digest",
+        "rollback_grant_digest",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(RollbackCompatibilityEvidence.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "checks": "array",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_RollbackCompatibilityEvidence.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "RollbackCompatibilityEvidence.v1",
+      "required_fields": [
+        "checks",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "grant_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(RollbackGrant.v1)||0x00||CanonicalJSON-v1(record-without-grant_digest)",
+      "field_types": {
+        "candidate_digest": "sha256_digest",
+        "compatibility_evidence_digest": "sha256_digest",
+        "expires_after_sequence": "integer",
+        "grant_digest": "sha256_digest",
+        "grant_id": "string",
+        "issuer_actor_id": "string",
+        "issuer_role_id": "closed_role_id",
+        "predecessor_digest": "sha256_digest",
+        "procedure_id": "string",
+        "resulting_point_digest": "sha256_digest",
+        "rollback_target_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "trigger_evidence_digest": "sha256_digest",
+        "use_limit": "integer"
+      },
+      "record_kind": "RollbackGrant.v1",
+      "required_fields": [
+        "candidate_digest",
+        "compatibility_evidence_digest",
+        "expires_after_sequence",
+        "grant_digest",
+        "grant_id",
+        "issuer_actor_id",
+        "issuer_role_id",
+        "predecessor_digest",
+        "procedure_id",
+        "resulting_point_digest",
+        "rollback_target_digest",
+        "schema_version",
+        "trigger_evidence_digest",
+        "use_limit"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "procedure_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(RollbackProcedure.v1)||0x00||CanonicalJSON-v1(record-without-procedure_digest)",
+      "field_types": {
+        "compatibility_evidence_digest": "sha256_digest",
+        "evidence_retention_policy": "object",
+        "owner_role_id": "closed_role_id",
+        "parent_application_owner_role_id": "closed_role_id",
+        "procedure_digest": "sha256_digest",
+        "procedure_id": "string",
+        "rollback_grant_digest": "sha256_digest",
+        "schema_version": "literal_1",
+        "steps": "array",
+        "terminal_outcomes": "array"
+      },
+      "record_kind": "RollbackProcedure.v1",
+      "required_fields": [
+        "compatibility_evidence_digest",
+        "evidence_retention_policy",
+        "owner_role_id",
+        "parent_application_owner_role_id",
+        "procedure_digest",
+        "procedure_id",
+        "rollback_grant_digest",
+        "schema_version",
+        "steps",
+        "terminal_outcomes"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(RollbackTriggerEvidence.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "current_accepted_point_digest": "sha256_digest",
+        "observed_trigger": "string",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_RollbackTriggerEvidence.v1",
+        "schema_version": "literal_1",
+        "trigger_artifact_refs": "array",
+        "trigger_policy_id": "string",
+        "triggered_decision_digest": "sha256_digest"
+      },
+      "record_kind": "RollbackTriggerEvidence.v1",
+      "required_fields": [
+        "current_accepted_point_digest",
+        "observed_trigger",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "schema_version",
+        "trigger_artifact_refs",
+        "trigger_policy_id",
+        "triggered_decision_digest"
+      ],
+      "unknown_fields": "reject"
+    }
+  ],
+  "closed_role_catalog_ref": "../integration/cross-family-authority.v1.json#/role_catalog",
+  "concrete_records": {
+    "compatibility_evidence": {
+      "checks": [
+        {
+          "evidence_ref": "artifact:schema-v1-replay-0001",
+          "id": "schema-v1-replay",
+          "passed": true
+        },
+        {
+          "evidence_ref": "artifact:no-extra-core-0001",
+          "id": "no-extra-core",
+          "passed": true
+        }
+      ],
+      "record_digest": "sha256:b3b8b6037df80c9dfadda0f7e6e2635054279143a4fa7261acec85b5ecf376f7",
+      "record_id": "compatibility-evidence-0001",
+      "record_kind": "RollbackCompatibilityEvidence.v1",
+      "schema_version": 1,
+      "terminal_disposition": "compatible"
+    },
+    "handoff_projection": {
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "compatibility_evidence_digest": "sha256:b3b8b6037df80c9dfadda0f7e6e2635054279143a4fa7261acec85b5ecf376f7",
+      "evidence_retention_policy": {
+        "append_only": true,
+        "policy_id": "evolution-retention-v1"
+      },
+      "ordered_procedure_digest": "sha256:972fdc5c45aca8349431210bc2f6b1de594f5963613289ddd9de8cbcf7860a28",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "recovery_owner_role_id": "rollback_authority",
+      "resulting_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "rollback_authority_grant_digest": "sha256:d96248cff4d07fcedb5a23499ffc7a918f59a6c29c1f0522b2434566151e2872",
+      "rollback_issuer_actor_id": "actor:rollback-governor-01",
+      "rollback_receipt_digest": "sha256:a969c44548a732ee413587569d6fbf844e5bcb31a3af92684ff5450cb625aac6",
+      "rollback_target_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "trigger_evidence_digest": "sha256:d41bba3d947d2f34c8cfa5421943c4b164227e2ea93c8246c3d2375a72a11ed4",
+      "trigger_policy_id": "rollback-trigger-v1"
+    },
+    "promotion_decision": {
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "decision": "promote",
+      "decision_id": "promotion-decision-0001",
+      "decision_kind": "promotion",
+      "issuer_actor_id": "actor:promotion-governor-01",
+      "issuer_role_id": "promotion_authority",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "record_digest": "sha256:90f2fdcd415be895aeeaed45dcb253984e959d8800bf2500242bde737af3da00",
+      "record_kind": "PromotionOrRemovalDecision.v1",
+      "resulting_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "rollback_target_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "schema_version": 1,
+      "terminal_disposition": "promoted"
+    },
+    "removal_decision": {
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "decision": "remove",
+      "decision_id": "removal-decision-0001",
+      "decision_kind": "removal",
+      "issuer_actor_id": "actor:promotion-governor-01",
+      "issuer_role_id": "promotion_authority",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "record_digest": "sha256:a6466d9ea5becf101e9d53066bb5f7c4001b194119a6a47f828319edf7a4056f",
+      "record_kind": "PromotionOrRemovalDecision.v1",
+      "resulting_point_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "rollback_target_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "schema_version": 1,
+      "terminal_disposition": "removed"
+    },
+    "rollback_application_result": {
+      "application_id": "rollback-application-0001",
+      "current_point_before_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "integrated_validation_refs": [
+        "artifact:restored-point-validation-0001"
+      ],
+      "owner_role_id": "parent_integration_authority",
+      "procedure_digest": "sha256:972fdc5c45aca8349431210bc2f6b1de594f5963613289ddd9de8cbcf7860a28",
+      "record_digest": "sha256:269577c8b2230d1d07927c3f25db64cec94e72fa079ef3c373fb848b24f1ef52",
+      "record_kind": "RollbackApplicationResult.v1",
+      "restored_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "rollback_grant_digest": "sha256:d96248cff4d07fcedb5a23499ffc7a918f59a6c29c1f0522b2434566151e2872",
+      "schema_version": 1,
+      "terminal_disposition": "restored_and_validated"
+    },
+    "rollback_grant": {
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "compatibility_evidence_digest": "sha256:b3b8b6037df80c9dfadda0f7e6e2635054279143a4fa7261acec85b5ecf376f7",
+      "expires_after_sequence": 70,
+      "grant_digest": "sha256:d96248cff4d07fcedb5a23499ffc7a918f59a6c29c1f0522b2434566151e2872",
+      "grant_id": "rollback-grant-0001",
+      "issuer_actor_id": "actor:rollback-governor-01",
+      "issuer_role_id": "rollback_authority",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "procedure_id": "rollback-procedure-0001",
+      "resulting_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "rollback_target_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "schema_version": 1,
+      "trigger_evidence_digest": "sha256:d41bba3d947d2f34c8cfa5421943c4b164227e2ea93c8246c3d2375a72a11ed4",
+      "use_limit": 1
+    },
+    "rollback_procedure": {
+      "compatibility_evidence_digest": "sha256:b3b8b6037df80c9dfadda0f7e6e2635054279143a4fa7261acec85b5ecf376f7",
+      "evidence_retention_policy": {
+        "append_only": true,
+        "retain": [
+          "campaign",
+          "compatibility",
+          "effects",
+          "evaluation",
+          "promotion",
+          "removal",
+          "review",
+          "rollback"
+        ]
+      },
+      "owner_role_id": "rollback_authority",
+      "parent_application_owner_role_id": "parent_integration_authority",
+      "procedure_digest": "sha256:972fdc5c45aca8349431210bc2f6b1de594f5963613289ddd9de8cbcf7860a28",
+      "procedure_id": "rollback-procedure-0001",
+      "rollback_grant_digest": "sha256:d96248cff4d07fcedb5a23499ffc7a918f59a6c29c1f0522b2434566151e2872",
+      "schema_version": 1,
+      "steps": [
+        "verify_current_point",
+        "verify_trigger",
+        "verify_exact_target",
+        "verify_authority_grant",
+        "verify_compatibility",
+        "stop_new_effects",
+        "parent_apply_exact_predecessor",
+        "validate_restored_digest",
+        "emit_rollback_receipt"
+      ],
+      "terminal_outcomes": [
+        "failed_unsettled",
+        "restored_and_validated"
+      ]
+    },
+    "rollback_receipt": {
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "compatibility_evidence_digest": "sha256:b3b8b6037df80c9dfadda0f7e6e2635054279143a4fa7261acec85b5ecf376f7",
+      "issuer_actor_id": "actor:rollback-governor-01",
+      "issuer_role_id": "rollback_authority",
+      "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "receipt_digest": "sha256:a969c44548a732ee413587569d6fbf844e5bcb31a3af92684ff5450cb625aac6",
+      "receipt_id": "rollback-receipt-0001",
+      "receipt_kind": "rollback_receipt.v1",
+      "restored_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "rollback_application_result_digest": "sha256:269577c8b2230d1d07927c3f25db64cec94e72fa079ef3c373fb848b24f1ef52",
+      "rollback_grant_digest": "sha256:d96248cff4d07fcedb5a23499ffc7a918f59a6c29c1f0522b2434566151e2872",
+      "schema_version": 1,
+      "sequence": 71,
+      "terminal_disposition": "restored_and_validated",
+      "trigger_evidence_digest": "sha256:d41bba3d947d2f34c8cfa5421943c4b164227e2ea93c8246c3d2375a72a11ed4"
+    },
+    "trigger_evidence": {
+      "current_accepted_point_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "observed_trigger": "integrated_validation_regression",
+      "record_digest": "sha256:d41bba3d947d2f34c8cfa5421943c4b164227e2ea93c8246c3d2375a72a11ed4",
+      "record_id": "rollback-trigger-0001",
+      "record_kind": "RollbackTriggerEvidence.v1",
+      "schema_version": 1,
+      "trigger_artifact_refs": [
+        "artifact:regression-0001"
+      ],
+      "trigger_policy_id": "rollback-trigger-v1",
+      "triggered_decision_digest": "sha256:90f2fdcd415be895aeeaed45dcb253984e959d8800bf2500242bde737af3da00"
+    }
+  },
+  "exact_predecessor_proof": {
+    "algorithm": "byte_compare_normalized_lowercase_sha256_digest_strings",
+    "all_equal": true,
+    "independently_recomputed_from": [
+      "concrete_records.promotion_decision.predecessor_digest",
+      "concrete_records.rollback_grant.rollback_target_digest",
+      "concrete_records.rollback_application_result.restored_point_digest",
+      "concrete_records.rollback_receipt.restored_point_digest",
+      "concrete_records.handoff_projection.rollback_target_digest"
+    ],
+    "observed_values": [
+      "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    ]
+  },
+  "ordering": [
+    {
+      "consumes": [
+        "PromotionOrRemovalDecision.v1",
+        "RollbackTriggerEvidence.v1",
+        "RollbackCompatibilityEvidence.v1"
+      ],
+      "id": "ROLL-01-DECIDE-GRANT",
+      "owner_role_id": "rollback_authority",
+      "phase": "pre_application",
+      "produces": [
+        "RollbackGrant.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "RollbackGrant.v1",
+        "RollbackProcedure.v1"
+      ],
+      "id": "ROLL-02-PARENT-APPLY",
+      "owner_role_id": "parent_integration_authority",
+      "phase": "application",
+      "produces": [
+        "RollbackApplicationResult.v1"
+      ]
+    },
+    {
+      "consumes": [
+        "RollbackApplicationResult.v1",
+        "RollbackGrant.v1"
+      ],
+      "id": "ROLL-03-RECEIPT",
+      "owner_role_id": "rollback_authority",
+      "phase": "post_application",
+      "produces": [
+        "rollback_receipt.v1"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "baseline_record_refs": [
+        "promotion_decision",
+        "trigger_evidence",
+        "compatibility_evidence",
+        "rollback_grant",
+        "rollback_procedure",
+        "rollback_application_result",
+        "rollback_receipt"
+      ],
+      "id": "ROLLBACK-EXACT-PREDECESSOR-RESTORED",
+      "mutated_value": null,
+      "mutation_path": null,
+      "terminal_disposition": "restored_and_validated"
+    },
+    {
+      "baseline_record_refs": [
+        "promotion_decision",
+        "trigger_evidence",
+        "compatibility_evidence",
+        "rollback_grant",
+        "rollback_procedure",
+        "rollback_application_result",
+        "rollback_receipt"
+      ],
+      "id": "ROLLBACK-PROMOTION-REJECTED",
+      "mutated_value": "reject",
+      "mutation_path": "promotion_decision.decision",
+      "terminal_disposition": "rejected_predecessor_unchanged"
+    },
+    {
+      "baseline_record_refs": [
+        "promotion_decision",
+        "trigger_evidence",
+        "compatibility_evidence",
+        "rollback_grant",
+        "rollback_procedure",
+        "rollback_application_result",
+        "rollback_receipt"
+      ],
+      "id": "ROLLBACK-STALE-CURRENT-POINT",
+      "mutated_value": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "mutation_path": "trigger_evidence.current_accepted_point_digest",
+      "terminal_disposition": "stale_attention"
+    },
+    {
+      "baseline_record_refs": [
+        "promotion_decision",
+        "trigger_evidence",
+        "compatibility_evidence",
+        "rollback_grant",
+        "rollback_procedure",
+        "rollback_application_result",
+        "rollback_receipt"
+      ],
+      "id": "ROLLBACK-PARTIAL-EFFECT",
+      "mutated_value": "partial_external_effect",
+      "mutation_path": "rollback_application_result.terminal_disposition",
+      "terminal_disposition": "failed_unsettled_attention"
+    },
+    {
+      "baseline_record_refs": [
+        "promotion_decision",
+        "trigger_evidence",
+        "compatibility_evidence",
+        "rollback_grant",
+        "rollback_procedure",
+        "rollback_application_result",
+        "rollback_receipt"
+      ],
+      "id": "ROLLBACK-FAILED-VALIDATION",
+      "mutated_value": [],
+      "mutation_path": "rollback_application_result.integrated_validation_refs",
+      "terminal_disposition": "failed_unsettled_attention"
+    },
+    {
+      "baseline_record_refs": [
+        "promotion_decision",
+        "trigger_evidence",
+        "compatibility_evidence",
+        "rollback_grant",
+        "rollback_procedure",
+        "rollback_application_result",
+        "rollback_receipt"
+      ],
+      "id": "ROLLBACK-FAILED-ROLLBACK",
+      "mutated_value": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "mutation_path": "rollback_application_result.restored_point_digest",
+      "terminal_disposition": "failed_unsettled_attention"
+    },
+    {
+      "baseline_record_refs": [
+        "promotion_decision",
+        "trigger_evidence",
+        "compatibility_evidence",
+        "rollback_grant",
+        "rollback_procedure",
+        "rollback_application_result",
+        "rollback_receipt"
+      ],
+      "id": "ROLLBACK-GUESSED-RECENCY-TARGET",
+      "mutated_value": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "mutation_path": "rollback_grant.rollback_target_digest",
+      "terminal_disposition": "rejected_non_exact_target"
+    },
+    {
+      "baseline_record_refs": [
+        "promotion_decision",
+        "trigger_evidence",
+        "compatibility_evidence",
+        "rollback_grant",
+        "rollback_procedure",
+        "rollback_application_result",
+        "rollback_receipt"
+      ],
+      "id": "ROLLBACK-CANDIDATE-PREDECESSOR-MISMATCH",
+      "mutated_value": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "mutation_path": "rollback_grant.candidate_digest",
+      "terminal_disposition": "rejected_identity_mismatch"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

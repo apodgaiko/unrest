@@ -12,8 +12,8 @@
     "repository_head_role": "checked-out predecessor while final candidate changes were present in the worktree; not the candidate content identity",
     "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
     "final_product_package_test": {
-      "files": 103,
-      "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7",
+      "files": 130,
+      "sha256": "f23748c30396799a7b7bdac2c70a9f85459855114a7e85b3674570b0ee577c5b",
       "paths": [
         "pyproject.toml",
         "uv.lock",
@@ -22,6 +22,7 @@
         "tools/**"
       ]
     },
+    "final_product_package_test_revalidation": "Recomputed after the ADR-0305 compatibility file-link correction; the scoped 130-file product/package/test surface and SHA-256 are unchanged because docs/** is outside the declared binding.",
     "superseded_filesystem_binding": {
       "files": 105,
       "sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",
@@ -31,7 +32,7 @@
   "commit_reproducible_finalization": {
     "status": "final-current-rollback-authority",
     "predecessor_commit": "c4394c89d85ae912bea4414a12ea4546753e89da",
-    "binding": {"files": 103, "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7"},
+    "binding": {"files": 130, "sha256": "f23748c30396799a7b7bdac2c70a9f85459855114a7e85b3674570b0ee577c5b"},
     "checkpoint_authority": {
       "decision": "Decision 001",
       "local_probe": {"status": "failed-ordering-probe", "command": "env -u CODEX_PATH uv run pytest -q", "result": "919 passed, 7 skipped, 2 failed in 220.56s; exit 1", "invocations": 1, "reruns": 0, "failing_nodeids": ["tests/test_documentation_contract.py::test_review_audit_and_executable_crosswalk_are_release_carriers", "tests/test_release_binding.py::test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology"], "evidence_source": "mission attempt W-FREEZE 2026-08-13T13-25-57Z"},

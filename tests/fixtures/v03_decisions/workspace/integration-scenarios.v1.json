@@ -1,0 +1,313 @@
+{
+  "acceptance_rule": "Only parent_integration_authority may atomically advance the accepted working point after every ordered check passes; every failure leaves the accepted point byte-identical to its predecessor.",
+  "check_outcomes": [
+    "fail",
+    "not_run",
+    "pass"
+  ],
+  "closed_role_catalog_ref": "../integration/cross-family-authority.v1.json#/role_catalog",
+  "closed_schema": {
+    "accepted_point": {
+      "after_digest": "sha256_digest",
+      "before_digest": "sha256_digest",
+      "changes": "boolean",
+      "mutation_count": "integer_0_or_1"
+    },
+    "checks": {
+      "atomic_acceptance": "check_outcome",
+      "base_and_lineage": "check_outcome",
+      "conflict": "check_outcome",
+      "freshness": "check_outcome",
+      "identity_and_single_use": "check_outcome",
+      "integrated_verification": "check_outcome",
+      "post_application_receipts": "check_outcome",
+      "pre_application_authorization_and_plan": "check_outcome",
+      "staging_application": "check_outcome",
+      "writes_and_effects": "check_outcome"
+    },
+    "predecessor_restoration": {
+      "evidence_id": "nonempty_ascii_id_or_absent",
+      "predecessor_digest": "sha256_digest",
+      "result": "not_required|restored_and_verified|unchanged_and_verified"
+    },
+    "replay": {
+      "first_accepted_point_digest": "sha256_digest",
+      "first_terminal_disposition": "terminal_disposition",
+      "identical_result": "literal_true",
+      "second_accepted_point_digest": "sha256_digest",
+      "second_terminal_disposition": "terminal_disposition"
+    },
+    "scenario": {
+      "accepted_point": "accepted_point",
+      "checks": "checks",
+      "effect_state": "absent|settled|unknown",
+      "failure_reason": "nonempty_ascii_id_or_absent",
+      "id": "nonempty_ascii_id",
+      "integration_receipt": "absent|fresh_single_use",
+      "owner_role_id": "closed_role_id",
+      "predecessor_restoration": "predecessor_restoration",
+      "replay": "replay",
+      "terminal_disposition": "terminal_disposition"
+    },
+    "unknown_fields": "reject"
+  },
+  "ordered_checks": [
+    "identity_and_single_use",
+    "base_and_lineage",
+    "freshness",
+    "writes_and_effects",
+    "conflict",
+    "pre_application_authorization_and_plan",
+    "staging_application",
+    "integrated_verification",
+    "atomic_acceptance",
+    "post_application_receipts"
+  ],
+  "replay_rule": "Re-evaluating identical persisted inputs produces the same terminal disposition, failure reason, accepted-point bytes, mutation count, and receipt state; a consumed candidate or nonce is instead the explicit WS-CASE-REPLAY input.",
+  "scenarios": [
+    {
+      "accepted_point": {
+        "after_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "before_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "changes": false,
+        "mutation_count": 0
+      },
+      "checks": {
+        "atomic_acceptance": "not_run",
+        "base_and_lineage": "pass",
+        "conflict": "fail",
+        "freshness": "pass",
+        "identity_and_single_use": "pass",
+        "integrated_verification": "not_run",
+        "post_application_receipts": "not_run",
+        "pre_application_authorization_and_plan": "not_run",
+        "staging_application": "not_run",
+        "writes_and_effects": "pass"
+      },
+      "effect_state": "absent",
+      "failure_reason": "observed_write_set_overlap",
+      "id": "WS-CASE-CONFLICT",
+      "integration_receipt": "absent",
+      "owner_role_id": "parent_integration_authority",
+      "predecessor_restoration": {
+        "evidence_id": "ws-case-conflict-predecessor-proof",
+        "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "result": "unchanged_and_verified"
+      },
+      "replay": {
+        "first_accepted_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "first_terminal_disposition": "rework",
+        "identical_result": true,
+        "second_accepted_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "second_terminal_disposition": "rework"
+      },
+      "terminal_disposition": "rework"
+    },
+    {
+      "accepted_point": {
+        "after_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "before_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "changes": true,
+        "mutation_count": 1
+      },
+      "checks": {
+        "atomic_acceptance": "pass",
+        "base_and_lineage": "pass",
+        "conflict": "pass",
+        "freshness": "pass",
+        "identity_and_single_use": "pass",
+        "integrated_verification": "pass",
+        "post_application_receipts": "pass",
+        "pre_application_authorization_and_plan": "pass",
+        "staging_application": "pass",
+        "writes_and_effects": "pass"
+      },
+      "effect_state": "settled",
+      "failure_reason": "absent",
+      "id": "WS-CASE-DISJOINT",
+      "integration_receipt": "fresh_single_use",
+      "owner_role_id": "parent_integration_authority",
+      "predecessor_restoration": {
+        "evidence_id": "absent",
+        "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "result": "not_required"
+      },
+      "replay": {
+        "first_accepted_point_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "first_terminal_disposition": "accepted",
+        "identical_result": true,
+        "second_accepted_point_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "second_terminal_disposition": "accepted"
+      },
+      "terminal_disposition": "accepted"
+    },
+    {
+      "accepted_point": {
+        "after_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "before_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "changes": false,
+        "mutation_count": 0
+      },
+      "checks": {
+        "atomic_acceptance": "not_run",
+        "base_and_lineage": "pass",
+        "conflict": "not_run",
+        "freshness": "fail",
+        "identity_and_single_use": "pass",
+        "integrated_verification": "not_run",
+        "post_application_receipts": "not_run",
+        "pre_application_authorization_and_plan": "not_run",
+        "staging_application": "not_run",
+        "writes_and_effects": "fail"
+      },
+      "effect_state": "unknown",
+      "failure_reason": "unauthorized_effect_and_missing_receipt",
+      "id": "WS-CASE-EFFECT",
+      "integration_receipt": "absent",
+      "owner_role_id": "external_effect_recovery_authority",
+      "predecessor_restoration": {
+        "evidence_id": "ws-case-effect-predecessor-proof",
+        "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "result": "unchanged_and_verified"
+      },
+      "replay": {
+        "first_accepted_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "first_terminal_disposition": "unsettled_effect_attention",
+        "identical_result": true,
+        "second_accepted_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "second_terminal_disposition": "unsettled_effect_attention"
+      },
+      "terminal_disposition": "unsettled_effect_attention"
+    },
+    {
+      "accepted_point": {
+        "after_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "before_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "changes": false,
+        "mutation_count": 0
+      },
+      "checks": {
+        "atomic_acceptance": "not_run",
+        "base_and_lineage": "pass",
+        "conflict": "pass",
+        "freshness": "pass",
+        "identity_and_single_use": "pass",
+        "integrated_verification": "fail",
+        "post_application_receipts": "not_run",
+        "pre_application_authorization_and_plan": "pass",
+        "staging_application": "pass",
+        "writes_and_effects": "pass"
+      },
+      "effect_state": "settled",
+      "failure_reason": "integrated_test_failed_after_branch_tests_passed",
+      "id": "WS-CASE-INTEGRATED-TEST",
+      "integration_receipt": "absent",
+      "owner_role_id": "parent_integration_authority",
+      "predecessor_restoration": {
+        "evidence_id": "ws-case-integrated-test-predecessor-proof",
+        "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "result": "unchanged_and_verified"
+      },
+      "replay": {
+        "first_accepted_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "first_terminal_disposition": "rejected",
+        "identical_result": true,
+        "second_accepted_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "second_terminal_disposition": "rejected"
+      },
+      "terminal_disposition": "rejected"
+    },
+    {
+      "accepted_point": {
+        "after_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "before_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "changes": false,
+        "mutation_count": 0
+      },
+      "checks": {
+        "atomic_acceptance": "not_run",
+        "base_and_lineage": "pass",
+        "conflict": "not_run",
+        "freshness": "fail",
+        "identity_and_single_use": "fail",
+        "integrated_verification": "not_run",
+        "post_application_receipts": "not_run",
+        "pre_application_authorization_and_plan": "not_run",
+        "staging_application": "not_run",
+        "writes_and_effects": "not_run"
+      },
+      "effect_state": "absent",
+      "failure_reason": "return_nonce_and_candidate_already_consumed",
+      "id": "WS-CASE-REPLAY",
+      "integration_receipt": "absent",
+      "owner_role_id": "parent_integration_authority",
+      "predecessor_restoration": {
+        "evidence_id": "ws-case-replay-predecessor-proof",
+        "predecessor_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "result": "unchanged_and_verified"
+      },
+      "replay": {
+        "first_accepted_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "first_terminal_disposition": "rejected",
+        "identical_result": true,
+        "second_accepted_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "second_terminal_disposition": "rejected"
+      },
+      "terminal_disposition": "rejected"
+    },
+    {
+      "accepted_point": {
+        "after_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "before_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "changes": false,
+        "mutation_count": 0
+      },
+      "checks": {
+        "atomic_acceptance": "not_run",
+        "base_and_lineage": "fail",
+        "conflict": "not_run",
+        "freshness": "fail",
+        "identity_and_single_use": "pass",
+        "integrated_verification": "not_run",
+        "post_application_receipts": "not_run",
+        "pre_application_authorization_and_plan": "not_run",
+        "staging_application": "not_run",
+        "writes_and_effects": "not_run"
+      },
+      "effect_state": "absent",
+      "failure_reason": "current_predecessor_advanced_and_receipts_stale",
+      "id": "WS-CASE-STALE",
+      "integration_receipt": "absent",
+      "owner_role_id": "parent_integration_authority",
+      "predecessor_restoration": {
+        "evidence_id": "ws-case-stale-predecessor-proof",
+        "predecessor_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "result": "unchanged_and_verified"
+      },
+      "replay": {
+        "first_accepted_point_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "first_terminal_disposition": "stale",
+        "identical_result": true,
+        "second_accepted_point_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "second_terminal_disposition": "stale"
+      },
+      "terminal_disposition": "stale"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative",
+  "terminal_dispositions": [
+    "accepted",
+    "rejected",
+    "rework",
+    "stale",
+    "unsettled_effect_attention"
+  ],
+  "unauthorized_actors": [
+    "child_worker",
+    "evaluator",
+    "evidence_store",
+    "telemetry",
+    "workspace_provider"
+  ]
+}

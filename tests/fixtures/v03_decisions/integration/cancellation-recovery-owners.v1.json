@@ -1,0 +1,253 @@
+{
+  "closed_role_catalog_ref": "cross-family-authority.v1.json#/role_catalog",
+  "negative_cases": [
+    {
+      "expected_failure_reason": "workspace_deletion_does_not_settle_unknown_effect",
+      "id": "XREC-BYPASS-DELETE-AS-SETTLED",
+      "mutation": "replace rollback_partial_effect recovery with workspace deletion",
+      "result": "reject"
+    },
+    {
+      "expected_failure_reason": "graph_cancellation_does_not_stop_live_worker",
+      "id": "XREC-BYPASS-GRAPH-AS-LIVE-STOP",
+      "mutation": "replace running_work_in_flight owner action with pending graph patch",
+      "result": "reject"
+    },
+    {
+      "expected_failure_reason": "one_route_has_exactly_one_catalog_role",
+      "id": "XREC-BYPASS-MULTIPLE-STEP-OWNERS",
+      "mutation": "replace promotion_partial_apply owner_role_id string with evaluator plus integrator array",
+      "result": "reject"
+    },
+    {
+      "expected_failure_reason": "retry_preserves_prior_generation",
+      "id": "XREC-BYPASS-RETRY-REWRITES",
+      "mutation": "overwrite external_effect_retry prior attempt outcome",
+      "result": "reject"
+    },
+    {
+      "expected_failure_reason": "timeout_requires_reconciliation",
+      "id": "XREC-BYPASS-TIMEOUT-AS-TERMINAL",
+      "mutation": "record running_work_timeout as successful cancellation without drain evidence",
+      "result": "reject"
+    },
+    {
+      "expected_failure_reason": "unknown_state_fails_closed",
+      "id": "XREC-BYPASS-UNKNOWN-AS-SUCCESS",
+      "mutation": "record rollback_unknown_effect as restored_and_validated",
+      "result": "reject"
+    }
+  ],
+  "owner_rule": "Each route has exactly one owner_role_id from the closed role catalog; promotion decision and parent application are separate routes.",
+  "required_route_ids": [
+    "evaluation_error",
+    "evaluation_in_flight",
+    "evaluation_queued",
+    "evaluation_stale_input",
+    "evaluation_timeout",
+    "external_effect_crash_restart",
+    "external_effect_post_effect",
+    "external_effect_retry",
+    "external_effect_timeout",
+    "inquiry_crash_restart",
+    "inquiry_in_flight",
+    "inquiry_pre_start",
+    "inquiry_timeout",
+    "parent_application_apply",
+    "parent_application_atomic_mutation",
+    "parent_application_integrated_validation",
+    "parent_application_plan",
+    "parent_application_receipt_recovery",
+    "parent_application_staging",
+    "pending_work_cancel_patch",
+    "promotion_decision_mismatch",
+    "promotion_decision_pre_apply",
+    "promotion_decision_stale_evidence",
+    "promotion_partial_apply",
+    "promotion_receipt_missing",
+    "promotion_receipt_stale_integration_result",
+    "promotion_stale_evidence",
+    "rollback_failed_validation",
+    "rollback_in_flight",
+    "rollback_partial_effect",
+    "rollback_pre_start",
+    "rollback_unknown_effect",
+    "running_work_crash_restart",
+    "running_work_in_flight",
+    "running_work_stale_attempt",
+    "running_work_timeout",
+    "workspace_active",
+    "workspace_cleanup_retry",
+    "workspace_orphan_claim",
+    "workspace_pre_allocation",
+    "workspace_returned"
+  ],
+  "routes": [
+    {
+      "owner_role_id": "independent_evaluation_authority",
+      "route_id": "evaluation_error"
+    },
+    {
+      "owner_role_id": "independent_evaluation_authority",
+      "route_id": "evaluation_in_flight"
+    },
+    {
+      "owner_role_id": "independent_evaluation_authority",
+      "route_id": "evaluation_queued"
+    },
+    {
+      "owner_role_id": "independent_evaluation_authority",
+      "route_id": "evaluation_stale_input"
+    },
+    {
+      "owner_role_id": "independent_evaluation_authority",
+      "route_id": "evaluation_timeout"
+    },
+    {
+      "owner_role_id": "external_effect_recovery_authority",
+      "route_id": "external_effect_crash_restart"
+    },
+    {
+      "owner_role_id": "external_effect_recovery_authority",
+      "route_id": "external_effect_post_effect"
+    },
+    {
+      "owner_role_id": "external_effect_recovery_authority",
+      "route_id": "external_effect_retry"
+    },
+    {
+      "owner_role_id": "external_effect_recovery_authority",
+      "route_id": "external_effect_timeout"
+    },
+    {
+      "owner_role_id": "inquiry_lifecycle_authority",
+      "route_id": "inquiry_crash_restart"
+    },
+    {
+      "owner_role_id": "inquiry_lifecycle_authority",
+      "route_id": "inquiry_in_flight"
+    },
+    {
+      "owner_role_id": "inquiry_lifecycle_authority",
+      "route_id": "inquiry_pre_start"
+    },
+    {
+      "owner_role_id": "inquiry_lifecycle_authority",
+      "route_id": "inquiry_timeout"
+    },
+    {
+      "owner_role_id": "parent_integration_authority",
+      "route_id": "parent_application_apply"
+    },
+    {
+      "owner_role_id": "parent_integration_authority",
+      "route_id": "parent_application_atomic_mutation"
+    },
+    {
+      "owner_role_id": "parent_integration_authority",
+      "route_id": "parent_application_integrated_validation"
+    },
+    {
+      "owner_role_id": "parent_integration_authority",
+      "route_id": "parent_application_plan"
+    },
+    {
+      "owner_role_id": "parent_integration_authority",
+      "route_id": "parent_application_receipt_recovery"
+    },
+    {
+      "owner_role_id": "parent_integration_authority",
+      "route_id": "parent_application_staging"
+    },
+    {
+      "owner_role_id": "mission_controller_authority",
+      "route_id": "pending_work_cancel_patch"
+    },
+    {
+      "owner_role_id": "promotion_authority",
+      "route_id": "promotion_decision_mismatch"
+    },
+    {
+      "owner_role_id": "promotion_authority",
+      "route_id": "promotion_decision_pre_apply"
+    },
+    {
+      "owner_role_id": "promotion_authority",
+      "route_id": "promotion_decision_stale_evidence"
+    },
+    {
+      "owner_role_id": "parent_integration_authority",
+      "route_id": "promotion_partial_apply"
+    },
+    {
+      "owner_role_id": "promotion_authority",
+      "route_id": "promotion_receipt_missing"
+    },
+    {
+      "owner_role_id": "promotion_authority",
+      "route_id": "promotion_receipt_stale_integration_result"
+    },
+    {
+      "owner_role_id": "promotion_authority",
+      "route_id": "promotion_stale_evidence"
+    },
+    {
+      "owner_role_id": "rollback_authority",
+      "route_id": "rollback_failed_validation"
+    },
+    {
+      "owner_role_id": "rollback_authority",
+      "route_id": "rollback_in_flight"
+    },
+    {
+      "owner_role_id": "external_effect_recovery_authority",
+      "route_id": "rollback_partial_effect"
+    },
+    {
+      "owner_role_id": "rollback_authority",
+      "route_id": "rollback_pre_start"
+    },
+    {
+      "owner_role_id": "external_effect_recovery_authority",
+      "route_id": "rollback_unknown_effect"
+    },
+    {
+      "owner_role_id": "mission_controller_authority",
+      "route_id": "running_work_crash_restart"
+    },
+    {
+      "owner_role_id": "mission_controller_authority",
+      "route_id": "running_work_in_flight"
+    },
+    {
+      "owner_role_id": "mission_controller_authority",
+      "route_id": "running_work_stale_attempt"
+    },
+    {
+      "owner_role_id": "mission_controller_authority",
+      "route_id": "running_work_timeout"
+    },
+    {
+      "owner_role_id": "workspace_lease_authority",
+      "route_id": "workspace_active"
+    },
+    {
+      "owner_role_id": "workspace_lease_authority",
+      "route_id": "workspace_cleanup_retry"
+    },
+    {
+      "owner_role_id": "orphan_recovery_supervisor",
+      "route_id": "workspace_orphan_claim"
+    },
+    {
+      "owner_role_id": "workspace_lease_authority",
+      "route_id": "workspace_pre_allocation"
+    },
+    {
+      "owner_role_id": "workspace_lease_authority",
+      "route_id": "workspace_returned"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

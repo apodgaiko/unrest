@@ -1,0 +1,2234 @@
+{
+  "adjacent_planes": [
+    {
+      "allowed_output": "immutable evidence and query results",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "mission_truth",
+        "promotion_state"
+      ],
+      "id": "evidence",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    },
+    {
+      "allowed_output": "candidate artifacts and promotion proposals",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "evaluator_policy",
+        "mission_truth",
+        "promotion_state"
+      ],
+      "id": "evolution",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    },
+    {
+      "allowed_output": "base-bound patches, effect receipts, and cleanup evidence",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "mission_truth",
+        "promotion_state"
+      ],
+      "id": "execution",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    },
+    {
+      "allowed_output": "answer artifacts and an actor-requested evidence handoff",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "mission_identity",
+        "mission_truth"
+      ],
+      "id": "inquiry",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    },
+    {
+      "allowed_output": "typed data through a versioned interface",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "effective_capability_policy",
+        "mission_truth"
+      ],
+      "id": "runtime_adapter",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    },
+    {
+      "allowed_output": "non-authoritative observations keyed by public identity",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "mission_truth",
+        "promotion_state"
+      ],
+      "id": "telemetry",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    },
+    {
+      "allowed_output": "independent per-target verdicts",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "mission_truth",
+        "promotion_state"
+      ],
+      "id": "validator_evaluator",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    },
+    {
+      "allowed_output": "typed work handoff",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "contract_authority",
+        "mission_truth"
+      ],
+      "id": "worker",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    },
+    {
+      "allowed_output": "patch return and lease evidence",
+      "forbidden_mutations": [
+        "accepted_working_point",
+        "mission_truth",
+        "promotion_state"
+      ],
+      "id": "workspace",
+      "kernel_invariants_enforced": [
+        "atomic_durable_persistence",
+        "disk_reconstructed_truth",
+        "exact_one_work_owner",
+        "fail_closed_gates",
+        "finite_prelaunch_capability_policy",
+        "fresh_advisory_terminal_review_coordinator_seal",
+        "independent_validation",
+        "one_visible_transition",
+        "restart_generation_reconciliation",
+        "single_mutable_work_selection",
+        "structural_role_authority",
+        "typed_attention"
+      ]
+    }
+  ],
+  "authority_holders": [
+    {
+      "applies_through": "admitted effect executor",
+      "id": "external_effect_authority",
+      "subject": "irreversible_effect"
+    },
+    {
+      "applies_through": "ProjectController and single MissionCoordinator",
+      "id": "mission_controller_authority",
+      "subject": "mission_lifecycle"
+    },
+    {
+      "applies_through": "parent-owned staging and application transaction",
+      "id": "parent_integration_authority",
+      "subject": "accepted_working_point"
+    },
+    {
+      "applies_through": "pre-application decision recorder and post-application receipt issuer",
+      "id": "promotion_authority",
+      "subject": "promotion_state"
+    },
+    {
+      "applies_through": "exact-predecessor recovery decision path",
+      "id": "rollback_authority",
+      "subject": "rollback_state"
+    }
+  ],
+  "chronology_is_authority": false,
+  "closed_record_schemas": {
+    "MissionKernelState.v1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "active_work_owner_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "attention": {
+          "additionalProperties": false,
+          "properties": {
+            "decision_type": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "typed": {
+              "const": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "decision_type",
+            "typed"
+          ],
+          "type": "object"
+        },
+        "capability_policy": {
+          "additionalProperties": false,
+          "properties": {
+            "compiled_before_child_creation": {
+              "const": true,
+              "type": "boolean"
+            },
+            "dynamic_expansion_allowed": {
+              "const": false,
+              "type": "boolean"
+            },
+            "source": {
+              "const": "finite_prelaunch_policy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "compiled_before_child_creation",
+            "dynamic_expansion_allowed",
+            "source"
+          ],
+          "type": "object"
+        },
+        "gate_evidence": {
+          "additionalProperties": false,
+          "properties": {
+            "complete": {
+              "const": true,
+              "type": "boolean"
+            },
+            "dissent_resolved": {
+              "const": true,
+              "type": "boolean"
+            },
+            "fresh": {
+              "const": true,
+              "type": "boolean"
+            },
+            "gate_cleared": {
+              "const": true,
+              "type": "boolean"
+            },
+            "independent": {
+              "const": true,
+              "type": "boolean"
+            },
+            "matches_target": {
+              "const": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "complete",
+            "dissent_resolved",
+            "fresh",
+            "gate_cleared",
+            "independent",
+            "matches_target"
+          ],
+          "type": "object"
+        },
+        "mission_truth": {
+          "additionalProperties": false,
+          "properties": {
+            "generation": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "reconstructed_from_disk": {
+              "const": true,
+              "type": "boolean"
+            },
+            "store": {
+              "const": "ProjectStore",
+              "type": "string"
+            }
+          },
+          "required": [
+            "generation",
+            "reconstructed_from_disk",
+            "store"
+          ],
+          "type": "object"
+        },
+        "mutable_work": {
+          "additionalProperties": false,
+          "properties": {
+            "accepted_isolation_contract_active": {
+              "const": false,
+              "type": "boolean"
+            },
+            "active_selection_ids": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 1,
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "accepted_isolation_contract_active",
+            "active_selection_ids"
+          ],
+          "type": "object"
+        },
+        "persistence": {
+          "additionalProperties": false,
+          "properties": {
+            "atomic": {
+              "const": true,
+              "type": "boolean"
+            },
+            "durable_root": {
+              "const": ".unrest",
+              "type": "string"
+            },
+            "runtime_root": {
+              "const": ".unrest-runtime",
+              "type": "string"
+            },
+            "store": {
+              "const": "ProjectStore",
+              "type": "string"
+            }
+          },
+          "required": [
+            "atomic",
+            "durable_root",
+            "runtime_root",
+            "store"
+          ],
+          "type": "object"
+        },
+        "reconciliation": {
+          "additionalProperties": false,
+          "properties": {
+            "attempt_generation": {
+              "const": 7,
+              "type": "integer"
+            },
+            "current_generation": {
+              "const": 7,
+              "type": "integer"
+            },
+            "source": {
+              "const": "durable_records",
+              "type": "string"
+            }
+          },
+          "required": [
+            "attempt_generation",
+            "current_generation",
+            "source"
+          ],
+          "type": "object"
+        },
+        "role_authority": {
+          "additionalProperties": false,
+          "properties": {
+            "effective_tool_source": {
+              "const": "constructed_mcp_server",
+              "type": "string"
+            },
+            "prompt_or_skill_grants_authority": {
+              "const": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "effective_tool_source",
+            "prompt_or_skill_grants_authority"
+          ],
+          "type": "object"
+        },
+        "terminal_review": {
+          "additionalProperties": false,
+          "properties": {
+            "advisory": {
+              "const": true,
+              "type": "boolean"
+            },
+            "fresh": {
+              "const": true,
+              "type": "boolean"
+            },
+            "sealed_by": {
+              "const": "mission_controller_authority",
+              "type": "string"
+            }
+          },
+          "required": [
+            "advisory",
+            "fresh",
+            "sealed_by"
+          ],
+          "type": "object"
+        },
+        "transition": {
+          "additionalProperties": false,
+          "properties": {
+            "visible_transition_count": {
+              "const": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "visible_transition_count"
+          ],
+          "type": "object"
+        },
+        "validation": {
+          "additionalProperties": false,
+          "properties": {
+            "independent": {
+              "const": true,
+              "type": "boolean"
+            },
+            "target_coverage_complete": {
+              "const": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "independent",
+            "target_coverage_complete"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "active_work_owner_ids",
+        "attention",
+        "capability_policy",
+        "gate_evidence",
+        "mission_truth",
+        "mutable_work",
+        "persistence",
+        "reconciliation",
+        "role_authority",
+        "terminal_review",
+        "transition",
+        "validation"
+      ],
+      "type": "object"
+    }
+  },
+  "kernel_mutation_cases": [
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "non_atomic_mission_write",
+      "id": "atomic_durable_persistence",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": false,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/persistence/atomic",
+        "value": false
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "resident_state_substituted_for_disk_truth",
+      "id": "disk_reconstructed_truth",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": false,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/mission_truth/reconstructed_from_disk",
+        "value": false
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "two_active_work_owners",
+      "id": "exact_one_work_owner",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001",
+          "W-002"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/active_work_owner_ids",
+        "value": [
+          "W-001",
+          "W-002"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "gate_cleared_with_stale_evidence",
+      "id": "fail_closed_gates",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": false,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/gate_evidence/fresh",
+        "value": false
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "post_launch_dynamic_capability_expansion",
+      "id": "finite_prelaunch_capability_policy",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": true,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/capability_policy/dynamic_expansion_allowed",
+        "value": true
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "coordinator_sealed_from_stale_terminal_review",
+      "id": "fresh_advisory_terminal_review_coordinator_seal",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": false,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/terminal_review/fresh",
+        "value": false
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "self_validation_substituted_for_independent_verdict",
+      "id": "independent_validation",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": false,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/validation/independent",
+        "value": false
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "hidden_multiple_transitions_in_one_step",
+      "id": "one_visible_transition",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 2
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/transition/visible_transition_count",
+        "value": 2
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "stale_attempt_generation_used_for_reconciliation",
+      "id": "restart_generation_reconciliation",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 6,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/reconciliation/attempt_generation",
+        "value": 6
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "overlapping_mutable_work_selected_without_accepted_isolation",
+      "id": "single_mutable_work_selection",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001",
+            "W-002"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/mutable_work/active_selection_ids",
+        "value": [
+          "W-001",
+          "W-002"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "prompt_or_skill_text_granted_effective_authority",
+      "id": "structural_role_authority",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": true
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/role_authority/prompt_or_skill_grants_authority",
+        "value": true
+      },
+      "valid": false
+    },
+    {
+      "baseline_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": true
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "expected_failure_reason": "ambiguous_authority_bypassed_typed_attention",
+      "id": "typed_attention",
+      "mutated_payload": {
+        "active_work_owner_ids": [
+          "W-001"
+        ],
+        "attention": {
+          "decision_type": "authority_ambiguity",
+          "typed": false
+        },
+        "capability_policy": {
+          "compiled_before_child_creation": true,
+          "dynamic_expansion_allowed": false,
+          "source": "finite_prelaunch_policy"
+        },
+        "gate_evidence": {
+          "complete": true,
+          "dissent_resolved": true,
+          "fresh": true,
+          "gate_cleared": true,
+          "independent": true,
+          "matches_target": true
+        },
+        "mission_truth": {
+          "generation": 7,
+          "reconstructed_from_disk": true,
+          "store": "ProjectStore"
+        },
+        "mutable_work": {
+          "accepted_isolation_contract_active": false,
+          "active_selection_ids": [
+            "W-001"
+          ]
+        },
+        "persistence": {
+          "atomic": true,
+          "durable_root": ".unrest",
+          "runtime_root": ".unrest-runtime",
+          "store": "ProjectStore"
+        },
+        "reconciliation": {
+          "attempt_generation": 7,
+          "current_generation": 7,
+          "source": "durable_records"
+        },
+        "role_authority": {
+          "effective_tool_source": "constructed_mcp_server",
+          "prompt_or_skill_grants_authority": false
+        },
+        "terminal_review": {
+          "advisory": true,
+          "fresh": true,
+          "sealed_by": "mission_controller_authority"
+        },
+        "transition": {
+          "visible_transition_count": 1
+        },
+        "validation": {
+          "independent": true,
+          "target_coverage_complete": true
+        }
+      },
+      "mutation": {
+        "operation": "set",
+        "path": "/attention/typed",
+        "value": false
+      },
+      "valid": false
+    }
+  ],
+  "preserved_kernel": [
+    "atomic_durable_persistence",
+    "disk_reconstructed_truth",
+    "exact_one_work_owner",
+    "fail_closed_gates",
+    "finite_prelaunch_capability_policy",
+    "fresh_advisory_terminal_review_coordinator_seal",
+    "independent_validation",
+    "one_visible_transition",
+    "restart_generation_reconciliation",
+    "single_mutable_work_selection",
+    "structural_role_authority",
+    "typed_attention"
+  ],
+  "reverse_edge_tests": [
+    {
+      "allowed": false,
+      "expected_failure_reason": "adjacent_plane_has_no_authority_to_write_active_work_owner",
+      "from": "adjacent_plane",
+      "id": "BYPASS-ACTIVE-WORK-OWNER",
+      "to": "active_work_owner"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "chronology_has_no_authority_to_write_mission_truth",
+      "from": "chronology",
+      "id": "BYPASS-CHRONOLOGY",
+      "to": "mission_truth"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "dynamic_configuration_has_no_authority_to_write_effective_capability_policy",
+      "from": "dynamic_configuration",
+      "id": "BYPASS-DYNAMIC-CAPABILITY",
+      "to": "effective_capability_policy"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "evidence_has_no_authority_to_write_mission_truth",
+      "from": "evidence",
+      "id": "BYPASS-EVIDENCE",
+      "to": "mission_truth"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "evolution_has_no_authority_to_write_accepted_working_point",
+      "from": "evolution",
+      "id": "BYPASS-EVOLUTION",
+      "to": "accepted_working_point"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "adjacent_result_has_no_authority_to_write_gate_clearance",
+      "from": "adjacent_result",
+      "id": "BYPASS-GATE-SEAL",
+      "to": "gate_clearance"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "latest_timestamp_or_filename_has_no_authority_to_write_restart_reconciliation",
+      "from": "latest_timestamp_or_filename",
+      "id": "BYPASS-GENERATION-INFERENCE",
+      "to": "restart_reconciliation"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "adapter_callback_has_no_authority_to_write_multiple_mission_transitions",
+      "from": "adapter_callback",
+      "id": "BYPASS-HIDDEN-MULTI-TRANSITION",
+      "to": "multiple_mission_transitions"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "inquiry_has_no_authority_to_write_mission_truth",
+      "from": "inquiry",
+      "id": "BYPASS-INQUIRY",
+      "to": "mission_truth"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "scheduler_has_no_authority_to_write_overlapping_mutable_work",
+      "from": "scheduler",
+      "id": "BYPASS-OVERLAPPING-MUTABLE-WORK",
+      "to": "overlapping_mutable_work"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "adjacent_store_has_no_authority_to_write_mission_truth",
+      "from": "adjacent_store",
+      "id": "BYPASS-PERSISTENCE-STORE",
+      "to": "mission_truth"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "runtime_adapter_has_no_authority_to_write_mission_truth",
+      "from": "runtime_adapter",
+      "id": "BYPASS-RUNTIME-ADAPTER",
+      "to": "mission_truth"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "skill_text_has_no_authority_to_write_effective_capability_policy",
+      "from": "skill_text",
+      "id": "BYPASS-SKILL-TEXT",
+      "to": "effective_capability_policy"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "telemetry_has_no_authority_to_write_mission_truth",
+      "from": "telemetry",
+      "id": "BYPASS-TELEMETRY",
+      "to": "mission_truth"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "adjacent_result_has_no_authority_to_write_terminal_mission_seal",
+      "from": "adjacent_result",
+      "id": "BYPASS-TERMINAL-SEAL",
+      "to": "terminal_mission_seal"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "validator_evaluator_has_no_authority_to_write_promotion_state",
+      "from": "validator_evaluator",
+      "id": "BYPASS-VALIDATOR-EVALUATOR",
+      "to": "promotion_state"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "worker_has_no_authority_to_write_mission_truth",
+      "from": "worker",
+      "id": "BYPASS-WORKER",
+      "to": "mission_truth"
+    },
+    {
+      "allowed": false,
+      "expected_failure_reason": "workspace_has_no_authority_to_write_accepted_working_point",
+      "from": "workspace",
+      "id": "BYPASS-WORKSPACE",
+      "to": "accepted_working_point"
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

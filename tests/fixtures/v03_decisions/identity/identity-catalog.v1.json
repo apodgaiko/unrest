@@ -1,0 +1,926 @@
+{
+  "closed_schema_contract": {
+    "null": "reject",
+    "scalar_types": [
+      "boolean",
+      "integer",
+      "string"
+    ],
+    "schema_dialect": "unrest-closed-json-schema.v1",
+    "unknown_fields": "reject",
+    "validation_order": "strict_parse_then_exact_kind_schema_then_canonicalize_then_hash"
+  },
+  "foundation_registry_dimensions": [
+    "base_revision",
+    "budget_envelope",
+    "candidate_digest",
+    "capability_policy_digest",
+    "context_digest",
+    "environment_digest",
+    "evaluator_digest",
+    "route_profile_digest",
+    "seed",
+    "workload_digest",
+    "workspace_lease_id"
+  ],
+  "identity_kinds": [
+    {
+      "consumers": [
+        "integration_receipt.v1",
+        "promotion_receipt.v1",
+        "rollback_receipt.v1",
+        "run_identity.v1"
+      ],
+      "domain": "accepted_working_point_identity.v1",
+      "id": "accepted_working_point",
+      "normalization": "typed digest of the exact externally accepted repository/configuration point",
+      "payload_schema": {
+        "$id": "Identity.v1/accepted_working_point",
+        "additional_properties": false,
+        "properties": {
+          "accepted_working_point_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "base_revision": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^accepted_working_point:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "accepted_working_point_digest",
+          "base_revision"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "accepted_working_point_digest",
+        "base_revision"
+      ]
+    },
+    {
+      "consumers": [
+        "candidate_identity.v1",
+        "evidence_identity.v1",
+        "receipt_artifact_refs"
+      ],
+      "domain": "artifact_identity.v1",
+      "id": "artifact",
+      "normalization": "public media type, safe integer size, content digest, producer run digest, and typed lineage only",
+      "payload_schema": {
+        "$id": "Identity.v1/artifact",
+        "additional_properties": false,
+        "properties": {
+          "artifact_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^artifact:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "artifact_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "artifact_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "accepted_working_point_identity.v1",
+        "candidate_identity.v1",
+        "run_identity.v1",
+        "workspace_lease_identity.v1"
+      ],
+      "domain": "base_identity.v1",
+      "id": "base",
+      "normalization": "full lowercase Git object ID plus repository identity; no symbolic or latest ref",
+      "payload_schema": {
+        "$id": "Identity.v1/base",
+        "additional_properties": false,
+        "properties": {
+          "base_revision": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^base:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "base_revision"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "base_revision"
+      ]
+    },
+    {
+      "consumers": [
+        "run_identity.v1"
+      ],
+      "domain": "budget_identity.v1",
+      "id": "budget",
+      "normalization": "closed unit/currency envelope with safe integers, limits, and stop conditions",
+      "payload_schema": {
+        "$id": "Identity.v1/budget",
+        "additional_properties": false,
+        "properties": {
+          "budget_envelope": {
+            "additional_properties": false,
+            "properties": {
+              "amount": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "unit": {
+                "enum": [
+                  "steps"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "unit"
+            ],
+            "type": "object"
+          },
+          "public_id": {
+            "pattern": "^budget:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "budget_envelope"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "budget_envelope"
+      ]
+    },
+    {
+      "consumers": [
+        "evaluation_receipt.v1",
+        "integration_receipt.v1",
+        "promotion_receipt.v1",
+        "review_receipt.v1",
+        "run_identity.v1"
+      ],
+      "domain": "candidate_identity.v1",
+      "id": "candidate",
+      "normalization": "typed public bundle/artifact digests and allowed mutation surface; never bundle bodies",
+      "payload_schema": {
+        "$id": "Identity.v1/candidate",
+        "additional_properties": false,
+        "properties": {
+          "accepted_working_point_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "artifact_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "base_revision": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "candidate_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "capability_policy_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "context_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^candidate:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "route_profile_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "accepted_working_point_digest",
+          "artifact_digest",
+          "base_revision",
+          "candidate_digest",
+          "capability_policy_digest",
+          "context_digest",
+          "route_profile_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "accepted_working_point_digest",
+        "artifact_digest",
+        "base_revision",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "route_profile_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "candidate_identity.v1",
+        "evaluator_identity.v1",
+        "run_identity.v1"
+      ],
+      "domain": "context_identity.v1",
+      "id": "context",
+      "normalization": "manifest and retrieval-policy digests plus public source locators; never context or source bodies",
+      "payload_schema": {
+        "$id": "Identity.v1/context",
+        "additional_properties": false,
+        "properties": {
+          "context_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^context:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "context_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "context_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "evaluator_identity.v1",
+        "run_identity.v1",
+        "workload_identity.v1"
+      ],
+      "domain": "environment_identity.v1",
+      "id": "environment",
+      "normalization": "public image, dependency, platform, and runtime manifest digests; no environment values",
+      "payload_schema": {
+        "$id": "Identity.v1/environment",
+        "additional_properties": false,
+        "properties": {
+          "environment_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^environment:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "environment_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "environment_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "evaluation_receipt.v1",
+        "review_identity.v1",
+        "run_identity.v1"
+      ],
+      "domain": "evaluator_identity.v1",
+      "id": "evaluator",
+      "normalization": "evaluator code/config, scorer/oracle, holdout manifest, exclusion/retry policy, and environment digests",
+      "payload_schema": {
+        "$id": "Identity.v1/evaluator",
+        "additional_properties": false,
+        "properties": {
+          "environment_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "evaluator_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^evaluator:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "workload_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "environment_digest",
+          "evaluator_digest",
+          "workload_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "environment_digest",
+        "evaluator_digest",
+        "workload_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "review_identity.v1",
+        "review_receipt.v1"
+      ],
+      "domain": "evidence_identity.v1",
+      "id": "evidence",
+      "normalization": "sorted typed artifact and receipt digest manifest; no evidence bodies or reports",
+      "payload_schema": {
+        "$id": "Identity.v1/evidence",
+        "additional_properties": false,
+        "properties": {
+          "artifact_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "candidate_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "evaluator_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "evidence_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^evidence:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "artifact_digest",
+          "candidate_digest",
+          "evidence_digest",
+          "evaluator_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "artifact_digest",
+        "candidate_digest",
+        "evidence_digest",
+        "evaluator_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "candidate_identity.v1",
+        "run_identity.v1",
+        "workspace_lease_identity.v1"
+      ],
+      "domain": "policy_identity.v1",
+      "id": "policy",
+      "normalization": "finite effective public capability-policy digest and version",
+      "payload_schema": {
+        "$id": "Identity.v1/policy",
+        "additional_properties": false,
+        "properties": {
+          "capability_policy_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^policy:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "capability_policy_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "capability_policy_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "route_profile_identity.v1",
+        "run_identity.v1"
+      ],
+      "domain": "provider_configuration_identity.v1",
+      "id": "provider_configuration",
+      "normalization": "allowlisted public provider family, endpoint/profile/model IDs, and feature flags only",
+      "payload_schema": {
+        "$id": "Identity.v1/provider_configuration",
+        "additional_properties": false,
+        "properties": {
+          "provider_configuration_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^provider_configuration:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "secret_set_version_id": {
+            "pattern": "^secret-set:[a-z0-9-]+:v[1-9][0-9]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "provider_configuration_digest",
+          "secret_set_version_id"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "provider_configuration_digest",
+        "secret_set_version_id"
+      ]
+    },
+    {
+      "consumers": [
+        "promotion_receipt.v1",
+        "review_receipt.v1"
+      ],
+      "domain": "review_identity.v1",
+      "id": "review",
+      "normalization": "reviewer set, independence/quorum policy, candidate, evidence, and review-policy digests",
+      "payload_schema": {
+        "$id": "Identity.v1/review",
+        "additional_properties": false,
+        "properties": {
+          "candidate_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "evidence_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^review:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "review_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "candidate_digest",
+          "evidence_digest",
+          "review_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "candidate_digest",
+        "evidence_digest",
+        "review_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "candidate_identity.v1",
+        "run_identity.v1"
+      ],
+      "domain": "route_profile_identity.v1",
+      "id": "route_profile",
+      "normalization": "public route/model/effort/profile policy and provider-configuration digest",
+      "payload_schema": {
+        "$id": "Identity.v1/route_profile",
+        "additional_properties": false,
+        "properties": {
+          "provider_configuration_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^route_profile:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "route_profile_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "provider_configuration_digest",
+          "route_profile_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "provider_configuration_digest",
+        "route_profile_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "artifact_identity.v1",
+        "run_receipt.v1"
+      ],
+      "domain": "run_identity.v1",
+      "id": "run",
+      "normalization": "complete replay boundary composed only from typed public identities",
+      "payload_schema": {
+        "$id": "Identity.v1/run",
+        "additional_properties": false,
+        "properties": {
+          "accepted_working_point_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "base_revision": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "budget_envelope": {
+            "additional_properties": false,
+            "properties": {
+              "amount": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "unit": {
+                "enum": [
+                  "steps"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "unit"
+            ],
+            "type": "object"
+          },
+          "candidate_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "capability_policy_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "context_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "environment_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "evaluator_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "provider_configuration_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^run:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "route_profile_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "secret_set_version_id": {
+            "pattern": "^secret-set:[a-z0-9-]+:v[1-9][0-9]*$",
+            "type": "string"
+          },
+          "seed": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "workload_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "workspace_lease_id": {
+            "pattern": "^lease:[a-z0-9-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "accepted_working_point_digest",
+          "base_revision",
+          "budget_envelope",
+          "candidate_digest",
+          "capability_policy_digest",
+          "context_digest",
+          "environment_digest",
+          "evaluator_digest",
+          "provider_configuration_digest",
+          "route_profile_digest",
+          "secret_set_version_id",
+          "seed",
+          "workload_digest",
+          "workspace_lease_id"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "accepted_working_point_digest",
+        "base_revision",
+        "budget_envelope",
+        "candidate_digest",
+        "capability_policy_digest",
+        "context_digest",
+        "environment_digest",
+        "evaluator_digest",
+        "provider_configuration_digest",
+        "route_profile_digest",
+        "secret_set_version_id",
+        "seed",
+        "workload_digest",
+        "workspace_lease_id"
+      ]
+    },
+    {
+      "consumers": [
+        "provider_configuration_identity.v1",
+        "run_identity.v1"
+      ],
+      "domain": "secret_set_version_identity.v1",
+      "id": "secret_set_version",
+      "normalization": "opaque public issuer namespace, set name, and content-independent version; never a secret derivative",
+      "payload_schema": {
+        "$id": "Identity.v1/secret_set_version",
+        "additional_properties": false,
+        "properties": {
+          "public_id": {
+            "pattern": "^secret_set_version:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "secret_set_version_id": {
+            "pattern": "^secret-set:[a-z0-9-]+:v[1-9][0-9]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "secret_set_version_id"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "secret_set_version_id"
+      ]
+    },
+    {
+      "consumers": [
+        "run_identity.v1",
+        "workload_identity.v1"
+      ],
+      "domain": "seed_identity.v1",
+      "id": "seed",
+      "normalization": "safe integer or public deterministic seed identifier under the workload schema",
+      "payload_schema": {
+        "$id": "Identity.v1/seed",
+        "additional_properties": false,
+        "properties": {
+          "public_id": {
+            "pattern": "^seed:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "seed": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "seed"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "seed"
+      ]
+    },
+    {
+      "consumers": [
+        "evaluation_receipt.v1",
+        "evaluator_identity.v1",
+        "run_identity.v1"
+      ],
+      "domain": "workload_identity.v1",
+      "id": "workload",
+      "normalization": "corpus, partition, fixture, correctness-oracle, randomization, and seed digests",
+      "payload_schema": {
+        "$id": "Identity.v1/workload",
+        "additional_properties": false,
+        "properties": {
+          "environment_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^workload:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "seed": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "workload_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "environment_digest",
+          "seed",
+          "workload_digest"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "environment_digest",
+        "seed",
+        "workload_digest"
+      ]
+    },
+    {
+      "consumers": [
+        "patch_receipt.v1",
+        "run_identity.v1",
+        "workspace_receipt.v1"
+      ],
+      "domain": "workspace_lease_identity.v1",
+      "id": "workspace_lease",
+      "normalization": "one writer, immutable base, admitted resource/effect scope, and public lease ID",
+      "payload_schema": {
+        "$id": "Identity.v1/workspace_lease",
+        "additional_properties": false,
+        "properties": {
+          "base_revision": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "capability_policy_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "public_id": {
+            "pattern": "^workspace_lease:[a-z0-9:-]+$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "workspace_lease_id": {
+            "pattern": "^lease:[a-z0-9-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "public_id",
+          "base_revision",
+          "capability_policy_digest",
+          "workspace_lease_id"
+        ],
+        "type": "object"
+      },
+      "required_dimensions": [
+        "base_revision",
+        "capability_policy_digest",
+        "workspace_lease_id"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "status": "proposed"
+}

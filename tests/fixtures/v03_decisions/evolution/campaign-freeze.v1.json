@@ -1,0 +1,1004 @@
+{
+  "closed_record_schemas": [
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(CampaignAdmissionDecision.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "decision": "string",
+        "decision_id": "string",
+        "evidence_refs": "array",
+        "issuer": "object",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_CampaignAdmissionDecision.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "CampaignAdmissionDecision.v1",
+      "required_fields": [
+        "decision",
+        "decision_id",
+        "evidence_refs",
+        "issuer",
+        "record_digest",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(CampaignCancellationDecision.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "decision": "string",
+        "decision_id": "string",
+        "evidence_refs": "array",
+        "issuer": "object",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_CampaignCancellationDecision.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "CampaignCancellationDecision.v1",
+      "required_fields": [
+        "decision",
+        "decision_id",
+        "evidence_refs",
+        "issuer",
+        "record_digest",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(CampaignClosure.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "decision": "string",
+        "decision_id": "string",
+        "evidence_refs": "array",
+        "issuer": "object",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_CampaignClosure.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "CampaignClosure.v1",
+      "required_fields": [
+        "decision",
+        "decision_id",
+        "evidence_refs",
+        "issuer",
+        "record_digest",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(CampaignFailure.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "attempt_id": "string",
+        "evidence_refs": "array",
+        "failure_class": "string",
+        "owner_role_id": "closed_role_id",
+        "record_digest": "sha256_digest",
+        "record_id": "string",
+        "record_kind": "literal_CampaignFailure.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "CampaignFailure.v1",
+      "required_fields": [
+        "attempt_id",
+        "evidence_refs",
+        "failure_class",
+        "owner_role_id",
+        "record_digest",
+        "record_id",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(CampaignLifecycleEvent.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "event_id": "string",
+        "evidence_refs": "array",
+        "from_state": "null|string",
+        "owner_role_id": "closed_role_id",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_CampaignLifecycleEvent.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "null|string",
+        "to_state": "string"
+      },
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "required_fields": [
+        "event_id",
+        "evidence_refs",
+        "from_state",
+        "owner_role_id",
+        "record_digest",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition",
+        "to_state"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(CampaignRun.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "attempt_id": "string",
+        "campaign_digest": "sha256_digest",
+        "candidate_digest": "sha256_digest",
+        "cost_limit": "integer",
+        "owner_role_id": "closed_role_id",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_CampaignRun.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "CampaignRun.v1",
+      "required_fields": [
+        "attempt_id",
+        "campaign_digest",
+        "candidate_digest",
+        "cost_limit",
+        "owner_role_id",
+        "record_digest",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(CandidateGenealogy.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "accepted_working_point_digest": "sha256_digest",
+        "artifact_refs": "array",
+        "base_revision": "string",
+        "campaign_generation": "integer",
+        "campaign_id": "string",
+        "candidate_digest": "sha256_digest",
+        "falsification_test": "string",
+        "hypothesis": "string",
+        "mutation_mechanism": "string",
+        "mutation_scope": "array",
+        "ordered_parent_digests": "array",
+        "predicted_effect": "string",
+        "producer_run_digest": "sha256_digest",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_CandidateGenealogy.v1",
+        "regression_risks": "array",
+        "schema_version": "literal_1",
+        "workspace_lease_id": "string"
+      },
+      "record_kind": "CandidateGenealogy.v1",
+      "required_fields": [
+        "accepted_working_point_digest",
+        "artifact_refs",
+        "base_revision",
+        "campaign_generation",
+        "campaign_id",
+        "candidate_digest",
+        "falsification_test",
+        "hypothesis",
+        "mutation_mechanism",
+        "mutation_scope",
+        "ordered_parent_digests",
+        "predicted_effect",
+        "producer_run_digest",
+        "record_digest",
+        "record_kind",
+        "regression_risks",
+        "schema_version",
+        "workspace_lease_id"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(EvolutionCampaign.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "accepted_working_point_digest": "sha256_digest",
+        "base_revision": "string",
+        "budget_authority": "object",
+        "budget_identity": "object",
+        "campaign_generation": "integer",
+        "campaign_id": "string",
+        "cancel_authority_and_drain_rule": "object",
+        "context_identity": "object",
+        "correctness_oracle": "object",
+        "effect_permissions": "object",
+        "environment_identity": "object",
+        "evaluator_identity_and_authority": "object",
+        "holdout_custodian": "object",
+        "holdout_manifest": "object",
+        "mutation_scope": "object",
+        "objective_vector": "array",
+        "parent_candidate_digest": "sha256_digest",
+        "promotion_policy_and_authority": "object",
+        "provider_configuration_identity": "object",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_EvolutionCampaign.v1",
+        "retry_exclusion_decision_authority": "object",
+        "retry_exclusion_policy": "object",
+        "reviewer_set_independence_policy_and_quorum": "object",
+        "rollback_plan": "object",
+        "route_profile_identity": "object",
+        "safety_and_burden_rules": "object",
+        "schema_version": "literal_1",
+        "seed_randomization_policy": "object",
+        "stop_authority_and_rules": "object",
+        "workload_identity": "object",
+        "workspace_tier_and_lease_requirements": "object"
+      },
+      "record_kind": "EvolutionCampaign.v1",
+      "required_fields": [
+        "accepted_working_point_digest",
+        "base_revision",
+        "budget_authority",
+        "budget_identity",
+        "campaign_generation",
+        "campaign_id",
+        "cancel_authority_and_drain_rule",
+        "context_identity",
+        "correctness_oracle",
+        "effect_permissions",
+        "environment_identity",
+        "evaluator_identity_and_authority",
+        "holdout_custodian",
+        "holdout_manifest",
+        "mutation_scope",
+        "objective_vector",
+        "parent_candidate_digest",
+        "promotion_policy_and_authority",
+        "provider_configuration_identity",
+        "record_digest",
+        "record_kind",
+        "retry_exclusion_decision_authority",
+        "retry_exclusion_policy",
+        "reviewer_set_independence_policy_and_quorum",
+        "rollback_plan",
+        "route_profile_identity",
+        "safety_and_burden_rules",
+        "schema_version",
+        "seed_randomization_policy",
+        "stop_authority_and_rules",
+        "workload_identity",
+        "workspace_tier_and_lease_requirements"
+      ],
+      "unknown_fields": "reject"
+    },
+    {
+      "digest_field": "record_digest",
+      "digest_preimage": "ASCII(unrest.evolution.v1)||0x00||ASCII(RetryExclusionDecision.v1)||0x00||CanonicalJSON-v1(record-without-record_digest)",
+      "field_types": {
+        "decision": "string",
+        "decision_id": "string",
+        "evidence_refs": "array",
+        "issuer": "object",
+        "record_digest": "sha256_digest",
+        "record_kind": "literal_RetryExclusionDecision.v1",
+        "schema_version": "literal_1",
+        "terminal_disposition": "string"
+      },
+      "record_kind": "RetryExclusionDecision.v1",
+      "required_fields": [
+        "decision",
+        "decision_id",
+        "evidence_refs",
+        "issuer",
+        "record_digest",
+        "record_kind",
+        "schema_version",
+        "terminal_disposition"
+      ],
+      "unknown_fields": "reject"
+    }
+  ],
+  "closed_role_catalog_ref": "../integration/cross-family-authority.v1.json#/role_catalog",
+  "concrete_records": {
+    "admission_accept": {
+      "decision": "accept",
+      "decision_id": "admission-accepted-0001",
+      "evidence_refs": [
+        "artifact:campaign-freeze-0001"
+      ],
+      "issuer": {
+        "actor_id": "actor:campaign-governor-01",
+        "role_id": "campaign_authority"
+      },
+      "record_digest": "sha256:a81cf9a6f1438a8aa765a74073e93e7462e39bbe86e1215ef9311245fa3f4771",
+      "record_kind": "CampaignAdmissionDecision.v1",
+      "schema_version": 1,
+      "terminal_disposition": "admitted"
+    },
+    "admission_failure": {
+      "decision": "reject",
+      "decision_id": "admission-rejected-0002",
+      "evidence_refs": [
+        "violation:candidate-controls-evaluator"
+      ],
+      "issuer": {
+        "actor_id": "actor:campaign-governor-01",
+        "role_id": "campaign_authority"
+      },
+      "record_digest": "sha256:ad1d5f1ced1e03bc979e62410ace7609383590f0d731d8eaf0412251f4220fc9",
+      "record_kind": "CampaignAdmissionDecision.v1",
+      "schema_version": 1,
+      "terminal_disposition": "rejected_before_launch"
+    },
+    "campaign_freeze": {
+      "accepted_working_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "base_revision": "git:96d5c0f0b240bd3373809546d7aecc1e407f837b",
+      "budget_authority": {
+        "actor_id": "actor:budget-governor-01",
+        "role_id": "campaign_budget_authority"
+      },
+      "budget_identity": {
+        "currency": "evaluation_case",
+        "hard_limit": 12,
+        "ledger_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "campaign_generation": 1,
+      "campaign_id": "campaign-evo-0001",
+      "cancel_authority_and_drain_rule": {
+        "authority": {
+          "actor_id": "actor:stop-governor-01",
+          "role_id": "campaign_stop_authority"
+        },
+        "drain": "stop_new_runs_then_inventory_active_attempts_and_effects"
+      },
+      "context_identity": {
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "public_id": "context-evo-0001"
+      },
+      "correctness_oracle": {
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "public_id": "oracle-evo-0001",
+        "required_floor": 0.95
+      },
+      "effect_permissions": {
+        "allowed_classes": [],
+        "grant_refs": []
+      },
+      "environment_identity": {
+        "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "public_id": "environment-py313-linux-0001"
+      },
+      "evaluator_identity_and_authority": {
+        "actor_id": "actor:evaluator-01",
+        "identity_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "role_id": "independent_evaluation_authority"
+      },
+      "holdout_custodian": {
+        "actor_id": "actor:holdout-custodian-01",
+        "manifest_access": "blinded_tasks_only",
+        "role_id": "holdout_custodian"
+      },
+      "holdout_manifest": {
+        "case_count": 4,
+        "digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "public_id": "holdout-manifest-0001"
+      },
+      "mutation_scope": {
+        "allowed_paths": [
+          "src/solver.py"
+        ],
+        "prohibited_surfaces": [
+          "accepted_working_point",
+          "evaluator",
+          "holdout",
+          "oracle"
+        ]
+      },
+      "objective_vector": [
+        {
+          "direction": "maximize",
+          "floor": 0.95,
+          "metric_id": "correctness",
+          "weight": 1
+        }
+      ],
+      "parent_candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "promotion_policy_and_authority": {
+        "actor_id": "actor:promotion-governor-01",
+        "policy_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "role_id": "promotion_authority"
+      },
+      "provider_configuration_identity": {
+        "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "public_id": "provider-config-0001"
+      },
+      "record_digest": "sha256:d67acea3d0ef929b51f34613967cbbc22215054d23791ab9b7e83babe5ddd20c",
+      "record_kind": "EvolutionCampaign.v1",
+      "retry_exclusion_decision_authority": {
+        "actor_id": "actor:retry-governor-01",
+        "role_id": "retry_exclusion_decision_authority"
+      },
+      "retry_exclusion_policy": {
+        "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "max_retries_per_case": 1,
+        "missing_treatment": "retained_non_improving"
+      },
+      "reviewer_set_independence_policy_and_quorum": {
+        "policy_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "quorum": 2,
+        "reviewers": [
+          {
+            "actor_id": "actor:reviewer-01",
+            "identity_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          {
+            "actor_id": "actor:reviewer-02",
+            "identity_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+          }
+        ],
+        "role_id": "independent_review_authority"
+      },
+      "rollback_plan": {
+        "authority": {
+          "actor_id": "actor:rollback-governor-01",
+          "role_id": "rollback_authority"
+        },
+        "compatibility_evidence_required": [
+          "compatibility-evidence-0001"
+        ],
+        "target_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "trigger_policy_id": "rollback-trigger-v1"
+      },
+      "route_profile_identity": {
+        "digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "public_id": "route-profile-0001"
+      },
+      "safety_and_burden_rules": {
+        "max_operator_minutes": 30,
+        "no_unsettled_effects": true,
+        "safety_floor": 1
+      },
+      "schema_version": 1,
+      "seed_randomization_policy": {
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "seeds": [
+          17,
+          29
+        ],
+        "selection": "fixed_sorted"
+      },
+      "stop_authority_and_rules": {
+        "actor_id": "actor:stop-governor-01",
+        "role_id": "campaign_stop_authority",
+        "stop_on": [
+          "budget_exhausted",
+          "cancel_requested",
+          "unsettled_effect"
+        ]
+      },
+      "workload_identity": {
+        "case_count": 8,
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "public_id": "workload-0001"
+      },
+      "workspace_tier_and_lease_requirements": {
+        "lease_policy_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "minimum_tier": "disjoint_worktree"
+      }
+    },
+    "cancellation": {
+      "decision": "cancel",
+      "decision_id": "cancel-0001",
+      "evidence_refs": [
+        "reason:operator-request-0001"
+      ],
+      "issuer": {
+        "actor_id": "actor:stop-governor-01",
+        "role_id": "campaign_stop_authority"
+      },
+      "record_digest": "sha256:196ef0a1096c6ccbfdbb3c870a3afee7fc61242e04984d24c3d33218fb589602",
+      "record_kind": "CampaignCancellationDecision.v1",
+      "schema_version": 1,
+      "terminal_disposition": "drain_required"
+    },
+    "closure": {
+      "decision": "close",
+      "decision_id": "campaign-closure-0001",
+      "evidence_refs": [
+        "inventory:attempt-effect-0001",
+        "outcome:cancellation-0001"
+      ],
+      "issuer": {
+        "actor_id": "actor:campaign-governor-01",
+        "role_id": "campaign_authority"
+      },
+      "record_digest": "sha256:4e78cd96130d8755e7519dd38a9a54afc1d61bb0f4916552c4b6c859450155bd",
+      "record_kind": "CampaignClosure.v1",
+      "schema_version": 1,
+      "terminal_disposition": "cancelled_all_attempts_and_costs_retained"
+    },
+    "exclusion": {
+      "decision": "reject_exclusion",
+      "decision_id": "exclusion-rejected-0001",
+      "evidence_refs": [
+        "attempt:attempt-0002",
+        "policy:retry-exclusion-v1"
+      ],
+      "issuer": {
+        "actor_id": "actor:retry-governor-01",
+        "role_id": "retry_exclusion_decision_authority"
+      },
+      "record_digest": "sha256:820e07c6871e017a76b4a6983c19fdde385a871ffbccf6a791cede1e7b70aa7e",
+      "record_kind": "RetryExclusionDecision.v1",
+      "schema_version": 1,
+      "terminal_disposition": "attempt_remains_in_denominator"
+    },
+    "failure": {
+      "attempt_id": "attempt-0001",
+      "evidence_refs": [
+        "artifact:infrastructure-error-0001"
+      ],
+      "failure_class": "infrastructure_error",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:d2462a86489da07fd85f606642057821b40930e7aa6bab79d6f8599ca2ccdfb6",
+      "record_id": "campaign-failure-0001",
+      "record_kind": "CampaignFailure.v1",
+      "schema_version": 1,
+      "terminal_disposition": "retained_failure"
+    },
+    "retry": {
+      "decision": "approve_retry",
+      "decision_id": "retry-approved-0001",
+      "evidence_refs": [
+        "attempt:attempt-0001",
+        "policy:retry-exclusion-v1"
+      ],
+      "issuer": {
+        "actor_id": "actor:retry-governor-01",
+        "role_id": "retry_exclusion_decision_authority"
+      },
+      "record_digest": "sha256:c4ae4cdc5a005c52d663f34cabaf62cd0c18123024f8cf05a0bc78bc2baa966b",
+      "record_kind": "RetryExclusionDecision.v1",
+      "schema_version": 1,
+      "terminal_disposition": "new_attempt_required"
+    },
+    "run": {
+      "attempt_id": "attempt-0001",
+      "campaign_digest": "sha256:d67acea3d0ef929b51f34613967cbbc22215054d23791ab9b7e83babe5ddd20c",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "cost_limit": 12,
+      "owner_role_id": "campaign_authority",
+      "record_digest": "sha256:3f327190265acf14caddfc3801f9219e10190653fb411380829bbb543705d265",
+      "record_kind": "CampaignRun.v1",
+      "schema_version": 1,
+      "terminal_disposition": "launched"
+    }
+  },
+  "freeze_mutations": [
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "accepted_working_point_digest",
+      "id": "FREEZE-MUTATION-01",
+      "mutation": "replace_accepted_working_point_digest_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "base_revision",
+      "id": "FREEZE-MUTATION-02",
+      "mutation": "replace_base_revision_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "budget_authority",
+      "id": "FREEZE-MUTATION-03",
+      "mutation": "replace_budget_authority_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "budget_identity",
+      "id": "FREEZE-MUTATION-04",
+      "mutation": "replace_budget_identity_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "campaign_generation",
+      "id": "FREEZE-MUTATION-05",
+      "mutation": "replace_campaign_generation_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "campaign_id",
+      "id": "FREEZE-MUTATION-06",
+      "mutation": "replace_campaign_id_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "cancel_authority_and_drain_rule",
+      "id": "FREEZE-MUTATION-07",
+      "mutation": "replace_cancel_authority_and_drain_rule_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "context_identity",
+      "id": "FREEZE-MUTATION-08",
+      "mutation": "replace_context_identity_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "correctness_oracle",
+      "id": "FREEZE-MUTATION-09",
+      "mutation": "replace_correctness_oracle_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "effect_permissions",
+      "id": "FREEZE-MUTATION-10",
+      "mutation": "replace_effect_permissions_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "environment_identity",
+      "id": "FREEZE-MUTATION-11",
+      "mutation": "replace_environment_identity_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "evaluator_identity_and_authority",
+      "id": "FREEZE-MUTATION-12",
+      "mutation": "replace_evaluator_identity_and_authority_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "holdout_custodian",
+      "id": "FREEZE-MUTATION-13",
+      "mutation": "replace_holdout_custodian_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "holdout_manifest",
+      "id": "FREEZE-MUTATION-14",
+      "mutation": "replace_holdout_manifest_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "mutation_scope",
+      "id": "FREEZE-MUTATION-15",
+      "mutation": "replace_mutation_scope_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "objective_vector",
+      "id": "FREEZE-MUTATION-16",
+      "mutation": "replace_objective_vector_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "parent_candidate_digest",
+      "id": "FREEZE-MUTATION-17",
+      "mutation": "replace_parent_candidate_digest_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "promotion_policy_and_authority",
+      "id": "FREEZE-MUTATION-18",
+      "mutation": "replace_promotion_policy_and_authority_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "provider_configuration_identity",
+      "id": "FREEZE-MUTATION-19",
+      "mutation": "replace_provider_configuration_identity_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "retry_exclusion_decision_authority",
+      "id": "FREEZE-MUTATION-20",
+      "mutation": "replace_retry_exclusion_decision_authority_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "retry_exclusion_policy",
+      "id": "FREEZE-MUTATION-21",
+      "mutation": "replace_retry_exclusion_policy_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "reviewer_set_independence_policy_and_quorum",
+      "id": "FREEZE-MUTATION-22",
+      "mutation": "replace_reviewer_set_independence_policy_and_quorum_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "rollback_plan",
+      "id": "FREEZE-MUTATION-23",
+      "mutation": "replace_rollback_plan_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "route_profile_identity",
+      "id": "FREEZE-MUTATION-24",
+      "mutation": "replace_route_profile_identity_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "safety_and_burden_rules",
+      "id": "FREEZE-MUTATION-25",
+      "mutation": "replace_safety_and_burden_rules_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "seed_randomization_policy",
+      "id": "FREEZE-MUTATION-26",
+      "mutation": "replace_seed_randomization_policy_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "stop_authority_and_rules",
+      "id": "FREEZE-MUTATION-27",
+      "mutation": "replace_stop_authority_and_rules_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "workload_identity",
+      "id": "FREEZE-MUTATION-28",
+      "mutation": "replace_workload_identity_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    },
+    {
+      "baseline_record_ref": "campaign_freeze",
+      "field": "workspace_tier_and_lease_requirements",
+      "id": "FREEZE-MUTATION-29",
+      "mutation": "replace_workspace_tier_and_lease_requirements_with_distinct_value",
+      "result": "reject_and_require_new_campaign_generation"
+    }
+  ],
+  "genealogy_record": {
+    "accepted_working_point_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "artifact_refs": [
+      "artifact:candidate-patch-0001"
+    ],
+    "base_revision": "git:96d5c0f0b240bd3373809546d7aecc1e407f837b",
+    "campaign_generation": 1,
+    "campaign_id": "campaign-evo-0001",
+    "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "falsification_test": "test:falsify-regression-0001",
+    "hypothesis": "bounded solver change improves correctness",
+    "mutation_mechanism": "patch-return-v1",
+    "mutation_scope": [
+      "src/solver.py"
+    ],
+    "ordered_parent_digests": [
+      "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    ],
+    "predicted_effect": "correctness +0.02",
+    "producer_run_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "record_digest": "sha256:ac71dfc18e3aef025d2142c3c165303ff7086433f190f065a26cff28a3e7130e",
+    "record_kind": "CandidateGenealogy.v1",
+    "regression_risks": [
+      "timeout_rate"
+    ],
+    "schema_version": 1,
+    "workspace_lease_id": "workspace-lease-0001"
+  },
+  "lifecycle_transitions": [
+    {
+      "event_id": "EVOL-LIFE-01-ADMIT",
+      "evidence_refs": [
+        "artifact:campaign-freeze-0001"
+      ],
+      "from_state": null,
+      "owner_role_id": "campaign_authority",
+      "record_digest": "sha256:ca09accdbaf9a62e268e63d1a17225e6f86bc6cc5d67cb8454063f191d6b8e14",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": null,
+      "to_state": "admitted"
+    },
+    {
+      "event_id": "EVOL-LIFE-02-LAUNCH",
+      "evidence_refs": [
+        "decision:admission-accepted-0001"
+      ],
+      "from_state": "admitted",
+      "owner_role_id": "campaign_authority",
+      "record_digest": "sha256:a2087b96a2b7e565a3eac414f5f7e9e9e7802dd0ed8eff6412f73ec732761a38",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": null,
+      "to_state": "running"
+    },
+    {
+      "event_id": "EVOL-LIFE-03-RUN-FAILURE",
+      "evidence_refs": [
+        "failure:campaign-failure-0001"
+      ],
+      "from_state": "running",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:258503d4cf56fc85fd7085c58d75f1480110bf231669509d52e73830eee6a765",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": "retained_failure",
+      "to_state": "running"
+    },
+    {
+      "event_id": "EVOL-LIFE-04-RETRY-REQUEST",
+      "evidence_refs": [
+        "attempt:attempt-0001"
+      ],
+      "from_state": "running",
+      "owner_role_id": "independent_evaluation_authority",
+      "record_digest": "sha256:a3818db667859a9282348c5525b48c48bf181378309427c61b3cd794fd92b542",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": null,
+      "to_state": "retry_pending"
+    },
+    {
+      "event_id": "EVOL-LIFE-05-RETRY-DECISION",
+      "evidence_refs": [
+        "decision:retry-approved-0001"
+      ],
+      "from_state": "retry_pending",
+      "owner_role_id": "retry_exclusion_decision_authority",
+      "record_digest": "sha256:4a72900e70f56f644582edcb03a37c06c424e6b15a8d54b5eb41018df990fa8f",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": null,
+      "to_state": "running"
+    },
+    {
+      "event_id": "EVOL-LIFE-06-EXCLUSION-DECISION",
+      "evidence_refs": [
+        "decision:exclusion-rejected-0001"
+      ],
+      "from_state": "running",
+      "owner_role_id": "retry_exclusion_decision_authority",
+      "record_digest": "sha256:c7e3d315fd157f0cc54a20186f6343540b7b8e6908a4cc04efcccd947bf151af",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": "original_attempt_retained",
+      "to_state": "running"
+    },
+    {
+      "event_id": "EVOL-LIFE-07-CANCEL-REQUEST",
+      "evidence_refs": [
+        "decision:cancel-0001"
+      ],
+      "from_state": "running",
+      "owner_role_id": "campaign_stop_authority",
+      "record_digest": "sha256:53470f4e6d0d181a4deb0d3fe49eb636a863105dbf1eac6d803ec00d9b2247bb",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": null,
+      "to_state": "cancel_requested"
+    },
+    {
+      "event_id": "EVOL-LIFE-08-DRAIN",
+      "evidence_refs": [
+        "inventory:attempt-effect-0001"
+      ],
+      "from_state": "cancel_requested",
+      "owner_role_id": "campaign_stop_authority",
+      "record_digest": "sha256:aecfe0a1231159ccceba1f72e1a48e1120b57e8d5f75cf5510719b8f233e2e48",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": null,
+      "to_state": "draining"
+    },
+    {
+      "event_id": "EVOL-LIFE-09-CLOSE",
+      "evidence_refs": [
+        "closure:campaign-closure-0001"
+      ],
+      "from_state": "draining",
+      "owner_role_id": "campaign_authority",
+      "record_digest": "sha256:c5bf859c14983c0b8c8cc70c388df8395e1c9ff7e13762ef7b1eb04b08571afd",
+      "record_kind": "CampaignLifecycleEvent.v1",
+      "schema_version": 1,
+      "terminal_disposition": "cancelled_all_attempts_and_costs_retained",
+      "to_state": "closed"
+    }
+  ],
+  "negative_cases": [
+    {
+      "id": "CAMPAIGN-NEG-CANDIDATE-EVALUATOR",
+      "mutation": "evaluator actor equals candidate author",
+      "result": "reject_admission"
+    },
+    {
+      "id": "CAMPAIGN-NEG-MISSING-CLOSURE",
+      "mutation": "draining has no CampaignClosure.v1",
+      "result": "reject_incomplete_lifecycle"
+    },
+    {
+      "id": "CAMPAIGN-NEG-UNDEFINED-OWNER",
+      "mutation": "retry owner role_id=retry_manager",
+      "result": "reject_unknown_role"
+    }
+  ],
+  "required_freeze_fields": [
+    "accepted_working_point_digest",
+    "base_revision",
+    "budget_authority",
+    "budget_identity",
+    "campaign_generation",
+    "campaign_id",
+    "cancel_authority_and_drain_rule",
+    "context_identity",
+    "correctness_oracle",
+    "effect_permissions",
+    "environment_identity",
+    "evaluator_identity_and_authority",
+    "holdout_custodian",
+    "holdout_manifest",
+    "mutation_scope",
+    "objective_vector",
+    "parent_candidate_digest",
+    "promotion_policy_and_authority",
+    "provider_configuration_identity",
+    "retry_exclusion_decision_authority",
+    "retry_exclusion_policy",
+    "reviewer_set_independence_policy_and_quorum",
+    "rollback_plan",
+    "route_profile_identity",
+    "safety_and_burden_rules",
+    "seed_randomization_policy",
+    "stop_authority_and_rules",
+    "workload_identity",
+    "workspace_tier_and_lease_requirements"
+  ],
+  "role_bindings": {
+    "campaign_authority": "actor:campaign-governor-01",
+    "campaign_budget_authority": "actor:budget-governor-01",
+    "campaign_stop_authority": "actor:stop-governor-01",
+    "holdout_custodian": "actor:holdout-custodian-01",
+    "independent_evaluation_authority": "actor:evaluator-01",
+    "independent_review_authority": "actor:review-board-01",
+    "parent_integration_authority": "actor:parent-integrator-01",
+    "promotion_authority": "actor:promotion-governor-01",
+    "retry_exclusion_decision_authority": "actor:retry-governor-01",
+    "rollback_authority": "actor:rollback-governor-01",
+    "workspace_lease_authority": "actor:workspace-governor-01",
+    "workspace_return_authority": "actor:patch-returner-01"
+  },
+  "schema_version": 1,
+  "status": "proposed_non_authoritative"
+}

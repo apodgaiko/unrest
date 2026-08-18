@@ -1,0 +1,163 @@
+{
+  "cases": [
+    {
+      "authority": "actor",
+      "id": "INQ-CASE-AMBIGUOUS",
+      "observables": [
+        "clarification_questions",
+        "known_unknowns",
+        "source_scope",
+        "visible_assumptions"
+      ],
+      "outcome": "clarifying",
+      "rule": "material_ambiguity_cannot_unlock_exploration_without_actor_resolution"
+    },
+    {
+      "authority": "actor_or_external_budget_authority",
+      "id": "INQ-CASE-BUDGET",
+      "observables": [
+        "branch_outcomes",
+        "partial_answer_or_no_answer",
+        "remaining_budget",
+        "spent_budget"
+      ],
+      "outcome": "budget_exhausted",
+      "rule": "new_launches_stop_and_only_external_authority_may_amend_budget"
+    },
+    {
+      "authority": "actor",
+      "id": "INQ-CASE-CANCEL",
+      "observables": [
+        "cancellation_reason",
+        "partial_artifacts",
+        "settled_or_unknown_branches",
+        "spent_budget"
+      ],
+      "outcome": "cancelled",
+      "rule": "stop_launch_request_cooperative_stop_bounded_drain_and_no_answer_claim"
+    },
+    {
+      "authority": "inquiry_lifecycle_owner_under_frozen_synthesis_policy",
+      "id": "INQ-CASE-DISSENT",
+      "observables": [
+        "majority_claim",
+        "minority_evidence",
+        "minority_mechanism",
+        "rejection_reason",
+        "resurrection_condition"
+      ],
+      "outcome": "answered",
+      "rule": "minority_report_remains_separately_addressable"
+    },
+    {
+      "authority": "inquiry_lifecycle_owner_under_frozen_branch_policy",
+      "id": "INQ-CASE-FAILURE",
+      "observables": [
+        "coverage_gap",
+        "failed_branch_reason",
+        "partial_and_negative_evidence",
+        "unaffected_branch_outcomes"
+      ],
+      "outcome": "answered",
+      "rule": "failure_is_retained_and_cannot_disappear_from_synthesis"
+    },
+    {
+      "authority": "actor",
+      "id": "INQ-CASE-HAPPY",
+      "observables": [
+        "answer_revision",
+        "artifact_refs",
+        "distinct_branch_outcomes",
+        "limitations",
+        "spent_and_remaining_budget"
+      ],
+      "outcome": "answered",
+      "rule": "at_least_two_materially_distinct_read_only_branches_finish_with_evidence"
+    },
+    {
+      "authority": "actor",
+      "id": "INQ-CASE-RESUME",
+      "observables": [
+        "freshness_results",
+        "new_activation_id",
+        "prior_artifact_state",
+        "same_inquiry_id"
+      ],
+      "outcome": "exploring",
+      "rule": "resume_requires_explicit_authority_new_activation_and_sufficient_budget"
+    },
+    {
+      "authority": "data_governance_authority",
+      "id": "INQ-CASE-RETENTION",
+      "observables": [
+        "artifact_availability",
+        "deletion_or_tombstone_receipt",
+        "hold_state",
+        "retention_policy_id",
+        "terminal_disposition"
+      ],
+      "outcome": "answered",
+      "rule": "runner_branch_synthesizer_and_consumer_cannot_shorten_retention_or_rewrite_history"
+    }
+  ],
+  "negative_cases": [
+    {
+      "id": "INQ-BYPASS-BRANCH-MUTATION",
+      "mutation": "grant_branch_product_write_or_external_effect_authority",
+      "valid": false
+    },
+    {
+      "id": "INQ-BYPASS-BUDGET-SELF-AMEND",
+      "mutation": "let_runner_increase_budget",
+      "valid": false
+    },
+    {
+      "id": "INQ-BYPASS-DISSENT-DROP",
+      "mutation": "remove_minority_report_to_complete_synthesis",
+      "valid": false
+    },
+    {
+      "id": "INQ-BYPASS-FAILURE-DROP",
+      "mutation": "omit_failed_branch_from_outcome_inventory",
+      "valid": false
+    },
+    {
+      "id": "INQ-BYPASS-OBSERVATION-ALIAS",
+      "mutation": "reinterpret_mission_observation_as_inquiry_state",
+      "valid": false
+    },
+    {
+      "id": "INQ-BYPASS-RESUME-REUSE",
+      "mutation": "resume_without_new_activation_or_freshness_check",
+      "valid": false
+    },
+    {
+      "id": "INQ-BYPASS-RETENTION-ERASE",
+      "mutation": "let_runner_delete_negative_evidence_without_receipt",
+      "valid": false
+    },
+    {
+      "id": "INQ-BYPASS-UNKNOWN-AS-STOPPED",
+      "mutation": "convert_unknown_branch_drain_state_to_stopped",
+      "valid": false
+    }
+  ],
+  "schema_version": 1,
+  "states": [
+    "answered",
+    "budget_exhausted",
+    "cancelled",
+    "clarifying",
+    "draft",
+    "exploring",
+    "failed",
+    "paused",
+    "synthesizing"
+  ],
+  "status": "proposed",
+  "terminal_states": [
+    "answered",
+    "cancelled",
+    "failed"
+  ]
+}
