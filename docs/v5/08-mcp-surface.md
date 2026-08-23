@@ -93,14 +93,17 @@ coordinator; the tool itself does not seal a mission.
   prompt convention.
 - `SEC-MCP-001`: worker, validator, and reviewer modes cannot call orchestrator
   lifecycle tools through their server.
-- `ARCH-STATE-001`: mutating orchestrator calls are serialized per project and
-  execute blocking controller work in a thread.
+- `ARCH-STATE-001`: mutating orchestrator calls queue within one server and
+  fail fast with `project_busy` when another process holds the same project's
+  OS-owned mutation lock; controller work executes in a thread.
 - `COMPAT-ENVELOPE-001`: envelope field names and strict typed handoff fields
   are compatibility boundaries.
 
 ## Failure modes
 
 - Wrong lifecycle state returns `wrong_state`.
+- Contended project mutation returns `project_busy`; inability to inspect or
+  acquire the mutation lock returns `project_lock_error` before controller entry.
 - Invalid plans, patches, and decisions return stable top-level errors plus
   stable validation details.
 - Invalid worker overrides fail before project creation.

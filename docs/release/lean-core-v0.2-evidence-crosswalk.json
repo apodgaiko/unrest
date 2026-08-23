@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "candidate": {
-    "files": 130,
-    "sha256": "f23748c30396799a7b7bdac2c70a9f85459855114a7e85b3674570b0ee577c5b",
+    "files": 103,
+    "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7",
     "paths": [
       "pyproject.toml",
       "uv.lock",
@@ -11,7 +11,6 @@
       "tools/**"
     ]
   },
-  "candidate_binding_revalidation": "Recomputed after the ADR-0305 compatibility file-link correction; the scoped 130-file product/package/test surface and SHA-256 are unchanged because docs/** is outside the declared binding.",
   "superseded_filesystem_candidate": {
     "files": 105,
     "sha256": "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1",

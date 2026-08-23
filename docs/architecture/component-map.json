@@ -129,6 +129,7 @@
       ],
       "paths": [
         "src/unrest_harness/controller.py",
+        "src/unrest_harness/project_lock.py",
         "src/unrest_harness/server.py"
       ],
       "specifications": [
@@ -136,6 +137,7 @@
         "docs/v5/08-mcp-surface.md"
       ],
       "tests": [
+        "tests/test_project_lock.py",
         "tests/test_server.py"
       ]
     },

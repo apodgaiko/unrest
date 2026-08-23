@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -17,26 +18,32 @@ assert SPEC is not None and SPEC.loader is not None
 release_binding = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release_binding)
 
-CARRIERS = (
+HISTORICAL_CARRIERS = (
     ROOT / "docs/release/lean-core-v0.2-manifest.json",
     ROOT / "docs/release/lean-core-v0.2-review-audit.json",
     ROOT / "docs/release/lean-core-v0.2-evidence-crosswalk.json",
     ROOT / "docs/release/lean-core-v0.2.md",
     ROOT / "docs/release/lean-core-v0.2-rollback.md",
 )
+ACTIVE_MANIFEST = ROOT / release_binding.ACTIVE_RELEASE_MANIFEST
+ACTIVE_PROSE_CARRIERS = (
+    ROOT / "docs/release/lean-core-v0.2.1.md",
+    ROOT / "docs/release/lean-core-v0.2.1-rollback.md",
+)
 
 
 def _computed() -> dict[str, object]:
-    paths = release_binding.tracked_regular_paths(ROOT)
+    paths = release_binding.candidate_regular_paths(ROOT)
     return release_binding.inventory(ROOT, paths)
 
 
-def test_binding_uses_only_git_tracked_regular_files() -> None:
-    paths = release_binding.tracked_regular_paths(ROOT)
+def test_binding_uses_only_candidate_regular_files() -> None:
+    paths = release_binding.candidate_regular_paths(ROOT)
     assert paths == sorted(paths, key=lambda value: value.encode("utf-8"))
     assert "pyproject.toml" in paths and "uv.lock" in paths
     assert all(".egg-info/" not in path for path in paths)
     assert all((ROOT / path).is_file() and not (ROOT / path).is_symlink() for path in paths)
+    assert "src/unrest_harness/project_lock.py" in paths
 
     ignored_generated = ROOT / "src/unrest_harness.egg-info/PKG-INFO"
     assert ignored_generated.exists(), "the ignored-file exclusion probe must be present"
@@ -56,29 +63,41 @@ def test_binding_rejects_coherent_fake_digest() -> None:
         release_binding.assert_declaration_matches(fake, computed)
 
 
-def test_all_five_carriers_agree_with_tracked_binding_and_keep_chronology() -> None:
+def test_v02_carriers_are_byte_identical_to_the_v020_tag() -> None:
+    for carrier in HISTORICAL_CARRIERS:
+        relative = carrier.relative_to(ROOT).as_posix()
+        tagged = subprocess.run(
+            ("git", "show", f"v0.2.0:{relative}"),
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        assert carrier.read_bytes() == tagged
+
+
+def test_v021_manifest_owns_the_live_candidate_binding() -> None:
     computed = _computed()
-    manifest = json.loads(CARRIERS[0].read_text(encoding="utf-8"))
-    audit = json.loads(CARRIERS[1].read_text(encoding="utf-8"))
-    crosswalk = json.loads(CARRIERS[2].read_text(encoding="utf-8"))
-    declarations = (
-        manifest["source"]["final_product_package_test"],
-        audit["candidate_binding"],
-        crosswalk["candidate"],
-    )
+    manifest = json.loads(ACTIVE_MANIFEST.read_text(encoding="utf-8"))
+    declaration = release_binding.declared_binding(manifest)
     expected = {"files": computed["files"], "sha256": computed["sha256"]}
-    for declaration in declarations:
-        assert {"files": declaration["files"], "sha256": declaration["sha256"]} == expected
-    for carrier in CARRIERS:
+    assert {"files": declaration["files"], "sha256": declaration["sha256"]} == expected
+    assert manifest["release"] == "unrest-v0.2.1"
+    assert manifest["history"]["v0.2_carriers"] == "immutable bytes from tag v0.2.0"
+    assert str(release_binding.ACTIVE_RELEASE_MANIFEST) == ACTIVE_MANIFEST.relative_to(
+        ROOT
+    ).as_posix()
+    for carrier in ACTIVE_PROSE_CARRIERS:
         text = carrier.read_text(encoding="utf-8")
         assert str(computed["sha256"]) in text
-        assert "35e21ed3a3a70f6687d35ad7fa8d03d7601d77935a72fabfdbf86a05f5e166e1" in text
-        assert "superseded" in text.lower()
+        assert "0.2.1" in text
+        assert "proposed" in text.lower()
 
-    drifted = json.loads(json.dumps(audit))
-    drifted["candidate_binding"]["sha256"] = "f" * 64
-    with pytest.raises(AssertionError):
-        assert drifted["candidate_binding"] == manifest["source"]["final_product_package_test"]
+    drifted = json.loads(json.dumps(manifest))
+    drifted["source"]["final_product_package_test"]["sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="binding declaration mismatch"):
+        release_binding.assert_declaration_matches(
+            release_binding.declared_binding(drifted), computed
+        )
 
 
 def test_complete_measurement_report_machine_data() -> None:

@@ -7,6 +7,7 @@ import base64
 import json
 from pathlib import Path
 import re
+import subprocess
 import tomllib
 
 
@@ -14,6 +15,27 @@ ROOT = Path(__file__).resolve().parents[2]
 CROSSWALK_PATH = ROOT / "docs/release/lean-core-v0.2-evidence-crosswalk.json"
 AUDIT_PATH = ROOT / "docs/release/lean-core-v0.2-review-audit.json"
 CROSSWALK = json.loads(CROSSWALK_PATH.read_text(encoding="utf-8"))
+V02_TAG = "v0.2.0"
+
+
+def _tag_bytes(relative: str) -> bytes:
+    return subprocess.run(
+        ("git", "show", f"{V02_TAG}:{relative}"),
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+
+
+def _tag_paths(root: str) -> list[str]:
+    output = subprocess.run(
+        ("git", "ls-tree", "-r", "--name-only", V02_TAG, "--", root),
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout
+    return sorted(output.splitlines())
 
 
 def _record_nodes(record: dict[str, object]) -> tuple[str, ...]:
@@ -80,19 +102,21 @@ def test_crosswalk_is_complete_and_every_mapped_node_passes(lean_reference_run) 
     assert lean_reference_run.returncode == 0, lean_reference_run.output
 
 
-def test_candidate_source_import_dependency_and_hard_cut_inventories() -> None:
+def test_v02_source_import_dependency_and_hard_cut_inventories_are_historical() -> None:
     audit = json.loads(AUDIT_PATH.read_text(encoding="utf-8"))
-    source_paths = sorted(
-        path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "src/unrest_harness").glob("*.py")
-    )
+    source_paths = [
+        path
+        for path in _tag_paths("src/unrest_harness")
+        if Path(path).parent.as_posix() == "src/unrest_harness"
+        and path.endswith(".py")
+    ]
     assert source_paths == audit["source_inventory"]
 
     first_party_modules = {Path(path).stem for path in source_paths}
     first_party_modules.add("unrest_harness")
     imported: set[str] = set()
     for relative in source_paths:
-        tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+        tree = ast.parse(_tag_bytes(relative).decode("utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 imported.update(alias.name.split(".")[0] for alias in node.names)
@@ -100,7 +124,7 @@ def test_candidate_source_import_dependency_and_hard_cut_inventories() -> None:
                 imported.add(node.module.split(".")[0])
     assert sorted(imported & first_party_modules) == audit["first_party_import_inventory"]
 
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = tomllib.loads(_tag_bytes("pyproject.toml").decode("utf-8"))
     runtime = sorted(_dependency_name(value) for value in project["project"]["dependencies"])
     development = sorted(
         _dependency_name(value) for value in project["dependency-groups"]["dev"]
@@ -110,36 +134,32 @@ def test_candidate_source_import_dependency_and_hard_cut_inventories() -> None:
     assert development == dependencies["development"]
     assert not (set(runtime) | set(development)) & set(dependencies["removed_direct"])
 
-    absent = [path for path in audit["hard_cut_absence_inventory"] if (ROOT / path).exists()]
-    assert absent == []
+    tag_inventory = set(_tag_paths("."))
+    assert not set(audit["hard_cut_absence_inventory"]) & tag_inventory
 
 
-def test_fresh_candidate_archives_match_package_inventory(built_distribution) -> None:
+def test_v02_package_inventory_is_bound_to_the_v020_tag() -> None:
     audit = json.loads(AUDIT_PATH.read_text(encoding="utf-8"))
     expected = {
         path.removeprefix("src/") for path in audit["source_inventory"]
     }
     expected.add("unrest_harness/py.typed")
-    expected.update(
-        path.relative_to(ROOT / "src").as_posix()
-        for path in (ROOT / "src/unrest_harness/bundled").rglob("*")
-        if path.is_file() and "__pycache__" not in path.parts
-    )
-    wheel_product = {
-        member
-        for member in built_distribution.wheel_members
-        if member.startswith("unrest_harness/")
+    expected.update(path.removeprefix("src/") for path in _tag_paths(
+        "src/unrest_harness/bundled"
+    ))
+    tag_product = {
+        path.removeprefix("src/")
+        for path in _tag_paths("src/unrest_harness")
+        if path.endswith(".py")
+        or path == "src/unrest_harness/py.typed"
+        or path.startswith("src/unrest_harness/bundled/")
     }
-    assert wheel_product == expected
+    assert tag_product == expected
 
     forbidden = audit["package_input_inventory"]["forbidden_archive_fragments"]
     archive_hits = [
-        f"{kind}:{member}"
-        for kind, members in (
-            ("wheel", built_distribution.wheel_members),
-            ("sdist", built_distribution.sdist_members),
-        )
-        for member in members
+        member
+        for member in tag_product
         if any(fragment in member.lower() for fragment in forbidden)
     ]
     assert archive_hits == []

@@ -289,13 +289,17 @@ without sealing.
 
 ## 9. Same-project operation serialization
 
-Mutating orchestrator MCP calls acquire one in-process `asyncio.Lock` per
-project. This prevents concurrent same-process tool calls from racing disk
-cursors. `inspect_project` is read-only and does not take the lock.
+Mutating orchestrator MCP calls first acquire one in-process `asyncio.Lock` per
+project, preserving same-process queueing. They then attempt a non-blocking OS
+file lock in that project's runtime directory before controller entry. A lock
+held by another server process returns `project_busy`; lock-path or acquisition
+failures return `project_lock_error`. Different projects use different locks.
 
-The lock is not a distributed lock and does not make multiple server processes
-safe against each other. Such concurrent same-project processes are outside the
-current contract.
+The file is a stable rendezvous path, not a lease sentinel: ownership belongs
+to the open file handle and the operating system releases it on close or
+process exit. No deletion or operator cleanup is required. POSIX uses `flock`
+and Windows uses a one-byte `msvcrt.locking` range. `inspect_project` is
+read-only and does not take either lock.
 
 ## Change protocol
 

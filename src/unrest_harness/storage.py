@@ -445,6 +445,9 @@ class ProjectStore:
     def unrest_runtime_dir(self, project_id: str) -> Path:
         return self.config.unrest_runtime_dir(project_id)
 
+    def mutation_lock_path(self, project_id: str) -> Path:
+        return self.unrest_runtime_dir(project_id) / "mutation.lock"
+
     def workspace_dir(self, project_id: str) -> Path:
         return Path(self.load_project(project_id).workspace_dir)
 

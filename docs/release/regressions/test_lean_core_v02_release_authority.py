@@ -48,7 +48,9 @@ def _expected_authority() -> dict[str, object]:
 
 
 def test_governed_release_files_are_exhaustive_and_machine_local_path_free() -> None:
-    observed = tuple(path.name for path in sorted(RELEASE_ROOT.glob("lean-core-v0.2*")))
+    historical = list(RELEASE_ROOT.glob("lean-core-v0.2-*"))
+    historical.append(RELEASE_ROOT / "lean-core-v0.2.md")
+    observed = tuple(path.name for path in sorted(historical))
     assert observed == GOVERNED
     prohibited = ("/Users/", "/private/", "/tmp/", "/var/folders/", "aleksandrpodgaiko")
     for name in GOVERNED:

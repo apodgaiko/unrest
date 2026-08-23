@@ -1,6 +1,5 @@
 """Focused documentation authority checks retained by Lean Core."""
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -8,14 +7,6 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_BINDING_SPEC = importlib.util.spec_from_file_location(
-    "release_binding", ROOT / "tools/release_binding.py"
-)
-assert RELEASE_BINDING_SPEC is not None and RELEASE_BINDING_SPEC.loader is not None
-release_binding = importlib.util.module_from_spec(RELEASE_BINDING_SPEC)
-RELEASE_BINDING_SPEC.loader.exec_module(release_binding)
-
-
 def _assert_external_publication_carrier(
     publication: dict[str, object], carrier_texts: tuple[str, ...]
 ) -> None:
@@ -217,7 +208,7 @@ def test_withdrawn_governance_and_deleted_evidence_bindings_are_retired() -> Non
         assert "implementation-tree-manifest" not in text
 
 
-def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
+def test_v02_review_audit_and_crosswalk_remain_historical_carriers() -> None:
     audit = json.loads(
         (ROOT / "docs/release/lean-core-v0.2-review-audit.json").read_text(
             encoding="utf-8"
@@ -238,40 +229,14 @@ def test_review_audit_and_executable_crosswalk_are_release_carriers() -> None:
         encoding="utf-8"
     )
 
-    tracked_paths = release_binding.tracked_regular_paths(ROOT)
-    computed = release_binding.inventory(ROOT, tracked_paths)
-    computed_binding = {
-        "files": computed["files"],
-        "sha256": computed["sha256"],
+    historical_binding = manifest["source"]["final_product_package_test"]
+    assert historical_binding == audit["candidate_binding"]
+    assert historical_binding == crosswalk["candidate"]
+    assert historical_binding == {
+        "files": 103,
+        "sha256": "a4cf3074e077b7e6ce11fd1d74765c0478780a2e138f9c215c64beecc3e292a7",
         "paths": ["pyproject.toml", "uv.lock", "src/**", "tests/**", "tools/**"],
     }
-
-    def assert_carrier_bindings(
-        candidate_manifest: dict[str, object],
-        candidate_audit: dict[str, object],
-        candidate_crosswalk: dict[str, object],
-    ) -> None:
-        current = candidate_manifest["source"]["final_product_package_test"]  # type: ignore[index]
-        assert current == computed_binding
-        assert candidate_audit["candidate_binding"] == current
-        assert candidate_crosswalk["candidate"] == current
-
-    assert_carrier_bindings(manifest, audit, crosswalk)
-
-    zero_digest = "0" * 64
-    zero_manifest = json.loads(json.dumps(manifest))
-    zero_audit = json.loads(json.dumps(audit))
-    zero_crosswalk = json.loads(json.dumps(crosswalk))
-    zero_manifest["source"]["final_product_package_test"]["sha256"] = zero_digest
-    zero_audit["candidate_binding"]["sha256"] = zero_digest
-    zero_crosswalk["candidate"]["sha256"] = zero_digest
-    with pytest.raises(AssertionError):
-        assert_carrier_bindings(zero_manifest, zero_audit, zero_crosswalk)
-
-    single_carrier_audit = json.loads(json.dumps(audit))
-    single_carrier_audit["candidate_binding"]["sha256"] = zero_digest
-    with pytest.raises(AssertionError):
-        assert_carrier_bindings(manifest, single_carrier_audit, crosswalk)
 
     superseded = manifest["superseded_evidence"]
     assert superseded["repository_head_at_checkpoint"].startswith("6cf713c")

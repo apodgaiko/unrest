@@ -36,6 +36,7 @@ from .models import (
     ValidationItem,
     WorkHandoff,
 )
+from .project_lock import ProjectLockError, ProjectMutationLock, project_lock_path
 from .storage import atomic_write_json, trusted_persistence_root
 
 logger = logging.getLogger(__name__)
@@ -157,13 +158,9 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     # SECURITY[SEC-MCP-001]: Lifecycle tools are registered only on the
     # orchestrator server; worker, validator, and reviewer modes construct
     # authority-limited servers.
-    # Per-project lock around mutating controller calls. The thread hop in each
-    # tool prevents event-loop blocking, but two same-project tool calls could
-    # otherwise race on disk state (attention, attempts, task-state, tasks).
-    # docs/v5/07-runtime-architecture.md §9 declares concurrent same-project
-    # operations undefined behavior; this lock serializes them defensively
-    # without requiring host coordination. `inspect_project` is read-only and
-    # stays uncontended.
+    # Same-process callers retain the existing queueing semantics. Once at the
+    # front of that queue, a caller must also acquire the shared OS lock before
+    # entering any mutating controller path. `inspect_project` is read-only.
     project_locks: dict[str, asyncio.Lock] = {}
     locks_guard = asyncio.Lock()
 
@@ -174,6 +171,45 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
                 lock = asyncio.Lock()
                 project_locks[project_id] = lock
             return lock
+
+    async def call_project_mutation(
+        project_id: str,
+        call: Callable[[], Any],
+    ) -> dict[str, Any]:
+        async with await _project_lock(project_id):
+            try:
+                lock_path = project_lock_path(controller.store, project_id)
+            except ProjectLockError:
+                return safe_payload(
+                    ToolError("project_lock_error", "project mutation lock unavailable")
+                )
+
+            # Preserve the pre-lock behavior for invalid or nonexistent project
+            # identifiers: the controller remains the compatibility oracle.
+            if lock_path is None:
+                try:
+                    return safe_payload(await asyncio.to_thread(call))
+                except ToolError as exc:
+                    return safe_payload(exc)
+
+            project_lock = ProjectMutationLock(lock_path)
+            try:
+                acquired = await asyncio.to_thread(project_lock.try_acquire)
+            except ProjectLockError:
+                return safe_payload(
+                    ToolError("project_lock_error", "project mutation lock unavailable")
+                )
+            if not acquired:
+                return safe_payload(
+                    ToolError("project_busy", "another project mutation is in progress")
+                )
+            try:
+                try:
+                    return safe_payload(await asyncio.to_thread(call))
+                except ToolError as exc:
+                    return safe_payload(exc)
+            finally:
+                project_lock.release()
 
     @mcp.tool(
         name="start_project",
@@ -239,13 +275,9 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
             ),
         ],
     ) -> dict[str, Any]:
-        async with await _project_lock(project_id):
-            try:
-                return safe_payload(
-                    await asyncio.to_thread(controller.submit_plan, project_id, task_list)
-                )
-            except ToolError as exc:
-                return safe_payload(exc)
+        return await call_project_mutation(
+            project_id, lambda: controller.submit_plan(project_id, task_list)
+        )
 
     @mcp.tool(
         name="advance_project",
@@ -266,13 +298,9 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         ] = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
-        async with await _project_lock(project_id):
-            try:
-                return safe_payload(
-                    await asyncio.to_thread(controller.advance_project, project_id, max_steps)
-                )
-            except ToolError as exc:
-                return safe_payload(exc)
+        return await call_project_mutation(
+            project_id, lambda: controller.advance_project(project_id, max_steps)
+        )
 
     @mcp.tool(
         name="end_mission",
@@ -302,15 +330,10 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
             ),
         ] = None,
     ) -> dict[str, Any]:
-        async with await _project_lock(project_id):
-            try:
-                return safe_payload(
-                    await asyncio.to_thread(
-                        controller.end_mission, project_id, deliverable_roots
-                    )
-                )
-            except ToolError as exc:
-                return safe_payload(exc)
+        return await call_project_mutation(
+            project_id,
+            lambda: controller.end_mission(project_id, deliverable_roots),
+        )
 
     @mcp.tool(
         name="decide_attention",
@@ -329,13 +352,9 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
             list[Decision], Field(description="One Decision per open attention item.")
         ],
     ) -> dict[str, Any]:
-        async with await _project_lock(project_id):
-            try:
-                return safe_payload(
-                    await asyncio.to_thread(controller.decide_attention, project_id, decisions)
-                )
-            except ToolError as exc:
-                return safe_payload(exc)
+        return await call_project_mutation(
+            project_id, lambda: controller.decide_attention(project_id, decisions)
+        )
 
     @mcp.tool(
         name="inspect_project",
@@ -365,13 +384,9 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         project_id: Annotated[str, Field(description="Project id.")],
         reason: Annotated[str, Field(description="Why we are aborting.")],
     ) -> dict[str, Any]:
-        async with await _project_lock(project_id):
-            try:
-                return safe_payload(
-                    await asyncio.to_thread(controller.abort_project, project_id, reason)
-                )
-            except ToolError as exc:
-                return safe_payload(exc)
+        return await call_project_mutation(
+            project_id, lambda: controller.abort_project(project_id, reason)
+        )
 
 
 # ---------------------------------------------------------------------------

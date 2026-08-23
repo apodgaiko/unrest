@@ -14,6 +14,9 @@ from typing import Iterable, Sequence
 SURFACE_ROOTS = ("src", "tests", "tools")
 SURFACE_FILES = ("pyproject.toml", "uv.lock")
 REGULAR_GIT_MODES = {"100644", "100755"}
+ACTIVE_RELEASE_MANIFEST = PurePosixPath(
+    "docs/release/lean-core-v0.2.1-manifest.json"
+)
 
 
 def _in_surface(relative: str) -> bool:
@@ -44,6 +47,25 @@ def tracked_regular_paths(repository: Path, revision: str | None = None) -> list
         mode = metadata.split(b" ", 1)[0].decode("ascii")
         relative = raw_path.decode("utf-8")
         if mode in REGULAR_GIT_MODES and _in_surface(relative):
+            paths.add(relative)
+    return sorted(paths, key=lambda value: value.encode("utf-8"))
+
+
+def candidate_regular_paths(repository: Path) -> list[str]:
+    """Return the prospective committed surface, including new candidate files."""
+    paths = set(tracked_regular_paths(repository))
+    output = subprocess.run(
+        ("git", "ls-files", "--others", "--exclude-standard", "-z"),
+        cwd=repository,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    for raw_path in output.split(b"\0"):
+        if not raw_path:
+            continue
+        relative = raw_path.decode("utf-8")
+        path = repository / relative
+        if _in_surface(relative) and path.is_file() and not path.is_symlink():
             paths.add(relative)
     return sorted(paths, key=lambda value: value.encode("utf-8"))
 
@@ -107,7 +129,12 @@ def main() -> int:
 
     repository = args.repository.resolve()
     root = (args.root or repository).resolve()
-    result = inventory(root, tracked_regular_paths(repository, args.revision))
+    paths = (
+        candidate_regular_paths(repository)
+        if args.revision is None
+        else tracked_regular_paths(repository, args.revision)
+    )
+    result = inventory(root, paths)
     if args.check_manifest is not None:
         manifest = json.loads(args.check_manifest.read_text(encoding="utf-8"))
         assert_declaration_matches(declared_binding(manifest), result)

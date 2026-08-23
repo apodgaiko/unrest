@@ -12,7 +12,7 @@ from unrest_harness import __version__
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.2.0"
+EXPECTED_VERSION = "0.2.1"
 
 
 def test_public_release_identity_is_consistent() -> None:
@@ -28,6 +28,12 @@ def test_public_release_identity_is_consistent() -> None:
     assert citation["version"] == EXPECTED_VERSION
     assert __version__ == EXPECTED_VERSION
     assert installed_version("unrest-harness") == EXPECTED_VERSION
+
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "unrest_harness-0.2.1-py3-none-any.whl" in ci
+    assert "unrest_harness-0.2.1.tar.gz" in ci
+    assert "name: unrest-v0.2.1-python313" in ci
+    assert "unrest_harness-0.2.0" not in ci
 
 
 def test_acp_handshakes_derive_the_public_runtime_version() -> None:
