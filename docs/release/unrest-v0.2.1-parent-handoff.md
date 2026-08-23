@@ -1,7 +1,8 @@
 # Parent handoff: Unrest v0.2.1
 
-This file is intentionally pre-tag. Resolve the candidate from the existing
-local branch, and resolve the annotated tag only after the parent creates it:
+Resolve candidate and annotated-release authority symbolically. Literal
+commit, tree, artifact, and current tag-state facts belong to mission-003
+out-of-tree evidence and live Git inspection:
 
 ```sh
 CANDIDATE_REF=refs/heads/codex/v0.2.1-foundation-safety
@@ -10,14 +11,10 @@ CANDIDATE_TREE=$(git rev-parse "$CANDIDATE_REF^{tree}")
 TAG_REF=refs/tags/v0.2.1
 ```
 
-Before tagging, the exact candidate commit/tree and validated wheel/sdist sizes
-and SHA-256 values are recorded only in the out-of-tree
-`mission-002/evidence/candidate-release-receipt.json`. After tagging, the exact
-commit/tree/annotated-tag-object identities and the unchanged archive values
-belong only in the finalized post-tag handoff evidence.
-
-As checked on 2026-08-23, no local or remote `v0.2.1` tag was observed and no
-push or publication was performed. The candidate must descend from
+The exact candidate commit/tree, validated wheel/sdist sizes and SHA-256 values,
+and annotated-tag-object identity are recorded only in the out-of-tree
+`mission-003/evidence/final-candidate-receipt.json` and finalized handoff. The
+candidate must descend from
 `2b17a613b99ef182c9bae18b8171efc17e8fe8d2`.
 
 ## Dirty-main-safe integration
@@ -44,15 +41,22 @@ Do not drop the stash until the three pre-existing change groups are visibly
 restored and any conflicts are resolved. If the initial HEAD or inventory is
 different, stop and reassess; do not reset, clean, or force-update main.
 
-## Parent-owned tag and editable installation
+## Idempotent tag verification or creation and editable installation
 
-After independent validation and successful integration:
+After independent validation, verify an existing symbolic tag or create it only
+when the ref is absent. A mismatched existing tag stops the procedure without
+moving or deleting the ref:
 
 ```sh
-git tag -a v0.2.1 "$CANDIDATE_COMMIT" -m "Unrest v0.2.1"
+if TAG_OBJECT=$(git rev-parse --verify -q "$TAG_REF^{tag}"); then
+  test "$(git rev-parse "$TAG_REF^{commit}")" = "$CANDIDATE_COMMIT"
+  test "$(git rev-parse "$TAG_REF^{tree}")" = "$CANDIDATE_TREE"
+else
+  git tag -a "${TAG_REF#refs/tags/}" "$CANDIDATE_COMMIT" -m "Unrest v0.2.1"
+  TAG_OBJECT=$(git rev-parse "$TAG_REF^{tag}")
+fi
 test "$(git rev-parse "$TAG_REF^{commit}")" = "$CANDIDATE_COMMIT"
 test "$(git rev-parse "$TAG_REF^{tree}")" = "$CANDIDATE_TREE"
-TAG_OBJECT=$(git rev-parse "$TAG_REF^{tag}")
 test "$(git cat-file -t "$TAG_OBJECT")" = tag
 uv tool install --editable --force /Users/aleksandrpodgaiko/Desktop/unrest
 unrest --help

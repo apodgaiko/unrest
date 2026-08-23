@@ -163,6 +163,7 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     # entering any mutating controller path. `inspect_project` is read-only.
     project_locks: dict[str, asyncio.Lock] = {}
     locks_guard = asyncio.Lock()
+    detached_mutations: set[asyncio.Task[dict[str, Any]]] = set()
 
     async def _project_lock(project_id: str) -> asyncio.Lock:
         async with locks_guard:
@@ -176,40 +177,78 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         project_id: str,
         call: Callable[[], Any],
     ) -> dict[str, Any]:
-        async with await _project_lock(project_id):
-            try:
-                lock_path = project_lock_path(controller.store, project_id)
-            except ProjectLockError:
-                return safe_payload(
-                    ToolError("project_lock_error", "project mutation lock unavailable")
-                )
+        project_lock = await _project_lock(project_id)
+        await project_lock.acquire()
+        try:
+            lock_path = project_lock_path(controller.store, project_id)
+        except ProjectLockError:
+            project_lock.release()
+            return safe_payload(
+                ToolError("project_lock_error", "project mutation lock unavailable")
+            )
+        except BaseException:
+            project_lock.release()
+            raise
 
+        def invoke() -> Any:
             # Preserve the pre-lock behavior for invalid or nonexistent project
             # identifiers: the controller remains the compatibility oracle.
             if lock_path is None:
                 try:
-                    return safe_payload(await asyncio.to_thread(call))
+                    return call()
                 except ToolError as exc:
-                    return safe_payload(exc)
+                    return exc
 
-            project_lock = ProjectMutationLock(lock_path)
+            mutation_lock = ProjectMutationLock(lock_path)
             try:
-                acquired = await asyncio.to_thread(project_lock.try_acquire)
+                acquired = mutation_lock.try_acquire()
             except ProjectLockError:
-                return safe_payload(
-                    ToolError("project_lock_error", "project mutation lock unavailable")
+                return ToolError(
+                    "project_lock_error", "project mutation lock unavailable"
                 )
             if not acquired:
-                return safe_payload(
-                    ToolError("project_busy", "another project mutation is in progress")
+                return ToolError(
+                    "project_busy", "another project mutation is in progress"
                 )
             try:
                 try:
-                    return safe_payload(await asyncio.to_thread(call))
+                    return call()
                 except ToolError as exc:
-                    return safe_payload(exc)
+                    return exc
             finally:
+                mutation_lock.release()
+
+        async def run_mutation() -> dict[str, Any]:
+            try:
+                return safe_payload(await asyncio.to_thread(invoke))
+            finally:
+                # The task, not its caller, owns the same-process lease once the
+                # worker starts. A cancelled caller therefore cannot admit a
+                # second same-server mutation before the thread has finished.
                 project_lock.release()
+
+        mutation_task = asyncio.create_task(
+            run_mutation(), name="unrest-project-mutation"
+        )
+        try:
+            return await asyncio.shield(mutation_task)
+        except asyncio.CancelledError:
+            # asyncio only keeps weak task references. Retain detached mutations
+            # until their worker completes, then observe the result exactly once.
+            detached_mutations.add(mutation_task)
+
+            def observe_detached(completed: asyncio.Task[dict[str, Any]]) -> None:
+                detached_mutations.discard(completed)
+                try:
+                    completed.result()
+                except asyncio.CancelledError:
+                    logger.error("Detached project mutation did not complete")
+                except Exception:  # noqa: BLE001
+                    # Exception text can contain provider or project data.
+                    logger.error("Detached project mutation failed")
+
+            mutation_task.add_done_callback(observe_detached)
+            raise
 
     @mcp.tool(
         name="start_project",

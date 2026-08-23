@@ -130,7 +130,8 @@ def test_v021_records_bound_the_narrow_delta_without_promoting_fm010() -> None:
     assert manifest["version"] == "0.2.1"
     assert manifest["base"]["fm000_commit"] == FM000
     assert manifest["scope"]["implemented"] == [
-        "cross-process per-project mutation exclusion"
+        "cross-process per-project mutation exclusion",
+        "cancellation-safe mutation lock lifetime",
     ]
     assert manifest["scope"]["fm000_status"] == "proposed groundwork only"
     for text in (release, rollback, forensics):
@@ -151,15 +152,31 @@ def test_v021_records_bound_the_narrow_delta_without_promoting_fm010() -> None:
     assert "106 and 214 are top-level attempt-report" in normalized_forensics
     assert "both work and validation reports" in normalized_forensics
     assert "neither number is a validator-only count" in normalized_forensics
+    assert "56 | 50" in forensics
+    assert "14 | 24" in forensics
+    assert "111 | 103" in forensics
+    assert "validator-only populations are 50, 24, and 103" in normalized_forensics
+    assert "work populations are 56, 14, and 111" in normalized_forensics
+    assert (
+        "no duplicate task IDs, missing node IDs, unmatched IDs"
+        in normalized_forensics
+    )
+    assert "type other than `work` or `validate`" in normalized_forensics
     assert "no canonical handoff or commit" in forensics
 
 
 def test_final_carriers_reject_unfinished_identity_and_verification_states() -> None:
     forbidden = (
         "<fill-after-verification>",
+        "fill-after",
         "pending-freeze-verification",
         '"status": "pending"',
         "candidate commit and archive checks remain owned",
+        "not tagged",
+        "already tagged",
+        "tag is absent",
+        "tag is present",
+        "no local or remote `v0.2.1` tag",
     )
     for carrier in FINAL_CARRIERS:
         text = carrier.read_text(encoding="utf-8").lower()
@@ -174,8 +191,15 @@ def test_parent_handoff_has_symbolic_authority_and_exact_external_plan_targets()
     assert "TAG_REF=refs/tags/v0.2.1" in handoff
     assert 'CANDIDATE_COMMIT=$(git rev-parse "$CANDIDATE_REF^{commit}")' in handoff
     assert 'CANDIDATE_TREE=$(git rev-parse "$CANDIDATE_REF^{tree}")' in handoff
-    assert "mission-002/evidence/candidate-release-receipt.json" in handoff
-    assert "finalized post-tag handoff evidence" in handoff
+    assert "mission-003/evidence/final-candidate-receipt.json" in handoff
+    assert "mission-003" in handoff
+    assert 'if TAG_OBJECT=$(git rev-parse --verify -q "$TAG_REF^{tag}")' in handoff
+    assert (
+        'git tag -a "${TAG_REF#refs/tags/}" "$CANDIDATE_COMMIT" '
+        '-m "Unrest v0.2.1"'
+    ) in handoff
+    assert "git tag -f" not in handoff
+    assert "git tag -d" not in handoff
     assert "git merge --ff-only" in handoff
     assert "git reset" not in handoff
     assert "git clean" not in handoff

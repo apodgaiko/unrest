@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import gc
 import io
 import json
+import logging
 import multiprocessing
 import os
 import threading
+import weakref
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from time import monotonic
@@ -18,7 +21,13 @@ import pytest
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController, ToolError
 from unrest_harness.dispatcher import MockDispatcher, MockTerminalReviewer
-from unrest_harness.models import MissionPlanning, TerminalReviewHandoff, WorkHandoff
+from unrest_harness.models import (
+    MissionPlanning,
+    Task,
+    TaskList,
+    TerminalReviewHandoff,
+    WorkHandoff,
+)
 from unrest_harness.project_lock import (
     ProjectMutationLock,
     _prepare_windows_lockfile,
@@ -113,10 +122,44 @@ class _CountingDispatcher:
 
     def dispatch(self, request: Any) -> WorkHandoff:
         self.calls += 1
-        return WorkHandoff(node_id=request.task.id, done=True)
+        return WorkHandoff(
+            node_id=request.task.id,
+            attempt_id=request.spawn_ts,
+            done=True,
+            report="",
+        )
 
     def dispatch_batch(self, requests: list[Any]) -> list[WorkHandoff]:
         return [self.dispatch(request) for request in requests]
+
+
+class _BlockingDispatcher(_CountingDispatcher):
+    def __init__(self, entered: threading.Event, release: threading.Event) -> None:
+        super().__init__()
+        self.entered = entered
+        self.release = release
+
+    def dispatch(self, request: Any) -> WorkHandoff:
+        self.calls += 1
+        self.entered.set()
+        if not self.release.wait(2):
+            raise RuntimeError("test dispatcher release timed out")
+        return WorkHandoff(
+            node_id=request.task.id,
+            attempt_id=request.spawn_ts,
+            done=True,
+            report="completed",
+        )
+
+
+class _CountingProjectController(ProjectController):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.advance_entries = 0
+
+    def advance_project(self, project_id: str, max_steps: int | None = None) -> Any:
+        self.advance_entries += 1
+        return super().advance_project(project_id, max_steps)
 
 
 class _RecordingController:
@@ -128,6 +171,7 @@ class _RecordingController:
         release_event: Any | None = None,
         block_first: bool = False,
         exception_first: bool = False,
+        exception_message: str = "expected controller exception",
     ) -> None:
         self.store = ProjectStore(config)
         self.dispatcher = _CountingDispatcher()
@@ -136,6 +180,7 @@ class _RecordingController:
         self.release_event = release_event
         self.block_first = block_first
         self.exception_first = exception_first
+        self.exception_message = exception_message
 
     def _entry(self, method: str, project_id: str) -> None:
         self.entered.append((method, project_id))
@@ -146,7 +191,7 @@ class _RecordingController:
             assert self.release_event is not None
             self.release_event.wait()
         if self.exception_first and first:
-            raise RuntimeError("expected controller exception")
+            raise RuntimeError(self.exception_message)
         raise ToolError("controller_entered", method)
 
     def submit_plan(self, project_id: str, task_list: Any) -> None:
@@ -242,6 +287,32 @@ def _single_call_process(
             "dispatch_count": controller.dispatcher.calls,
         }
     )
+
+
+def _active_mutation_task() -> asyncio.Task[Any]:
+    tasks = [
+        task
+        for task in asyncio.all_tasks()
+        if task.get_name() == "unrest-project-mutation"
+    ]
+    assert len(tasks) == 1
+    return tasks[0]
+
+
+async def _wait_until(predicate: Any, *, timeout: float = 2.0) -> None:
+    deadline = monotonic() + timeout
+    while not predicate():
+        if monotonic() >= deadline:
+            raise AssertionError("condition did not become true before timeout")
+        await asyncio.sleep(0.01)
+
+
+async def _wait_for_reference_clear(reference: Any) -> None:
+    def cleared() -> bool:
+        gc.collect()
+        return reference() is None
+
+    await _wait_until(cleared)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="native contention lane runs on POSIX")
@@ -366,6 +437,279 @@ async def test_same_server_calls_queue_and_release_after_exception(tmp_path: Pat
 
 
 @pytest.mark.asyncio
+async def test_cancelled_waiter_retains_mutation_and_lock_until_normal_completion(
+    tmp_path: Path,
+) -> None:
+    harness_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = _config(harness_home)
+    _seed_project(config, workspace, "project-a")
+    entered = threading.Event()
+    release = threading.Event()
+    first_controller = _RecordingController(
+        config,
+        entered_event=entered,
+        release_event=release,
+        block_first=True,
+    )
+    second_controller = _RecordingController(config)
+    first_server = create_orchestrator_server(
+        config, first_controller  # type: ignore[arg-type]
+    )
+    second_server = create_orchestrator_server(
+        config, second_controller  # type: ignore[arg-type]
+    )
+
+    waiter = asyncio.create_task(
+        first_server.call_tool(
+            "advance_project", _arguments("advance_project", "project-a")
+        )
+    )
+    assert await asyncio.to_thread(entered.wait, 1)
+    mutation_task = _active_mutation_task()
+    mutation_reference = weakref.ref(mutation_task)
+    del mutation_task
+
+    waiter.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+    gc.collect()
+    assert mutation_reference() is not None
+    assert not release.is_set()
+
+    blocked = _payload(
+        await second_server.call_tool(
+            "advance_project", _arguments("advance_project", "project-a")
+        )
+    )
+    assert blocked["error"] == "project_busy"
+    assert second_controller.entered == []
+
+    release.set()
+    await _wait_for_reference_clear(mutation_reference)
+    recovered = _payload(
+        await second_server.call_tool(
+            "advance_project", _arguments("advance_project", "project-a")
+        )
+    )
+    assert recovered["error"] == "controller_entered"
+    assert second_controller.entered == [("advance_project", "project-a")]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_detached_exception_is_consumed_safely_and_releases_lock(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    harness_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = _config(harness_home)
+    _seed_project(config, workspace, "project-a")
+    entered = threading.Event()
+    release = threading.Event()
+    first_controller = _RecordingController(
+        config,
+        entered_event=entered,
+        release_event=release,
+        block_first=True,
+        exception_first=True,
+        exception_message=SENTINEL,
+    )
+    second_controller = _RecordingController(config)
+    first_server = create_orchestrator_server(
+        config, first_controller  # type: ignore[arg-type]
+    )
+    second_server = create_orchestrator_server(
+        config, second_controller  # type: ignore[arg-type]
+    )
+    loop = asyncio.get_running_loop()
+    previous_handler = loop.get_exception_handler()
+    unhandled: list[dict[str, Any]] = []
+    loop.set_exception_handler(lambda _loop, context: unhandled.append(context))
+    caplog.set_level(logging.ERROR, logger="unrest_harness.server")
+
+    try:
+        waiter = asyncio.create_task(
+            first_server.call_tool(
+                "advance_project", _arguments("advance_project", "project-a")
+            )
+        )
+        assert await asyncio.to_thread(entered.wait, 1)
+        mutation_task = _active_mutation_task()
+        mutation_reference = weakref.ref(mutation_task)
+        del mutation_task
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+
+        blocked = _payload(
+            await second_server.call_tool(
+                "advance_project", _arguments("advance_project", "project-a")
+            )
+        )
+        assert blocked["error"] == "project_busy"
+        release.set()
+        await _wait_for_reference_clear(mutation_reference)
+    finally:
+        release.set()
+        loop.set_exception_handler(previous_handler)
+
+    detached_logs = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "unrest_harness.server"
+        and record.getMessage().startswith("Detached project mutation")
+    ]
+    assert detached_logs == ["Detached project mutation failed"]
+    assert SENTINEL not in caplog.text
+    assert unhandled == []
+    recovered = _payload(
+        await second_server.call_tool(
+            "advance_project", _arguments("advance_project", "project-a")
+        )
+    )
+    assert recovered["error"] == "controller_entered"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_public_advance_keeps_real_dispatch_exclusive_and_recovers(
+    tmp_path: Path,
+) -> None:
+    started = monotonic()
+    harness_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = _config(harness_home)
+    _seed_project(config, workspace, "project-a")
+    entered = threading.Event()
+    release = threading.Event()
+    first_dispatcher = _BlockingDispatcher(entered, release)
+    second_dispatcher = _CountingDispatcher()
+    reviewer = MockTerminalReviewer(TerminalReviewHandoff(done=True, report=""))
+    first_controller = _CountingProjectController(
+        config, first_dispatcher, reviewer
+    )
+    contract_dir = first_controller.store.ensure_contract_dir(
+        "project-a", "mission-001"
+    )
+    (contract_dir / "VAL-TIMEOUT.md").write_text(
+        "# VAL-TIMEOUT\n\nTimeout overlap remains exclusive.\n",
+        encoding="utf-8",
+    )
+    first_controller.submit_plan(
+        "project-a",
+        TaskList(
+            tasks=[
+                Task(
+                    id="work-one",
+                    type="work",
+                    body="Run one controlled dispatch.",
+                    targets=["VAL-TIMEOUT"],
+                    skill="test-worker",
+                )
+            ]
+        ),
+    )
+    second_controller = _CountingProjectController(
+        config, second_dispatcher, reviewer
+    )
+    first_server = create_orchestrator_server(config, first_controller)
+    second_server = create_orchestrator_server(config, second_controller)
+    store = ProjectStore(config)
+    state_path = store.unrest_runtime_dir("project-a") / "state.json"
+    task_state_path = (
+        store.unrest_runtime_dir("project-a")
+        / "missions"
+        / "mission-001"
+        / "task-state.json"
+    )
+    before_state = state_path.read_bytes()
+    before_task_state = task_state_path.read_bytes()
+    before_attempts = (
+        sorted(store.attempts_runtime_dir("project-a", "mission-001").glob("*")),
+        sorted(store.attempts_dir("project-a", "mission-001").glob("*")),
+    )
+
+    waiter = asyncio.create_task(
+        first_server.call_tool(
+            "advance_project", _arguments("advance_project", "project-a")
+        )
+    )
+    try:
+        assert await asyncio.to_thread(entered.wait, 1)
+        during_state = state_path.read_bytes()
+        during_task_state = task_state_path.read_bytes()
+        during_attempts = (
+            sorted(store.attempts_runtime_dir("project-a", "mission-001").glob("*")),
+            sorted(store.attempts_dir("project-a", "mission-001").glob("*")),
+        )
+        assert during_state == before_state
+        assert during_task_state != before_task_state
+        assert during_attempts == before_attempts
+        assert store.load_task_state("project-a", "mission-001").status_of(
+            "work-one"
+        ) == "running"
+
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+        competitor_started = monotonic()
+        competitor = _payload(
+            await second_server.call_tool(
+                "advance_project", _arguments("advance_project", "project-a")
+            )
+        )
+        assert monotonic() - competitor_started < 1.0
+        assert competitor["error"] == "project_busy"
+        assert first_controller.advance_entries == 1
+        assert second_controller.advance_entries == 0
+        assert first_dispatcher.calls == 1
+        assert second_dispatcher.calls == 0
+        assert state_path.read_bytes() == during_state
+        assert task_state_path.read_bytes() == during_task_state
+        assert (
+            sorted(store.attempts_runtime_dir("project-a", "mission-001").glob("*")),
+            sorted(store.attempts_dir("project-a", "mission-001").glob("*")),
+        ) == during_attempts
+
+        release.set()
+        await _wait_until(
+            lambda: store.load_task_state("project-a", "mission-001").status_of(
+                "work-one"
+            )
+            == "cleared"
+        )
+        runtime_attempts = sorted(
+            store.attempts_runtime_dir("project-a", "mission-001").glob("*.json")
+        )
+        report_attempts = sorted(
+            store.attempts_dir("project-a", "mission-001").glob("*.md")
+        )
+        assert len(runtime_attempts) == len(report_attempts) == 1
+        persisted = json.loads(runtime_attempts[0].read_text(encoding="utf-8"))
+        assert persisted["node_id"] == "work-one"
+        assert persisted["done"] is True
+        assert persisted["report"] == "completed"
+        assert "missing" not in report_attempts[0].read_text(encoding="utf-8").lower()
+        assert state_path.read_bytes() == before_state
+
+        recovered = _payload(
+            await second_server.call_tool(
+                "abort_project", _arguments("abort_project", "project-a")
+            )
+        )
+        assert recovered["state"]["state"] == "aborted"
+        assert second_controller.advance_entries == 0
+        assert first_dispatcher.calls == 1
+        assert second_dispatcher.calls == 0
+    finally:
+        release.set()
+    assert monotonic() - started < 10.0
+
+
+@pytest.mark.asyncio
 async def test_uncontended_success_lock_error_and_missing_project_compatibility(
     tmp_path: Path,
 ) -> None:
@@ -376,7 +720,9 @@ async def test_uncontended_success_lock_error_and_missing_project_compatibility(
     _seed_project(config, workspace, "success")
     controller = ProjectController(
         config,
-        MockDispatcher(lambda request: WorkHandoff(node_id=request.task.id, done=True)),
+        MockDispatcher(
+            lambda request: WorkHandoff(node_id=request.task.id, done=True, report="")
+        ),
         MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
     )
     server = create_orchestrator_server(config, controller)

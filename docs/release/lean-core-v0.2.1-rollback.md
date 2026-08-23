@@ -1,12 +1,13 @@
 # Unrest v0.2.1 rollback
 
 This candidate preserves FM-000 as proposed groundwork and implements only
-cross-process project mutation exclusion. FM-010 and the custody, telemetry,
-capability-policy, and general-thinker surfaces are untrusted research and are
-not implemented, so rollback requires no data or schema migration.
+cross-process project mutation exclusion with cancellation-safe mutation-lock
+lifetime. FM-010 and the custody, telemetry, capability-policy, and
+general-thinker surfaces are untrusted research and are not implemented, so
+rollback requires no data or schema migration.
 
 The candidate binding is
-`0f63515120030781dd4258de2747b6f61717100a966e22feccf3f6fc57d50600` over
+`469d6f831b32c4237e88c9d35f610c838b1abf8f505b1c3dee892c2cafadb656` over
 133 files.
 Before rollback, preserve the failing candidate commit, command output, and
 project directory; do not rewrite historical v0.2 release records.

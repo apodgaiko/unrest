@@ -7,25 +7,30 @@ attempt reports.
 ## Method
 
 For each exact project root, task definitions are the entries in
-`.unrest-runtime/missions/mission-001/tasks.json`; attempt reports are all
-top-level `.unrest/missions/mission-001/attempts/*.md` files, including work and
-validation attempts; decisions are top-level `.unrest/decisions/*` files. Wall
-bounds run from `project.json.created_at` to the filesystem mtime of
-`state.json`. These bounds describe elapsed project lifetime, not active CPU or
-provider time.
+`.unrest-runtime/missions/mission-001/tasks.json`. Attempt reports are direct
+regular `.unrest/missions/mission-001/attempts/*.md` files. Each report's
+front-matter `node_id` is joined to exactly one task `id` and its `type` in the
+runtime task graph; retries remain separate attempts. All three joins are
+complete: there are no duplicate task IDs, missing node IDs, unmatched IDs, or
+joins to a type other than `work` or `validate`. Decisions are top-level
+`.unrest/decisions/*` files. Wall bounds run from `project.json.created_at` to
+the filesystem mtime of `state.json`; they describe elapsed project lifetime,
+not active CPU or provider time.
 
-| Mission evidence root | Outcome | Task definitions | Attempt reports | Decisions | Wall bound |
-| --- | --- | ---: | ---: | ---: | ---: |
-| `/Users/aleksandrpodgaiko/.unrest/projects/20260818T155446Z-fm-000-foundation-authority-and-compatibility-specification-miss` | done; committed proposal groundwork | 206 | 106 | 51 | 39.87 h |
-| `/Users/aleksandrpodgaiko/.unrest/projects/20260818T155514Z-run-unrest-plugin-unrest-personal-as-one-complete-separate-missi` | aborted FM-010 research | 61 | 38 | 24 | 10.47 h |
-| `/Users/aleksandrpodgaiko/.unrest/projects/20260819T100227Z-r2-prerequisite-unrest-hardening-mission-after-preserving-and-ab` | aborted custody/hardening detour | 468 | 214 | 66 | 99.87 h |
+| Mission evidence root | Outcome | Task definitions | All attempts | Work attempts | Validator attempts | Decisions | Wall bound |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/Users/aleksandrpodgaiko/.unrest/projects/20260818T155446Z-fm-000-foundation-authority-and-compatibility-specification-miss` | done; committed proposal groundwork | 206 | 106 | 56 | 50 | 51 | 39.87 h |
+| `/Users/aleksandrpodgaiko/.unrest/projects/20260818T155514Z-run-unrest-plugin-unrest-personal-as-one-complete-separate-missi` | aborted FM-010 research | 61 | 38 | 14 | 24 | 24 | 10.47 h |
+| `/Users/aleksandrpodgaiko/.unrest/projects/20260819T100227Z-r2-prerequisite-unrest-hardening-mission-after-preserving-and-ab` | aborted custody/hardening detour | 468 | 214 | 111 | 103 | 66 | 99.87 h |
 
 In prose: FM-000 used 206 task definitions and 106 attempt reports; original
 FM-010 used 61 task definitions and 38 attempt reports; R2 used 468 task
 definitions and 214 attempt reports. Each attempt-report total includes work and
 validation reports. In particular, 106 and 214 are top-level attempt-report
 totals containing both work and validation reports; neither number is a
-validator-only count.
+validator-only count. The earlier `validator reports` label conflated the total
+population with one task type. The attributable validator-only populations are
+50, 24, and 103 respectively; their work populations are 56, 14, and 111.
 
 ## Findings
 
@@ -44,8 +49,9 @@ v0.3 measurement behavior is not implemented here.
 The operationally useful finding was narrower. After an MCP client timeout, a
 fresh Unrest server could overlap a still-running server against the same
 project. That duplicate-server incident admitted overlapping ACP dispatch and
-made a live attempt appear missing to the newer controller. v0.2.1 addresses
-that process-local locking gap only.
+made a live attempt appear missing to the newer controller. v0.2.1 keeps the
+per-project OS lock through the controller worker's true lifetime even when the
+public await is cancelled; it does not add a custody or reconnect protocol.
 
 The attempted recovery became a runaway repair topology: 468 task definitions,
 214 work-and-validation attempt reports, 66 decisions, nearly 100 hours of wall

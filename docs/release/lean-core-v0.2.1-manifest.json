@@ -2,19 +2,19 @@
   "schema_version": 1,
   "release": "unrest-v0.2.1",
   "version": "0.2.1",
-  "status": "local-candidate-ready-for-tag-gate",
+  "status": "local release record; exact candidate and tag state delegated to mission evidence",
   "base": {
     "v0.2_tag": "v0.2.0",
     "fm000_commit": "2b17a613b99ef182c9bae18b8171efc17e8fe8d2",
     "candidate_ref": "refs/heads/codex/v0.2.1-foundation-safety",
     "release_tag_ref": "refs/tags/v0.2.1",
-    "exact_identity_authority": "mission-002/evidence/candidate-release-receipt.json before tagging; finalized post-tag handoff evidence after tagging"
+    "exact_identity_authority": "mission-003 out-of-tree candidate receipt and finalized handoff evidence"
   },
   "source": {
     "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
     "final_product_package_test": {
       "files": 133,
-      "sha256": "0f63515120030781dd4258de2747b6f61717100a966e22feccf3f6fc57d50600",
+      "sha256": "469d6f831b32c4237e88c9d35f610c838b1abf8f505b1c3dee892c2cafadb656",
       "paths": [
         "pyproject.toml",
         "uv.lock",
@@ -30,7 +30,8 @@
   },
   "scope": {
     "implemented": [
-      "cross-process per-project mutation exclusion"
+      "cross-process per-project mutation exclusion",
+      "cancellation-safe mutation lock lifetime"
     ],
     "fm000_status": "proposed groundwork only",
     "not_implemented": [
@@ -48,9 +49,9 @@
     "ci_bundle": "unrest-v0.2.1-python313"
   },
   "verification": {
-    "status": "candidate-gates-complete",
-    "predecessor_checkpoint": "verified from the retained mission-001 receipt; no source-suite rerun",
-    "final_identity_location": "out-of-tree mission evidence",
-    "full_source_suite_budget": "consumed by the sole Python 3.13 invocation on the predecessor frozen candidate"
+    "status": "exact results and current ref state are recorded out of tree",
+    "candidate_receipt": "mission-003/evidence/final-candidate-receipt.json",
+    "final_identity_location": "mission-003 out-of-tree evidence",
+    "tag_state_authority": "live Git inspection plus mission-003 out-of-tree evidence"
   }
 }
