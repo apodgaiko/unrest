@@ -18,6 +18,13 @@ ADR_PATHS = tuple(
 CONTRACT_ROOT = "docs/v03/contracts"
 FIXTURE_ROOT = "tests/fixtures/v03_decisions"
 RELEASE_ROOT = ROOT / "docs/release"
+FINAL_CARRIERS = (
+    RELEASE_ROOT / "lean-core-v0.2.1-manifest.json",
+    RELEASE_ROOT / "lean-core-v0.2.1.md",
+    RELEASE_ROOT / "lean-core-v0.2.1-rollback.md",
+    RELEASE_ROOT / "unrest-v0.2.1-parent-handoff.md",
+    RELEASE_ROOT / "unrest-v0.2.1-forensics.md",
+)
 
 
 def _git(*args: str) -> bytes:
@@ -140,15 +147,35 @@ def test_v021_records_bound_the_narrow_delta_without_promoting_fm010() -> None:
     assert "38 attempt reports" in forensics
     assert "468 task definitions" in forensics
     assert "214 attempt reports" in forensics
+    normalized_forensics = " ".join(forensics.split())
+    assert "106 and 214 are top-level attempt-report" in normalized_forensics
+    assert "both work and validation reports" in normalized_forensics
+    assert "neither number is a validator-only count" in normalized_forensics
     assert "no canonical handoff or commit" in forensics
 
 
-def test_parent_handoff_has_exact_external_plan_targets_and_safe_placeholders() -> None:
+def test_final_carriers_reject_unfinished_identity_and_verification_states() -> None:
+    forbidden = (
+        "<fill-after-verification>",
+        "pending-freeze-verification",
+        '"status": "pending"',
+        "candidate commit and archive checks remain owned",
+    )
+    for carrier in FINAL_CARRIERS:
+        text = carrier.read_text(encoding="utf-8").lower()
+        assert not any(value in text for value in forbidden), carrier.name
+
+
+def test_parent_handoff_has_symbolic_authority_and_exact_external_plan_targets() -> None:
     handoff = (RELEASE_ROOT / "unrest-v0.2.1-parent-handoff.md").read_text(
         encoding="utf-8"
     )
-    assert "CANDIDATE_COMMIT=<fill-after-verification>" in handoff
-    assert "CANDIDATE_TREE=<fill-after-verification>" in handoff
+    assert "CANDIDATE_REF=refs/heads/codex/v0.2.1-foundation-safety" in handoff
+    assert "TAG_REF=refs/tags/v0.2.1" in handoff
+    assert 'CANDIDATE_COMMIT=$(git rev-parse "$CANDIDATE_REF^{commit}")' in handoff
+    assert 'CANDIDATE_TREE=$(git rev-parse "$CANDIDATE_REF^{tree}")' in handoff
+    assert "mission-002/evidence/candidate-release-receipt.json" in handoff
+    assert "finalized post-tag handoff evidence" in handoff
     assert "git merge --ff-only" in handoff
     assert "git reset" not in handoff
     assert "git clean" not in handoff

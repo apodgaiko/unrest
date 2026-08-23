@@ -1,13 +1,20 @@
 # Parent handoff: Unrest v0.2.1
 
-This file is intentionally pre-tag. The freeze worker replaces exactly these
-two values after the sole release checkpoint, archive validation, and local
-candidate commit:
+This file is intentionally pre-tag. Resolve the candidate from the existing
+local branch, and resolve the annotated tag only after the parent creates it:
 
-```text
-CANDIDATE_COMMIT=<fill-after-verification>
-CANDIDATE_TREE=<fill-after-verification>
+```sh
+CANDIDATE_REF=refs/heads/codex/v0.2.1-foundation-safety
+CANDIDATE_COMMIT=$(git rev-parse "$CANDIDATE_REF^{commit}")
+CANDIDATE_TREE=$(git rev-parse "$CANDIDATE_REF^{tree}")
+TAG_REF=refs/tags/v0.2.1
 ```
+
+Before tagging, the exact candidate commit/tree and validated wheel/sdist sizes
+and SHA-256 values are recorded only in the out-of-tree
+`mission-002/evidence/candidate-release-receipt.json`. After tagging, the exact
+commit/tree/annotated-tag-object identities and the unchanged archive values
+belong only in the finalized post-tag handoff evidence.
 
 As checked on 2026-08-23, no local or remote `v0.2.1` tag was observed and no
 push or publication was performed. The candidate must descend from
@@ -27,8 +34,8 @@ test "$(git rev-parse HEAD)" = "96d5c0f0b240bd3373809546d7aecc1e407f837b"
 git status --short
 git stash push --include-untracked -m pre-v0.2.1-main-preservation
 test -z "$(git status --porcelain)"
-git merge --ff-only CANDIDATE_COMMIT
-test "$(git rev-parse HEAD^{tree})" = "CANDIDATE_TREE"
+git merge --ff-only "$CANDIDATE_COMMIT"
+test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
 git stash apply stash@{0}
 git status --short
 ```
@@ -42,9 +49,11 @@ different, stop and reassess; do not reset, clean, or force-update main.
 After independent validation and successful integration:
 
 ```sh
-git tag -a v0.2.1 CANDIDATE_COMMIT -m "Unrest v0.2.1"
-test "$(git rev-parse v0.2.1^{commit})" = "CANDIDATE_COMMIT"
-test "$(git rev-parse v0.2.1^{tree})" = "CANDIDATE_TREE"
+git tag -a v0.2.1 "$CANDIDATE_COMMIT" -m "Unrest v0.2.1"
+test "$(git rev-parse "$TAG_REF^{commit}")" = "$CANDIDATE_COMMIT"
+test "$(git rev-parse "$TAG_REF^{tree}")" = "$CANDIDATE_TREE"
+TAG_OBJECT=$(git rev-parse "$TAG_REF^{tag}")
+test "$(git cat-file -t "$TAG_OBJECT")" = tag
 uv tool install --editable --force /Users/aleksandrpodgaiko/Desktop/unrest
 unrest --help
 unrest-server --help

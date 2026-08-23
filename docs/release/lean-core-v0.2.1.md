@@ -1,7 +1,9 @@
 # Unrest v0.2.1 local candidate
 
-Status: candidate; not tagged or published. Candidate commit and archive checks
-remain owned by the freeze/verification step.
+Status: locally verified candidate; not tagged or published. The candidate is
+resolved through `refs/heads/codex/v0.2.1-foundation-safety`; the future
+annotated release is resolved through `refs/tags/v0.2.1` only after the parent
+creates it.
 
 ## What changed
 
@@ -21,7 +23,7 @@ and general-thinker runtime are not implemented by v0.2.1.
 
 - Version: `0.2.1` in package metadata, runtime, lockfile, citation, tests, CI,
   and expected archive names.
-- Live product/package/test binding: `efc1aeae63456cfa92d9d10c141e3da27cbe1747b8e5a703afe372d6c728bfd4` over 133
+- Live product/package/test binding: `0f63515120030781dd4258de2747b6f61717100a966e22feccf3f6fc57d50600` over 133
   prospective committed regular files selected from `pyproject.toml`, `uv.lock`,
   and `src/**`, `tests/**`, and `tools/**`.
 - Live manifest: [`lean-core-v0.2.1-manifest.json`](lean-core-v0.2.1-manifest.json).
@@ -31,5 +33,9 @@ and general-thinker runtime are not implemented by v0.2.1.
 
 The [forensic report](unrest-v0.2.1-forensics.md) records why this release is
 narrow. The [rollback record](lean-core-v0.2.1-rollback.md) and
-[parent handoff](unrest-v0.2.1-parent-handoff.md) remain pre-publication
-operator records.
+[parent handoff](unrest-v0.2.1-parent-handoff.md) are pre-publication operator
+records. Exact candidate commit/tree and built wheel/sdist sizes and hashes live
+in the out-of-tree `mission-002/evidence/candidate-release-receipt.json`.
+The exact annotated-tag-object identity belongs to the finalized post-tag
+handoff evidence. Keeping those values out of tracked carriers avoids making a
+file claim an identity that its own edit changes.

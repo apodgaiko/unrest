@@ -23,7 +23,9 @@ provider time.
 In prose: FM-000 used 206 task definitions and 106 attempt reports; original
 FM-010 used 61 task definitions and 38 attempt reports; R2 used 468 task
 definitions and 214 attempt reports. Each attempt-report total includes work and
-validation reports.
+validation reports. In particular, 106 and 214 are top-level attempt-report
+totals containing both work and validation reports; neither number is a
+validator-only count.
 
 ## Findings
 

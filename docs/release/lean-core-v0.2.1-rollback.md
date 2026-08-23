@@ -6,7 +6,7 @@ capability-policy, and general-thinker surfaces are untrusted research and are
 not implemented, so rollback requires no data or schema migration.
 
 The candidate binding is
-`efc1aeae63456cfa92d9d10c141e3da27cbe1747b8e5a703afe372d6c728bfd4` over
+`0f63515120030781dd4258de2747b6f61717100a966e22feccf3f6fc57d50600` over
 133 files.
 Before rollback, preserve the failing candidate commit, command output, and
 project directory; do not rewrite historical v0.2 release records.

@@ -2,18 +2,19 @@
   "schema_version": 1,
   "release": "unrest-v0.2.1",
   "version": "0.2.1",
-  "status": "local-candidate-pending-freeze-verification",
+  "status": "local-candidate-ready-for-tag-gate",
   "base": {
     "v0.2_tag": "v0.2.0",
     "fm000_commit": "2b17a613b99ef182c9bae18b8171efc17e8fe8d2",
-    "candidate_commit": "<fill-after-verification>",
-    "candidate_tree": "<fill-after-verification>"
+    "candidate_ref": "refs/heads/codex/v0.2.1-foundation-safety",
+    "release_tag_ref": "refs/tags/v0.2.1",
+    "exact_identity_authority": "mission-002/evidence/candidate-release-receipt.json before tagging; finalized post-tag handoff evidence after tagging"
   },
   "source": {
     "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
     "final_product_package_test": {
       "files": 133,
-      "sha256": "efc1aeae63456cfa92d9d10c141e3da27cbe1747b8e5a703afe372d6c728bfd4",
+      "sha256": "0f63515120030781dd4258de2747b6f61717100a966e22feccf3f6fc57d50600",
       "paths": [
         "pyproject.toml",
         "uv.lock",
@@ -47,8 +48,9 @@
     "ci_bundle": "unrest-v0.2.1-python313"
   },
   "verification": {
-    "owner": "work-freeze-verify-commit",
-    "status": "pending",
-    "full_source_suite_budget": "one Python 3.13 invocation on the frozen candidate"
+    "status": "candidate-gates-complete",
+    "predecessor_checkpoint": "verified from the retained mission-001 receipt; no source-suite rerun",
+    "final_identity_location": "out-of-tree mission evidence",
+    "full_source_suite_budget": "consumed by the sole Python 3.13 invocation on the predecessor frozen candidate"
   }
 }
