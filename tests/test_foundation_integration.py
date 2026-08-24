@@ -8,11 +8,14 @@ import subprocess
 import threading
 import time
 
+import pytest
+
 from unrest_harness import api
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController
 from unrest_harness.dispatcher import MockDispatcher, MockTerminalReviewer
 from unrest_harness.foundation_tools import FoundationTools
+from unrest_harness.foundation_tools import FoundationToolError
 from unrest_harness.models import Task, TaskList, TerminalReviewHandoff, WorkHandoff
 from unrest_harness.server import create_orchestrator_server
 
@@ -100,6 +103,49 @@ async def test_catalog_names_equal_mcp_and_library(harness_home: Path) -> None:
         callable_name = item["library_callable"].rsplit(".", 1)[-1]
         assert callable(getattr(api, callable_name))
         assert inspect.signature(getattr(api, callable_name))
+
+
+def test_library_schema_validation_precedes_effect_and_blocks_bad_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeTools:
+        calls = 0
+        invalid_output = False
+
+        def inspect_run(self, run_id: str) -> dict[str, object]:
+            self.calls += 1
+            result: dict[str, object] = {
+                "run_id": run_id,
+                "operation": "start_project",
+                "state": "queued",
+                "resource_key": "workspace:/tmp/example",
+                "idempotency_key": "library-schema",
+                "project_id": None,
+                "created_at": "2026-08-24T00:00:00Z",
+                "updated_at": "2026-08-24T00:00:00Z",
+                "result": None,
+                "error": None,
+                "receipt_id": None,
+            }
+            if self.invalid_output:
+                result["private_detail"] = "must not escape"
+            return result
+
+    tools = FakeTools()
+    monkeypatch.setattr(api, "_tools", lambda: tools)
+
+    with pytest.raises(FoundationToolError) as invalid:
+        api.inspect_run("")
+    assert invalid.value.code == "invalid_argument"
+    assert tools.calls == 0
+
+    tools.invalid_output = True
+    with pytest.raises(FoundationToolError) as internal:
+        api.inspect_run("run:1")
+    assert internal.value.as_envelope() == {
+        "error": {"code": "internal_error", "message": "internal error"}
+    }
+    assert tools.calls == 1
 
 
 def test_production_run_executor_routes_start_once_and_attaches(

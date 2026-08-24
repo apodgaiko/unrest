@@ -7,6 +7,7 @@ The function names and signatures are frozen by
 from __future__ import annotations
 
 from collections.abc import Mapping
+import inspect
 from typing import Any
 
 from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer
@@ -14,6 +15,11 @@ from .config import HarnessConfig
 from .controller import ProjectController
 from .foundation_tools import FoundationToolError, FoundationTools, public_error
 from .measurement import MeasurementError, measure_baseline as _measure_baseline
+from .public_schema import (
+    PublicSchemaValidationError,
+    validate_public_request,
+    validate_public_result,
+)
 
 
 def _tools() -> FoundationTools:
@@ -25,17 +31,47 @@ def _tools() -> FoundationTools:
 
 
 def _call(name: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    tools = _tools()
+    method = getattr(tools, name)
     try:
-        return getattr(_tools(), name)(*args, **kwargs)
+        request = inspect.signature(method).bind(*args, **kwargs)
+        request.apply_defaults()
+        validate_public_request(name, dict(request.arguments))
+    except (PublicSchemaValidationError, TypeError, ValueError):
+        raise FoundationToolError("invalid_argument", "invalid argument") from None
+    except RuntimeError:
+        raise FoundationToolError("internal_error", "internal error") from None
+    try:
+        result = method(*args, **kwargs)
     except Exception as exc:
         raise public_error(exc) from None
+    try:
+        validate_public_result(name, result)
+    except (PublicSchemaValidationError, RuntimeError):
+        raise FoundationToolError("internal_error", "internal error") from None
+    return result
 
 
 async def _call_async(name: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    tools = _tools()
+    method = getattr(tools, name)
     try:
-        return await getattr(_tools(), name)(*args, **kwargs)
+        request = inspect.signature(method).bind(*args, **kwargs)
+        request.apply_defaults()
+        validate_public_request(name, dict(request.arguments))
+    except (PublicSchemaValidationError, TypeError, ValueError):
+        raise FoundationToolError("invalid_argument", "invalid argument") from None
+    except RuntimeError:
+        raise FoundationToolError("internal_error", "internal error") from None
+    try:
+        result = await method(*args, **kwargs)
     except Exception as exc:
         raise public_error(exc) from None
+    try:
+        validate_public_result(name, result)
+    except (PublicSchemaValidationError, RuntimeError):
+        raise FoundationToolError("internal_error", "internal error") from None
+    return result
 
 
 def submit_run(operation: str, arguments: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
@@ -135,10 +171,26 @@ def measure_baseline(
     destination: str,
     confirm_provider_work: bool,
 ) -> dict[str, Any]:
+    request = {
+        "protocol": protocol,
+        "destination": destination,
+        "confirm_provider_work": confirm_provider_work,
+    }
     try:
-        return _measure_baseline(protocol, destination, confirm_provider_work)
+        validate_public_request("measure-baseline", request)
+    except PublicSchemaValidationError:
+        raise FoundationToolError("invalid_argument", "invalid argument") from None
+    except RuntimeError:
+        raise FoundationToolError("internal_error", "internal error") from None
+    try:
+        result = _measure_baseline(protocol, destination, confirm_provider_work)
     except MeasurementError:
         raise FoundationToolError("invalid_argument", "invalid argument") from None
+    try:
+        validate_public_result("measure-baseline", result)
+    except (PublicSchemaValidationError, RuntimeError):
+        raise FoundationToolError("internal_error", "internal error") from None
+    return result
 
 
 __all__ = [

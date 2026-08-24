@@ -131,7 +131,10 @@ class ConfiguredProvider:
             input_tokens=None,
             output_tokens=None,
             reported_cost_usd=None,
-            cache_status="disabled",
+            # ProviderSessionResult intentionally exposes no cache telemetry.
+            # A fresh process/session is useful isolation, but it is not proof
+            # about provider-side response caching.
+            cache_status="unknown",
             error_code=result.error_code,
         )
 
@@ -404,6 +407,9 @@ class BaselineRunner:
                 continue
             if self.total_reported_cost > GLOBAL_REPORTED_COST_USD:
                 repetitions.append(self._unrun_record(index, case_id, "cost_exhausted"))
+                continue
+            if self.unknown_reported_cost_count > 0:
+                repetitions.append(self._unrun_record(index, case_id, "cost_unavailable"))
                 continue
             repetitions.append(await self._run_repetition(index, case_id))
         case_statistics = {

@@ -50,12 +50,21 @@ def public_surface_catalog() -> dict[str, Any]:
         raise RuntimeError("public-surface catalog identity mismatch")
     definitions = document.get("definitions")
     methods = document.get("mcp_methods")
-    if not isinstance(definitions, dict) or not isinstance(methods, list):
+    commands = document.get("cli_commands")
+    if (
+        not isinstance(definitions, dict)
+        or not isinstance(methods, list)
+        or not isinstance(commands, list)
+    ):
         raise RuntimeError("public-surface catalog is incomplete")
     names = [method.get("name") for method in methods if isinstance(method, dict)]
     if len(names) != 23 or len(set(names)) != 23 or not all(isinstance(name, str) for name in names):
         raise RuntimeError("public-surface MCP method inventory mismatch")
-    for method in methods:
+    if [command.get("name") for command in commands if isinstance(command, dict)] != [
+        "measure-baseline"
+    ]:
+        raise RuntimeError("public-surface CLI command inventory mismatch")
+    for method in [*methods, *commands]:
         if not isinstance(method, dict):
             raise RuntimeError("public-surface method must be an object")
         _definition_name(method.get("args_schema"), definitions)
@@ -76,7 +85,7 @@ def _definition_name(reference: object, definitions: Mapping[str, Any]) -> str:
 
 def _method(name: str) -> dict[str, Any]:
     catalog = public_surface_catalog()
-    for method in catalog["mcp_methods"]:
+    for method in [*catalog["mcp_methods"], *catalog["cli_commands"]]:
         if method["name"] == name:
             return method
     raise RuntimeError(f"unknown additive public method: {name}")

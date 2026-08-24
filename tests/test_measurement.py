@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import subprocess
@@ -279,6 +280,39 @@ def test_evolution_cases_use_real_public_state_machine_and_cold_state(tmp_path: 
             assert project_record is not None and project_record.name.startswith("oracle-")
 
 
+def test_project_cases_use_real_run_control_and_nested_acp(tmp_path: Path) -> None:
+    source = _source(tmp_path)
+    config = _config(tmp_path)
+    runner = BaselineRunner(
+        config=config,
+        protocol=load_protocol("fm010-baseline-v1", config),
+        provider=FakeProvider(),
+        source_root=source,
+    )
+    command = f"{sys.executable} {MOCK_MEASUREMENT_ACP}"
+    with patch.dict(
+        os.environ,
+        {
+            "UNREST_WORKER_ACP_COMMAND": command,
+            "UNREST_VALIDATOR_ACP_COMMAND": command,
+        },
+    ):
+        records = [
+            asyncio.run(runner._run_repetition(index, case_id))
+            for index, case_id in ((1, "P1"), (6, "P2"))
+        ]
+
+    assert all(record["oracle_passed"] for record in records)
+    assert records[0]["rework_count"] == 0
+    assert records[1]["rework_count"] == 1
+    assert [record["artifact_digest"] for record in records] == [
+        "sha256:" + hashlib.sha256(text.encode()).hexdigest()
+        for text in ("unrest baseline p1\n", "unrest baseline p2\n")
+    ]
+    assert len(runner.invocations) == 6
+    assert all(event["parent_repetition_id"] in {"rep-01", "rep-06"} for event in runner.invocations)
+
+
 @pytest.mark.parametrize(
     ("provider", "expected_status"),
     [
@@ -321,7 +355,11 @@ def test_unknown_reported_cost_is_not_collapsed_to_zero(tmp_path: Path) -> None:
     observation = json.loads((destination / "invalid-observation.json").read_text())
     assert observation["reported_cost_status"] == "unavailable"
     assert observation["reported_cost_usd"] is None
-    assert observation["unknown_reported_cost_count"] == 55
+    assert observation["unknown_reported_cost_count"] == 2
+    assert observation["provider_invocation_count"] == 2
+    assert {
+        record["failure"] for record in observation["repetitions"][1:]
+    } == {"cost_unavailable"}
 
 
 def test_prompt_marker_alone_cannot_claim_cache_disabled(tmp_path: Path) -> None:
@@ -398,6 +436,15 @@ def test_exact_cli_and_library_result_and_error_shapes(
 
     monkeypatch.setattr(api, "_measure_baseline", lambda *args: published)
     assert api.measure_baseline("fm010-baseline-v1", "results", True) == published
+
+    monkeypatch.setattr(
+        api,
+        "_measure_baseline",
+        lambda *args: {**published, "private_detail": "must not escape"},
+    )
+    with pytest.raises(FoundationToolError) as malformed:
+        api.measure_baseline("fm010-baseline-v1", "results", True)
+    assert malformed.value.code == "internal_error"
 
     def reject(*args: object) -> dict[str, Any]:
         del args
