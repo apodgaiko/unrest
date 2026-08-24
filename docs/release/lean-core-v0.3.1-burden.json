@@ -20,8 +20,8 @@
     "source_suite_invocations": 1
   },
   "compatibility_lanes": {
-    "python_3_11": "pending",
-    "python_3_12": "pending"
+    "python_3_11": "77 passed in 6.89s",
+    "python_3_12": "77 passed in 7.04s"
   },
   "installation": {
     "dependencies": 5,
