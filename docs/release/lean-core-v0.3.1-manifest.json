@@ -1,0 +1,49 @@
+{
+  "artifacts": {
+    "checksums": "SHA256SUMS",
+    "ci_bundle": "unrest-v0.3.1-python313",
+    "sdist": "unrest_harness-0.3.1.tar.gz",
+    "wheel": "unrest_harness-0.3.1-py3-none-any.whl"
+  },
+  "base": {
+    "candidate_ref": "refs/heads/codex/v0.3.1-fm000-fm010",
+    "predecessor_commit": "0662bf350498fd6d3911dbff45e682e1ccc84623",
+    "predecessor_tag": "v0.3.0",
+    "release_tag_ref": "refs/tags/v0.3.1"
+  },
+  "compatibility": {
+    "existing_mcp_tools_unchanged": 7,
+    "existing_project_format": "preserved",
+    "python": ">=3.11"
+  },
+  "history": {
+    "active_binding_owner": "docs/release/lean-core-v0.3.1-manifest.json",
+    "v0.2_carriers": "immutable bytes from tag v0.2.0",
+    "v0.3.0_carriers": "immutable bytes from tag v0.3.0"
+  },
+  "release": "unrest-v0.3.1",
+  "schema_version": 1,
+  "scope": {
+    "dependencies_added": [],
+    "fm000_status": "implemented additive foundation runtime",
+    "fm010_status": "implemented manual provider-backed measurement protocol",
+    "migration_required": false,
+    "new_public_methods": 23
+  },
+  "source": {
+    "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
+    "final_product_package_test": {
+      "files": 177,
+      "paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "src/**",
+        "tests/**",
+        "tools/**"
+      ],
+      "sha256": "d7310b8db31915c6f55cb1a39bee2145c61c5748fcdfe86c14ae4e495ab9db9e"
+    }
+  },
+  "status": "frozen v0.3.1 release candidate; exact remote identity belongs to the annotated tag and GitHub Release",
+  "version": "0.3.1"
+}

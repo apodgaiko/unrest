@@ -1,0 +1,37 @@
+{
+  "candidate": {
+    "commit": null,
+    "focused_fm010_nested_seconds": 13.32,
+    "full_suite": {
+      "passed": null,
+      "pytest_seconds": null,
+      "skipped": null,
+      "wall_seconds": null
+    },
+    "python": "3.13.12",
+    "source_suite_invocations": 0
+  },
+  "compatibility_lanes": {
+    "python_3_11": "pending",
+    "python_3_12": "pending"
+  },
+  "installation": {
+    "dependencies": 5,
+    "migration_required": false,
+    "optional_dependency_groups": 0,
+    "service_added": false
+  },
+  "reference": {
+    "commit": "0662bf350498fd6d3911dbff45e682e1ccc84623",
+    "full_suite": {
+      "passed": 948,
+      "pytest_seconds": 152.94,
+      "skipped": 7,
+      "wall_seconds": 156.29
+    },
+    "python": "3.13.12",
+    "tag": "v0.3.0"
+  },
+  "schema_version": 1,
+  "status": "candidate checkpoint pending"
+}
