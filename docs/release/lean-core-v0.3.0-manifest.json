@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "release": "unrest-v0.3.0",
+  "version": "0.3.0",
+  "status": "remote Foundation & Safety release; exact commit and artifact identities belong to the annotated tag and GitHub Release",
+  "base": {
+    "v0.2_tag": "v0.2.0",
+    "v0.2.1_local_tag": "v0.2.1",
+    "fm000_commit": "2b17a613b99ef182c9bae18b8171efc17e8fe8d2",
+    "candidate_ref": "refs/heads/codex/v0.3.0-release",
+    "release_tag_ref": "refs/tags/v0.3.0",
+    "exact_identity_authority": "annotated Git tag, GitHub Release, and uploaded SHA256SUMS"
+  },
+  "source": {
+    "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
+    "final_product_package_test": {
+      "files": 134,
+      "sha256": "effab6ecbde8d8336dd56a16211be8d9587ad3258234dbf0bd7bb82a5a37c2a4",
+      "paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "src/**",
+        "tests/**",
+        "tools/**"
+      ]
+    }
+  },
+  "history": {
+    "v0.2_carriers": "immutable bytes from tag v0.2.0",
+    "v0.2.1_record": "preserved local predecessor release record",
+    "active_binding_owner": "docs/release/lean-core-v0.3.0-manifest.json"
+  },
+  "scope": {
+    "implemented": [
+      "FM-000 proposed ADR, contract, and decision-fixture foundation",
+      "cross-process per-project mutation exclusion for all five mutating MCP operations",
+      "cancellation-safe mutation ownership through the controller worker lifetime",
+      "release identity, archive, installed-wheel, and forensic verification hardening"
+    ],
+    "fm000_status": "proposed groundwork only",
+    "not_implemented": [
+      "FM-010 measurement baseline",
+      "asynchronous run admission and attach",
+      "read-only Inquiry fan-out",
+      "general-thinker runtime",
+      "automatic self-improvement campaigns"
+    ],
+    "dependencies_added": [],
+    "migration_required": false
+  },
+  "compatibility": {
+    "python": ">=3.11",
+    "existing_project_format": "preserved",
+    "new_contention_errors": [
+      "project_busy",
+      "project_lock_error"
+    ]
+  },
+  "artifacts": {
+    "wheel": "unrest_harness-0.3.0-py3-none-any.whl",
+    "sdist": "unrest_harness-0.3.0.tar.gz",
+    "checksums": "SHA256SUMS",
+    "ci_bundle": "unrest-v0.3.0-python313"
+  }
+}

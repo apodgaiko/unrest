@@ -27,8 +27,8 @@ HISTORICAL_CARRIERS = (
 )
 ACTIVE_MANIFEST = ROOT / release_binding.ACTIVE_RELEASE_MANIFEST
 ACTIVE_PROSE_CARRIERS = (
-    ROOT / "docs/release/lean-core-v0.2.1.md",
-    ROOT / "docs/release/lean-core-v0.2.1-rollback.md",
+    ROOT / "docs/release/lean-core-v0.3.0.md",
+    ROOT / "docs/release/lean-core-v0.3.0-rollback.md",
 )
 
 
@@ -75,13 +75,13 @@ def test_v02_carriers_are_byte_identical_to_the_v020_tag() -> None:
         assert carrier.read_bytes() == tagged
 
 
-def test_v021_manifest_owns_the_live_candidate_binding() -> None:
+def test_v030_manifest_owns_the_live_candidate_binding() -> None:
     computed = _computed()
     manifest = json.loads(ACTIVE_MANIFEST.read_text(encoding="utf-8"))
     declaration = release_binding.declared_binding(manifest)
     expected = {"files": computed["files"], "sha256": computed["sha256"]}
     assert {"files": declaration["files"], "sha256": declaration["sha256"]} == expected
-    assert manifest["release"] == "unrest-v0.2.1"
+    assert manifest["release"] == "unrest-v0.3.0"
     assert manifest["history"]["v0.2_carriers"] == "immutable bytes from tag v0.2.0"
     assert str(release_binding.ACTIVE_RELEASE_MANIFEST) == ACTIVE_MANIFEST.relative_to(
         ROOT
@@ -89,7 +89,7 @@ def test_v021_manifest_owns_the_live_candidate_binding() -> None:
     for carrier in ACTIVE_PROSE_CARRIERS:
         text = carrier.read_text(encoding="utf-8")
         assert str(computed["sha256"]) in text
-        assert "0.2.1" in text
+        assert "0.3.0" in text
         assert "proposed" in text.lower()
 
     drifted = json.loads(json.dumps(manifest))
