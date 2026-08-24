@@ -63,3 +63,9 @@ in `docs/release/lean-core-v0.3.1-burden.json`; rollback is documented in
 `docs/release/lean-core-v0.3.1-rollback.md`. The annotated `v0.3.1` tag and the
 GitHub Release own the final commit and archive identities. The published
 `v0.3.0` tag remains immutable.
+
+The release-time live FM-010 campaign was not executed: the external-action
+safety gate declined transmission of the frozen tasks to the configured Claude
+route with an up-to-USD-50 ceiling. The runner, mock-backed real lifecycle
+checks and publication safeguards ship; a live observation requires separate
+explicit approval.

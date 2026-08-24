@@ -29,6 +29,10 @@
     "optional_dependency_groups": 0,
     "service_added": false
   },
+  "live_fm010_observation": {
+    "reason": "external provider transmission and up-to-USD-50 spend were not approved by the execution safety gate",
+    "status": "not_executed"
+  },
   "reference": {
     "commit": "0662bf350498fd6d3911dbff45e682e1ccc84623",
     "full_suite": {
