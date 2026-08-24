@@ -26,6 +26,11 @@ import tempfile
 from typing import Any, Iterator, Literal, Protocol, cast
 import uuid
 
+from .accepted_point_authority import (
+    AcceptedPointAuthorityError,
+    _AcceptedPointCapability,
+    _require_accepted_point_capability,
+)
 from .canonical_identity import (
     IdentityRecord,
     canonical_json_bytes,
@@ -438,6 +443,60 @@ class EvolutionManager:
         with self._locked():
             return self._inspect_unlocked(campaign_id)
 
+    def retain_frozen_oracle_result(
+        self,
+        *,
+        campaign_id: str,
+        candidate_id: str,
+        outcome: Literal["pass", "fail", "reward_hack"],
+        evidence_digest: str,
+    ) -> str:
+        """Retain a post-author, immutable oracle result for read-only evaluation.
+
+        This is an internal measurement seam, not a promotion or campaign-state
+        transition. The result is identity-bound and created only after the
+        candidate patch has been returned and admitted.
+        """
+        if outcome not in {"pass", "fail", "reward_hack"} or _DIGEST.fullmatch(evidence_digest) is None:
+            raise EvolutionError("invalid_oracle_result")
+        self._validate_public_id(campaign_id, "campaign")
+        self._validate_public_id(candidate_id, "candidate")
+        with self._locked():
+            snapshot = self._inspect_unlocked(campaign_id)
+            candidate = self._candidate(snapshot, candidate_id)
+            record: dict[str, Any] = {
+                "campaign_digest": snapshot.campaign_digest,
+                "candidate_digest": candidate.candidate_digest,
+                "candidate_id": candidate_id,
+                "evidence_digest": evidence_digest,
+                "oracle_digest": snapshot.freeze.oracle_digest,
+                "outcome": outcome,
+                "schema_version": 1,
+                "workload_digest": snapshot.freeze.workload_digest,
+            }
+            record["oracle_result_digest"] = _sha(canonical_json_bytes(record))
+            path = self._oracle_result_path(campaign_id, candidate_id)
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            encoded = canonical_json_bytes(record)
+            try:
+                descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            except FileExistsError:
+                existing = verify_canonical_json_bytes(path.read_bytes())
+                if existing != record:
+                    raise EvolutionError("immutable_oracle_result")
+                return str(record["oracle_result_digest"])
+            try:
+                offset = 0
+                while offset < len(encoded):
+                    written = os.write(descriptor, encoded[offset:])
+                    if written == 0:
+                        raise OSError("short write")
+                    offset += written
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            return str(record["oracle_result_digest"])
+
     def add_candidate(
         self,
         *,
@@ -574,11 +633,17 @@ class EvolutionManager:
         }
         parsed: Mapping[str, Any] | None = None
         if self.provider_runner is not None:
+            oracle_record = self._load_oracle_result(campaign_id, candidate_id)
+            project_record = (
+                self._oracle_result_path(campaign_id, candidate_id)
+                if oracle_record is not None
+                else self._provider_project_record()
+            )
             request = ProviderSessionRequest(
                 role="independent_evaluator",
-                prompt=self._evaluator_assignment(snapshot, candidate),
+                prompt=self._evaluator_assignment(snapshot, candidate, oracle_record),
                 workspace_path=Path(self.workspace_manager.inspect_workspace(candidate.lease_id).worktree_path),
-                project_record_path=self._provider_project_record(),
+                project_record_path=project_record,
                 private_artifact_path=artifact_path,
                 private_artifact_root=private_directory,
             )
@@ -695,11 +760,22 @@ class EvolutionManager:
         }
         parsed: Mapping[str, Any] | None = None
         if self.provider_runner is not None:
+            oracle_record = self._load_oracle_result(campaign_id, candidate_id)
+            project_record = (
+                self._oracle_result_path(campaign_id, candidate_id)
+                if oracle_record is not None
+                else self._provider_project_record()
+            )
             request = ProviderSessionRequest(
                 role="independent_reviewer",
-                prompt=self._reviewer_assignment(snapshot, candidate, evaluation),
+                prompt=self._reviewer_assignment(
+                    snapshot,
+                    candidate,
+                    evaluation,
+                    oracle_record,
+                ),
                 workspace_path=Path(self.workspace_manager.inspect_workspace(candidate.lease_id).worktree_path),
-                project_record_path=self._provider_project_record(),
+                project_record_path=project_record,
                 private_artifact_path=artifact_path,
                 private_artifact_root=private_directory,
             )
@@ -787,9 +863,16 @@ class EvolutionManager:
         grant: HumanPromotionGrant,
         *,
         validate: Callable[[Path], bool] | None = None,
+        _accepted_point_capability: _AcceptedPointCapability | None = None,
     ) -> PromotionRecord:
         """Apply one externally granted exact candidate through parent authority."""
 
+        try:
+            _require_accepted_point_capability(
+                _accepted_point_capability, self.repository
+            )
+        except AcceptedPointAuthorityError as exc:
+            raise EvolutionError(exc.code) from exc
         self._validate_human_grant(grant.grant_id, grant.authorized_by)
         self._validate_public_id(grant.campaign_id, "campaign")
         self._validate_public_id(grant.candidate_id, "candidate")
@@ -814,7 +897,12 @@ class EvolutionManager:
                     },
                 )
 
-        integration = self._reconcile_or_integrate(grant, candidate, validate or self.validation)
+        integration = self._reconcile_or_integrate(
+            grant,
+            candidate,
+            validate or self.validation,
+            _accepted_point_capability,
+        )
         with self._locked():
             snapshot = self._inspect_unlocked(grant.campaign_id)
             candidate, evaluation, review = self._promotion_inputs(snapshot, grant, allow_promoted=True)
@@ -856,9 +944,16 @@ class EvolutionManager:
         grant: HumanRollbackGrant,
         *,
         validate: Callable[[Path], bool] | None = None,
+        _accepted_point_capability: _AcceptedPointCapability | None = None,
     ) -> RollbackRecord:
         """Restore only the exact predecessor selected by a human grant."""
 
+        try:
+            _require_accepted_point_capability(
+                _accepted_point_capability, self.repository
+            )
+        except AcceptedPointAuthorityError as exc:
+            raise EvolutionError(exc.code) from exc
         self._validate_human_grant(grant.grant_id, grant.authorized_by)
         self._validate_public_id(grant.campaign_id, "campaign")
         self._validate_public_id(grant.promotion_id, "promotion")
@@ -982,6 +1077,29 @@ class EvolutionManager:
 
     def _private_campaign_directory(self, campaign_id: str) -> Path:
         return self.private_root / campaign_id.removeprefix("campaign:")
+
+    def _oracle_result_path(self, campaign_id: str, candidate_id: str) -> Path:
+        token = candidate_id.removeprefix("candidate:")
+        return self._private_campaign_directory(campaign_id) / f"oracle-{token}.json"
+
+    def _load_oracle_result(
+        self,
+        campaign_id: str,
+        candidate_id: str,
+    ) -> Mapping[str, Any] | None:
+        path = self._oracle_result_path(campaign_id, candidate_id)
+        if not path.is_file():
+            return None
+        try:
+            record = verify_canonical_json_bytes(path.read_bytes())
+        except (OSError, ValueError) as exc:
+            raise EvolutionError("invalid_oracle_result") from exc
+        expected = record.get("oracle_result_digest")
+        unsigned = dict(record)
+        unsigned.pop("oracle_result_digest", None)
+        if expected != _sha(canonical_json_bytes(unsigned)):
+            raise EvolutionError("invalid_oracle_result")
+        return record
 
     def _event_files(self, campaign_id: str) -> tuple[Path, ...]:
         directory = self._campaign_directory(campaign_id)
@@ -1268,7 +1386,11 @@ class EvolutionManager:
         )
 
     @staticmethod
-    def _evaluator_assignment(snapshot: CampaignSnapshot, candidate: CandidateAttempt) -> str:
+    def _evaluator_assignment(
+        snapshot: CampaignSnapshot,
+        candidate: CandidateAttempt,
+        oracle_record: Mapping[str, Any] | None = None,
+    ) -> str:
         assignment = {
             "campaign_digest": snapshot.campaign_digest,
             "candidate_digest": candidate.candidate_digest,
@@ -1280,6 +1402,11 @@ class EvolutionManager:
             },
             "workload_digest": snapshot.freeze.workload_digest,
         }
+        if oracle_record is not None:
+            assignment["frozen_oracle_result"] = {
+                "digest": oracle_record["oracle_result_digest"],
+                "path": "project_record_path",
+            }
         return "Evaluate the exact frozen candidate. Return only one JSON object.\n" + json.dumps(assignment, sort_keys=True)
 
     @staticmethod
@@ -1287,6 +1414,7 @@ class EvolutionManager:
         snapshot: CampaignSnapshot,
         candidate: CandidateAttempt,
         evaluation: EvaluationRecord,
+        oracle_record: Mapping[str, Any] | None = None,
     ) -> str:
         assignment = {
             "campaign_digest": snapshot.campaign_digest,
@@ -1300,6 +1428,11 @@ class EvolutionManager:
                 "outcome": "approve|reject|rework|inconclusive|dissent",
             },
         }
+        if oracle_record is not None:
+            assignment["frozen_oracle_result"] = {
+                "digest": oracle_record["oracle_result_digest"],
+                "path": "project_record_path",
+            }
         return "Review the complete frozen evidence set. Return only one JSON object.\n" + json.dumps(assignment, sort_keys=True)
 
     def _provider_project_record(self) -> Path:
@@ -1597,6 +1730,7 @@ class EvolutionManager:
         grant: HumanPromotionGrant,
         candidate: CandidateAttempt,
         validate: Callable[[Path], bool] | None,
+        accepted_point_capability: _AcceptedPointCapability | None,
     ) -> IntegrationResult:
         lease = self.workspace_manager.inspect_workspace(candidate.lease_id)
         if lease.state == "integrated" and lease.integration_receipt_digest is not None:
@@ -1633,6 +1767,7 @@ class EvolutionManager:
                     )
                 ],
                 validate=validate,
+                _accepted_point_capability=accepted_point_capability,
             )
         except WorkspaceError as exc:
             raise EvolutionError("workspace_" + exc.code) from exc

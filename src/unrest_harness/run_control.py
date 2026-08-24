@@ -596,6 +596,19 @@ class RunControl:
                         self._settle_cancel_without_worker_unlocked(run_id)
             return self.inspect_run(run_id).as_dict()
 
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            events = self._load_events(run_id)
+            expected_key = _sha256(idempotency_key.encode("utf-8"))
+            expected_reason = _sha256(reason.encode("utf-8"))
+            if not any(
+                event.state == "cancel_requested"
+                and event.details.get("cancel_idempotency_digest") == expected_key
+                and event.details.get("reason_digest") == expected_reason
+                for event in events
+            ):
+                return None
+            return self.inspect_run(run_id).as_dict()
+
         try:
             value = DurableMutationJournal(self.project_root).execute(
                 operation="cancel_run",
@@ -603,6 +616,7 @@ class RunControl:
                 idempotency_key=idempotency_key,
                 request=request,
                 effect=effect,
+                reconcile=reconcile,
             )
         except MutationJournalError as exc:
             raise RunControlError(exc.code, exc.code.replace("_", " ")) from exc
@@ -706,7 +720,7 @@ class RunControl:
                 or not isinstance(public.get("error"), Mapping)
                 or set(public["error"]) != {"code", "message"}
                 or public["error"].get("code") not in {
-                    "invalid_argument", "invalid_transition", "not_found"
+                    "busy", "invalid_argument", "invalid_transition", "not_found"
                 }
                 or not isinstance(public["error"].get("message"), str)
                 or not isinstance(private, Mapping)

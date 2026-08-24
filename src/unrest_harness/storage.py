@@ -24,7 +24,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Mapping
 
 from .capability_policy import redact_sensitive_value
 from .config import HarnessConfig
@@ -447,6 +447,13 @@ class ProjectStore:
 
     def mutation_lock_path(self, project_id: str) -> Path:
         return self.unrest_runtime_dir(project_id) / "mutation.lock"
+
+    def apply_accepted_point_plan(self, project_id: str, plan: Any) -> Any:
+        """Sole store-owned entry point for a typed accepted-point mutation."""
+
+        from .accepted_point_authority import _apply_accepted_point_plan
+
+        return _apply_accepted_point_plan(self, project_id, plan)
 
     def workspace_dir(self, project_id: str) -> Path:
         return Path(self.load_project(project_id).workspace_dir)

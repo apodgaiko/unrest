@@ -8,6 +8,11 @@ from typing import Any
 
 import pytest
 
+from unrest_harness.accepted_point_authority import (
+    CandidatePromotionPlan,
+    PromotionRollbackPlan,
+    _apply_accepted_point_plan,
+)
 from unrest_harness.evolution import (
     CampaignFreeze,
     EvolutionError,
@@ -15,6 +20,7 @@ from unrest_harness.evolution import (
     HumanPromotionGrant,
     HumanRollbackGrant,
 )
+from unrest_harness.mutation_journal import _ExternalGrantRecords
 from unrest_harness.provider_sessions import ProviderSessionRequest, ProviderSessionResult
 from unrest_harness.workspaces import ResourceBudget, WorkspaceManager
 
@@ -31,6 +37,67 @@ def _git(repository: Path, *arguments: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+class _AuthorityStore:
+    def __init__(self, repository: Path) -> None:
+        self.repository = repository
+
+    def workspace_dir(self, _project_id: str) -> Path:
+        return self.repository
+
+    def mutation_lock_path(self, _project_id: str) -> Path:
+        path = self.repository / ".unrest-runtime" / "test-authority.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+
+def _promote(manager, grant, *, validate=None):
+    proof = _grant_proof(manager.repository, grant.grant_id, "promote_candidate")
+    return _apply_accepted_point_plan(
+        _AuthorityStore(manager.repository),
+        "project:test",
+        CandidatePromotionPlan(
+            manager,
+            grant,
+            validate=validate,
+            retained_grant_proof=proof,
+        ),
+    )
+
+
+def _rollback(manager, grant, *, validate=None):
+    proof = _grant_proof(manager.repository, grant.grant_id, "rollback_promotion")
+    return _apply_accepted_point_plan(
+        _AuthorityStore(manager.repository),
+        "project:test",
+        PromotionRollbackPlan(
+            manager,
+            grant,
+            validate=validate,
+            retained_grant_proof=proof,
+        ),
+    )
+
+
+def _grant_proof(repository: Path, grant_id: str, operation: str):
+    records = _ExternalGrantRecords(repository, custody_root_id="evolution-test")
+    records.retain(
+        grant_id=grant_id,
+        authorized_by="human:test",
+        issuer_custody_root_id="evolution-test",
+        issuer_identity_digest=_sha("f"),
+        operation=operation,
+        project_id="project:test",
+        scope={},
+    )
+    return records.consume(
+        grant_id=grant_id,
+        operation=operation,
+        project_id="project:test",
+        scope={},
+        request_fingerprint=_sha("e"),
+    )
 
 
 @pytest.fixture
@@ -337,22 +404,24 @@ async def test_human_promotion_is_exact_atomic_and_idempotent(repository: Path) 
     manager, candidate, grant = await _approved_candidate(repository)
     predecessor = grant.expected_predecessor_revision
     wrong = replace(grant, candidate_digest=_sha("9"), grant_id="human-grant:wrong")
+    with pytest.raises(EvolutionError, match="parent_authority_required"):
+        manager.promote_candidate(grant)
     with pytest.raises(EvolutionError, match="promotion_candidate_mismatch"):
-        manager.promote_candidate(wrong)
+        _promote(manager, wrong)
     assert _git(repository, "rev-parse", "HEAD") == predecessor
 
-    promoted = manager.promote_candidate(grant)
+    promoted = _promote(manager, grant)
     assert promoted.predecessor_revision == predecessor
     assert promoted.accepted_revision == _git(repository, "rev-parse", "HEAD")
     assert promoted.promotion_receipt_digest is not None
     assert promoted.effect_count == 1
     assert (repository / "candidate.txt").read_text(encoding="utf-8") == "candidate\n"
-    assert manager.promote_candidate(grant) == promoted
+    assert _promote(manager, grant) == promoted
     assert manager.inspect_campaign("campaign:test").state == "promoted"
 
     stale = replace(grant, grant_id="human-grant:stale", candidate_id=candidate.candidate_id)
     with pytest.raises(EvolutionError, match="campaign_not_open"):
-        manager.promote_candidate(stale)
+        _promote(manager, stale)
 
 
 @pytest.mark.asyncio
@@ -372,13 +441,13 @@ async def test_post_accept_receipt_failure_reconciles_without_reapply(
 
     monkeypatch.setattr(manager, "_promotion_receipt", fail_once)
     with pytest.raises(EvolutionError, match="injected_receipt_failure"):
-        manager.promote_candidate(grant)
+        _promote(manager, grant)
     accepted = _git(repository, "rev-parse", "HEAD")
     partial = manager.inspect_campaign("campaign:test").promotions[0]
     assert partial.state == "effect_applied"
     assert partial.effect_count == 1
 
-    completed = manager.promote_candidate(grant)
+    completed = _promote(manager, grant)
     assert completed.accepted_revision == accepted
     assert completed.effect_count == 1
     assert calls == 2
@@ -389,7 +458,7 @@ async def test_exact_human_rollback_and_receipt_recovery(
     repository: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     manager, _, promotion_grant = await _approved_candidate(repository)
-    promotion = manager.promote_candidate(promotion_grant)
+    promotion = _promote(manager, promotion_grant)
     wrong = HumanRollbackGrant(
         grant_id="human-grant:rollback-wrong",
         authorized_by="human:maintainer",
@@ -399,7 +468,7 @@ async def test_exact_human_rollback_and_receipt_recovery(
         rollback_target_revision="0" * 40,
     )
     with pytest.raises(EvolutionError, match="rollback_target_mismatch"):
-        manager.rollback_promotion(wrong)
+        _rollback(manager, wrong)
     assert _git(repository, "rev-parse", "HEAD") == promotion.accepted_revision
 
     grant = replace(
@@ -419,25 +488,25 @@ async def test_exact_human_rollback_and_receipt_recovery(
 
     monkeypatch.setattr(manager, "_rollback_receipt", fail_once)
     with pytest.raises(EvolutionError, match="injected_rollback_receipt_failure"):
-        manager.rollback_promotion(grant, validate=lambda _: True)
+        _rollback(manager, grant, validate=lambda _: True)
     partial = manager.inspect_campaign("campaign:test").rollbacks[0]
     assert partial.state == "effect_applied"
     assert _git(repository, "rev-parse", "HEAD") == promotion.predecessor_revision
 
-    rolled_back = manager.rollback_promotion(grant, validate=lambda _: True)
+    rolled_back = _rollback(manager, grant, validate=lambda _: True)
     assert rolled_back.predecessor_revision == promotion.predecessor_revision
     assert _git(repository, "rev-parse", "HEAD") == promotion.predecessor_revision
     assert rolled_back.rollback_receipt_digest is not None
     assert rolled_back.effect_count == 1
     assert calls == 2
-    assert manager.rollback_promotion(grant) == rolled_back
+    assert _rollback(manager, grant) == rolled_back
     assert manager.inspect_campaign("campaign:test").state == "rolled_back"
 
 
 @pytest.mark.asyncio
 async def test_rollback_validation_failure_preserves_current(repository: Path) -> None:
     manager, _, promotion_grant = await _approved_candidate(repository)
-    promotion = manager.promote_candidate(promotion_grant)
+    promotion = _promote(manager, promotion_grant)
     grant = HumanRollbackGrant(
         grant_id="human-grant:rollback-invalid",
         authorized_by="human:maintainer",
@@ -447,5 +516,5 @@ async def test_rollback_validation_failure_preserves_current(repository: Path) -
         rollback_target_revision=promotion.predecessor_revision,
     )
     with pytest.raises(EvolutionError, match="rollback_validation_failed"):
-        manager.rollback_promotion(grant, validate=lambda _: False)
+        _rollback(manager, grant, validate=lambda _: False)
     assert _git(repository, "rev-parse", "HEAD") == promotion.accepted_revision

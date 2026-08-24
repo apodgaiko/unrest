@@ -26,6 +26,11 @@ import time
 from typing import Any, Iterator, Literal
 import uuid
 
+from .accepted_point_authority import (
+    AcceptedPointAuthorityError,
+    _AcceptedPointCapability,
+    _require_accepted_point_capability,
+)
 from .canonical_identity import (
     canonical_json_bytes,
     construct_identity,
@@ -452,9 +457,16 @@ class WorkspaceManager:
         grants: Sequence[HumanIntegrationGrant],
         *,
         validate: Callable[[Path], bool] | None = None,
+        _accepted_point_capability: _AcceptedPointCapability | None = None,
     ) -> IntegrationResult:
         """Integrate exact returned patches after explicit human grants."""
 
+        try:
+            _require_accepted_point_capability(
+                _accepted_point_capability, self.repository
+            )
+        except AcceptedPointAuthorityError as exc:
+            raise WorkspaceError(exc.code) from exc
         if not grants:
             raise WorkspaceError("integration_grant_required")
         with self._locked():

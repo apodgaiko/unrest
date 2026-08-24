@@ -8,6 +8,10 @@ import sys
 
 import pytest
 
+from unrest_harness.accepted_point_authority import (
+    WorkspaceIntegrationPlan,
+    _apply_accepted_point_plan,
+)
 from unrest_harness.workspaces import (
     HumanIntegrationGrant,
     ResourceBudget,
@@ -70,11 +74,32 @@ def _lease(
 
 def _grant(lease, patch_digest: str) -> HumanIntegrationGrant:
     return HumanIntegrationGrant(
-        grant_id="human-grant:" + lease.lease_id,
+        grant_id="mission-grant:" + lease.lease_id,
         authorized_by="maintainer:test",
         lease_id=lease.lease_id,
         patch_digest=patch_digest,
         expected_parent_revision=lease.base_revision,
+    )
+
+
+class _AuthorityStore:
+    def __init__(self, repository: Path) -> None:
+        self.repository = repository
+
+    def workspace_dir(self, _project_id: str) -> Path:
+        return self.repository
+
+    def mutation_lock_path(self, _project_id: str) -> Path:
+        path = self.repository / ".unrest-runtime" / "test-authority.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+
+def _integrate(manager, grants, *, validate=None):
+    return _apply_accepted_point_plan(
+        _AuthorityStore(manager.repository),
+        "project:test",
+        WorkspaceIntegrationPlan(manager, grants, validate=validate),
     )
 
 
@@ -164,9 +189,13 @@ def test_return_is_identity_bound_append_only_and_parent_is_unchanged(repository
     assert persisted.returned_inventory[0].content_digest.startswith("sha256:")
     assert list((repository / ".unrest" / "workspaces" / "leases" / "return").glob("*.json"))
 
+    with pytest.raises(WorkspaceError, match="parent_authority_required"):
+        restarted.integrate_workspaces([_grant(lease, returned.patch_digest)])
+    assert _git(repository, "rev-parse", "HEAD^{tree}") == parent_tree
+
     (tree / "src" / "binary.dat").write_bytes(b"changed")
     with pytest.raises(WorkspaceError, match="workspace_mutated_after_return"):
-        restarted.integrate_workspaces([_grant(lease, returned.patch_digest)])
+        _integrate(restarted, [_grant(lease, returned.patch_digest)])
     assert _git(repository, "rev-parse", "HEAD^{tree}") == parent_tree
 
 
@@ -186,7 +215,8 @@ def test_disjoint_returns_integrate_in_deterministic_order(repository: Path) -> 
         observed_validation.append(((path / "alpha.txt").is_file(), (path / "zeta.txt").is_file()))
         return True
 
-    result = manager.integrate_workspaces(
+    result = _integrate(
+        manager,
         [_grant(later, later_return.patch_digest), _grant(earlier, earlier_return.patch_digest)],
         validate=validate,
     )
@@ -211,7 +241,8 @@ def test_overlap_stale_and_validation_failure_preserve_parent(repository: Path) 
     before = _git(repository, "rev-parse", "HEAD^{tree}")
     assert first_return.patch_digest and second_return.patch_digest
     with pytest.raises(WorkspaceError, match="overlapping_returns"):
-        manager.integrate_workspaces(
+        _integrate(
+            manager,
             [_grant(first, first_return.patch_digest), _grant(second, second_return.patch_digest)]
         )
     assert _git(repository, "rev-parse", "HEAD^{tree}") == before
@@ -221,14 +252,14 @@ def test_overlap_stale_and_validation_failure_preserve_parent(repository: Path) 
     separate_return = manager.return_workspace(separate.lease_id)
     assert separate_return.patch_digest
     with pytest.raises(WorkspaceError, match="validation_failed"):
-        manager.integrate_workspaces([_grant(separate, separate_return.patch_digest)], validate=lambda _: False)
+        _integrate(manager, [_grant(separate, separate_return.patch_digest)], validate=lambda _: False)
     assert _git(repository, "rev-parse", "HEAD^{tree}") == before
 
     (repository / "advance.txt").write_text("advance", encoding="utf-8")
     _git(repository, "add", "advance.txt")
     _git(repository, "commit", "-m", "advance parent")
     with pytest.raises(WorkspaceError, match="stale_parent"):
-        manager.integrate_workspaces([_grant(separate, separate_return.patch_digest)])
+        _integrate(manager, [_grant(separate, separate_return.patch_digest)])
 
 
 def test_expiry_orphan_cleanup_and_retry_preserve_evidence(repository: Path) -> None:
@@ -315,7 +346,7 @@ def test_mutated_patch_artifact_and_cleanup_failure_are_retained(
     original = patch_path.read_bytes()
     patch_path.write_bytes(original + b"corrupt")
     with pytest.raises(WorkspaceError, match="patch_artifact_mutated"):
-        manager.integrate_workspaces([_grant(lease, returned.patch_digest)])
+        _integrate(manager, [_grant(lease, returned.patch_digest)])
     patch_path.write_bytes(original)
 
     original_git = manager._git

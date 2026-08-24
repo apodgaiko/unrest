@@ -33,6 +33,8 @@ def _payload(value: Any) -> dict[str, Any]:
         public_code = (
             "not_found"
             if value.code == "not_found"
+            else "busy"
+            if value.code == "project_mutation_busy"
             else "invalid_transition"
             if value.code in _TRANSITION_TOOL_ERRORS
             else "invalid_argument"
@@ -118,7 +120,9 @@ def execute(operation: str, arguments: Mapping[str, Any], _context: Any) -> dict
     mutation_lock = ProjectMutationLock(lock_path)
     try:
         if not mutation_lock.try_acquire():
-            raise RuntimeError("project mutation is busy")
+            return _payload(
+                ToolError("project_mutation_busy", "project mutation is busy")
+            )
         try:
             return _payload(_invoke(controller, operation, arguments))
         except ToolError as exc:

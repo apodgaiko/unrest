@@ -5,8 +5,13 @@ import hashlib
 import os
 from pathlib import Path
 import subprocess
-from typing import Any, Callable, Mapping, TypeVar, cast
+from typing import Any, Callable, Mapping, cast
 
+from .accepted_point_authority import (
+    CandidatePromotionPlan,
+    PromotionRollbackPlan,
+    WorkspaceIntegrationPlan,
+)
 from .capability_policy import FINITE_CREDENTIAL_NAMES
 from .canonical_identity import canonical_json_bytes
 from .config import HARNESS_CONFIG_ENV_VARS, HarnessConfig
@@ -23,9 +28,8 @@ from .evolution import (
 from .inquiry import InquiryBudget, InquiryManager
 from .mutation_journal import (
     DurableMutationJournal,
-    ExternalGrantStore,
+    ExternalGrantVerifier,
 )
-from .project_lock import ProjectLockError, ProjectMutationLock, project_lock_path
 from .provider_sessions import ProviderSessionRunner
 from .run_control import RunControl
 from .workspaces import (
@@ -43,9 +47,6 @@ def _sha(value: bytes) -> str:
 
 def _token(value: str, length: int = 24) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:length]
-
-
-_T = TypeVar("_T")
 
 
 class FoundationToolError(RuntimeError):
@@ -92,9 +93,24 @@ def public_error(exc: Exception) -> FoundationToolError:
 class FoundationTools:
     """One authority-aware adapter shared by MCP and library surfaces."""
 
-    def __init__(self, config: HarnessConfig, controller: ProjectController) -> None:
+    def __init__(
+        self,
+        config: HarnessConfig,
+        controller: ProjectController,
+        *,
+        evolution_provider_runner: Any | None = None,
+        mutation_journal_factory: Callable[[Path], DurableMutationJournal] | None = None,
+    ) -> None:
         self.config = config
-        self.controller = controller
+        # The public effect facade receives only the store authority surface.
+        # Host grant admission remains structurally unreachable from this object.
+        self.store = controller.store
+        self._evolution_provider_runner = (
+            evolution_provider_runner or ProviderSessionRunner(self.config)
+        )
+        self._mutation_journal_factory = (
+            mutation_journal_factory or DurableMutationJournal
+        )
         self.config.harness_home.mkdir(parents=True, exist_ok=True)
         worker_environment = {
             name: os.environ[name]
@@ -111,13 +127,13 @@ class FoundationTools:
 
     def _project_repository(self, project_id: str) -> Path:
         try:
-            return self.controller.store.workspace_dir(project_id).resolve(strict=True)
+            return self.store.workspace_dir(project_id).resolve(strict=True)
         except (FileNotFoundError, OSError) as exc:
             raise FoundationToolError("not_found", "project was not found") from exc
 
     def _inquiry_root(self, project_id: str | None) -> Path:
         if project_id is not None:
-            root = self.controller.store.bucket_root(project_id)
+            root = self.store.bucket_root(project_id)
             if not (root / ".unrest-runtime" / "project.json").is_file():
                 raise FoundationToolError("not_found", "project was not found")
             return root
@@ -128,69 +144,22 @@ class FoundationTools:
     def _project_roots(self) -> tuple[Path, ...]:
         return tuple(
             Path(record.workspace_dir).resolve()
-            for record in self.controller.store.list_projects()
+            for record in self.store.list_projects()
         )
 
     def _project_id_for_repository(self, repository: Path) -> str:
         resolved = repository.resolve()
-        for record in self.controller.store.list_projects():
+        for record in self.store.list_projects():
             if Path(record.workspace_dir).resolve() == resolved:
                 return record.id
         raise FoundationToolError("not_found", "project was not found")
 
-    def _under_project_authority(self, project_id: str, effect: Callable[[], _T]) -> _T:
-        """Enter the controller-owned exclusion path before an accepted-point effect."""
-
-        try:
-            path = project_lock_path(self.controller.store, project_id)
-        except ProjectLockError as exc:
-            raise FoundationToolError("internal_error", "project mutation lock unavailable") from exc
-        if path is None:
-            raise FoundationToolError("not_found", "project was not found")
-        lock = ProjectMutationLock(path)
-        try:
-            if not lock.try_acquire():
-                raise FoundationToolError("busy", "project mutation is busy")
-            return effect()
-        except ProjectLockError as exc:
-            raise FoundationToolError("internal_error", "project mutation lock unavailable") from exc
-        finally:
-            lock.release()
-
-    @staticmethod
-    def _journal(repository: Path) -> DurableMutationJournal:
-        return DurableMutationJournal(repository)
-
-    def retain_human_grant(
-        self,
-        *,
-        project_id: str,
-        grant_id: str,
-        authorized_by: str,
-        operation: str,
-        scope: Mapping[str, Any],
-    ) -> None:
-        """Host/controller admission seam; deliberately absent from MCP/library catalog.
-
-        The external actor supplies the exact scope.  Workspace and evolution
-        adapters can only consume this immutable record and cannot issue it.
-        """
-
-        repository = self._project_repository(project_id)
-        self._under_project_authority(
-            project_id,
-            lambda: ExternalGrantStore(repository).retain(
-                grant_id=grant_id,
-                authorized_by=authorized_by,
-                operation=operation,
-                project_id=project_id,
-                scope=scope,
-            ),
-        )
+    def _journal(self, repository: Path) -> DurableMutationJournal:
+        return self._mutation_journal_factory(repository)
 
     def _find_inquiry(self, inquiry_id: str) -> InquiryManager:
         roots = [self.config.harness_home / "foundation"]
-        roots.extend(self.controller.store.bucket_root(item.id) for item in self.controller.store.list_projects())
+        roots.extend(self.store.bucket_root(item.id) for item in self.store.list_projects())
         for root in roots:
             if (root / ".unrest" / "inquiries" / inquiry_id.removeprefix("inquiry:")).is_dir():
                 return InquiryManager(root, self.config)
@@ -209,7 +178,7 @@ class FoundationTools:
             if events.is_dir():
                 return EvolutionManager(
                     root,
-                    provider_runner=ProviderSessionRunner(self.config),
+                    provider_runner=self._evolution_provider_runner,
                 )
         raise FoundationToolError("not_found", "campaign was not found")
 
@@ -295,10 +264,10 @@ class FoundationTools:
             "project_id": project_id,
             "write_paths": list(write_paths),
         }
+        lease_id = "lease:" + _token("workspace\0" + idempotency_key)
 
         def effect(_: str) -> Mapping[str, Any]:
             manager = WorkspaceManager(repository)
-            lease_id = "lease:" + _token("workspace\0" + idempotency_key)
             try:
                 lease = manager.lease_workspace(
                     base_revision=base_revision,
@@ -315,12 +284,21 @@ class FoundationTools:
                 lease = manager.inspect_workspace(lease_id)
             return self._workspace_summary(lease)
 
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            try:
+                return self._workspace_summary(
+                    WorkspaceManager(repository).inspect_workspace(lease_id)
+                )
+            except WorkspaceError:
+                return None
+
         return self._journal(repository).execute(
             operation="lease_workspace",
             resource_key=f"{project_id}\0{base_revision}\0{','.join(sorted(write_paths))}",
             idempotency_key=idempotency_key,
             request=request,
             effect=effect,
+            reconcile=reconcile,
         )
 
     def inspect_workspace(self, workspace_id: str) -> dict[str, Any]:
@@ -339,9 +317,20 @@ class FoundationTools:
                 raise WorkspaceError("lease_not_active")
             return self._workspace_summary(manager.inspect_workspace(workspace_id))
 
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            lease = manager.inspect_workspace(workspace_id)
+            if lease.patch_digest is None or lease.patch_receipt_digest is None:
+                return None
+            return {
+                **self._workspace_summary(lease),
+                "state": "returned",
+                "receipt_id": lease.patch_receipt_digest,
+            }
+
         return self._journal(repository).execute(
             operation="return_workspace", resource_key=workspace_id,
             idempotency_key=idempotency_key, request=request, effect=effect,
+            reconcile=reconcile,
         )
 
     def integrate_workspace(self, workspace_id: str, human_grant_id: str, idempotency_key: str) -> dict[str, Any]:
@@ -354,41 +343,59 @@ class FoundationTools:
             "workspace_id": workspace_id,
         }
 
-        def effect(fingerprint: str) -> Mapping[str, Any]:
-            def mutate() -> Mapping[str, Any]:
-                lease = manager.inspect_workspace(workspace_id)
-                if lease.patch_digest is None:
-                    raise WorkspaceError("workspace_not_returned")
-                scope = {
-                    "expected_parent_revision": lease.base_revision,
-                    "patch_digest": lease.patch_digest,
-                    "workspace_id": workspace_id,
-                }
-                authorized_by = ExternalGrantStore(repository).consume(
-                    grant_id=human_grant_id,
-                    operation="integrate_workspace",
-                    project_id=project_id,
-                    scope=scope,
-                    request_fingerprint=fingerprint,
-                )
-                manager.integrate_workspaces(
-                    (
-                        HumanIntegrationGrant(
-                            human_grant_id,
-                            authorized_by,
-                            workspace_id,
-                            lease.patch_digest,
-                            lease.base_revision,
-                        ),
-                    )
-                )
-                return self._workspace_summary(manager.inspect_workspace(workspace_id))
+        def retained_grant(fingerprint: str) -> tuple[HumanIntegrationGrant, object]:
+            lease = manager.inspect_workspace(workspace_id)
+            if lease.patch_digest is None:
+                raise WorkspaceError("workspace_not_returned")
+            scope = {
+                "expected_parent_revision": lease.base_revision,
+                "patch_digest": lease.patch_digest,
+                "workspace_id": workspace_id,
+            }
+            proof = ExternalGrantVerifier(
+                repository,
+                custody_root_id=manager.store.custody_root_id,
+            ).consume(
+                grant_id=human_grant_id,
+                operation="integrate_workspace",
+                project_id=project_id,
+                scope=scope,
+                request_fingerprint=fingerprint,
+            )
+            return HumanIntegrationGrant(
+                human_grant_id,
+                proof.authorized_by,
+                workspace_id,
+                lease.patch_digest,
+                lease.base_revision,
+            ), proof
 
-            return self._under_project_authority(project_id, mutate)
+        def effect(fingerprint: str) -> Mapping[str, Any]:
+            grant, proof = retained_grant(fingerprint)
+            self.store.apply_accepted_point_plan(
+                project_id,
+                WorkspaceIntegrationPlan(
+                    manager,
+                    (grant,),
+                    retained_grant_proof=proof,
+                ),
+            )
+            return self._workspace_summary(manager.inspect_workspace(workspace_id))
+
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            lease = manager.inspect_workspace(workspace_id)
+            if lease.state != "integrated" or lease.integration_receipt_digest is None:
+                return None
+            return self._workspace_summary(lease)
+
+        def stage(fingerprint: str) -> None:
+            retained_grant(fingerprint)
 
         return self._journal(repository).execute(
             operation="integrate_workspace", resource_key=workspace_id,
             idempotency_key=idempotency_key, request=request, effect=effect,
+            stage=stage,
+            reconcile=reconcile,
         )
 
     def cleanup_workspace(self, workspace_id: str, idempotency_key: str) -> dict[str, Any]:
@@ -400,9 +407,16 @@ class FoundationTools:
             manager.cleanup_workspace(workspace_id)
             return self._workspace_summary(manager.inspect_workspace(workspace_id))
 
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            lease = manager.inspect_workspace(workspace_id)
+            if lease.cleanup_receipt_digest is None:
+                return None
+            return self._workspace_summary(lease)
+
         return self._journal(repository).execute(
             operation="cleanup_workspace", resource_key=workspace_id,
             idempotency_key=idempotency_key, request=request, effect=effect,
+            reconcile=reconcile,
         )
 
     def open_campaign(self, project_id: str, accepted_point_digest: str, workload_id: str, evaluator_id: str, reviewer_id: str, budget: Mapping[str, int], seed: int, idempotency_key: str) -> dict[str, Any]:
@@ -417,6 +431,7 @@ class FoundationTools:
             "seed": seed,
             "workload_id": workload_id,
         }
+        campaign_id = "campaign:" + _token("campaign\0" + idempotency_key)
 
         def effect(_: str) -> Mapping[str, Any]:
             revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repository, check=True, capture_output=True, text=True).stdout.strip()
@@ -440,15 +455,28 @@ class FoundationTools:
                 reviewer_policy_digest=digest("reviewer-policy"), capability_policy_digest=policy,
                 provider_configuration_digest=digest("provider"), route_profile_digest=digest("route"),
                 context_digest=digest("context"), environment_digest=digest("environment"),
-                secret_set_version_id="secret-set:local:v1", author_id="candidate-author:" + project_id,
+                secret_set_version_id="secret-set:local:v1", author_id="public-workspace:" + project_id,
                 evaluator_id=evaluator_id, reviewer_id=reviewer_id,
                 budget_steps=int(budget["max_steps"]), seed=seed,
                 stopping_rule_digest=digest("stopping"), promotion_rule_digest=digest("promotion"),
                 protected_paths=(".git", ".unrest", ".unrest-runtime"),
             )
-            manager = EvolutionManager(repository, provider_runner=ProviderSessionRunner(self.config))
-            campaign_id = "campaign:" + _token("campaign\0" + idempotency_key)
+            manager = EvolutionManager(
+                repository,
+                provider_runner=self._evolution_provider_runner,
+            )
             return self._campaign_summary(manager.open_campaign(campaign_id=campaign_id, freeze=freeze))
+
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            try:
+                return self._campaign_summary(
+                    EvolutionManager(
+                        repository,
+                        provider_runner=self._evolution_provider_runner,
+                    ).inspect_campaign(campaign_id)
+                )
+            except EvolutionError:
+                return None
 
         return self._journal(repository).execute(
             operation="open_campaign",
@@ -456,6 +484,7 @@ class FoundationTools:
             idempotency_key=idempotency_key,
             request=request,
             effect=effect,
+            reconcile=reconcile,
         )
 
     def inspect_campaign(self, campaign_id: str) -> dict[str, Any]:
@@ -471,11 +500,11 @@ class FoundationTools:
             "idempotency_key": idempotency_key,
             "parent_candidate_id": parent_candidate_id,
         }
+        candidate_id = "candidate:" + _token("candidate\0" + idempotency_key)
 
         def effect(_: str) -> Mapping[str, Any]:
             snapshot = manager.inspect_campaign(campaign_id)
             translated = "original" if action == "initial" else action
-            candidate_id = "candidate:" + _token("candidate\0" + idempotency_key)
             if not any(item.candidate_id == candidate_id for item in snapshot.candidates):
                 manager.add_candidate(
                     campaign_id=campaign_id,
@@ -487,9 +516,16 @@ class FoundationTools:
                 )
             return self._campaign_summary(manager.inspect_campaign(campaign_id))
 
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            snapshot = manager.inspect_campaign(campaign_id)
+            if not any(item.candidate_id == candidate_id for item in snapshot.candidates):
+                return None
+            return self._campaign_summary(snapshot)
+
         return self._journal(repository).execute(
             operation="add_candidate", resource_key=campaign_id,
             idempotency_key=idempotency_key, request=request, effect=effect,
+            reconcile=reconcile,
         )
 
     async def evaluate_candidate(self, campaign_id: str, candidate_id: str, idempotency_key: str) -> dict[str, Any]:
@@ -499,14 +535,22 @@ class FoundationTools:
             "candidate_id": candidate_id,
             "idempotency_key": idempotency_key,
         }
+        evaluation_id = "evaluation:" + _token("evaluation\0" + idempotency_key)
 
         async def effect(_: str) -> Mapping[str, Any]:
-            await manager.evaluate_candidate(campaign_id=campaign_id, candidate_id=candidate_id, evaluation_id="evaluation:" + _token("evaluation\0" + idempotency_key))
+            await manager.evaluate_candidate(campaign_id=campaign_id, candidate_id=candidate_id, evaluation_id=evaluation_id)
             return self._campaign_summary(manager.inspect_campaign(campaign_id))
+
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            snapshot = manager.inspect_campaign(campaign_id)
+            if not any(item.evaluation_id == evaluation_id for item in snapshot.evaluations):
+                return None
+            return self._campaign_summary(snapshot)
 
         return await self._journal(manager.repository).execute_async(
             operation="evaluate_candidate", resource_key=f"{campaign_id}\0{candidate_id}",
             idempotency_key=idempotency_key, request=request, effect=effect,
+            reconcile=reconcile,
         )
 
     async def review_candidate(self, campaign_id: str, candidate_id: str, idempotency_key: str) -> dict[str, Any]:
@@ -516,18 +560,26 @@ class FoundationTools:
             "candidate_id": candidate_id,
             "idempotency_key": idempotency_key,
         }
+        review_id = "review:" + _token("review\0" + idempotency_key)
 
         async def effect(_: str) -> Mapping[str, Any]:
             snapshot = manager.inspect_campaign(campaign_id)
             evaluations = [item for item in snapshot.evaluations if item.candidate_id == candidate_id]
             if not evaluations:
                 raise EvolutionError("evaluation_not_found")
-            await manager.review_candidate(campaign_id=campaign_id, candidate_id=candidate_id, evaluation_id=evaluations[-1].evaluation_id, review_id="review:" + _token("review\0" + idempotency_key))
+            await manager.review_candidate(campaign_id=campaign_id, candidate_id=candidate_id, evaluation_id=evaluations[-1].evaluation_id, review_id=review_id)
             return self._campaign_summary(manager.inspect_campaign(campaign_id))
+
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            snapshot = manager.inspect_campaign(campaign_id)
+            if not any(item.review_id == review_id for item in snapshot.reviews):
+                return None
+            return self._campaign_summary(snapshot)
 
         return await self._journal(manager.repository).execute_async(
             operation="review_candidate", resource_key=f"{campaign_id}\0{candidate_id}",
             idempotency_key=idempotency_key, request=request, effect=effect,
+            reconcile=reconcile,
         )
 
     def promote_candidate(self, campaign_id: str, candidate_id: str, human_grant_id: str, idempotency_key: str) -> dict[str, Any]:
@@ -541,44 +593,65 @@ class FoundationTools:
             "idempotency_key": idempotency_key,
         }
 
-        def effect(fingerprint: str) -> Mapping[str, Any]:
-            def mutate() -> Mapping[str, Any]:
-                snapshot = manager.inspect_campaign(campaign_id)
-                candidate = next((item for item in snapshot.candidates if item.candidate_id == candidate_id), None)
-                evaluation = next((item for item in reversed(snapshot.evaluations) if item.candidate_id == candidate_id), None)
-                review = next((item for item in reversed(snapshot.reviews) if item.candidate_id == candidate_id), None)
-                if candidate is None or evaluation is None or review is None:
-                    raise EvolutionError("promotion_evidence_mismatch")
-                scope = {
-                    "campaign_id": campaign_id,
-                    "candidate_digest": candidate.candidate_digest,
-                    "candidate_id": candidate_id,
-                    "evaluation_receipt_digest": evaluation.receipt_digest,
-                    "expected_predecessor_revision": snapshot.freeze.accepted_revision,
-                    "lease_id": candidate.lease_id,
-                    "patch_digest": candidate.patch_digest,
-                    "review_receipt_digest": review.receipt_digest,
-                }
-                authorized_by = ExternalGrantStore(repository).consume(
-                    grant_id=human_grant_id,
-                    operation="promote_candidate",
-                    project_id=project_id,
-                    scope=scope,
-                    request_fingerprint=fingerprint,
-                )
-                grant = HumanPromotionGrant(
-                    human_grant_id, authorized_by, campaign_id, candidate_id,
-                    candidate.candidate_digest, snapshot.freeze.accepted_revision, candidate.lease_id,
-                    candidate.patch_digest, evaluation.receipt_digest, review.receipt_digest,
-                )
-                manager.promote_candidate(grant)
-                return self._campaign_summary(manager.inspect_campaign(campaign_id))
+        def retained_grant(fingerprint: str) -> tuple[HumanPromotionGrant, object]:
+            snapshot = manager.inspect_campaign(campaign_id)
+            candidate = next((item for item in snapshot.candidates if item.candidate_id == candidate_id), None)
+            evaluation = next((item for item in reversed(snapshot.evaluations) if item.candidate_id == candidate_id), None)
+            review = next((item for item in reversed(snapshot.reviews) if item.candidate_id == candidate_id), None)
+            if candidate is None or evaluation is None or review is None:
+                raise EvolutionError("promotion_evidence_mismatch")
+            scope = {
+                "campaign_id": campaign_id,
+                "candidate_digest": candidate.candidate_digest,
+                "candidate_id": candidate_id,
+                "evaluation_receipt_digest": evaluation.receipt_digest,
+                "expected_predecessor_revision": snapshot.freeze.accepted_revision,
+                "lease_id": candidate.lease_id,
+                "patch_digest": candidate.patch_digest,
+                "review_receipt_digest": review.receipt_digest,
+            }
+            proof = ExternalGrantVerifier(
+                repository,
+                custody_root_id=manager.store.custody_root_id,
+            ).consume(
+                grant_id=human_grant_id,
+                operation="promote_candidate",
+                project_id=project_id,
+                scope=scope,
+                request_fingerprint=fingerprint,
+            )
+            return HumanPromotionGrant(
+                human_grant_id, proof.authorized_by, campaign_id, candidate_id,
+                candidate.candidate_digest, snapshot.freeze.accepted_revision, candidate.lease_id,
+                candidate.patch_digest, evaluation.receipt_digest, review.receipt_digest,
+            ), proof
 
-            return self._under_project_authority(project_id, mutate)
+        def effect(fingerprint: str) -> Mapping[str, Any]:
+            grant, proof = retained_grant(fingerprint)
+            self.store.apply_accepted_point_plan(
+                project_id,
+                CandidatePromotionPlan(manager, grant, retained_grant_proof=proof),
+            )
+            return self._campaign_summary(manager.inspect_campaign(campaign_id))
+
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            snapshot = manager.inspect_campaign(campaign_id)
+            if not any(
+                item.grant_id == human_grant_id
+                and item.promotion_receipt_digest is not None
+                for item in snapshot.promotions
+            ):
+                return None
+            return self._campaign_summary(snapshot)
+
+        def stage(fingerprint: str) -> None:
+            retained_grant(fingerprint)
 
         return self._journal(repository).execute(
             operation="promote_candidate", resource_key=f"{campaign_id}\0{candidate_id}",
             idempotency_key=idempotency_key, request=request, effect=effect,
+            stage=stage,
+            reconcile=reconcile,
         )
 
     def rollback_promotion(self, campaign_id: str, promotion_receipt_id: str, human_grant_id: str, idempotency_key: str) -> dict[str, Any]:
@@ -592,39 +665,57 @@ class FoundationTools:
             "promotion_receipt_id": promotion_receipt_id,
         }
 
-        def effect(fingerprint: str) -> Mapping[str, Any]:
-            def mutate() -> Mapping[str, Any]:
-                snapshot = manager.inspect_campaign(campaign_id)
-                promotion = next((item for item in snapshot.promotions if item.promotion_receipt_digest == promotion_receipt_id), None)
-                if promotion is None:
-                    raise EvolutionError("promotion_not_complete")
-                scope = {
-                    "campaign_id": campaign_id,
-                    "expected_current_revision": promotion.accepted_revision,
-                    "promotion_id": promotion.promotion_id,
-                    "promotion_receipt_id": promotion_receipt_id,
-                    "rollback_target_revision": promotion.predecessor_revision,
-                }
-                authorized_by = ExternalGrantStore(repository).consume(
-                    grant_id=human_grant_id,
-                    operation="rollback_promotion",
-                    project_id=project_id,
-                    scope=scope,
-                    request_fingerprint=fingerprint,
-                )
-                manager.rollback_promotion(
-                    HumanRollbackGrant(
-                        human_grant_id,
-                        authorized_by,
-                        campaign_id,
-                        promotion.promotion_id,
-                        promotion.accepted_revision,
-                        promotion.predecessor_revision,
-                    )
-                )
-                return self._campaign_summary(manager.inspect_campaign(campaign_id))
+        def retained_grant(fingerprint: str) -> tuple[HumanRollbackGrant, object]:
+            snapshot = manager.inspect_campaign(campaign_id)
+            promotion = next((item for item in snapshot.promotions if item.promotion_receipt_digest == promotion_receipt_id), None)
+            if promotion is None:
+                raise EvolutionError("promotion_not_complete")
+            scope = {
+                "campaign_id": campaign_id,
+                "expected_current_revision": promotion.accepted_revision,
+                "promotion_id": promotion.promotion_id,
+                "promotion_receipt_id": promotion_receipt_id,
+                "rollback_target_revision": promotion.predecessor_revision,
+            }
+            proof = ExternalGrantVerifier(
+                repository,
+                custody_root_id=manager.store.custody_root_id,
+            ).consume(
+                grant_id=human_grant_id,
+                operation="rollback_promotion",
+                project_id=project_id,
+                scope=scope,
+                request_fingerprint=fingerprint,
+            )
+            return HumanRollbackGrant(
+                human_grant_id,
+                proof.authorized_by,
+                campaign_id,
+                promotion.promotion_id,
+                promotion.accepted_revision,
+                promotion.predecessor_revision,
+            ), proof
 
-            return self._under_project_authority(project_id, mutate)
+        def effect(fingerprint: str) -> Mapping[str, Any]:
+            grant, proof = retained_grant(fingerprint)
+            self.store.apply_accepted_point_plan(
+                project_id,
+                PromotionRollbackPlan(manager, grant, retained_grant_proof=proof),
+            )
+            return self._campaign_summary(manager.inspect_campaign(campaign_id))
+
+        def reconcile(_: str) -> Mapping[str, Any] | None:
+            snapshot = manager.inspect_campaign(campaign_id)
+            if not any(
+                item.grant_id == human_grant_id
+                and item.rollback_receipt_digest is not None
+                for item in snapshot.rollbacks
+            ):
+                return None
+            return self._campaign_summary(snapshot)
+
+        def stage(fingerprint: str) -> None:
+            retained_grant(fingerprint)
 
         return self._journal(repository).execute(
             operation="rollback_promotion",
@@ -632,6 +723,8 @@ class FoundationTools:
             idempotency_key=idempotency_key,
             request=request,
             effect=effect,
+            stage=stage,
+            reconcile=reconcile,
         )
 
 

@@ -16,6 +16,10 @@ import subprocess
 from typing import Any, Literal
 
 from . import attention as attn_factory
+from .accepted_point_authority import (
+    AcceptedPointAuthorityError,
+    WorkspaceIntegrationPlan,
+)
 from .capability_policy import redact_credential_values
 from .dispatcher import (
     DispatchRequest,
@@ -523,10 +527,15 @@ class MissionCoordinator:
 
         if batch_error is None and grants:
             try:
-                manager.integrate_workspaces(
-                    tuple(grants), validate=self._validate_integration_tree
+                self.store.apply_accepted_point_plan(
+                    self.project_id,
+                    WorkspaceIntegrationPlan(
+                        manager,
+                        tuple(grants),
+                        validate=self._validate_integration_tree,
+                    ),
                 )
-            except WorkspaceError as exc:
+            except (AcceptedPointAuthorityError, WorkspaceError) as exc:
                 batch_error = f"Workspace integration failed: {exc.code}"
 
         for lease in leases.values():

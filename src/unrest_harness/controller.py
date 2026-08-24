@@ -70,6 +70,20 @@ class ProjectController:
         self.dispatcher = dispatcher
         self.terminal_reviewer = terminal_reviewer
 
+    def apply_accepted_point_plan(self, project_id: str, plan: object) -> object:
+        """Delegate one closed mutation plan to the store-owned authority."""
+
+        return self.store.apply_accepted_point_plan(project_id, plan)
+
+    def local_grant_custodian(self, project_id: str, actor_id: str):
+        """Bind an explicit local operator identity to immutable grant custody."""
+
+        from .accepted_point_authority import HostGrantCustodian, _mint_local_host_actor
+
+        repository = self.store.workspace_dir(project_id).resolve(strict=True)
+        actor = _mint_local_host_actor(repository, actor_id)
+        return HostGrantCustodian(repository, project_id, actor)
+
     # ------------------------------------------------------------------
     # Tool methods
     # ------------------------------------------------------------------

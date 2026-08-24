@@ -5,6 +5,7 @@ import errno
 import importlib
 import os
 import stat
+import threading
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -13,6 +14,21 @@ from .storage import ProjectStore
 
 class ProjectLockError(RuntimeError):
     """The project lock could not be safely inspected or acquired."""
+
+
+_HELD_LOCKS = threading.local()
+
+
+def _held_paths() -> set[str]:
+    paths = getattr(_HELD_LOCKS, "paths", None)
+    if paths is None:
+        paths = set()
+        _HELD_LOCKS.paths = paths
+    return paths
+
+
+def project_mutation_lock_held(path: Path) -> bool:
+    return str(path.resolve(strict=False)) in _held_paths()
 
 
 def project_lock_path(store: ProjectStore, project_id: str) -> Path | None:
@@ -71,12 +87,14 @@ class ProjectMutationLock:
             lock_file.close()
             return False
         self._file = lock_file
+        _held_paths().add(str(self.path.resolve(strict=False)))
         return True
 
     def release(self) -> None:
         lock_file, self._file = self._file, None
         if lock_file is None:
             return
+        _held_paths().discard(str(self.path.resolve(strict=False)))
         try:
             # Closing the handle releases both flock and Windows byte-range locks,
             # including automatically when the owning process exits abruptly.
