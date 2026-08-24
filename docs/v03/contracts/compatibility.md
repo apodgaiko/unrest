@@ -1,8 +1,9 @@
 # Compatibility and rollback contract
 
-Status: **draft; non-authoritative**. This contract supports
-[ADR-0305](../../decisions/ADR-0305-compatibility.md) and grants no acceptance,
-runtime, integration, migration, or release authority.
+Status: **accepted for v0.3.1**. This contract supports
+[ADR-0305](../../decisions/ADR-0305-compatibility.md). Proposal-era wording and
+the pinned v0.2 inventory below remain dated compatibility provenance; current
+runtime authority comes from the accepted ADR and v0.3.1 contract.
 
 ## Artifact set
 

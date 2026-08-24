@@ -1,9 +1,10 @@
-# Proposed Receipt.v1 dependency and freshness contract
+# Accepted Receipt.v1 dependency and freshness contract
 
-Status: proposed, non-authoritative, and unindexed. This contract supports
+Status: accepted for v0.3.1. This contract supports
 [ADR-0301](../../decisions/ADR-0301-identity.md), uses
 [Identity.v1](identity-v1.md), and inherits issuer, integration, promotion, and
 rollback authority from [ADR-0300](../../decisions/ADR-0300-authority.md).
+Proposal-era wording below is dated rationale, not current runtime status.
 
 ## Complete receipt-family catalog
 
@@ -177,12 +178,11 @@ artifacts.
 
 ## Compatibility and rollback
 
-These are new proposal-only receipt families, not current handoff receipts and
-not current schema-v1 Mission persistence. Future adapters must name the exact
+These are additive v0.3.1 receipt families, distinct from legacy handoff
+receipts and schema-v1 Mission persistence. Adapters must name the exact
 domain and cannot relabel or heuristically migrate existing records.
 
-Before acceptance, rollback is rejection/deletion of this draft set. After a
-future implementation, stop issuance/consumption, retain immutable history
+Rollback stops issuance/consumption and retains immutable history
 under policy, and use the current Mission-only no-extra path. Disabling receipt
 consumption cannot convert stale or unverifiable evidence into acceptance.
 

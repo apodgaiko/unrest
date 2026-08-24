@@ -1,8 +1,9 @@
-# Proposed v0.3 authority contract
+# Accepted v0.3 authority contract
 
-Status: proposed, non-authoritative, and unindexed. This supporting contract is
-owned by [ADR-0300](../../decisions/ADR-0300-authority.md). It does not alter
-current v0.2 behavior and cannot be accepted by verification or chronology.
+Status: accepted for v0.3.1 and owned by
+[ADR-0300](../../decisions/ADR-0300-authority.md). Proposal-era baseline and
+alternative language below is retained as dated rationale; current authority is
+the accepted ADR, implemented runtime, and v0.3.1 validation contract.
 
 ## Current authority baseline
 

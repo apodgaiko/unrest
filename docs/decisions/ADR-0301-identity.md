@@ -3,15 +3,18 @@
 ## Record metadata
 
 id: ADR-0301
-status: proposed
+status: accepted
 date: 2026-08-18
+accepted_date: 2026-08-24
+accepted_by: maintainer-v0.3.1-instruction
 task_ids:
   - W-IDENTITY-EVIDENCE
 contract_targets:
   - VAL-ID-001
   - VAL-ID-002
-  - VAL-ID-003
-  - VAL-ID-004
+  - VAL-RCP-001
+  - VAL-RCP-002
+  - VAL-SEC-002
 supersedes: []
 superseded_by: null
 evaluation_tier:
@@ -22,10 +25,11 @@ evaluation_tier:
 
 ## Authority status
 
-This record is an unindexed, non-authoritative proposal. Authorship, its date
-or filename, bundle inclusion, passing vectors, and chronology do not accept or
-integrate it. Only a downstream maintainer may accept and canonically integrate
-a specific version through the authority boundary in
+Accepted for v0.3.1 by the maintainer's explicit 2026-08-24 full-implementation
+instruction. Identity Catalog v2 preserves the original 18 kinds and adds the
+six runtime kinds frozen by the v0.3.1 contract. Proposal-era wording below is
+dated design rationale, not the current runtime-status oracle. Authority remains
+bounded through
 [ADR-0300](ADR-0300-authority.md). This record issues no integration receipt.
 
 ## Scope
@@ -34,10 +38,9 @@ a specific version through the authority boundary in
   domains, receipt families, issuer/consumer/dependency semantics, freshness,
   revocation, outcomes, artifact/deviation/cost fields, integrity, and secret-
   safe metadata.
-- Out of scope: accepting this record, runtime implementation, storage engine,
-  cryptographic key custody, public CLI/MCP shape, workspace isolation,
-  evaluator quorum, promotion authority, migration, or changing current v0.2
-  records.
+- Out of scope: cryptographic key custody or signed third-party authoritative
+  export, public surface ownership, OS isolation, evaluator quorum, promotion
+  authority, heuristic migration, or rewriting v0.2 records.
 
 ## Context
 
@@ -61,15 +64,15 @@ It is an input and useful precedent, not current product behavior and not the
 identity domain defined here. Nothing in this draft changes either current
 schema-v1 bytes or that protocol.
 
-## Proposed decisions and dispositions
+## Accepted decisions and dispositions
 
-| Decision ID | Disposition | Proposed rule |
+| Decision ID | Disposition | Rule |
 | --- | --- | --- |
-| ID-D01 | proposed | Version `IF-FINGERPRINT` as a strict canonical JSON subset plus an identity-kind domain separator and SHA-256 digest. Stored bytes and digest preimages are exact and independently reproducible. |
-| ID-D02 | proposed | Bind the complete frozen foundation dimension catalog and the 18 public identity kinds in the identity contract. A change in one material dimension produces a distinct identity and cannot reuse dependent evidence. |
-| ID-D03 | proposed | Version nine append-only receipt families from the frozen foundation registry. Every receipt binds issuer authority, subject, dependency digests, non-authoritative time metadata, outcome, artifacts, deviations, cost, integrity, freshness policy, disposition, and consumers. |
-| ID-D04 | proposed | Compute freshness by exact dependency comparison, revocation and expiry policy. Chronology never establishes authority or freshness, and an old receipt remains an immutable historical statement after becoming stale or revoked. |
-| ID-D05 | proposed | Admit only named public configuration and opaque public secret-set version identifiers. Raw, encoded, encrypted, transformed, or hashed secret values, prompts, source bodies, reports, and unrelated command output are forbidden from identities, receipts, fixtures, evidence metadata, and handoffs. |
+| ID-D01 | accepted | Version `IF-FINGERPRINT` as a strict canonical JSON subset plus an identity-kind domain separator and SHA-256 digest. Stored bytes and digest preimages are exact and independently reproducible. |
+| ID-D02 | accepted | Bind the complete frozen foundation dimension catalog and the 18 public identity kinds in the identity contract. A change in one material dimension produces a distinct identity and cannot reuse dependent evidence. |
+| ID-D03 | accepted | Version nine append-only receipt families from the frozen foundation registry. Every receipt binds issuer authority, subject, dependency digests, non-authoritative time metadata, outcome, artifacts, deviations, cost, integrity, freshness policy, disposition, and consumers. |
+| ID-D04 | accepted | Compute freshness by exact dependency comparison, revocation and expiry policy. Chronology never establishes authority or freshness, and an old receipt remains an immutable historical statement after becoming stale or revoked. |
+| ID-D05 | accepted | Admit only named public configuration and opaque public secret-set version identifiers. Raw, encoded, encrypted, transformed, or hashed secret values, prompts, source bodies, reports, and unrelated command output are forbidden from identities, receipts, fixtures, evidence metadata, and handoffs. |
 | ID-A01 | rejected | Hash arbitrary JSON, rely on library-default serialization, allow coercion, or treat semantically similar but non-canonical stored bytes as valid. |
 | ID-A02 | rejected | Use timestamps, latest-file selection, sequence, successful outcomes, or a producer's self-assertion as freshness, issuer authority, or causality. |
 | ID-A03 | rejected | Include a secret value or its hash to make a run reproducible. Hashing a secret creates a comparison oracle; it does not make the value public metadata. |
@@ -261,7 +264,8 @@ records their downstream ownership and cross-family dependencies.
 ## Review
 
 - Reviewer: none
-- Approval date/evidence: none; proposed and unindexed
+- Approval date/evidence: 2026-08-24 maintainer full-implementation instruction,
+  accepted decision index, Catalog v2/runtime receipts, and validation contract.
 - Evaluation evidence: strict fixture parsing, independent vector
   recomputation, mutation partitions, leak classification, and link checks
   only; no runtime acceptance exists

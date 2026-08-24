@@ -3,8 +3,10 @@
 ## Record metadata
 
 id: ADR-0304
-status: proposed
+status: accepted
 date: 2026-08-18
+accepted_date: 2026-08-24
+accepted_by: maintainer-v0.3.1-instruction
 task_ids:
   - W-EVOLUTION
 contract_targets:
@@ -12,6 +14,7 @@ contract_targets:
   - VAL-EVO-002
   - VAL-EVO-003
   - VAL-EVO-004
+  - VAL-EVO-005
 supersedes: []
 superseded_by: null
 evaluation_tier:
@@ -21,11 +24,11 @@ evaluation_tier:
 
 ## Authority status
 
-This record is an unindexed, non-authoritative proposal. Authorship, filename,
-date, campaign score, fixture success, bundle inclusion, or later chronology
-does not accept or integrate it. Only a downstream maintainer may accept and
-canonically integrate an exact version through the boundary proposed by
-[ADR-0300](ADR-0300-authority.md). This record issues no integration receipt.
+Accepted for v0.3.1 by the maintainer's explicit 2026-08-24 full-implementation
+instruction. Promotion and rollback remain explicit human decisions through
+[ADR-0300](ADR-0300-authority.md); evaluation never gains promotion authority.
+Proposal-era wording below is dated design rationale, not the current
+runtime-status oracle.
 
 ## Scope
 
@@ -33,9 +36,9 @@ canonically integrate an exact version through the boundary proposed by
   holdout independence, immutable candidate genealogy, complete outcome and
   learning retention, exact-candidate promotion, freshness/quorum, reward-hack
   resistance, exact-predecessor rollback, and automated-canary disposition.
-- Out of scope: acceptance, runtime implementation, evaluator adapter choice,
-  storage engine, public surfaces, Mission coordination, live continuation,
-  dependency changes, and changing current v0.2 behavior.
+- Out of scope: automated live/canary promotion, candidate-controlled evaluator
+  policy, Mission coordination, signed third-party custody, and rewriting v0.2
+  behavior.
 
 ## Context
 
@@ -53,21 +56,21 @@ Mission coordinator and independent Mission validator handoffs, but no
 evaluator/promotion service, protected holdout custodian, evolution campaign,
 candidate portfolio, automated canary, or promotion/rollback receipt flow.
 
-The proposed identity and receipt records in
+The accepted identity and receipt records in
 [ADR-0301](ADR-0301-identity.md) and the isolated patch-return lifecycle in
-[ADR-0303](ADR-0303-workspace.md) are also unaccepted proposals. They are
-cross-linked dependencies, not present behavior. Nothing below changes v0.2.
+[ADR-0303](ADR-0303-workspace.md) are accepted prerequisites. They are
+cross-linked additive dependencies; nothing below rewrites v0.2 Mission data.
 
-## Proposed decisions and dispositions
+## Accepted decisions and dispositions
 
-| Decision ID | Disposition | Proposed rule |
+| Decision ID | Disposition | Rule |
 | --- | --- | --- |
-| EVO-D01 | proposed | Admit only offline campaigns whose complete governance record is externally frozen before launch; candidate authors and mutation workers cannot change its inputs or authorities. |
-| EVO-D02 | proposed | Keep candidate authors/workers, evaluator, reviewer quorum, `holdout_custodian`, `retry_exclusion_decision_authority`, and `promotion_authority` independent as declared by the campaign policy. Evaluation and review produce evidence or recommendations only. |
-| EVO-D03 | proposed | Give every candidate immutable content identity and complete genealogy. Any edit, rebase, retry input change, or mutation creates a new candidate/run rather than rewriting lineage. |
-| EVO-D04 | proposed | Retain every evaluation, review, decision, dissent, cost, and learning/projection invalidation outcome. Missing, excluded, skipped, failed, or contaminated data never improves a score or disappears from denominators. |
-| EVO-D05 | proposed | Promotion requires a named external authority, an exact candidate and predecessor, fresh identity-bound evidence, satisfied independent quorum, a recorded decision, parent-only integration, and terminal receipts. |
-| EVO-D06 | proposed | Promotion or removal predeclares an exact predecessor rollback target, trigger, issuer, procedure, compatibility checks, retention, and terminal receipt. Rollback never chooses “latest known good.” |
+| EVO-D01 | accepted | Admit only offline campaigns whose complete governance record is externally frozen before launch; candidate authors and mutation workers cannot change its inputs or authorities. |
+| EVO-D02 | accepted | Keep candidate authors/workers, evaluator, reviewer quorum, `holdout_custodian`, `retry_exclusion_decision_authority`, and `promotion_authority` independent as declared by the campaign policy. Evaluation and review produce evidence or recommendations only. |
+| EVO-D03 | accepted | Give every candidate immutable content identity and complete genealogy. Any edit, rebase, retry input change, or mutation creates a new candidate/run rather than rewriting lineage. |
+| EVO-D04 | accepted | Retain every evaluation, review, decision, dissent, cost, and learning/projection invalidation outcome. Missing, excluded, skipped, failed, or contaminated data never improves a score or disappears from denominators. |
+| EVO-D05 | accepted | Promotion requires a named external authority, an exact candidate and predecessor, fresh identity-bound evidence, satisfied independent quorum, a recorded decision, parent-only integration, and terminal receipts. |
+| EVO-D06 | accepted | Promotion or removal predeclares an exact predecessor rollback target, trigger, issuer, procedure, compatibility checks, retention, and terminal receipt. Rollback never chooses “latest known good.” |
 | EVO-A01 | rejected | Let a candidate author, mutation worker, evaluator, reviewer, adapter, score, chronology, terminal-review recommendation, or successful test directly promote or mutate Mission truth. |
 | EVO-A02 | rejected | Let candidate code read protected holdouts, alter evaluator/oracle/completion criteria, suppress failures, choose its own retries/exclusions, or benefit from missing observations. |
 | EVO-A03 | rejected | Retain only winners, aggregate away dissent/error classes, rewrite genealogy after retry/rebase, or delete evidence when a learning summary changes. |
@@ -231,7 +234,7 @@ considered and rejected: it makes infrastructure failure look like progress.
   any material mutation consume time and storage.
 - Compatibility/hard cut: none in current v0.2; future live/autonomous
   promotion remains gated off.
-- Schema/migration impact: new proposal-only v1 records; no heuristic reader.
+- Schema/migration impact: new additive v1 campaign records; no heuristic reader.
 - Security/privacy impact: only public identities and bounded artifact refs are
   retained; protected holdout bodies, secrets, prompts, reports, and raw output
   remain excluded from metadata and candidate access.
@@ -250,7 +253,8 @@ These remain deferred and cannot authorize live automation. See the
 ## Review
 
 - Reviewer: none
-- Approval date/evidence: none; proposed and unindexed
+- Approval date/evidence: 2026-08-24 maintainer full-implementation instruction,
+  accepted decision index, offline evolution runtime, and validation contract.
 - Evaluation evidence: focused fixture, completeness, and link checks only; no
   runtime acceptance, promotion, canary, or rollback evidence exists
 

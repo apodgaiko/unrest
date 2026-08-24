@@ -3,15 +3,18 @@
 ## Record metadata
 
 id: ADR-0305
-status: proposed
+status: accepted
 date: 2026-08-18
+accepted_date: 2026-08-24
+accepted_by: maintainer-v0.3.1-instruction
 task_ids:
   - W-COMPATIBILITY
 contract_targets:
-  - VAL-COMPAT-001
-  - VAL-COMPAT-002
-  - VAL-COMPAT-003
-  - VAL-COMPAT-004
+  - VAL-COMP-001
+  - VAL-COMP-002
+  - VAL-COMP-003
+  - VAL-BUR-001
+  - VAL-BUR-002
 supersedes: []
 superseded_by: null
 evaluation_tier:
@@ -22,24 +25,16 @@ evaluation_tier:
 
 ## Status and boundary
 
-This record is a non-authoritative proposal. It is unindexed and therefore does
-not change the accepted authority in
-[ADR-0002](ADR-0002-lean-core-v0.2.md) or the current
-[architecture index](../architecture/index.md). Authorship, chronology,
-successful verification, or mere presence in this checkout, an FM-000 bundle,
-or an unaccepted inventory cannot accept or integrate it. The downstream
-maintainer/integration owner, acting through the product decision and
-integration process, is the sole acceptance authority. Acceptance,
-implementation, package changes, migration execution, and release remain that
-downstream authority's acts.
+Accepted for v0.3.1 by the maintainer's explicit 2026-08-24 full-implementation
+instruction. It extends rather than replaces the accepted authority in
+[ADR-0002](ADR-0002-lean-core-v0.2.md) and the current
+[architecture index](../architecture/index.md). Proposal-era wording below is
+dated design rationale, not the current runtime-status oracle. Authorship,
+chronology, successful verification, or mere presence still cannot independently
+grant authority; the recorded maintainer decision and integrated evidence do.
 
-No product-stage integration receipt exists, and this record and product
-milestone neither contain nor issue one. A downstream receipt may exist only
-after a handoff is generated and the sole downstream authority adjudicates and
-integrates a specific version. The absence of a pre-gate handoff is therefore
-expected and is not a product defect.
-
-Current v0.2 truth and proposed v0.3 rules are deliberately separate below.
+Pinned v0.2 truth and the accepted additive v0.3.1 rules are deliberately
+separate below.
 The machine-readable [source inventory](../../tests/fixtures/v03_decisions/compatibility/v02-source-inventory.v1.json)
 and [classification matrix](../../tests/fixtures/v03_decisions/compatibility/compatibility-matrix.v1.json)
 are [contracted](../v03/contracts/compatibility.md).
@@ -50,12 +45,12 @@ are [contracted](../v03/contracts/compatibility.md).
   configuration, public API, persistence, directory, discovery, package-data,
   optional-extra, verification, coordinator, observer, and hard-cut surfaces;
   narrow readers; and the no-extra rollback path.
-- Out of scope: acceptance, runtime or dependency changes, migration execution,
-  release, resurrection of deliberate hard cuts, or a second coordinator.
+- Out of scope: heuristic migration, resurrection of deliberate hard cuts,
+  required optional adapters/services, provider choice, or a second coordinator.
 
 ## Context
 
-The proposal families introduce future versioned concepts around a pinned base
+The v0.3.1 families introduce additive versioned concepts around a pinned base
 whose current compatibility perimeter must remain explicit. The decision is
 identified by base commit `96d5c0f0b240bd3373809546d7aecc1e407f837b`,
 base tree `a6746372e3367ee11d974cbe4778f968a38f940f`, inventory
@@ -91,15 +86,15 @@ version `v02-source-inventory.v1`, and matrix version
   secret redaction, duplicate root schemas, historical baseline generation,
   and broad static/recursive assurance. Those cuts have no compatibility shim.
 
-## Proposed v0.3 decision
+## Accepted v0.3 decision
 
 ### Decisions and dispositions
 
-| Decision ID | Disposition | Proposed rule |
+| Decision ID | Disposition | Rule |
 | --- | --- | --- |
-| COMP-D01 | proposed | Classify every pinned v0.2 surface exactly once as preserved, changed, migration-sensitive, or gated, with authority, verification, compatibility effect, and rollback. |
-| COMP-D02 | proposed | Preserve one Mission coordinator and only the two observed narrow readers; unsupported or ambiguous records fail closed without rewrite. |
-| COMP-D03 | proposed | Preserve the ordinary no-extra wheel as the complete current Mission rollback path and require explicit removable boundaries for any future extra. |
+| COMP-D01 | accepted | Classify every pinned v0.2 surface exactly once as preserved, changed, migration-sensitive, or gated, with authority, verification, compatibility effect, and rollback. |
+| COMP-D02 | accepted | Preserve one Mission coordinator and only the two observed narrow readers; unsupported or ambiguous records fail closed without rewrite. |
+| COMP-D03 | accepted | Preserve the ordinary no-extra wheel as the complete current Mission rollback path and require explicit removable boundaries for any future extra. |
 | COMP-A01 | rejected | Add a shadow coordinator, observer scheduler, or adapter-owned Mission transition path. |
 | COMP-A02 | rejected | Add a generic migration registry, heuristic reader, null coercion, replay fallback, or best-effort future-schema loading. |
 | COMP-A03 | rejected | Revive an ADR-0002 hard cut through an alias, optional package, or renamed command. |
@@ -127,7 +122,7 @@ Missing, duplicate, unknown, or vaguely classified IDs fail the artifact.
 ### Compatibility authority and identity
 
 The accepted v0.2 documents and exact base bytes remain current authority.
-This draft identifies a future compatibility decision by the tuple
+This decision is identified by the tuple
 `(base_commit, base_tree, inventory_version, matrix_version)`. A later source
 change, accepted ADR, package candidate, or inventory mutation requires a new
 identity and fresh classification; chronology cannot carry a verdict forward.
@@ -197,10 +192,10 @@ uninstalling its dependency/configuration and rerunning the no-extra wheel
 lifecycle; it never selects, coordinates, validates, promotes, or closes a
 Mission.
 
-Rollback owner is the maintainer/release integrator. On failure, reject or
-delete the unaccepted v0.3 slice and reinstall the last accepted no-extra
-wheel; preserve `.unrest/` and `.unrest-runtime/` separately. There is no data
-migration to reverse in this draft.
+Rollback owner is the maintainer/release integrator. On failure, disable the
+additive v0.3.1 slice and reinstall the last accepted no-extra wheel; preserve
+`.unrest/` and `.unrest-runtime/` separately. There is no schema-v1 Mission
+data migration to reverse.
 
 ## Error, cancellation, and terminal disposition
 
@@ -248,11 +243,11 @@ The cross-family dependencies and downstream owners are in the
 
 ## Consequences
 
-The proposal spends no dependency or runtime budget and adds no migration
-framework. Its cost is an explicit matrix that downstream changes must update
-when they intentionally alter a surface. Rollback is deletion/rejection of
-this unaccepted ADR, contract, and fixtures; current v0.2 behavior remains
-untouched.
+The decision adds no migration framework. Its cost is an explicit matrix that
+downstream changes must update
+when they intentionally alter a surface. Rollback disables the additive
+v0.3.1 surfaces while retaining this decision and its evidence; current
+schema-v1 Mission behavior remains untouched.
 
 - Positive: every compatibility promise has a pinned source and verification
   owner rather than inheriting authority from chronology.
@@ -268,18 +263,19 @@ untouched.
 ## Review
 
 - Reviewer: none
-- Approval date/evidence: none; proposed and unindexed
-- Evaluation evidence: focused fixture, link, frozen-oracle, and real-reader
-  checks only; no acceptance, migration, or release evidence exists
+- Approval date/evidence: 2026-08-24 maintainer full-implementation instruction,
+  accepted decision index, compatibility lanes, and validation contract.
+- Evaluation evidence: focused fixture, link, frozen-oracle, real-reader, and
+  installed-package checks.
 
 ## Rollback
 
 - Trigger: downstream rejection, an incomplete classification, frozen-oracle
   drift, shadow authority, reader bypass, or failed no-extra lifecycle.
-- Procedure: reject and remove this proposal family; reinstall the last
+- Procedure: disable/remove the v0.3.1 additive surfaces; reinstall the last
   accepted no-extra wheel for any later failed implementation.
-- Data recovery: preserve `.unrest/` and `.unrest-runtime/` separately; this
-  documentation-only proposal creates no runtime data.
+- Data recovery: preserve `.unrest/` and `.unrest-runtime/` separately; additive
+  v0.3.1 stores remain side-by-side and do not rewrite schema-v1 Mission data.
 - Verification: rerun the frozen schema-v1 and ordinary-wheel lifecycle checks
   against the accepted product object.
 
@@ -293,10 +289,9 @@ this draft specifies its required transcript and does not counterfeit one.
 
 ## Implementation and verification
 
-- Components/paths: future compatibility, storage, public-surface, and release
-  owners only; this task changes proposal documentation and fixtures.
-- Canonical documents: current ADR-0002 and architecture index remain
-  authoritative; this proposal and its compatibility contract are unaccepted.
+- Components/paths: compatibility, storage, public-surface, and release owners.
+- Canonical documents: ADR-0002, this accepted additive decision, its contract,
+  and the architecture index are authoritative for their respective surfaces.
 - Tests/evidence: strict fixture parsing, exact inventory/matrix partition,
   relative link/anchor resolution, three real-reader probes, the 14-case frozen
   suite, and the later installed-wheel lifecycle.

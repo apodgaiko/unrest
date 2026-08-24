@@ -3,13 +3,17 @@
 ## Record metadata
 
 id: ADR-0302
-status: proposed
+status: accepted
 date: 2026-08-18
+accepted_date: 2026-08-24
+accepted_by: maintainer-v0.3.1-instruction
 task_ids:
   - W-AUTH-INQUIRY
 contract_targets:
   - VAL-INQ-001
   - VAL-INQ-002
+  - VAL-INQ-003
+  - VAL-INQ-004
 supersedes: []
 superseded_by: null
 evaluation_tier:
@@ -19,11 +23,10 @@ evaluation_tier:
 
 ## Authority status
 
-This is an unindexed, non-authoritative proposal. Authorship, chronology,
-filename, bundle inclusion, fixture success, and successful verification do not
-accept it. Only a downstream maintainer may accept and canonically integrate a
-specific version. This record emits no integration receipt and creates no
-Mission.
+Accepted for v0.3.1 by the maintainer's explicit 2026-08-24 full-implementation
+instruction. Inquiry remains a separate evidence lifecycle and creates no
+Mission implicitly. Proposal-era wording below is dated design rationale, not
+the current runtime-status oracle.
 
 ## Scope
 
@@ -32,8 +35,8 @@ Mission.
   retention, terminal outcomes, and a digest-bound evidence handoff to a
   separately launched Mission.
 - Out of scope: mutable implementation work, Mission transitions, automatic
-  launch, identity canonicalization details, public CLI/MCP names, provider
-  selection, workspace/evaluator/evolution behavior, and runtime code.
+  Mission launch, family-owned canonicalization, workspace integration,
+  evolution promotion, and provider credential policy.
 
 ## Context
 
@@ -53,15 +56,15 @@ and Mission truth remains under the current controller/coordinator/store path.
 This proposal does not reinterpret current observation as Inquiry and does not
 add behavior to v0.2.
 
-## Proposed decisions and dispositions
+## Accepted decisions and dispositions
 
-| Decision ID | Disposition | Proposed rule |
+| Decision ID | Disposition | Rule |
 | --- | --- | --- |
-| INQ-D01 | proposed | Add a versioned actor-visible `Inquiry.v1` lifecycle with its own persisted identity, activation history, states, budget, branches, artifacts, dissent, errors, and retention metadata. |
-| INQ-D02 | proposed | Initial Inquiry branches are read-only and cannot write product state, Mission truth, an accepted working point, promotion state, or external effects. |
-| INQ-D03 | proposed | Ambiguity, partial failure, budget exhaustion, cancellation, resumption, and dissent remain distinct inspectable outcomes rather than being collapsed into success or generic failure. |
-| INQ-D04 | proposed | Inquiry may emit a digest-bound evidence handoff, but only an explicit external actor decision may launch a fresh, separately identified and separately planned Mission that consumes it. |
-| INQ-D05 | proposed | Immutable history and evidence are retained according to explicit actor/data-governance policy; deletion is receipt-bearing and cannot rewrite a terminal Inquiry into another outcome. |
+| INQ-D01 | accepted | Add a versioned actor-visible `Inquiry.v1` lifecycle with its own persisted identity, activation history, states, budget, branches, artifacts, dissent, errors, and retention metadata. |
+| INQ-D02 | accepted | Initial Inquiry branches are read-only and cannot write product state, Mission truth, an accepted working point, promotion state, or external effects. |
+| INQ-D03 | accepted | Ambiguity, partial failure, budget exhaustion, cancellation, resumption, and dissent remain distinct inspectable outcomes rather than being collapsed into success or generic failure. |
+| INQ-D04 | accepted | Inquiry may emit a digest-bound evidence handoff, but only an explicit external actor decision may launch a fresh, separately identified and separately planned Mission that consumes it. |
+| INQ-D05 | accepted | Immutable history and evidence are retained according to explicit actor/data-governance policy; deletion is receipt-bearing and cannot rewrite a terminal Inquiry into another outcome. |
 | INQ-A01 | rejected | Treat `answered`, successful synthesis, a handoff file, a tool alias, a timestamp, or proximity to a Mission as implicit Mission creation or mutation. |
 | INQ-A02 | rejected | Reuse current Mission observation or task states as the Inquiry lifecycle, or model Inquiry branches as extra Mission work owners. |
 | INQ-A03 | rejected | Let a branch mutate the repository, invoke an irreversible effect, suppress negative evidence, or discard dissent to complete synthesis. |
@@ -225,8 +228,8 @@ and bypass cases are in the
 - Compatibility effect: none now. v0.2 observation and Mission surfaces remain
   unchanged. Future implementation adds new versioned records rather than
   silently extending Mission tasks or persistence.
-- Rollback: reject/delete this unaccepted draft. After future implementation,
-  disable new Inquiry creation, retain/tombstone records per policy, and leave
+- Rollback: disable new Inquiry creation, retain/tombstone records per policy,
+  retain this accepted decision and its evidence, and leave
   the current v0.2 Mission path operable; an Inquiry rollback never rewrites a
   Mission.
 
@@ -268,7 +271,8 @@ See the
 ## Review
 
 - Reviewer: none
-- Approval date/evidence: none; proposed and unindexed
+- Approval date/evidence: 2026-08-24 maintainer full-implementation instruction,
+  accepted decision index, Inquiry runtime, and validation contract.
 - Evaluation evidence: lifecycle and handoff fixture checks only; no runtime
   behavior or acceptance exists
 

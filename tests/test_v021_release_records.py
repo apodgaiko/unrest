@@ -41,7 +41,7 @@ def _fm000_tree(root: str) -> dict[str, str]:
     }
 
 
-def test_fm000_proposal_artifacts_are_exact_and_still_proposed() -> None:
+def test_fm000_proposal_artifacts_remain_exact_historical_provenance() -> None:
     subprocess.run(
         ("git", "merge-base", "--is-ancestor", FM000, "HEAD"), cwd=ROOT, check=True
     )
@@ -49,19 +49,6 @@ def test_fm000_proposal_artifacts_are_exact_and_still_proposed() -> None:
     expected_fixtures = _fm000_tree(FIXTURE_ROOT)
     assert len(expected_contracts) == 8
     assert expected_fixtures
-    current_contracts = {
-        path.relative_to(ROOT).as_posix()
-        for path in (ROOT / CONTRACT_ROOT).rglob("*")
-        if path.is_file()
-    }
-    current_fixtures = {
-        path.relative_to(ROOT).as_posix()
-        for path in (ROOT / FIXTURE_ROOT).rglob("*")
-        if path.is_file()
-    }
-    assert current_contracts == set(expected_contracts)
-    assert current_fixtures == set(expected_fixtures)
-
     for relative, expected_blob in {
         **_fm000_tree("docs/decisions"),
         **expected_contracts,
@@ -70,8 +57,10 @@ def test_fm000_proposal_artifacts_are_exact_and_still_proposed() -> None:
         if relative.startswith("docs/decisions/ADR-030") or relative.startswith(
             (f"{CONTRACT_ROOT}/", f"{FIXTURE_ROOT}/")
         ):
-            actual_blob = _git("hash-object", relative).decode("ascii").strip()
-            assert actual_blob == expected_blob, relative
+            historical_blob = _git(
+                "rev-parse", f"{FM000}:{relative}"
+            ).decode("ascii").strip()
+            assert historical_blob == expected_blob, relative
 
     current_adrs = tuple(
         path.relative_to(ROOT).as_posix()
@@ -79,15 +68,13 @@ def test_fm000_proposal_artifacts_are_exact_and_still_proposed() -> None:
     )
     assert current_adrs == ADR_PATHS
     for relative in ADR_PATHS:
-        assert "status: proposed" in (ROOT / relative).read_text(encoding="utf-8")
+        assert "status: accepted" in (ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_candidate_diff_has_no_forbidden_v03_runtime_surface() -> None:
-    changed = set(_git("diff", "--name-only", FM000).decode("utf-8").splitlines())
-    changed.update(
-        _git("ls-files", "--others", "--exclude-standard")
-        .decode("utf-8")
-        .splitlines()
+def test_v021_candidate_had_no_forbidden_v03_runtime_surface() -> None:
+    v021 = _git("rev-parse", "v0.2.1^{commit}").decode("ascii").strip()
+    changed = set(
+        _git("diff", "--name-only", FM000, v021).decode("utf-8").splitlines()
     )
     forbidden_parts = (
         "custody",

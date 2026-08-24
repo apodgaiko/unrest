@@ -3,14 +3,17 @@
 ## Record metadata
 
 id: ADR-0303
-status: proposed
+status: accepted
 date: 2026-08-18
+accepted_date: 2026-08-24
+accepted_by: maintainer-v0.3.1-instruction
 task_ids:
   - W-WORKSPACE-EFFECTS
 contract_targets:
   - VAL-WS-001
   - VAL-WS-002
   - VAL-WS-003
+  - VAL-WS-004
 supersedes: []
 superseded_by: null
 evaluation_tier:
@@ -20,11 +23,10 @@ evaluation_tier:
 
 ## Authority status
 
-This record is an unindexed, non-authoritative proposal. Authorship, its date,
-filename, bundle inclusion, fixture success, or later chronology does not make
-it accepted. Only a downstream maintainer may accept a specific version and
-integrate it through the canonical decision process. This record emits no
-integration receipt and changes no working point.
+Accepted for v0.3.1 by the maintainer's explicit 2026-08-24 full-implementation
+instruction. The implemented tier is T1 Git separation with parent-only
+integration; it is not an OS confinement claim. Proposal-era wording below is
+dated design rationale, not the current runtime-status oracle.
 
 ## Scope
 
@@ -32,9 +34,9 @@ integration receipt and changes no working point.
   patch return, conflict and freshness checks, parent-only integration,
   external-effect authority, cancellation, drain, orphan recovery, cleanup,
   evidence retention, and terminal workspace disposition.
-- Out of scope: accepting this record, runtime implementation, canonical
-  identity encoding, Mission-truth authority, evaluator/promotion policy,
-  public CLI/MCP shape, dependencies, and compatibility migration.
+- Out of scope: OS/process/network/credential confinement, canonical identity
+  ownership, Mission-truth authority, evaluator scoring, promotion decisions,
+  and heuristic migration.
 
 ## Context
 
@@ -63,17 +65,17 @@ cache, host-filesystem, or external-effect isolation. Deleting a worktree does
 not terminate processes, revoke credentials, undo a database write, or retract
 a publication.
 
-## Proposed decisions and dispositions
+## Accepted decisions and dispositions
 
-| Decision ID | Disposition | Proposed rule |
+| Decision ID | Disposition | Rule |
 | --- | --- | --- |
-| WS-D01 | proposed | Admit work only at an explicit isolation tier whose guarantees, non-guarantees, resource namespaces, setup, allowed work/effects, and cleanup are lease-bound. |
-| WS-D02 | proposed | Give every mutable child one writer, one immutable base, one unique `WorkspaceLease.v1`, finite authority, and a declared return contract. |
-| WS-D03 | proposed | A child returns an identity-bound patch/candidate and evidence; it cannot merge, push, promote, update Mission truth, or change the accepted working point. |
-| WS-D04 | proposed | Only `parent_integration_authority` may stage and integrate an exact returned candidate after identity, base, freshness, conflict, effect, and integrated-verification checks. |
-| WS-D05 | proposed | External effects require separate, narrowly scoped authority and receipts; workspace admission or capability possession never supplies effect authority. |
-| WS-D06 | proposed | Cancellation revokes future authority, drains for a declared bound, records partial/unknown effects, and terminates in release or durable attention; it never infers cleanup. |
-| WS-D07 | proposed | Orphan claim and cleanup are identity-bound, single-owner, idempotent, evidence-retaining operations with explicit terminal dispositions. |
+| WS-D01 | accepted | Admit work only at an explicit isolation tier whose guarantees, non-guarantees, resource namespaces, setup, allowed work/effects, and cleanup are lease-bound. |
+| WS-D02 | accepted | Give every mutable child one writer, one immutable base, one unique `WorkspaceLease.v1`, finite authority, and a declared return contract. |
+| WS-D03 | accepted | A child returns an identity-bound patch/candidate and evidence; it cannot merge, push, promote, update Mission truth, or change the accepted working point. |
+| WS-D04 | accepted | Only `parent_integration_authority` may stage and integrate an exact returned candidate after identity, base, freshness, conflict, effect, and integrated-verification checks. |
+| WS-D05 | accepted | External effects require separate, narrowly scoped authority and receipts; workspace admission or capability possession never supplies effect authority. |
+| WS-D06 | accepted | Cancellation revokes future authority, drains for a declared bound, records partial/unknown effects, and terminates in release or durable attention; it never infers cleanup. |
+| WS-D07 | accepted | Orphan claim and cleanup are identity-bound, single-owner, idempotent, evidence-retaining operations with explicit terminal dispositions. |
 | WS-A01 | rejected | Treat a shared checkout, directory convention, container label, or Git worktree as full isolation. |
 | WS-A02 | rejected | Let a child self-integrate because its patch is disjoint, its tests pass, its lease is recent, or its return happened later. |
 | WS-A03 | rejected | Treat process exit, cancellation request, worktree removal, cleanup timeout, or missing telemetry as proof that work and effects settled. |
@@ -291,7 +293,8 @@ compatibility is recorded in the
 ## Review
 
 - Reviewer: none; downstream maintainer review required.
-- Approval date/evidence: none; status remains `proposed` and unindexed.
+- Approval date/evidence: 2026-08-24 maintainer full-implementation instruction,
+  accepted decision index, T1 workspace runtime, and validation contract.
 - Evaluation evidence: focused deterministic fixture/link checks only; these do
   not prove a runtime provider or accept the decision.
 
@@ -299,14 +302,14 @@ compatibility is recorded in the
 
 - Trigger: rejection, unresolved provider proof, incompatible authority or
   identity decision, or failed downstream integration.
-- Procedure: remove/reject this unaccepted slice; do not update the decision
-  index and do not issue an integration receipt.
-- Data recovery: none for this documentation-only proposal.
+- Procedure: disable the additive workspace runtime while retaining this
+  accepted decision, its evidence, and any already-issued receipts.
+- Data recovery: retain workspace and integration records according to policy.
 - Verification: confirm current v0.2 sources and accepted indexes are unchanged.
 
 ## Implementation and verification
 
-- Components/paths: proposed future workspace provider and parent integration
+- Components/paths: workspace provider and parent integration
   boundary; this task changes documentation and fixtures only.
 - Canonical documents: this ADR, the
   [workspace contract](../v03/contracts/workspace.md), and its three fixtures.

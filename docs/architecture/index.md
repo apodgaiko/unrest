@@ -8,6 +8,12 @@ verified_by:
   - tests/test_repository_contract.py
 related_decisions:
   - ADR-0002
+  - ADR-0300
+  - ADR-0301
+  - ADR-0302
+  - ADR-0303
+  - ADR-0304
+  - ADR-0305
 schema_version: 1
 ---
 
@@ -52,9 +58,10 @@ record order, two-space indentation, and one trailing newline.
 
 The v0.3.1 implementation adds durable run control, read-only Inquiry,
 T1 Git-worktree leases, offline evolution, canonical identities and receipts.
-The six dated FM-000 ADRs remain historical proposal evidence until the
-maintainer records their acceptance in the decision index; runtime availability
-does not silently self-approve them.
+The six dated FM-000 ADRs are accepted for v0.3.1 by the maintainer's explicit
+2026-08-24 instruction and are registered in the decision index. Their original
+FM-000 Git blobs remain historical proposal evidence; runtime availability by
+itself never silently approves a decision.
 
 No decision is accepted merely because an ID appears in prose. Its accepted
 ADR must resolve from the decision index.

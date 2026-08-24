@@ -18,6 +18,12 @@ Provide the canonical registry for repository ADR IDs and accepted status.
 ## Accepted decisions
 
 - [ADR-0002: Define the Lean Core v0.2 compaction perimeter](ADR-0002-lean-core-v0.2.md)
+- [ADR-0300: Bound v0.3 authority to the preserved Mission kernel](ADR-0300-authority.md)
+- [ADR-0301: Bind v0.3 identity and evidence to canonical public inputs](ADR-0301-identity.md)
+- [ADR-0302: Specify a separate inspectable Inquiry lifecycle](ADR-0302-inquiry.md)
+- [ADR-0303: Govern isolated child work and parent-only integration](ADR-0303-workspace.md)
+- [ADR-0304: Govern offline evolution, exact promotion, and rollback](ADR-0304-evolution.md)
+- [ADR-0305: Preserve the v0.2 compatibility and rollback perimeter](ADR-0305-compatibility.md)
 
 ## Public contract
 
@@ -60,6 +66,12 @@ uv run pytest -q tests/test_documentation_contract.py -k decision
 ## Related decisions
 
 - [ADR-0002](ADR-0002-lean-core-v0.2.md)
+- [ADR-0300](ADR-0300-authority.md)
+- [ADR-0301](ADR-0301-identity.md)
+- [ADR-0302](ADR-0302-inquiry.md)
+- [ADR-0303](ADR-0303-workspace.md)
+- [ADR-0304](ADR-0304-evolution.md)
+- [ADR-0305](ADR-0305-compatibility.md)
 
 ## Known limitations
 

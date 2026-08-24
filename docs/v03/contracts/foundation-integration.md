@@ -1,8 +1,10 @@
-# Proposed v0.3 foundation integration contract
+# Accepted v0.3 foundation integration contract
 
-Status: proposed, non-authoritative, and unindexed. This contract integrates
-the six FM-000 proposal families for review; it does not accept them, modify
-current v0.2 behavior, issue a receipt, or authorize runtime implementation.
+Status: accepted for v0.3.1 under ADR-0300 through ADR-0305. The maintainer's
+2026-08-24 full-implementation instruction, accepted decision index, product
+handlers, and v0.3.1 validation contract form the integration authority. The
+proposal inventory and pre-acceptance checks below remain dated provenance;
+they do not describe the current runtime status.
 
 ## Exact family inventory
 
@@ -18,10 +20,10 @@ Exactly these six family ADR filenames are in the FM-000 decision set:
 | compatibility | [ADR-0305](../../decisions/ADR-0305-compatibility.md) | pinned v0.2 surface classification and no-extra rollback perimeter | [compatibility](compatibility.md) |
 
 There is one filename per family and one family per filename. Every ADR has
-canonical template metadata with `status: proposed`, is absent from the
-[accepted decision index](../../decisions/index.md), names no reviewer or
-acceptance evidence, and separates current v0.2 truth from proposed v0.3 rules.
-No extra `ADR-03xx` family is admitted by this contract.
+canonical template metadata with `status: accepted`, appears in the
+[accepted decision index](../../decisions/index.md), names the maintainer's
+2026-08-24 acceptance authority, and separates pinned v0.2 truth from additive
+v0.3.1 rules. No extra `ADR-03xx` family is admitted by this contract.
 
 The deterministic file and metadata oracle is
 [tree manifest](../../../tests/fixtures/v03_decisions/integration/tree-manifest.v1.json).
@@ -226,28 +228,28 @@ schema-shaped JSON alone is insufficient.
 
 ## Compatibility, recovery, and rollback
 
-This integration contract changes no v0.2 runtime, accepted index, registry,
-dependency, persistence, or release surface. Before acceptance, recovery is to
-repair or reject the affected new proposal family and recompute the entire
-cross-family validation. Rollback is deletion/rejection of the unaccepted
-proposal tree. After any future acceptance, each primary family retains its
-own separately accepted compatibility and rollback process; this cross-record
-map never becomes a generic migration or recovery authority.
+This integration contract adds v0.3.1 runtime, index, registry, persistence,
+and public surfaces without rewriting schema-v1 Mission records. Recovery is
+to repair or disable the affected additive family and recompute the entire
+cross-family validation. Each primary family retains its own accepted
+compatibility and rollback process; this cross-record map never becomes a
+generic migration or recovery authority.
 
 ## Verification obligations
 
 1. Strictly validate every JSON fixture and deterministic byte form.
 2. Resolve every relative path and heading anchor over the entire new tree.
-3. Assert the exact six ADR filenames, canonical non-accepted metadata, and
-   absence from the accepted index.
+3. Assert the exact six ADR filenames, canonical accepted metadata, and
+   presence in the accepted index.
 4. Assert each concern has exactly one primary family and every cross-family
    edge has a non-mutating type or explicit external decision owner.
 5. Assert every cancellation/recovery step has exactly one owner and at least
    one non-success terminal outcome for unknown or partial state.
-6. Assert the complete proposed/rejected/deferred ID inventory and all 14 open
-   questions.
+6. Assert the complete accepted/rejected/deferred ID inventory and all retained
+   open questions.
 7. Assert all eight required scenario classes are covered across all six
    families and every named path/pointer/anchor resolves.
 
-Passing verifies proposal consistency only. It does not accept any ADR, change
-the accepted working point, implement v0.3, or issue an integration receipt.
+Passing verifies the accepted cross-family contract. Runtime and real-surface
+tests separately prove that the registered handlers implement it; documentation
+consistency alone never issues an integration receipt.

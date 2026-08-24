@@ -1,8 +1,9 @@
-# Proposed v0.3 workspace and integration contract
+# Accepted v0.3 workspace and integration contract
 
-This contract supports unaccepted [ADR-0303](../../decisions/ADR-0303-workspace.md).
-It is proposal evidence only. It does not authorize a workspace, effect,
-integration, or Mission mutation and emits no receipt.
+Status: accepted for v0.3.1 under
+[ADR-0303](../../decisions/ADR-0303-workspace.md). The implemented tier is T1
+Git separation with parent-only integration; it does not claim OS confinement.
+Proposal-era wording below is dated rationale, not current runtime status.
 
 ## Current v0.2 baseline
 

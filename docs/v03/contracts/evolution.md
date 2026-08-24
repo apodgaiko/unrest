@@ -1,11 +1,12 @@
-# Proposed v0.3 offline evolution and promotion contract
+# Accepted v0.3 offline evolution and promotion contract
 
-Status: proposed, non-authoritative, and unindexed. This contract supports
+Status: accepted for v0.3.1. This contract supports
 [ADR-0304](../../decisions/ADR-0304-evolution.md). It inherits authority from
 [ADR-0300](../../decisions/ADR-0300-authority.md), canonical identity and
 receipt freshness from [ADR-0301](../../decisions/ADR-0301-identity.md), and
 parent-only integration from [ADR-0303](../../decisions/ADR-0303-workspace.md).
 Those links assign ownership; this contract does not duplicate or accept them.
+Proposal-era wording below is dated rationale, not current runtime status.
 
 ## Current v0.2 baseline
 

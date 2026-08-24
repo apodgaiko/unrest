@@ -3,16 +3,16 @@
 ## Record metadata
 
 id: ADR-0300
-status: proposed
+status: accepted
 date: 2026-08-18
+accepted_date: 2026-08-24
+accepted_by: maintainer-v0.3.1-instruction
 task_ids:
   - W-AUTH-INQUIRY
 contract_targets:
   - VAL-AUTH-001
   - VAL-AUTH-002
-  - VAL-AUTH-003
-  - VAL-AUTH-004
-  - VAL-AUTH-005
+  - VAL-FND-001
 supersedes: []
 superseded_by: null
 evaluation_tier:
@@ -22,21 +22,20 @@ evaluation_tier:
 
 ## Authority status
 
-This record is a non-authoritative proposal. It is not present in the accepted
-[decision index](index.md). Authorship, its date or filename, inclusion in an
-FM-000 bundle, successful verification, and later chronology do not accept or
-integrate it. Only a downstream maintainer acting through the product's
-decision and integration process may accept it and update canonical indexes and
-specifications. No integration receipt is produced by this record.
+Accepted for v0.3.1 by the maintainer's explicit 2026-08-24 instruction to
+implement FM-000 fully rather than ship proposal-only policy. The accepted
+[decision index](index.md), runtime implementation, v0.3.1 contract, and
+validation evidence are the integration record. Proposal-era wording below is
+retained as dated design rationale; it is not the current runtime-status oracle.
 
 ## Scope
 
 - In scope: Mission-truth mutation, adjacent-plane reverse edges, the retained
   Mission kernel, external effects, cancellation and recovery ownership, and
   the authority requirements that future v0.3 decisions must satisfy.
-- Out of scope: accepting this record, runtime implementation, identity
-  encoding, detailed workspace isolation, evaluator policy, compatibility
-  migration, dependencies, public surfaces, or a second coordinator.
+- Out of scope: family-owned identity encoding, OS-level workspace confinement,
+  automated promotion/canary authority, heuristic migration, or a second
+  Mission coordinator.
 
 ## Context
 
@@ -67,18 +66,18 @@ there is no network-denial guarantee.
 Current v0.2 has no Inquiry, isolated workspace lease, evaluator/promotion
 service, or evolution campaign. Nothing below describes current behavior.
 
-## Proposed v0.3 decisions and dispositions
+## Accepted v0.3 decisions and dispositions
 
-Each row is independently reviewable. `proposed` means requested future rule,
-not accepted behavior.
+Each row is independently reviewable. `accepted` rows are operative in v0.3.1;
+rejected and deferred rows retain their original disposition.
 
-| Decision ID | Disposition | Proposed rule |
+| Decision ID | Disposition | Rule |
 | --- | --- | --- |
-| AUTH-D01 | proposed | Preserve one Mission mutation path: an explicit external actor decision enters through `ProjectController`, is applied by the single `MissionCoordinator`, and is persisted by `ProjectStore`. |
-| AUTH-D02 | proposed | Adjacent Inquiry, execution, evidence, telemetry, adapter, evaluator, and evolution planes return typed requests, artifacts, patches, evidence, or recommendations only; none writes Mission truth or the accepted working point. |
-| AUTH-D03 | proposed | Capability possession never authorizes an irreversible effect. Each such effect is forbidden or requires a narrowly scoped external authority grant and a retained receipt. |
-| AUTH-D04 | proposed | Every cancellation and recovery route has exactly one decision owner, a bounded action, retained evidence, and a terminal disposition; unsettled effects produce attention rather than inferred cleanup. |
-| AUTH-D05 | proposed | Any future kernel change requires a separately accepted ADR plus canonical specification, compatibility, recovery, fixture, real-surface, and rollback updates. |
+| AUTH-D01 | accepted | Preserve one Mission mutation path: an explicit external actor decision enters through `ProjectController`, is applied by the single `MissionCoordinator`, and is persisted by `ProjectStore`. |
+| AUTH-D02 | accepted | Adjacent Inquiry, execution, evidence, telemetry, adapter, evaluator, and evolution planes return typed requests, artifacts, patches, evidence, or recommendations only; none writes Mission truth or the accepted working point. |
+| AUTH-D03 | accepted | Capability possession never authorizes an irreversible effect. Each such effect is forbidden or requires a narrowly scoped external authority grant and a retained receipt. |
+| AUTH-D04 | accepted | Every cancellation and recovery route has exactly one decision owner, a bounded action, retained evidence, and a terminal disposition; unsettled effects produce attention rather than inferred cleanup. |
+| AUTH-D05 | accepted | Any future kernel change requires a separately accepted ADR plus canonical specification, compatibility, recovery, fixture, real-surface, and rollback updates. |
 | AUTH-A01 | rejected | Treat worker prose, skill instructions, successful tests, evidence, evaluator scores, telemetry, timestamps, or chronology as Mission mutation or acceptance authority. |
 | AUTH-A02 | rejected | Add a second Mission coordinator, let an adjacent store shadow canonical Mission truth, or let an evaluator self-promote. |
 | AUTH-A03 | rejected | Treat task-list graph cancellation, terminal-review teardown, worktree deletion, or process exit as proof of total cancellation or effect reversal. |
@@ -267,7 +266,8 @@ and dependencies are inventoried in the
 ## Review
 
 - Reviewer: none
-- Approval date/evidence: none; proposed and unindexed
+- Approval date/evidence: 2026-08-24 maintainer full-implementation instruction,
+  accepted decision index, v0.3.1 runtime, and validation contract.
 - Evaluation evidence: focused fixture and link checks only; no runtime
   acceptance or integration evidence exists
 

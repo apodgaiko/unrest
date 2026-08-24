@@ -1,8 +1,9 @@
-# Proposed Inquiry.v1 contract
+# Accepted Inquiry.v1 contract
 
-Status: proposed, non-authoritative, and unindexed. This contract supports
+Status: accepted for v0.3.1. This contract supports
 [ADR-0302](../../decisions/ADR-0302-inquiry.md) and inherits the one-way
 authority boundary from [ADR-0300](../../decisions/ADR-0300-authority.md).
+Proposal-era wording below is dated rationale, not current runtime status.
 
 ## Separation from current surfaces
 

@@ -1,9 +1,10 @@
-# Proposed Identity.v1 canonicalization contract
+# Accepted Identity canonicalization contract
 
-Status: proposed, non-authoritative, and unindexed. This contract supports
+Status: accepted for v0.3.1. This contract supports
 [ADR-0301](../../decisions/ADR-0301-identity.md), inherits authority from
-[ADR-0300](../../decisions/ADR-0300-authority.md), and does not alter current
-v0.2 serialization or identity.
+[ADR-0300](../../decisions/ADR-0300-authority.md), and preserves v1 vectors.
+Identity Catalog v2 adds the six runtime kinds frozen by the v0.3.1 contract.
+Proposal-era wording below is dated rationale, not current runtime status.
 
 ## Catalog boundary
 
