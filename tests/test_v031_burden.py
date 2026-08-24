@@ -27,7 +27,8 @@ def test_ordinary_ci_never_executes_the_provider_baseline() -> None:
     workflow_path = ROOT / ".github/workflows/ci.yml"
     workflow_text = workflow_path.read_text(encoding="utf-8")
     assert workflow_text.count("env -u CODEX_PATH uv run pytest -q") == 1
-    assert "measure-baseline" not in workflow_text
+    assert "--confirm-provider-work" not in workflow_text
+    assert workflow_text.count("measure-baseline --help") == 2
     assert "${{ secrets." not in workflow_text
 
 
