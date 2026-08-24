@@ -86,6 +86,34 @@ scheduling, and detail aliases. Consumers must switch atomically: there is no
 legacy output flag or version negotiation. Existing persisted project and
 mission records remain schema version 1 and require no data migration.
 
+## v0.3.1 foundation runtime
+
+The additive foundation surface keeps long work attachable instead of holding a
+single blocking call. `submit_run`, `inspect_run`, `attach_run`, and
+`cancel_run` govern durable Mission operations. Read-only Inquiry can fan out,
+pause, resume, synthesize, and hand a retained result to Mission. Mutable child
+work uses scoped Git-worktree leases and returns evidence for parent-only
+integration. Offline campaigns retain candidate genealogy, independent
+evaluation and review, explicit human-grant promotion, and rollback.
+
+These 23 operations are available through the orchestrator MCP server and the
+same named callables in `unrest_harness.api`; their request and result shapes
+are frozen in `docs/v03/v0.3.1/public-surface.v1.json`. The seven existing MCP
+operations are unchanged. All accepted-point mutation still crosses the single
+Mission authority boundary—parallel workers return evidence, not competing
+truth.
+
+FM-010 is an explicit release/diagnostic command and never runs during import,
+help, installation, or ordinary tests:
+
+```bash
+uv run unrest measure-baseline --help
+```
+
+Provider work requires the separate `--confirm-provider-work` flag. Raw
+provider material stays private under the Unrest home; only a sanitized valid,
+invalid, or inconclusive observation is written to the requested results path.
+
 ## How it works
 
 1. The orchestrator investigates the objective and writes durable mission scope.
