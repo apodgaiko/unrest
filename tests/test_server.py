@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import shutil
+import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -23,13 +25,21 @@ from unrest_harness.dispatcher import (
     MockDispatcher,
     MockTerminalReviewer,
 )
+from unrest_harness.evolution import CampaignFreeze, EvolutionManager
 from unrest_harness.models import (
     TerminalReviewHandoff,
     ValidateHandoff,
     ValidationItem,
     WorkHandoff,
 )
-from unrest_harness.public_schema import public_input_schema, public_output_schema
+from unrest_harness.public_schema import (
+    PublicSchemaValidationError,
+    public_input_schema,
+    public_output_schema,
+    public_surface_catalog,
+    validate_public_request,
+    validate_public_result,
+)
 from unrest_harness.server import (
     create_orchestrator_server,
     create_terminal_reviewer_server,
@@ -37,6 +47,7 @@ from unrest_harness.server import (
     create_worker_server,
 )
 from unrest_harness.storage import ProjectStore
+from unrest_harness.workspaces import ResourceBudget, WorkspaceManager
 
 
 @pytest.fixture
@@ -82,6 +93,146 @@ def _resolve_local_schema_references(schema: object, definitions: dict[str, obje
     }
 
 
+def _valid_public_requests() -> dict[str, dict[str, object]]:
+    budget = {"max_steps": 1, "timeout_seconds": 1}
+    action = {"campaign_id": "campaign:1", "candidate_id": "candidate:1", "idempotency_key": "idem:1"}
+    return {
+        "add_candidate": {
+            "campaign_id": "campaign:1",
+            "artifact_id": "artifact:1",
+            "action": "initial",
+            "idempotency_key": "idem:1",
+        },
+        "advance_inquiry": {"inquiry_id": "inquiry:1", "idempotency_key": "idem:1"},
+        "attach_run": {"run_id": "run:1"},
+        "cancel_inquiry": {
+            "inquiry_id": "inquiry:1",
+            "reason": "done",
+            "idempotency_key": "idem:1",
+        },
+        "cancel_run": {"run_id": "run:1", "reason": "done", "idempotency_key": "idem:1"},
+        "cleanup_workspace": {"workspace_id": "lease:1", "idempotency_key": "idem:1"},
+        "evaluate_candidate": dict(action),
+        "handoff_inquiry": {
+            "inquiry_id": "inquiry:1",
+            "consumer_id": "consumer:1",
+            "idempotency_key": "idem:1",
+        },
+        "inspect_campaign": {"campaign_id": "campaign:1"},
+        "inspect_inquiry": {"inquiry_id": "inquiry:1"},
+        "inspect_run": {"run_id": "run:1"},
+        "inspect_workspace": {"workspace_id": "lease:1"},
+        "integrate_workspace": {
+            "workspace_id": "lease:1",
+            "human_grant_id": "grant:1",
+            "idempotency_key": "idem:1",
+        },
+        "lease_workspace": {
+            "project_id": "project:1",
+            "base_revision": "0" * 40,
+            "write_paths": ["src"],
+            "idempotency_key": "idem:1",
+            "lease_seconds": 1,
+        },
+        "open_campaign": {
+            "project_id": "project:1",
+            "accepted_point_digest": "sha256:" + "0" * 64,
+            "workload_id": "workload:1",
+            "evaluator_id": "evaluator:1",
+            "reviewer_id": "reviewer:1",
+            "budget": budget,
+            "seed": 0,
+            "idempotency_key": "idem:1",
+        },
+        "open_inquiry": {
+            "question": "Why?",
+            "budget": budget,
+            "idempotency_key": "idem:1",
+        },
+        "pause_inquiry": {
+            "inquiry_id": "inquiry:1",
+            "reason": "wait",
+            "idempotency_key": "idem:1",
+        },
+        "promote_candidate": {
+            **action,
+            "human_grant_id": "grant:1",
+        },
+        "resume_inquiry": {"inquiry_id": "inquiry:1", "idempotency_key": "idem:1"},
+        "return_workspace": {"workspace_id": "lease:1", "idempotency_key": "idem:1"},
+        "review_candidate": dict(action),
+        "rollback_promotion": {
+            "campaign_id": "campaign:1",
+            "promotion_receipt_id": "receipt:1",
+            "human_grant_id": "grant:1",
+            "idempotency_key": "idem:1",
+        },
+        "submit_run": {
+            "operation": "start_project",
+            "arguments": {"brief": "Ship", "workspace_dir": "/workspace"},
+            "idempotency_key": "idem:1",
+        },
+    }
+
+
+def _valid_public_results() -> dict[str, dict[str, object]]:
+    timestamp = "2026-08-24T12:34:56Z"
+    return {
+        "campaign_summary": {
+            "campaign_id": "campaign:1",
+            "state": "open",
+            "candidate_ids": [],
+            "receipt_id": None,
+        },
+        "handoff_summary": {
+            "handoff_id": "handoff:1",
+            "inquiry_id": "inquiry:1",
+            "consumer_id": "consumer:1",
+            "receipt_id": "receipt:1",
+        },
+        "inquiry_summary": {
+            "inquiry_id": "inquiry:1",
+            "state": "open",
+            "branch_outcomes": {},
+            "receipt_id": None,
+        },
+        "queued_run_summary": {
+            "run_id": "run:1",
+            "operation": "start_project",
+            "state": "queued",
+            "resource_key": "workspace:/workspace",
+            "idempotency_key": "idem:1",
+            "project_id": None,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+            "result": None,
+            "error": None,
+            "receipt_id": None,
+        },
+        "run_summary": {
+            "run_id": "run:1",
+            "operation": "start_project",
+            "state": "running",
+            "resource_key": "workspace:/workspace",
+            "idempotency_key": "idem:1",
+            "project_id": None,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+            "result": None,
+            "error": None,
+            "receipt_id": None,
+        },
+        "workspace_summary": {
+            "workspace_id": "lease:1",
+            "state": "leased",
+            "base_revision": "0" * 40,
+            "lease_expires_at": timestamp,
+            "patch_id": None,
+            "receipt_id": None,
+        },
+    }
+
+
 # ---------------------------------------------------------------------------
 # Tool surface per mode (structural isolation)
 # ---------------------------------------------------------------------------
@@ -110,6 +261,37 @@ async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
         "inspect_project",
         "abort_project",
     }
+
+
+@pytest.mark.asyncio
+async def test_original_mcp_schemas_equal_frozen_v030_fixture(
+    config: HarnessConfig,
+) -> None:
+    fixture = json.loads(
+        (
+            Path(__file__).parent
+            / "fixtures/v031_compatibility/v030-mcp-schemas.v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    schemas = fixture["schemas"]
+    canonical = json.dumps(
+        schemas,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    assert fixture["source_tag"] == "v0.3.0"
+    assert fixture["schema_sha256"] == "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+    tools = {
+        tool.name: {
+            "input_schema": tool.parameters,
+            "output_schema": tool.output_schema,
+        }
+        for tool in await create_orchestrator_server(config).list_tools()
+        if tool.name in schemas
+    }
+    assert tools == schemas
 
 
 @pytest.mark.asyncio
@@ -196,6 +378,119 @@ async def test_additive_mcp_schemas_are_exactly_catalog_backed(
         ]
 
 
+def test_public_validator_covers_every_method_request_and_result() -> None:
+    catalog = public_surface_catalog()
+    requests = _valid_public_requests()
+    methods = {method["name"]: method for method in catalog["mcp_methods"]}
+    assert set(requests) == set(methods)
+
+    results = _valid_public_results()
+    for name, request in requests.items():
+        validate_public_request(name, request)
+        with pytest.raises(PublicSchemaValidationError):
+            validate_public_request(name, {**request, "unexpected": True})
+
+        result_name = methods[name]["result_schema"].removeprefix("#/definitions/")
+        result = results[result_name]
+        validate_public_result(name, result)
+        validate_public_result(
+            name,
+            {"error": {"code": "invalid_argument", "message": "invalid argument"}},
+        )
+        with pytest.raises(PublicSchemaValidationError):
+            validate_public_result(name, {**result, "unexpected": True})
+        with pytest.raises(PublicSchemaValidationError):
+            validate_public_result(
+                name,
+                {"error": {"code": "not_a_public_code", "message": "no"}},
+            )
+
+
+def test_public_validator_exercises_defaults_conditionals_and_boundaries() -> None:
+    requests = _valid_public_requests()
+
+    # Omitted defaults are accepted; explicit nullable fields remain nullable.
+    validate_public_request("open_inquiry", requests["open_inquiry"])
+    validate_public_request(
+        "open_inquiry", {**requests["open_inquiry"], "project_id": None}
+    )
+    add = requests["add_candidate"]
+    validate_public_request("add_candidate", {**add, "parent_candidate_id": None})
+
+    lease = requests["lease_workspace"]
+    validate_public_request("lease_workspace", {key: value for key, value in lease.items() if key != "lease_seconds"})
+    with pytest.raises(PublicSchemaValidationError):
+        validate_public_request("lease_workspace", {**lease, "write_paths": []})
+    with pytest.raises(PublicSchemaValidationError):
+        validate_public_request("lease_workspace", {**lease, "write_paths": ["src", "src"]})
+    with pytest.raises(PublicSchemaValidationError):
+        validate_public_request("lease_workspace", {**lease, "base_revision": "x" * 40})
+
+    campaign = requests["open_campaign"]
+    validate_public_request(
+        "open_campaign",
+        {**campaign, "budget": {"max_steps": 1, "timeout_seconds": 1, "max_branches": 4}},
+    )
+    with pytest.raises(PublicSchemaValidationError):
+        validate_public_request(
+            "open_campaign",
+            {**campaign, "budget": {"max_steps": 1, "timeout_seconds": 1, "max_branches": 5}},
+        )
+
+    run_arguments: dict[str, dict[str, object]] = {
+        "abort_project": {"project_id": "project:1", "reason": "done"},
+        "advance_project": {"project_id": "project:1", "max_steps": 1},
+        "decide_attention": {
+            "project_id": "project:1",
+            "decisions": [{"item_id": "attention:1", "action": "continue"}],
+        },
+        "end_mission": {"project_id": "project:1", "deliverable_roots": None},
+        "start_project": {"brief": "Ship", "workspace_dir": "/workspace"},
+        "submit_plan": {"project_id": "project:1", "task_list": {}},
+    }
+    for operation, arguments in run_arguments.items():
+        validate_public_request(
+            "submit_run",
+            {"operation": operation, "arguments": arguments, "idempotency_key": operation},
+        )
+    with pytest.raises(PublicSchemaValidationError):
+        validate_public_request(
+            "submit_run",
+            {
+                "operation": "abort_project",
+                "arguments": run_arguments["start_project"],
+                "idempotency_key": "mismatch",
+            },
+        )
+
+    patch_decision = {
+        "project_id": "project:1",
+        "decisions": [{"item_id": "attention:1", "action": "patch", "patch": {}}],
+    }
+    validate_public_request(
+        "submit_run",
+        {"operation": "decide_attention", "arguments": patch_decision, "idempotency_key": "patch"},
+    )
+    with pytest.raises(PublicSchemaValidationError):
+        validate_public_request(
+            "submit_run",
+            {
+                "operation": "decide_attention",
+                "arguments": {
+                    "project_id": "project:1",
+                    "decisions": [{"item_id": "attention:1", "action": "patch"}],
+                },
+                "idempotency_key": "missing-patch",
+            },
+        )
+
+    run_result = _valid_public_results()["run_summary"]
+    with pytest.raises(PublicSchemaValidationError):
+        validate_public_result(
+            "inspect_run", {**run_result, "created_at": "2026-08-24 12:34:56"}
+        )
+
+
 @pytest.mark.asyncio
 async def test_additive_handlers_enforce_catalog_constraints(
     config: HarnessConfig,
@@ -223,11 +518,177 @@ async def test_additive_handlers_enforce_catalog_constraints(
         },
     )
     assert duplicate_paths.structured_content == {
-        "error": {
-            "code": "invalid_argument",
-            "message": "write_paths must contain unique values",
-        }
+        "error": {"code": "invalid_argument", "message": "invalid argument"}
     }
+
+
+@pytest.mark.asyncio
+async def test_catalog_validation_precedes_effect_and_invalid_output_fails_closed(
+    config: HarnessConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ProbeTools:
+        calls = 0
+
+        def lease_workspace(self, *args: object) -> dict[str, object]:
+            self.calls += 1
+            raise AssertionError("invalid request reached effect")
+
+        def inspect_run(self, run_id: str) -> dict[str, object]:
+            self.calls += 1
+            return {"private_source_body": "do not disclose"}
+
+        def inspect_workspace(self, workspace_id: str) -> dict[str, object]:
+            self.calls += 1
+            return _valid_public_results()["workspace_summary"]
+
+    probe = ProbeTools()
+    monkeypatch.setattr(server_module, "FoundationTools", lambda *args: probe)
+    server = create_orchestrator_server(config)
+
+    rejected = await server.call_tool(
+        "lease_workspace",
+        {
+            "project_id": "project:1",
+            "base_revision": "0" * 40,
+            "write_paths": ["src", "src"],
+            "idempotency_key": "duplicate",
+        },
+    )
+    assert rejected.structured_content == {
+        "error": {"code": "invalid_argument", "message": "invalid argument"}
+    }
+    assert probe.calls == 0
+
+    invalid_output = await server.call_tool("inspect_run", {"run_id": "run:1"})
+    assert invalid_output.structured_content == {
+        "error": {"code": "internal_error", "message": "internal error"}
+    }
+    assert "private_source_body" not in str(invalid_output)
+
+    valid_output = await server.call_tool(
+        "inspect_workspace", {"workspace_id": "lease:1"}
+    )
+    assert valid_output.structured_content == _valid_public_results()["workspace_summary"]
+    assert probe.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_real_run_inquiry_workspace_and_campaign_results_cross_validator(
+    config: HarnessConfig,
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+
+    def git(*arguments: str) -> str:
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    git("init")
+    git("config", "user.name", "Schema Validator")
+    git("config", "user.email", "schema@example.test")
+    (repository / ".gitignore").write_text(
+        "/.agents\n/.claude\n/.codex\n/.unrest\n/.unrest-runtime\n/AGENTS.md\n",
+        encoding="utf-8",
+    )
+    (repository / "artifact.txt").write_text("accepted\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-m", "base")
+
+    controller = ProjectController(
+        config,
+        MockDispatcher(lambda request: WorkHandoff(node_id=request.task.id, done=True)),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
+    )
+    controller.start_project("schema result probe", str(repository))
+    server = create_orchestrator_server(config, controller)
+
+    inquiry = await server.call_tool(
+        "open_inquiry",
+        {
+            "question": "What is bounded?",
+            "budget": {"max_steps": 1, "timeout_seconds": 1},
+            "idempotency_key": "real-inquiry",
+        },
+    )
+    validate_public_result("open_inquiry", inquiry.structured_content)
+    assert "error" not in inquiry.structured_content
+
+    base_revision = git("rev-parse", "HEAD")
+    workspace_manager = WorkspaceManager(repository)
+    lease = workspace_manager.lease_workspace(
+        base_revision=base_revision,
+        owner_id="worker:schema-probe",
+        declared_write_paths=("artifact.txt",),
+        capability_policy_digest="sha256:" + "2" * 64,
+        duration_seconds=60,
+        lease_id="lease:schema-probe",
+        resource_budget=ResourceBudget(),
+    )
+    workspace_result = await server.call_tool(
+        "inspect_workspace", {"workspace_id": lease.lease_id}
+    )
+    validate_public_result("inspect_workspace", workspace_result.structured_content)
+    assert "error" not in workspace_result.structured_content
+
+    evolution = EvolutionManager(repository)
+
+    def digest(character: str) -> str:
+        return "sha256:" + character * 64
+
+    evolution.open_campaign(
+        campaign_id="campaign:schema-probe",
+        freeze=CampaignFreeze(
+            accepted_revision=base_revision,
+            accepted_working_point_digest=digest("a"),
+            workload_digest=digest("b"),
+            oracle_digest=digest("c"),
+            author_policy_digest=digest("d"),
+            evaluator_policy_digest=digest("e"),
+            reviewer_policy_digest=digest("f"),
+            capability_policy_digest=digest("1"),
+            provider_configuration_digest=digest("2"),
+            route_profile_digest=digest("3"),
+            context_digest=digest("4"),
+            environment_digest=digest("5"),
+            secret_set_version_id="secret-set:schema:v1",
+            author_id="worker:schema-author",
+            evaluator_id="validator:schema-evaluator",
+            reviewer_id="reviewer:schema-reviewer",
+            budget_steps=1,
+            seed=1,
+            stopping_rule_digest=digest("6"),
+            promotion_rule_digest=digest("7"),
+            protected_paths=(".git", ".unrest", ".unrest-runtime"),
+        ),
+    )
+    campaign = await server.call_tool(
+        "inspect_campaign", {"campaign_id": "campaign:schema-probe"}
+    )
+    validate_public_result("inspect_campaign", campaign.structured_content)
+    assert "error" not in campaign.structured_content
+
+    async_workspace = tmp_path / "async-workspace"
+    async_workspace.mkdir()
+    queued = await server.call_tool(
+        "submit_run",
+        {
+            "operation": "start_project",
+            "arguments": {
+                "brief": "async schema result probe",
+                "workspace_dir": str(async_workspace),
+            },
+            "idempotency_key": "real-run",
+        },
+    )
+    validate_public_result("submit_run", queued.structured_content)
+    assert queued.structured_content["state"] == "queued"
 
 
 @pytest.mark.asyncio

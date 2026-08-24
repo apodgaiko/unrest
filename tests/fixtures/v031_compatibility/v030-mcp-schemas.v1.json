@@ -1,0 +1,409 @@
+{
+  "schema_sha256": "sha256:d37513a9047ff3577522f0a7c732e05532d7bf7221c163b6bdd3d5b3432c5c75",
+  "schemas": {
+    "abort_project": {
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "description": "Project id.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why we are aborting.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "advance_project": {
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_steps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional cap on step() calls."
+          },
+          "project_id": {
+            "description": "Project id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "decide_attention": {
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "decisions": {
+            "description": "One Decision per open attention item.",
+            "items": {
+              "additionalProperties": false,
+              "description": "4 fields. See `specs/task_list/PRODUCT.md` §Patching.",
+              "properties": {
+                "action": {
+                  "description": "continue | patch | retry | next_mission | abort. retry is for transient node_failed attempts only; use patch for changed work, failed validation, missing assertions, over-broad scope, or task-list adaptation. next_mission is only for runtime closure-report gaps that cannot be patched inside the current mission.",
+                  "enum": [
+                    "continue",
+                    "patch",
+                    "retry",
+                    "next_mission",
+                    "abort"
+                  ],
+                  "type": "string"
+                },
+                "item_id": {
+                  "type": "string"
+                },
+                "justification": {
+                  "default": "",
+                  "description": "Decision rationale, especially for accepted risk, scope change, or why patch/retry/next_mission is appropriate.",
+                  "type": "string"
+                },
+                "patch": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "description": "Four ops. See `specs/task_list/PRODUCT.md` §Patching.\n\n- `add_items`: new assertion ids (contract files must exist on disk).\n- `add`: new tasks appended to the task list.\n- `supersede`: dict mapping old_id → new_id. Old task marked\n  `superseded`; **every `depends_on` reference to old_id in the task\n  list is rewritten to new_id in-place**. No runtime chain resolver.\n- `cancel`: list of task ids to remove. Each cancelled task is marked\n  `superseded`; **every `depends_on` list is rewritten to drop the\n  cancelled id**. Use when a planned task is no longer needed (wrong\n  authoring, scope retraction, dead-end discovered).",
+                      "properties": {
+                        "add": {
+                          "description": "New tasks; appended to the task list. Ids must be globally new.",
+                          "items": {
+                            "additionalProperties": false,
+                            "description": "A single mission task.\n\nDependencies live inline as `depends_on: list[task_id]`. The runtime\ncomputes \"runnable\" by checking that every id in `depends_on` is in a\nterminal status (`cleared` or `superseded`).",
+                            "properties": {
+                              "auto_merge": {
+                                "default": true,
+                                "description": "Legacy no-op. Work tasks always run directly in the project workspace.",
+                                "type": "boolean"
+                              },
+                              "body": {
+                                "description": "Markdown task body. Work/validate tasks need a specific outcome, scope, targets, evidence, setup, non-goals, and split rationale when broad. Gate bodies must be empty — they exist only to seal.",
+                                "type": "string"
+                              },
+                              "depends_on": {
+                                "description": "Upstream task ids that must reach a terminal status before this task becomes runnable. Dependencies are untyped — gate semantics come from `type == 'gate'`, not from the dep itself.",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "id": {
+                                "description": "Mission-unique task id.",
+                                "type": "string"
+                              },
+                              "skill": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null,
+                                "description": "Skill procedure to load. Required for work/validate; must be null for gate."
+                              },
+                              "targets": {
+                                "description": "Contract assertion ids this task addresses. Work nodes may own one or multiple related atomic assertions when the implementation boundary is coherent; every assertion must still have exactly one active work owner. Validators / gates may bundle several.",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "type": {
+                                "description": "\"work\" | \"validate\" | \"gate\"",
+                                "enum": [
+                                  "work",
+                                  "validate",
+                                  "gate"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "body",
+                              "targets"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "add_items": {
+                          "description": "New assertion ids to declare. Matching contract/<id>.md files must already exist on disk before decide_attention is called.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "cancel": {
+                          "description": "Task ids to remove without replacement. Cancelled tasks are marked superseded and dropped from every downstream `depends_on` list. Cleared/running tasks cannot be cancelled.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "supersede": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "description": "Old task id → new task id. The new id must appear in `add` (this patch) or be an existing non-superseded task. Cleared/running tasks cannot be superseded. Downstream `depends_on` references are rewritten in-place.",
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Required iff action == patch; must satisfy task-list structural validation."
+                }
+              },
+              "required": [
+                "item_id",
+                "action"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "project_id": {
+            "description": "Project id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "decisions"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "end_mission": {
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "deliverable_roots": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Final-artifact roots authorized by terminal-review policy in addition to the normal workspace product surface. None keeps the persisted declaration (default empty), [] clears it, and a non-empty list replaces it after canonical preflight. This is a preflight plus prompt policy for a trusted reviewer, not an OS filesystem sandbox."
+          },
+          "project_id": {
+            "description": "Project id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "inspect_project": {
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "description": "Project id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "start_project": {
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "brief": {
+            "description": "The user's ask in prose; goes to brief.md",
+            "type": "string"
+          },
+          "worker_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Codex model override for work nodes in this project."
+          },
+          "worker_reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Codex reasoning-effort override for work nodes in this project; validators and terminal review keep their configured roles."
+          },
+          "workspace_dir": {
+            "description": "Absolute path to the user's workspace.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "brief",
+          "workspace_dir"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "submit_plan": {
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "description": "Project id from start_project.",
+            "type": "string"
+          },
+          "task_list": {
+            "additionalProperties": false,
+            "description": "Mission task list (tasks: list[Task] with depends_on).",
+            "properties": {
+              "tasks": {
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A single mission task.\n\nDependencies live inline as `depends_on: list[task_id]`. The runtime\ncomputes \"runnable\" by checking that every id in `depends_on` is in a\nterminal status (`cleared` or `superseded`).",
+                  "properties": {
+                    "auto_merge": {
+                      "default": true,
+                      "description": "Legacy no-op. Work tasks always run directly in the project workspace.",
+                      "type": "boolean"
+                    },
+                    "body": {
+                      "description": "Markdown task body. Work/validate tasks need a specific outcome, scope, targets, evidence, setup, non-goals, and split rationale when broad. Gate bodies must be empty — they exist only to seal.",
+                      "type": "string"
+                    },
+                    "depends_on": {
+                      "description": "Upstream task ids that must reach a terminal status before this task becomes runnable. Dependencies are untyped — gate semantics come from `type == 'gate'`, not from the dep itself.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "description": "Mission-unique task id.",
+                      "type": "string"
+                    },
+                    "skill": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "description": "Skill procedure to load. Required for work/validate; must be null for gate."
+                    },
+                    "targets": {
+                      "description": "Contract assertion ids this task addresses. Work nodes may own one or multiple related atomic assertions when the implementation boundary is coherent; every assertion must still have exactly one active work owner. Validators / gates may bundle several.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "type": {
+                      "description": "\"work\" | \"validate\" | \"gate\"",
+                      "enum": [
+                        "work",
+                        "validate",
+                        "gate"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "body",
+                    "targets"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "project_id",
+          "task_list"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    }
+  },
+  "source_tag": "v0.3.0"
+}
