@@ -7,16 +7,18 @@ present an exact retained human grant.
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
-from typing import Any, Protocol
+import subprocess
+from typing import Literal, Protocol
 
 from .canonical_identity import verify_canonical_json_bytes
 from .mutation_journal import (
     _require_consumed_grant,
     _retain_external_grant,
+    request_fingerprint_for_scope,
 )
 from .project_lock import (
     ProjectLockError,
@@ -35,6 +37,8 @@ class _AcceptedPointStore(Protocol):
     def workspace_dir(self, project_id: str) -> Path: ...
 
     def mutation_lock_path(self, project_id: str) -> Path: ...
+
+    def mission_dir(self, project_id: str, mission_id: str) -> Path: ...
 
 
 _CAPABILITY_GUARD = object()
@@ -74,42 +78,92 @@ def _require_accepted_point_capability(
 
 @dataclass(frozen=True)
 class WorkspaceIntegrationPlan:
-    manager: Any
-    grants: Sequence[Any]
-    validate: Callable[[Path], bool] | None = None
-    retained_grant_proof: object | None = None
+    lease_ids: tuple[str, ...]
+    grant_ids: tuple[str, ...]
+    request_fingerprint: str
+    validation_policy: Literal["none", "git_index_check"] = "none"
 
 
 @dataclass(frozen=True)
 class CandidatePromotionPlan:
-    manager: Any
-    grant: Any
-    validate: Callable[[Path], bool] | None = None
-    retained_grant_proof: object | None = None
+    campaign_id: str
+    candidate_id: str
+    grant_id: str
+    request_fingerprint: str
+    validation_policy: Literal["none", "git_index_check"] = "none"
 
 
 @dataclass(frozen=True)
 class PromotionRollbackPlan:
-    manager: Any
-    grant: Any
-    validate: Callable[[Path], bool] | None = None
-    retained_grant_proof: object | None = None
+    campaign_id: str
+    promotion_receipt_id: str
+    grant_id: str
+    request_fingerprint: str
+    validation_policy: Literal["none", "git_index_check"] = "none"
 
 
 AcceptedPointPlan = WorkspaceIntegrationPlan | CandidatePromotionPlan | PromotionRollbackPlan
+
+
+_MISSION_PROOF_GUARD = object()
+
+
+class _MissionGrantProof:
+    __slots__ = (
+        "_guard",
+        "mission_id",
+        "project_id",
+        "request_fingerprint",
+        "scope_digest",
+    )
+
+    def __init__(
+        self,
+        guard: object,
+        *,
+        mission_id: str,
+        project_id: str,
+        request_fingerprint: str,
+        scope_digest: str,
+    ) -> None:
+        if guard is not _MISSION_PROOF_GUARD:
+            raise TypeError("mission proofs are store-owned")
+        self._guard = guard
+        self.mission_id = mission_id
+        self.project_id = project_id
+        self.request_fingerprint = request_fingerprint
+        self.scope_digest = scope_digest
+
+
+def _mint_mission_grant_proof(
+    store: _AcceptedPointStore,
+    project_id: str,
+    mission_id: str,
+    plan: WorkspaceIntegrationPlan,
+) -> _MissionGrantProof:
+    if not store.mission_dir(project_id, mission_id).is_dir():
+        raise AcceptedPointAuthorityError("unauthorized")
+    scope = _workspace_plan_scope(plan)
+    return _MissionGrantProof(
+        _MISSION_PROOF_GUARD,
+        mission_id=mission_id,
+        project_id=project_id,
+        request_fingerprint=plan.request_fingerprint,
+        scope_digest=request_fingerprint_for_scope(scope),
+    )
 
 
 def _apply_accepted_point_plan(
     store: _AcceptedPointStore,
     project_id: str,
     plan: AcceptedPointPlan,
-) -> Any:
+    issuer_proof: object,
+) -> object:
     """Apply one typed plan under the store-owned project authority."""
 
     repository = store.workspace_dir(project_id).resolve(strict=True)
-    manager_repository = Path(plan.manager.repository).resolve(strict=True)
-    if manager_repository != repository:
-        raise AcceptedPointAuthorityError("unauthorized")
+    if not plan.request_fingerprint.startswith("sha256:"):
+        raise AcceptedPointAuthorityError("invalid_argument")
     lock_path = store.mutation_lock_path(project_id)
     nested = project_mutation_lock_held(lock_path)
     lock = ProjectMutationLock(lock_path)
@@ -122,46 +176,170 @@ def _apply_accepted_point_plan(
             repository=repository,
         )
         if isinstance(plan, WorkspaceIntegrationPlan):
-            human_grants = [
-                grant for grant in plan.grants
-                if str(getattr(grant, "grant_id", "")).startswith("human-grant:")
-            ]
-            if human_grants:
-                if len(human_grants) != 1:
-                    raise AcceptedPointAuthorityError("unauthorized")
-                _require_consumed_grant(
-                    plan.retained_grant_proof,
-                    grant_id=human_grants[0].grant_id,
+            from .workspaces import HumanIntegrationGrant, WorkspaceManager
+
+            if (
+                not plan.lease_ids
+                or len(plan.lease_ids) != len(plan.grant_ids)
+                or tuple(sorted(plan.lease_ids)) != plan.lease_ids
+            ):
+                raise AcceptedPointAuthorityError("invalid_argument")
+            workspace_manager = WorkspaceManager(
+                repository, custody_root_id=_local_custody_root_id(repository)
+            )
+            leases = tuple(
+                workspace_manager.inspect_workspace(item) for item in plan.lease_ids
+            )
+            scope = _workspace_plan_scope(plan)
+            human = all(item.startswith("human-grant:") for item in plan.grant_ids)
+            mission = all(item.startswith("mission-grant:") for item in plan.grant_ids)
+            if human and len(plan.grant_ids) == 1:
+                human_proof = _require_consumed_grant(
+                    issuer_proof,
+                    grant_id=plan.grant_ids[0],
                     operation="integrate_workspace",
                     project_id=project_id,
+                    request_fingerprint=plan.request_fingerprint,
+                    scope={
+                        "expected_parent_revision": leases[0].base_revision,
+                        "patch_digest": leases[0].patch_digest,
+                        "validation_policy": plan.validation_policy,
+                        "workspace_id": leases[0].lease_id,
+                    },
                 )
-            return plan.manager.integrate_workspaces(
-                plan.grants,
-                validate=plan.validate,
+                authorized_by = human_proof.authorized_by
+            elif mission:
+                _require_mission_proof(issuer_proof, project_id, plan, scope)
+                authorized_by = "mission-plan-parent-authority"
+            else:
+                raise AcceptedPointAuthorityError("unauthorized")
+            grants = tuple(
+                HumanIntegrationGrant(
+                    grant_id=grant_id,
+                    authorized_by=authorized_by,
+                    lease_id=lease.lease_id,
+                    patch_digest=lease.patch_digest or "",
+                    expected_parent_revision=lease.base_revision,
+                )
+                for grant_id, lease in zip(plan.grant_ids, leases, strict=True)
+            )
+            return workspace_manager.integrate_workspaces(
+                grants,
+                validate=_validation(plan.validation_policy),
+                request_fingerprint=plan.request_fingerprint,
                 _accepted_point_capability=capability,
             )
         if isinstance(plan, CandidatePromotionPlan):
-            _require_consumed_grant(
-                plan.retained_grant_proof,
-                grant_id=plan.grant.grant_id,
+            from .evolution import EvolutionManager, HumanPromotionGrant
+            from .workspaces import WorkspaceManager
+
+            custody_root_id = _local_custody_root_id(repository)
+            promotion_manager = EvolutionManager(
+                repository,
+                custody_root_id=custody_root_id,
+                workspace_manager=WorkspaceManager(
+                    repository, custody_root_id=custody_root_id
+                ),
+            )
+            snapshot = promotion_manager.inspect_campaign(plan.campaign_id)
+            candidate = next(
+                (item for item in snapshot.candidates if item.candidate_id == plan.candidate_id),
+                None,
+            )
+            evaluation = next(
+                (item for item in reversed(snapshot.evaluations) if item.candidate_id == plan.candidate_id),
+                None,
+            )
+            review = next(
+                (item for item in reversed(snapshot.reviews) if item.candidate_id == plan.candidate_id),
+                None,
+            )
+            if candidate is None or evaluation is None or review is None:
+                raise AcceptedPointAuthorityError("invalid_transition")
+            scope = {
+                "campaign_id": plan.campaign_id,
+                "candidate_digest": candidate.candidate_digest,
+                "candidate_id": plan.candidate_id,
+                "evaluation_receipt_digest": evaluation.receipt_digest,
+                "expected_predecessor_revision": snapshot.freeze.accepted_revision,
+                "lease_id": candidate.lease_id,
+                "patch_digest": candidate.patch_digest,
+                "review_receipt_digest": review.receipt_digest,
+                "validation_policy": plan.validation_policy,
+            }
+            human_proof = _require_consumed_grant(
+                issuer_proof,
+                grant_id=plan.grant_id,
                 operation="promote_candidate",
                 project_id=project_id,
+                request_fingerprint=plan.request_fingerprint,
+                scope=scope,
             )
-            return plan.manager.promote_candidate(
-                plan.grant,
-                validate=plan.validate,
+            promotion_grant = HumanPromotionGrant(
+                plan.grant_id,
+                human_proof.authorized_by,
+                plan.campaign_id,
+                plan.candidate_id,
+                candidate.candidate_digest,
+                snapshot.freeze.accepted_revision,
+                candidate.lease_id,
+                candidate.patch_digest,
+                evaluation.receipt_digest,
+                review.receipt_digest,
+            )
+            return promotion_manager.promote_candidate(
+                promotion_grant,
+                validate=_validation(plan.validation_policy),
+                request_fingerprint=plan.request_fingerprint,
                 _accepted_point_capability=capability,
             )
         if isinstance(plan, PromotionRollbackPlan):
-            _require_consumed_grant(
-                plan.retained_grant_proof,
-                grant_id=plan.grant.grant_id,
+            from .evolution import EvolutionManager, HumanRollbackGrant
+            from .workspaces import WorkspaceManager
+
+            custody_root_id = _local_custody_root_id(repository)
+            rollback_manager = EvolutionManager(
+                repository,
+                custody_root_id=custody_root_id,
+                workspace_manager=WorkspaceManager(
+                    repository, custody_root_id=custody_root_id
+                ),
+            )
+            snapshot = rollback_manager.inspect_campaign(plan.campaign_id)
+            promotion = next(
+                (item for item in snapshot.promotions if item.promotion_receipt_digest == plan.promotion_receipt_id),
+                None,
+            )
+            if promotion is None:
+                raise AcceptedPointAuthorityError("invalid_transition")
+            scope = {
+                "campaign_id": plan.campaign_id,
+                "expected_current_revision": promotion.accepted_revision,
+                "promotion_id": promotion.promotion_id,
+                "promotion_receipt_id": plan.promotion_receipt_id,
+                "rollback_target_revision": promotion.predecessor_revision,
+                "validation_policy": plan.validation_policy,
+            }
+            human_proof = _require_consumed_grant(
+                issuer_proof,
+                grant_id=plan.grant_id,
                 operation="rollback_promotion",
                 project_id=project_id,
+                request_fingerprint=plan.request_fingerprint,
+                scope=scope,
             )
-            return plan.manager.rollback_promotion(
-                plan.grant,
-                validate=plan.validate,
+            rollback_grant = HumanRollbackGrant(
+                plan.grant_id,
+                human_proof.authorized_by,
+                plan.campaign_id,
+                promotion.promotion_id,
+                promotion.accepted_revision,
+                promotion.predecessor_revision,
+            )
+            return rollback_manager.rollback_promotion(
+                rollback_grant,
+                validate=_validation(plan.validation_policy),
+                request_fingerprint=plan.request_fingerprint,
                 _accepted_point_capability=capability,
             )
         raise AcceptedPointAuthorityError("invalid_argument")
@@ -170,6 +348,47 @@ def _apply_accepted_point_plan(
     finally:
         if not nested:
             lock.release()
+
+
+def _workspace_plan_scope(plan: WorkspaceIntegrationPlan) -> Mapping[str, object]:
+    return {
+        "grant_ids": list(plan.grant_ids),
+        "lease_ids": list(plan.lease_ids),
+        "validation_policy": plan.validation_policy,
+    }
+
+
+def _require_mission_proof(
+    proof: object,
+    project_id: str,
+    plan: WorkspaceIntegrationPlan,
+    scope: Mapping[str, object],
+) -> None:
+    if (
+        not isinstance(proof, _MissionGrantProof)
+        or proof._guard is not _MISSION_PROOF_GUARD
+        or proof.project_id != project_id
+        or proof.request_fingerprint != plan.request_fingerprint
+        or proof.scope_digest != request_fingerprint_for_scope(scope)
+    ):
+        raise AcceptedPointAuthorityError("unauthorized")
+
+
+def _validation(policy: str):
+    if policy == "none":
+        return None
+    if policy == "git_index_check":
+        return _validate_git_index
+    raise AcceptedPointAuthorityError("invalid_argument")
+
+
+def _validate_git_index(worktree: Path) -> bool:
+    return subprocess.run(
+        ["git", "diff", "--cached", "--check"],
+        cwd=worktree,
+        check=False,
+        capture_output=True,
+    ).returncode == 0
 
 
 class _LocalHostActor:
@@ -234,7 +453,7 @@ class HostGrantCustodian:
         *,
         grant_id: str,
         operation: str,
-        scope: Mapping[str, Any],
+        scope: Mapping[str, object],
     ) -> None:
         _retain_external_grant(
             self.repository,

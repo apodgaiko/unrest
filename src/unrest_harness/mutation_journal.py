@@ -426,7 +426,15 @@ _CONSUMED_GRANT_GUARD = object()
 
 
 class _ConsumedGrantProof:
-    __slots__ = ("_guard", "authorized_by", "grant_id", "operation", "project_id")
+    __slots__ = (
+        "_guard",
+        "authorized_by",
+        "grant_id",
+        "operation",
+        "project_id",
+        "request_fingerprint",
+        "scope_digest",
+    )
 
     def __init__(
         self,
@@ -436,6 +444,8 @@ class _ConsumedGrantProof:
         grant_id: str,
         operation: str,
         project_id: str,
+        request_fingerprint: str,
+        scope_digest: str,
     ) -> None:
         if guard is not _CONSUMED_GRANT_GUARD:
             raise TypeError("consumed grant proofs are verifier-owned")
@@ -444,6 +454,8 @@ class _ConsumedGrantProof:
         self.grant_id = grant_id
         self.operation = operation
         self.project_id = project_id
+        self.request_fingerprint = request_fingerprint
+        self.scope_digest = scope_digest
 
 
 def _require_consumed_grant(
@@ -452,15 +464,26 @@ def _require_consumed_grant(
     grant_id: str,
     operation: str,
     project_id: str,
-) -> None:
+    request_fingerprint: str,
+    scope: Mapping[str, Any],
+) -> _ConsumedGrantProof:
     if (
         not isinstance(proof, _ConsumedGrantProof)
         or proof._guard is not _CONSUMED_GRANT_GUARD
         or proof.grant_id != grant_id
         or proof.operation != operation
         or proof.project_id != project_id
+        or proof.request_fingerprint != request_fingerprint
+        or proof.scope_digest != request_fingerprint_for_scope(scope)
     ):
         _fail("unauthorized")
+    return proof
+
+
+def request_fingerprint_for_scope(scope: Mapping[str, Any]) -> str:
+    return "sha256:" + hashlib.sha256(
+        b"unrest.human-grant-scope.v1\0" + _canonical_bytes(scope)
+    ).hexdigest()
 
 
 class _ExternalGrantRecords:
@@ -549,6 +572,8 @@ class _ExternalGrantRecords:
                     grant_id=grant_id,
                     operation=operation,
                     project_id=project_id,
+                    request_fingerprint=request_fingerprint,
+                    scope_digest=request_fingerprint_for_scope(scope),
                 )
             _atomic_write(
                 consumption,
@@ -565,6 +590,8 @@ class _ExternalGrantRecords:
                 grant_id=grant_id,
                 operation=operation,
                 project_id=project_id,
+                request_fingerprint=request_fingerprint,
+                scope_digest=request_fingerprint_for_scope(scope),
             )
 
 

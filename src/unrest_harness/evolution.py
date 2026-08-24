@@ -863,6 +863,7 @@ class EvolutionManager:
         grant: HumanPromotionGrant,
         *,
         validate: Callable[[Path], bool] | None = None,
+        request_fingerprint: str = "",
         _accepted_point_capability: _AcceptedPointCapability | None = None,
     ) -> PromotionRecord:
         """Apply one externally granted exact candidate through parent authority."""
@@ -874,6 +875,8 @@ class EvolutionManager:
         except AcceptedPointAuthorityError as exc:
             raise EvolutionError(exc.code) from exc
         self._validate_human_grant(grant.grant_id, grant.authorized_by)
+        if _DIGEST.fullmatch(request_fingerprint) is None:
+            raise EvolutionError("invalid_request_fingerprint")
         self._validate_public_id(grant.campaign_id, "campaign")
         self._validate_public_id(grant.candidate_id, "candidate")
         if _LEASE_ID.fullmatch(grant.lease_id) is None:
@@ -902,6 +905,7 @@ class EvolutionManager:
             candidate,
             validate or self.validation,
             _accepted_point_capability,
+            request_fingerprint,
         )
         with self._locked():
             snapshot = self._inspect_unlocked(grant.campaign_id)
@@ -944,6 +948,7 @@ class EvolutionManager:
         grant: HumanRollbackGrant,
         *,
         validate: Callable[[Path], bool] | None = None,
+        request_fingerprint: str = "",
         _accepted_point_capability: _AcceptedPointCapability | None = None,
     ) -> RollbackRecord:
         """Restore only the exact predecessor selected by a human grant."""
@@ -955,12 +960,26 @@ class EvolutionManager:
         except AcceptedPointAuthorityError as exc:
             raise EvolutionError(exc.code) from exc
         self._validate_human_grant(grant.grant_id, grant.authorized_by)
+        if _DIGEST.fullmatch(request_fingerprint) is None:
+            raise EvolutionError("invalid_request_fingerprint")
         self._validate_public_id(grant.campaign_id, "campaign")
         self._validate_public_id(grant.promotion_id, "promotion")
         with self._locked():
             snapshot = self._inspect_unlocked(grant.campaign_id)
             existing = next((item for item in snapshot.rollbacks if item.grant_id == grant.grant_id), None)
             if existing is not None and existing.rollback_receipt_digest is not None:
+                transaction = self._load_rollback_transaction(request_fingerprint)
+                if (
+                    transaction is None
+                    or transaction.get("grant_id") != grant.grant_id
+                    or transaction.get("request_fingerprint") != request_fingerprint
+                ):
+                    raise EvolutionError("rollback_transaction_mismatch")
+                if transaction.get("state") != "completed":
+                    self._append_rollback_transaction(
+                        request_fingerprint,
+                        {**transaction, "state": "completed"},
+                    )
                 return existing
             promotion = next((item for item in snapshot.promotions if item.promotion_id == grant.promotion_id), None)
             if promotion is None or promotion.promotion_receipt_digest is None:
@@ -984,7 +1003,12 @@ class EvolutionManager:
                     },
                 )
 
-        self._restore_exact_predecessor(promotion, validate or self.validation)
+        self._restore_exact_predecessor(
+            promotion,
+            validate or self.validation,
+            grant.grant_id,
+            request_fingerprint,
+        )
         with self._locked():
             snapshot = self._inspect_unlocked(grant.campaign_id)
             promotion = next(item for item in snapshot.promotions if item.promotion_id == grant.promotion_id)
@@ -1015,6 +1039,17 @@ class EvolutionManager:
                     "replaced_revision": promotion.accepted_revision,
                     "rollback_id": current.rollback_id,
                     "rollback_receipt_digest": receipt.digest,
+                },
+            )
+            self._accepted_point_fault("post_receipt")
+            self._append_rollback_transaction(
+                request_fingerprint,
+                {
+                    "expected_new_revision": promotion.predecessor_revision,
+                    "expected_old_revision": promotion.accepted_revision,
+                    "grant_id": grant.grant_id,
+                    "request_fingerprint": request_fingerprint,
+                    "state": "completed",
                 },
             )
             return self._rollback_from_event(event)
@@ -1731,9 +1766,15 @@ class EvolutionManager:
         candidate: CandidateAttempt,
         validate: Callable[[Path], bool] | None,
         accepted_point_capability: _AcceptedPointCapability | None,
+        request_fingerprint: str,
     ) -> IntegrationResult:
         lease = self.workspace_manager.inspect_workspace(candidate.lease_id)
         if lease.state == "integrated" and lease.integration_receipt_digest is not None:
+            if (
+                lease.integration_grant_id != grant.grant_id
+                or lease.integration_request_fingerprint != request_fingerprint
+            ):
+                raise EvolutionError("integration_state_mismatch")
             try:
                 integration_receipt = self.store.load_receipt(
                     "integration_receipt.v1", lease.integration_receipt_digest
@@ -1767,6 +1808,7 @@ class EvolutionManager:
                     )
                 ],
                 validate=validate,
+                request_fingerprint=request_fingerprint,
                 _accepted_point_capability=accepted_point_capability,
             )
         except WorkspaceError as exc:
@@ -1807,9 +1849,29 @@ class EvolutionManager:
         self,
         promotion: PromotionRecord,
         validate: Callable[[Path], bool] | None,
+        grant_id: str,
+        request_fingerprint: str,
     ) -> None:
+        transaction = self._load_rollback_transaction(request_fingerprint)
+        if transaction is not None and (
+            transaction.get("expected_new_revision") != promotion.predecessor_revision
+            or transaction.get("expected_old_revision") != promotion.accepted_revision
+            or transaction.get("grant_id") != grant_id
+            or transaction.get("request_fingerprint") != request_fingerprint
+        ):
+            raise EvolutionError("rollback_transaction_mismatch")
         current = self._head_revision()
         if current == promotion.predecessor_revision:
+            self._append_rollback_transaction(
+                request_fingerprint,
+                {
+                    "expected_new_revision": promotion.predecessor_revision,
+                    "expected_old_revision": promotion.accepted_revision,
+                    "grant_id": grant_id,
+                    "request_fingerprint": request_fingerprint,
+                    "state": "post_ref",
+                },
+            )
             return
         if current != promotion.accepted_revision:
             raise EvolutionError("stale_rollback_current")
@@ -1826,9 +1888,70 @@ class EvolutionManager:
             finally:
                 subprocess.run(["git", "worktree", "remove", "--force", str(tree)], cwd=self.repository, capture_output=True)
                 shutil.rmtree(tree, ignore_errors=True)
+        if transaction is None:
+            self._append_rollback_transaction(
+                request_fingerprint,
+                {
+                    "expected_new_revision": promotion.predecessor_revision,
+                    "expected_old_revision": promotion.accepted_revision,
+                    "grant_id": grant_id,
+                    "request_fingerprint": request_fingerprint,
+                    "state": "pre_ref",
+                },
+            )
+            self._accepted_point_fault("pre_ref")
         parent_ref = self._git("symbolic-ref", "--quiet", "HEAD")
         self._git("update-ref", parent_ref, promotion.predecessor_revision, promotion.accepted_revision)
         self._git("reset", "--hard", promotion.predecessor_revision)
+        self._append_rollback_transaction(
+            request_fingerprint,
+            {
+                "expected_new_revision": promotion.predecessor_revision,
+                "expected_old_revision": promotion.accepted_revision,
+                "grant_id": grant_id,
+                "request_fingerprint": request_fingerprint,
+                "state": "post_ref",
+            },
+        )
+        self._accepted_point_fault("post_ref")
+
+    def _rollback_transaction_directory(self, fingerprint: str) -> Path:
+        token = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+        return self.durable_root / "transactions" / "rollback" / token
+
+    def _load_rollback_transaction(
+        self, fingerprint: str
+    ) -> Mapping[str, Any] | None:
+        events = sorted(self._rollback_transaction_directory(fingerprint).glob("*.json"))
+        if not events:
+            return None
+        try:
+            value = verify_canonical_json_bytes(events[-1].read_bytes())
+        except (OSError, ValueError) as exc:
+            raise EvolutionError("rollback_transaction_corrupt") from exc
+        if not isinstance(value, Mapping):
+            raise EvolutionError("rollback_transaction_corrupt")
+        return value
+
+    def _append_rollback_transaction(
+        self,
+        fingerprint: str,
+        record: Mapping[str, Any],
+    ) -> None:
+        directory = self._rollback_transaction_directory(fingerprint)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        sequence = len(tuple(directory.glob("*.json"))) + 1
+        path = directory / f"{sequence:08d}.json"
+        encoded = canonical_json_bytes(record)
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(descriptor, encoded)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def _accepted_point_fault(self, _boundary: str) -> None:
+        return None
 
     def _rollback_receipt(self, snapshot: CampaignSnapshot, promotion: PromotionRecord) -> ReceiptRecord:
         candidate = self._candidate(snapshot, promotion.candidate_id)

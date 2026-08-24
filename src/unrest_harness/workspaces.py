@@ -92,6 +92,8 @@ class WorkspaceLease:
     returned_inventory: tuple[FileInventoryEntry, ...] = ()
     cleanup_receipt_digest: str | None = None
     integration_receipt_digest: str | None = None
+    integration_grant_id: str | None = None
+    integration_request_fingerprint: str | None = None
     terminal_reason: str | None = None
 
 
@@ -457,6 +459,7 @@ class WorkspaceManager:
         grants: Sequence[HumanIntegrationGrant],
         *,
         validate: Callable[[Path], bool] | None = None,
+        request_fingerprint: str = "",
         _accepted_point_capability: _AcceptedPointCapability | None = None,
     ) -> IntegrationResult:
         """Integrate exact returned patches after explicit human grants."""
@@ -469,6 +472,8 @@ class WorkspaceManager:
             raise WorkspaceError(exc.code) from exc
         if not grants:
             raise WorkspaceError("integration_grant_required")
+        if _DIGEST.fullmatch(request_fingerprint) is None:
+            raise WorkspaceError("invalid_request_fingerprint")
         with self._locked():
             leases: list[WorkspaceLease] = []
             seen: set[str] = set()
@@ -476,62 +481,71 @@ class WorkspaceManager:
                 if not grant.grant_id or not grant.authorized_by or grant.lease_id in seen:
                     raise WorkspaceError("invalid_integration_grant")
                 lease = self._load_latest(grant.lease_id)
-                if lease.state != "returned" or lease.patch_digest is None:
+                if lease.state not in {"returned", "integrated"} or lease.patch_digest is None:
                     raise WorkspaceError("workspace_not_returned")
                 if grant.patch_digest != lease.patch_digest:
                     raise WorkspaceError("grant_patch_mismatch")
                 if grant.expected_parent_revision != lease.base_revision:
                     raise WorkspaceError("grant_predecessor_mismatch")
-                self._verify_return_unchanged_or_cleaned(lease)
+                if lease.state == "returned":
+                    self._verify_return_unchanged_or_cleaned(lease)
+                elif (
+                    lease.integration_grant_id != grant.grant_id
+                    or lease.integration_request_fingerprint != request_fingerprint
+                ):
+                    raise WorkspaceError("integration_evidence_mismatch")
                 leases.append(lease)
                 seen.add(grant.lease_id)
             ordered = sorted(leases, key=lambda item: (item.lease_id, item.patch_digest or ""))
             self._reject_overlap(ordered)
-            predecessor = self._git("rev-parse", "HEAD").stdout.strip()
-            if any(item.base_revision != predecessor for item in ordered):
-                raise WorkspaceError("stale_parent")
-            if not self._clean_parent():
-                raise WorkspaceError("dirty_parent")
-            integration_tree = Path(tempfile.mkdtemp(prefix="integration-", dir=self.runtime_root))
-            try:
-                self._git("worktree", "add", "--detach", str(integration_tree), predecessor)
-                for lease in ordered:
-                    self._git("apply", "--index", "--binary", str(self._patch_path(lease.patch_digest or "")), cwd=integration_tree)
-                if validate is not None:
-                    try:
-                        valid = validate(integration_tree)
-                    except Exception as exc:
-                        raise WorkspaceError("validation_failed") from exc
-                    if not valid:
-                        raise WorkspaceError("validation_failed")
-                tree = self._git("write-tree", cwd=integration_tree).stdout.strip()
-                environment = dict(os.environ)
-                predecessor_time = self._git("show", "-s", "--format=%aI", predecessor).stdout.strip()
-                environment.update({
-                    "GIT_AUTHOR_NAME": "Unrest parent integration authority",
-                    "GIT_AUTHOR_EMAIL": "unrest@localhost",
-                    "GIT_COMMITTER_NAME": "Unrest parent integration authority",
-                    "GIT_COMMITTER_EMAIL": "unrest@localhost",
-                    "GIT_AUTHOR_DATE": predecessor_time,
-                    "GIT_COMMITTER_DATE": predecessor_time,
-                })
-                message = "Integrate Unrest workspaces\n\n" + "\n".join(f"{item.lease_id} {item.patch_digest}" for item in ordered) + "\n"
-                commit = subprocess.run(
-                    ["git", "commit-tree", tree, "-p", predecessor],
-                    cwd=integration_tree,
-                    input=message,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    env=environment,
-                ).stdout.strip()
-                self._git("update-ref", ordered[0].parent_ref, commit, predecessor)
-                self._git("reset", "--hard", commit)
-            except (OSError, subprocess.CalledProcessError) as exc:
-                raise WorkspaceError("git_operation_failed") from exc
-            finally:
-                self._git("worktree", "remove", "--force", str(integration_tree), check=False)
-                shutil.rmtree(integration_tree, ignore_errors=True)
+            transaction = self._load_integration_transaction(request_fingerprint)
+            grant_pairs = tuple((grant.lease_id, grant.grant_id) for grant in grants)
+            if transaction is not None:
+                if (
+                    transaction.get("grant_pairs") != [list(item) for item in grant_pairs]
+                    or transaction.get("request_fingerprint") != request_fingerprint
+                ):
+                    raise WorkspaceError("integration_transaction_mismatch")
+                predecessor = str(transaction["expected_old_revision"])
+                commit = str(transaction["expected_new_revision"])
+            else:
+                predecessor = self._git("rev-parse", "HEAD").stdout.strip()
+                if any(item.base_revision != predecessor for item in ordered):
+                    raise WorkspaceError("stale_parent")
+                if not self._clean_parent():
+                    raise WorkspaceError("dirty_parent")
+                commit = self._build_integration_commit(ordered, predecessor, validate)
+                self._append_integration_transaction(
+                    request_fingerprint,
+                    {
+                        "expected_new_revision": commit,
+                        "expected_old_revision": predecessor,
+                        "grant_pairs": [list(item) for item in grant_pairs],
+                        "request_fingerprint": request_fingerprint,
+                        "state": "pre_ref",
+                    },
+                )
+                self._accepted_point_fault("pre_ref")
+            head = self._git("rev-parse", "HEAD").stdout.strip()
+            if head == predecessor:
+                try:
+                    self._git("update-ref", ordered[0].parent_ref, commit, predecessor)
+                    self._git("reset", "--hard", commit)
+                except (OSError, subprocess.CalledProcessError) as exc:
+                    raise WorkspaceError("git_operation_failed") from exc
+            elif head != commit:
+                raise WorkspaceError("integration_transaction_attention")
+            self._append_integration_transaction(
+                request_fingerprint,
+                {
+                    "expected_new_revision": commit,
+                    "expected_old_revision": predecessor,
+                    "grant_pairs": [list(item) for item in grant_pairs],
+                    "request_fingerprint": request_fingerprint,
+                    "state": "post_ref",
+                },
+            )
+            self._accepted_point_fault("post_ref")
             receipts: list[str] = []
             accepted_digest = _sha((commit + "\0" + predecessor).encode())
             accepted = construct_identity(
@@ -539,7 +553,19 @@ class WorkspaceManager:
                 {"accepted_working_point_digest": accepted_digest, "base_revision": commit, "public_id": "accepted_working_point:" + commit[:20], "schema_version": 1},
             )
             self.store.append_identity(accepted)
+            grants_by_lease = {grant.lease_id: grant for grant in grants}
             for lease in ordered:
+                grant = grants_by_lease[lease.lease_id]
+                latest = self._load_latest(lease.lease_id)
+                if latest.state == "integrated":
+                    if (
+                        latest.integration_grant_id != grant.grant_id
+                        or latest.integration_request_fingerprint != request_fingerprint
+                        or latest.integration_receipt_digest is None
+                    ):
+                        raise WorkspaceError("integration_evidence_mismatch")
+                    receipts.append(latest.integration_receipt_digest)
+                    continue
                 dependencies = self._foundation_digest_map(lease)
                 dependencies.update({
                     "accepted_working_point": accepted.digest,
@@ -556,9 +582,118 @@ class WorkspaceManager:
                     dependency_digests=dependencies,
                     sequence=lease.sequence + 1,
                 )
-                self._transition(lease, state="integrated", integration_receipt_digest=receipt.digest)
+                self._transition(
+                    lease,
+                    state="integrated",
+                    integration_grant_id=grant.grant_id,
+                    integration_receipt_digest=receipt.digest,
+                    integration_request_fingerprint=request_fingerprint,
+                )
                 receipts.append(receipt.digest)
+            self._accepted_point_fault("post_receipt")
+            self._append_integration_transaction(
+                request_fingerprint,
+                {
+                    "expected_new_revision": commit,
+                    "expected_old_revision": predecessor,
+                    "grant_pairs": [list(item) for item in grant_pairs],
+                    "request_fingerprint": request_fingerprint,
+                    "state": "completed",
+                },
+            )
             return IntegrationResult(predecessor, commit, tuple((item.lease_id, item.patch_digest or "") for item in ordered), tuple(receipts))
+
+    def _build_integration_commit(
+        self,
+        ordered: Sequence[WorkspaceLease],
+        predecessor: str,
+        validate: Callable[[Path], bool] | None,
+    ) -> str:
+        integration_tree = Path(
+            tempfile.mkdtemp(prefix="integration-", dir=self.runtime_root)
+        )
+        try:
+            self._git("worktree", "add", "--detach", str(integration_tree), predecessor)
+            for lease in ordered:
+                self._git(
+                    "apply",
+                    "--index",
+                    "--binary",
+                    str(self._patch_path(lease.patch_digest or "")),
+                    cwd=integration_tree,
+                )
+            if validate is not None:
+                try:
+                    valid = validate(integration_tree)
+                except Exception as exc:
+                    raise WorkspaceError("validation_failed") from exc
+                if not valid:
+                    raise WorkspaceError("validation_failed")
+            tree = self._git("write-tree", cwd=integration_tree).stdout.strip()
+            environment = dict(os.environ)
+            predecessor_time = self._git(
+                "show", "-s", "--format=%aI", predecessor
+            ).stdout.strip()
+            environment.update(
+                {
+                    "GIT_AUTHOR_NAME": "Unrest parent integration authority",
+                    "GIT_AUTHOR_EMAIL": "unrest@localhost",
+                    "GIT_COMMITTER_NAME": "Unrest parent integration authority",
+                    "GIT_COMMITTER_EMAIL": "unrest@localhost",
+                    "GIT_AUTHOR_DATE": predecessor_time,
+                    "GIT_COMMITTER_DATE": predecessor_time,
+                }
+            )
+            message = "Integrate Unrest workspaces\n\n" + "\n".join(
+                f"{item.lease_id} {item.patch_digest}" for item in ordered
+            ) + "\n"
+            return subprocess.run(
+                ["git", "commit-tree", tree, "-p", predecessor],
+                cwd=integration_tree,
+                input=message,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=environment,
+            ).stdout.strip()
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise WorkspaceError("git_operation_failed") from exc
+        finally:
+            self._git(
+                "worktree", "remove", "--force", str(integration_tree), check=False
+            )
+            shutil.rmtree(integration_tree, ignore_errors=True)
+
+    def _integration_transaction_directory(self, fingerprint: str) -> Path:
+        token = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+        return self.repository / ".unrest" / "workspaces" / "transactions" / token
+
+    def _load_integration_transaction(
+        self, fingerprint: str
+    ) -> Mapping[str, Any] | None:
+        directory = self._integration_transaction_directory(fingerprint)
+        events = sorted(directory.glob("*.json"))
+        if not events:
+            return None
+        value = verify_canonical_json_bytes(events[-1].read_bytes())
+        if not isinstance(value, Mapping):
+            raise WorkspaceError("integration_transaction_corrupt")
+        return value
+
+    def _append_integration_transaction(
+        self,
+        fingerprint: str,
+        record: Mapping[str, Any],
+    ) -> None:
+        directory = self._integration_transaction_directory(fingerprint)
+        sequence = len(tuple(directory.glob("*.json"))) + 1
+        self._append_exact(
+            directory / f"{sequence:08d}.json",
+            canonical_json_bytes(record),
+        )
+
+    def _accepted_point_fault(self, _boundary: str) -> None:
+        return None
 
     def cleanup_workspace(self, lease_id: str) -> CleanupResult:
         """Remove only this lease's owned worktree; evidence remains durable."""
@@ -1088,6 +1223,8 @@ class WorkspaceManager:
                 "candidate_identity_digest",
                 "cleanup_receipt_digest",
                 "integration_receipt_digest",
+                "integration_grant_id",
+                "integration_request_fingerprint",
                 "terminal_reason",
             ):
                 fields.setdefault(optional, None)

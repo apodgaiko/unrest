@@ -7,11 +7,15 @@ import subprocess
 import sys
 
 import pytest
+import unrest_harness.accepted_point_authority as accepted_authority
 
 from unrest_harness.accepted_point_authority import (
+    AcceptedPointAuthorityError,
     WorkspaceIntegrationPlan,
     _apply_accepted_point_plan,
+    _mint_mission_grant_proof,
 )
+from unrest_harness.mutation_journal import request_fingerprint
 from unrest_harness.workspaces import (
     HumanIntegrationGrant,
     ResourceBudget,
@@ -94,13 +98,35 @@ class _AuthorityStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
+    def mission_dir(self, _project_id: str, _mission_id: str) -> Path:
+        path = self.repository / ".unrest" / "missions" / "mission:test"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
 
 def _integrate(manager, grants, *, validate=None):
-    return _apply_accepted_point_plan(
-        _AuthorityStore(manager.repository),
-        "project:test",
-        WorkspaceIntegrationPlan(manager, grants, validate=validate),
+    ordered = tuple(sorted(grants, key=lambda item: item.lease_id))
+    fingerprint = request_fingerprint(
+        {
+            "grant_ids": [item.grant_id for item in ordered],
+            "lease_ids": [item.lease_id for item in ordered],
+        }
     )
+    plan = WorkspaceIntegrationPlan(
+        tuple(item.lease_id for item in ordered),
+        tuple(item.grant_id for item in ordered),
+        fingerprint,
+        validation_policy="git_index_check" if validate is not None else "none",
+    )
+    store = _AuthorityStore(manager.repository)
+    proof = _mint_mission_grant_proof(store, "project:test", "mission:test", plan)
+    original = accepted_authority._validate_git_index
+    if validate is not None:
+        accepted_authority._validate_git_index = validate
+    try:
+        return _apply_accepted_point_plan(store, "project:test", plan, proof)
+    finally:
+        accepted_authority._validate_git_index = original
 
 
 def test_exact_clean_base_scope_and_t1_label_survive_restart(repository: Path) -> None:
@@ -362,3 +388,68 @@ def test_mutated_patch_artifact_and_cleanup_failure_are_retained(
     monkeypatch.setattr(manager, "_git", original_git)
     assert manager.cleanup_workspace(lease.lease_id).outcome == "released"
     assert patch_path.read_bytes() == original
+
+
+def test_closed_plan_rejects_nonhuman_and_swapped_mission_proofs(
+    repository: Path,
+) -> None:
+    manager = _manager(repository)
+    lease = _lease(manager, repository, "lease:closed", ("closed.txt",))
+    Path(lease.worktree_path, "closed.txt").write_text("closed\n")
+    returned = manager.return_workspace(lease.lease_id)
+    assert returned.patch_digest is not None
+    store = _AuthorityStore(repository)
+    plan = WorkspaceIntegrationPlan(
+        (lease.lease_id,),
+        ("mission-grant:closed",),
+        request_fingerprint({"value": "closed-a"}),
+    )
+    proof = _mint_mission_grant_proof(store, "project:test", "mission:test", plan)
+    swapped = WorkspaceIntegrationPlan(
+        plan.lease_ids,
+        plan.grant_ids,
+        request_fingerprint({"value": "closed-b"}),
+    )
+    with pytest.raises(AcceptedPointAuthorityError, match="unauthorized"):
+        _apply_accepted_point_plan(store, "project:test", swapped, proof)
+    nonhuman = WorkspaceIntegrationPlan(
+        plan.lease_ids,
+        ("operator:forged",),
+        plan.request_fingerprint,
+    )
+    with pytest.raises(AcceptedPointAuthorityError, match="unauthorized"):
+        _apply_accepted_point_plan(store, "project:test", nonhuman, proof)
+    assert not hasattr(plan, "manager")
+    assert not hasattr(plan, "validate")
+    assert _git(repository, "rev-parse", "HEAD") == lease.base_revision
+
+
+@pytest.mark.parametrize("boundary", ["pre_ref", "post_ref", "post_receipt"])
+def test_integration_transaction_recovers_each_git_boundary(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    boundary: str,
+) -> None:
+    manager = _manager(repository)
+    lease = _lease(manager, repository, "lease:recover", ("recover.txt",))
+    Path(lease.worktree_path, "recover.txt").write_text("recovered\n")
+    returned = manager.return_workspace(lease.lease_id)
+    assert returned.patch_digest is not None
+    fired = False
+
+    def fault(_self, observed: str) -> None:
+        nonlocal fired
+        if observed == boundary and not fired:
+            fired = True
+            raise RuntimeError("injected accepted-point crash")
+
+    monkeypatch.setattr(WorkspaceManager, "_accepted_point_fault", fault)
+    grant = _grant(lease, returned.patch_digest)
+    with pytest.raises(RuntimeError, match="injected accepted-point crash"):
+        _integrate(manager, [grant])
+    result = _integrate(manager, [grant])
+    latest = manager.inspect_workspace(lease.lease_id)
+    assert result.accepted_revision == _git(repository, "rev-parse", "HEAD")
+    assert latest.integration_grant_id == grant.grant_id
+    assert latest.integration_request_fingerprint is not None
+    assert latest.integration_receipt_digest is not None

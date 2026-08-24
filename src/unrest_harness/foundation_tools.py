@@ -350,6 +350,7 @@ class FoundationTools:
             scope = {
                 "expected_parent_revision": lease.base_revision,
                 "patch_digest": lease.patch_digest,
+                "validation_policy": "none",
                 "workspace_id": workspace_id,
             }
             proof = ExternalGrantVerifier(
@@ -375,16 +376,34 @@ class FoundationTools:
             self.store.apply_accepted_point_plan(
                 project_id,
                 WorkspaceIntegrationPlan(
-                    manager,
-                    (grant,),
-                    retained_grant_proof=proof,
+                    (grant.lease_id,),
+                    (grant.grant_id,),
+                    fingerprint,
                 ),
+                proof,
             )
             return self._workspace_summary(manager.inspect_workspace(workspace_id))
 
-        def reconcile(_: str) -> Mapping[str, Any] | None:
+        def reconcile(fingerprint: str) -> Mapping[str, Any] | None:
             lease = manager.inspect_workspace(workspace_id)
-            if lease.state != "integrated" or lease.integration_receipt_digest is None:
+            if lease.state != "integrated":
+                grant, proof = retained_grant(fingerprint)
+                self.store.apply_accepted_point_plan(
+                    project_id,
+                    WorkspaceIntegrationPlan(
+                        (grant.lease_id,),
+                        (grant.grant_id,),
+                        fingerprint,
+                    ),
+                    proof,
+                )
+                lease = manager.inspect_workspace(workspace_id)
+            if (
+                lease.state != "integrated"
+                or lease.integration_receipt_digest is None
+                or lease.integration_grant_id != human_grant_id
+                or lease.integration_request_fingerprint != fingerprint
+            ):
                 return None
             return self._workspace_summary(lease)
 
@@ -609,6 +628,7 @@ class FoundationTools:
                 "lease_id": candidate.lease_id,
                 "patch_digest": candidate.patch_digest,
                 "review_receipt_digest": review.receipt_digest,
+                "validation_policy": "none",
             }
             proof = ExternalGrantVerifier(
                 repository,
@@ -630,18 +650,35 @@ class FoundationTools:
             grant, proof = retained_grant(fingerprint)
             self.store.apply_accepted_point_plan(
                 project_id,
-                CandidatePromotionPlan(manager, grant, retained_grant_proof=proof),
+                CandidatePromotionPlan(
+                    grant.campaign_id,
+                    grant.candidate_id,
+                    grant.grant_id,
+                    fingerprint,
+                ),
+                proof,
             )
             return self._campaign_summary(manager.inspect_campaign(campaign_id))
 
-        def reconcile(_: str) -> Mapping[str, Any] | None:
+        def reconcile(fingerprint: str) -> Mapping[str, Any] | None:
             snapshot = manager.inspect_campaign(campaign_id)
             if not any(
                 item.grant_id == human_grant_id
                 and item.promotion_receipt_digest is not None
                 for item in snapshot.promotions
             ):
-                return None
+                grant, proof = retained_grant(fingerprint)
+                self.store.apply_accepted_point_plan(
+                    project_id,
+                    CandidatePromotionPlan(
+                        grant.campaign_id,
+                        grant.candidate_id,
+                        grant.grant_id,
+                        fingerprint,
+                    ),
+                    proof,
+                )
+                snapshot = manager.inspect_campaign(campaign_id)
             return self._campaign_summary(snapshot)
 
         def stage(fingerprint: str) -> None:
@@ -676,6 +713,7 @@ class FoundationTools:
                 "promotion_id": promotion.promotion_id,
                 "promotion_receipt_id": promotion_receipt_id,
                 "rollback_target_revision": promotion.predecessor_revision,
+                "validation_policy": "none",
             }
             proof = ExternalGrantVerifier(
                 repository,
@@ -700,18 +738,35 @@ class FoundationTools:
             grant, proof = retained_grant(fingerprint)
             self.store.apply_accepted_point_plan(
                 project_id,
-                PromotionRollbackPlan(manager, grant, retained_grant_proof=proof),
+                PromotionRollbackPlan(
+                    grant.campaign_id,
+                    promotion_receipt_id,
+                    grant.grant_id,
+                    fingerprint,
+                ),
+                proof,
             )
             return self._campaign_summary(manager.inspect_campaign(campaign_id))
 
-        def reconcile(_: str) -> Mapping[str, Any] | None:
+        def reconcile(fingerprint: str) -> Mapping[str, Any] | None:
             snapshot = manager.inspect_campaign(campaign_id)
             if not any(
                 item.grant_id == human_grant_id
                 and item.rollback_receipt_digest is not None
                 for item in snapshot.rollbacks
             ):
-                return None
+                grant, proof = retained_grant(fingerprint)
+                self.store.apply_accepted_point_plan(
+                    project_id,
+                    PromotionRollbackPlan(
+                        grant.campaign_id,
+                        promotion_receipt_id,
+                        grant.grant_id,
+                        fingerprint,
+                    ),
+                    proof,
+                )
+                snapshot = manager.inspect_campaign(campaign_id)
             return self._campaign_summary(snapshot)
 
         def stage(fingerprint: str) -> None:

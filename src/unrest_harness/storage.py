@@ -24,7 +24,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Mapping
 
 from .capability_policy import redact_sensitive_value
 from .config import HarnessConfig
@@ -448,12 +448,42 @@ class ProjectStore:
     def mutation_lock_path(self, project_id: str) -> Path:
         return self.unrest_runtime_dir(project_id) / "mutation.lock"
 
-    def apply_accepted_point_plan(self, project_id: str, plan: Any) -> Any:
+    def apply_accepted_point_plan(
+        self,
+        project_id: str,
+        plan: object,
+        issuer_proof: object,
+    ) -> object:
         """Sole store-owned entry point for a typed accepted-point mutation."""
 
-        from .accepted_point_authority import _apply_accepted_point_plan
+        from .accepted_point_authority import (
+            CandidatePromotionPlan,
+            PromotionRollbackPlan,
+            WorkspaceIntegrationPlan,
+            _apply_accepted_point_plan,
+        )
 
-        return _apply_accepted_point_plan(self, project_id, plan)
+        if not isinstance(
+            plan,
+            (WorkspaceIntegrationPlan, CandidatePromotionPlan, PromotionRollbackPlan),
+        ):
+            raise TypeError("unknown accepted-point plan")
+        return _apply_accepted_point_plan(self, project_id, plan, issuer_proof)
+
+    def mission_grant_proof(
+        self,
+        project_id: str,
+        mission_id: str,
+        plan: object,
+    ) -> object:
+        from .accepted_point_authority import (
+            WorkspaceIntegrationPlan,
+            _mint_mission_grant_proof,
+        )
+
+        if not isinstance(plan, WorkspaceIntegrationPlan):
+            raise TypeError("mission proof requires a workspace integration plan")
+        return _mint_mission_grant_proof(self, project_id, mission_id, plan)
 
     def workspace_dir(self, project_id: str) -> Path:
         return Path(self.load_project(project_id).workspace_dir)

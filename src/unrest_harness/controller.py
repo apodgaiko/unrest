@@ -70,10 +70,15 @@ class ProjectController:
         self.dispatcher = dispatcher
         self.terminal_reviewer = terminal_reviewer
 
-    def apply_accepted_point_plan(self, project_id: str, plan: object) -> object:
+    def apply_accepted_point_plan(
+        self,
+        project_id: str,
+        plan: object,
+        issuer_proof: object,
+    ) -> object:
         """Delegate one closed mutation plan to the store-owned authority."""
 
-        return self.store.apply_accepted_point_plan(project_id, plan)
+        return self.store.apply_accepted_point_plan(project_id, plan, issuer_proof)
 
     def local_grant_custodian(self, project_id: str, actor_id: str):
         """Bind an explicit local operator identity to immutable grant custody."""

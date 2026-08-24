@@ -7,8 +7,10 @@ import subprocess
 from typing import Any
 
 import pytest
+import unrest_harness.accepted_point_authority as accepted_authority
 
 from unrest_harness.accepted_point_authority import (
+    AcceptedPointAuthorityError,
     CandidatePromotionPlan,
     PromotionRollbackPlan,
     _apply_accepted_point_plan,
@@ -53,34 +55,78 @@ class _AuthorityStore:
 
 
 def _promote(manager, grant, *, validate=None):
-    proof = _grant_proof(manager.repository, grant.grant_id, "promote_candidate")
-    return _apply_accepted_point_plan(
-        _AuthorityStore(manager.repository),
-        "project:test",
-        CandidatePromotionPlan(
-            manager,
-            grant,
-            validate=validate,
-            retained_grant_proof=proof,
-        ),
+    snapshot = manager.inspect_campaign(grant.campaign_id)
+    candidate = next(item for item in snapshot.candidates if item.candidate_id == grant.candidate_id)
+    evaluation = next(item for item in reversed(snapshot.evaluations) if item.candidate_id == grant.candidate_id)
+    review = next(item for item in reversed(snapshot.reviews) if item.candidate_id == grant.candidate_id)
+    scope = {
+        "campaign_id": grant.campaign_id,
+        "candidate_digest": candidate.candidate_digest,
+        "candidate_id": grant.candidate_id,
+        "evaluation_receipt_digest": evaluation.receipt_digest,
+        "expected_predecessor_revision": snapshot.freeze.accepted_revision,
+        "lease_id": candidate.lease_id,
+        "patch_digest": candidate.patch_digest,
+        "review_receipt_digest": review.receipt_digest,
+        "validation_policy": "git_index_check" if validate is not None else "none",
+    }
+    fingerprint = _sha("e")
+    proof = _grant_proof(
+        manager.repository, grant.grant_id, "promote_candidate", scope, fingerprint
     )
+    plan = CandidatePromotionPlan(
+        grant.campaign_id,
+        grant.candidate_id,
+        grant.grant_id,
+        fingerprint,
+        validation_policy="git_index_check" if validate is not None else "none",
+    )
+    original = accepted_authority._validate_git_index
+    if validate is not None:
+        accepted_authority._validate_git_index = validate
+    try:
+        return _apply_accepted_point_plan(
+            _AuthorityStore(manager.repository), "project:test", plan, proof
+        )
+    finally:
+        accepted_authority._validate_git_index = original
 
 
 def _rollback(manager, grant, *, validate=None):
-    proof = _grant_proof(manager.repository, grant.grant_id, "rollback_promotion")
-    return _apply_accepted_point_plan(
-        _AuthorityStore(manager.repository),
-        "project:test",
-        PromotionRollbackPlan(
-            manager,
-            grant,
-            validate=validate,
-            retained_grant_proof=proof,
-        ),
+    snapshot = manager.inspect_campaign(grant.campaign_id)
+    promotion = next(item for item in snapshot.promotions if item.promotion_id == grant.promotion_id)
+    assert promotion.promotion_receipt_digest is not None
+    scope = {
+        "campaign_id": grant.campaign_id,
+        "expected_current_revision": promotion.accepted_revision,
+        "promotion_id": promotion.promotion_id,
+        "promotion_receipt_id": promotion.promotion_receipt_digest,
+        "rollback_target_revision": promotion.predecessor_revision,
+        "validation_policy": "git_index_check" if validate is not None else "none",
+    }
+    fingerprint = _sha("d")
+    proof = _grant_proof(
+        manager.repository, grant.grant_id, "rollback_promotion", scope, fingerprint
     )
+    plan = PromotionRollbackPlan(
+        grant.campaign_id,
+        promotion.promotion_receipt_digest,
+        grant.grant_id,
+        fingerprint,
+        validation_policy="git_index_check" if validate is not None else "none",
+    )
+    original = accepted_authority._validate_git_index
+    if validate is not None:
+        accepted_authority._validate_git_index = validate
+    try:
+        return _apply_accepted_point_plan(
+            _AuthorityStore(manager.repository), "project:test", plan, proof
+        )
+    finally:
+        accepted_authority._validate_git_index = original
 
 
-def _grant_proof(repository: Path, grant_id: str, operation: str):
+def _grant_proof(repository: Path, grant_id: str, operation: str, scope, fingerprint):
     records = _ExternalGrantRecords(repository, custody_root_id="evolution-test")
     records.retain(
         grant_id=grant_id,
@@ -89,14 +135,14 @@ def _grant_proof(repository: Path, grant_id: str, operation: str):
         issuer_identity_digest=_sha("f"),
         operation=operation,
         project_id="project:test",
-        scope={},
+        scope=scope,
     )
     return records.consume(
         grant_id=grant_id,
         operation=operation,
         project_id="project:test",
-        scope={},
-        request_fingerprint=_sha("e"),
+        scope=scope,
+        request_fingerprint=fingerprint,
     )
 
 
@@ -406,8 +452,16 @@ async def test_human_promotion_is_exact_atomic_and_idempotent(repository: Path) 
     wrong = replace(grant, candidate_digest=_sha("9"), grant_id="human-grant:wrong")
     with pytest.raises(EvolutionError, match="parent_authority_required"):
         manager.promote_candidate(grant)
-    with pytest.raises(EvolutionError, match="promotion_candidate_mismatch"):
-        _promote(manager, wrong)
+    fabricated = CandidatePromotionPlan(
+        grant.campaign_id,
+        "candidate:missing",
+        wrong.grant_id,
+        _sha("9"),
+    )
+    with pytest.raises(AcceptedPointAuthorityError, match="invalid_transition"):
+        _apply_accepted_point_plan(
+            _AuthorityStore(repository), "project:test", fabricated, object()
+        )
     assert _git(repository, "rev-parse", "HEAD") == predecessor
 
     promoted = _promote(manager, grant)
@@ -429,7 +483,7 @@ async def test_post_accept_receipt_failure_reconciles_without_reapply(
     repository: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     manager, _, grant = await _approved_candidate(repository)
-    original = manager._promotion_receipt
+    original = EvolutionManager._promotion_receipt
     calls = 0
 
     def fail_once(*args, **kwargs):
@@ -439,7 +493,7 @@ async def test_post_accept_receipt_failure_reconciles_without_reapply(
             raise EvolutionError("injected_receipt_failure")
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(manager, "_promotion_receipt", fail_once)
+    monkeypatch.setattr(EvolutionManager, "_promotion_receipt", fail_once)
     with pytest.raises(EvolutionError, match="injected_receipt_failure"):
         _promote(manager, grant)
     accepted = _git(repository, "rev-parse", "HEAD")
@@ -467,8 +521,14 @@ async def test_exact_human_rollback_and_receipt_recovery(
         expected_current_revision=promotion.accepted_revision,
         rollback_target_revision="0" * 40,
     )
-    with pytest.raises(EvolutionError, match="rollback_target_mismatch"):
-        _rollback(manager, wrong)
+    with pytest.raises(TypeError):
+        PromotionRollbackPlan(
+            wrong.campaign_id,
+            promotion.promotion_receipt_digest or "",
+            wrong.grant_id,
+            _sha("0"),
+            expected_current_revision=wrong.expected_current_revision,  # type: ignore[call-arg]
+        )
     assert _git(repository, "rev-parse", "HEAD") == promotion.accepted_revision
 
     grant = replace(
@@ -476,7 +536,7 @@ async def test_exact_human_rollback_and_receipt_recovery(
         grant_id="human-grant:rollback-exact",
         rollback_target_revision=promotion.predecessor_revision,
     )
-    original = manager._rollback_receipt
+    original = EvolutionManager._rollback_receipt
     calls = 0
 
     def fail_once(*args, **kwargs):
@@ -486,7 +546,7 @@ async def test_exact_human_rollback_and_receipt_recovery(
             raise EvolutionError("injected_rollback_receipt_failure")
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(manager, "_rollback_receipt", fail_once)
+    monkeypatch.setattr(EvolutionManager, "_rollback_receipt", fail_once)
     with pytest.raises(EvolutionError, match="injected_rollback_receipt_failure"):
         _rollback(manager, grant, validate=lambda _: True)
     partial = manager.inspect_campaign("campaign:test").rollbacks[0]
@@ -499,9 +559,42 @@ async def test_exact_human_rollback_and_receipt_recovery(
     assert rolled_back.rollback_receipt_digest is not None
     assert rolled_back.effect_count == 1
     assert calls == 2
-    assert _rollback(manager, grant) == rolled_back
+    assert _rollback(manager, grant, validate=lambda _: True) == rolled_back
     assert manager.inspect_campaign("campaign:test").state == "rolled_back"
 
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("boundary", ["pre_ref", "post_ref", "post_receipt"])
+async def test_rollback_transaction_recovers_each_git_boundary(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    boundary: str,
+) -> None:
+    manager, _, promotion_grant = await _approved_candidate(repository)
+    promotion = _promote(manager, promotion_grant)
+    grant = HumanRollbackGrant(
+        grant_id=f"human-grant:rollback-{boundary}",
+        authorized_by="human:maintainer",
+        campaign_id="campaign:test",
+        promotion_id=promotion.promotion_id,
+        expected_current_revision=promotion.accepted_revision,
+        rollback_target_revision=promotion.predecessor_revision,
+    )
+    fired = False
+
+    def fault(_self, observed: str) -> None:
+        nonlocal fired
+        if observed == boundary and not fired:
+            fired = True
+            raise RuntimeError("injected accepted-point crash")
+
+    monkeypatch.setattr(EvolutionManager, "_accepted_point_fault", fault)
+    with pytest.raises(RuntimeError, match="injected accepted-point crash"):
+        _rollback(manager, grant)
+    restored = _rollback(manager, grant)
+    assert restored.rollback_receipt_digest is not None
+    assert restored.effect_count == 1
+    assert _git(repository, "rev-parse", "HEAD") == promotion.predecessor_revision
 
 @pytest.mark.asyncio
 async def test_rollback_validation_failure_preserves_current(repository: Path) -> None:

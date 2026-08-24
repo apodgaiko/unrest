@@ -168,6 +168,7 @@ def test_integration_requires_retained_exact_grant_and_consumes_it_once(
     scope = {
         "expected_parent_revision": base,
         "patch_digest": returned.patch_digest,
+        "validation_policy": "none",
         "workspace_id": lease.lease_id,
     }
     assert not hasattr(tools, "retain_human_grant")
@@ -227,6 +228,7 @@ def test_scope_mismatched_retained_grant_fails_before_parent_effect(
         scope={
             "expected_parent_revision": base,
             "patch_digest": "sha256:" + "0" * 64,
+            "validation_policy": "none",
             "workspace_id": lease.lease_id,
         },
     )
@@ -405,6 +407,7 @@ async def test_evolution_provider_and_git_faults_reconcile_without_reexecution(
         "lease_id": candidate.lease_id,
         "patch_digest": candidate.patch_digest,
         "review_receipt_digest": review.receipt_digest,
+        "validation_policy": "none",
     }
     custodian = controller.local_grant_custodian(project_id, "human:maintainer")
     custodian.admit(
@@ -446,6 +449,7 @@ async def test_evolution_provider_and_git_faults_reconcile_without_reexecution(
         "promotion_id": promotion.promotion_id,
         "promotion_receipt_id": promotion.promotion_receipt_digest,
         "rollback_target_revision": promotion.predecessor_revision,
+        "validation_policy": "none",
     }
     custodian.admit(
         grant_id="human-grant:rollback-fault",

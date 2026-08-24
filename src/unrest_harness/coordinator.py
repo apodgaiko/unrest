@@ -20,6 +20,7 @@ from .accepted_point_authority import (
     AcceptedPointAuthorityError,
     WorkspaceIntegrationPlan,
 )
+from .mutation_journal import request_fingerprint
 from .capability_policy import redact_credential_values
 from .dispatcher import (
     DispatchRequest,
@@ -527,13 +528,29 @@ class MissionCoordinator:
 
         if batch_error is None and grants:
             try:
+                ordered_grants = tuple(sorted(grants, key=lambda item: item.lease_id))
+                integration_request = {
+                    "grant_ids": [item.grant_id for item in ordered_grants],
+                    "lease_ids": [item.lease_id for item in ordered_grants],
+                    "mission_id": mid,
+                    "project_id": self.project_id,
+                    "validation_policy": "git_index_check",
+                }
+                plan = WorkspaceIntegrationPlan(
+                    tuple(item.lease_id for item in ordered_grants),
+                    tuple(item.grant_id for item in ordered_grants),
+                    request_fingerprint(integration_request),
+                    validation_policy="git_index_check",
+                )
+                issuer_proof = self.store.mission_grant_proof(
+                    self.project_id,
+                    mid,
+                    plan,
+                )
                 self.store.apply_accepted_point_plan(
                     self.project_id,
-                    WorkspaceIntegrationPlan(
-                        manager,
-                        tuple(grants),
-                        validate=self._validate_integration_tree,
-                    ),
+                    plan,
+                    issuer_proof,
                 )
             except (AcceptedPointAuthorityError, WorkspaceError) as exc:
                 batch_error = f"Workspace integration failed: {exc.code}"
