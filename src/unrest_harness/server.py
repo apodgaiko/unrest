@@ -38,6 +38,7 @@ from .models import (
     WorkHandoff,
 )
 from .project_lock import ProjectLockError, ProjectMutationLock, project_lock_path
+from .public_schema import catalog_tool
 from .storage import atomic_write_json, trusted_persistence_root
 
 logger = logging.getLogger(__name__)
@@ -53,54 +54,6 @@ class _FoundationBudget(BaseModel):
     max_steps: int = Field(ge=1)
     timeout_seconds: int = Field(ge=1)
     max_branches: int = Field(default=4, ge=1, le=4)
-
-
-class _AbortProjectArguments(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: _NonEmpty
-    reason: _NonEmpty
-
-
-class _AdvanceProjectArguments(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: _NonEmpty
-    max_steps: int | None = Field(default=None, ge=1)
-
-
-class _DecideAttentionArguments(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: _NonEmpty
-    decisions: list[Decision]
-
-
-class _EndMissionArguments(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: _NonEmpty
-    deliverable_roots: list[str] | None = None
-
-
-class _StartProjectArguments(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    brief: _NonEmpty
-    workspace_dir: _NonEmpty
-    worker_model: str | None = None
-    worker_reasoning_effort: str | None = None
-
-
-class _SubmitPlanArguments(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: _NonEmpty
-    task_list: TaskList
-
-
-_RunArguments = (
-    _AbortProjectArguments
-    | _AdvanceProjectArguments
-    | _DecideAttentionArguments
-    | _EndMissionArguments
-    | _StartProjectArguments
-    | _SubmitPlanArguments
-)
 
 
 def _read_sensitive_inventory_fd(fd: int | None) -> SensitiveValueInventory:
@@ -498,7 +451,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         error = exc if isinstance(exc, FoundationToolError) else public_error(exc)
         return error.as_envelope()
 
-    @mcp.tool(name="submit_run")
+    @catalog_tool(mcp, "submit_run")
     async def submit_run(
         operation: Literal[
             "abort_project",
@@ -508,34 +461,34 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
             "start_project",
             "submit_plan",
         ],
-        arguments: _RunArguments,
+        arguments: Mapping[str, Any],
         idempotency_key: _NonEmpty,
     ) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(
                 tools.submit_run,
                 operation,
-                arguments.model_dump(mode="json"),
+                arguments,
                 idempotency_key,
             )
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="inspect_run")
+    @catalog_tool(mcp, "inspect_run")
     async def inspect_run(run_id: _NonEmpty) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(tools.inspect_run, run_id)
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="attach_run")
+    @catalog_tool(mcp, "attach_run")
     async def attach_run(run_id: _NonEmpty) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(tools.attach_run, run_id)
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="cancel_run")
+    @catalog_tool(mcp, "cancel_run")
     async def cancel_run(
         run_id: _NonEmpty, reason: _NonEmpty, idempotency_key: _NonEmpty
     ) -> dict[str, Any]:
@@ -546,12 +499,12 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="open_inquiry")
+    @catalog_tool(mcp, "open_inquiry")
     async def open_inquiry(
         question: _NonEmpty,
         budget: _FoundationBudget,
         idempotency_key: _NonEmpty,
-        project_id: _NonEmpty | None = None,
+        project_id: str | None = None,
     ) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(
@@ -564,14 +517,14 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="inspect_inquiry")
+    @catalog_tool(mcp, "inspect_inquiry")
     async def inspect_inquiry(inquiry_id: _NonEmpty) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(tools.inspect_inquiry, inquiry_id)
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="advance_inquiry")
+    @catalog_tool(mcp, "advance_inquiry")
     async def advance_inquiry(
         inquiry_id: _NonEmpty, idempotency_key: _NonEmpty
     ) -> dict[str, Any]:
@@ -580,7 +533,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="pause_inquiry")
+    @catalog_tool(mcp, "pause_inquiry")
     async def pause_inquiry(
         inquiry_id: _NonEmpty, reason: _NonEmpty, idempotency_key: _NonEmpty
     ) -> dict[str, Any]:
@@ -591,7 +544,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="resume_inquiry")
+    @catalog_tool(mcp, "resume_inquiry")
     async def resume_inquiry(
         inquiry_id: _NonEmpty, idempotency_key: _NonEmpty
     ) -> dict[str, Any]:
@@ -602,7 +555,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="cancel_inquiry")
+    @catalog_tool(mcp, "cancel_inquiry")
     async def cancel_inquiry(
         inquiry_id: _NonEmpty, reason: _NonEmpty, idempotency_key: _NonEmpty
     ) -> dict[str, Any]:
@@ -613,7 +566,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="handoff_inquiry")
+    @catalog_tool(mcp, "handoff_inquiry")
     async def handoff_inquiry(
         inquiry_id: _NonEmpty, consumer_id: _NonEmpty, idempotency_key: _NonEmpty
     ) -> dict[str, Any]:
@@ -624,7 +577,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="lease_workspace")
+    @catalog_tool(mcp, "lease_workspace")
     async def lease_workspace(
         project_id: _NonEmpty,
         base_revision: _Revision,
@@ -633,6 +586,10 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         lease_seconds: Annotated[int, Field(ge=1)] = 3600,
     ) -> dict[str, Any]:
         try:
+            if len(write_paths) != len(set(write_paths)):
+                raise FoundationToolError(
+                    "invalid_argument", "write_paths must contain unique values"
+                )
             return await asyncio.to_thread(
                 tools.lease_workspace,
                 project_id,
@@ -644,14 +601,14 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="inspect_workspace")
+    @catalog_tool(mcp, "inspect_workspace")
     async def inspect_workspace(workspace_id: _NonEmpty) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(tools.inspect_workspace, workspace_id)
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="return_workspace")
+    @catalog_tool(mcp, "return_workspace")
     async def return_workspace(
         workspace_id: _NonEmpty, idempotency_key: _NonEmpty
     ) -> dict[str, Any]:
@@ -662,7 +619,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="integrate_workspace")
+    @catalog_tool(mcp, "integrate_workspace")
     async def integrate_workspace(
         workspace_id: _NonEmpty,
         human_grant_id: _NonEmpty,
@@ -678,7 +635,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="cleanup_workspace")
+    @catalog_tool(mcp, "cleanup_workspace")
     async def cleanup_workspace(
         workspace_id: _NonEmpty, idempotency_key: _NonEmpty
     ) -> dict[str, Any]:
@@ -689,7 +646,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="open_campaign")
+    @catalog_tool(mcp, "open_campaign")
     async def open_campaign(
         project_id: _NonEmpty,
         accepted_point_digest: _Digest,
@@ -715,20 +672,20 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="inspect_campaign")
+    @catalog_tool(mcp, "inspect_campaign")
     async def inspect_campaign(campaign_id: _NonEmpty) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(tools.inspect_campaign, campaign_id)
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="add_candidate")
+    @catalog_tool(mcp, "add_candidate")
     async def add_candidate(
         campaign_id: _NonEmpty,
         artifact_id: _NonEmpty,
         action: Literal["edit", "initial", "rebase", "retry"],
         idempotency_key: _NonEmpty,
-        parent_candidate_id: _NonEmpty | None = None,
+        parent_candidate_id: str | None = None,
     ) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(
@@ -742,7 +699,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="evaluate_candidate")
+    @catalog_tool(mcp, "evaluate_candidate")
     async def evaluate_candidate(
         campaign_id: _NonEmpty,
         candidate_id: _NonEmpty,
@@ -755,7 +712,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="review_candidate")
+    @catalog_tool(mcp, "review_candidate")
     async def review_candidate(
         campaign_id: _NonEmpty,
         candidate_id: _NonEmpty,
@@ -768,7 +725,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="promote_candidate")
+    @catalog_tool(mcp, "promote_candidate")
     async def promote_candidate(
         campaign_id: _NonEmpty,
         candidate_id: _NonEmpty,
@@ -786,7 +743,7 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
-    @mcp.tool(name="rollback_promotion")
+    @catalog_tool(mcp, "rollback_promotion")
     async def rollback_promotion(
         campaign_id: _NonEmpty,
         promotion_receipt_id: _NonEmpty,

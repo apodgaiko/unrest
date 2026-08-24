@@ -29,6 +29,7 @@ from unrest_harness.models import (
     ValidationItem,
     WorkHandoff,
 )
+from unrest_harness.public_schema import public_input_schema, public_output_schema
 from unrest_harness.server import (
     create_orchestrator_server,
     create_terminal_reviewer_server,
@@ -65,6 +66,22 @@ async def _tool_contract(server, name: str) -> tuple[str | None, dict[str, objec
     return tool.description, tool.parameters
 
 
+def _resolve_local_schema_references(schema: object, definitions: dict[str, object]) -> object:
+    if isinstance(schema, list):
+        return [_resolve_local_schema_references(item, definitions) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    reference = schema.get("$ref")
+    if isinstance(reference, str) and reference.startswith("#/definitions/"):
+        name = reference.removeprefix("#/definitions/")
+        return _resolve_local_schema_references(definitions[name], definitions)
+    return {
+        key: _resolve_local_schema_references(value, definitions)
+        for key, value in schema.items()
+        if key != "definitions"
+    }
+
+
 # ---------------------------------------------------------------------------
 # Tool surface per mode (structural isolation)
 # ---------------------------------------------------------------------------
@@ -92,6 +109,124 @@ async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
         "decide_attention",
         "inspect_project",
         "abort_project",
+    }
+
+
+@pytest.mark.asyncio
+async def test_additive_mcp_schemas_are_exactly_catalog_backed(
+    config: HarnessConfig,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    documented = (
+        repository_root / "docs/v03/v0.3.1/public-surface.v1.json"
+    ).read_bytes()
+    packaged = (
+        repository_root
+        / "src/unrest_harness/bundled/foundation/public-surface.v1.json"
+    ).read_bytes()
+    assert packaged == documented
+
+    catalog = json.loads(documented)
+    methods = {method["name"]: method for method in catalog["mcp_methods"]}
+    tools = {
+        tool.name: tool
+        for tool in await create_orchestrator_server(config).list_tools()
+        if tool.name in methods
+    }
+    assert set(tools) == set(methods)
+
+    for name, method in methods.items():
+        tool = tools[name]
+        expected_input = public_input_schema(name)
+        assert _resolve_local_schema_references(
+            tool.parameters,
+            tool.parameters.get("definitions", {}),
+        ) == _resolve_local_schema_references(
+            expected_input,
+            expected_input.get("definitions", {}),
+        )
+        expected_output = public_output_schema(name)
+        assert _resolve_local_schema_references(
+            tool.output_schema,
+            tool.output_schema.get("definitions", {}),
+        ) == _resolve_local_schema_references(
+            expected_output,
+            expected_output.get("definitions", {}),
+        )
+
+        request_name = method["args_schema"].removeprefix("#/definitions/")
+        request = _resolve_local_schema_references(
+            tool.parameters,
+            tool.parameters.get("definitions", {}),
+        )
+        expected_request = _resolve_local_schema_references(
+            catalog["definitions"][request_name],
+            catalog["definitions"],
+        )
+        assert request == expected_request
+
+        result_name = method["result_schema"].removeprefix("#/definitions/")
+        output = _resolve_local_schema_references(
+            tool.output_schema,
+            tool.output_schema.get("definitions", {}),
+        )
+        expected = _resolve_local_schema_references(
+            {
+                "oneOf": [
+                    catalog["definitions"][result_name],
+                    catalog["definitions"]["error_envelope"],
+                ],
+                "type": "object",
+            },
+            catalog["definitions"],
+        )
+        assert output == expected
+
+    submit = tools["submit_run"].parameters
+    assert len(submit["allOf"]) == 6
+    assert submit["properties"]["arguments"] == {"type": "object"}
+    assert tools["lease_workspace"].parameters["properties"]["write_paths"][
+        "uniqueItems"
+    ] is True
+    for name in ("open_inquiry", "add_candidate"):
+        nullable_name = "project_id" if name == "open_inquiry" else "parent_candidate_id"
+        assert tools[name].parameters["properties"][nullable_name]["type"] == [
+            "string",
+            "null",
+        ]
+
+
+@pytest.mark.asyncio
+async def test_additive_handlers_enforce_catalog_constraints(
+    config: HarnessConfig,
+) -> None:
+    server = create_orchestrator_server(config)
+    mismatched = await server.call_tool(
+        "submit_run",
+        {
+            "operation": "abort_project",
+            "arguments": {"brief": "wrong operation", "workspace_dir": "/tmp"},
+            "idempotency_key": "schema:mismatch",
+        },
+    )
+    assert mismatched.structured_content == {
+        "error": {"code": "invalid_argument", "message": "invalid argument"}
+    }
+
+    duplicate_paths = await server.call_tool(
+        "lease_workspace",
+        {
+            "project_id": "project:missing",
+            "base_revision": "0" * 40,
+            "write_paths": ["src", "src"],
+            "idempotency_key": "schema:duplicates",
+        },
+    )
+    assert duplicate_paths.structured_content == {
+        "error": {
+            "code": "invalid_argument",
+            "message": "write_paths must contain unique values",
+        }
     }
 
 

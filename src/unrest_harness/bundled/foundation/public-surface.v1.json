@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "catalog_id": "unrest.public-surface.v1",
+  "cli_commands": [
+    {
+      "args_schema": "#/definitions/measure_baseline_request",
+      "errors": "#/stable_error_codes",
+      "library_callable": "unrest_harness.api.measure_baseline",
+      "name": "measure-baseline",
+      "result_schema": "#/definitions/measurement_summary"
+    }
+  ],
+  "definitions": {
+    "abort_project_args": {
+      "additionalProperties": false,
+      "properties": {"project_id": {"minLength": 1, "type": "string"}, "reason": {"minLength": 1, "type": "string"}},
+      "required": ["project_id", "reason"],
+      "type": "object"
+    },
+    "add_candidate_request": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {"enum": ["edit", "initial", "rebase", "retry"]},
+        "artifact_id": {"minLength": 1, "type": "string"},
+        "campaign_id": {"minLength": 1, "type": "string"},
+        "idempotency_key": {"minLength": 1, "type": "string"},
+        "parent_candidate_id": {"default": null, "type": ["string", "null"]}
+      },
+      "required": ["campaign_id", "artifact_id", "action", "idempotency_key"],
+      "type": "object"
+    },
+    "advance_project_args": {
+      "additionalProperties": false,
+      "properties": {"max_steps": {"default": null, "minimum": 1, "type": ["integer", "null"]}, "project_id": {"minLength": 1, "type": "string"}},
+      "required": ["project_id"],
+      "type": "object"
+    },
+    "attention_item": {
+      "additionalProperties": false,
+      "properties": {"id": {"type": "string"}, "report": {"type": "string"}},
+      "required": ["id", "report"],
+      "type": "object"
+    },
+    "budget": {
+      "additionalProperties": false,
+      "properties": {"max_branches": {"default": 4, "maximum": 4, "minimum": 1, "type": "integer"}, "max_steps": {"minimum": 1, "type": "integer"}, "timeout_seconds": {"minimum": 1, "type": "integer"}},
+      "required": ["max_steps", "timeout_seconds"],
+      "type": "object"
+    },
+    "campaign_action_request": {
+      "additionalProperties": false,
+      "properties": {"campaign_id": {"minLength": 1, "type": "string"}, "candidate_id": {"minLength": 1, "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}},
+      "required": ["campaign_id", "candidate_id", "idempotency_key"],
+      "type": "object"
+    },
+    "campaign_inspect_request": {
+      "additionalProperties": false,
+      "properties": {"campaign_id": {"minLength": 1, "type": "string"}},
+      "required": ["campaign_id"],
+      "type": "object"
+    },
+    "campaign_summary": {
+      "additionalProperties": false,
+      "properties": {"campaign_id": {"type": "string"}, "candidate_ids": {"items": {"type": "string"}, "type": "array"}, "receipt_id": {"type": ["string", "null"]}, "state": {"enum": ["budget_exhausted", "cancelled", "decision_needed", "evaluating", "failed", "inconclusive", "open", "promoted", "rejected", "rework", "reviewing", "rolled_back"]}},
+      "required": ["campaign_id", "state", "candidate_ids", "receipt_id"],
+      "type": "object"
+    },
+    "cancel_run_request": {
+      "additionalProperties": false,
+      "properties": {"idempotency_key": {"minLength": 1, "type": "string"}, "reason": {"minLength": 1, "type": "string"}, "run_id": {"minLength": 1, "type": "string"}},
+      "required": ["run_id", "reason", "idempotency_key"],
+      "type": "object"
+    },
+    "decide_attention_args": {
+      "additionalProperties": false,
+      "properties": {
+        "decisions": {"items": {"$ref": "#/definitions/decision"}, "type": "array"},
+        "project_id": {"minLength": 1, "type": "string"}
+      },
+      "required": ["project_id", "decisions"],
+      "type": "object"
+    },
+    "decision": {
+      "additionalProperties": false,
+      "allOf": [{"if": {"properties": {"action": {"const": "patch"}}}, "then": {"properties": {"patch": {"$ref": "#/definitions/task_list_patch"}}, "required": ["patch"]}, "else": {"properties": {"patch": {"type": "null"}}}}],
+      "properties": {"action": {"enum": ["abort", "continue", "next_mission", "patch", "retry"]}, "item_id": {"minLength": 1, "type": "string"}, "justification": {"default": "", "type": "string"}, "patch": {"default": null}},
+      "required": ["item_id", "action"],
+      "type": "object"
+    },
+    "end_mission_args": {
+      "additionalProperties": false,
+      "properties": {"deliverable_roots": {"default": null, "items": {"type": "string"}, "type": ["array", "null"]}, "project_id": {"minLength": 1, "type": "string"}},
+      "required": ["project_id"],
+      "type": "object"
+    },
+    "error_envelope": {
+      "additionalProperties": false,
+      "properties": {"error": {"additionalProperties": false, "properties": {"code": {"enum": ["budget_exhausted", "busy", "cancelled", "conflict", "integrity_error", "internal_error", "invalid_argument", "invalid_transition", "not_found", "protected_path_changed", "provider_unavailable", "signature_suite_unsupported", "stale", "timeout", "unauthorized"]}, "message": {"type": "string"}}, "required": ["code", "message"], "type": "object"}},
+      "required": ["error"],
+      "type": "object"
+    },
+    "handoff_inquiry_request": {
+      "additionalProperties": false,
+      "properties": {"consumer_id": {"minLength": 1, "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}, "inquiry_id": {"minLength": 1, "type": "string"}},
+      "required": ["inquiry_id", "consumer_id", "idempotency_key"],
+      "type": "object"
+    },
+    "handoff_summary": {
+      "additionalProperties": false,
+      "properties": {"consumer_id": {"type": "string"}, "handoff_id": {"type": "string"}, "inquiry_id": {"type": "string"}, "receipt_id": {"type": "string"}},
+      "required": ["handoff_id", "inquiry_id", "consumer_id", "receipt_id"],
+      "type": "object"
+    },
+    "inquiry_action_request": {
+      "additionalProperties": false,
+      "properties": {"idempotency_key": {"minLength": 1, "type": "string"}, "inquiry_id": {"minLength": 1, "type": "string"}},
+      "required": ["inquiry_id", "idempotency_key"],
+      "type": "object"
+    },
+    "inquiry_inspect_request": {
+      "additionalProperties": false,
+      "properties": {"inquiry_id": {"minLength": 1, "type": "string"}},
+      "required": ["inquiry_id"],
+      "type": "object"
+    },
+    "inquiry_reason_request": {
+      "additionalProperties": false,
+      "properties": {"idempotency_key": {"minLength": 1, "type": "string"}, "inquiry_id": {"minLength": 1, "type": "string"}, "reason": {"minLength": 1, "type": "string"}},
+      "required": ["inquiry_id", "reason", "idempotency_key"],
+      "type": "object"
+    },
+    "inquiry_summary": {
+      "additionalProperties": false,
+      "properties": {"branch_outcomes": {"additionalProperties": {"enum": ["answered", "budget_exhausted", "cancelled", "failed", "paused", "pending", "running"]}, "type": "object"}, "inquiry_id": {"type": "string"}, "receipt_id": {"type": ["string", "null"]}, "state": {"enum": ["answered", "budget_exhausted", "cancelled", "exploring", "failed", "open", "paused", "synthesizing"]}},
+      "required": ["inquiry_id", "state", "branch_outcomes", "receipt_id"],
+      "type": "object"
+    },
+    "inspect_run_request": {
+      "additionalProperties": false,
+      "properties": {"run_id": {"minLength": 1, "type": "string"}},
+      "required": ["run_id"],
+      "type": "object"
+    },
+    "integrate_workspace_request": {
+      "additionalProperties": false,
+      "properties": {"human_grant_id": {"minLength": 1, "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}, "workspace_id": {"minLength": 1, "type": "string"}},
+      "required": ["workspace_id", "human_grant_id", "idempotency_key"],
+      "type": "object"
+    },
+    "lease_workspace_request": {
+      "additionalProperties": false,
+      "properties": {"base_revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}, "lease_seconds": {"default": 3600, "minimum": 1, "type": "integer"}, "project_id": {"minLength": 1, "type": "string"}, "write_paths": {"items": {"minLength": 1, "type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true}},
+      "required": ["project_id", "base_revision", "write_paths", "idempotency_key"],
+      "type": "object"
+    },
+    "measure_baseline_request": {
+      "additionalProperties": false,
+      "properties": {"confirm_provider_work": {"const": true}, "destination": {"minLength": 1, "type": "string"}, "protocol": {"minLength": 1, "type": "string"}},
+      "required": ["protocol", "destination", "confirm_provider_work"],
+      "type": "object"
+    },
+    "measurement_summary": {
+      "additionalProperties": false,
+      "properties": {"bundle_digest": {"type": ["string", "null"]}, "provider_invocation_count": {"minimum": 0, "type": "integer"}, "repetition_count": {"const": 20}, "status": {"enum": ["inconclusive", "invalid", "published"]}},
+      "required": ["status", "repetition_count", "provider_invocation_count", "bundle_digest"],
+      "type": "object"
+    },
+    "open_campaign_request": {
+      "additionalProperties": false,
+      "properties": {"accepted_point_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}, "budget": {"$ref": "#/definitions/budget"}, "evaluator_id": {"minLength": 1, "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}, "project_id": {"minLength": 1, "type": "string"}, "reviewer_id": {"minLength": 1, "type": "string"}, "seed": {"type": "integer"}, "workload_id": {"minLength": 1, "type": "string"}},
+      "required": ["project_id", "accepted_point_digest", "workload_id", "evaluator_id", "reviewer_id", "budget", "seed", "idempotency_key"],
+      "type": "object"
+    },
+    "open_inquiry_request": {
+      "additionalProperties": false,
+      "properties": {"budget": {"$ref": "#/definitions/budget"}, "idempotency_key": {"minLength": 1, "type": "string"}, "project_id": {"default": null, "type": ["string", "null"]}, "question": {"minLength": 1, "type": "string"}},
+      "required": ["question", "budget", "idempotency_key"],
+      "type": "object"
+    },
+    "project_envelope": {
+      "additionalProperties": false,
+      "properties": {"dag": {"default": null, "type": ["string", "null"]}, "harnessRoot": {"type": "string"}, "projectId": {"type": "string"}, "projectRoot": {"type": "string"}, "state": {"$ref": "#/definitions/project_state"}},
+      "required": ["projectId", "state", "projectRoot", "harnessRoot"],
+      "type": "object"
+    },
+    "project_state": {
+      "oneOf": [
+        {"additionalProperties": false, "properties": {"state": {"const": "draft"}}, "required": ["state"], "type": "object"},
+        {"additionalProperties": false, "properties": {"mission_id": {"type": "string"}, "state": {"const": "mission_planning"}}, "required": ["state", "mission_id"], "type": "object"},
+        {"additionalProperties": false, "properties": {"mission_id": {"type": "string"}, "state": {"const": "mission_running"}}, "required": ["state", "mission_id"], "type": "object"},
+        {"additionalProperties": false, "properties": {"items": {"default": [], "items": {"$ref": "#/definitions/attention_item"}, "type": "array"}, "state": {"const": "attention_needed"}}, "required": ["state"], "type": "object"},
+        {"additionalProperties": false, "properties": {"state": {"const": "done"}}, "required": ["state"], "type": "object"},
+        {"additionalProperties": false, "properties": {"reason": {"type": "string"}, "state": {"const": "failed"}}, "required": ["state", "reason"], "type": "object"},
+        {"additionalProperties": false, "properties": {"reason": {"type": "string"}, "state": {"const": "aborted"}}, "required": ["state", "reason"], "type": "object"}
+      ]
+    },
+    "queued_run_summary": {
+      "allOf": [
+        {"$ref": "#/definitions/run_summary"},
+        {"properties": {"state": {"const": "queued"}}, "type": "object"}
+      ]
+    },
+    "promote_candidate_request": {
+      "additionalProperties": false,
+      "properties": {"campaign_id": {"minLength": 1, "type": "string"}, "candidate_id": {"minLength": 1, "type": "string"}, "human_grant_id": {"minLength": 1, "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}},
+      "required": ["campaign_id", "candidate_id", "human_grant_id", "idempotency_key"],
+      "type": "object"
+    },
+    "rollback_promotion_request": {
+      "additionalProperties": false,
+      "properties": {"campaign_id": {"minLength": 1, "type": "string"}, "human_grant_id": {"minLength": 1, "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}, "promotion_receipt_id": {"minLength": 1, "type": "string"}},
+      "required": ["campaign_id", "promotion_receipt_id", "human_grant_id", "idempotency_key"],
+      "type": "object"
+    },
+    "run_summary": {
+      "additionalProperties": false,
+      "properties": {"created_at": {"format": "date-time", "type": "string"}, "error": {"oneOf": [{"$ref": "#/definitions/error_envelope"}, {"type": "null"}]}, "idempotency_key": {"type": "string"}, "operation": {"enum": ["abort_project", "advance_project", "decide_attention", "end_mission", "start_project", "submit_plan"]}, "project_id": {"type": ["string", "null"]}, "receipt_id": {"type": ["string", "null"]}, "resource_key": {"type": "string"}, "result": {"oneOf": [{"$ref": "#/definitions/project_envelope"}, {"type": "null"}]}, "run_id": {"type": "string"}, "state": {"enum": ["attention", "cancel_requested", "cancelled", "draining", "effect_complete", "failed", "queued", "report_complete", "running", "succeeded"]}, "updated_at": {"format": "date-time", "type": "string"}},
+      "required": ["run_id", "operation", "state", "resource_key", "idempotency_key", "project_id", "created_at", "updated_at", "result", "error", "receipt_id"],
+      "type": "object"
+    },
+    "start_project_args": {
+      "additionalProperties": false,
+      "properties": {"brief": {"minLength": 1, "type": "string"}, "worker_model": {"default": null, "type": ["string", "null"]}, "worker_reasoning_effort": {"default": null, "type": ["string", "null"]}, "workspace_dir": {"minLength": 1, "type": "string"}},
+      "required": ["brief", "workspace_dir"],
+      "type": "object"
+    },
+    "submit_plan_args": {
+      "additionalProperties": false,
+      "properties": {"project_id": {"minLength": 1, "type": "string"}, "task_list": {"$ref": "#/definitions/task_list"}},
+      "required": ["project_id", "task_list"],
+      "type": "object"
+    },
+    "submit_run_request": {
+      "additionalProperties": false,
+      "allOf": [
+        {"if": {"properties": {"operation": {"const": "abort_project"}}}, "then": {"properties": {"arguments": {"$ref": "#/definitions/abort_project_args"}}}},
+        {"if": {"properties": {"operation": {"const": "advance_project"}}}, "then": {"properties": {"arguments": {"$ref": "#/definitions/advance_project_args"}}}},
+        {"if": {"properties": {"operation": {"const": "decide_attention"}}}, "then": {"properties": {"arguments": {"$ref": "#/definitions/decide_attention_args"}}}},
+        {"if": {"properties": {"operation": {"const": "end_mission"}}}, "then": {"properties": {"arguments": {"$ref": "#/definitions/end_mission_args"}}}},
+        {"if": {"properties": {"operation": {"const": "start_project"}}}, "then": {"properties": {"arguments": {"$ref": "#/definitions/start_project_args"}}}},
+        {"if": {"properties": {"operation": {"const": "submit_plan"}}}, "then": {"properties": {"arguments": {"$ref": "#/definitions/submit_plan_args"}}}}
+      ],
+      "properties": {"arguments": {"type": "object"}, "idempotency_key": {"minLength": 1, "type": "string"}, "operation": {"enum": ["abort_project", "advance_project", "decide_attention", "end_mission", "start_project", "submit_plan"]}},
+      "required": ["operation", "arguments", "idempotency_key"],
+      "type": "object"
+    },
+    "task": {
+      "additionalProperties": false,
+      "properties": {"auto_merge": {"default": true, "type": "boolean"}, "body": {"type": "string"}, "depends_on": {"default": [], "items": {"pattern": "^[A-Za-z][A-Za-z0-9_-]*$", "type": "string"}, "type": "array"}, "id": {"pattern": "^[A-Za-z][A-Za-z0-9_-]*$", "type": "string"}, "skill": {"default": null, "type": ["string", "null"]}, "targets": {"items": {"pattern": "^[A-Z][A-Z0-9-]+$", "type": "string"}, "type": "array"}, "type": {"enum": ["gate", "validate", "work"]}},
+      "required": ["id", "type", "body", "targets"],
+      "type": "object"
+    },
+    "task_list": {
+      "additionalProperties": false,
+      "properties": {"tasks": {"default": [], "items": {"$ref": "#/definitions/task"}, "type": "array"}},
+      "type": "object"
+    },
+    "task_list_patch": {
+      "additionalProperties": false,
+      "properties": {"add": {"default": [], "items": {"$ref": "#/definitions/task"}, "type": "array"}, "add_items": {"default": [], "items": {"pattern": "^[A-Z][A-Z0-9-]+$", "type": "string"}, "type": "array"}, "cancel": {"default": [], "items": {"type": "string"}, "type": "array"}, "supersede": {"additionalProperties": {"type": "string"}, "default": {}, "type": "object"}},
+      "type": "object"
+    },
+    "workspace_action_request": {
+      "additionalProperties": false,
+      "properties": {"idempotency_key": {"minLength": 1, "type": "string"}, "workspace_id": {"minLength": 1, "type": "string"}},
+      "required": ["workspace_id", "idempotency_key"],
+      "type": "object"
+    },
+    "workspace_inspect_request": {
+      "additionalProperties": false,
+      "properties": {"workspace_id": {"minLength": 1, "type": "string"}},
+      "required": ["workspace_id"],
+      "type": "object"
+    },
+    "workspace_summary": {
+      "additionalProperties": false,
+      "properties": {"base_revision": {"type": "string"}, "lease_expires_at": {"format": "date-time", "type": "string"}, "patch_id": {"type": ["string", "null"]}, "receipt_id": {"type": ["string", "null"]}, "state": {"enum": ["cancelled", "cleanup_failed", "expired", "integrated", "leased", "quarantined", "released", "returned", "unsettled"]}, "workspace_id": {"type": "string"}},
+      "required": ["workspace_id", "state", "base_revision", "lease_expires_at", "patch_id", "receipt_id"],
+      "type": "object"
+    }
+  },
+  "mcp_methods": [
+    {"args_schema": "#/definitions/add_candidate_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.add_candidate", "name": "add_candidate", "resource_key": ["campaign_id"], "result_schema": "#/definitions/campaign_summary"},
+    {"args_schema": "#/definitions/inquiry_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.advance_inquiry", "name": "advance_inquiry", "resource_key": ["inquiry_id"], "result_schema": "#/definitions/inquiry_summary"},
+    {"args_schema": "#/definitions/inspect_run_request", "errors": "#/stable_error_codes", "idempotency_key": null, "library_callable": "unrest_harness.api.attach_run", "name": "attach_run", "resource_key": ["run_id"], "result_schema": "#/definitions/run_summary"},
+    {"args_schema": "#/definitions/inquiry_reason_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.cancel_inquiry", "name": "cancel_inquiry", "resource_key": ["inquiry_id"], "result_schema": "#/definitions/inquiry_summary"},
+    {"args_schema": "#/definitions/cancel_run_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.cancel_run", "name": "cancel_run", "resource_key": ["run_id"], "result_schema": "#/definitions/run_summary"},
+    {"args_schema": "#/definitions/workspace_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.cleanup_workspace", "name": "cleanup_workspace", "resource_key": ["workspace_id"], "result_schema": "#/definitions/workspace_summary"},
+    {"args_schema": "#/definitions/campaign_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.evaluate_candidate", "name": "evaluate_candidate", "resource_key": ["campaign_id", "candidate_id"], "result_schema": "#/definitions/campaign_summary"},
+    {"args_schema": "#/definitions/handoff_inquiry_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.handoff_inquiry", "name": "handoff_inquiry", "resource_key": ["inquiry_id", "consumer_id"], "result_schema": "#/definitions/handoff_summary"},
+    {"args_schema": "#/definitions/campaign_inspect_request", "errors": "#/stable_error_codes", "idempotency_key": null, "library_callable": "unrest_harness.api.inspect_campaign", "name": "inspect_campaign", "resource_key": ["campaign_id"], "result_schema": "#/definitions/campaign_summary"},
+    {"args_schema": "#/definitions/inquiry_inspect_request", "errors": "#/stable_error_codes", "idempotency_key": null, "library_callable": "unrest_harness.api.inspect_inquiry", "name": "inspect_inquiry", "resource_key": ["inquiry_id"], "result_schema": "#/definitions/inquiry_summary"},
+    {"args_schema": "#/definitions/inspect_run_request", "errors": "#/stable_error_codes", "idempotency_key": null, "library_callable": "unrest_harness.api.inspect_run", "name": "inspect_run", "resource_key": ["run_id"], "result_schema": "#/definitions/run_summary"},
+    {"args_schema": "#/definitions/workspace_inspect_request", "errors": "#/stable_error_codes", "idempotency_key": null, "library_callable": "unrest_harness.api.inspect_workspace", "name": "inspect_workspace", "resource_key": ["workspace_id"], "result_schema": "#/definitions/workspace_summary"},
+    {"args_schema": "#/definitions/integrate_workspace_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.integrate_workspace", "name": "integrate_workspace", "resource_key": ["workspace_id"], "result_schema": "#/definitions/workspace_summary"},
+    {"args_schema": "#/definitions/lease_workspace_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.lease_workspace", "name": "lease_workspace", "resource_key": ["project_id", "base_revision", "write_paths"], "result_schema": "#/definitions/workspace_summary"},
+    {"args_schema": "#/definitions/open_campaign_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.open_campaign", "name": "open_campaign", "resource_key": ["project_id", "accepted_point_digest", "workload_id"], "result_schema": "#/definitions/campaign_summary"},
+    {"args_schema": "#/definitions/open_inquiry_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.open_inquiry", "name": "open_inquiry", "resource_key": ["project_id", "question"], "result_schema": "#/definitions/inquiry_summary"},
+    {"args_schema": "#/definitions/inquiry_reason_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.pause_inquiry", "name": "pause_inquiry", "resource_key": ["inquiry_id"], "result_schema": "#/definitions/inquiry_summary"},
+    {"args_schema": "#/definitions/promote_candidate_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.promote_candidate", "name": "promote_candidate", "resource_key": ["campaign_id", "candidate_id"], "result_schema": "#/definitions/campaign_summary"},
+    {"args_schema": "#/definitions/inquiry_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.resume_inquiry", "name": "resume_inquiry", "resource_key": ["inquiry_id"], "result_schema": "#/definitions/inquiry_summary"},
+    {"args_schema": "#/definitions/workspace_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.return_workspace", "name": "return_workspace", "resource_key": ["workspace_id"], "result_schema": "#/definitions/workspace_summary"},
+    {"args_schema": "#/definitions/campaign_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.review_candidate", "name": "review_candidate", "resource_key": ["campaign_id", "candidate_id"], "result_schema": "#/definitions/campaign_summary"},
+    {"args_schema": "#/definitions/rollback_promotion_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.rollback_promotion", "name": "rollback_promotion", "resource_key": ["campaign_id", "promotion_receipt_id"], "result_schema": "#/definitions/campaign_summary"},
+    {"args_schema": "#/definitions/submit_run_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.submit_run", "name": "submit_run", "resource_key": ["operation", "arguments.project_id", "arguments.workspace_dir"], "result_schema": "#/definitions/queued_run_summary"}
+  ],
+  "stable_error_codes": ["budget_exhausted", "busy", "cancelled", "conflict", "integrity_error", "internal_error", "invalid_argument", "invalid_transition", "not_found", "protected_path_changed", "provider_unavailable", "signature_suite_unsupported", "stale", "timeout", "unauthorized"],
+  "version": 1
+}
