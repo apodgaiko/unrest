@@ -24,10 +24,18 @@ jobs:
       - name: Import package
         run: uv run python -c "import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()"
       - name: Focused compatibility contracts
-        run: uv run pytest -q tests/test_assets.py tests/test_config.py tests/test_models.py
+        run: >-
+          uv run pytest -q
+          tests/test_assets.py
+          tests/test_config.py
+          tests/test_models.py
+          tests/test_persistence_schema_v1.py
+          tests/test_foundation_integration.py
+          tests/test_v031_burden.py
       - name: Supported CLI surfaces
         run: |
           uv run unrest --help
+          uv run unrest measure-baseline --help
           uv run unrest-server --help
           uv run python -m unrest_harness --help
       - name: Repository contract
@@ -64,6 +72,7 @@ jobs:
           uv pip install --python .wheel-venv/bin/python dist/*.whl
           cd "$(mktemp -d)"
           "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" measure-baseline --help
           "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --help
           "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness --help
           "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "from unrest_harness.config import HarnessConfig; assert HarnessConfig.discover().capability_policy.schema_version == 1"
@@ -74,22 +83,22 @@ jobs:
           set -e
           test "$status" -ne 0
           test "$output" = "unrest-server: startup configuration rejected"
-      - name: Generate and verify v0.3.0 build-local checksums
+      - name: Generate and verify v0.3.1 build-local checksums
         run: |
-          test -f dist/unrest_harness-0.3.0-py3-none-any.whl
-          test -f dist/unrest_harness-0.3.0.tar.gz
+          test -f dist/unrest_harness-0.3.1-py3-none-any.whl
+          test -f dist/unrest_harness-0.3.1.tar.gz
           cd dist
           sha256sum \
-            unrest_harness-0.3.0-py3-none-any.whl \
-            unrest_harness-0.3.0.tar.gz > SHA256SUMS
+            unrest_harness-0.3.1-py3-none-any.whl \
+            unrest_harness-0.3.1.tar.gz > SHA256SUMS
           sha256sum --check --strict SHA256SUMS
-      - name: Upload v0.3.0 archives and checksums
+      - name: Upload v0.3.1 archives and checksums
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: unrest-v0.3.0-python313
+          name: unrest-v0.3.1-python313
           path: |
-            dist/unrest_harness-0.3.0-py3-none-any.whl
-            dist/unrest_harness-0.3.0.tar.gz
+            dist/unrest_harness-0.3.1-py3-none-any.whl
+            dist/unrest_harness-0.3.1.tar.gz
             dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 90
