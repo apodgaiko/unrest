@@ -1,25 +1,77 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "nullable_digest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "statistic": {
+      "additionalProperties": false,
+      "properties": {"mad_seconds": {"minimum": 0, "type": ["number", "null"]}, "median_seconds": {"minimum": 0, "type": ["number", "null"]}, "noisy": {"type": "boolean"}},
+      "required": ["median_seconds", "mad_seconds", "noisy"],
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "properties": {
-    "bundle_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
-    "case_statistics": {"type": "object"},
-    "protocol": {"type": "object"},
+    "bundle_digest": {"$ref": "#/$defs/digest"},
+    "case_statistics": {
+      "additionalProperties": false,
+      "properties": {"E1": {"$ref": "#/$defs/statistic"}, "E2": {"$ref": "#/$defs/statistic"}, "P1": {"$ref": "#/$defs/statistic"}, "P2": {"$ref": "#/$defs/statistic"}},
+      "required": ["P1", "P2", "E1", "E2"],
+      "type": "object"
+    },
+    "protocol": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_policy": {"const": "cold-no-shared-response-cache"},
+        "ceilings": {"additionalProperties": false, "properties": {"global_seconds": {"const": 12000}, "repetition_seconds": {"const": 1200}, "reported_cost_usd": {"const": 50.0}}, "required": ["global_seconds", "repetition_seconds", "reported_cost_usd"], "type": "object"},
+        "concurrency": {"const": 1},
+        "model_digest": {"$ref": "#/$defs/nullable_digest"},
+        "model_status": {"enum": ["configured", "provider-default-unreported"]},
+        "product_digest": {"$ref": "#/$defs/digest"},
+        "protocol_digest": {"const": "sha256:b8a4e47e876af42f12331c8a5de2b918c3686542ef75f20efe3be0e903f48677"},
+        "protocol_id": {"const": "fm010-baseline-v1"},
+        "provider": {"enum": ["claude", "codex"]},
+        "reasoning_effort": {"enum": [null, "minimal", "low", "medium", "high", "xhigh", "max"]},
+        "route_digest": {"$ref": "#/$defs/nullable_digest"},
+        "route_status": {"enum": ["configured", "unavailable"]}
+      },
+      "required": ["protocol_id", "protocol_digest", "product_digest", "provider", "model_digest", "model_status", "reasoning_effort", "route_digest", "route_status", "cache_policy", "concurrency", "ceilings"],
+      "type": "object"
+    },
     "provider_invocation_count": {"minimum": 0, "type": "integer"},
-    "provider_invocations": {"type": "array"},
+    "provider_invocations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_status": {"enum": ["disabled", "hit", "unknown"]}, "case_id": {"enum": ["P1", "P2", "E1", "E2"]}, "duration_seconds": {"minimum": 0, "type": "number"},
+          "error_code": {"enum": [null, "adapter_not_configured", "adapter_start_failed", "cancelled", "invalid_structured_output", "node_incomplete", "output_limit_exceeded", "protocol_error", "timed_out"]},
+          "input_tokens": {"minimum": 0, "type": ["integer", "null"]}, "invocation_id": {"minLength": 1, "type": "string"}, "model_digest": {"$ref": "#/$defs/nullable_digest"},
+          "outcome": {"enum": ["completed", "failed", "timed_out", "cancelled"]}, "output_tokens": {"minimum": 0, "type": ["integer", "null"]}, "parent_repetition_id": {"pattern": "^rep-(0[1-9]|1[0-9]|20)$", "type": "string"},
+          "phase": {"enum": ["p1-work", "p1-validate", "p2-initial-work", "p2-initial-validate", "p2-corrected-work", "p2-corrected-validate", "candidate", "evaluation", "review"]},
+          "provider": {"enum": ["claude", "codex"]}, "reported_cost_usd": {"minimum": 0, "type": ["number", "null"]}, "role": {"enum": ["worker", "validator", "candidate_author", "independent_evaluator", "independent_reviewer"]}, "route_digest": {"$ref": "#/$defs/nullable_digest"}
+        },
+        "required": ["invocation_id", "parent_repetition_id", "case_id", "phase", "role", "provider", "model_digest", "route_digest", "duration_seconds", "input_tokens", "output_tokens", "reported_cost_usd", "cache_status", "outcome", "error_code"],
+        "type": "object"
+      },
+      "type": "array"
+    },
     "repetition_count": {"const": 20},
-    "repetitions": {"items": {"type": "object"}, "maxItems": 20, "minItems": 20, "type": "array"},
-    "reported_cost_status": {"enum": ["complete", "unavailable"]},
-    "reported_cost_usd": {"minimum": 0, "type": ["number", "null"]},
-    "schema_version": {"const": 1},
-    "status": {"enum": ["inconclusive", "invalid", "published"]},
-    "unknown_reported_cost_count": {"minimum": 0, "type": "integer"}
+    "repetitions": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_digest": {"$ref": "#/$defs/nullable_digest"}, "case_id": {"enum": ["P1", "P2", "E1", "E2"]}, "duration_seconds": {"minimum": 0, "type": "number"},
+          "failure": {"enum": [null, "cancelled", "cost_exhausted", "cost_unavailable", "global_timeout", "oracle_failed", "repetition_timeout", "unexpected_error"]}, "oracle_passed": {"type": "boolean"}, "ordinal": {"maximum": 20, "minimum": 1, "type": "integer"},
+          "promotion_applied": {"type": "boolean"}, "repetition_id": {"pattern": "^rep-(0[1-9]|1[0-9]|20)$", "type": "string"}, "rework_count": {"minimum": 0, "type": "integer"}, "transition_count": {"minimum": 0, "type": "integer"}
+        },
+        "required": ["repetition_id", "case_id", "ordinal", "duration_seconds", "oracle_passed", "failure", "transition_count", "rework_count", "artifact_digest"],
+        "type": "object"
+      },
+      "maxItems": 20, "minItems": 20, "type": "array"
+    },
+    "reported_cost_status": {"enum": ["complete", "unavailable"]}, "reported_cost_usd": {"minimum": 0, "type": ["number", "null"]}, "schema_version": {"const": 1},
+    "status": {"enum": ["inconclusive", "invalid", "published"]}, "unknown_reported_cost_count": {"minimum": 0, "type": "integer"}
   },
-  "required": [
-    "schema_version", "status", "protocol", "repetition_count",
-    "provider_invocation_count", "reported_cost_status", "reported_cost_usd",
-    "repetitions", "provider_invocations", "case_statistics", "bundle_digest",
-    "unknown_reported_cost_count"
-  ],
+  "required": ["schema_version", "status", "protocol", "repetition_count", "provider_invocation_count", "reported_cost_status", "reported_cost_usd", "repetitions", "provider_invocations", "case_statistics", "bundle_digest", "unknown_reported_cost_count"],
   "type": "object"
 }

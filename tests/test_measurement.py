@@ -82,15 +82,15 @@ class FakeProvider:
             return InvocationOutcome(
                 status="failed",
                 parsed=None,
-                provider="fake",
+                provider="codex",
                 cache_status=self.cache_status,  # type: ignore[arg-type]
-                error_code="seeded_failure",
+                error_code="protocol_error",
             )
-        if invocation_id.endswith("-rejected"):
+        if invocation_id.endswith("-p2-initial-work"):
             parsed: dict[str, Any] = {"artifact_text": "p2: rejected\n"}
-        elif invocation_id.endswith("-rework"):
+        elif invocation_id.endswith("-p2-corrected-work"):
             parsed = {"artifact_text": "unrest baseline p2\n"}
-        elif "-p1-author" in invocation_id:
+        elif invocation_id.endswith("-p1-work"):
             parsed = {"artifact_text": "unrest baseline p1\n"}
         elif invocation_id.endswith("-candidate"):
             parsed = {"artifact_text": "setting=improved\n"}
@@ -101,7 +101,7 @@ class FakeProvider:
         return InvocationOutcome(
             status="completed",
             parsed=parsed,
-            provider="fake",
+            provider="codex",
             model="fake-v1",
             route="local-test",
             input_tokens=10,
@@ -148,18 +148,30 @@ async def _synthetic_case(
     """Fast protocol arithmetic fixture; real state-machine paths are tested below."""
 
     phases = {
-        "P1": ("author", "validator"),
-        "P2": ("rejected", "validator-reject", "rework", "validator-accept"),
-        "E1": ("candidate", "evaluation", "review"),
-        "E2": ("evaluation", "review"),
+        "P1": (("p1-work", "worker"), ("p1-validate", "validator")),
+        "P2": (
+            ("p2-initial-work", "worker"),
+            ("p2-initial-validate", "validator"),
+            ("p2-corrected-work", "worker"),
+            ("p2-corrected-validate", "validator"),
+        ),
+        "E1": (
+            ("candidate", "candidate_author"),
+            ("evaluation", "independent_evaluator"),
+            ("review", "independent_reviewer"),
+        ),
+        "E2": (
+            ("evaluation", "independent_evaluator"),
+            ("review", "independent_reviewer"),
+        ),
     }[case_id]
     passed = True
-    for phase in phases:
+    for phase, role in phases:
         outcome = await runner._invoke(
             repetition_id,
             case_id,
             phase,
-            "fixture",
+            role,
             "fixture",
             cold_root,
         )
@@ -355,8 +367,8 @@ def test_unknown_reported_cost_is_not_collapsed_to_zero(tmp_path: Path) -> None:
     observation = json.loads((destination / "invalid-observation.json").read_text())
     assert observation["reported_cost_status"] == "unavailable"
     assert observation["reported_cost_usd"] is None
-    assert observation["unknown_reported_cost_count"] == 2
-    assert observation["provider_invocation_count"] == 2
+    assert observation["unknown_reported_cost_count"] == 1
+    assert observation["provider_invocation_count"] == 1
     assert {
         record["failure"] for record in observation["repetitions"][1:]
     } == {"cost_unavailable"}
@@ -488,8 +500,8 @@ def test_publication_rejects_unknown_or_private_fields_and_preserves_existing(
     unsigned = dict(bundle)
     unsigned.pop("bundle_digest")
     bundle["bundle_digest"] = _digest_value(unsigned)
-    assert verify_bundle(bundle)
-    with pytest.raises(MeasurementError, match="MEASUREMENT-009"):
+    assert not verify_bundle(bundle)
+    with pytest.raises(MeasurementError, match="MEASUREMENT-010"):
         publish_bundle(bundle, destination)
     assert (destination / "bundle.json").read_bytes() == original
     assert summary["status"] == "published"

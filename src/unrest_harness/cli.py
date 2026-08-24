@@ -137,15 +137,33 @@ def measure_baseline_cmd(
 ) -> None:
     """Run the frozen manual/provider-backed FM-010 release baseline."""
     from .measurement import MeasurementError, measure_baseline
+    from .public_schema import (
+        PublicSchemaValidationError,
+        validate_public_request,
+        validate_public_result,
+    )
 
     try:
+        validate_public_request(
+            "measure-baseline",
+            {
+                "protocol": protocol,
+                "destination": str(destination),
+                "confirm_provider_work": confirm_provider_work,
+            },
+        )
         summary = measure_baseline(
             protocol,
             str(destination),
             confirm_provider_work,
         )
+        validate_public_result("measure-baseline", summary)
+    except PublicSchemaValidationError:
+        raise click.ClickException("invalid argument") from None
     except MeasurementError as exc:
         raise click.ClickException(str(exc)) from None
+    except RuntimeError:
+        raise click.ClickException("internal error") from None
     click.echo(json.dumps(summary, sort_keys=True, separators=(",", ":")))
     if summary["status"] != "published":
         raise click.exceptions.Exit(2)

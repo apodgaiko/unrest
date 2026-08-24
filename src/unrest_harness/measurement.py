@@ -9,7 +9,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import os
+import re
 import statistics
 import subprocess
 import time
@@ -39,6 +41,51 @@ REPETITION_TIMEOUT_SECONDS = 20 * 60
 GLOBAL_TIMEOUT_SECONDS = 200 * 60
 GLOBAL_REPORTED_COST_USD = 50.0
 NOISE_LIMIT = 0.15
+CANONICAL_PROTOCOL_DIGEST = (
+    "sha256:b8a4e47e876af42f12331c8a5de2b918c3686542ef75f20efe3be0e903f48677"
+)
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_PROVIDERS = frozenset({"claude", "codex"})
+_PHASES = frozenset(
+    {
+        "p1-work",
+        "p1-validate",
+        "p2-initial-work",
+        "p2-initial-validate",
+        "p2-corrected-work",
+        "p2-corrected-validate",
+        "candidate",
+        "evaluation",
+        "review",
+    }
+)
+_INVOCATION_ROLES = frozenset(
+    {"worker", "validator", "candidate_author", "independent_evaluator", "independent_reviewer"}
+)
+_INVOCATION_OUTCOMES = frozenset({"completed", "failed", "timed_out", "cancelled"})
+_ERROR_CODES = frozenset(
+    {
+        "adapter_not_configured",
+        "adapter_start_failed",
+        "cancelled",
+        "invalid_structured_output",
+        "node_incomplete",
+        "output_limit_exceeded",
+        "protocol_error",
+        "timed_out",
+    }
+)
+_FAILURES = frozenset(
+    {
+        "cancelled",
+        "cost_exhausted",
+        "cost_unavailable",
+        "global_timeout",
+        "oracle_failed",
+        "repetition_timeout",
+        "unexpected_error",
+    }
+)
 
 MeasurementStatus = Literal["published", "invalid", "inconclusive"]
 
@@ -48,6 +95,10 @@ class MeasurementError(RuntimeError):
 
 
 class _BudgetExhausted(RuntimeError):
+    pass
+
+
+class _BudgetUnavailable(RuntimeError):
     pass
 
 
@@ -223,23 +274,10 @@ def load_protocol(protocol: str, config: HarnessConfig) -> dict[str, Any]:
 
 
 def _validate_protocol(protocol: Mapping[str, Any]) -> None:
-    cases = protocol.get("cases")
-    ceilings = protocol.get("ceilings")
-    expected_order = [case for case in ("P1", "P2", "E1", "E2") for _ in range(5)]
-    if (
-        protocol.get("protocol_id") != PROTOCOL_ID
-        or protocol.get("schema_version") != 1
-        or protocol.get("order") != expected_order
-        or not isinstance(cases, dict)
-        or sorted(cases) != ["E1", "E2", "P1", "P2"]
-        or not isinstance(ceilings, dict)
-        or ceilings.get("repetition_seconds") != REPETITION_TIMEOUT_SECONDS
-        or ceilings.get("global_seconds") != GLOBAL_TIMEOUT_SECONDS
-        or ceilings.get("reported_cost_usd") != GLOBAL_REPORTED_COST_USD
-        or protocol.get("concurrency") != 1
-        or protocol.get("cache_policy") != "cold-no-shared-response-cache"
-        or protocol.get("noise_limit") != NOISE_LIMIT
-    ):
+    # The canonical digest binds every key, value, nested fixture, oracle,
+    # prompt, ordering position, and ceiling. Shape-only checks would allow a
+    # seemingly valid protocol to quietly redefine what the release measured.
+    if _digest_value(dict(protocol)) != CANONICAL_PROTOCOL_DIGEST:
         raise MeasurementError("MEASUREMENT-002 protocol is invalid")
 
 
@@ -296,6 +334,25 @@ def _digest_value(value: Mapping[str, Any]) -> str:
 
 def _sha256_text(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode()).hexdigest()
+
+
+def _public_provider(value: str) -> str:
+    if value not in _PROVIDERS:
+        raise MeasurementError("MEASUREMENT-013 unsupported provider identity")
+    return value
+
+
+def _optional_identity_digest(value: str | None) -> str | None:
+    return _sha256_text(value) if value else None
+
+
+def _finite_number(value: object, *, minimum: float = 0.0) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+        and float(value) >= minimum
+    )
 
 
 def _median_mad(values: Sequence[float]) -> dict[str, float | bool | None]:
@@ -426,6 +483,7 @@ class BaselineRunner:
             len(repetitions) != REPETITION_COUNT
             or any(not record["oracle_passed"] for record in repetitions)
             or any(event["cache_status"] != "disabled" for event in self.invocations)
+            or any(event["outcome"] != "completed" for event in self.invocations)
             or self.total_reported_cost > GLOBAL_REPORTED_COST_USD
             or self.unknown_reported_cost_count > 0
         )
@@ -433,10 +491,10 @@ class BaselineRunner:
         status: MeasurementStatus = "invalid" if invalid else "inconclusive" if noisy else "published"
         protocol_public = {
             "protocol_id": self.protocol["protocol_id"],
-            "protocol_digest": _digest_value(dict(self.protocol)),
+            "protocol_digest": CANONICAL_PROTOCOL_DIGEST,
             "product_digest": protected_product_digest(self.source_root),
-            "provider": self.config.worker_provider_name,
-            "model": os.environ.get("UNREST_WORKER_MODEL"),
+            "provider": _public_provider(self.config.worker_provider_name),
+            "model_digest": _optional_identity_digest(os.environ.get("UNREST_WORKER_MODEL")),
             "model_status": (
                 "configured"
                 if os.environ.get("UNREST_WORKER_MODEL")
@@ -509,15 +567,19 @@ class BaselineRunner:
             self.provider.config = repetition_config
             self.provider.runner = ProviderSessionRunner(repetition_config)
         start = self.clock()
+        remaining_global = GLOBAL_TIMEOUT_SECONDS - (start - self.started)
         try:
+            if remaining_global <= 0:
+                raise TimeoutError
             outcome = await asyncio.wait_for(
                 self._execute_case(repetition_id, case_id, cold_root),
-                timeout=REPETITION_TIMEOUT_SECONDS,
+                timeout=min(REPETITION_TIMEOUT_SECONDS, remaining_global),
             )
         except TimeoutError:
+            global_expired = self.clock() - self.started >= GLOBAL_TIMEOUT_SECONDS
             outcome = {
                 "oracle_passed": False,
-                "failure": "repetition_timeout",
+                "failure": "global_timeout" if global_expired else "repetition_timeout",
                 "transition_count": 0,
                 "rework_count": 0,
                 "artifact_digest": None,
@@ -526,6 +588,30 @@ class BaselineRunner:
             outcome = {
                 "oracle_passed": False,
                 "failure": "cost_exhausted",
+                "transition_count": 0,
+                "rework_count": 0,
+                "artifact_digest": None,
+            }
+        except _BudgetUnavailable:
+            outcome = {
+                "oracle_passed": False,
+                "failure": "cost_unavailable",
+                "transition_count": 0,
+                "rework_count": 0,
+                "artifact_digest": None,
+            }
+        except asyncio.CancelledError:
+            outcome = {
+                "oracle_passed": False,
+                "failure": "cancelled",
+                "transition_count": 0,
+                "rework_count": 0,
+                "artifact_digest": None,
+            }
+        except Exception:  # noqa: BLE001 - public observation is value-free
+            outcome = {
+                "oracle_passed": False,
+                "failure": "unexpected_error",
                 "transition_count": 0,
                 "rework_count": 0,
                 "artifact_digest": None,
@@ -761,9 +847,10 @@ class BaselineRunner:
                     "parent_repetition_id": repetition_id,
                     "case_id": case_id,
                     "phase": record["node_id"],
-                    "provider": record["provider"],
-                    "model": record["model"],
-                    "route": record["route"],
+                    "role": record["role"],
+                    "provider": _public_provider(record["provider"]),
+                    "model_digest": _optional_identity_digest(record["model"]),
+                    "route_digest": _optional_identity_digest(record["route"]),
                     "duration_seconds": record["duration_seconds"],
                     "input_tokens": record["input_tokens"],
                     "output_tokens": record["output_tokens"],
@@ -996,20 +1083,27 @@ class BaselineRunner:
                 "parent_repetition_id": repetition_id,
                 "case_id": case_id,
                 "phase": phase,
-                "provider": outcome.provider,
-                "model": outcome.model,
-                "route": outcome.route,
+                "role": role,
+                "provider": _public_provider(outcome.provider),
+                "model_digest": _optional_identity_digest(outcome.model),
+                "route_digest": _optional_identity_digest(outcome.route),
                 "duration_seconds": duration,
                 "input_tokens": outcome.input_tokens,
                 "output_tokens": outcome.output_tokens,
                 "reported_cost_usd": outcome.reported_cost_usd,
                 "cache_status": outcome.cache_status,
                 "outcome": outcome.status,
-                "error_code": outcome.error_code,
+                "error_code": (
+                    outcome.error_code
+                    if outcome.error_code is None or outcome.error_code in _ERROR_CODES
+                    else "protocol_error"
+                ),
             }
         )
         if self.total_reported_cost > GLOBAL_REPORTED_COST_USD:
             raise _BudgetExhausted
+        if self.unknown_reported_cost_count:
+            raise _BudgetUnavailable
         return outcome
 
 
@@ -1085,6 +1179,7 @@ def verify_bundle(bundle: object) -> bool:
         return False
     repetitions = bundle.get("repetitions")
     invocations = bundle.get("provider_invocations")
+    protocol = bundle.get("protocol")
     if (
         bundle.get("schema_version") != 1
         or bundle.get("status") not in {"inconclusive", "invalid", "published"}
@@ -1096,6 +1191,54 @@ def verify_bundle(bundle: object) -> bool:
         or bundle.get("reported_cost_status") not in {"complete", "unavailable"}
         or not isinstance(bundle.get("unknown_reported_cost_count"), int)
         or bundle["unknown_reported_cost_count"] < 0
+        or not isinstance(protocol, dict)
+    ):
+        return False
+    if set(protocol) != {
+        "cache_policy",
+        "ceilings",
+        "concurrency",
+        "model_digest",
+        "model_status",
+        "product_digest",
+        "protocol_digest",
+        "protocol_id",
+        "provider",
+        "reasoning_effort",
+        "route_digest",
+        "route_status",
+    }:
+        return False
+    reasoning = protocol.get("reasoning_effort")
+    if (
+        protocol.get("protocol_id") != PROTOCOL_ID
+        or protocol.get("protocol_digest") != CANONICAL_PROTOCOL_DIGEST
+        or protocol.get("cache_policy") != "cold-no-shared-response-cache"
+        or protocol.get("concurrency") != 1
+        or protocol.get("ceilings")
+        != {
+            "global_seconds": GLOBAL_TIMEOUT_SECONDS,
+            "repetition_seconds": REPETITION_TIMEOUT_SECONDS,
+            "reported_cost_usd": GLOBAL_REPORTED_COST_USD,
+        }
+        or protocol.get("provider") not in _PROVIDERS
+        or protocol.get("model_status")
+        not in {"configured", "provider-default-unreported"}
+        or protocol.get("route_status") not in {"configured", "unavailable"}
+        or reasoning not in {None, "minimal", "low", "medium", "high", "xhigh", "max"}
+        or not _DIGEST_RE.fullmatch(str(protocol.get("product_digest")))
+        or (
+            protocol.get("model_digest") is not None
+            and not _DIGEST_RE.fullmatch(str(protocol.get("model_digest")))
+        )
+        or (
+            protocol.get("route_digest") is not None
+            and not _DIGEST_RE.fullmatch(str(protocol.get("route_digest")))
+        )
+        or (protocol.get("model_status") == "configured")
+        != (protocol.get("model_digest") is not None)
+        or (protocol.get("route_status") == "configured")
+        != (protocol.get("route_digest") is not None)
     ):
         return False
     if bundle["reported_cost_status"] == "complete":
@@ -1120,8 +1263,10 @@ def verify_bundle(bundle: object) -> bool:
         "transition_count",
     }
     repetition_ids: set[str] = set()
-    case_counts = {case: 0 for case in ("P1", "P2", "E1", "E2")}
-    for repetition in repetitions:
+    expected_order = [case for case in ("P1", "P2", "E1", "E2") for _ in range(5)]
+    for ordinal, (repetition, expected_case) in enumerate(
+        zip(repetitions, expected_order, strict=True), start=1
+    ):
         if not isinstance(repetition, dict):
             return False
         keys = set(repetition)
@@ -1132,12 +1277,38 @@ def verify_bundle(bundle: object) -> bool:
             return False
         repetition_id = repetition.get("repetition_id")
         case_id = repetition.get("case_id")
-        if not isinstance(repetition_id, str) or repetition_id in repetition_ids or case_id not in case_counts:
+        if (
+            repetition_id != f"rep-{ordinal:02d}"
+            or repetition_id in repetition_ids
+            or case_id != expected_case
+            or repetition.get("ordinal") != ordinal
+            or not _finite_number(repetition.get("duration_seconds"))
+            or type(repetition.get("oracle_passed")) is not bool
+            or not isinstance(repetition.get("transition_count"), int)
+            or isinstance(repetition.get("transition_count"), bool)
+            or repetition["transition_count"] < 0
+            or not isinstance(repetition.get("rework_count"), int)
+            or isinstance(repetition.get("rework_count"), bool)
+            or repetition["rework_count"] < 0
+            or (
+                repetition.get("artifact_digest") is not None
+                and not _DIGEST_RE.fullmatch(str(repetition.get("artifact_digest")))
+            )
+        ):
+            return False
+        passed = repetition["oracle_passed"]
+        if passed:
+            if repetition.get("failure") is not None:
+                return False
+            if repetition["rework_count"] != (1 if case_id == "P2" else 0):
+                return False
+            if case_id == "E2" and repetition.get("promotion_applied") is not False:
+                return False
+        elif repetition.get("failure") not in _FAILURES:
+            return False
+        if "promotion_applied" in repetition and type(repetition["promotion_applied"]) is not bool:
             return False
         repetition_ids.add(repetition_id)
-        case_counts[case_id] += 1
-    if set(case_counts.values()) != {5}:
-        return False
     expected_invocation_keys = {
         "cache_status",
         "case_id",
@@ -1145,28 +1316,138 @@ def verify_bundle(bundle: object) -> bool:
         "error_code",
         "input_tokens",
         "invocation_id",
-        "model",
+        "model_digest",
         "outcome",
         "output_tokens",
         "parent_repetition_id",
         "phase",
         "provider",
         "reported_cost_usd",
-        "route",
+        "role",
+        "route_digest",
     }
     invocation_ids: set[str] = set()
     for invocation in invocations:
         if not isinstance(invocation, dict) or set(invocation) != expected_invocation_keys:
             return False
         invocation_id = invocation.get("invocation_id")
+        phase = invocation.get("phase")
+        parent = invocation.get("parent_repetition_id")
+        case = invocation.get("case_id")
+        expected_invocation_ids = {
+            f"{parent}-{phase}",
+            f"{parent}-{str(case).lower()}-{phase}",
+        }
         if (
             not isinstance(invocation_id, str)
+            or invocation_id not in expected_invocation_ids
             or invocation_id in invocation_ids
             or invocation.get("parent_repetition_id") not in repetition_ids
+            or invocation.get("case_id")
+            != expected_order[int(str(invocation.get("parent_repetition_id"))[-2:]) - 1]
+            or invocation.get("phase") not in _PHASES
+            or invocation.get("role") not in _INVOCATION_ROLES
+            or invocation.get("provider") not in _PROVIDERS
             or invocation.get("cache_status") not in {"disabled", "hit", "unknown"}
+            or invocation.get("outcome") not in _INVOCATION_OUTCOMES
+            or not _finite_number(invocation.get("duration_seconds"))
+            or (
+                invocation.get("model_digest") is not None
+                and not _DIGEST_RE.fullmatch(str(invocation.get("model_digest")))
+            )
+            or (
+                invocation.get("route_digest") is not None
+                and not _DIGEST_RE.fullmatch(str(invocation.get("route_digest")))
+            )
         ):
             return False
+        for token_field in ("input_tokens", "output_tokens"):
+            token = invocation.get(token_field)
+            if token is not None and (
+                not isinstance(token, int) or isinstance(token, bool) or token < 0
+            ):
+                return False
+        cost = invocation.get("reported_cost_usd")
+        if cost is not None and not _finite_number(cost):
+            return False
+        error = invocation.get("error_code")
+        if error is not None and error not in _ERROR_CODES:
+            return False
+        if (invocation["outcome"] == "completed") != (error is None):
+            return False
         invocation_ids.add(invocation_id)
+    unknown_count = sum(
+        event["reported_cost_usd"] is None for event in invocations
+    )
+    total_cost = sum(
+        float(event["reported_cost_usd"])
+        for event in invocations
+        if event["reported_cost_usd"] is not None
+    )
+    if unknown_count != bundle["unknown_reported_cost_count"]:
+        return False
+    if unknown_count:
+        if bundle["reported_cost_status"] != "unavailable" or bundle["reported_cost_usd"] is not None:
+            return False
+    elif (
+        bundle["reported_cost_status"] != "complete"
+        or not _finite_number(bundle["reported_cost_usd"])
+        or not math.isclose(float(bundle["reported_cost_usd"]), total_cost, abs_tol=1e-12)
+    ):
+        return False
+    statistics_value = bundle.get("case_statistics")
+    if not isinstance(statistics_value, dict) or set(statistics_value) != {"P1", "P2", "E1", "E2"}:
+        return False
+    expected_statistics = {
+        case: _median_mad(
+            [
+                float(record["duration_seconds"])
+                for record in repetitions
+                if record["case_id"] == case and record["oracle_passed"]
+            ]
+        )
+        for case in ("P1", "P2", "E1", "E2")
+    }
+    if statistics_value != expected_statistics:
+        return False
+    invalid = (
+        any(not record["oracle_passed"] for record in repetitions)
+        or any(event["cache_status"] != "disabled" for event in invocations)
+        or any(event["outcome"] != "completed" for event in invocations)
+        or total_cost > GLOBAL_REPORTED_COST_USD
+        or unknown_count > 0
+    )
+    noisy = any(bool(value["noisy"]) for value in expected_statistics.values())
+    expected_status = "invalid" if invalid else "inconclusive" if noisy else "published"
+    if bundle["status"] != expected_status:
+        return False
+    if expected_status == "published":
+        expected_phases = {
+            "P1": {"p1-work", "p1-validate"},
+            "P2": {
+                "p2-initial-work",
+                "p2-initial-validate",
+                "p2-corrected-work",
+                "p2-corrected-validate",
+            },
+            "E1": {"candidate", "evaluation", "review"},
+            "E2": {"evaluation", "review"},
+        }
+        for repetition in repetitions:
+            attributed = [
+                event
+                for event in invocations
+                if event["parent_repetition_id"] == repetition["repetition_id"]
+            ]
+            phases = {
+                event["phase"]
+                for event in attributed
+            }
+            if (
+                phases != expected_phases[repetition["case_id"]]
+                or len(attributed) != len(phases)
+            ):
+                return False
     expected = bundle.get("bundle_digest")
     unsigned = dict(bundle)
     unsigned.pop("bundle_digest", None)
