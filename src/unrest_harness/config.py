@@ -5,7 +5,7 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Literal, Mapping
+from typing import Mapping
 
 from .capability_policy import (
     CAPABILITY_PROFILE_ENV,
@@ -341,6 +341,11 @@ class HarnessConfig:
             "worker": self.worker_provider,
             "validator": self.validator_provider,
             "terminal_reviewer": self.terminal_reviewer_provider,
+            "inquiry_branch": self.worker_provider,
+            "inquiry_synthesis": self.validator_provider,
+            "candidate_author": self.worker_provider,
+            "independent_evaluator": self.validator_provider,
+            "independent_reviewer": self.terminal_reviewer_provider,
         }
         for role, provider in providers.items():
             validate_provider_support(
@@ -420,12 +425,10 @@ class HarnessConfig:
     # Role-specialized variants
     # ------------------------------------------------------------------
 
-    def for_role(
-        self, role: Literal["worker", "validator", "terminal_reviewer"]
-    ) -> HarnessConfig:
-        if role == "worker":
+    def for_role(self, role: RoleName) -> HarnessConfig:
+        if role in ("worker", "inquiry_branch", "candidate_author"):
             return self
-        if role == "validator":
+        if role in ("validator", "inquiry_synthesis", "independent_evaluator"):
             return replace(
                 self,
                 worker_provider_name=(
@@ -436,7 +439,7 @@ class HarnessConfig:
                     self.validator_reasoning_effort or self.worker_reasoning_effort
                 ),
             )
-        if role == "terminal_reviewer":
+        if role in ("terminal_reviewer", "independent_reviewer"):
             return replace(
                 self,
                 worker_provider_name=(
@@ -451,4 +454,6 @@ class HarnessConfig:
                     or self.worker_reasoning_effort
                 ),
             )
+        if role == "orchestrator":
+            return self
         raise ValueError(f"unknown role: {role}")

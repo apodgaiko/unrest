@@ -266,7 +266,10 @@ def _acp_subprocess_env(
             if not isinstance(sanitized, dict):
                 raise AssertionError("sanitized CODEX_CONFIG must remain an object")
             config.update(sanitized)
-        if policy.profile == UNSAFE_DEVELOPMENT_PROFILE:
+        immutable_session = not policy.process.enabled and not any(
+            root.write for root in policy.roots
+        )
+        if policy.profile == UNSAFE_DEVELOPMENT_PROFILE and not immutable_session:
             config.update(
                 {
                     "sandbox_mode": "danger-full-access",
@@ -278,9 +281,14 @@ def _acp_subprocess_env(
             env["CODEX_SANDBOX"] = "danger-full-access"
             env["CODEX_DISABLE_SANDBOX"] = "1"
         else:
+            sandbox_mode = (
+                "workspace-write"
+                if any(root.write for root in policy.roots)
+                else "read-only"
+            )
             config.update(
                 {
-                    "sandbox_mode": "workspace-write",
+                    "sandbox_mode": sandbox_mode,
                     "approval_policy": "on-request",
                     "model_reasoning_effort": reasoning_effort or "medium",
                 }

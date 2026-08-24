@@ -5,7 +5,17 @@ from typing import Literal
 
 ProviderName = Literal["claude", "codex"]
 ConfigFormat = Literal["mcp_json", "codex_config"]
-CapabilityRole = Literal["orchestrator", "worker", "validator", "terminal_reviewer"]
+CapabilityRole = Literal[
+    "orchestrator",
+    "worker",
+    "validator",
+    "terminal_reviewer",
+    "inquiry_branch",
+    "inquiry_synthesis",
+    "candidate_author",
+    "independent_evaluator",
+    "independent_reviewer",
+]
 
 ORCHESTRATOR_PROVIDER_NAMES: tuple[ProviderName, ...] = (
     "claude",
@@ -39,6 +49,11 @@ class ProviderDefinition:
         "worker",
         "validator",
         "terminal_reviewer",
+        "inquiry_branch",
+        "inquiry_synthesis",
+        "candidate_author",
+        "independent_evaluator",
+        "independent_reviewer",
     )
     network_modes: tuple[str, ...] = ("allow",)
     acp_filesystem_enforcement: bool = True

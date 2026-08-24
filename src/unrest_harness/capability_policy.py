@@ -37,7 +37,17 @@ FINITE_CREDENTIAL_NAMES = (
     "ZAI_API_KEY",
 )
 
-RoleName = Literal["orchestrator", "worker", "validator", "terminal_reviewer"]
+RoleName = Literal[
+    "orchestrator",
+    "worker",
+    "validator",
+    "terminal_reviewer",
+    "inquiry_branch",
+    "inquiry_synthesis",
+    "candidate_author",
+    "independent_evaluator",
+    "independent_reviewer",
+]
 RootName = Literal["workspace", "project_record", "deliverable_roots", "host"]
 ToolKind = Literal[
     "read",
@@ -147,6 +157,11 @@ class RoleCapabilities(StrictPolicyModel):
     worker: RoleCapability
     validator: RoleCapability
     terminal_reviewer: RoleCapability
+    inquiry_branch: RoleCapability
+    inquiry_synthesis: RoleCapability
+    candidate_author: RoleCapability
+    independent_evaluator: RoleCapability
+    independent_reviewer: RoleCapability
 
     def for_role(self, role: RoleName) -> RoleCapability:
         return getattr(self, role)
@@ -192,7 +207,18 @@ class CapabilityPolicyError(ValueError):
         )
         self.role = _diagnostic_identifier(
             role,
-            {"orchestrator", "worker", "validator", "terminal_reviewer", "unresolved"},
+            {
+                "orchestrator",
+                "worker",
+                "validator",
+                "terminal_reviewer",
+                "inquiry_branch",
+                "inquiry_synthesis",
+                "candidate_author",
+                "independent_evaluator",
+                "independent_reviewer",
+                "unresolved",
+            },
         )
         self.version = version if isinstance(version, int) else _opaque(version)
         self.capability = _diagnostic_identifier(

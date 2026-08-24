@@ -2,6 +2,326 @@
   "policy_id": "unrest-role-capabilities",
   "profiles": {
     "safe": {
+      "candidate_author": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "independent_evaluator": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "independent_reviewer": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "inquiry_branch": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "inquiry_synthesis": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
       "orchestrator": {
         "approvals": {
           "behavior": "deny",
@@ -315,6 +635,326 @@
       }
     },
     "unsafe-development-unrestricted": {
+      "candidate_author": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "independent_evaluator": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "independent_reviewer": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "inquiry_branch": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
+      "inquiry_synthesis": {
+        "approvals": {
+          "behavior": "allow_once",
+          "tool_kinds": [
+            "fetch",
+            "read",
+            "search",
+            "think"
+          ]
+        },
+        "environment": {
+          "credentials": [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CODEX_API_KEY",
+            "GLM_API_KEY",
+            "OPENAI_API_KEY",
+            "ZAI_API_KEY"
+          ],
+          "forward": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "NO_PROXY",
+            "PATH",
+            "SSL_CERT_DIR",
+            "SSL_CERT_FILE",
+            "TEMP",
+            "TMP",
+            "TMPDIR"
+          ],
+          "inherit_all": false,
+          "internal": [
+            "CODEX_CONFIG",
+            "CODEX_PATH",
+            "INITIAL_AGENT_MODE"
+          ],
+          "terminal_injection": []
+        },
+        "filesystem": [
+          {
+            "name": "workspace",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "project_record",
+            "read": true,
+            "write": false
+          },
+          {
+            "name": "deliverable_roots",
+            "read": true,
+            "write": false
+          }
+        ],
+        "network": {
+          "mode": "allow"
+        },
+        "process": {
+          "commands": [],
+          "enabled": false
+        }
+      },
       "orchestrator": {
         "approvals": {
           "behavior": "allow_once",
