@@ -29,6 +29,7 @@ from typing import Any, BinaryIO, Iterator, NoReturn
 
 from .canonical_identity import IdentityRecord, construct_identity
 from .foundation_store import CustodyActor, FoundationStore
+from .mutation_journal import DurableMutationJournal, MutationJournalError
 from .receipts import construct_receipt, load_receipt_catalog
 
 
@@ -42,6 +43,7 @@ RUN_OPERATIONS = frozenset(
         "submit_plan",
     }
 )
+EXECUTOR_FAILURE_KEY = "_unrest_executor_failure_v1"
 TERMINAL_RUN_STATES = frozenset({"attention", "cancelled", "failed", "succeeded"})
 _ACTIVE_RUN_STATES = frozenset(
     {
@@ -563,29 +565,63 @@ class RunControl:
     def cancel_run(self, run_id: str, reason: str, idempotency_key: str) -> RunSummary:
         _validate_text(reason, "reason")
         _validate_text(idempotency_key, "idempotency_key")
-        with _exclusive_lock(self._run_lock(run_id)):
-            summary = self.inspect_run(run_id)
-            if summary.state in TERMINAL_RUN_STATES:
-                return summary
-            events = self._load_events(run_id)
-            if not any(event.state == "cancel_requested" for event in events):
-                self._append_event_unlocked(
-                    run_id,
-                    "cancel_requested",
-                    {
-                        "cancel_idempotency_digest": _sha256(idempotency_key.encode("utf-8")),
-                        "reason_digest": _sha256(reason.encode("utf-8")),
-                    },
-                )
-            cursor = self._load_worker_cursor(run_id)
-            if cursor is None or not _pid_live(int(cursor.get("pid", -1))):
-                self._settle_cancel_without_worker_unlocked(run_id)
-            else:
-                try:
-                    os.killpg(int(cursor["pgid"]), signal.SIGTERM)
-                except ProcessLookupError:
+        request = {
+            "idempotency_key": idempotency_key,
+            "reason": reason,
+            "run_id": run_id,
+        }
+
+        def effect(_: str) -> Mapping[str, Any]:
+            with _exclusive_lock(self._run_lock(run_id)):
+                summary = self.inspect_run(run_id)
+                if summary.state in TERMINAL_RUN_STATES:
+                    return summary.as_dict()
+                events = self._load_events(run_id)
+                if not any(event.state == "cancel_requested" for event in events):
+                    self._append_event_unlocked(
+                        run_id,
+                        "cancel_requested",
+                        {
+                            "cancel_idempotency_digest": _sha256(idempotency_key.encode("utf-8")),
+                            "reason_digest": _sha256(reason.encode("utf-8")),
+                        },
+                    )
+                cursor = self._load_worker_cursor(run_id)
+                if cursor is None or not _pid_live(int(cursor.get("pid", -1))):
                     self._settle_cancel_without_worker_unlocked(run_id)
-        return self.inspect_run(run_id)
+                else:
+                    try:
+                        os.killpg(int(cursor["pgid"]), signal.SIGTERM)
+                    except ProcessLookupError:
+                        self._settle_cancel_without_worker_unlocked(run_id)
+            return self.inspect_run(run_id).as_dict()
+
+        try:
+            value = DurableMutationJournal(self.project_root).execute(
+                operation="cancel_run",
+                resource_key=run_id,
+                idempotency_key=idempotency_key,
+                request=request,
+                effect=effect,
+            )
+        except MutationJournalError as exc:
+            raise RunControlError(exc.code, exc.code.replace("_", " ")) from exc
+        try:
+            return RunSummary(
+                run_id=str(value["run_id"]),
+                operation=str(value["operation"]),
+                state=str(value["state"]),
+                resource_key=str(value["resource_key"]),
+                idempotency_key=str(value["idempotency_key"]),
+                project_id=str(value["project_id"]) if value["project_id"] is not None else None,
+                created_at=str(value["created_at"]),
+                updated_at=str(value["updated_at"]),
+                result=dict(value["result"]) if isinstance(value["result"], Mapping) else None,
+                error=dict(value["error"]) if isinstance(value["error"], Mapping) else None,
+                receipt_id=str(value["receipt_id"]) if value["receipt_id"] is not None else None,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RunControlError("integrity_error", "cancel replay record is invalid") from exc
 
     def recover(self) -> tuple[RunSummary, ...]:
         recovered: list[RunSummary] = []
@@ -658,6 +694,46 @@ class RunControl:
     def worker_effect_complete(self, run_id: str, result: Mapping[str, Any]) -> None:
         if not isinstance(result, Mapping):
             _fail("internal_error", "run executor returned an invalid result")
+        failure = result.get(EXECUTOR_FAILURE_KEY)
+        if failure is not None:
+            if set(result) != {EXECUTOR_FAILURE_KEY} or not isinstance(failure, Mapping):
+                _fail("internal_error", "run executor returned an invalid result")
+            public = failure.get("public_error")
+            private = failure.get("private_tool_error")
+            if (
+                not isinstance(public, Mapping)
+                or set(public) != {"error"}
+                or not isinstance(public.get("error"), Mapping)
+                or set(public["error"]) != {"code", "message"}
+                or public["error"].get("code") not in {
+                    "invalid_argument", "invalid_transition", "not_found"
+                }
+                or not isinstance(public["error"].get("message"), str)
+                or not isinstance(private, Mapping)
+                or set(private) != {"code", "details", "message"}
+                or not isinstance(private.get("code"), str)
+                or not isinstance(private.get("message"), str)
+                or not isinstance(private.get("details"), list)
+                or not all(isinstance(item, str) for item in private["details"])
+            ):
+                _fail("internal_error", "run executor returned an invalid result")
+            with _exclusive_lock(self._run_lock(run_id)):
+                if self.inspect_run(run_id).state in TERMINAL_RUN_STATES:
+                    return
+                _atomic_private_write(
+                    self._run_dir(run_id) / "private" / "tool-error.json",
+                    _json_bytes(
+                        {
+                            "code": private["code"],
+                            "details": list(private["details"]),
+                            "message": private["message"],
+                            "schema_version": 1,
+                        }
+                    ),
+                    immutable=True,
+                )
+                self._finalize_terminal_unlocked(run_id, "failed", error=public)
+            return
         _validate_project_envelope(result)
         encoded = _json_bytes(dict(result))
         with _exclusive_lock(self._run_lock(run_id)):

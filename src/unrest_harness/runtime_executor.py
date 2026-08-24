@@ -14,14 +14,43 @@ from .config import HarnessConfig
 from .controller import ProjectController, ToolError
 from .models import Decision, TaskList
 from .project_lock import ProjectLockError, ProjectMutationLock, project_lock_path
+from .run_control import EXECUTOR_FAILURE_KEY
+
+
+_TRANSITION_TOOL_ERRORS = frozenset(
+    {
+        "invalid_contract_dir",
+        "invalid_decisions",
+        "invalid_task_list",
+        "mission_not_ready_to_close",
+        "wrong_state",
+    }
+)
 
 
 def _payload(value: Any) -> dict[str, Any]:
     if isinstance(value, ToolError):
+        public_code = (
+            "not_found"
+            if value.code == "not_found"
+            else "invalid_transition"
+            if value.code in _TRANSITION_TOOL_ERRORS
+            else "invalid_argument"
+        )
         return {
-            "error": value.code,
-            "message": value.message,
-            "details": [str(item) for item in (value.details or [])],
+            EXECUTOR_FAILURE_KEY: {
+                "private_tool_error": {
+                    "code": value.code,
+                    "details": [str(item) for item in (value.details or [])],
+                    "message": value.message,
+                },
+                "public_error": {
+                    "error": {
+                        "code": public_code,
+                        "message": public_code.replace("_", " "),
+                    }
+                },
+            }
         }
     dumped = value.model_dump(mode="json", by_alias=True)
     if not isinstance(dumped, dict):

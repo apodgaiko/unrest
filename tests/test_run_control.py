@@ -176,7 +176,13 @@ def test_cancel_is_idempotent_records_boundaries_and_releases_resource(project: 
     assert first.state in {"cancel_requested", "draining", "cancelled"}
     terminal = control.attach_run(run.run_id, timeout_seconds=5)
     assert terminal.state == "cancelled"
-    assert control.cancel_run(run.run_id, "operator requested", "cancel:one") == terminal
+    restarted = _control(project)
+    assert restarted.cancel_run(run.run_id, "operator requested", "cancel:one") == first
+    event_count = len(list((project / f".unrest/runs/{token}/events").glob("*.json")))
+    with pytest.raises(RunControlError) as collision:
+        restarted.cancel_run(run.run_id, "different reason", "cancel:one")
+    assert collision.value.code == "conflict"
+    assert len(list((project / f".unrest/runs/{token}/events").glob("*.json"))) == event_count
     successor = control.submit_run("start_project", _start_args(project), "idem:after-cancel")
     assert control.attach_run(successor.run_id, timeout_seconds=5).state == "succeeded"
     events = [
