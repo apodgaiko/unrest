@@ -41,7 +41,7 @@
         "tests/**",
         "tools/**"
       ],
-      "sha256": "d7310b8db31915c6f55cb1a39bee2145c61c5748fcdfe86c14ae4e495ab9db9e"
+      "sha256": "c9856db7449eafe34e7c25e66d4a58162121e562e0c632b673647bbbc8209cef"
     }
   },
   "status": "frozen v0.3.1 release candidate; exact remote identity belongs to the annotated tag and GitHub Release",

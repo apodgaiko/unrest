@@ -26,7 +26,7 @@ def test_v031_release_records_are_coherent() -> None:
     assert manifest["scope"]["dependencies_added"] == []
     assert burden["reference"]["commit"] == manifest["base"]["predecessor_commit"]
     assert burden["installation"]["dependencies"] == 5
-    if burden["status"] == "complete":
+    if burden["status"] in {"complete", "complete_with_focused_repair"}:
         assert burden["candidate"]["source_suite_invocations"] == 1
     else:
         assert burden["status"] == "candidate checkpoint pending"

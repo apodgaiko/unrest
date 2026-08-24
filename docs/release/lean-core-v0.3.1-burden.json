@@ -1,15 +1,23 @@
 {
   "candidate": {
-    "commit": null,
+    "commit": "owned by the final annotated v0.3.1 tag",
     "focused_fm010_nested_seconds": 13.32,
+    "focused_post_checkpoint_repair": {
+      "passed": 42,
+      "pytest_seconds": 17.85,
+      "scope": "tests/test_claude_settings_callers.py tests/test_measurement.py"
+    },
     "full_suite": {
-      "passed": null,
-      "pytest_seconds": null,
-      "skipped": null,
-      "wall_seconds": null
+      "failed": 14,
+      "failure_class": "unscoped FM-010 telemetry writes; repaired afterward with focused proof",
+      "passed": 1082,
+      "pytest_seconds": 190.47,
+      "skipped": 7,
+      "wall_seconds": null,
+      "wall_seconds_reason": "outer wall was not independently captured"
     },
     "python": "3.13.12",
-    "source_suite_invocations": 0
+    "source_suite_invocations": 1
   },
   "compatibility_lanes": {
     "python_3_11": "pending",
@@ -33,5 +41,5 @@
     "tag": "v0.3.0"
   },
   "schema_version": 1,
-  "status": "candidate checkpoint pending"
+  "status": "complete_with_focused_repair"
 }

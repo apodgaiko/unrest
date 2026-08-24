@@ -1958,11 +1958,18 @@ class ACPNodeDispatcher:
 
     supports_isolated_workspaces = True
 
-    def __init__(self, config: HarnessConfig, store: ProjectStore | None = None):
+    def __init__(
+        self,
+        config: HarnessConfig,
+        store: ProjectStore | None = None,
+        *,
+        record_invocations: bool = False,
+    ):
         self.config = config
         self.store = store or ProjectStore(config)
         self.loader = AssetLoader(config)
         self.runner = ACPNodeRunner(config=config, loader=self.loader)
+        self.record_invocations = record_invocations
 
     def dispatch(self, request: DispatchRequest) -> NodeHandoff:
         self.store.refresh_inventory(os.environ)
@@ -1986,6 +1993,8 @@ class ACPNodeDispatcher:
         request: DispatchRequest,
         duration_seconds: float,
     ) -> None:
+        if not self.record_invocations:
+            return
         role: Literal["validator", "worker"] = (
             "validator" if request.task.type == "validate" else "worker"
         )

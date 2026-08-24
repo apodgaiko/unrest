@@ -38,6 +38,13 @@ telemetry. Interactive per-candidate human adjudication, a general scheduler
 across unrelated projects, and automatic online self-modification remain later
 work.
 
+The release-only full source suite grew from 152.94 seconds to 190.47 seconds
+(about 25%) as coverage rose from 948 to 1,096 executed tests. Its sole frozen
+checkpoint exposed one unscoped telemetry-write regression; the exact failing
+matrix plus FM-010 flow then passed 42 focused tests after telemetry became
+opt-in. Routine CI never runs the repeated provider campaign, and installation
+still has no added dependency or setup step.
+
 Ordinary import, installation, help and CI never execute the repeated provider
 campaign. Run it explicitly with:
 

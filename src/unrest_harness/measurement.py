@@ -651,7 +651,7 @@ class BaselineRunner:
         self._initialize_repository(cold_root)
         controller = ProjectController(
             self.config,
-            ACPNodeDispatcher(self.config),
+            ACPNodeDispatcher(self.config, record_invocations=True),
             ACPTerminalReviewer(self.config),
         )
         tools = FoundationTools(self.config, controller)
@@ -882,7 +882,7 @@ class BaselineRunner:
         bridge = _EvolutionBridge(self, repetition_id, case_id)
         controller = ProjectController(
             self.config,
-            ACPNodeDispatcher(self.config),
+            ACPNodeDispatcher(self.config, record_invocations=True),
             ACPTerminalReviewer(self.config),
         )
         tools = FoundationTools(

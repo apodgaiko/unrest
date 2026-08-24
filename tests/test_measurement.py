@@ -376,7 +376,7 @@ def test_unknown_reported_cost_is_not_collapsed_to_zero(tmp_path: Path) -> None:
 
 def test_prompt_marker_alone_cannot_claim_cache_disabled(tmp_path: Path) -> None:
     config = _config(tmp_path)
-    dispatcher = ACPNodeDispatcher(config)
+    dispatcher = ACPNodeDispatcher(config, record_invocations=True)
     workspace = tmp_path / "marker-workspace"
     workspace.mkdir()
     project = dispatcher.store.create_project("cache marker", workspace)
