@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "receipt_domain": "unrest.receipt.v1",
+  "freshness_statuses": ["fresh", "revoked", "stale", "unverifiable"],
+  "local_authoritative_consumers": ["cleanup_authority", "evaluation_authority", "evidence_store", "maintainer", "parent_integration_authority", "promotion_authority", "reviewer", "rollback_authority", "workspace_authority", "workspace_return_authority"],
+  "receipt_families": [
+    {
+      "consumers": ["evidence_store", "workspace_authority"],
+      "dependencies": [
+        {"dependency_kind": "policy", "dependency_type": "identity", "must_be_fresh": true, "role": "capability_policy_digest"},
+        {"dependency_kind": "environment", "dependency_type": "identity", "must_be_fresh": true, "role": "environment_digest"},
+        {"dependency_kind": "workspace_lease", "dependency_type": "identity", "must_be_fresh": true, "role": "workspace_lease_id"},
+        {"dependency_kind": "workspace_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "workspace_receipt_evidence"}
+      ],
+      "expiry_rule": "policy_defined",
+      "id": "cleanup_receipt.v1",
+      "issuer_authority": "workspace_cleanup_authority",
+      "outcomes": ["cleanup_failed", "released", "resources_unsettled"],
+      "revocation_authority": "workspace_cleanup_authority",
+      "signature_policy": "deferred_optional",
+      "subject_kind": "workspace_lease",
+      "terminal_dispositions": ["attention", "released", "unsettled"]
+    },
+    {
+      "consumers": ["evidence_store", "promotion_authority", "reviewer"],
+      "dependencies": [
+        {"dependency_kind": "accepted_working_point", "dependency_type": "identity", "must_be_fresh": true, "role": "accepted_working_point_digest"},
+        {"dependency_kind": "artifact", "dependency_type": "identity", "must_be_fresh": true, "role": "artifact_digest"},
+        {"dependency_kind": "budget", "dependency_type": "identity", "must_be_fresh": true, "role": "budget_envelope"},
+        {"dependency_kind": "candidate", "dependency_type": "identity", "must_be_fresh": true, "role": "candidate_digest"},
+        {"dependency_kind": "policy", "dependency_type": "identity", "must_be_fresh": true, "role": "capability_policy_digest"},
+        {"dependency_kind": "context", "dependency_type": "identity", "must_be_fresh": true, "role": "context_digest"},
+        {"dependency_kind": "environment", "dependency_type": "identity", "must_be_fresh": true, "role": "environment_digest"},
+        {"dependency_kind": "evaluator", "dependency_type": "identity", "must_be_fresh": true, "role": "evaluator_digest"},
+        {"dependency_kind": "route_profile", "dependency_type": "identity", "must_be_fresh": true, "role": "route_profile_digest"},
+        {"dependency_kind": "run_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "run_receipt_evidence"},
+        {"dependency_kind": "secret_set_version", "dependency_type": "identity", "must_be_fresh": true, "role": "secret_set_version_id"},
+        {"dependency_kind": "seed", "dependency_type": "identity", "must_be_fresh": true, "role": "seed"},
+        {"dependency_kind": "workload", "dependency_type": "identity", "must_be_fresh": true, "role": "workload_digest"}
+      ],
+      "expiry_rule": "optional_policy_expiry",
+      "id": "evaluation_receipt.v1",
+      "issuer_authority": "independent_evaluation_authority",
+      "outcomes": ["cancelled", "completed_fail", "completed_pass", "contaminated", "evaluator_error", "infrastructure_error", "policy_rejected", "skipped", "stale_input", "suspected_reward_hack", "timed_out"],
+      "revocation_authority": "independent_evaluation_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "candidate",
+      "terminal_dispositions": ["invalid", "retained_failure", "retained_result"]
+    },
+    {
+      "consumers": ["evidence_store", "promotion_authority", "rollback_authority"],
+      "dependencies": [
+        {"dependency_kind": "accepted_working_point", "dependency_type": "identity", "must_be_fresh": true, "role": "accepted_working_point_digest"},
+        {"dependency_kind": "artifact", "dependency_type": "identity", "must_be_fresh": true, "role": "artifact_digest"},
+        {"dependency_kind": "base", "dependency_type": "identity", "must_be_fresh": true, "role": "base_revision"},
+        {"dependency_kind": "candidate", "dependency_type": "identity", "must_be_fresh": true, "role": "candidate_digest"},
+        {"dependency_kind": "policy", "dependency_type": "identity", "must_be_fresh": true, "role": "capability_policy_digest"},
+        {"dependency_kind": "patch_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "patch_receipt_evidence"},
+        {"dependency_kind": "workspace_lease", "dependency_type": "identity", "must_be_fresh": true, "role": "workspace_lease_id"}
+      ],
+      "expiry_rule": "dependency_bound",
+      "id": "integration_receipt.v1",
+      "issuer_authority": "parent_integration_authority",
+      "outcomes": ["integrated_and_validated", "rejected", "rework", "rolled_back_after_validation_failure"],
+      "revocation_authority": "parent_integration_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "accepted_working_point",
+      "terminal_dispositions": ["integrated", "rejected", "rework", "rolled_back"]
+    },
+    {
+      "consumers": ["evidence_store", "parent_integration_authority"],
+      "dependencies": [
+        {"dependency_kind": "artifact", "dependency_type": "identity", "must_be_fresh": true, "role": "artifact_digest"},
+        {"dependency_kind": "base", "dependency_type": "identity", "must_be_fresh": true, "role": "base_revision"},
+        {"dependency_kind": "candidate", "dependency_type": "identity", "must_be_fresh": true, "role": "candidate_digest"},
+        {"dependency_kind": "policy", "dependency_type": "identity", "must_be_fresh": true, "role": "capability_policy_digest"},
+        {"dependency_kind": "environment", "dependency_type": "identity", "must_be_fresh": true, "role": "environment_digest"},
+        {"dependency_kind": "workspace_lease", "dependency_type": "identity", "must_be_fresh": true, "role": "workspace_lease_id"},
+        {"dependency_kind": "workspace_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "workspace_receipt_evidence"}
+      ],
+      "expiry_rule": "dependency_bound",
+      "id": "patch_receipt.v1",
+      "issuer_authority": "workspace_return_authority",
+      "outcomes": ["cancelled_partial_return", "failed_return", "patch_returned", "unsettled_effects"],
+      "revocation_authority": "workspace_return_authority",
+      "signature_policy": "deferred_optional",
+      "subject_kind": "candidate",
+      "terminal_dispositions": ["attention", "failed", "returned"]
+    },
+    {
+      "consumers": ["evidence_store", "maintainer", "rollback_authority"],
+      "dependencies": [
+        {"dependency_kind": "accepted_working_point", "dependency_type": "identity", "must_be_fresh": true, "role": "accepted_working_point_digest"},
+        {"dependency_kind": "candidate", "dependency_type": "identity", "must_be_fresh": true, "role": "candidate_digest"},
+        {"dependency_kind": "evaluation_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "evaluation_receipt_evidence"},
+        {"dependency_kind": "integration_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "integration_receipt_evidence"},
+        {"dependency_kind": "review_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "review_receipt_evidence"}
+      ],
+      "expiry_rule": "dependency_bound",
+      "id": "promotion_receipt.v1",
+      "issuer_authority": "promotion_authority",
+      "outcomes": ["inconclusive", "promoted", "rejected", "rework"],
+      "revocation_authority": "promotion_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "candidate",
+      "terminal_dispositions": ["inconclusive", "promoted", "rejected", "rework"]
+    },
+    {
+      "consumers": ["evidence_store", "promotion_authority"],
+      "dependencies": [
+        {"dependency_kind": "accepted_working_point", "dependency_type": "identity", "must_be_fresh": true, "role": "accepted_working_point_digest"},
+        {"dependency_kind": "candidate", "dependency_type": "identity", "must_be_fresh": true, "role": "candidate_digest"},
+        {"dependency_kind": "evaluation_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "evaluation_receipt_evidence"},
+        {"dependency_kind": "evaluator", "dependency_type": "identity", "must_be_fresh": true, "role": "evaluator_digest"},
+        {"dependency_kind": "evidence", "dependency_type": "identity", "must_be_fresh": true, "role": "evidence_digest"},
+        {"dependency_kind": "review", "dependency_type": "identity", "must_be_fresh": true, "role": "review_digest"}
+      ],
+      "expiry_rule": "dependency_bound",
+      "id": "review_receipt.v1",
+      "issuer_authority": "independent_review_authority",
+      "outcomes": ["approve", "cancelled", "dissent", "inconclusive", "reject", "rework"],
+      "revocation_authority": "independent_review_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "candidate",
+      "terminal_dispositions": ["approved", "inconclusive", "rejected", "rework"]
+    },
+    {
+      "consumers": ["evidence_store", "maintainer"],
+      "dependencies": [
+        {"dependency_kind": "accepted_working_point", "dependency_type": "identity", "must_be_fresh": true, "role": "accepted_working_point_digest"},
+        {"dependency_kind": "artifact", "dependency_type": "identity", "must_be_fresh": true, "role": "artifact_digest"},
+        {"dependency_kind": "policy", "dependency_type": "identity", "must_be_fresh": true, "role": "capability_policy_digest"},
+        {"dependency_kind": "integration_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "integration_receipt_evidence"},
+        {"dependency_kind": "promotion_receipt.v1", "dependency_type": "receipt", "must_be_fresh": true, "role": "promotion_receipt_evidence"}
+      ],
+      "expiry_rule": "dependency_bound",
+      "id": "rollback_receipt.v1",
+      "issuer_authority": "rollback_authority",
+      "outcomes": ["failed_unsettled", "restored_and_validated"],
+      "revocation_authority": "rollback_authority",
+      "signature_policy": "required_before_authoritative_consumption",
+      "subject_kind": "accepted_working_point",
+      "terminal_dispositions": ["attention", "restored"]
+    },
+    {
+      "consumers": ["evaluation_authority", "evidence_store", "workspace_authority"],
+      "dependencies": [
+        {"dependency_kind": "accepted_working_point", "dependency_type": "identity", "must_be_fresh": true, "role": "accepted_working_point_digest"},
+        {"dependency_kind": "base", "dependency_type": "identity", "must_be_fresh": true, "role": "base_revision"},
+        {"dependency_kind": "budget", "dependency_type": "identity", "must_be_fresh": true, "role": "budget_envelope"},
+        {"dependency_kind": "candidate", "dependency_type": "identity", "must_be_fresh": true, "role": "candidate_digest"},
+        {"dependency_kind": "policy", "dependency_type": "identity", "must_be_fresh": true, "role": "capability_policy_digest"},
+        {"dependency_kind": "context", "dependency_type": "identity", "must_be_fresh": true, "role": "context_digest"},
+        {"dependency_kind": "environment", "dependency_type": "identity", "must_be_fresh": true, "role": "environment_digest"},
+        {"dependency_kind": "evaluator", "dependency_type": "identity", "must_be_fresh": true, "role": "evaluator_digest"},
+        {"dependency_kind": "provider_configuration", "dependency_type": "identity", "must_be_fresh": true, "role": "provider_configuration_digest"},
+        {"dependency_kind": "route_profile", "dependency_type": "identity", "must_be_fresh": true, "role": "route_profile_digest"},
+        {"dependency_kind": "secret_set_version", "dependency_type": "identity", "must_be_fresh": true, "role": "secret_set_version_id"},
+        {"dependency_kind": "seed", "dependency_type": "identity", "must_be_fresh": true, "role": "seed"},
+        {"dependency_kind": "workload", "dependency_type": "identity", "must_be_fresh": true, "role": "workload_digest"},
+        {"dependency_kind": "workspace_lease", "dependency_type": "identity", "must_be_fresh": true, "role": "workspace_lease_id"}
+      ],
+      "expiry_rule": "dependency_bound",
+      "id": "run_receipt.v1",
+      "issuer_authority": "run_lifecycle_authority",
+      "outcomes": ["cancelled", "failed", "partial", "succeeded"],
+      "revocation_authority": "run_lifecycle_authority",
+      "signature_policy": "deferred_optional",
+      "subject_kind": "run",
+      "terminal_dispositions": ["cancelled", "failed", "partial", "succeeded"]
+    },
+    {
+      "consumers": ["cleanup_authority", "evidence_store", "workspace_return_authority"],
+      "dependencies": [
+        {"dependency_kind": "accepted_working_point", "dependency_type": "identity", "must_be_fresh": true, "role": "accepted_working_point_digest"},
+        {"dependency_kind": "artifact", "dependency_type": "identity", "must_be_fresh": true, "role": "artifact_digest"},
+        {"dependency_kind": "base", "dependency_type": "identity", "must_be_fresh": true, "role": "base_revision"},
+        {"dependency_kind": "policy", "dependency_type": "identity", "must_be_fresh": true, "role": "capability_policy_digest"},
+        {"dependency_kind": "environment", "dependency_type": "identity", "must_be_fresh": true, "role": "environment_digest"},
+        {"dependency_kind": "workspace_lease", "dependency_type": "identity", "must_be_fresh": true, "role": "workspace_lease_id"}
+      ],
+      "expiry_rule": "lease_expiry",
+      "id": "workspace_receipt.v1",
+      "issuer_authority": "workspace_lease_authority",
+      "outcomes": ["active", "allocation_failed", "cancelled", "orphaned", "returned", "timed_out"],
+      "revocation_authority": "workspace_lease_authority",
+      "signature_policy": "deferred_optional",
+      "subject_kind": "workspace_lease",
+      "terminal_dispositions": ["active", "attention", "failed", "returned"]
+    }
+  ]
+}
