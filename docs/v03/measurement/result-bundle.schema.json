@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bundle_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "case_statistics": {"type": "object"},
+    "protocol": {"type": "object"},
+    "provider_invocation_count": {"minimum": 0, "type": "integer"},
+    "provider_invocations": {"type": "array"},
+    "repetition_count": {"const": 20},
+    "repetitions": {"items": {"type": "object"}, "maxItems": 20, "minItems": 20, "type": "array"},
+    "reported_cost_status": {"enum": ["complete", "unavailable"]},
+    "reported_cost_usd": {"minimum": 0, "type": ["number", "null"]},
+    "schema_version": {"const": 1},
+    "status": {"enum": ["inconclusive", "invalid", "published"]},
+    "unknown_reported_cost_count": {"minimum": 0, "type": "integer"}
+  },
+  "required": [
+    "schema_version", "status", "protocol", "repetition_count",
+    "provider_invocation_count", "reported_cost_status", "reported_cost_usd",
+    "repetitions", "provider_invocations", "case_statistics", "bundle_digest",
+    "unknown_reported_cost_count"
+  ],
+  "type": "object"
+}

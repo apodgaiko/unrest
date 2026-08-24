@@ -126,6 +126,31 @@ def check_repository_cmd() -> None:
     click.echo(report.render(), nl=False)
 
 
+@cli.command("measure-baseline")
+@click.option("--protocol", required=True, type=str)
+@click.option("--destination", required=True, type=click.Path(path_type=Path))
+@click.option("--confirm-provider-work", is_flag=True, required=True)
+def measure_baseline_cmd(
+    protocol: str,
+    destination: Path,
+    confirm_provider_work: bool,
+) -> None:
+    """Run the frozen manual/provider-backed FM-010 release baseline."""
+    from .measurement import MeasurementError, measure_baseline
+
+    try:
+        summary = measure_baseline(
+            protocol,
+            str(destination),
+            confirm_provider_work,
+        )
+    except MeasurementError as exc:
+        raise click.ClickException(str(exc)) from None
+    click.echo(json.dumps(summary, sort_keys=True, separators=(",", ":")))
+    if summary["status"] != "published":
+        raise click.exceptions.Exit(2)
+
+
 # ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------

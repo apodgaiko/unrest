@@ -87,9 +87,15 @@ async def test_catalog_names_equal_mcp_and_library(harness_home: Path) -> None:
         (Path(__file__).resolve().parents[1] / "docs" / "v03" / "v0.3.1" / "public-surface.v1.json").read_text()
     )
     names = {item["name"] for item in catalog["mcp_methods"]}
+    cli_library_names = {
+        item["library_callable"].rsplit(".", 1)[-1]
+        for item in catalog["cli_commands"]
+    }
     server_names = {tool.name for tool in await create_orchestrator_server(config).list_tools()}
     assert names <= server_names
-    assert names == set(api.__all__)
+    assert names == set(api.__all__) - cli_library_names
+    assert cli_library_names == {"measure_baseline"}
+    assert callable(api.measure_baseline)
     for item in catalog["mcp_methods"]:
         callable_name = item["library_callable"].rsplit(".", 1)[-1]
         assert callable(getattr(api, callable_name))

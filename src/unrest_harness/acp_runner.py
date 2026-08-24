@@ -12,6 +12,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1064,6 +1065,7 @@ class ACPNodeRunner:
         progress_callback: ProgressCallback | None = None,
     ) -> NodeHandoff:
         """Spawn the worker MCP server + ACP agent; poll the attempt file; return the handoff."""
+        invocation_started = time.monotonic()
         runtime = self._node_runtime(
             project_id, mission_id, task, spawn_ts, store, cwd
         )
@@ -1235,6 +1237,42 @@ class ACPNodeRunner:
                 sr = prompt_result.get("stopReason")
                 if isinstance(sr, str):
                     prompt_stop_reason = sr
+                usage = prompt_result.get("usage")
+                usage = usage if isinstance(usage, dict) else {}
+                reported_cache_status = usage.get(
+                    "cacheStatus", usage.get("cache_status")
+                )
+                cache_status = (
+                    reported_cache_status
+                    if reported_cache_status in {"disabled", "hit", "unknown"}
+                    else "unknown"
+                )
+                telemetry_directory = (
+                    store.unrest_runtime_dir(project_id)
+                    / "missions"
+                    / mission_id
+                    / "provider-invocations"
+                )
+                telemetry_directory.mkdir(parents=True, exist_ok=True)
+                atomic_write_json(
+                    telemetry_directory / f"{spawn_ts}__{task.id}.json",
+                    {
+                        "cache_status": cache_status,
+                        "duration_seconds": time.monotonic() - invocation_started,
+                        "input_tokens": usage.get("inputTokens", usage.get("input_tokens")),
+                        "model": usage.get("model"),
+                        "node_id": task.id,
+                        "output_tokens": usage.get("outputTokens", usage.get("output_tokens")),
+                        "provider": role_config.worker_provider.name,
+                        "reported_cost_usd": usage.get(
+                            "reportedCostUsd", usage.get("reported_cost_usd")
+                        ),
+                        "role": runtime.role,
+                        "route": "acp",
+                        "spawn_ts": spawn_ts,
+                    },
+                    trusted_root=telemetry_directory,
+                )
 
             # 4) Give the worker MCP server a short grace period to flush.
             await self._poll_attempt_file(handoff_path, timeout=2.0)
@@ -1928,21 +1966,65 @@ class ACPNodeDispatcher:
 
     def dispatch(self, request: DispatchRequest) -> NodeHandoff:
         self.store.refresh_inventory(os.environ)
-        return _run_coro_blocking(
-            self.runner.run_node(
-                project_id=request.project_id,
-                mission_id=request.mission_id,
-                task=request.task,
-                spawn_ts=request.spawn_ts,
-                store=self.store,
-                cwd=request.cwd,
+        started = time.monotonic()
+        try:
+            return _run_coro_blocking(
+                self.runner.run_node(
+                    project_id=request.project_id,
+                    mission_id=request.mission_id,
+                    task=request.task,
+                    spawn_ts=request.spawn_ts,
+                    store=self.store,
+                    cwd=request.cwd,
+                )
             )
+        finally:
+            self._record_invocation(request, time.monotonic() - started)
+
+    def _record_invocation(
+        self,
+        request: DispatchRequest,
+        duration_seconds: float,
+    ) -> None:
+        role: Literal["validator", "worker"] = (
+            "validator" if request.task.type == "validate" else "worker"
+        )
+        role_config = self.config.for_role(role)
+        directory = (
+            self.store.unrest_runtime_dir(request.project_id)
+            / "missions"
+            / request.mission_id
+            / "provider-invocations"
+        )
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{request.spawn_ts}__{request.task.id}.json"
+        if path.is_file():
+            return
+        atomic_write_json(
+            path,
+            {
+                # Missing provider telemetry is unknown. Prompt text is never
+                # evidence that an upstream response cache was disabled.
+                "cache_status": "unknown",
+                "duration_seconds": duration_seconds,
+                "input_tokens": None,
+                "model": None,
+                "node_id": request.task.id,
+                "output_tokens": None,
+                "provider": role_config.worker_provider.name,
+                "reported_cost_usd": None,
+                "role": role,
+                "route": "acp",
+                "spawn_ts": request.spawn_ts,
+            },
+            trusted_root=directory,
         )
 
     def dispatch_batch(self, requests: list[DispatchRequest]) -> list[NodeHandoff]:
         self.store.refresh_inventory(os.environ)
 
         async def _run_all() -> list[NodeHandoff]:
+            started = {request.task.id: time.monotonic() for request in requests}
             results = await asyncio.gather(
                 *(
                     self.runner.run_node(
@@ -1959,6 +2041,10 @@ class ACPNodeDispatcher:
             )
             handoffs: list[NodeHandoff] = []
             for request, result in zip(requests, results, strict=True):
+                self._record_invocation(
+                    request,
+                    time.monotonic() - started[request.task.id],
+                )
                 if isinstance(result, BaseException):
                     summary = _truncate_text(
                         "Dispatcher crashed before a handoff: "

@@ -12,7 +12,8 @@ from typing import Any
 from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer
 from .config import HarnessConfig
 from .controller import ProjectController
-from .foundation_tools import FoundationTools, public_error
+from .foundation_tools import FoundationToolError, FoundationTools, public_error
+from .measurement import MeasurementError, measure_baseline as _measure_baseline
 
 
 def _tools() -> FoundationTools:
@@ -129,11 +130,22 @@ def rollback_promotion(campaign_id: str, promotion_receipt_id: str, human_grant_
     return _call("rollback_promotion", campaign_id, promotion_receipt_id, human_grant_id, idempotency_key)
 
 
+def measure_baseline(
+    protocol: str,
+    destination: str,
+    confirm_provider_work: bool,
+) -> dict[str, Any]:
+    try:
+        return _measure_baseline(protocol, destination, confirm_provider_work)
+    except MeasurementError:
+        raise FoundationToolError("invalid_argument", "invalid argument") from None
+
+
 __all__ = [
     "add_candidate", "advance_inquiry", "attach_run", "cancel_inquiry",
     "cancel_run", "cleanup_workspace", "evaluate_candidate", "handoff_inquiry",
     "inspect_campaign", "inspect_inquiry", "inspect_run", "inspect_workspace",
     "integrate_workspace", "lease_workspace", "open_campaign", "open_inquiry",
     "pause_inquiry", "promote_candidate", "resume_inquiry", "return_workspace",
-    "review_candidate", "rollback_promotion", "submit_run",
+    "measure_baseline", "review_candidate", "rollback_promotion", "submit_run",
 ]
