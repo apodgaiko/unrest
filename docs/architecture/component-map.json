@@ -119,6 +119,44 @@
       ]
     },
     {
+      "decisions": [],
+      "id": "COMP-FOUNDATION",
+      "invariants": [
+        "ARCH-DISPATCH-001",
+        "ARCH-MCP-001",
+        "ARCH-STORAGE-001"
+      ],
+      "paths": [
+        "src/unrest_harness/api.py",
+        "src/unrest_harness/canonical_identity.py",
+        "src/unrest_harness/evolution.py",
+        "src/unrest_harness/foundation_store.py",
+        "src/unrest_harness/foundation_tools.py",
+        "src/unrest_harness/inquiry.py",
+        "src/unrest_harness/provider_sessions.py",
+        "src/unrest_harness/receipts.py",
+        "src/unrest_harness/run_control.py",
+        "src/unrest_harness/run_worker.py",
+        "src/unrest_harness/runtime_executor.py",
+        "src/unrest_harness/workspaces.py"
+      ],
+      "specifications": [
+        "docs/v03/v0.3.1/mission.md",
+        "docs/v03/v0.3.1/public-surface.v1.json"
+      ],
+      "tests": [
+        "tests/test_canonical_identity.py",
+        "tests/test_evolution.py",
+        "tests/test_foundation_integration.py",
+        "tests/test_foundation_store.py",
+        "tests/test_inquiry.py",
+        "tests/test_provider_sessions.py",
+        "tests/test_receipts.py",
+        "tests/test_run_control.py",
+        "tests/test_workspaces.py"
+      ]
+    },
+    {
       "decisions": [
         "ADR-0002"
       ],

@@ -74,7 +74,8 @@ class Task(BaseModel):
     auto_merge: bool = Field(
         default=True,
         description=(
-            "Legacy no-op. Work tasks always run directly in the project workspace."
+            "Persisted compatibility field. It does not itself authorize parent "
+            "integration; explicit disjoint Writes scopes control T1 batching."
         ),
     )
     depends_on: list[str] = Field(

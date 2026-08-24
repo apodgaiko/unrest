@@ -38,7 +38,7 @@ rejected. A task has:
 | `body` | Required non-empty Markdown for work/validate; empty for a gate. |
 | `targets` | Contract assertion IDs. A validator and gate need at least one; targetless work is allowed only for coherent setup/integration work. |
 | `skill` | Required for work/validate; `null` for a gate. |
-| `auto_merge` | Legacy no-op retained in serialized shape; defaults to `true`. Work runs in the project workspace. |
+| `auto_merge` | Persisted compatibility field; defaults to `true`. It does not itself authorize integration. |
 | `depends_on` | Direct upstream task IDs; defaults to `[]`. |
 
 Task statuses are `pending`, `running`, `cleared`, `failed`, or `superseded`.
@@ -106,6 +106,16 @@ Cleared tasks, running tasks, and any task in the transitive upstream closure of
 a cleared gate cannot be superseded or cancelled.
 
 ## Dispatch
+
+Two or more independent mutable tasks may run concurrently only when each body
+contains one explicit `Writes: path, ...` line, the scopes are pairwise
+disjoint, the dispatcher supports isolated workspaces, and the project root is
+a clean Git repository. Each child receives a distinct T1 worktree at the same
+base. The parent returns and scope-checks exact patches, validates staged Git
+bytes, and integrates serially. Missing/overlapping scopes, non-Git roots,
+unsupported dispatchers, or failed admission preserve the serial project-
+workspace behavior. T1 separates Git worktrees and indexes only; it is not OS,
+network, credential, process, cache, service, or external-effect isolation.
 
 A non-gate task is runnable when it is `pending` and every direct dependency is
 `cleared`. Retired dependencies have already been rewritten, so dispatch does

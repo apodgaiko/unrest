@@ -74,7 +74,17 @@ async def _tool_contract(server, name: str) -> tuple[str | None, dict[str, objec
 async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
     server = create_orchestrator_server(config)
     names = await _tool_names(server)
-    assert names == {
+    catalog = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "docs"
+            / "v03"
+            / "v0.3.1"
+            / "public-surface.v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    additive = {method["name"] for method in catalog["mcp_methods"]}
+    assert names == additive | {
         "start_project",
         "submit_plan",
         "advance_project",

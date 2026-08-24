@@ -26,6 +26,8 @@ withdraws the former repository governance language and duplicate root schemas.
 - [Runtime architecture](../v5/07-runtime-architecture.md)
 - [MCP surface](../v5/08-mcp-surface.md)
 - [V5 implementation plan and completion map](../v5/10-implementation-plan.md)
+- [v0.3.1 foundation mission and contracts](../v03/v0.3.1/mission.md)
+- [v0.3.1 frozen additive public surface](../v03/v0.3.1/public-surface.v1.json)
 
 ## Machine-readable architecture
 
@@ -47,6 +49,12 @@ record order, two-space indentation, and one trailing newline.
 - [ADR-0002](../decisions/ADR-0002-lean-core-v0.2.md) — accepted Lean Core v0.2
   compaction perimeter.
 - [Batch 0.5 accepted scope package](../proposals/batch-0.5/README.md)
+
+The v0.3.1 implementation adds durable run control, read-only Inquiry,
+T1 Git-worktree leases, offline evolution, canonical identities and receipts.
+The six dated FM-000 ADRs remain historical proposal evidence until the
+maintainer records their acceptance in the decision index; runtime availability
+does not silently self-approve them.
 
 No decision is accepted merely because an ID appears in prose. Its accepted
 ADR must resolve from the decision index.

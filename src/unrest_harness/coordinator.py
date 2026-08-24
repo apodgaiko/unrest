@@ -6,10 +6,14 @@ tool loops `step()` until a returnable condition.
 """
 from __future__ import annotations
 
-import os
 import concurrent.futures
 from dataclasses import dataclass, field
-from typing import Literal
+import hashlib
+import os
+from pathlib import Path
+import re
+import subprocess
+from typing import Any, Literal
 
 from . import attention as attn_factory
 from .capability_policy import redact_credential_values
@@ -40,6 +44,15 @@ from .models import (
 from .storage import AttemptValidationError, ProjectStore, utc_now_filesafe
 from .envelope import public_attention_items
 from .task_validation import gates_in_order
+from .workspaces import (
+    HumanIntegrationGrant,
+    ResourceBudget,
+    WorkspaceError,
+    WorkspaceManager,
+)
+
+
+_WRITES_LINE = re.compile(r"(?im)^writes:\s*(?P<paths>[^\n]+)$")
 
 
 # ---------------------------------------------------------------------------
@@ -282,11 +295,62 @@ class MissionCoordinator:
             return validator_batch[:capacity]
 
         candidate_batch = runnable[:capacity]
-        if any(task.type == "work" for task in candidate_batch):
-            # INVARIANT[ARCH-DISPATCH-001]: Shared-checkout work is selected
-            # singly before any task is persisted as running.
+        work_batch = [task for task in candidate_batch if task.type == "work"]
+        if work_batch:
+            if len(work_batch) >= 2 and self._isolated_work_supported(work_batch):
+                return work_batch
+            # Shared-checkout work and tasks without explicit disjoint write
+            # scopes preserve the v0.3.0 serial behavior.
             return candidate_batch[:1]
         return candidate_batch
+
+    def _isolated_work_supported(self, batch: list[Task]) -> bool:
+        if not bool(getattr(self.dispatcher, "supports_isolated_workspaces", False)):
+            return False
+        if any(not task.auto_merge for task in batch):
+            return False
+        scopes = [self._task_write_paths(task) for task in batch]
+        if any(not scope for scope in scopes):
+            return False
+        flattened = [path for scope in scopes for path in scope]
+        if any(
+            self._paths_overlap(left, right)
+            for index, left in enumerate(flattened)
+            for right in flattened[index + 1 :]
+        ):
+            return False
+        try:
+            workspace = self.store.workspace_dir(self.project_id).resolve(strict=True)
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=workspace,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return Path(result.stdout.strip()).resolve() == workspace
+        except (FileNotFoundError, OSError, subprocess.CalledProcessError):
+            return False
+
+    @staticmethod
+    def _task_write_paths(task: Task) -> tuple[str, ...]:
+        match = _WRITES_LINE.search(task.body)
+        if match is None:
+            return ()
+        paths = tuple(
+            sorted(
+                {
+                    item.strip()
+                    for item in match.group("paths").split(",")
+                    if item.strip()
+                }
+            )
+        )
+        return paths
+
+    @staticmethod
+    def _paths_overlap(left: str, right: str) -> bool:
+        return left == right or left.startswith(right + "/") or right.startswith(left + "/")
 
     def _dispatch_batch(
         self,
@@ -296,7 +360,13 @@ class MissionCoordinator:
         batch: list[Task],
     ) -> StepResult:
         if any(task.type == "work" for task in batch):
-            raise RuntimeError("mutable work must use single-task dispatch")
+            if not all(task.type == "work" for task in batch):
+                raise RuntimeError("mutable and validation work cannot share a batch")
+            if len(batch) < 2 or not self._isolated_work_supported(batch):
+                raise RuntimeError(
+                    "mutable work batch requires isolated disjoint workspaces"
+                )
+            return self._dispatch_isolated_work_batch(mid, task_state, batch)
 
         self.store.refresh_inventory(os.environ)
         batch_attempts: list[_BatchAttempt] = []
@@ -342,6 +412,183 @@ class MissionCoordinator:
         return StepResult.advanced(
             "batch cleared: " + ", ".join(attempt.task.id for attempt in batch_attempts)
         )
+
+    def _dispatch_isolated_work_batch(
+        self,
+        mid: str,
+        task_state: TaskStateFile,
+        batch: list[Task],
+    ) -> StepResult:
+        """Dispatch explicit disjoint scopes in T1 worktrees, then integrate.
+
+        ``Writes: path, ...`` in each task body is the plan-authorized scope.
+        Missing, malformed, overlapping, dirty-parent, or non-Git admission
+        preserves the legacy serial path and makes no isolation claim.
+        """
+
+        repository = self.store.workspace_dir(self.project_id).resolve(strict=True)
+        manager: WorkspaceManager
+        leases: dict[str, Any] = {}
+        try:
+            manager = WorkspaceManager(
+                repository,
+                custody_root_id=f"mission:{self.project_id}:{mid}",
+            )
+            base = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repository,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            policy_bytes = (
+                self.store.config.bundled_dir
+                / "policies"
+                / "role-capabilities.v1.json"
+            ).read_bytes()
+            policy_digest = "sha256:" + hashlib.sha256(policy_bytes).hexdigest()
+            batch_attempts: list[_BatchAttempt] = []
+            for index, task in enumerate(batch):
+                spawn_ts = self._batch_spawn_ts(index)
+                lease = manager.lease_workspace(
+                    base_revision=base,
+                    owner_id=(
+                        f"mission-task:{self.project_id}:{mid}:"
+                        f"{task.id}:{spawn_ts}"
+                    ),
+                    declared_write_paths=self._task_write_paths(task),
+                    capability_policy_digest=policy_digest,
+                    duration_seconds=max(
+                        60, self.store.config.terminal_review_timeout_seconds
+                    ),
+                    lease_id=f"lease:{self._lease_token(mid, task.id, spawn_ts)}",
+                    resource_budget=ResourceBudget(max_processes=0),
+                )
+                leases[task.id] = lease
+                batch_attempts.append(_BatchAttempt(task=task, spawn_ts=spawn_ts))
+        except (OSError, subprocess.CalledProcessError, WorkspaceError):
+            for lease in leases.values():
+                try:
+                    manager.cancel_workspace(lease.lease_id)
+                    manager.cleanup_workspace(lease.lease_id)
+                except (UnboundLocalError, WorkspaceError):
+                    pass
+            return self._dispatch_one(mid, batch[0])
+
+        self.store.refresh_inventory(os.environ)
+        for attempt in batch_attempts:
+            task_state.set_status(attempt.task.id, "running")
+            task_state.set_last_attempt(attempt.task.id, attempt.spawn_ts)
+        self.store.save_task_state(self.project_id, mid, task_state)
+
+        requests = [
+            DispatchRequest(
+                project_id=self.project_id,
+                mission_id=mid,
+                task=attempt.task,
+                spawn_ts=attempt.spawn_ts,
+                cwd=leases[attempt.task.id].worktree_path,
+            )
+            for attempt in batch_attempts
+        ]
+        handoffs = self._dispatch_requests(requests)
+        batch_error: str | None = None
+        grants: list[HumanIntegrationGrant] = []
+        bound_handoffs: dict[str, NodeHandoff] = {}
+        for attempt in sorted(batch_attempts, key=lambda item: item.task.id):
+            handoff = self._bind_dispatched_handoff(
+                attempt.task, handoffs[attempt.task.id], attempt.spawn_ts
+            )
+            bound_handoffs[attempt.task.id] = handoff
+            if not handoff.done:
+                batch_error = "A parallel worker failed; batch integration was withheld."
+                continue
+            try:
+                returned = manager.return_workspace(leases[attempt.task.id].lease_id)
+                if returned.patch_digest is not None:
+                    grants.append(
+                        HumanIntegrationGrant(
+                            grant_id=(
+                                f"mission-grant:{mid}:{attempt.task.id}:"
+                                f"{attempt.spawn_ts}"
+                            ),
+                            authorized_by="mission-plan-parent-authority",
+                            lease_id=leases[attempt.task.id].lease_id,
+                            patch_digest=returned.patch_digest,
+                            expected_parent_revision=base,
+                        )
+                    )
+            except WorkspaceError as exc:
+                batch_error = f"Workspace return failed: {exc.code}"
+
+        if batch_error is None and grants:
+            try:
+                manager.integrate_workspaces(
+                    tuple(grants), validate=self._validate_integration_tree
+                )
+            except WorkspaceError as exc:
+                batch_error = f"Workspace integration failed: {exc.code}"
+
+        for lease in leases.values():
+            try:
+                latest = manager.inspect_workspace(lease.lease_id)
+                if latest.state == "active":
+                    manager.cancel_workspace(lease.lease_id)
+                cleanup = manager.cleanup_workspace(lease.lease_id)
+                if cleanup.outcome != "released" and batch_error is None:
+                    batch_error = "Workspace cleanup requires attention."
+            except WorkspaceError:
+                if batch_error is None:
+                    batch_error = "Workspace cleanup requires attention."
+
+        attention: list[AttentionItemInternal] = []
+        for attempt in sorted(batch_attempts, key=lambda item: item.task.id):
+            handoff = bound_handoffs[attempt.task.id]
+            if batch_error is not None and handoff.done:
+                handoff = WorkHandoff(
+                    node_id=attempt.task.id,
+                    attempt_id=attempt.spawn_ts,
+                    done=False,
+                    report=batch_error,
+                    request_attention=False,
+                )
+            self.store.save_attempt(
+                self.project_id,
+                mid,
+                attempt.spawn_ts,
+                attempt.task.id,
+                handoff,
+            )
+            attention.extend(
+                self._apply_handoff_collect(
+                    mid, attempt.task, handoff, attempt.spawn_ts
+                )
+            )
+        if attention:
+            self._raise_attention(attention)
+            return StepResult.attention_needed("isolated_batch_attention")
+        return StepResult.advanced(
+            "isolated batch cleared: "
+            + ", ".join(attempt.task.id for attempt in batch_attempts)
+        )
+
+    @staticmethod
+    def _validate_integration_tree(worktree: Path) -> bool:
+        return (
+            subprocess.run(
+                ["git", "diff", "--cached", "--check"],
+                cwd=worktree,
+                check=False,
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+
+    @staticmethod
+    def _lease_token(mid: str, task_id: str, spawn_ts: str) -> str:
+        return hashlib.sha256(
+            f"{mid}\0{task_id}\0{spawn_ts}".encode("utf-8")
+        ).hexdigest()[:24]
 
     def _dispatch_requests(
         self,

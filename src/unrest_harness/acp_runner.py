@@ -1918,6 +1918,8 @@ def _run_coro_blocking(coro: Coroutine[Any, Any, Any]) -> Any:
 class ACPNodeDispatcher:
     """Implements `NodeDispatcher` by calling `ACPNodeRunner.run_node`."""
 
+    supports_isolated_workspaces = True
+
     def __init__(self, config: HarnessConfig, store: ProjectStore | None = None):
         self.config = config
         self.store = store or ProjectStore(config)

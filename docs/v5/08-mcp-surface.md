@@ -27,6 +27,15 @@ handoffs, state preconditions, and error payloads.
 
 ### Orchestrator mode
 
+Orchestrator mode retains the seven v0.3.0 Mission methods byte-for-byte and
+adds the 23 methods frozen in
+[`public-surface.v1.json`](../v03/v0.3.1/public-surface.v1.json). The additive
+methods are `submit_run`, `inspect_run`, `attach_run`, `cancel_run`; Inquiry
+open/inspect/advance/pause/resume/cancel/handoff; workspace lease/inspect/
+return/integrate/cleanup; and evolution open/inspect/add/evaluate/review/
+promote/rollback. Every additive MCP method delegates to the same
+`FoundationTools` method as its same-named installed-library callable.
+
 | Tool | Preconditions | Observable result |
 | --- | --- | --- |
 | `start_project` | Non-empty brief; existing absolute workspace; overrides valid for selected worker provider. | Creates project and `mission-001`; returns `mission_planning`. |
@@ -58,6 +67,11 @@ Tool failures return:
   "details": ["validation_code: detail"]
 }
 ```
+
+The seven legacy methods keep that error shape. Additive methods use the
+closed stable envelope `{ "error": {"code": "…", "message": "…"} }` and
+the code vocabulary in the frozen public catalog. Provider/source/report/
+prompt bodies and secret values or hashes never enter it.
 
 ### Worker mode
 
@@ -96,6 +110,9 @@ coordinator; the tool itself does not seal a mission.
 - `ARCH-STATE-001`: mutating orchestrator calls queue within one server and
   fail fast with `project_busy` when another process holds the same project's
   OS-owned mutation lock; controller work executes in a thread.
+- Durable `submit_run` admission and synchronous Mission methods converge on
+  the same per-project OS mutation lock and the same `ProjectController`;
+  run custody is not a second Mission authority.
 - `COMPAT-ENVELOPE-001`: envelope field names and strict typed handoff fields
   are compatibility boundaries.
 

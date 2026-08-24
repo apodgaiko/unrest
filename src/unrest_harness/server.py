@@ -13,10 +13,10 @@ import logging
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any, Mapping
+from typing import Annotated, Any, Literal, Mapping
 
 from fastmcp import Context, FastMCP
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .capability_policy import (
     CapabilityPolicy,
@@ -28,6 +28,7 @@ from .capability_policy import (
 from .config import HarnessConfig
 from .controller import ProjectController, ToolError
 from .dispatcher import NodeDispatcher, TerminalReviewer
+from .foundation_tools import FoundationToolError, FoundationTools, public_error
 from .models import (
     Decision,
     TaskList,
@@ -41,6 +42,65 @@ from .storage import atomic_write_json, trusted_persistence_root
 
 logger = logging.getLogger(__name__)
 _SENSITIVE_INVENTORY_MAX_BYTES = 4 * 1024 * 1024
+_NonEmpty = Annotated[str, Field(min_length=1)]
+_Revision = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
+_Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
+
+
+class _FoundationBudget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    max_steps: int = Field(ge=1)
+    timeout_seconds: int = Field(ge=1)
+    max_branches: int = Field(default=4, ge=1, le=4)
+
+
+class _AbortProjectArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: _NonEmpty
+    reason: _NonEmpty
+
+
+class _AdvanceProjectArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: _NonEmpty
+    max_steps: int | None = Field(default=None, ge=1)
+
+
+class _DecideAttentionArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: _NonEmpty
+    decisions: list[Decision]
+
+
+class _EndMissionArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: _NonEmpty
+    deliverable_roots: list[str] | None = None
+
+
+class _StartProjectArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    brief: _NonEmpty
+    workspace_dir: _NonEmpty
+    worker_model: str | None = None
+    worker_reasoning_effort: str | None = None
+
+
+class _SubmitPlanArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: _NonEmpty
+    task_list: TaskList
+
+
+_RunArguments = (
+    _AbortProjectArguments
+    | _AdvanceProjectArguments
+    | _DecideAttentionArguments
+    | _EndMissionArguments
+    | _StartProjectArguments
+    | _SubmitPlanArguments
+)
 
 
 def _read_sensitive_inventory_fd(fd: int | None) -> SensitiveValueInventory:
@@ -68,7 +128,7 @@ def create_orchestrator_server(
     config: HarnessConfig,
     controller: ProjectController | None = None,
 ) -> FastMCP:
-    """7 orchestrator tools, registered on a stdio MCP server."""
+    """Seven compatible Mission tools plus 23 additive foundation tools."""
     config.validate_capability_support()
     if controller is None:
         from .dispatcher import MockDispatcher, MockTerminalReviewer
@@ -85,14 +145,17 @@ def create_orchestrator_server(
         name="unrest",
         instructions=(
             "Mission orchestration harness. Mode: orchestrator. "
-            "7 tools: start_project, submit_plan, advance_project, "
+            "Mission tools: start_project, submit_plan, advance_project, "
             "end_mission, decide_attention, inspect_project, abort_project. "
+            "Additive run, Inquiry, workspace, and evolution tools follow the "
+            "frozen v0.3.1 public catalog. "
             "Lifecycle: plan with submit_plan, run with advance_project, "
             "request closure with end_mission, resolve attention with decide_attention, "
             "then call advance_project again."
         ),
     )
     _register_orchestrator_tools(mcp, controller)
+    _register_foundation_tools(mcp, FoundationTools(config, controller))
     return mcp
 
 
@@ -426,6 +489,320 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         return await call_project_mutation(
             project_id, lambda: controller.abort_project(project_id, reason)
         )
+
+
+def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
+    """Register the exact additive catalog on the orchestrator authority."""
+
+    def failure(exc: Exception) -> dict[str, Any]:
+        error = exc if isinstance(exc, FoundationToolError) else public_error(exc)
+        return error.as_envelope()
+
+    @mcp.tool(name="submit_run")
+    async def submit_run(
+        operation: Literal[
+            "abort_project",
+            "advance_project",
+            "decide_attention",
+            "end_mission",
+            "start_project",
+            "submit_plan",
+        ],
+        arguments: _RunArguments,
+        idempotency_key: _NonEmpty,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.submit_run,
+                operation,
+                arguments.model_dump(mode="json"),
+                idempotency_key,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="inspect_run")
+    async def inspect_run(run_id: _NonEmpty) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(tools.inspect_run, run_id)
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="attach_run")
+    async def attach_run(run_id: _NonEmpty) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(tools.attach_run, run_id)
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="cancel_run")
+    async def cancel_run(
+        run_id: _NonEmpty, reason: _NonEmpty, idempotency_key: _NonEmpty
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.cancel_run, run_id, reason, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="open_inquiry")
+    async def open_inquiry(
+        question: _NonEmpty,
+        budget: _FoundationBudget,
+        idempotency_key: _NonEmpty,
+        project_id: _NonEmpty | None = None,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.open_inquiry,
+                question,
+                budget.model_dump(),
+                idempotency_key,
+                project_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="inspect_inquiry")
+    async def inspect_inquiry(inquiry_id: _NonEmpty) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(tools.inspect_inquiry, inquiry_id)
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="advance_inquiry")
+    async def advance_inquiry(
+        inquiry_id: _NonEmpty, idempotency_key: _NonEmpty
+    ) -> dict[str, Any]:
+        try:
+            return await tools.advance_inquiry(inquiry_id, idempotency_key)
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="pause_inquiry")
+    async def pause_inquiry(
+        inquiry_id: _NonEmpty, reason: _NonEmpty, idempotency_key: _NonEmpty
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.pause_inquiry, inquiry_id, reason, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="resume_inquiry")
+    async def resume_inquiry(
+        inquiry_id: _NonEmpty, idempotency_key: _NonEmpty
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.resume_inquiry, inquiry_id, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="cancel_inquiry")
+    async def cancel_inquiry(
+        inquiry_id: _NonEmpty, reason: _NonEmpty, idempotency_key: _NonEmpty
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.cancel_inquiry, inquiry_id, reason, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="handoff_inquiry")
+    async def handoff_inquiry(
+        inquiry_id: _NonEmpty, consumer_id: _NonEmpty, idempotency_key: _NonEmpty
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.handoff_inquiry, inquiry_id, consumer_id, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="lease_workspace")
+    async def lease_workspace(
+        project_id: _NonEmpty,
+        base_revision: _Revision,
+        write_paths: Annotated[list[_NonEmpty], Field(min_length=1)],
+        idempotency_key: _NonEmpty,
+        lease_seconds: Annotated[int, Field(ge=1)] = 3600,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.lease_workspace,
+                project_id,
+                base_revision,
+                write_paths,
+                idempotency_key,
+                lease_seconds,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="inspect_workspace")
+    async def inspect_workspace(workspace_id: _NonEmpty) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(tools.inspect_workspace, workspace_id)
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="return_workspace")
+    async def return_workspace(
+        workspace_id: _NonEmpty, idempotency_key: _NonEmpty
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.return_workspace, workspace_id, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="integrate_workspace")
+    async def integrate_workspace(
+        workspace_id: _NonEmpty,
+        human_grant_id: _NonEmpty,
+        idempotency_key: _NonEmpty,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.integrate_workspace,
+                workspace_id,
+                human_grant_id,
+                idempotency_key,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="cleanup_workspace")
+    async def cleanup_workspace(
+        workspace_id: _NonEmpty, idempotency_key: _NonEmpty
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.cleanup_workspace, workspace_id, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="open_campaign")
+    async def open_campaign(
+        project_id: _NonEmpty,
+        accepted_point_digest: _Digest,
+        workload_id: _NonEmpty,
+        evaluator_id: _NonEmpty,
+        reviewer_id: _NonEmpty,
+        budget: _FoundationBudget,
+        seed: int,
+        idempotency_key: _NonEmpty,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.open_campaign,
+                project_id,
+                accepted_point_digest,
+                workload_id,
+                evaluator_id,
+                reviewer_id,
+                budget.model_dump(),
+                seed,
+                idempotency_key,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="inspect_campaign")
+    async def inspect_campaign(campaign_id: _NonEmpty) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(tools.inspect_campaign, campaign_id)
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="add_candidate")
+    async def add_candidate(
+        campaign_id: _NonEmpty,
+        artifact_id: _NonEmpty,
+        action: Literal["edit", "initial", "rebase", "retry"],
+        idempotency_key: _NonEmpty,
+        parent_candidate_id: _NonEmpty | None = None,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.add_candidate,
+                campaign_id,
+                artifact_id,
+                action,
+                idempotency_key,
+                parent_candidate_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="evaluate_candidate")
+    async def evaluate_candidate(
+        campaign_id: _NonEmpty,
+        candidate_id: _NonEmpty,
+        idempotency_key: _NonEmpty,
+    ) -> dict[str, Any]:
+        try:
+            return await tools.evaluate_candidate(
+                campaign_id, candidate_id, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="review_candidate")
+    async def review_candidate(
+        campaign_id: _NonEmpty,
+        candidate_id: _NonEmpty,
+        idempotency_key: _NonEmpty,
+    ) -> dict[str, Any]:
+        try:
+            return await tools.review_candidate(
+                campaign_id, candidate_id, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="promote_candidate")
+    async def promote_candidate(
+        campaign_id: _NonEmpty,
+        candidate_id: _NonEmpty,
+        human_grant_id: _NonEmpty,
+        idempotency_key: _NonEmpty,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.promote_candidate,
+                campaign_id,
+                candidate_id,
+                human_grant_id,
+                idempotency_key,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @mcp.tool(name="rollback_promotion")
+    async def rollback_promotion(
+        campaign_id: _NonEmpty,
+        promotion_receipt_id: _NonEmpty,
+        human_grant_id: _NonEmpty,
+        idempotency_key: _NonEmpty,
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                tools.rollback_promotion,
+                campaign_id,
+                promotion_receipt_id,
+                human_grant_id,
+                idempotency_key,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
 
 
 # ---------------------------------------------------------------------------

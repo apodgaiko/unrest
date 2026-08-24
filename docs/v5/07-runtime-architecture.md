@@ -8,6 +8,9 @@ applies_to:
   - src/unrest_harness/dispatcher.py
   - src/unrest_harness/envelope.py
   - src/unrest_harness/runtime_observability.py
+  - src/unrest_harness/run_control.py
+  - src/unrest_harness/runtime_executor.py
+  - src/unrest_harness/workspaces.py
 verified_by:
   - tests/test_acp_runner.py
   - tests/test_cli.py
@@ -42,7 +45,9 @@ every controller call; an in-memory coordinator is never authoritative.
 - `ARCH-STATE-001`: one coordinator `step()` performs at most one externally
   visible state transition.
 - `ARCH-DISPATCH-001`: a capacity slice containing work selects one authored
-  task before persistence; only validator-only batches may run concurrently.
+  task before persistence unless two or more work tasks declare explicit,
+  pairwise-disjoint `Writes:` scopes and the production dispatcher proves a
+  clean T1 Git-worktree admission. Validator-only batches remain concurrent.
 - `ARCH-TASK-001`: submission and patches preserve exact one-work-owner
   contract coverage.
 - `ARCH-GATE-001`: gate results are derived from persisted validator handoffs,
@@ -70,6 +75,19 @@ host orchestrator
   → ProjectStore durable Markdown mirror
   → gate/attention/closure transition
 ```
+
+Additive asynchronous Mission control follows one subordinate route:
+
+```text
+submit_run → durable RunControl admission → one process worker
+           → runtime_executor → shared project mutation lock
+           → ProjectController → MissionCoordinator/ProjectStore
+```
+
+Inquiry, workspace, identity/receipt, and evolution stores retain their own
+typed lifecycle evidence but cannot write Mission state. Workspace integration
+and evolution promotion reach the parent repository authority and never let a
+child update the parent ref.
 
 `ProjectController` is the command boundary. It validates tool state, creates a
 fresh coordinator per invocation, applies task-list patches, records decisions,
@@ -158,12 +176,20 @@ are not accepted.
 - all recovered attention is raised together.
 
 Ready gate-validator lanes retain priority. Otherwise the coordinator considers
-the authored runnable prefix up to configured capacity: a prefix containing
-work selects only its first task, while a validator-only prefix may batch.
-Selection happens before any task is marked `running`, so work never overlaps
-work or validation through either dispatcher path. Batch handoffs are applied
-in task-ID order for deterministic persistence even when dispatch completion
-order differs.
+the authored runnable prefix up to configured capacity. A work prefix runs
+serially unless every selected work task has one explicit `Writes: path, ...`
+line, the normalized scopes are pairwise disjoint, the dispatcher advertises
+isolated-workspace support, and the project is a clean Git root. In that case
+the parent leases distinct detached worktrees at one exact base, dispatches
+with each request's own `cwd`, scope-checks identity-bound returned patches,
+validates staged Git bytes, integrates the disjoint patch set serially, and
+cleans only owned worktrees. Any scope escape, overlap, stale base, child
+failure, integration failure, or unsettled cleanup becomes attention; conflict
+does not change the parent. A missing declaration, non-Git root, unsupported
+dispatcher, or admission failure preserves legacy serial behavior. T1 is Git
+working-tree/index separation only, not process/network/credential/host
+confinement. Batch handoffs are applied in task-ID order for deterministic
+persistence even when dispatch completion order differs.
 
 Within a validator batch, each node keeps independent MCP child and drain
 lifecycle state. Free-port selection, MCP spawn, and readiness confirmation are
