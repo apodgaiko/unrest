@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
 import stat
 import tomllib
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 import click
 
@@ -167,6 +169,266 @@ def measure_baseline_cmd(
     click.echo(json.dumps(summary, sort_keys=True, separators=(",", ":")))
     if summary["status"] != "published":
         raise click.exceptions.Exit(2)
+
+
+_ADAPTER_REQUEST_LIMIT = 1_048_576
+
+
+def _adapter_document(path: Path) -> dict[str, object]:
+    try:
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_size > _ADAPTER_REQUEST_LIMIT:
+            raise ValueError
+        value = json.loads(path.read_bytes())
+    except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError):
+        raise click.ClickException("invalid_argument") from None
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise click.ClickException("invalid_argument")
+    return value
+
+
+def _closed_adapter_mapping(
+    value: object,
+    *,
+    required: AbstractSet[str],
+    optional: AbstractSet[str] = frozenset(),
+) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) - required - optional or required - set(value):
+        raise click.ClickException("invalid_argument")
+    return value
+
+
+def _emit_adapter_result(content: bytes) -> None:
+    payload = content[:-1] if content.endswith(b"\n") else content
+    try:
+        if json.dumps(
+            json.loads(payload),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8") != payload:
+            raise ValueError
+    except (UnicodeDecodeError, ValueError, json.JSONDecodeError, TypeError):
+        raise click.ClickException("internal_error") from None
+    click.echo(payload.decode("utf-8"))
+
+
+def _task_request(value: object):
+    from .task_adapter import TaskBounds, TaskRequest
+
+    document = _closed_adapter_mapping(
+        value,
+        required={"bounds", "brief", "idempotency_key"},
+        optional={
+            "consumer_id",
+            "pause_reason",
+            "project_id",
+            "resume_after_pause",
+        },
+    )
+    bounds = _closed_adapter_mapping(
+        document["bounds"],
+        required={"max_steps", "timeout_seconds"},
+        optional={"max_branches"},
+    )
+    try:
+        checked_bounds = TaskBounds(**cast(Any, bounds))
+        arguments = {key: value for key, value in document.items() if key != "bounds"}
+        return TaskRequest(bounds=checked_bounds, **cast(Any, arguments))
+    except (TypeError, ValueError):
+        raise click.ClickException("invalid_argument") from None
+
+
+@cli.command("run-task")
+@click.option(
+    "--request",
+    "request_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+def run_task_cmd(request_path: Path) -> None:
+    """Run one bounded task from a closed JSON request file."""
+
+    from . import api
+    from .foundation_tools import FoundationToolError
+    from .task_adapter import TaskAdapterError
+
+    request = _task_request(_adapter_document(request_path))
+    try:
+        result = asyncio.run(api.run_task(request))
+    except (FoundationToolError, TaskAdapterError) as exc:
+        raise click.ClickException(exc.code) from None
+    except (OSError, RuntimeError, ValueError):
+        raise click.ClickException("internal_error") from None
+    _emit_adapter_result(result.canonical_bytes())
+
+
+def _project_request(value: object):
+    from .project_adapter import ProjectAdapterError, ProjectDag, ProjectNode
+
+    document = _closed_adapter_mapping(
+        value,
+        required={"max_steps", "mission_id", "nodes", "project_id"},
+    )
+    nodes = document["nodes"]
+    if not isinstance(nodes, list):
+        raise click.ClickException("invalid_argument")
+    checked_nodes = []
+    required = {"body", "id"}
+    optional = {"auto_merge", "needs", "result_path", "skill", "targets", "writes"}
+    try:
+        for item in nodes:
+            node = _closed_adapter_mapping(item, required=required, optional=optional)
+            arguments = dict(node)
+            for key in ("needs", "targets", "writes"):
+                if key in arguments:
+                    sequence = arguments[key]
+                    if not isinstance(sequence, list):
+                        raise TypeError
+                    arguments[key] = tuple(sequence)
+            checked_nodes.append(ProjectNode(**cast(Any, arguments)))
+        project = ProjectDag(tuple(checked_nodes))
+    except (ProjectAdapterError, TypeError, ValueError):
+        raise click.ClickException("invalid_argument") from None
+    project_id = document["project_id"]
+    mission_id = document["mission_id"]
+    max_steps = document["max_steps"]
+    if (
+        not isinstance(project_id, str)
+        or not project_id.strip()
+        or not isinstance(mission_id, str)
+        or not mission_id.strip()
+        or isinstance(max_steps, bool)
+        or not isinstance(max_steps, int)
+        or max_steps <= 0
+    ):
+        raise click.ClickException("invalid_argument")
+    return project_id, mission_id, project, max_steps
+
+
+def _project_adapter_coordinator(project_id: str):
+    from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer
+    from .controller import ProjectController
+    from .coordinator import MissionCoordinator
+
+    config = HarnessConfig.discover()
+    controller = ProjectController(
+        config,
+        ACPNodeDispatcher(config),
+        ACPTerminalReviewer(config),
+    )
+    return MissionCoordinator(
+        controller.store,
+        project_id,
+        controller.dispatcher,
+        controller.terminal_reviewer,
+    )
+
+
+@cli.command("run-project")
+@click.option(
+    "--request",
+    "request_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+def run_project_adapter_cmd(request_path: Path) -> None:
+    """Run one exact, already-submitted project DAG from JSON."""
+
+    from . import api
+    from .project_adapter import ProjectAdapterError
+
+    project_id, mission_id, project, max_steps = _project_request(
+        _adapter_document(request_path)
+    )
+    try:
+        coordinator = _project_adapter_coordinator(project_id)
+        result = api.run_project(
+            coordinator,
+            mission_id,
+            project,
+            max_steps=max_steps,
+        )
+    except ProjectAdapterError as exc:
+        raise click.ClickException(exc.code) from None
+    except (FileNotFoundError, OSError, RuntimeError, ValueError):
+        raise click.ClickException("invalid_argument") from None
+    _emit_adapter_result(result.canonical_bytes())
+
+
+def _improvement_request(value: object):
+    from .evolution import CampaignFreeze, EvolutionError
+    from .improve_adapter import ImprovementRequest
+
+    document = _closed_adapter_mapping(value, required={"repository", "request"})
+    request = _closed_adapter_mapping(
+        document["request"],
+        required={
+            "action",
+            "author_id",
+            "campaign_id",
+            "candidate_id",
+            "evaluation_id",
+            "freeze",
+            "lease_id",
+            "review_id",
+        },
+        optional={
+            "candidate_cost_steps",
+            "candidate_dissent_digests",
+            "evaluation_cost_steps",
+            "parent_candidate_id",
+        },
+    )
+    repository = document["repository"]
+    if not isinstance(repository, str) or not repository:
+        raise click.ClickException("invalid_argument")
+    try:
+        freeze = CampaignFreeze.from_mapping(
+            _closed_adapter_mapping(
+                request["freeze"],
+                required={field.name for field in CampaignFreeze.__dataclass_fields__.values()},
+            )
+        )
+        arguments = {key: item for key, item in request.items() if key != "freeze"}
+        dissent = arguments.get("candidate_dissent_digests")
+        if dissent is not None:
+            if not isinstance(dissent, list):
+                raise TypeError
+            arguments["candidate_dissent_digests"] = tuple(dissent)
+        checked = ImprovementRequest(freeze=freeze, **cast(Any, arguments))
+    except (EvolutionError, TypeError, ValueError):
+        raise click.ClickException("invalid_argument") from None
+    return Path(repository), checked
+
+
+@cli.command("run-improvement")
+@click.option(
+    "--request",
+    "request_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+def run_improvement_cmd(request_path: Path) -> None:
+    """Run one provider-free candidate through the reviewed decision boundary."""
+
+    from . import api
+    from .evolution import EvolutionError, EvolutionManager
+    from .improve_adapter import ImprovementAdapterError
+
+    repository, request = _improvement_request(_adapter_document(request_path))
+    try:
+        api._validate_improvement_request(request)
+        resolved_repository = repository.resolve(strict=True)
+        if not resolved_repository.is_dir():
+            raise ValueError
+        manager = EvolutionManager(resolved_repository)
+        result = asyncio.run(api.run_improvement(manager, request))
+    except ImprovementAdapterError as exc:
+        raise click.ClickException(exc.code) from None
+    except (EvolutionError, FileNotFoundError, OSError, RuntimeError, ValueError):
+        raise click.ClickException("invalid_argument") from None
+    _emit_adapter_result(result.to_json_bytes())
 
 
 # ---------------------------------------------------------------------------

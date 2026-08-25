@@ -1,0 +1,54 @@
+{
+  "schema": "unrest.v04.speed-workloads.v1",
+  "accepted_base": "545ff97ef5cdab01859a0b56d9352c4715bdcabf",
+  "provider_free": true,
+  "protocol": {
+    "clock": "time.perf_counter_ns",
+    "warmups_per_arm": 1,
+    "recorded_samples_per_arm": 10,
+    "pair_order": ["primitive", "adapter", "adapter", "primitive", "primitive", "adapter", "adapter", "primitive", "primitive", "adapter"],
+    "median": "sort ten integer nanosecond samples; integer mean of zero-based positions 4 and 5",
+    "normalization": "canonical JSON UTF-8, sorted keys, compact separators; remove runtime_uuid, timestamps, absolute roots, durations, and ordering-only scheduler fields",
+    "isolation": "fresh temporary root per arm and sample; fixed locale/UTF-8; inherited secrets removed; socket connect guard fails the run",
+    "failure": "unknown key, missing raw byte, duplicate UUID, digest mismatch, sequence mismatch, network attempt, noninteger sample, or gate miss fails closed"
+  },
+  "rows": [
+    {
+      "id": "task-v1",
+      "owner": "ACT-230",
+      "input": {"brief": "Compare alpha and beta, then return the supported choice.", "mode": "bounded", "max_steps": 2, "seed": 100},
+      "primitive_calls": ["open_inquiry", "advance_inquiry", "handoff_inquiry", "inspect_inquiry"],
+      "adapter_calls": ["run_task"],
+      "expected": {"terminal": "completed", "summary": "alpha", "public_invocations": {"primitive": 4, "adapter": 1}, "manual_checkpoints": {"primitive": 0, "adapter": 0}},
+      "gates": {"normalized_outcome_equal": true, "raw_artifacts_equal": true, "adapter_invocation_reduction_min": 0.5, "adapter_median_ratio_max": 1.1}
+    },
+    {
+      "id": "project-v1",
+      "owner": "ACT-230",
+      "input": {"seed": 110, "tasks": [{"id": "leaf-a", "needs": [], "work_ms": 120, "result": "A"}, {"id": "leaf-b", "needs": [], "work_ms": 120, "result": "B"}, {"id": "join", "needs": ["leaf-a", "leaf-b"], "work_ms": 20, "result": "A+B"}]},
+      "primitive_calls": ["run leaf-a to completion", "run leaf-b to completion", "run join to completion"],
+      "adapter_calls": ["run_project with isolated parallel leaves and dependent join"],
+      "expected": {"terminal": "completed", "ordered_results": ["A", "B", "A+B"], "attempts": 3, "manual_checkpoints": {"primitive": 0, "adapter": 0}},
+      "gates": {"normalized_outcome_equal": true, "raw_artifacts_equal": true, "primitive_leaves_serialized": true, "adapter_leaves_isolated_parallel": true, "adapter_median_ratio_max": 0.75}
+    },
+    {
+      "id": "improvement-v1",
+      "owner": "ACT-240",
+      "input": {"campaign_id": "speed-campaign", "candidate_id": "speed-candidate", "seed": 130, "candidate_bytes_utf8": "setting=adapter\n", "evaluation": "completed_pass", "review": "approve"},
+      "primitive_calls": ["open_campaign", "add_candidate", "evaluate_candidate", "review_candidate", "inspect_campaign"],
+      "adapter_calls": ["run_improvement"],
+      "expected": {"terminal": "decision_needed", "campaign_phase": "reviewed", "evaluation": "completed_pass", "review": "approve", "public_invocations": {"primitive": 5, "adapter": 1}, "manual_checkpoints": {"primitive": 0, "adapter": 0}},
+      "gates": {"normalized_outcome_equal": true, "raw_artifacts_equal": true, "adapter_invocation_reduction_min": 0.5, "adapter_median_ratio_max": 1.1}
+    }
+  ],
+  "result_schema": {
+    "closed": true,
+    "required_top_level": ["schema", "accepted_base", "fixture_sha256", "candidate_head", "candidate_tree", "environment", "network_attempts", "rows", "release_pass"],
+    "row_required": ["id", "status", "runtime_uuid", "pair_order", "normalization", "primitive", "adapter", "gates", "raw_artifacts"],
+    "arm_required": ["runtime_uuids", "samples_ns", "median_ns", "public_invocations", "manual_checkpoints", "terminal", "normalized_sha256"],
+    "artifact_required": ["runtime_uuid", "kind", "path", "bytes", "sha256"],
+    "gate_required": ["name", "observed", "limit", "passed", "reason"],
+    "constraints": "Exactly three rows sorted improvement-v1, project-v1, task-v1. Each arm has ten samples and ten unique runtime UUIDs plus one excluded warmup UUID. Every artifact path is relative to the result root and every recorded byte is opened and rehashed. release_pass is true iff every recomputed gate passes and network_attempts is zero.",
+    "reason_enum": ["ok", "schema", "binding", "missing_raw", "digest", "nondeterministic", "sequence", "parity", "invocations", "checkpoint", "time", "network"]
+  }
+}

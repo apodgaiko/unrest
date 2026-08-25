@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "unrest.v04.speed-result.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "accepted_base", "fixture_sha256", "candidate_head", "candidate_tree", "environment", "network_attempts", "rows", "release_pass"],
+  "properties": {
+    "schema": {"const": "unrest.v04.speed-result.v1"},
+    "accepted_base": {"const": "545ff97ef5cdab01859a0b56d9352c4715bdcabf"},
+    "fixture_sha256": {"const": "34ecc3c4a3dd053095efd205cc81dfcef39d3ac7453b4069d7fc185e4b2ece2f"},
+    "candidate_head": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "candidate_tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "network_attempts": {"const": 0},
+    "rows": {"type": "array", "prefixItems": [{"$ref": "#/$defs/improvement_row"}, {"$ref": "#/$defs/project_row"}, {"$ref": "#/$defs/task_row"}], "items": false, "minItems": 3, "maxItems": 3},
+    "release_pass": {"const": true}
+  },
+  "$defs": {
+    "environment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["clock", "command_guard_probes", "encoding", "environment_keys", "locale", "network_guard_probes", "provider_attempts", "secret_keys_removed", "subprocess_attempts"],
+      "properties": {
+        "clock": {"const": "time.perf_counter_ns"},
+        "command_guard_probes": {"const": ["os.system", "subprocess.Popen", "subprocess.run", "subprocess.call", "subprocess.check_call", "subprocess.check_output"]},
+        "encoding": {"const": "UTF-8"}, "environment_keys": {"const": ["LANG", "LC_ALL", "PYTHONUTF8", "TZ"]}, "locale": {"const": "C"},
+        "network_guard_probes": {"const": ["socket.socket", "socket.socketpair", "socket.fromfd", "socket.create_connection", "socket.create_server", "socket.getaddrinfo", "socket.gethostbyname", "socket.gethostbyname_ex", "socket.gethostbyaddr", "socket.getnameinfo", "socket.getfqdn", "socket.gethostname", "socket.getservbyname", "socket.getservbyport", "socket.getprotobyname", "socket.connect", "socket.connect_ex", "socket.bind", "socket.listen", "socket.accept", "socket.send", "socket.sendall", "socket.sendto", "socket.sendmsg", "socket.sendfile", "socket.recv", "socket.recv_into", "socket.recvfrom", "socket.recvfrom_into", "socket.recvmsg", "socket.recvmsg_into", "socket.makefile", "socket.shutdown"]},
+        "provider_attempts": {"const": 0}, "secret_keys_removed": {"const": true}, "subprocess_attempts": {"const": 0}
+      }
+    },
+    "row": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "status", "runtime_uuid", "pair_order", "normalization", "primitive", "adapter", "gates", "raw_artifacts"],
+      "properties": {
+        "id": {"enum": ["improvement-v1", "project-v1", "task-v1"]}, "status": {"const": "passed"}, "runtime_uuid": {"$ref": "#/$defs/uuid_v4"},
+        "pair_order": {"const": ["primitive", "adapter", "adapter", "primitive", "primitive", "adapter", "adapter", "primitive", "primitive", "adapter"]},
+        "normalization": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "primitive": {"$ref": "#/$defs/arm"}, "adapter": {"$ref": "#/$defs/arm"}, "gates": {"type": "array"}, "raw_artifacts": {"$ref": "#/$defs/artifact_table"}
+      }
+    },
+    "arm": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runtime_uuids", "samples_ns", "median_ns", "public_invocations", "manual_checkpoints", "terminal", "normalized_sha256"],
+      "properties": {
+        "runtime_uuids": {"type": "array", "minItems": 11, "maxItems": 11, "uniqueItems": true, "items": {"$ref": "#/$defs/uuid_v4"}},
+        "samples_ns": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"type": "integer", "minimum": 0}}, "median_ns": {"type": "integer", "minimum": 1000},
+        "public_invocations": {"type": "integer", "minimum": 1}, "manual_checkpoints": {"const": 0}, "terminal": {"enum": ["completed", "decision_needed"]},
+        "normalized_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "uuid_v4": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "uuid_improvement_primitive": {"type": "string", "pattern": "^0[0-9a-f]{7}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "uuid_improvement_adapter": {"type": "string", "pattern": "^2[0-9a-f]{7}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "uuid_project_primitive": {"type": "string", "pattern": "^4[0-9a-f]{7}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "uuid_project_adapter": {"type": "string", "pattern": "^6[0-9a-f]{7}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "uuid_task_primitive": {"type": "string", "pattern": "^8[0-9a-f]{7}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "uuid_task_adapter": {"type": "string", "pattern": "^a[0-9a-f]{7}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "improvement_primitive_arm": {"allOf": [{"$ref": "#/$defs/arm"}, {"properties": {"runtime_uuids": {"items": {"$ref": "#/$defs/uuid_improvement_primitive"}}}}]},
+    "improvement_adapter_arm": {"allOf": [{"$ref": "#/$defs/arm"}, {"properties": {"runtime_uuids": {"items": {"$ref": "#/$defs/uuid_improvement_adapter"}}}}]},
+    "project_primitive_arm": {"allOf": [{"$ref": "#/$defs/arm"}, {"properties": {"runtime_uuids": {"items": {"$ref": "#/$defs/uuid_project_primitive"}}}}]},
+    "project_adapter_arm": {"allOf": [{"$ref": "#/$defs/arm"}, {"properties": {"runtime_uuids": {"items": {"$ref": "#/$defs/uuid_project_adapter"}}}}]},
+    "task_primitive_arm": {"allOf": [{"$ref": "#/$defs/arm"}, {"properties": {"runtime_uuids": {"items": {"$ref": "#/$defs/uuid_task_primitive"}}}}]},
+    "task_adapter_arm": {"allOf": [{"$ref": "#/$defs/arm"}, {"properties": {"runtime_uuids": {"items": {"$ref": "#/$defs/uuid_task_adapter"}}}}]},
+    "artifact_table": {
+      "type": "object", "additionalProperties": false, "required": ["runtime_uuid", "kind", "path", "bytes", "sha256"],
+      "properties": {
+        "runtime_uuid": {"type": "array", "minItems": 22, "maxItems": 22, "uniqueItems": true, "items": {"$ref": "#/$defs/uuid_v4"}},
+        "kind": {"type": "array", "minItems": 22, "maxItems": 22, "items": {"enum": ["primitive_warmup", "primitive_recorded", "adapter_warmup", "adapter_recorded"]}, "allOf": [
+          {"contains": {"const": "primitive_warmup"}, "minContains": 1, "maxContains": 1}, {"contains": {"const": "primitive_recorded"}, "minContains": 10, "maxContains": 10},
+          {"contains": {"const": "adapter_warmup"}, "minContains": 1, "maxContains": 1}, {"contains": {"const": "adapter_recorded"}, "minContains": 10, "maxContains": 10}
+        ]},
+        "path": {"type": "array", "minItems": 22, "maxItems": 22, "uniqueItems": true, "items": {"type": "string", "pattern": "^(?:(?!\\.)[^/\\\\:\\u0000]+/)*(?!\\.)[^/\\\\:\\u0000]+$"}},
+        "bytes": {"type": "array", "minItems": 22, "maxItems": 22, "items": {"type": "integer", "minimum": 1}},
+        "sha256": {"type": "array", "minItems": 22, "maxItems": 22, "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+      }
+    },
+    "improvement_artifact_table": {"allOf": [{"$ref": "#/$defs/artifact_table"}, {"properties": {"runtime_uuid": {"items": {"anyOf": [{"$ref": "#/$defs/uuid_improvement_primitive"}, {"$ref": "#/$defs/uuid_improvement_adapter"}]}, "allOf": [{"contains": {"$ref": "#/$defs/uuid_improvement_primitive"}, "minContains": 11, "maxContains": 11}, {"contains": {"$ref": "#/$defs/uuid_improvement_adapter"}, "minContains": 11, "maxContains": 11}]}}}]},
+    "project_artifact_table": {"allOf": [{"$ref": "#/$defs/artifact_table"}, {"properties": {"runtime_uuid": {"items": {"anyOf": [{"$ref": "#/$defs/uuid_project_primitive"}, {"$ref": "#/$defs/uuid_project_adapter"}]}, "allOf": [{"contains": {"$ref": "#/$defs/uuid_project_primitive"}, "minContains": 11, "maxContains": 11}, {"contains": {"$ref": "#/$defs/uuid_project_adapter"}, "minContains": 11, "maxContains": 11}]}}}]},
+    "task_artifact_table": {"allOf": [{"$ref": "#/$defs/artifact_table"}, {"properties": {"runtime_uuid": {"items": {"anyOf": [{"$ref": "#/$defs/uuid_task_primitive"}, {"$ref": "#/$defs/uuid_task_adapter"}]}, "allOf": [{"contains": {"$ref": "#/$defs/uuid_task_primitive"}, "minContains": 11, "maxContains": 11}, {"contains": {"$ref": "#/$defs/uuid_task_adapter"}, "minContains": 11, "maxContains": 11}]}}}]},
+    "normalized_gate": {"const": {"limit": true, "name": "normalized_outcome_equal", "observed": true, "passed": true, "reason": "ok"}},
+    "raw_gate": {"const": {"limit": 22, "name": "raw_artifacts_equal", "observed": 22, "passed": true, "reason": "ok"}},
+    "sequence_gate": {"const": {"limit": true, "name": "exact_sequence", "observed": true, "passed": true, "reason": "ok"}},
+    "checkpoint_gate": {"const": {"limit": 0, "name": "manual_checkpoints", "observed": 0, "passed": true, "reason": "ok"}},
+    "serialized_gate": {"const": {"limit": true, "name": "primitive_leaves_serialized", "observed": true, "passed": true, "reason": "ok"}},
+    "parallel_gate": {"const": {"limit": true, "name": "adapter_leaves_isolated_parallel", "observed": true, "passed": true, "reason": "ok"}},
+    "task_invocation_gate": {"const": {"limit": 0.5, "name": "adapter_invocation_reduction_min", "observed": 0.75, "passed": true, "reason": "ok"}},
+    "improvement_invocation_gate": {"const": {"limit": 0.5, "name": "adapter_invocation_reduction_min", "observed": 0.8, "passed": true, "reason": "ok"}},
+    "time_gate_1_10": {"type": "object", "additionalProperties": false, "required": ["name", "observed", "limit", "passed", "reason"], "properties": {"name": {"const": "adapter_median_ratio_max"}, "observed": {"type": "number", "maximum": 1.1}, "limit": {"const": 1.1}, "passed": {"const": true}, "reason": {"const": "ok"}}},
+    "project_time_gate": {"type": "object", "additionalProperties": false, "required": ["name", "observed", "limit", "passed", "reason"], "properties": {"name": {"const": "adapter_median_ratio_max"}, "observed": {"type": "number", "maximum": 0.75}, "limit": {"const": 0.75}, "passed": {"const": true}, "reason": {"const": "ok"}}},
+    "improvement_row": {"allOf": [{"$ref": "#/$defs/row"}, {"properties": {
+      "id": {"const": "improvement-v1"}, "normalization": {"const": ["/outcome/campaign_phase", "/outcome/candidate_after_sha256", "/outcome/candidate_before_sha256", "/outcome/evaluation", "/outcome/evaluation_digest", "/outcome/manual_checkpoints", "/outcome/mechanics/dispatcher_configuration_identity", "/outcome/mechanics/logical_events", "/outcome/mechanics/logical_operation_count", "/outcome/mechanics/logical_operations", "/outcome/mechanics/validation_calls", "/outcome/operation_sequence", "/outcome/promotions", "/outcome/review", "/outcome/review_digest", "/outcome/rollbacks", "/outcome/terminal", "/row_id"]},
+      "primitive": {"allOf": [{"$ref": "#/$defs/improvement_primitive_arm"}, {"properties": {"public_invocations": {"const": 5}, "terminal": {"const": "decision_needed"}}}]}, "adapter": {"allOf": [{"$ref": "#/$defs/improvement_adapter_arm"}, {"properties": {"public_invocations": {"const": 1}, "terminal": {"const": "decision_needed"}}}]},
+      "raw_artifacts": {"$ref": "#/$defs/improvement_artifact_table"},
+      "gates": {"type": "array", "prefixItems": [{"$ref": "#/$defs/normalized_gate"}, {"$ref": "#/$defs/raw_gate"}, {"$ref": "#/$defs/sequence_gate"}, {"$ref": "#/$defs/checkpoint_gate"}, {"$ref": "#/$defs/improvement_invocation_gate"}, {"$ref": "#/$defs/time_gate_1_10"}], "items": false, "minItems": 6, "maxItems": 6}
+    }}]},
+    "project_row": {"allOf": [{"$ref": "#/$defs/row"}, {"properties": {
+      "id": {"const": "project-v1"}, "normalization": {"const": ["/outcome/attempts", "/outcome/manual_checkpoints", "/outcome/result_artifacts", "/outcome/mechanics/dispatcher_configuration_identity", "/outcome/mechanics/logical_events", "/outcome/mechanics/logical_operation_count", "/outcome/mechanics/logical_operations", "/outcome/mechanics/validation_calls", "/outcome/terminal", "/row_id"]},
+      "primitive": {"allOf": [{"$ref": "#/$defs/project_primitive_arm"}, {"properties": {"public_invocations": {"const": 3}, "terminal": {"const": "completed"}}}]}, "adapter": {"allOf": [{"$ref": "#/$defs/project_adapter_arm"}, {"properties": {"public_invocations": {"const": 1}, "terminal": {"const": "completed"}}}]},
+      "raw_artifacts": {"$ref": "#/$defs/project_artifact_table"},
+      "gates": {"type": "array", "prefixItems": [{"$ref": "#/$defs/normalized_gate"}, {"$ref": "#/$defs/raw_gate"}, {"$ref": "#/$defs/sequence_gate"}, {"$ref": "#/$defs/checkpoint_gate"}, {"$ref": "#/$defs/serialized_gate"}, {"$ref": "#/$defs/parallel_gate"}, {"$ref": "#/$defs/project_time_gate"}], "items": false, "minItems": 7, "maxItems": 7}
+    }}]},
+    "task_row": {"allOf": [{"$ref": "#/$defs/row"}, {"properties": {
+      "id": {"const": "task-v1"}, "normalization": {"const": ["/outcome/mechanics/dispatcher_configuration_identity", "/outcome/mechanics/logical_events", "/outcome/mechanics/logical_operation_count", "/outcome/mechanics/logical_operations", "/outcome/mechanics/validation_calls", "/outcome/manual_checkpoints", "/outcome/operation_sequence", "/outcome/summary", "/outcome/terminal", "/row_id"]},
+      "primitive": {"allOf": [{"$ref": "#/$defs/task_primitive_arm"}, {"properties": {"public_invocations": {"const": 4}, "terminal": {"const": "completed"}}}]}, "adapter": {"allOf": [{"$ref": "#/$defs/task_adapter_arm"}, {"properties": {"public_invocations": {"const": 1}, "terminal": {"const": "completed"}}}]},
+      "raw_artifacts": {"$ref": "#/$defs/task_artifact_table"},
+      "gates": {"type": "array", "prefixItems": [{"$ref": "#/$defs/normalized_gate"}, {"$ref": "#/$defs/raw_gate"}, {"$ref": "#/$defs/sequence_gate"}, {"$ref": "#/$defs/checkpoint_gate"}, {"$ref": "#/$defs/task_invocation_gate"}, {"$ref": "#/$defs/time_gate_1_10"}], "items": false, "minItems": 6, "maxItems": 6}
+    }}]}
+  }
+}

@@ -8,18 +8,44 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import inspect
+import re
 from typing import Any
 
 from .acp_runner import ACPNodeDispatcher, ACPTerminalReviewer
 from .config import HarnessConfig
 from .controller import ProjectController
+from .coordinator import MissionCoordinator
 from .foundation_tools import FoundationToolError, FoundationTools, public_error
 from .measurement import MeasurementError, measure_baseline as _measure_baseline
+from .evolution import CampaignFreeze, EvolutionError, EvolutionManager
+from .improve_adapter import (
+    ImprovementAdapterError,
+    ImprovementRequest,
+    ImprovementResult,
+    run_improvement as _run_improvement,
+)
+from .project_adapter import (
+    CancellationSignal,
+    ProjectDag,
+    ProjectRunResult,
+    run_project as _run_project,
+)
 from .public_schema import (
     PublicSchemaValidationError,
     validate_public_request,
     validate_public_result,
 )
+from .task_adapter import (
+    InquiryLifecycle,
+    TaskRequest,
+    TaskResult,
+    run_task as _run_task,
+)
+
+
+_PUBLIC_ID = re.compile(r"^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9-]*$")
+_LEASE_ID = re.compile(r"^lease:[a-z0-9-]+$")
+_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def _tools() -> FoundationTools:
@@ -191,6 +217,100 @@ def measure_baseline(
     except (PublicSchemaValidationError, RuntimeError):
         raise FoundationToolError("internal_error", "internal error") from None
     return result
+
+
+async def run_task(
+    request: TaskRequest,
+    *,
+    lifecycle: InquiryLifecycle | None = None,
+) -> TaskResult:
+    """Execute the bounded task adapter through the installed Python carrier."""
+
+    checked_lifecycle = lifecycle if lifecycle is not None else _tools()
+    return await _run_task(checked_lifecycle, request)
+
+
+def run_project(
+    coordinator: MissionCoordinator,
+    mission_id: str,
+    project: ProjectDag,
+    *,
+    max_steps: int,
+    cancel: CancellationSignal | None = None,
+) -> ProjectRunResult:
+    """Execute an exact, already-submitted project DAG through the Python carrier."""
+
+    return _run_project(
+        coordinator,
+        mission_id,
+        project,
+        max_steps=max_steps,
+        cancel=cancel,
+    )
+
+
+def _invalid_improvement_request() -> ImprovementAdapterError:
+    return ImprovementAdapterError("invalid_argument", operation="open")
+
+
+def _validate_improvement_request(request: ImprovementRequest) -> None:
+    try:
+        freeze = (
+            request.freeze
+            if isinstance(request.freeze, CampaignFreeze)
+            else CampaignFreeze.from_mapping(request.freeze)
+        )
+        freeze.validate()
+    except (EvolutionError, TypeError, ValueError):
+        raise _invalid_improvement_request() from None
+
+    public_ids = (
+        (request.campaign_id, "campaign"),
+        (request.candidate_id, "candidate"),
+        (request.evaluation_id, "evaluation"),
+        (request.review_id, "review"),
+    )
+    if any(
+        not isinstance(value, str)
+        or _PUBLIC_ID.fullmatch(value) is None
+        or not value.startswith(prefix + ":")
+        for value, prefix in public_ids
+    ):
+        raise _invalid_improvement_request()
+    if not isinstance(request.lease_id, str) or _LEASE_ID.fullmatch(request.lease_id) is None:
+        raise _invalid_improvement_request()
+    if request.parent_candidate_id is not None and (
+        not isinstance(request.parent_candidate_id, str)
+        or _PUBLIC_ID.fullmatch(request.parent_candidate_id) is None
+        or not request.parent_candidate_id.startswith("candidate:")
+    ):
+        raise _invalid_improvement_request()
+    if request.action not in {"original", "edit", "rebase", "retry"}:
+        raise _invalid_improvement_request()
+    if (request.action == "original") != (request.parent_candidate_id is None):
+        raise _invalid_improvement_request()
+    if request.author_id != freeze.author_id:
+        raise _invalid_improvement_request()
+    costs = (request.candidate_cost_steps, request.evaluation_cost_steps)
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in costs):
+        raise _invalid_improvement_request()
+    dissent = tuple(request.candidate_dissent_digests)
+    if (
+        dissent != tuple(sorted(dissent))
+        or len(dissent) != len(set(dissent))
+        or any(not isinstance(value, str) or _DIGEST.fullmatch(value) is None for value in dissent)
+    ):
+        raise _invalid_improvement_request()
+
+
+async def run_improvement(
+    manager: EvolutionManager,
+    request: ImprovementRequest,
+) -> ImprovementResult:
+    """Execute the provider-free improvement adapter through the Python carrier."""
+
+    _validate_improvement_request(request)
+    return await _run_improvement(manager, request)
 
 
 __all__ = [
