@@ -15,7 +15,7 @@ SURFACE_ROOTS = ("src", "tests", "tools")
 SURFACE_FILES = ("pyproject.toml", "uv.lock")
 REGULAR_GIT_MODES = {"100644", "100755"}
 ACTIVE_RELEASE_MANIFEST = PurePosixPath(
-    "docs/release/lean-core-v0.3.1-manifest.json"
+    "docs/release/lean-core-v0.4.0-manifest.json"
 )
 
 

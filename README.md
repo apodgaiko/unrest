@@ -86,6 +86,26 @@ scheduling, and detail aliases. Consumers must switch atomically: there is no
 legacy output flag or version negotiation. Existing persisted project and
 mission records remain schema version 1 and require no data migration.
 
+## v0.4.0 composition adapters
+
+Unrest v0.4.0 adds three bounded composition surfaces over the existing
+foundation runtime. `run-task` drives one finite Inquiry lifecycle,
+`run-project` executes an already-submitted declarative Mission DAG, and
+`run-improvement` carries one provider-free candidate through evaluation and
+review to the explicit decision boundary. Each accepts a closed JSON request
+and emits canonical JSON; the same operations are available as `run_task`,
+`run_project`, and `run_improvement` in `unrest_harness.api`.
+
+```bash
+uv run unrest run-task --request task.json
+uv run unrest run-project --request project.json
+uv run unrest run-improvement --request improvement.json
+```
+
+The adapters reuse the accepted Inquiry, Mission, workspace, and campaign
+authorities. They do not introduce a second scheduler, provider route,
+promotion path, dependency family, service, or data migration.
+
 ## v0.3.1 foundation runtime
 
 The additive foundation surface keeps long work attachable instead of holding a
