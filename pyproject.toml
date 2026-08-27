@@ -46,7 +46,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-unrest_harness = ["bundled/**/*", "py.typed"]
+unrest_harness = ["bundled/**/*", "schemas/*.json", "py.typed"]
 
 [project.scripts]
 unrest = "unrest_harness.cli:cli"

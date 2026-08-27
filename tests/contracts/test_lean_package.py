@@ -46,10 +46,21 @@ def _assert_lean_archive(
     forbidden = (
         "baseline.py",
         "governance.py",
-        "schemas/",
         "capability_closed_model",
         "capability-security-model",
     )
+
+    def deleted_surface(name: str) -> bool:
+        lowered = name.lower()
+        relative = (
+            lowered.split("/", 1)[1]
+            if lowered.startswith("unrest_harness-") and "/" in lowered
+            else lowered
+        )
+        return relative.startswith("schemas/") or any(
+            fragment in lowered for fragment in forbidden
+        )
+
     hits = sorted(
         f"{archive}:{name}"
         for archive, members in (
@@ -57,7 +68,7 @@ def _assert_lean_archive(
             ("sdist", sdist_members),
         )
         for name in members
-        if any(fragment in name.lower() for fragment in forbidden)
+        if deleted_surface(name)
     )
     if hits:
         raise AssertionError(f"deleted product surface packaged: {hits}")
