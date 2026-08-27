@@ -42,10 +42,10 @@ credential identity; and the safe profile does not inherit ambient values.
 
 ## CI wiring
 
-CI keeps Python 3.11 and 3.12 import/help lanes and a Python 3.13 primary lane
-with Ruff, mypy, one full source-suite run, this repository command, build,
-distribution inspection, and installed-wheel validation from an unrelated
-directory. Commands in a job or step guarded by a constant-false expression do
+CI uses one Python 3.13 primary lane for package import and CLI help, Ruff,
+mypy, one full source-suite run, this repository command, build, distribution
+inspection, and installed-wheel validation from an unrelated directory.
+Commands in a job or step guarded by a constant-false expression do
 not count. The deliberately finite expression grammar is boolean literals,
 `!`, `&&`, `||`, and parentheses; expressions containing any dynamic term are
 not treated as constant. Commands inside a line-bounded literal

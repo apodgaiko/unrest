@@ -16,7 +16,7 @@ semantic subtree; read the complete root-to-leaf chain before editing.
 
 ## Engineering rules
 
-- Use Python 3.11+ and `uv`; `uv.lock` is authoritative. Prefer direct,
+- Use Python 3.13+ and `uv`; `uv.lock` is authoritative. Prefer direct,
   typed, locally legible code and deterministic serialization.
 - Never run concurrent mutable workers in one checkout. Sort enumerated inputs
   before persisted or generated output.
@@ -64,9 +64,8 @@ uv run pytest -q <milestone-test-paths>
 
 Reserve one full source-suite run for the frozen release candidate on Python
 3.13. The release checkpoint is `env -u CODEX_PATH uv run pytest -q`; do not
-repeat it after build or require it after minor edits. Python 3.11 and 3.12 are
-compatibility lanes for package imports, focused contracts, repository
-validation, and supported CLI surfaces, not duplicate full-suite lanes.
+repeat it after build or require it after minor edits. Python 3.13 is the
+minimum supported runtime and the single CI compatibility and release lane.
 
 When CLI entry points, bundled assets, package data, or MCP surfaces change,
 also run `uv build`, `uv run python tools/check_distribution.py dist`, and the

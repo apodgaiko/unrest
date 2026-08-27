@@ -197,8 +197,6 @@ def test_each_rule_family_emits_its_bounded_code(
 @pytest.mark.parametrize(
     ("family", "old", "new"),
     (
-        ("python-3.11", '["3.11", "3.12"]', '["3.10", "3.12"]'),
-        ("python-3.12", '["3.11", "3.12"]', '["3.11", "3.10"]'),
         ("python-3.13", 'python-version: "3.13"', 'python-version: "3.10"'),
         (
             "package-import",
@@ -456,19 +454,6 @@ def test_ci_dynamic_or_alternate_shell_branches_remain_accepted(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.startswith("Lean repository contract passed")
-
-
-def test_ci_duty_allows_an_additional_compatibility_lane(tmp_path: Path) -> None:
-    repository = _copy_repository(tmp_path)
-    path = repository / ".github/workflows/ci.yml"
-    text = path.read_text(encoding="utf-8")
-    path.write_text(
-        text.replace('["3.11", "3.12"]', '["3.11", "3.12", "3.13"]'),
-        encoding="utf-8",
-    )
-
-    check_repository(repository)
-
 
 def test_withdrawn_commands_are_unknown_and_absent_from_help() -> None:
     runner = CliRunner()

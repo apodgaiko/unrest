@@ -362,17 +362,6 @@ def _has_setup_python(job: dict[str, Any], version: str) -> bool:
     )
 
 
-def _has_compatibility_lanes(job: dict[str, Any]) -> bool:
-    strategy = job.get("strategy")
-    matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
-    versions = matrix.get("python-version") if isinstance(matrix, dict) else None
-    return (
-        isinstance(versions, list)
-        and {"3.11", "3.12"}.issubset(str(version) for version in versions)
-        and _has_setup_python(job, "${{ matrix.python-version }}")
-    )
-
-
 def _has_exact_command(commands: tuple[tuple[str, ...], ...], expected: tuple[str, ...]) -> bool:
     return expected in commands
 
@@ -439,24 +428,13 @@ def _has_installed_lifecycle(commands: tuple[tuple[str, ...], ...]) -> bool:
     )
 
 
-def _compatibility_job_is_complete(job: dict[str, Any]) -> bool:
-    commands = _run_commands(job)
-    required = (
-        ("uv", "run", "unrest", "--help"),
-        ("uv", "run", "unrest-server", "--help"),
-        ("uv", "run", "python", "-m", "unrest_harness", "--help"),
-        ("uv", "run", "unrest", "check-repository"),
-    )
-    return (
-        _has_compatibility_lanes(job)
-        and _has_package_import(commands)
-        and all(_has_exact_command(commands, command) for command in required)
-    )
-
-
 def _primary_job_is_complete(job: dict[str, Any]) -> bool:
     commands = _run_commands(job)
     required = (
+        ("uv", "run", "unrest", "--help"),
+        ("uv", "run", "unrest", "measure-baseline", "--help"),
+        ("uv", "run", "unrest-server", "--help"),
+        ("uv", "run", "python", "-m", "unrest_harness", "--help"),
         ("uv", "run", "ruff", "check", "."),
         ("uv", "run", "mypy", "src"),
         ("env", "-u", "CODEX_PATH", "uv", "run", "pytest", "-q"),
@@ -466,6 +444,7 @@ def _primary_job_is_complete(job: dict[str, Any]) -> bool:
     )
     return (
         _has_setup_python(job, "3.13")
+        and _has_package_import(commands)
         and all(_has_exact_command(commands, command) for command in required)
         and _has_installed_lifecycle(commands)
     )
@@ -489,9 +468,7 @@ def _check_ci(root: Path, diagnostics: list[RepositoryDiagnostic]) -> None:
         diagnostics.append(RepositoryDiagnostic("LEAN-REPO-CI", ci_path))
         return
     workflow_jobs = tuple(job for job in jobs.values() if isinstance(job, dict))
-    if not any(_compatibility_job_is_complete(job) for job in workflow_jobs) or not any(
-        _primary_job_is_complete(job) for job in workflow_jobs
-    ):
+    if not any(_primary_job_is_complete(job) for job in workflow_jobs):
         diagnostics.append(RepositoryDiagnostic("LEAN-REPO-CI", ci_path))
 
 

@@ -6,41 +6,6 @@ on:
   pull_request:
 
 jobs:
-  compatibility:
-    name: compatibility (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12"]
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v8.3.2
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
-      - name: Install dependencies
-        run: uv sync --locked
-      - name: Import package
-        run: uv run python -c "import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()"
-      - name: Focused compatibility contracts
-        run: >-
-          uv run pytest -q
-          tests/test_assets.py
-          tests/test_config.py
-          tests/test_models.py
-          tests/test_persistence_schema_v1.py
-          tests/test_foundation_integration.py
-          tests/test_v031_burden.py
-      - name: Supported CLI surfaces
-        run: |
-          uv run unrest --help
-          uv run unrest measure-baseline --help
-          uv run unrest-server --help
-          uv run python -m unrest_harness --help
-      - name: Repository contract
-        run: uv run unrest check-repository
-
   primary:
     name: primary source and package gate (py3.13)
     runs-on: ubuntu-latest
@@ -54,6 +19,14 @@ jobs:
           enable-cache: true
       - name: Install dependencies
         run: uv sync --locked
+      - name: Import package
+        run: uv run python -c "import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()"
+      - name: Supported CLI surfaces
+        run: |
+          uv run unrest --help
+          uv run unrest measure-baseline --help
+          uv run unrest-server --help
+          uv run python -m unrest_harness --help
       - name: Lint (ruff)
         run: uv run ruff check .
       - name: Type-check (mypy)

@@ -3,7 +3,7 @@ name = "unrest-harness"
 version = "0.3.1"
 description = "Turn any coding agent into a mission orchestration system via MCP and ACP."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = "Apache-2.0"
 authors = [{ name = "apodgaiko" }]
 keywords = [
@@ -22,8 +22,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
 ]
@@ -69,6 +67,6 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 line-length = 100
 exclude = [".validation", "validator-regressions"]

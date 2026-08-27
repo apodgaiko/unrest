@@ -16,7 +16,7 @@ terminal review can account for the requested outcome.
 
 Requirements:
 
-- Python 3.11+
+- Python 3.13+
 - [`uv`](https://docs.astral.sh/uv/)
 - Node.js 22+ and `npm`
 - Claude Code or Codex as the orchestrator host
@@ -203,9 +203,9 @@ of these preflights may invoke the full source suite. Freeze the resulting
 tracked and untracked source binding, then run the full source suite exactly
 once on Python 3.13 with `env -u CODEX_PATH uv run pytest -q`, retaining its raw
 stdout, stderr, exit code, timing, environment metadata, and pre/post binding.
-Do not rerun the suite after build. Python 3.11 and 3.12 run lightweight
-compatibility checks. Changes to CLI entry points, bundled assets, package data,
-or MCP surfaces additionally run `uv build`,
+Do not rerun the suite after build. Python 3.13 is the minimum supported runtime
+and the single CI compatibility and release lane. Changes to CLI entry points,
+bundled assets, package data, or MCP surfaces additionally run `uv build`,
 `uv run python tools/check_distribution.py dist`, and the installed-wheel
 lifecycle from an unrelated working directory. The distribution check verifies
 complete archive membership and bytes, safely extracts the sdist, and runs all

@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "tests/fixtures/v031_compatibility/v030-burden-baseline.v1.json"
 
 
-def test_no_extra_install_keeps_the_v030_dependency_and_python_perimeter() -> None:
+def test_no_extra_install_keeps_dependencies_and_uses_v04_python_floor() -> None:
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
         "project"
@@ -20,7 +20,7 @@ def test_no_extra_install_keeps_the_v030_dependency_and_python_perimeter() -> No
     assert sorted(project.get("optional-dependencies", {})) == baseline[
         "optional_dependency_groups"
     ]
-    assert project["requires-python"] == ">=3.11"
+    assert project["requires-python"] == ">=3.13"
 
 
 def test_ordinary_ci_never_executes_the_provider_baseline() -> None:

@@ -302,8 +302,8 @@ def check_distribution(root: Path, dist: Path) -> dict[str, object]:
             "sdist restart oracle inventory mismatch: "
             f"missing={missing_oracle_files}, changed={changed_oracle_files}"
         )
-    if "Requires-Python: >=3.11\n" not in metadata.replace("\r\n", "\n"):
-        raise RuntimeError("wheel metadata does not preserve Requires-Python >=3.11")
+    if "Requires-Python: >=3.13\n" not in metadata.replace("\r\n", "\n"):
+        raise RuntimeError("wheel metadata does not preserve Requires-Python >=3.13")
     if f"Version: {version}\n" not in metadata.replace("\r\n", "\n"):
         raise RuntimeError("wheel metadata version does not match project version")
     normalized_entries = {
