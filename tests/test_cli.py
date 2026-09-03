@@ -1930,6 +1930,7 @@ def test_v045_skill_is_discoverable_as_the_seventh_bundled_skill(
         "Only INT-V045 consumes the return",
     ):
         assert phrase in skill.body
+    assert "/Users/" not in skill.body
 
 
 def _write_adapter_request(tmp_path: Path, document: dict[str, object]) -> Path:
