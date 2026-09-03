@@ -91,6 +91,9 @@ _DIAGNOSTIC_FIELDS = frozenset(
         "unknown_step_attempts",
     }
 )
+_HANDOFF_RESULT_FIELDS = frozenset(
+    {"consumer_id", "handoff_id", "inquiry_id", "receipt_id"}
+)
 _MAX_ANSWER_BYTES = 65_536
 
 
@@ -351,8 +354,10 @@ class HandoffRecord:
 
     @classmethod
     def from_public(cls, value: Mapping[str, object]) -> HandoffRecord:
-        fields = ("consumer_id", "handoff_id", "inquiry_id", "receipt_id")
-        if any(not isinstance(value.get(field), str) or not value.get(field) for field in fields):
+        if set(value) != _HANDOFF_RESULT_FIELDS or any(
+            not isinstance(value[field], str) or not value[field]
+            for field in _HANDOFF_RESULT_FIELDS
+        ):
             raise TaskAdapterError("invalid_result", "Inquiry handoff result is invalid")
         return cls(
             consumer_id=cast(str, value["consumer_id"]),

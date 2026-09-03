@@ -10,9 +10,11 @@ import pytest
 
 from unrest_harness.provider_sessions import ProviderSessionRunner
 from unrest_harness.task_adapter import (
+    HandoffRecord,
     InquiryRecord,
     TaskAdapterError,
     TaskBounds,
+    TaskOperation,
     TaskRequest,
     run_task,
 )
@@ -301,6 +303,48 @@ def test_old_inquiry_record_without_answer_fields_remains_readable() -> None:
     assert record.answer is None
     assert record.diagnostics is None
     assert record.public_record()["answer"] is None
+
+
+def test_handoff_record_transport_is_closed_and_canonical() -> None:
+    public = {
+        "consumer_id": "consumer:legacy",
+        "handoff_id": "handoff:legacy",
+        "inquiry_id": "inquiry:legacy",
+        "receipt_id": "receipt:legacy",
+    }
+
+    record = HandoffRecord.from_public(public)
+    operation = TaskOperation(operation="handoff_inquiry", handoff=record)
+
+    assert record.public_record() == public
+    assert operation.public_record() == {
+        "operation": "handoff_inquiry",
+        "result": public,
+    }
+
+
+@pytest.mark.parametrize("unknown", ["private_body", "unexpected"])
+def test_handoff_record_rejects_every_unknown_member_deterministically(
+    unknown: str,
+) -> None:
+    public = {
+        "consumer_id": "consumer:stable",
+        "handoff_id": "handoff:stable",
+        "inquiry_id": "inquiry:stable",
+        "receipt_id": "receipt:stable",
+        unknown: "PRIVATE-CANARY",
+    }
+
+    errors: list[tuple[str, str]] = []
+    for _ in range(2):
+        with pytest.raises(TaskAdapterError) as caught:
+            HandoffRecord.from_public(public)
+        errors.append((caught.value.code, str(caught.value)))
+
+    assert errors == [
+        ("invalid_result", "Inquiry handoff result is invalid"),
+        ("invalid_result", "Inquiry handoff result is invalid"),
+    ]
 
 
 @pytest.mark.parametrize(
