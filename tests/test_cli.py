@@ -2275,8 +2275,13 @@ def test_improvement_prerequisites_use_typed_inspections_and_reuse_manager(
     calls: list[tuple[str, str]] = []
 
     class FakeWorkspaceManager:
-        def __init__(self, _repository: Path) -> None:
-            pass
+        def __init__(
+            self,
+            _repository: Path,
+            *,
+            now: object,
+        ) -> None:
+            assert callable(now)
 
         def inspect_workspace(self, lease_id: str):
             calls.append(("workspace", lease_id))

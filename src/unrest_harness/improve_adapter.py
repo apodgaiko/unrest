@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, TypeVar
 
 from .canonical_identity import canonical_json_bytes
@@ -18,11 +20,28 @@ from .evolution import (
     ReviewOutcome,
     ReviewRecord,
 )
-from .workspaces import WorkspaceError
+from .workspaces import WorkspaceError, WorkspaceManager
 
 
 ImprovementOperation = Literal["open", "add_candidate", "evaluate", "review", "inspect"]
 _T = TypeVar("_T")
+
+
+def _inert_workspace_manager(
+    repository: str | Path,
+    *,
+    custody_root_id: str | None = None,
+) -> WorkspaceManager:
+    """Inspect persisted leases without advancing a valid expiry transition."""
+
+    from .workspaces import WorkspaceManager as PublicWorkspaceManager
+
+    def clock() -> datetime:
+        return datetime.min.replace(tzinfo=UTC)
+
+    if custody_root_id is None:
+        return PublicWorkspaceManager(repository, now=clock)
+    return PublicWorkspaceManager(repository, custody_root_id=custody_root_id, now=clock)
 
 
 class ImprovementAdapterError(RuntimeError):
@@ -289,8 +308,12 @@ async def run_improvement(
     if snapshot.freeze != freeze:
         raise ImprovementAdapterError("campaign_freeze_mismatch", operation="inspect")
 
+    inspection_manager = _inert_workspace_manager(
+        manager.repository,
+        custody_root_id=manager.workspace_manager.store.custody_root_id,
+    )
     try:
-        lease = manager.workspace_manager.inspect_workspace(request.lease_id)
+        lease = inspection_manager.inspect_workspace(request.lease_id)
     except WorkspaceError:
         raise ImprovementAdapterError(
             "missing_returned_candidate_lease", operation="inspect"

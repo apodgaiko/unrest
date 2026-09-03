@@ -321,10 +321,77 @@ async def test_answer_without_handoff_is_not_useful() -> None:
         terminal=result.terminal,
         inquiry=result.inquiry,
         handoff=None,
-        operations=result.operations,
+        operations=tuple(
+            operation
+            for operation in result.operations
+            if operation.operation != "handoff_inquiry"
+        ),
     )
     assert without_handoff.answer is not None
     assert without_handoff.useful is False
+
+
+@pytest.mark.asyncio
+async def test_task_result_binds_consumer_and_operation_history() -> None:
+    result = await run_task(FakeInquiryLifecycle(), _request())
+    assert result.expected_consumer_id == "consumer:task"
+    assert result.public_record()["expected_consumer_id"] == "consumer:task"
+    assert result.useful is True
+
+    missing_consumer = TaskResult(
+        terminal=result.terminal,
+        inquiry=result.inquiry,
+        handoff=result.handoff,
+        operations=result.operations,
+    )
+    assert missing_consumer.useful is False
+
+    with pytest.raises(TaskAdapterError) as caught:
+        TaskResult(
+            terminal=result.terminal,
+            inquiry=result.inquiry,
+            handoff=result.handoff,
+            operations=result.operations,
+            expected_consumer_id="consumer:wrong",
+        )
+    assert caught.value.code == "invalid_result"
+
+    for operations in ((), result.operations[:-1], result.operations[-2:]):
+        with pytest.raises(TaskAdapterError) as caught:
+            TaskResult(
+                terminal=result.terminal,
+                inquiry=result.inquiry,
+                handoff=result.handoff,
+                operations=operations,
+                expected_consumer_id=result.expected_consumer_id,
+            )
+        assert caught.value.code == "invalid_result"
+
+
+@pytest.mark.asyncio
+async def test_task_result_rejects_inconsistent_operation_records() -> None:
+    result = await run_task(FakeInquiryLifecycle(), _request())
+    wrong_handoff = HandoffRecord(
+        consumer_id="consumer:task",
+        handoff_id="handoff:other",
+        inquiry_id=result.inquiry.inquiry_id,
+        receipt_id="receipt:other",
+    )
+    operations = tuple(
+        TaskOperation("handoff_inquiry", handoff=wrong_handoff)
+        if operation.operation == "handoff_inquiry"
+        else operation
+        for operation in result.operations
+    )
+    with pytest.raises(TaskAdapterError) as caught:
+        TaskResult(
+            terminal=result.terminal,
+            inquiry=result.inquiry,
+            handoff=result.handoff,
+            operations=operations,
+            expected_consumer_id=result.expected_consumer_id,
+        )
+    assert caught.value.code == "invalid_result"
 
 
 def test_old_inquiry_record_without_answer_fields_remains_readable() -> None:

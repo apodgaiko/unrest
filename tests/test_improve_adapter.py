@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import socket
 import subprocess
@@ -171,6 +172,15 @@ def _durable_bytes(repository: Path) -> dict[str, bytes]:
     }
 
 
+def _state_bytes(repository: Path) -> dict[str, bytes]:
+    return {
+        str(path.relative_to(repository)): path.read_bytes()
+        for root in (repository / ".unrest", repository / ".unrest-runtime")
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
 @pytest.mark.asyncio
 async def test_nominal_provider_free_open_add_evaluate_review_inspect(repository: Path) -> None:
     manager = _manager(repository)
@@ -282,6 +292,46 @@ async def test_mismatched_freeze_lease_and_candidate_are_exact(repository: Path)
     with pytest.raises(ImprovementAdapterError) as caught:
         await run_improvement(manager, wrong_candidate)
     assert caught.value.code == "admitted_candidate_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_expired_active_lease_mismatch_is_exact_and_inert(repository: Path) -> None:
+    current = datetime(2026, 1, 1, tzinfo=UTC)
+    workspace = WorkspaceManager(
+        repository,
+        custody_root_id="improve-adapter-expired-test",
+        now=lambda: current,
+    )
+    manager = EvolutionManager(repository, workspace_manager=workspace)
+    lease = workspace.lease_workspace(
+        base_revision=_git(repository, "rev-parse", "HEAD"),
+        owner_id="worker:improve-author",
+        declared_write_paths=("candidate.txt",),
+        capability_policy_digest=_sha("1"),
+        duration_seconds=1,
+        lease_id="lease:expired-candidate",
+        resource_budget=ResourceBudget(max_patch_bytes=100_000),
+    )
+    request = ImprovementRequest(
+        campaign_id="campaign:improve-expired",
+        freeze=_freeze(repository),
+        lease_id=lease.lease_id,
+        candidate_id="candidate:expired",
+        action="original",
+        author_id="worker:improve-author",
+        evaluation_id="evaluation:expired",
+        review_id="review:expired",
+    )
+    manager.open_campaign(campaign_id=request.campaign_id, freeze=request.freeze)
+    current += timedelta(seconds=2)
+    before = _state_bytes(repository)
+
+    with pytest.raises(ImprovementAdapterError) as caught:
+        await run_improvement(manager, request)
+
+    assert caught.value.code == "returned_candidate_lease_mismatch"
+    assert _state_bytes(repository) == before
+    assert manager.provider_runner is None
 
 
 @pytest.mark.asyncio

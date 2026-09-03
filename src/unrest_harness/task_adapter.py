@@ -94,6 +94,14 @@ _DIAGNOSTIC_FIELDS = frozenset(
 _HANDOFF_RESULT_FIELDS = frozenset(
     {"consumer_id", "handoff_id", "inquiry_id", "receipt_id"}
 )
+_TASK_OPERATION_ORDER = {
+    "open_inquiry": 0,
+    "pause_inquiry": 1,
+    "resume_inquiry": 2,
+    "advance_inquiry": 3,
+    "handoff_inquiry": 4,
+    "inspect_inquiry": 5,
+}
 _MAX_ANSWER_BYTES = 65_536
 
 
@@ -383,7 +391,12 @@ class TaskOperation:
     handoff: HandoffRecord | None = None
 
     def __post_init__(self) -> None:
-        if (self.inquiry is None) == (self.handoff is None):
+        if (
+            self.operation not in _TASK_OPERATION_ORDER
+            or (self.inquiry is None) == (self.handoff is None)
+        ):
+            raise TaskAdapterError("invalid_result", "Task operation result is invalid")
+        if (self.operation == "handoff_inquiry") != (self.handoff is not None):
             raise TaskAdapterError("invalid_result", "Task operation result is invalid")
 
     def public_record(self) -> dict[str, object]:
@@ -401,14 +414,59 @@ class TaskResult:
     inquiry: InquiryRecord
     handoff: HandoffRecord | None
     operations: tuple[TaskOperation, ...]
+    expected_consumer_id: str | None = None
     schema_version: int = 1
 
     def __post_init__(self) -> None:
-        if self.terminal != _terminal(self.inquiry.state):
+        if (
+            self.schema_version != 1
+            or self.terminal != _terminal(self.inquiry.state)
+            or (
+                self.expected_consumer_id is not None
+                and (
+                    not isinstance(self.expected_consumer_id, str)
+                    or not self.expected_consumer_id.strip()
+                )
+            )
+        ):
             raise TaskAdapterError("invalid_result", "Task result is invalid")
         if self.handoff is not None and (
             self.inquiry.state != "answered"
             or self.handoff.inquiry_id != self.inquiry.inquiry_id
+            or (
+                self.expected_consumer_id is not None
+                and self.handoff.consumer_id != self.expected_consumer_id
+            )
+        ):
+            raise TaskAdapterError("invalid_result", "Task result is invalid")
+        inquiry_operations = tuple(
+            operation.inquiry
+            for operation in self.operations
+            if operation.inquiry is not None
+        )
+        handoff_operations = tuple(
+            operation.handoff
+            for operation in self.operations
+            if operation.handoff is not None
+        )
+        operation_names = tuple(operation.operation for operation in self.operations)
+        if (
+            not self.operations
+            or operation_names[0] != "open_inquiry"
+            or any(
+                record.inquiry_id != self.inquiry.inquiry_id
+                for record in inquiry_operations
+            )
+            or operation_names[-1] != "inspect_inquiry"
+            or len(set(operation_names)) != len(operation_names)
+            or tuple(_TASK_OPERATION_ORDER[name] for name in operation_names)
+            != tuple(sorted(_TASK_OPERATION_ORDER[name] for name in operation_names))
+            or (
+                "resume_inquiry" in operation_names
+                and "pause_inquiry" not in operation_names
+            )
+            or self.operations[-1].inquiry != self.inquiry
+            or handoff_operations != (() if self.handoff is None else (self.handoff,))
         ):
             raise TaskAdapterError("invalid_result", "Task result is invalid")
 
@@ -430,6 +488,8 @@ class TaskResult:
             and self.inquiry.state == "answered"
             and self.handoff is not None
             and self.handoff.inquiry_id == self.inquiry.inquiry_id
+            and self.expected_consumer_id is not None
+            and self.handoff.consumer_id == self.expected_consumer_id
         )
 
     def public_record(self) -> dict[str, object]:
@@ -438,6 +498,7 @@ class TaskResult:
             "diagnostics": (
                 self.diagnostics.public_record() if self.diagnostics is not None else None
             ),
+            "expected_consumer_id": self.expected_consumer_id,
             "handoff": self.handoff.public_record() if self.handoff is not None else None,
             "inquiry": self.inquiry.public_record(),
             "operations": [operation.public_record() for operation in self.operations],
@@ -546,6 +607,7 @@ async def run_task(lifecycle: InquiryLifecycle, request: TaskRequest) -> TaskRes
         inquiry=inspected,
         handoff=handoff,
         operations=tuple(operations),
+        expected_consumer_id=request.consumer_id,
     )
 
 

@@ -468,8 +468,12 @@ def _improvement_prerequisites(repository: Path, request: object):
     """Inspect exact public prerequisite records and return the bound manager."""
 
     from .evolution import CampaignFreeze, EvolutionError, EvolutionManager
-    from .improve_adapter import ImprovementAdapterError, ImprovementRequest
-    from .workspaces import WorkspaceError, WorkspaceManager
+    from .improve_adapter import (
+        ImprovementAdapterError,
+        ImprovementRequest,
+        _inert_workspace_manager,
+    )
+    from .workspaces import WorkspaceError
 
     if not isinstance(request, ImprovementRequest):
         raise ImprovementAdapterError("invalid_argument", operation="inspect")
@@ -509,7 +513,7 @@ def _improvement_prerequisites(repository: Path, request: object):
     )
 
     try:
-        workspace_manager = WorkspaceManager(repository)
+        workspace_manager = _inert_workspace_manager(repository)
         manager = EvolutionManager(repository, workspace_manager=workspace_manager)
         snapshot = manager.inspect_campaign(request.campaign_id)
     except EvolutionError:
