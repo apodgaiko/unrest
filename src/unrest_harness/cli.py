@@ -327,7 +327,7 @@ def _project_request(value: object):
         or not mission_id.strip()
         or isinstance(max_steps, bool)
         or not isinstance(max_steps, int)
-        or max_steps <= 0
+        or max_steps != 12
     ):
         raise click.ClickException("invalid_argument")
     return project_id, mission_id, project, max_steps
@@ -425,6 +425,10 @@ def _improvement_request(value: object):
     repository = document["repository"]
     if not isinstance(repository, str) or not repository:
         raise click.ClickException("invalid_argument")
+    for field in ("candidate_cost_steps", "evaluation_cost_steps"):
+        cost_steps = request.get(field, 0)
+        if isinstance(cost_steps, bool) or not isinstance(cost_steps, int) or cost_steps != 0:
+            raise click.ClickException("invalid_argument")
     try:
         freeze = CampaignFreeze.from_mapping(
             _closed_adapter_mapping(

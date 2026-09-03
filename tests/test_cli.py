@@ -2019,28 +2019,39 @@ def test_run_task_default_branches_and_unknown_members() -> None:
         cli_module._task_request(document)
 
 
-@pytest.mark.parametrize("value", [_OMIT, 0, -1, True, "1", 1.5, None])
+@pytest.mark.parametrize(
+    "value",
+    [_OMIT, 0, -1, 1, 13, 1_000_000, True, "1", 1.5, None],
+)
 def test_run_project_invalid_bound_matrix_is_safe_and_pre_construction(
     runner: CliRunner,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     value: object,
 ) -> None:
+    from unrest_harness import api
+
     document = _example("run-project.json")
     if value is _OMIT:
         document.pop("max_steps")
     else:
         document["max_steps"] = value
-    monkeypatch.setattr(
-        cli_module,
-        "_project_adapter_coordinator",
-        lambda *_args: pytest.fail("coordinator constructed"),
-    )
+    effects = {"coordinator": 0, "run_project": 0}
+
+    def coordinator_effect(*_args: object) -> None:
+        effects["coordinator"] += 1
+
+    def run_project_effect(*_args: object, **_kwargs: object) -> None:
+        effects["run_project"] += 1
+
+    monkeypatch.setattr(cli_module, "_project_adapter_coordinator", coordinator_effect)
+    monkeypatch.setattr(api, "run_project", run_project_effect)
     request = _write_adapter_request(tmp_path, document)
     monkeypatch.setattr(cli_module, "_RUN_PROJECT_REQUEST_PATH", request)
     result = runner.invoke(cli, ["run-project", "--request", str(request)])
     assert result.exit_code == 1
     assert result.output == "Error: invalid_argument\n"
+    assert effects == {"coordinator": 0, "run_project": 0}
 
 
 def test_run_project_and_improvement_reject_unknown_members() -> None:
@@ -2058,8 +2069,8 @@ def test_run_project_and_improvement_reject_unknown_members() -> None:
 
 
 @pytest.mark.parametrize("field", ["candidate_cost_steps", "evaluation_cost_steps"])
-@pytest.mark.parametrize("value", [_OMIT, 0, 1])
-def test_run_improvement_compatible_cost_matrix(field: str, value: object) -> None:
+@pytest.mark.parametrize("value", [_OMIT, 0])
+def test_run_improvement_zero_cost_matrix(field: str, value: object) -> None:
     document = _example("run-improvement.json")
     request = document["request"]
     assert isinstance(request, dict)
@@ -2074,7 +2085,7 @@ def test_run_improvement_compatible_cost_matrix(field: str, value: object) -> No
 
 
 @pytest.mark.parametrize("field", ["candidate_cost_steps", "evaluation_cost_steps"])
-@pytest.mark.parametrize("value", [-1, True, "1", 1.5, None])
+@pytest.mark.parametrize("value", [-1, 1, 1_000_000, True, "1", 1.5, None])
 def test_run_improvement_invalid_cost_matrix_is_safe_and_pre_manager(
     runner: CliRunner,
     tmp_path: Path,
@@ -2082,19 +2093,25 @@ def test_run_improvement_invalid_cost_matrix_is_safe_and_pre_manager(
     field: str,
     value: object,
 ) -> None:
-    from unrest_harness import evolution
+    from unrest_harness import api
 
     document = _nested_mutation(_example("run-improvement.json"), "request", field, value)
-    monkeypatch.setattr(
-        evolution,
-        "EvolutionManager",
-        lambda *_args, **_kwargs: pytest.fail("EvolutionManager constructed"),
-    )
+    effects = {"prerequisites": 0, "run_improvement": 0}
+
+    def prerequisite_effect(*_args: object) -> None:
+        effects["prerequisites"] += 1
+
+    async def run_improvement_effect(*_args: object, **_kwargs: object) -> None:
+        effects["run_improvement"] += 1
+
+    monkeypatch.setattr(cli_module, "_improvement_prerequisites", prerequisite_effect)
+    monkeypatch.setattr(api, "run_improvement", run_improvement_effect)
     request = _write_adapter_request(tmp_path, document)
     monkeypatch.setattr(cli_module, "_RUN_IMPROVEMENT_REQUEST_PATH", request)
     result = runner.invoke(cli, ["run-improvement", "--request", str(request)])
     assert result.exit_code == 1
     assert result.output == "Error: invalid_argument\n"
+    assert effects == {"prerequisites": 0, "run_improvement": 0}
 
 
 @pytest.mark.parametrize(
