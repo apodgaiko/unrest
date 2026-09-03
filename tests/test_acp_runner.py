@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import shutil
 import sys
 from dataclasses import replace
@@ -18,12 +19,14 @@ from pathlib import Path
 
 import pytest
 from fastmcp import Client
+import unrest_harness.acp_runner as acp_runner_module
 
 from unrest_harness.acp_runner import (
     ACPClient,
     ACPNodeDispatcher,
     ACPTerminalReviewer,
     ACPNodeRunner,
+    SUBPROCESS_STREAM_LIMIT,
     _acp_subprocess_env,
     _augment_acp_command,
     _ensure_claude_settings,
@@ -1584,11 +1587,9 @@ async def test_terminal_review_timeout_cleans_acp_and_mcp_children(
     project_setup,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    import unrest_harness.acp_runner as acp_runner_module
-
     config = replace(
         config,
-        terminal_reviewer_acp_command="fake-acp",
+        terminal_reviewer_acp_command=sys.executable,
         terminal_review_timeout_seconds=1,
     )
     runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
@@ -1617,6 +1618,8 @@ async def test_terminal_review_timeout_cleans_acp_and_mcp_children(
     acp_process = FakeProcess()
     client_cleaned = False
     progress: list[str] = []
+    launch_plans: list[object] = []
+    actual_preflight = acp_runner_module.preflight_launch
 
     class FakeClient:
         def __init__(
@@ -1659,13 +1662,28 @@ async def test_terminal_review_timeout_cleans_acp_and_mcp_children(
     async def ready(*args, **kwargs) -> None:
         return None
 
-    async def fake_spawn(*args, **kwargs):
+    def recording_preflight(plan):
+        launch_plans.append(plan)
+        actual_preflight(plan)
+
+    async def fake_spawn(plan, **kwargs):
+        launch_plans.append(plan)
+        assert plan.argv == (sys.executable,)
+        assert plan.cwd == str(project_setup.workspace_dir("p1").resolve())
+        assert plan.path == plan.environment.get("PATH")
+        assert kwargs == {
+            "stdin": asyncio.subprocess.PIPE,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "limit": SUBPROCESS_STREAM_LIMIT,
+        }
         return acp_process
 
     monkeypatch.setattr(runner, "_start_terminal_reviewer_mcp", fake_start_mcp)
     monkeypatch.setattr(runner, "_wait_for_server_ready", ready)
     monkeypatch.setattr(runner, "_find_free_port", lambda: 54321)
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_spawn)
+    monkeypatch.setattr(acp_runner_module, "preflight_launch", recording_preflight)
+    monkeypatch.setattr(acp_runner_module, "spawn_launch", fake_spawn)
     monkeypatch.setattr(acp_runner_module, "ACPClient", FakeClient)
 
     handoff = await runner.run_terminal_review(
@@ -1683,6 +1701,8 @@ async def test_terminal_review_timeout_cleans_acp_and_mcp_children(
     assert acp_process.terminated is True
     assert mcp_process.terminated is True
     assert client_cleaned is True
+    assert len(launch_plans) == 2
+    assert launch_plans[0] is launch_plans[1]
 
 
 def test_production_terminal_reviewer_emits_progress_to_stderr(
@@ -1704,3 +1724,489 @@ def test_production_terminal_reviewer_emits_progress_to_stderr(
 
     assert handoff.done is False
     assert "[unrest terminal-review] Agent: checking release evidence" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("task_type", ["work", "validate"])
+def test_owned_node_launch_uses_one_identical_plan(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    mock_acp_command: str,
+    monkeypatch: pytest.MonkeyPatch,
+    task_type: str,
+) -> None:
+    role_config = replace(
+        config,
+        worker_acp_command=mock_acp_command,
+        validator_acp_command=mock_acp_command,
+    )
+    runner = ACPNodeRunner(role_config, AssetLoader(role_config))
+    seen: list[tuple[str, object]] = []
+    actual_preflight = acp_runner_module.preflight_launch
+    actual_spawn = acp_runner_module.spawn_launch
+
+    def recording_preflight(plan):
+        seen.append(("preflight", plan))
+        actual_preflight(plan)
+
+    async def recording_spawn(plan, **kwargs):
+        seen.append(("spawn", plan))
+        assert kwargs == {
+            "stdin": asyncio.subprocess.PIPE,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "limit": SUBPROCESS_STREAM_LIMIT,
+        }
+        return await actual_spawn(plan, **kwargs)
+
+    async def no_op_server(**kwargs):
+        return await asyncio.create_subprocess_exec(
+            "/bin/sleep",
+            "30",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+    async def ready(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("unrest_harness.acp_runner.preflight_launch", recording_preflight)
+    monkeypatch.setattr("unrest_harness.acp_runner.spawn_launch", recording_spawn)
+    monkeypatch.setattr(runner, "_start_worker_mcp_server", no_op_server)
+    monkeypatch.setattr(runner, "_wait_for_server_ready", ready)
+    monkeypatch.setattr(runner, "_find_free_port", lambda: 54321)
+    task = Task(
+        id=f"plan-{task_type}",
+        type=task_type,  # type: ignore[arg-type]
+        body="prove launch plan identity",
+        targets=["VAL-001"],
+        skill="s",
+    )
+
+    handoff = asyncio.run(
+        runner.run_node(
+            "p1",
+            "mission-001",
+            task,
+            f"2026-08-30T00-00-00Z-{task_type}",
+            project_setup,
+        )
+    )
+
+    assert handoff.done is True
+    assert [name for name, _ in seen] == ["preflight", "spawn"]
+    assert seen[0][1] is seen[1][1]
+    plan = seen[0][1]
+    assert plan.argv == tuple(shlex.split(mock_acp_command))
+    assert plan.cwd == str(project_setup.workspace_dir("p1").resolve())
+    assert plan.path == plan.environment.get("PATH")
+
+
+@pytest.mark.parametrize("task_type", ["work", "validate"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "",
+        " ",
+        "adapter 'unterminated",
+        "''",
+        "./missing-adapter",
+        "\0adapter",
+        "adapter 'later\0argument'",
+        "\ud800adapter",
+    ],
+    ids=[
+        "empty",
+        "whitespace",
+        "tokenization",
+        "empty-argv0",
+        "missing",
+        "argv0-nul",
+        "later-argv-nul",
+        "unencodable",
+    ],
+)
+def test_owned_node_local_rejection_starts_no_mcp_client_or_protocol(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+    task_type: str,
+    command: str,
+) -> None:
+    role_config = replace(
+        config,
+        worker_acp_command=command,
+        validator_acp_command=command,
+    )
+    runner = ACPNodeRunner(role_config, AssetLoader(role_config))
+
+    async def forbidden_mcp(**kwargs):
+        raise AssertionError("MCP startup must not be reached")
+
+    async def forbidden_spawn(*args, **kwargs):
+        raise AssertionError("adapter spawn must not be reached")
+
+    class ForbiddenClient:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("ACPClient construction must not be reached")
+
+    monkeypatch.setattr(runner, "_start_worker_mcp_server", forbidden_mcp)
+    monkeypatch.setattr("unrest_harness.acp_runner.spawn_launch", forbidden_spawn)
+    monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+    task = Task(
+        id=f"reject-{task_type}-{abs(hash(command))}",
+        type=task_type,  # type: ignore[arg-type]
+        body="must reject",
+        targets=["VAL-001"],
+        skill="s",
+    )
+    spawn_ts = f"2026-08-30T01-00-00Z-{task_type}-{abs(hash(command))}"
+
+    handoff = asyncio.run(
+        runner.run_node(
+            "p1", "mission-001", task, spawn_ts, project_setup
+        )
+    )
+
+    assert handoff.done is False
+    assert "ACP adapter launch rejected:" in handoff.report
+    persisted = project_setup.attempt_path(
+        "p1", "mission-001", spawn_ts, task.id
+    ).read_text(encoding="utf-8")
+    assert '"done": false' in persisted
+    assert "completed" not in persisted
+
+
+@pytest.mark.parametrize("task_type", ["work", "validate"])
+@pytest.mark.parametrize("field", ["cwd", "env_key", "env_value", "path"])
+@pytest.mark.parametrize("malformation", ["nul", "unencodable"])
+def test_owned_node_rejects_malformed_os_fields_before_any_launch_work(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+    task_type: str,
+    field: str,
+    malformation: str,
+) -> None:
+    malformed = "CANARY\0VALUE" if malformation == "nul" else "\ud800"
+    try:
+        os.fsencode(malformed)
+    except UnicodeError:
+        pass
+    else:
+        if malformation == "unencodable":
+            pytest.skip("host filesystem encoding accepts the unpaired surrogate")
+
+    runner = ACPNodeRunner(config, AssetLoader(config))
+    actual_node_runtime = runner._node_runtime
+
+    def malformed_runtime(*args, **kwargs):
+        runtime = actual_node_runtime(*args, **kwargs)
+        environment = dict(runtime.agent_environment)
+        workspace_dir = runtime.workspace_dir
+        if field == "cwd":
+            workspace_dir = malformed
+        elif field == "env_key":
+            environment[malformed] = "value"
+        elif field == "env_value":
+            environment["MALFORMED_VALUE"] = malformed
+        else:
+            environment["PATH"] = malformed
+        return replace(
+            runtime,
+            workspace_dir=workspace_dir,
+            agent_environment=environment,
+        )
+
+    async def forbidden_mcp(**kwargs):
+        raise AssertionError("MCP startup must not be reached")
+
+    async def forbidden_spawn(*args, **kwargs):
+        raise AssertionError("adapter spawn must not be reached")
+
+    class ForbiddenClient:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("ACPClient construction must not be reached")
+
+    monkeypatch.setattr(runner, "_node_runtime", malformed_runtime)
+    monkeypatch.setattr(runner, "_start_worker_mcp_server", forbidden_mcp)
+    monkeypatch.setattr("unrest_harness.acp_runner.spawn_launch", forbidden_spawn)
+    monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+    task = Task(
+        id=f"os-field-{task_type}-{field}-{malformation}",
+        type=task_type,  # type: ignore[arg-type]
+        body="must reject before launch work",
+        targets=["VAL-001"],
+        skill="s",
+    )
+    spawn_ts = f"2026-08-30T02-00-00Z-{task_type}-{field}-{malformation}"
+
+    handoff = asyncio.run(
+        runner.run_node("p1", "mission-001", task, spawn_ts, project_setup)
+    )
+
+    assert handoff.done is False
+    assert handoff.report == "ACP adapter launch rejected: invalid_command"
+    assert "CANARY" not in handoff.report
+    persisted = project_setup.attempt_path(
+        "p1", "mission-001", spawn_ts, task.id
+    ).read_text(encoding="utf-8")
+    assert '"done": false' in persisted
+    assert "invalid_command" in persisted
+    assert "CANARY" not in persisted
+
+
+@pytest.mark.parametrize("task_type", ["work", "validate"])
+def test_owned_node_rejects_illegal_environment_name_before_any_launch_work(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+    task_type: str,
+) -> None:
+    canary = "CANARY=ILLEGAL_ENVIRONMENT_NAME"
+    runner = ACPNodeRunner(config, AssetLoader(config))
+    actual_node_runtime = runner._node_runtime
+
+    def illegal_environment_runtime(*args, **kwargs):
+        runtime = actual_node_runtime(*args, **kwargs)
+        environment = dict(runtime.agent_environment)
+        environment[canary] = "CANARY-VALUE"
+        return replace(runtime, agent_environment=environment)
+
+    async def forbidden_mcp(**kwargs):
+        raise AssertionError("MCP startup must not be reached")
+
+    async def forbidden_spawn(*args, **kwargs):
+        raise AssertionError("adapter spawn must not be reached")
+
+    class ForbiddenClient:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("ACPClient construction must not be reached")
+
+    monkeypatch.setattr(runner, "_node_runtime", illegal_environment_runtime)
+    monkeypatch.setattr(runner, "_start_worker_mcp_server", forbidden_mcp)
+    monkeypatch.setattr("unrest_harness.acp_runner.spawn_launch", forbidden_spawn)
+    monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+    task = Task(
+        id=f"illegal-environment-name-{task_type}",
+        type=task_type,  # type: ignore[arg-type]
+        body="must reject before launch work",
+        targets=["VAL-001"],
+        skill="s",
+    )
+    spawn_ts = f"2026-08-30T03-00-00Z-{task_type}"
+
+    handoff = asyncio.run(
+        runner.run_node("p1", "mission-001", task, spawn_ts, project_setup)
+    )
+
+    assert handoff.done is False
+    assert handoff.report == "ACP adapter launch rejected: invalid_command"
+    assert "CANARY" not in handoff.report
+    persisted = project_setup.attempt_path(
+        "p1", "mission-001", spawn_ts, task.id
+    ).read_text(encoding="utf-8")
+    assert '"done": false' in persisted
+    assert "invalid_command" in persisted
+    assert "CANARY" not in persisted
+
+
+@pytest.mark.parametrize("task_type", ["work", "validate"])
+@pytest.mark.parametrize(
+    ("fixture", "category"),
+    [("directory", "directory"), ("non_executable", "not_executable")],
+)
+def test_owned_node_obstruction_starts_no_mcp_client_or_protocol(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    task_type: str,
+    fixture: str,
+    category: str,
+) -> None:
+    launcher = workspace / f"blocked-{task_type}-{fixture}"
+    if fixture == "directory":
+        launcher.mkdir()
+        launcher.chmod(0o700)
+    else:
+        launcher.write_text("blocked", encoding="utf-8")
+        launcher.chmod(0o600)
+    command = f"./{launcher.name}"
+    role_config = replace(
+        config,
+        worker_acp_command=command,
+        validator_acp_command=command,
+    )
+    runner = ACPNodeRunner(role_config, AssetLoader(role_config))
+
+    async def forbidden_mcp(**kwargs):
+        raise AssertionError("MCP startup must not be reached")
+
+    async def forbidden_spawn(*args, **kwargs):
+        raise AssertionError("adapter spawn must not be reached")
+
+    class ForbiddenClient:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("ACPClient construction must not be reached")
+
+    monkeypatch.setattr(runner, "_start_worker_mcp_server", forbidden_mcp)
+    monkeypatch.setattr("unrest_harness.acp_runner.spawn_launch", forbidden_spawn)
+    monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+    task = Task(
+        id=f"blocked-{task_type}-{fixture}",
+        type=task_type,  # type: ignore[arg-type]
+        body="must reject",
+        targets=["VAL-001"],
+        skill="s",
+    )
+
+    handoff = asyncio.run(
+        runner.run_node(
+            "p1",
+            "mission-001",
+            task,
+            f"2026-08-30T03-00-00Z-{task_type}-{fixture}",
+            project_setup,
+        )
+    )
+
+    assert handoff.done is False
+    assert handoff.report.startswith(f"ACP adapter launch rejected: {category}")
+
+
+@pytest.mark.asyncio
+async def test_terminal_local_rejection_starts_no_mcp_client_or_protocol(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    role_config = replace(config, terminal_reviewer_acp_command="./missing-reviewer")
+    runner = ACPNodeRunner(role_config, AssetLoader(role_config))
+
+    async def forbidden_mcp(**kwargs):
+        raise AssertionError("reviewer MCP startup must not be reached")
+
+    async def forbidden_spawn(*args, **kwargs):
+        raise AssertionError("adapter spawn must not be reached")
+
+    class ForbiddenClient:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("ACPClient construction must not be reached")
+
+    monkeypatch.setattr(runner, "_start_terminal_reviewer_mcp", forbidden_mcp)
+    monkeypatch.setattr("unrest_harness.acp_runner.spawn_launch", forbidden_spawn)
+    monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+
+    handoff = await runner.run_terminal_review(
+        "p1", "mission-001", "2026-08-30T02-00-00Z", project_setup
+    )
+
+    assert handoff.done is False
+    assert handoff.report == "ACP adapter launch rejected: missing"
+
+
+@pytest.mark.parametrize("task_type", ["work", "validate"])
+def test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    task_type: str,
+) -> None:
+    launcher = workspace / f"invalid-format-{task_type}"
+    launcher.write_bytes(b"mode executable, intentionally invalid format\n")
+    launcher.chmod(0o700)
+    command = f"./{launcher.name}"
+    role_config = replace(
+        config,
+        worker_acp_command=command,
+        validator_acp_command=command,
+    )
+    runner = ACPNodeRunner(role_config, AssetLoader(role_config))
+
+    async def no_op_server(**kwargs):
+        return await asyncio.create_subprocess_exec(
+            "/bin/sleep",
+            "30",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+    async def ready(*args, **kwargs):
+        return None
+
+    class ForbiddenClient:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("ACPClient construction must not be reached")
+
+    monkeypatch.setattr(runner, "_start_worker_mcp_server", no_op_server)
+    monkeypatch.setattr(runner, "_wait_for_server_ready", ready)
+    monkeypatch.setattr(runner, "_find_free_port", lambda: 54321)
+    monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+    task = Task(
+        id=f"startup-{task_type}",
+        type=task_type,  # type: ignore[arg-type]
+        body="real startup failure",
+        targets=["VAL-001"],
+        skill="s",
+    )
+    spawn_ts = f"2026-08-30T04-00-00Z-{task_type}"
+
+    handoff = asyncio.run(
+        runner.run_node(
+            "p1", "mission-001", task, spawn_ts, project_setup
+        )
+    )
+
+    assert handoff.done is False
+    assert handoff.report.startswith("ACP adapter launch failed: startup_failed")
+    persisted = project_setup.attempt_path(
+        "p1", "mission-001", spawn_ts, task.id
+    ).read_text(encoding="utf-8")
+    assert launcher.name not in persisted
+    assert "completed" not in persisted
+
+
+@pytest.mark.asyncio
+async def test_terminal_real_startup_failure_is_safe_and_starts_no_protocol(
+    config: HarnessConfig,
+    project_setup: ProjectStore,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = workspace / "invalid-format-reviewer"
+    launcher.write_bytes(b"mode executable, intentionally invalid format\n")
+    launcher.chmod(0o700)
+    role_config = replace(
+        config,
+        terminal_reviewer_acp_command=f"./{launcher.name}",
+    )
+    runner = ACPNodeRunner(role_config, AssetLoader(role_config))
+
+    async def no_op_server(**kwargs):
+        return await asyncio.create_subprocess_exec(
+            "/bin/sleep",
+            "30",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+    async def ready(*args, **kwargs):
+        return None
+
+    class ForbiddenClient:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("ACPClient construction must not be reached")
+
+    monkeypatch.setattr(runner, "_start_terminal_reviewer_mcp", no_op_server)
+    monkeypatch.setattr(runner, "_wait_for_server_ready", ready)
+    monkeypatch.setattr(runner, "_find_free_port", lambda: 54321)
+    monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+
+    handoff = await runner.run_terminal_review(
+        "p1", "mission-001", "2026-08-30T05-00-00Z", project_setup
+    )
+
+    assert handoff.done is False
+    assert handoff.report == "ACP adapter launch failed: startup_failed"
+    assert launcher.name not in handoff.report

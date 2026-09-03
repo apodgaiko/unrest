@@ -9,13 +9,16 @@ import os
 import shutil
 import shlex
 import socket
+import stat
 import subprocess
 import sys
 import threading
 import time
 import weakref
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Awaitable, Callable, ClassVar, Coroutine, Literal
 
 from . import __version__
@@ -215,6 +218,191 @@ def _drop_structured_credential_aliases(
 
 class ACPError(Exception):
     pass
+
+
+LaunchFailureCategory = Literal[
+    "invalid_command",
+    "missing",
+    "directory",
+    "not_executable",
+    "startup_failed",
+]
+
+_LAUNCH_DIAGNOSTICS: dict[LaunchFailureCategory, str] = {
+    "invalid_command": "ACP adapter launch rejected: invalid_command",
+    "missing": "ACP adapter launch rejected: missing",
+    "directory": "ACP adapter launch rejected: directory",
+    "not_executable": "ACP adapter launch rejected: not_executable",
+    "startup_failed": "ACP adapter launch failed: startup_failed",
+}
+
+
+class LaunchError(RuntimeError):
+    """Stable launch failure that never retains rejected values or OS errors."""
+
+    def __init__(self, category: LaunchFailureCategory) -> None:
+        self.category = category
+        super().__init__(_LAUNCH_DIAGNOSTICS[category])
+
+
+def _is_os_launch_string(value: str) -> bool:
+    """Return whether *value* can cross the platform process boundary."""
+    if "\0" in value:
+        return False
+    try:
+        os.fsencode(value)
+    except UnicodeError:
+        return False
+    return True
+
+
+@dataclass(frozen=True, slots=True)
+class LaunchPlan:
+    """An exact, deeply immutable snapshot of one configured launch."""
+
+    argv: tuple[str, ...]
+    cwd: str
+    environment: Mapping[str, str]
+    path: str | None
+
+    def __post_init__(self) -> None:
+        invalid_shape = isinstance(self.argv, (str, bytes))
+        try:
+            argv = () if invalid_shape else tuple(self.argv)
+            environment = dict(self.environment)
+        except (TypeError, ValueError):
+            invalid_shape = True
+            argv = ()
+            environment = {}
+
+        if (
+            invalid_shape
+            or not argv
+            or not isinstance(self.cwd, str)
+            or any(not isinstance(argument, str) for argument in argv)
+            or not argv[0]
+            or any(
+                not isinstance(key, str) or not isinstance(value, str)
+                for key, value in environment.items()
+            )
+            or any("=" in key for key in environment)
+            or self.path != environment.get("PATH")
+        ):
+            raise LaunchError("invalid_command")
+
+        os_bound_values = (
+            *argv,
+            self.cwd,
+            *environment.keys(),
+            *environment.values(),
+        )
+        if self.path is not None:
+            os_bound_values += (self.path,)
+        if any(not _is_os_launch_string(value) for value in os_bound_values):
+            raise LaunchError("invalid_command")
+
+        object.__setattr__(self, "argv", argv)
+        object.__setattr__(
+            self,
+            "environment",
+            MappingProxyType(environment),
+        )
+
+
+def build_launch_plan(
+    command: str,
+    *,
+    cwd: str | Path,
+    environment: Mapping[str, str],
+) -> LaunchPlan:
+    """Parse a configured command once and snapshot all spawn authority."""
+    parse_failed = False
+    try:
+        argv = tuple(shlex.split(command, posix=True))
+    except ValueError:
+        parse_failed = True
+        argv = ()
+    if parse_failed or not argv or not argv[0]:
+        raise LaunchError("invalid_command")
+
+    copied_environment = dict(environment)
+    return LaunchPlan(
+        argv=argv,
+        cwd=os.fspath(cwd),
+        environment=MappingProxyType(copied_environment),
+        path=copied_environment.get("PATH"),
+    )
+
+
+def _launch_candidate_category(
+    candidate: Path,
+) -> LaunchFailureCategory | None:
+    try:
+        candidate_stat = candidate.stat()
+    except OSError:
+        return "missing"
+    if stat.S_ISDIR(candidate_stat.st_mode):
+        return "directory"
+    if not stat.S_ISREG(candidate_stat.st_mode):
+        return "missing"
+    if not os.access(candidate, os.X_OK):
+        return "not_executable"
+    return None
+
+
+def preflight_launch(plan: LaunchPlan) -> None:
+    """Reject obvious local launcher failures without changing spawn argv."""
+    argv0 = plan.argv[0]
+    if os.sep in argv0:
+        candidate = Path(argv0)
+        if not candidate.is_absolute():
+            candidate = Path(plan.cwd) / candidate
+        category = _launch_candidate_category(candidate)
+        if category is not None:
+            raise LaunchError(category)
+        return
+
+    if plan.path is None:
+        raise LaunchError("missing")
+
+    first_obstruction: LaunchFailureCategory | None = None
+    for entry in plan.path.split(os.pathsep):
+        directory = Path(entry) if entry else Path(".")
+        if not directory.is_absolute():
+            directory = Path(plan.cwd) / directory
+        category = _launch_candidate_category(directory / argv0)
+        if category is None:
+            return
+        if category != "missing" and first_obstruction is None:
+            first_obstruction = category
+    raise LaunchError(first_obstruction or "missing")
+
+
+async def spawn_launch(
+    plan: LaunchPlan,
+    *,
+    stdin: int | None,
+    stdout: int | None,
+    stderr: int | None,
+    limit: int,
+) -> asyncio.subprocess.Process:
+    """Spawn the exact checked plan, normalizing only real startup failures."""
+    startup_failed = False
+    try:
+        return await asyncio.create_subprocess_exec(
+            *plan.argv,
+            cwd=plan.cwd,
+            env=plan.environment,
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+            limit=limit,
+        )
+    except OSError:
+        startup_failed = True
+    if startup_failed:
+        raise LaunchError("startup_failed")
+    raise AssertionError("unreachable")
 
 
 def _augment_acp_command(command: str, provider, reasoning_effort: str | None = None) -> str:
@@ -992,11 +1180,17 @@ class ACPNodeRunner:
             workspace=workspace_path,
             project_record=project_record_path,
         )
-        command = (
-            role_config.worker_acp_command
-            or role_config.resolved_worker_acp_command
+        configured_command = (
+            self.config.validator_acp_command
+            if role == "validator"
+            else self.config.worker_acp_command
         )
-        if not command:
+        command = (
+            configured_command
+            if configured_command is not None
+            else role_config.resolved_worker_acp_command
+        )
+        if command is None:
             raise RuntimeError(
                 f"No ACP command for role={role}. "
                 f"Set UNREST_{role.upper()}_ACP_COMMAND."
@@ -1085,6 +1279,26 @@ class ACPNodeRunner:
 
         handoff_path.parent.mkdir(parents=True, exist_ok=True)
 
+        try:
+            launch_plan = build_launch_plan(
+                runtime.command,
+                cwd=workspace_dir,
+                environment=agent_env,
+            )
+            preflight_launch(launch_plan)
+        except LaunchError as exc:
+            return self._synthesize_and_persist_missing_handoff(
+                handoff_path=handoff_path,
+                task=task,
+                spawn_ts=spawn_ts,
+                summary=str(exc),
+                stop_reason=None,
+                exit_code=None,
+                stderr="",
+                session_error=None,
+                credentials=secrets,
+            )
+
         _ensure_claude_settings(
             workspace_path,
             role_config.worker_provider,
@@ -1157,17 +1371,27 @@ class ACPNodeRunner:
             )
 
             # 3) Spawn the ACP agent.
-            command_parts = shlex.split(runtime.command)
-            if not command_parts:
-                raise ValueError("ACP command cannot be empty")
-            process = await asyncio.create_subprocess_exec(
-                *command_parts,
+            process = await spawn_launch(
+                launch_plan,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=workspace_dir,
-                env=agent_env,
                 limit=SUBPROCESS_STREAM_LIMIT,
+            )
+        except LaunchError as exc:
+            if mcp_process.returncode is None:
+                mcp_process.terminate()
+            await self._close_mcp_process(mcp_process, secrets)
+            return self._synthesize_and_persist_missing_handoff(
+                handoff_path=handoff_path,
+                task=task,
+                spawn_ts=spawn_ts,
+                summary=str(exc),
+                stop_reason=None,
+                exit_code=None,
+                stderr="",
+                session_error=None,
+                credentials=secrets,
             )
         except BaseException:
             if mcp_process.returncode is None:
@@ -1359,6 +1583,8 @@ class ACPNodeRunner:
                     "UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS, then retry closure."
                 ),
             )
+        except LaunchError as exc:
+            return TerminalReviewHandoff(done=False, report=str(exc))
 
     async def _run_terminal_review_lifecycle(
         self,
@@ -1383,8 +1609,12 @@ class ACPNodeRunner:
             project_record=project_record_path,
             deliverable_roots=tuple(Path(root) for root in review_config.deliverable_roots),
         )
-        acp_command = role_config.worker_acp_command
-        if not acp_command:
+        acp_command = (
+            self.config.terminal_reviewer_acp_command
+            if self.config.terminal_reviewer_acp_command is not None
+            else role_config.resolved_worker_acp_command
+        )
+        if acp_command is None:
             raise RuntimeError(
                 "No ACP command for terminal reviewer. Set UNREST_TERMINAL_REVIEWER_ACP_COMMAND."
             )
@@ -1415,6 +1645,13 @@ class ACPNodeRunner:
             include_credentials=False,
         )
         secrets = finite_credential_values(os.environ)
+
+        launch_plan = build_launch_plan(
+            acp_command,
+            cwd=workspace_dir,
+            environment=agent_env,
+        )
+        preflight_launch(launch_plan)
 
         def redact(text: str) -> str:
             return redact_credential_values(text, secrets)
@@ -1472,16 +1709,11 @@ class ACPNodeRunner:
                 workspace_dir=workspace_dir,
                 deliverable_roots=review_config.deliverable_roots,
             )
-            command_parts = shlex.split(acp_command)
-            if not command_parts:
-                raise ValueError("ACP command cannot be empty")
-            process = await asyncio.create_subprocess_exec(
-                *command_parts,
+            process = await spawn_launch(
+                launch_plan,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=workspace_dir,
-                env=agent_env,
                 limit=SUBPROCESS_STREAM_LIMIT,
             )
             client = ACPClient(

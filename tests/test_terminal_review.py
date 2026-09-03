@@ -4,10 +4,13 @@ See docs/v5/10-implementation-plan.md §2 Phase 7.
 """
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
+import unrest_harness.acp_runner as acp_runner_module
 
 from unrest_harness.acp_runner import ACPTerminalReviewer, ACPNodeRunner
 from unrest_harness.assets import AssetLoader
@@ -220,6 +223,224 @@ class TestCleanReview:
 
 
 class TestTerminalReviewerFailure:
+    def test_illegal_environment_name_is_recoverable_attention_before_any_work(
+        self,
+        config: HarnessConfig,
+        workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        canary = "CANARY=ILLEGAL_ENVIRONMENT_NAME"
+        rejected_config = replace(
+            config,
+            terminal_reviewer_acp_command=sys.executable,
+        )
+        reviewer = ACPTerminalReviewer(rejected_config)
+        actual_build_launch_plan = acp_runner_module.build_launch_plan
+
+        def illegal_environment_build_launch_plan(command, *, cwd, environment):
+            copied_environment = dict(environment)
+            copied_environment[canary] = "CANARY-VALUE"
+            return actual_build_launch_plan(
+                command,
+                cwd=cwd,
+                environment=copied_environment,
+            )
+
+        async def forbidden_mcp(**kwargs):
+            raise AssertionError("reviewer MCP startup must not be reached")
+
+        async def forbidden_spawn(*args, **kwargs):
+            raise AssertionError("adapter spawn must not be reached")
+
+        class ForbiddenClient:
+            def __init__(self, *args, **kwargs) -> None:
+                raise AssertionError("ACPClient construction must not be reached")
+
+        monkeypatch.setattr(
+            reviewer.runner, "_start_terminal_reviewer_mcp", forbidden_mcp
+        )
+        monkeypatch.setattr(
+            "unrest_harness.acp_runner.build_launch_plan",
+            illegal_environment_build_launch_plan,
+        )
+        monkeypatch.setattr("unrest_harness.acp_runner.spawn_launch", forbidden_spawn)
+        monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+        controller = ProjectController(
+            rejected_config,
+            MockDispatcher(_responder),
+            reviewer,
+        )
+        pid = _start_and_seed_contract(controller, workspace)
+        _advance_to_closure(controller, pid)
+
+        env = controller.end_mission(pid)
+
+        assert env.state.state == "attention_needed"
+        reloaded = ProjectStore(rejected_config)
+        items = reloaded.load_attention(pid)
+        assert len(items) == 1
+        assert items[0].kind == "terminal_review"
+        assert items[0].report == "ACP adapter launch rejected: invalid_command"
+        persisted_reviews = list(
+            reloaded.terminal_reviews_dir(pid, "mission-001").glob("*.md")
+        )
+        assert len(persisted_reviews) == 1
+        persisted = persisted_reviews[0].read_text(encoding="utf-8")
+        assert "done: false" in persisted
+        assert "ACP adapter launch rejected: invalid_command" in persisted
+        assert "CANARY" not in persisted
+        assert not (
+            reloaded.mission_dir(pid, "mission-001") / "closeout.md"
+        ).exists()
+
+    @pytest.mark.parametrize(
+        "field",
+        ["argv0", "later_argv", "cwd", "env_key", "env_value", "path"],
+    )
+    @pytest.mark.parametrize("malformation", ["nul", "unencodable"])
+    def test_malformed_os_launch_string_is_recoverable_attention(
+        self,
+        config: HarnessConfig,
+        workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        malformation: str,
+    ) -> None:
+        malformed = "CANARY\0VALUE" if malformation == "nul" else "\ud800"
+        try:
+            os.fsencode(malformed)
+        except UnicodeError:
+            pass
+        else:
+            if malformation == "unencodable":
+                pytest.skip("host filesystem encoding accepts the unpaired surrogate")
+
+        command = sys.executable
+        if field == "argv0":
+            command = malformed
+        elif field == "later_argv":
+            command = f"{command} '{malformed}'"
+        rejected_config = replace(config, terminal_reviewer_acp_command=command)
+        reviewer = ACPTerminalReviewer(rejected_config)
+        actual_build_launch_plan = acp_runner_module.build_launch_plan
+
+        def malformed_build_launch_plan(command, *, cwd, environment):
+            copied_environment = dict(environment)
+            if field == "cwd":
+                cwd = malformed
+            elif field == "env_key":
+                copied_environment[malformed] = "value"
+            elif field == "env_value":
+                copied_environment["MALFORMED_VALUE"] = malformed
+            elif field == "path":
+                copied_environment["PATH"] = malformed
+            return actual_build_launch_plan(
+                command,
+                cwd=cwd,
+                environment=copied_environment,
+            )
+
+        async def forbidden_mcp(**kwargs):
+            raise AssertionError("reviewer MCP startup must not be reached")
+
+        async def forbidden_spawn(*args, **kwargs):
+            raise AssertionError("adapter spawn must not be reached")
+
+        class ForbiddenClient:
+            def __init__(self, *args, **kwargs) -> None:
+                raise AssertionError("ACPClient construction must not be reached")
+
+        monkeypatch.setattr(
+            reviewer.runner, "_start_terminal_reviewer_mcp", forbidden_mcp
+        )
+        monkeypatch.setattr(
+            "unrest_harness.acp_runner.build_launch_plan",
+            malformed_build_launch_plan,
+        )
+        monkeypatch.setattr("unrest_harness.acp_runner.spawn_launch", forbidden_spawn)
+        monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+        controller = ProjectController(
+            rejected_config,
+            MockDispatcher(_responder),
+            reviewer,
+        )
+        pid = _start_and_seed_contract(controller, workspace)
+        _advance_to_closure(controller, pid)
+
+        env = controller.end_mission(pid)
+
+        assert env.state.state == "attention_needed"
+        reloaded = ProjectStore(rejected_config)
+        items = reloaded.load_attention(pid)
+        assert len(items) == 1
+        assert items[0].kind == "terminal_review"
+        assert items[0].report == "ACP adapter launch rejected: invalid_command"
+        persisted_reviews = list(
+            reloaded.terminal_reviews_dir(pid, "mission-001").glob("*.md")
+        )
+        assert len(persisted_reviews) == 1
+        persisted = persisted_reviews[0].read_text(encoding="utf-8")
+        assert "done: false" in persisted
+        assert "ACP adapter launch rejected: invalid_command" in persisted
+        assert "CANARY" not in persisted
+        assert not (
+            reloaded.mission_dir(pid, "mission-001") / "closeout.md"
+        ).exists()
+
+    def test_preflight_rejection_persists_safe_recoverable_attention(
+        self,
+        config: HarnessConfig,
+        workspace: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        canary = "CANARY-terminal-command-path-env-secret-prompt-stderr-body"
+        rejected_config = replace(
+            config,
+            terminal_reviewer_acp_command=f"./{canary}",
+        )
+        monkeypatch.setenv("PATH", canary)
+        monkeypatch.setenv("OPENAI_API_KEY", canary)
+        reviewer = ACPTerminalReviewer(rejected_config)
+
+        async def forbidden_mcp(**kwargs):
+            raise AssertionError("reviewer MCP startup must not be reached")
+
+        class ForbiddenClient:
+            def __init__(self, *args, **kwargs) -> None:
+                raise AssertionError("ACPClient construction must not be reached")
+
+        monkeypatch.setattr(
+            reviewer.runner, "_start_terminal_reviewer_mcp", forbidden_mcp
+        )
+        monkeypatch.setattr("unrest_harness.acp_runner.ACPClient", ForbiddenClient)
+        controller = ProjectController(
+            rejected_config,
+            MockDispatcher(_responder),
+            reviewer,
+        )
+        pid = _start_and_seed_contract(controller, workspace)
+        _advance_to_closure(controller, pid)
+
+        env = controller.end_mission(pid)
+
+        assert env.state.state == "attention_needed"
+        reloaded = ProjectStore(rejected_config)
+        items = reloaded.load_attention(pid)
+        assert len(items) == 1
+        assert items[0].kind == "terminal_review"
+        assert items[0].report == "ACP adapter launch rejected: missing"
+        persisted_reviews = list(
+            reloaded.terminal_reviews_dir(pid, "mission-001").glob("*.md")
+        )
+        assert len(persisted_reviews) == 1
+        persisted = persisted_reviews[0].read_text(encoding="utf-8")
+        assert "done: false" in persisted
+        assert "ACP adapter launch rejected: missing" in persisted
+        assert canary not in persisted
+        assert not (
+            reloaded.mission_dir(pid, "mission-001") / "closeout.md"
+        ).exists()
+
     def test_production_timeout_handoff_is_persisted_and_does_not_seal(
         self,
         config: HarnessConfig,
