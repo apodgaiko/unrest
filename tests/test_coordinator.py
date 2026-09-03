@@ -23,6 +23,7 @@ from unrest_harness.dispatcher import (
     NodeHandoff,
 )
 from unrest_harness.models import (
+    AttentionNeeded,
     Decision,
     MissionRunning,
     Task,
@@ -180,6 +181,48 @@ def _reloaded_gate_result(
         reloaded.terminal_reviewer,
     )
     return coordinator._evaluate_gate(task_list, task_state, gate)
+
+
+def _frontier_identities(result: object) -> dict[str, list[str]]:
+    verdicts = result.validator_verdicts  # type: ignore[attr-defined]
+    targets = sorted({target for votes in verdicts.values() for target in votes})
+    return {
+        target: [node_id for node_id, votes in verdicts.items() if target in votes]
+        for target in targets
+    }
+
+
+def _file_manifest(root: Path) -> dict[str, str]:
+    return {
+        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _fresh_frontier_probe(
+    config: HarnessConfig,
+    project_id: str,
+    gate_id: str,
+) -> bytes:
+    script = (
+        Path(__file__).parent
+        / "fixtures"
+        / "evidence_frontier_v045"
+        / "replay.py"
+    )
+    return subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "gate",
+            str(config.harness_home),
+            project_id,
+            gate_id,
+        ],
+        check=True,
+        capture_output=True,
+    ).stdout
 
 
 def test_serial_dispatch_crash_is_bounded_and_redacted_in_reachable_sinks(
@@ -732,6 +775,32 @@ class TestCurrentEvidenceFrontier:
         assert actual == oracle
         assert result.cleared is cleared
 
+    def test_separate_persisted_independent_lanes_match_reloaded_oracle(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        tasks = [
+            _task("w", "work", ["VAL-001"]),
+            _task("north", "validate", ["VAL-001"], depends_on=["w"]),
+            _task("south", "validate", ["VAL-001"], depends_on=["w"]),
+            _task("g1", "gate", ["VAL-001"], depends_on=["north", "south"]),
+        ]
+        controller, project_id = self._run_graph(
+            config,
+            workspace,
+            tasks,
+            {
+                "north": [ValidationItem(item_id="VAL-001", passed=True)],
+                "south": [ValidationItem(item_id="VAL-001", passed=True)],
+            },
+        )
+
+        oracle = _independent_frontier_oracle(controller, project_id, "g1")
+        result = _reloaded_gate_result(controller, project_id)
+
+        assert oracle == {"VAL-001": ["north", "south"]}
+        assert _frontier_identities(result) == oracle
+        assert result.cleared is True
+
     def test_overlapping_targets_retire_only_overlap_and_ignore_unexpected_vote(
         self, config: HarnessConfig, workspace: Path
     ) -> None:
@@ -771,21 +840,142 @@ class TestCurrentEvidenceFrontier:
         }
         assert result.cleared is True
 
-    def test_missing_generation_and_omitted_item_fail_closed_as_current_matrix(
+    def test_patch_replacement_combines_overlap_history_and_incomparable_dissent(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        tasks = [
+            _task("w", "work", ["VAL-A", "VAL-B"]),
+            _task(
+                "old",
+                "validate",
+                ["VAL-A", "VAL-B"],
+                depends_on=["w"],
+            ),
+            _task("peer", "validate", ["VAL-A"], depends_on=["w"]),
+            _task("g1", "gate", ["VAL-A", "VAL-B"], depends_on=["old", "peer"]),
+        ]
+        items = {
+            "old": [
+                ValidationItem(item_id="VAL-A", passed=False),
+                ValidationItem(item_id="VAL-B", passed=True),
+            ],
+            "peer": [ValidationItem(item_id="VAL-A", passed=False)],
+            "repair": [ValidationItem(item_id="VAL-A", passed=True)],
+        }
+        controller, project_id = self._run_graph(
+            config,
+            workspace,
+            tasks,
+            items,
+            assertions=("VAL-A", "VAL-B"),
+        )
+        before_oracle = _independent_frontier_oracle(controller, project_id, "g1")
+        before_result = _reloaded_gate_result(controller, project_id)
+        old_attempt = controller.store.list_attempts(
+            project_id, "mission-001", node_id="old"
+        )[0]
+        old_report = controller.store.attempt_report_path(
+            project_id, "mission-001", old_attempt.spawn_ts, "old"
+        )
+        retained = {
+            old_attempt.path: old_attempt.path.read_bytes(),
+            old_report: old_report.read_bytes(),
+        }
+        attention = controller.store.load_attention(project_id)
+        assert attention[0].kind == "gate_failed"
+
+        controller.decide_attention(
+            project_id,
+            [
+                Decision(
+                    item_id=attention[0].id,
+                    action="patch",
+                    justification="replace only the old VAL-A lane",
+                    patch=TaskListPatch(
+                        add=[
+                            _task(
+                                "repair",
+                                "validate",
+                                ["VAL-A"],
+                                depends_on=["old"],
+                            ),
+                            _task(
+                                "g2",
+                                "gate",
+                                ["VAL-A", "VAL-B"],
+                                depends_on=["repair", "peer"],
+                            ),
+                        ],
+                        supersede={"g1": "g2"},
+                    ),
+                )
+            ],
+        )
+        controller.advance_project(project_id)
+        after_oracle = _independent_frontier_oracle(controller, project_id, "g2")
+        after_result = _reloaded_gate_result(controller, project_id, "g2")
+
+        assert before_oracle == {"VAL-A": ["old", "peer"], "VAL-B": ["old"]}
+        assert before_result.validator_verdicts == {
+            "old": {"VAL-A": False, "VAL-B": True},
+            "peer": {"VAL-A": False},
+        }
+        assert after_oracle == {
+            "VAL-A": ["peer", "repair"],
+            "VAL-B": ["old"],
+        }
+        assert _frontier_identities(after_result) == after_oracle
+        assert after_result.validator_verdicts == {
+            "old": {"VAL-B": True},
+            "peer": {"VAL-A": False},
+            "repair": {"VAL-A": True},
+        }
+        assert after_result.cleared is False
+        assert {path: path.read_bytes() for path in retained} == retained
+
+    def test_omitted_expected_item_fails_closed_in_isolation(
         self, config: HarnessConfig, workspace: Path
     ) -> None:
         tasks = [
             _task("w", "work", ["VAL-001"]),
-            _task("present", "validate", ["VAL-001"], depends_on=["w"]),
-            _task("missing", "validate", ["VAL-001"], depends_on=["w"]),
-            _task("g1", "gate", ["VAL-001"], depends_on=["present", "missing"]),
+            _task("complete", "validate", ["VAL-001"], depends_on=["w"]),
+            _task("omits", "validate", ["VAL-001"], depends_on=["w"]),
+            _task("g1", "gate", ["VAL-001"], depends_on=["complete", "omits"]),
         ]
         controller, project_id = self._run_graph(
             config,
             workspace,
             tasks,
             {
-                "present": [],
+                "complete": [ValidationItem(item_id="VAL-001", passed=True)],
+                "omits": [],
+            },
+        )
+
+        result = _reloaded_gate_result(controller, project_id)
+
+        assert result.cleared is False
+        assert result.validator_verdicts == {
+            "complete": {"VAL-001": True},
+            "omits": {"VAL-001": False},
+        }
+        assert result.missing_items == {"omits": ["VAL-001"]}
+
+    def test_missing_generation_fails_closed_in_isolation(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        tasks = [
+            _task("w", "work", ["VAL-001"]),
+            _task("complete", "validate", ["VAL-001"], depends_on=["w"]),
+            _task("missing", "validate", ["VAL-001"], depends_on=["w"]),
+            _task("g1", "gate", ["VAL-001"], depends_on=["complete", "missing"]),
+        ]
+        controller, project_id = self._run_graph(
+            config,
+            workspace,
+            tasks,
+            {
+                "complete": [ValidationItem(item_id="VAL-001", passed=True)],
                 "missing": [ValidationItem(item_id="VAL-001", passed=True)],
             },
         )
@@ -797,13 +987,10 @@ class TestCurrentEvidenceFrontier:
 
         assert result.cleared is False
         assert result.validator_verdicts == {
-            "present": {"VAL-001": False},
+            "complete": {"VAL-001": True},
             "missing": {"VAL-001": False},
         }
-        assert result.missing_items == {
-            "present": ["VAL-001"],
-            "missing": ["VAL-001"],
-        }
+        assert result.missing_items == {"missing": ["VAL-001"]}
 
     def test_frontier_reconstructs_byte_identically_in_fresh_interpreters(
         self, config: HarnessConfig, workspace: Path
@@ -914,6 +1101,91 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
         assert result.cleared is True
         assert result.validator_verdicts == {"validator": {"VAL-001": True}}
 
+    def test_multiple_validator_generations_ignore_lexical_and_mtime_cues(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        tasks = [
+            _task("w", "work", ["VAL-001"]),
+            _task("alpha", "validate", ["VAL-001"], depends_on=["w"]),
+            _task("beta", "validate", ["VAL-001"], depends_on=["w"]),
+            _task("g1", "gate", ["VAL-001"], depends_on=["alpha", "beta"]),
+        ]
+        controller, project_id = self._run_graph(
+            config,
+            workspace,
+            tasks,
+            {
+                "alpha": [ValidationItem(item_id="VAL-001", passed=True)],
+                "beta": [ValidationItem(item_id="VAL-001", passed=True)],
+            },
+        )
+        store = controller.store
+        state = store.load_task_state(project_id, "mission-001")
+        selected = {
+            validator: state.tasks[validator].last_attempt
+            for validator in ("alpha", "beta")
+        }
+        assert all(selected.values())
+        for index, validator in enumerate(("alpha", "beta")):
+            misleading = f"999{index}-12-31T23-59-59Z"
+            store.save_attempt(
+                project_id,
+                "mission-001",
+                misleading,
+                validator,
+                ValidateHandoff(
+                    node_id=validator,
+                    done=True,
+                    report=f"misleading-{validator}",
+                    items=[ValidationItem(item_id="VAL-001", passed=False)],
+                    passed=False,
+                ),
+            )
+            selected_path = store.attempt_path(
+                project_id,
+                "mission-001",
+                str(selected[validator]),
+                validator,
+            )
+            misleading_path = store.attempt_path(
+                project_id, "mission-001", misleading, validator
+            )
+            os.utime(selected_path, (2_000_000_000 - index, 2_000_000_000 - index))
+            os.utime(misleading_path, (1 + index, 1 + index))
+
+        chosen = _reloaded_gate_result(controller, project_id)
+        assert _independent_frontier_oracle(controller, project_id, "g1") == {
+            "VAL-001": ["alpha", "beta"]
+        }
+        assert chosen.cleared is True
+        assert chosen.validator_verdicts == {
+            "alpha": {"VAL-001": True},
+            "beta": {"VAL-001": True},
+        }
+        assert {
+            validator: Path(chosen.attempt_paths[validator]).name.split("__", 1)[0]
+            for validator in ("alpha", "beta")
+        } == selected
+
+        alpha_path = store.attempt_path(
+            project_id, "mission-001", str(selected["alpha"]), "alpha"
+        )
+        original = alpha_path.read_bytes()
+        payload = json.loads(original)
+        payload["node_id"] = "beta"
+        alpha_path.write_text(json.dumps(payload))
+        cross_task = _reloaded_gate_result(controller, project_id)
+        assert cross_task.cleared is False
+        assert "attempt node_id does not match running task" in (cross_task.reason or "")
+
+        payload = json.loads(original)
+        payload["attempt_id"] = "1900-01-01T00-00-00Z"
+        alpha_path.write_text(json.dumps(payload))
+        stale = _reloaded_gate_result(controller, project_id)
+        assert stale.cleared is False
+        assert "attempt_id does not match running generation" in (stale.reason or "")
+        alpha_path.write_bytes(original)
+
     def test_uncovered_target_fails_closed(
         self, config: HarnessConfig, workspace: Path
     ) -> None:
@@ -935,8 +1207,9 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
         assert result.failed_items == ["VAL-B"]
         assert result.reason == "no validator covered item(s): VAL-B"
 
-    def test_large_current_matrix_has_bounded_body_free_attention(
-        self, config: HarnessConfig, workspace: Path
+    @pytest.mark.parametrize("cleared", (True, False), ids=("cleared", "failed"))
+    def test_large_current_matrix_has_bounded_public_and_persisted_attention(
+        self, config: HarnessConfig, workspace: Path, cleared: bool
     ) -> None:
         validator_ids = [f"validator-{index:03d}" for index in range(96)]
         tasks = [_task("w", "work", ["VAL-001"])]
@@ -947,7 +1220,12 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
         tasks.append(_task("g1", "gate", ["VAL-001"], depends_on=validator_ids))
         private_canary = "/private/validator/report-canary-never-public"
         items = {
-            validator: [ValidationItem(item_id="VAL-001", passed=True)]
+            validator: [
+                ValidationItem(
+                    item_id="VAL-001",
+                    passed=cleared or validator != validator_ids[-1],
+                )
+            ]
             for validator in validator_ids
         }
 
@@ -955,17 +1233,85 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
             config, workspace, tasks, items
         )
         attention = controller.store.load_attention(project_id)
-        persisted = (
-            controller.store.unrest_runtime_dir(project_id) / "attention.json"
-        ).read_text()
+        envelope = controller.inspect_project(project_id)
+        assert isinstance(envelope.state, AttentionNeeded)
+        sinks = {
+            "public_envelope": json.dumps(envelope.model_dump(mode="json")),
+            "attention": (
+                controller.store.unrest_runtime_dir(project_id) / "attention.json"
+            ).read_text(),
+            "state": (
+                controller.store.unrest_runtime_dir(project_id) / "state.json"
+            ).read_text(),
+        }
         result = _reloaded_gate_result(controller, project_id)
 
         assert len(result.validator_verdicts) == len(validator_ids)
+        assert result.cleared is cleared
         assert len(attention) == 1
+        persisted_lengths = [len(item.report.encode("utf-8")) for item in attention]
+        public_lengths = [
+            len(item.report.encode("utf-8")) for item in envelope.state.items
+        ]
+        assert max(persisted_lengths) < 4096
+        assert max(public_lengths) < 4096
+        assert all(len(text.encode("utf-8")) > 0 for text in sinks.values())
+        for text in sinks.values():
+            assert private_canary not in text
+            assert "private-report-canary" not in text
+
+    def test_pending_malformed_evidence_bounds_all_public_sinks(
+        self, config: HarnessConfig, workspace: Path
+    ) -> None:
+        canary = "LONG-REPORT-CANARY-" + "x" * 6000 + " /private/secret/path"
+
+        def responder(request: DispatchRequest) -> NodeHandoff:
+            if request.task.type == "work":
+                return WorkHandoff(node_id=request.task.id, done=True, report="work")
+            return ValidateHandoff(
+                node_id=request.task.id,
+                done=True,
+                report=canary,
+                items=[ValidationItem(item_id="VAL-001", passed=True)],
+                passed=True,
+            )
+
+        controller = ProjectController(
+            config,
+            MockDispatcher(responder),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        project_id = _seed_project(controller, workspace)
+        controller.submit_plan(project_id, _simple_tl())
+        controller.advance_project(project_id, max_steps=2)
+        state = controller.store.load_task_state(project_id, "mission-001")
+        generation = state.tasks["v1"].last_attempt
+        assert generation is not None
+        assert state.status_of("g1") == "pending"
+        attempt = controller.store.attempt_path(
+            project_id, "mission-001", generation, "v1"
+        )
+        attempt.write_text('{"report":"' + canary)
+
+        envelope = controller.advance_project(project_id)
+        assert isinstance(envelope.state, AttentionNeeded)
+        attention = controller.store.load_attention(project_id)
+        sinks = (
+            json.dumps(envelope.model_dump(mode="json")),
+            (controller.store.unrest_runtime_dir(project_id) / "attention.json").read_text(),
+            (controller.store.unrest_runtime_dir(project_id) / "state.json").read_text(),
+            (
+                controller.store.mission_runtime_dir(project_id, "mission-001")
+                / "task-state.json"
+            ).read_text(),
+        )
+        assert attention[0].kind == "gate_failed"
         assert len(attention[0].report.encode("utf-8")) < 4096
-        assert private_canary not in attention[0].report
-        assert "private-report-canary" not in attention[0].report
-        assert "private-report-canary" not in persisted
+        assert all(
+            len(item.report.encode("utf-8")) < 4096 for item in envelope.state.items
+        )
+        assert all("LONG-REPORT-CANARY" not in text for text in sinks)
+        assert all("/private/secret/path" not in text for text in sinks)
 
     def test_invalid_cycle_rejects_before_persistence_and_cleared_gate_stays_sealed(
         self, config: HarnessConfig, workspace: Path
@@ -973,7 +1319,9 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
         controller = ProjectController(
             config,
             MockDispatcher(
-                lambda request: WorkHandoff(node_id=request.task.id, done=True)
+                lambda request: WorkHandoff(
+                    node_id=request.task.id, done=True, report=""
+                )
             ),
             MockTerminalReviewer(TerminalReviewHandoff(done=True)),
         )
@@ -994,6 +1342,29 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
         assert cycle_error.value.code == "invalid_task_list"
         assert "cycle_detected" in str(cycle_error.value.details)
         assert state_path.read_bytes() == state_before
+        with pytest.raises(ToolError) as missing_error:
+            controller.submit_plan(
+                project_id,
+                TaskList(
+                    tasks=[
+                        _task("w", "work", ["VAL-001"]),
+                        _task(
+                            "v",
+                            "validate",
+                            ["VAL-001"],
+                            depends_on=["absent"],
+                        ),
+                        _task("g1", "gate", ["VAL-001"], depends_on=["v"]),
+                    ]
+                ),
+            )
+        assert missing_error.value.code == "invalid_task_list"
+        assert "dep_unknown_task" in str(missing_error.value.details)
+        assert state_path.read_bytes() == state_before
+        assert not (
+            controller.store.mission_runtime_dir(project_id, "mission-001")
+            / "tasks.json"
+        ).exists()
 
         controller = ProjectController(
             config,
@@ -1026,8 +1397,21 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
             controller.store.mission_runtime_dir(project_id, "mission-001")
             / "task-state.json",
             controller.store.unrest_runtime_dir(project_id) / "attention.json",
+            controller.store.unrest_runtime_dir(project_id) / "state.json",
         ]
-        before = {str(path): path.read_bytes() for path in protected_paths}
+        attempt_history = [
+            path
+            for record in controller.store.list_attempts(project_id, "mission-001")
+            for path in (
+                record.path,
+                controller.store.attempt_report_path(
+                    project_id, "mission-001", record.spawn_ts, record.node_id
+                ),
+            )
+        ]
+        before = {
+            str(path): path.read_bytes() for path in protected_paths + attempt_history
+        }
 
         with pytest.raises(ToolError) as sealed_error:
             controller.decide_attention(
@@ -1051,7 +1435,36 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
                 ],
             )
         assert sealed_error.value.code == "invalid_patch"
-        assert before == {str(path): path.read_bytes() for path in protected_paths}
+        assert before == {
+            str(path): path.read_bytes() for path in protected_paths + attempt_history
+        }
+
+        replay_script = (
+            Path(__file__).parent
+            / "fixtures"
+            / "evidence_frontier_v045"
+            / "replay.py"
+        )
+        fresh = subprocess.run(
+            [
+                sys.executable,
+                str(replay_script),
+                "sealed-patch",
+                str(config.harness_home),
+                project_id,
+            ],
+            check=True,
+            capture_output=True,
+        )
+        fresh_result = json.loads(fresh.stdout)
+        assert fresh_result["accepted"] is False
+        assert fresh_result["code"] == "invalid_patch"
+        ProjectController(
+            config, controller.dispatcher, controller.terminal_reviewer
+        ).inspect_project(project_id)
+        assert before == {
+            str(path): path.read_bytes() for path in protected_paths + attempt_history
+        }
 
     @pytest.mark.parametrize("retire_operation", ("supersede", "cancel"))
     def test_normal_patch_retirement_excludes_residually_reachable_validator(
@@ -1068,7 +1481,7 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
                     report="replace this work",
                 )
             if request.task.type == "work":
-                return WorkHandoff(node_id=request.task.id, done=True)
+                return WorkHandoff(node_id=request.task.id, done=True, report="work")
             return ValidateHandoff(
                 node_id=request.task.id,
                 done=True,
@@ -1256,6 +1669,356 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
         assert attention[0].kind == "gate_checkpoint"
         assert "attempt-body-canary-old" not in persisted_attention
         assert "attempt-body-canary-new" not in persisted_attention
+
+    @pytest.mark.parametrize("operation", ("supersede", "cancel"))
+    def test_retirement_history_and_fresh_replay_are_closed_and_exact(
+        self,
+        config: HarnessConfig,
+        workspace: Path,
+        operation: str,
+    ) -> None:
+        reports = {
+            "old": "FAILED-BODY-CANARY /private/old/report",
+            "keep": "SUCCESS-BODY-CANARY /private/keep/report",
+            "new": "NEW-BODY-CANARY /private/new/report",
+        }
+
+        def responder(request: DispatchRequest) -> NodeHandoff:
+            if request.task.id == "work-old":
+                return WorkHandoff(
+                    node_id=request.task.id,
+                    done=False,
+                    report="replace this work",
+                )
+            if request.task.type == "work":
+                return WorkHandoff(node_id=request.task.id, done=True, report="work")
+            return ValidateHandoff(
+                node_id=request.task.id,
+                done=True,
+                report=reports[request.task.id],
+                items=[ValidationItem(item_id="VAL-001", passed=True)],
+                passed=True,
+            )
+
+        controller = ProjectController(
+            config,
+            MockDispatcher(responder),
+            MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+        )
+        project_id = _seed_project(controller, workspace)
+        initial_tasks = [
+            _task("work-old", "work", ["VAL-001"]),
+            _task(
+                "old", "validate", ["VAL-001"], depends_on=["work-old"]
+            ),
+            _task(
+                "keep", "validate", ["VAL-001"], depends_on=["work-old"]
+            ),
+            _task("g1", "gate", ["VAL-001"], depends_on=["old", "keep"]),
+        ]
+        controller.submit_plan(project_id, TaskList(tasks=initial_tasks))
+        controller.advance_project(project_id)
+        attention = controller.store.load_attention(project_id)
+        assert attention[0].kind == "node_failed"
+
+        store = controller.store
+        mission_id = "mission-001"
+        valid_generation = "2001-01-01T00-00-00Z"
+        invalid_generation = "2000-01-01T00-00-00Z"
+        store.save_attempt(
+            project_id,
+            mission_id,
+            valid_generation,
+            "old",
+            ValidateHandoff(
+                node_id="old",
+                done=True,
+                report=reports["old"],
+                items=[ValidationItem(item_id="VAL-001", passed=False)],
+                passed=False,
+            ),
+        )
+        before_state = store.load_task_state(project_id, mission_id)
+        work_old_generation = before_state.tasks["work-old"].last_attempt
+        before_state.set_last_attempt("old", valid_generation)
+        store.save_task_state(project_id, mission_id, before_state)
+        store.save_attempt(
+            project_id,
+            mission_id,
+            invalid_generation,
+            "old",
+            ValidateHandoff(
+                node_id="old",
+                done=True,
+                report="INVALID-BODY-CANARY /private/invalid/report",
+                items=[ValidationItem(item_id="VAL-001", passed=True)],
+                passed=True,
+            ),
+        )
+        invalid_json = store.attempt_path(
+            project_id, mission_id, invalid_generation, "old"
+        )
+        invalid_payload = json.loads(invalid_json.read_text())
+        invalid_payload["attempt_id"] = "1999-01-01T00-00-00Z"
+        invalid_json.write_text(json.dumps(invalid_payload))
+
+        regression = store.regression_path(project_id, mission_id, "VAL-001")
+        regression.parent.mkdir(parents=True, exist_ok=True)
+        regression.write_text("# Regression ledger\n\n## Existing\nREGRESSION-CANARY\n")
+        decision = store.append_decision_record(
+            project_id,
+            [Decision(item_id="history-control", action="continue")],
+            [],
+            summary="pre-existing decision",
+        )
+        valid_json = store.attempt_path(
+            project_id, mission_id, valid_generation, "old"
+        )
+        valid_markdown = store.attempt_report_path(
+            project_id, mission_id, valid_generation, "old"
+        )
+        invalid_markdown = store.attempt_report_path(
+            project_id, mission_id, invalid_generation, "old"
+        )
+        closed_paths = (
+            valid_json,
+            valid_markdown,
+            invalid_json,
+            invalid_markdown,
+            decision,
+            regression,
+        )
+        root = store.bucket_root(project_id)
+        closed_manifest = {
+            str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in closed_paths
+        }
+
+        assert [
+            (record.spawn_ts, record.node_id)
+            for record in store.list_attempts(project_id, mission_id, node_id="old")
+        ] == [(invalid_generation, "old"), (valid_generation, "old")]
+        assert store.read_attempt(
+            project_id, mission_id, valid_generation, "old"
+        ) == ValidateHandoff(
+            node_id="old",
+            attempt_id=valid_generation,
+            done=True,
+            report=reports["old"],
+            items=[ValidationItem(item_id="VAL-001", passed=False)],
+            passed=False,
+        )
+        with pytest.raises(ValueError, match="running generation"):
+            store.read_attempt(project_id, mission_id, invalid_generation, "old")
+        assert valid_markdown.read_text().startswith("---\nnode_id: old\n")
+        assert invalid_markdown.read_text().startswith("---\nnode_id: old\n")
+        assert decision in sorted(store.decisions_dir(project_id).glob("*.md"))
+        assert store.next_decision_number(project_id) == 2
+        assert store.regression_entry_count(project_id, mission_id, "VAL-001") == 1
+        assert regression == store.regression_path(project_id, mission_id, "VAL-001")
+
+        before_tasks = store.load_task_list(project_id, mission_id)
+        before_state = store.load_task_state(project_id, mission_id)
+        assert before_tasks == TaskList(tasks=initial_tasks)
+        assert before_state.model_dump(mode="json") == {
+            "tasks": {
+                "work-old": {"status": "failed", "last_attempt": work_old_generation},
+                "old": {"status": "pending", "last_attempt": valid_generation},
+                "keep": {"status": "pending", "last_attempt": None},
+                "g1": {"status": "pending", "last_attempt": None},
+            }
+        }
+        before_all = _file_manifest(root)
+
+        additions = [_task("work-new", "work", ["VAL-001"])]
+        supersede = {"work-old": "work-new"}
+        cancel: list[str] = []
+        if operation == "supersede":
+            additions.append(
+                _task("new", "validate", ["VAL-001"], depends_on=["work-new"])
+            )
+            supersede["old"] = "new"
+        else:
+            cancel = ["old"]
+        controller.decide_attention(
+            project_id,
+            [
+                Decision(
+                    item_id=attention[0].id,
+                    action="patch",
+                    justification=f"normal {operation} repair",
+                    patch=TaskListPatch(
+                        add=additions,
+                        supersede=supersede,
+                        cancel=cancel,
+                    ),
+                )
+            ],
+        )
+        controller.advance_project(project_id)
+
+        after_tasks = store.load_task_list(project_id, mission_id)
+        after_state = store.load_task_state(project_id, mission_id)
+        expected_tasks = [
+            _task("work-old", "work", ["VAL-001"]),
+            _task("old", "validate", ["VAL-001"], depends_on=["work-new"]),
+            _task("keep", "validate", ["VAL-001"], depends_on=["work-new"]),
+            _task(
+                "g1",
+                "gate",
+                ["VAL-001"],
+                depends_on=(["new", "keep"] if operation == "supersede" else ["keep"]),
+            ),
+            _task("work-new", "work", ["VAL-001"]),
+        ]
+        if operation == "supersede":
+            expected_tasks.append(
+                _task("new", "validate", ["VAL-001"], depends_on=["work-new"])
+            )
+        assert after_tasks == TaskList(tasks=expected_tasks)
+        assert after_state.status_of("work-old") == "superseded"
+        assert after_state.status_of("old") == "superseded"
+        assert after_state.status_of("work-new") == "cleared"
+        assert after_state.status_of("keep") == "cleared"
+        assert after_state.status_of("g1") == "cleared"
+        work_new_generation = after_state.tasks["work-new"].last_attempt
+        keep_generation = after_state.tasks["keep"].last_attempt
+        assert work_new_generation is not None
+        assert keep_generation is not None
+        if operation == "supersede":
+            assert after_state.status_of("new") == "cleared"
+        expected_after_state = {
+            "tasks": {
+                "work-old": {
+                    "status": "superseded",
+                    "last_attempt": work_old_generation,
+                },
+                "old": {
+                    "status": "superseded",
+                    "last_attempt": valid_generation,
+                },
+                "keep": {"status": "cleared", "last_attempt": keep_generation},
+                "g1": {"status": "cleared", "last_attempt": None},
+                "work-new": {
+                    "status": "cleared",
+                    "last_attempt": work_new_generation,
+                },
+            }
+        }
+        if operation == "supersede":
+            new_generation = after_state.tasks["new"].last_attempt
+            assert new_generation is not None
+            expected_after_state["tasks"]["new"] = {
+                "status": "cleared",
+                "last_attempt": new_generation,
+            }
+        assert after_state.model_dump(mode="json") == expected_after_state
+
+        active_validator = "new" if operation == "supersede" else "keep"
+        store.save_attempt(
+            project_id,
+            mission_id,
+            "9999-12-31T23-59-59Z",
+            active_validator,
+            ValidateHandoff(
+                node_id=active_validator,
+                done=True,
+                report="misleading restart generation",
+                items=[ValidationItem(item_id="VAL-001", passed=False)],
+                passed=False,
+            ),
+        )
+        assert {
+            str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in closed_paths
+        } == closed_manifest
+
+        gate = next(task for task in after_tasks.tasks if task.id == "g1")
+        exact_rewrite = list(gate.depends_on)
+        gate.depends_on.append("old")
+        store.save_task_list(project_id, mission_id, after_tasks)
+        result = _reloaded_gate_result(controller, project_id)
+        oracle = _independent_frontier_oracle(controller, project_id, "g1")
+        expected_frontier = (
+            {"VAL-001": ["keep", "new"]}
+            if operation == "supersede"
+            else {"VAL-001": ["keep"]}
+        )
+        assert exact_rewrite == (
+            ["new", "keep"] if operation == "supersede" else ["keep"]
+        )
+        assert oracle == expected_frontier
+        assert _frontier_identities(result) == oracle
+        assert "old" not in result.validator_verdicts
+        assert result.cleared is True
+
+        successful_generation = after_state.tasks["keep"].last_attempt
+        assert successful_generation is not None
+        successful = store.read_attempt(
+            project_id, mission_id, successful_generation, "keep"
+        )
+        assert successful is not None and successful.report == reports["keep"]
+
+        after_all = _file_manifest(root)
+        active_mutation_allowlist = {
+            ".unrest-runtime/attention.json",
+            ".unrest-runtime/state.json",
+            f".unrest-runtime/missions/{mission_id}/tasks.json",
+            f".unrest-runtime/missions/{mission_id}/task-state.json",
+            f".unrest-runtime/missions/{mission_id}/contract-state.json",
+        }
+        active_mutation_allowlist.update(
+            relative
+            for relative in after_all
+            if relative.startswith(f".unrest-runtime/missions/{mission_id}/attempts/")
+            or relative.startswith(f".unrest/missions/{mission_id}/attempts/")
+            or relative.startswith(".unrest/decisions/")
+        )
+        changed_paths = {
+            path
+            for path in set(before_all) | set(after_all)
+            if before_all.get(path) != after_all.get(path)
+        }
+        assert changed_paths <= active_mutation_allowlist
+        assert not changed_paths & set(closed_manifest)
+
+        public_sinks = (
+            json.dumps(controller.inspect_project(project_id).model_dump(mode="json")),
+            (store.unrest_runtime_dir(project_id) / "attention.json").read_text(),
+            (store.unrest_runtime_dir(project_id) / "state.json").read_text(),
+        )
+        for canary in (
+            "FAILED-BODY-CANARY",
+            "SUCCESS-BODY-CANARY",
+            "INVALID-BODY-CANARY",
+            "/private/old/report",
+            "/private/keep/report",
+            "/private/invalid/report",
+        ):
+            assert all(canary not in sink for sink in public_sinks)
+
+        before_replay = _file_manifest(root)
+        first = _fresh_frontier_probe(config, project_id, "g1")
+        second = _fresh_frontier_probe(config, project_id, "g1")
+        replay = json.loads(first)
+        assert first == second
+        assert replay["oracle"] == expected_frontier
+        assert {
+            target: [
+                node_id
+                for node_id, votes in replay["matrix"].items()
+                if target in votes
+            ]
+            for target in replay["oracle"]
+        } == replay["oracle"]
+        assert replay["cleared"] is True
+        assert replay["statuses"]["old"] == "superseded"
+        assert _file_manifest(root) == before_replay
+        assert set(_file_manifest(root)) - set(before_replay) == set()
+        assert {
+            str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in closed_paths
+        } == closed_manifest
 
 
 class TestSubmitPlanValidation:
@@ -1544,7 +2307,9 @@ class TestAbortProject:
     ) -> None:
         controller = ProjectController(
             config,
-            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockDispatcher(
+                lambda r: WorkHandoff(node_id=r.task.id, done=True, report="")
+            ),
             MockTerminalReviewer(TerminalReviewHandoff(done=True)),
         )
         pid = _seed_project(controller, workspace)
@@ -1571,7 +2336,9 @@ class TestAbortProject:
     ) -> None:
         controller = ProjectController(
             config,
-            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockDispatcher(
+                lambda r: WorkHandoff(node_id=r.task.id, done=True, report="")
+            ),
             MockTerminalReviewer(TerminalReviewHandoff(done=True)),
         )
         pid = _seed_project(controller, workspace)
@@ -1593,7 +2360,9 @@ class TestAbortProject:
     ) -> None:
         controller = ProjectController(
             config,
-            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockDispatcher(
+                lambda r: WorkHandoff(node_id=r.task.id, done=True, report="")
+            ),
             MockTerminalReviewer(TerminalReviewHandoff(done=True)),
         )
         pid = _seed_project(controller, workspace)
@@ -1651,7 +2420,9 @@ class TestResume:
     ) -> None:
         controller = ProjectController(
             config,
-            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockDispatcher(
+                lambda r: WorkHandoff(node_id=r.task.id, done=True, report="")
+            ),
             MockTerminalReviewer(TerminalReviewHandoff(done=True)),
         )
         pid = _seed_project(controller, workspace)
@@ -1741,7 +2512,9 @@ class TestResume:
     ) -> None:
         controller = ProjectController(
             config,
-            MockDispatcher(lambda r: WorkHandoff(node_id=r.task.id, done=True)),
+            MockDispatcher(
+                lambda r: WorkHandoff(node_id=r.task.id, done=True, report="")
+            ),
             MockTerminalReviewer(TerminalReviewHandoff(done=True)),
         )
         pid = _seed_project(controller, workspace)
