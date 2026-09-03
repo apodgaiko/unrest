@@ -2,9 +2,20 @@
 from __future__ import annotations
 
 
-from unrest_harness.envelope import make_envelope, render_task_list
+import hashlib
+
+import pytest
+
+from unrest_harness.envelope import make_envelope, project_next_action, render_task_list
 from unrest_harness.models import (
+    Aborted,
+    AttentionItem,
+    AttentionNeeded,
+    Done,
     Draft,
+    Failed,
+    MissionPlanning,
+    MissionRunning,
     Task,
     TaskList,
     TaskStateFile,
@@ -97,9 +108,14 @@ class TestRenderTaskList:
             "projectRoot",
             "harnessRoot",
             "dag",
+            "frontier",
+            "next_action",
+            "supersession_lineage",
+            "active_attempts",
         }
         assert dumped["projectId"] == "proj-1"
         assert dumped["harnessRoot"] == "/home/u/.unrest/projects/proj-1"
+        assert dumped["active_attempts"] == []
 
     def test_envelope_can_omit_dag(self) -> None:
         tl, ts = _build_pipeline(2)
@@ -113,6 +129,7 @@ class TestRenderTaskList:
             dag_mode="none",
         )
         assert env.dag is None
+        assert env.frontier is not None
 
     def test_ceiling_100_nodes_under_64kib(self) -> None:
         tl, ts = _build_pipeline(100)
@@ -120,3 +137,105 @@ class TestRenderTaskList:
         assert rendered is not None
         assert "more frontier tasks omitted" in rendered
         assert len(rendered.encode("utf-8")) < 64 * 1024
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    (
+        (Draft(), "abort_project"),
+        (MissionPlanning(mission_id="mission-001"), "submit_plan"),
+        (
+            AttentionNeeded(
+                items=[
+                    AttentionItem(
+                        id="a",
+                        report="gate failed; inspect authorized private gate evidence before deciding",
+                        kind="gate_failed",
+                        mission_id="mission-001",
+                        node_id="gate",
+                        attempt_id=None,
+                        terminal_review_id=None,
+                    )
+                ]
+            ),
+            "decide_attention",
+        ),
+        (Done(), "none"),
+        (Failed(reason="failed"), "none"),
+        (Aborted(reason="aborted"), "none"),
+    ),
+)
+def test_next_action_closed_state_rows(state: object, expected: str) -> None:
+    assert project_next_action(state, None, None) == expected  # type: ignore[arg-type]
+
+
+def test_next_action_mission_running_preconditions() -> None:
+    tl, ts = _build_pipeline(1)
+    assert project_next_action(MissionRunning(mission_id="mission-001"), tl, ts) == (
+        "advance_project"
+    )
+    for task in tl.tasks:
+        ts.set_status(task.id, "cleared")
+    assert project_next_action(MissionRunning(mission_id="mission-001"), tl, ts) == (
+        "end_mission"
+    )
+    assert project_next_action(
+        MissionRunning(mission_id="mission-001"), tl, None
+    ) == "advance_project"
+
+
+def test_full_dag_and_bounded_frontier_coexist() -> None:
+    tl, ts = _build_pipeline(20)
+    envelope = make_envelope(
+        "project",
+        MissionRunning(mission_id="mission-001"),
+        "/project",
+        "/harness",
+        tl,
+        ts,
+        dag_mode="full",
+    )
+
+    assert envelope.dag is not None
+    assert all(task.id in envelope.dag for task in tl.tasks)
+    assert envelope.frontier is not None
+    assert "more frontier tasks omitted" in envelope.frontier
+    assert len(envelope.frontier) < len(envelope.dag)
+
+
+def test_envelope_bytes_ignore_unordered_state_map_construction() -> None:
+    tl, first = _build_pipeline(3)
+    second = TaskStateFile()
+    for task_id in reversed([task.id for task in tl.tasks]):
+        second.set_status(task_id, first.status_of(task_id))
+
+    one = make_envelope(
+        "project",
+        MissionRunning(mission_id="mission-001"),
+        "/project",
+        "/harness",
+        tl,
+        first,
+        dag_mode="full",
+    ).model_dump_json()
+    two = make_envelope(
+        "project",
+        MissionRunning(mission_id="mission-001"),
+        "/project",
+        "/harness",
+        tl,
+        second,
+        dag_mode="full",
+    ).model_dump_json()
+
+    assert hashlib.sha256(one.encode()).digest() == hashlib.sha256(two.encode()).digest()
+
+
+def test_authored_task_order_remains_visible() -> None:
+    first = Task(id="z-first", type="work", body="b", targets=["X-1"], skill="s")
+    second = Task(id="a-second", type="work", body="b", targets=["X-2"], skill="s")
+    tl = TaskList(tasks=[first, second])
+    rendered = render_task_list(tl, TaskStateFile(), mode="full")
+
+    assert rendered is not None
+    assert rendered.index("z-first") < rendered.index("a-second")

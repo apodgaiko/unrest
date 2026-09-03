@@ -10,9 +10,19 @@ from collections import Counter
 from typing import Iterable, Literal, Mapping
 
 from .models import (
+    Aborted,
     AttentionItem,
+    AttentionNeeded,
+    Done,
+    Draft,
     Envelope,
+    Failed,
+    MissionPlanning,
+    MissionRunning,
+    NextAction,
     ProjectState,
+    LineageIdentity,
+    SupersessionLineageEntry,
     Task,
     TaskList,
     TaskStateFile,
@@ -348,6 +358,7 @@ def make_envelope(
     task_state: TaskStateFile | None = None,
     *,
     dag_mode: EnvelopeDagMode = "summary",
+    supersession_lineage: list[SupersessionLineageEntry] | None = None,
 ) -> Envelope:
     return Envelope(
         projectId=project_id,
@@ -359,12 +370,104 @@ def make_envelope(
             if dag_mode == "none"
             else render_task_list(task_list, task_state, mode=dag_mode)
         ),
+        frontier=render_task_list(task_list, task_state, mode="frontier"),
+        next_action=project_next_action(state, task_list, task_state),
+        supersession_lineage=supersession_lineage or [],
     )
 
 
+def project_next_action(
+    state: ProjectState,
+    task_list: TaskList | None,
+    task_state: TaskStateFile | None,
+) -> NextAction:
+    """Return the sole legal read-only lifecycle advice for current truth."""
+    if isinstance(state, Draft):
+        return "abort_project"
+    if isinstance(state, MissionPlanning):
+        return "submit_plan"
+    if isinstance(state, AttentionNeeded):
+        return "decide_attention"
+    if isinstance(state, MissionRunning):
+        if task_list is not None and task_state is not None and all(
+            task_state.status_of(task.id) in {"cleared", "failed"}
+            for task in task_list.tasks
+            if task_state.status_of(task.id) != "superseded"
+        ):
+            return "end_mission"
+        return "advance_project"
+    if isinstance(state, (Done, Failed, Aborted)):
+        return "none"
+    raise AssertionError("unsupported project state")
+
+
+def project_supersession_lineage(
+    mission_id: str,
+    task_list: TaskList | None,
+    task_state: TaskStateFile | None,
+    edges: list[dict[str, dict[str, str]]],
+) -> list[SupersessionLineageEntry]:
+    """Group accepted edges beneath active current tasks in authored order."""
+    if task_list is None:
+        return []
+    predecessors: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for edge in edges:
+        new = edge["new"]
+        old = edge["old"]
+        new_key = (new["mission_id"], new["node_id"])
+        old_key = (old["mission_id"], old["node_id"])
+        predecessors.setdefault(new_key, []).append(old_key)
+
+    result: list[SupersessionLineageEntry] = []
+    for task in task_list.tasks:
+        if task_state is not None and task_state.status_of(task.id) == "superseded":
+            continue
+        current = (mission_id, task.id)
+        ancestors: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+
+        pending = list(predecessors.get(current, []))
+        while pending:
+            predecessor = pending.pop(0)
+            if predecessor in seen:
+                continue
+            seen.add(predecessor)
+            ancestors.append(predecessor)
+            pending.extend(predecessors.get(predecessor, []))
+        if ancestors:
+            result.append(
+                SupersessionLineageEntry(
+                    current=LineageIdentity(mission_id=current[0], node_id=current[1]),
+                    superseded=[
+                        LineageIdentity(mission_id=ancestor[0], node_id=ancestor[1])
+                        for ancestor in ancestors
+                    ],
+                )
+            )
+    return result
+
+
 def public_attention_items(items: Iterable["AttentionItemInternal"]) -> list[AttentionItem]:
-    """Strip runtime metadata; public attention is only id + raw report."""
-    return [AttentionItem(id=it.id, report=it.report) for it in items]
+    """Project ordered internal records onto the closed body-free allowlist."""
+    summaries = {
+        "node_failed": "node failed; inspect authorized private attempt evidence before deciding",
+        "node_attention": "node requested attention; inspect authorized private attempt evidence before deciding",
+        "gate_failed": "gate failed; inspect authorized private gate evidence before deciding",
+        "gate_checkpoint": "gate checkpoint; inspect authorized private gate evidence before deciding",
+        "terminal_review": "terminal review; inspect authorized private review evidence before deciding",
+    }
+    return [
+        AttentionItem(
+            id=item.id,
+            report=summaries[item.kind],
+            kind=item.kind,
+            mission_id=item.mission_id,
+            node_id=item.node_id,
+            attempt_id=item.attempt_id,
+            terminal_review_id=item.terminal_review_id,
+        )
+        for item in items
+    ]
 
 
 from .models import AttentionItemInternal  # noqa: E402
@@ -374,7 +477,9 @@ __all__ = [
     "render_task_list",
     "render_dag",
     "make_envelope",
+    "project_next_action",
     "public_attention_items",
+    "project_supersession_lineage",
     "DagRenderMode",
     "EnvelopeDagMode",
 ]

@@ -1,0 +1,77 @@
+{
+  "requirements": [
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "docs/v03/v0.3.1/public-surface.v1.json",
+      "requirement": "Add strict orchestrator steering and role checkpoint schemas with continue, nudge, and stop_for_attention only; exact attempt/checkpoint binding; 60-second default continue; and no restart or cancel alias."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "src/unrest_harness/acp_runner.py",
+      "requirement": "Compose report_supervision_checkpoint only at worker, validator, and terminal-review semantic boundaries; wait at most 60 seconds, privately consume a nudge once, and finish the current atomic effect before cooperative stop handoff. Add no restart, filesystem, process, provider, cancellation, patch, integration, promotion, or release authority."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "src/unrest_harness/api.py",
+      "requirement": "Mirror the exact closed checkpoint, steering, body-free receipt/result, and stable error-code models needed by server and run control without adding a CLI carrier or restart/cancel alias."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "src/unrest_harness/bundled/foundation/public-surface.v1.json",
+      "requirement": "Apply byte-equivalent supervision schema changes to the bundled mirror and prove no nudge body, private inbox locator, snapshot locator, or safe handoff body is public."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "src/unrest_harness/coordinator.py",
+      "requirement": "Use the one existing coordinator poller for the 30-second sparse policy and local role adapters. A due checkpoint is only a request; blocked or missing delivery continues, cooperative stop enters existing attention, and only accepted external decide_attention supersession may replace work."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "src/unrest_harness/public_schema.py",
+      "requirement": "Validate the closed action enum, exact generation binding, nullable node/review XOR, strict body placement, body-free receipt/result rows, and extra-member rejection for integrated MCP surfaces."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "src/unrest_harness/run_control.py",
+      "requirement": "Add attachable inspect, report, and steer operation routing with exact project, mission, node-or-review, attempt, and checkpoint binding while advance_project runs. Keep existing cancel_run draining and cancellation semantics separate and unchanged."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "src/unrest_harness/run_worker.py",
+      "requirement": "Route attachable run control to the returned controller/supervision core without a second mutable worker, automatic retry, hidden restart, or body copy in run records, errors, logs, or results."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "src/unrest_harness/server.py",
+      "requirement": "Expose strict orchestrator steer_attempt and role checkpoint schemas through MCP only, route mutations through the controller project lock, permit steering during attached advance_project, and never return the nudge body on the orchestrator surface."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "tests/test_distribution_check.py",
+      "requirement": "Verify both public-surface mirror bytes and installed wheel/sdist lifecycle for checkpoint, steer, crash recovery, restart, privacy, and explicit-authority behavior."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "tests/test_run_control.py",
+      "requirement": "Exercise real attached advance, inspect, and steer concurrency; exact stale, replay, and wrong-binding refusal; explicit cancel as a separate control; restart/idempotency; and no automatic restart or duplicate mutable effect."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-015", "FUT-V045-LEG-016"],
+      "operation": "modify",
+      "path": "tests/test_server.py",
+      "requirement": "Exercise strict MCP worker, validator, and terminal-review checkpoint schemas; orchestrator steering; timeout and delivery_blocked continuation; multibyte cap; receipt/body canaries; and unknown member/action refusal."
+    }
+  ],
+  "schema": "unrest.v045.w-leg-int-supervision-requirements.v1"
+}

@@ -1,0 +1,53 @@
+{
+  "requirements": [
+    {
+      "contract_ids": ["FUT-V045-LEG-001", "FUT-V045-LEG-002", "FUT-V045-LEG-003", "FUT-V045-LEG-004", "FUT-V045-LEG-006", "FUT-V045-LEG-007", "FUT-V045-LEG-008", "FUT-V045-LEG-009", "FUT-V045-LEG-010", "FUT-V045-LEG-011", "FUT-V045-LEG-012"],
+      "operation": "modify",
+      "path": "docs/v03/v0.3.1/public-surface.v1.json",
+      "requirement": "Mirror the additive envelope frontier, closed next_action enum, safe attention identity with explicit nullable generation ids, five report summaries, and closed supersession lineage without changing tool names, state unions, dag, or existing result members."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-001", "FUT-V045-LEG-002", "FUT-V045-LEG-003", "FUT-V045-LEG-004", "FUT-V045-LEG-006", "FUT-V045-LEG-007", "FUT-V045-LEG-008", "FUT-V045-LEG-009", "FUT-V045-LEG-010", "FUT-V045-LEG-011", "FUT-V045-LEG-012"],
+      "operation": "modify",
+      "path": "src/unrest_harness/bundled/foundation/public-surface.v1.json",
+      "requirement": "Apply byte-equivalent schema changes to the packaged public-surface mirror and reject missing, extra, or wrong-null attention and lineage members."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-011"],
+      "operation": "modify",
+      "path": "src/unrest_harness/public_schema.py",
+      "requirement": "Validate the integrated strict result schemas for every existing project envelope and preserve the established catalog inventory."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-001", "FUT-V045-LEG-002", "FUT-V045-LEG-003", "FUT-V045-LEG-004", "FUT-V045-LEG-006", "FUT-V045-LEG-007", "FUT-V045-LEG-008", "FUT-V045-LEG-010", "FUT-V045-LEG-011", "FUT-V045-LEG-012"],
+      "operation": "modify",
+      "path": "src/unrest_harness/server.py",
+      "requirement": "Route all six project-id MCP entries through the returned controller guard and prove direct/MCP model-byte equivalence; retain abort_project as the only CLI carrier named by W-LEG."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-002", "FUT-V045-LEG-009", "FUT-V045-LEG-012"],
+      "operation": "modify",
+      "path": "src/unrest_harness/coordinator.py",
+      "requirement": "Pass the persisted terminal-review spawn timestamp to attention.terminal_review so newly authored terminal review items always have terminal_review_id while node_id and attempt_id remain null."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-001", "FUT-V045-LEG-002", "FUT-V045-LEG-003", "FUT-V045-LEG-004", "FUT-V045-LEG-006", "FUT-V045-LEG-007", "FUT-V045-LEG-008", "FUT-V045-LEG-009", "FUT-V045-LEG-010", "FUT-V045-LEG-011", "FUT-V045-LEG-012"],
+      "operation": "modify",
+      "path": "tests/test_server.py",
+      "requirement": "Add strict real MCP old/new/null/extra-member, zero/one/many/order/restart/privacy, dag/frontier, and every next_action precondition response cases."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-010", "FUT-V045-LEG-011"],
+      "operation": "modify",
+      "path": "tests/test_distribution_check.py",
+      "requirement": "Verify both schema mirrors and all changed module bytes in wheel and sdist, then exercise installed-wheel and extracted-sdist legacy/new attention restart without rewriting old persistence."
+    },
+    {
+      "contract_ids": ["FUT-V045-LEG-011"],
+      "operation": "none",
+      "path": "tools/check_distribution.py",
+      "requirement": "Run the existing complete-member byte comparison and safe sdist extraction against the integrated candidate; change this checker only if it cannot observe the new mirrored schema bytes."
+    }
+  ],
+  "schema": "unrest.v045.w-leg-int-requirements.v1"
+}

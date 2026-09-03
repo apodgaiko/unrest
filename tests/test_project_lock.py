@@ -28,10 +28,17 @@ from unrest_harness.models import (
     TerminalReviewHandoff,
     WorkHandoff,
 )
+from unrest_harness.patch_transaction import (
+    INSTALL_ORDER,
+    PatchTransaction,
+    TransactionTarget,
+)
 from unrest_harness.project_lock import (
     ProjectMutationLock,
     _prepare_windows_lockfile,
     _try_lock_windows,
+    project_access_guard,
+    project_lock_path,
 )
 from unrest_harness.server import create_orchestrator_server
 from unrest_harness.storage import ProjectStore
@@ -45,6 +52,17 @@ MUTATIONS = (
     "decide_attention",
     "abort_project",
 )
+LEGACY_TRANSACTION_PATHS = {
+    "task_list": ".unrest-runtime/missions/mission-001/tasks.json",
+    "task_state": ".unrest-runtime/missions/mission-001/task-state.json",
+    "contract_state": ".unrest-runtime/missions/mission-001/contract-state.json",
+    "supersession_lineage": ".unrest/missions/mission-001/supersession-lineage.json",
+    "mission_seal": ".unrest/missions/mission-001/closeout.md",
+    "project_record": ".unrest-runtime/project.json",
+    "decision_record": ".unrest/decisions/001-patch.md",
+    "attention_cursor": ".unrest-runtime/attention.json",
+    "project_state": ".unrest-runtime/state.json",
+}
 
 
 def _config(harness_home: Path) -> HarnessConfig:
@@ -70,6 +88,275 @@ def _seed_project(config: HarnessConfig, workspace: Path, project_id: str) -> No
     record.current_mission_id = "mission-001"
     store.save_project(record)
     store.save_state(project_id, MissionPlanning(mission_id="mission-001"))
+
+
+def _legacy_replacement_holder(
+    harness_home: str,
+    project_id: str,
+    release_event: Any,
+    output: Any,
+) -> None:
+    store = ProjectStore(_config(Path(harness_home)))
+    root = store.bucket_root(project_id)
+    project_path = root / LEGACY_TRANSACTION_PATHS["project_record"]
+    targets = [
+        TransactionTarget.from_images(
+            kind,
+            LEGACY_TRANSACTION_PATHS[kind],
+            (root / LEGACY_TRANSACTION_PATHS[kind]).read_bytes(),
+            f"replacement:{kind}\n".encode(),
+        )
+        for kind in INSTALL_ORDER
+    ]
+    with project_access_guard(store, project_id):
+        old_inode = project_path.stat().st_ino
+        PatchTransaction(root, "mission-001", "decision-001", targets).execute()
+        output.put(
+            {
+                "pid": os.getpid(),
+                "old_inode": old_inode,
+                "new_inode": project_path.stat().st_ino,
+            }
+        )
+        release_event.wait()
+
+
+def _legacy_lock_contender(
+    harness_home: str,
+    project_id: str,
+    output: Any,
+) -> None:
+    store = ProjectStore(_config(Path(harness_home)))
+    path = project_lock_path(store, project_id)
+    assert path is not None
+    lock = ProjectMutationLock(path, create=False)
+    acquired = lock.try_acquire()
+    output.put({"pid": os.getpid(), "acquired": acquired})
+    lock.release()
+
+
+def test_all_six_direct_controller_entries_recover_under_project_guard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = _config(home)
+    _seed_project(config, workspace, "project-a")
+    controller = ProjectController(
+        config,
+        _CountingDispatcher(),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+    )
+    events: list[str] = []
+
+    def recover(project_id: str) -> None:
+        assert project_id == "project-a"
+        events.append("recover")
+
+    monkeypatch.setattr(controller.store, "recover_patch_transactions", recover)
+    monkeypatch.setattr(
+        controller,
+        "_submit_plan",
+        lambda project_id, task_list: events.append("submit_plan"),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_advance_project",
+        lambda project_id, max_steps=None: events.append("advance_project"),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_end_mission",
+        lambda project_id, deliverable_roots=None: events.append("end_mission"),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_decide_attention",
+        lambda project_id, decisions: events.append("decide_attention"),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_abort_project",
+        lambda project_id, reason: events.append("abort_project"),
+    )
+    monkeypatch.setattr(
+        controller,
+        "_build_envelope",
+        lambda project_id, dag_mode="summary": events.append("inspect_project"),
+    )
+
+    controller.submit_plan("project-a", TaskList())
+    controller.advance_project("project-a", max_steps=1)
+    controller.end_mission("project-a")
+    controller.decide_attention("project-a", [])
+    controller.inspect_project("project-a")
+    controller.abort_project("project-a", "reason")
+
+    assert events == [
+        "recover",
+        "submit_plan",
+        "recover",
+        "advance_project",
+        "recover",
+        "end_mission",
+        "recover",
+        "decide_attention",
+        "recover",
+        "inspect_project",
+        "recover",
+        "abort_project",
+    ]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="contract requires a POSIX project lock")
+def test_genuine_legacy_inspect_locks_without_creating_lock_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    runtime = home / "projects" / "legacy" / ".unrest-runtime"
+    runtime.mkdir(parents=True)
+    project_path = runtime / "project.json"
+    project_path.write_text(
+        json.dumps(
+            {
+                "id": "legacy",
+                "workspace_dir": str(workspace),
+                "created_at": "2026-08-10T00:00:00Z",
+                "current_mission_id": "mission-001",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (runtime / "state.json").write_text('{"state":"done"}\n', encoding="utf-8")
+    controller = ProjectController(
+        _config(home),
+        _CountingDispatcher(),
+        MockTerminalReviewer(TerminalReviewHandoff(done=True)),
+    )
+
+    project_root = home / "projects" / "legacy"
+
+    def inventory() -> tuple[tuple[str, bytes], ...]:
+        return tuple(
+            (path.relative_to(project_root).as_posix(), path.read_bytes())
+            for path in sorted(project_root.rglob("*"))
+            if path.is_file()
+        )
+
+    before = inventory()
+    recovery_observations: list[bool] = []
+
+    def recover(project_id: str) -> None:
+        assert project_id == "legacy"
+        contender = ProjectMutationLock(runtime, create=False)
+        recovery_observations.append(contender.try_acquire())
+        contender.release()
+
+    monkeypatch.setattr(controller.store, "recover_patch_transactions", recover)
+
+    assert controller.inspect_project("legacy").state.state == "done"
+    assert recovery_observations == [False]
+    assert inventory() == before
+    assert not controller.store.mutation_lock_path("legacy").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="contract requires POSIX flock")
+def test_legacy_lock_survives_nine_target_project_record_replacement(
+    tmp_path: Path,
+) -> None:
+    context = multiprocessing.get_context("spawn")
+    harness_home = tmp_path / "home"
+    root = harness_home / "projects" / "legacy"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    for relative_path in LEGACY_TRANSACTION_PATHS.values():
+        path = root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.write_text(f"original:{relative_path}\n", encoding="utf-8")
+    project_path = root / LEGACY_TRANSACTION_PATHS["project_record"]
+    project_path.write_text(
+        json.dumps(
+            {
+                "id": "legacy",
+                "workspace_dir": str(workspace),
+                "created_at": "2026-08-10T00:00:00Z",
+                "current_mission_id": "mission-001",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    inventory_before = tuple(
+        path.relative_to(root).as_posix()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    )
+    assert ".unrest-runtime/mutation.lock" not in inventory_before
+
+    release = context.Event()
+    holder_output = context.Queue()
+    holder = context.Process(
+        target=_legacy_replacement_holder,
+        args=(str(harness_home), "legacy", release, holder_output),
+    )
+    holder.start()
+    holder_observation = holder_output.get(timeout=10)
+    assert holder_observation["old_inode"] != holder_observation["new_inode"]
+
+    blocked_output = context.Queue()
+    blocked = context.Process(
+        target=_legacy_lock_contender,
+        args=(str(harness_home), "legacy", blocked_output),
+    )
+    blocked.start()
+    blocked.join(10)
+    assert blocked.exitcode == 0
+    blocked_observation = blocked_output.get(timeout=2)
+    assert blocked_observation["acquired"] is False
+
+    release.set()
+    holder.join(10)
+    assert holder.exitcode == 0
+
+    acquired_output = context.Queue()
+    acquired = context.Process(
+        target=_legacy_lock_contender,
+        args=(str(harness_home), "legacy", acquired_output),
+    )
+    acquired.start()
+    acquired.join(10)
+    assert acquired.exitcode == 0
+    acquired_observation = acquired_output.get(timeout=2)
+    assert acquired_observation["acquired"] is True
+    assert len(
+        {
+            holder_observation["pid"],
+            blocked_observation["pid"],
+            acquired_observation["pid"],
+        }
+    ) == 3
+    assert tuple(
+        path.relative_to(root).as_posix()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    ) == inventory_before
+    print(
+        "WLEG_LEGACY_REPLACEMENT_LOCK_EVIDENCE="
+        + json.dumps(
+            {
+                "acquired_after_release": acquired_observation,
+                "blocked_while_held": blocked_observation,
+                "holder": holder_observation,
+                "inventory_unchanged": True,
+                "mutation_lock_absent": True,
+            },
+            sort_keys=True,
+        )
+    )
 
 
 def _arguments(method: str, project_id: str, *, sensitive: bool = False) -> dict[str, Any]:
@@ -753,6 +1040,7 @@ async def test_uncontended_success_lock_error_and_missing_project_compatibility(
 
     _seed_project(config, workspace, "broken-lock")
     lock_path = ProjectStore(config).mutation_lock_path("broken-lock")
+    lock_path.unlink()
     lock_path.mkdir()
     recording = _RecordingController(config)
     recording_server = create_orchestrator_server(config, recording)  # type: ignore[arg-type]

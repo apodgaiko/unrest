@@ -30,7 +30,9 @@ from .capability_policy import redact_sensitive_value
 from .config import HarnessConfig
 from .models import (
     AttentionFile,
+    AttentionItem,
     AttentionItemInternal,
+    AttentionNeeded,
     ContractStateFile,
     Decision,
     ProjectRecord,
@@ -328,6 +330,7 @@ def atomic_write_json(
     trusted_root: str | Path,
     allowed_ancestor: str | Path | None = None,
     inventory: Mapping[str, str] | None = None,
+    mode: int | None = None,
 ) -> None:
     redacted = redact_sensitive_value(payload, inventory)
     atomic_write_text(
@@ -335,6 +338,7 @@ def atomic_write_json(
         json.dumps(redacted, indent=2, ensure_ascii=False) + "\n",
         trusted_root=trusted_root,
         allowed_ancestor=allowed_ancestor,
+        mode=mode,
         _redact=False,
     )
 
@@ -355,6 +359,48 @@ def _symlink_components(path: Path) -> list[Path]:
         if current.is_symlink():
             components.append(current)
     return components
+
+
+def _lineage_identity(value: object) -> dict[str, str]:
+    if not isinstance(value, dict) or set(value) != {"mission_id", "node_id"}:
+        raise ValueError("invalid supersession lineage")
+    mission_id = value.get("mission_id")
+    node_id = value.get("node_id")
+    if not isinstance(mission_id, str) or not mission_id:
+        raise ValueError("invalid supersession lineage")
+    if not isinstance(node_id, str) or not node_id:
+        raise ValueError("invalid supersession lineage")
+    return {"mission_id": mission_id, "node_id": node_id}
+
+
+def _validate_lineage_acyclic(
+    edges: list[dict[str, dict[str, str]]],
+) -> None:
+    successors: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for edge in edges:
+        old = edge["old"]
+        new = edge["new"]
+        old_key = (old["mission_id"], old["node_id"])
+        new_key = (new["mission_id"], new["node_id"])
+        if old_key == new_key:
+            raise ValueError("invalid supersession lineage")
+        successors.setdefault(old_key, []).append(new_key)
+    visiting: set[tuple[str, str]] = set()
+    visited: set[tuple[str, str]] = set()
+
+    def visit(node: tuple[str, str]) -> None:
+        if node in visiting:
+            raise ValueError("invalid supersession lineage")
+        if node in visited:
+            return
+        visiting.add(node)
+        for child in successors.get(node, []):
+            visit(child)
+        visiting.remove(node)
+        visited.add(node)
+
+    for node in tuple(successors):
+        visit(node)
 
 
 def attempt_to_markdown(handoff: WorkHandoff | ValidateHandoff) -> str:
@@ -448,6 +494,12 @@ class ProjectStore:
     def mutation_lock_path(self, project_id: str) -> Path:
         return self.unrest_runtime_dir(project_id) / "mutation.lock"
 
+    def recover_patch_transactions(self, project_id: str) -> None:
+        """Repair or refuse an interrupted decision generation."""
+        from .patch_transaction import recover_patch_transactions
+
+        recover_patch_transactions(self.bucket_root(project_id))
+
     def apply_accepted_point_plan(
         self,
         project_id: str,
@@ -497,6 +549,63 @@ class ProjectStore:
         attempts/*.json)."""
         return self.unrest_runtime_dir(project_id) / "missions" / mission_id
 
+    def patch_transactions_dir(self, project_id: str, mission_id: str) -> Path:
+        return self.mission_runtime_dir(project_id, mission_id) / "patch-transactions"
+
+    def supersession_lineage_path(self, project_id: str, mission_id: str) -> Path:
+        return self.mission_dir(project_id, mission_id) / "supersession-lineage.json"
+
+    def load_supersession_edges(
+        self, project_id: str, mission_id: str
+    ) -> list[dict[str, dict[str, str]]]:
+        path = self.supersession_lineage_path(project_id, mission_id)
+        if not path.exists():
+            return []
+        try:
+            payload = json.loads(path.read_bytes())
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("invalid supersession lineage") from exc
+        if not isinstance(payload, dict) or set(payload) != {"schema", "edges"}:
+            raise ValueError("invalid supersession lineage")
+        if payload.get("schema") != "unrest.v045.supersession-lineage.v1":
+            raise ValueError("invalid supersession lineage")
+        rows = payload.get("edges")
+        if not isinstance(rows, list) or len(rows) > 256:
+            raise ValueError("invalid supersession lineage")
+        edges: list[dict[str, dict[str, str]]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for row in rows:
+            if not isinstance(row, dict) or set(row) != {"new", "old"}:
+                raise ValueError("invalid supersession lineage")
+            new = _lineage_identity(row.get("new"))
+            old = _lineage_identity(row.get("old"))
+            key = (old["mission_id"], old["node_id"], new["mission_id"], new["node_id"])
+            if key in seen:
+                raise ValueError("invalid supersession lineage")
+            seen.add(key)
+            edges.append({"new": new, "old": old})
+        _validate_lineage_acyclic(edges)
+        return edges
+
+    def render_supersession_lineage(
+        self, edges: list[dict[str, dict[str, str]]]
+    ) -> bytes:
+        payload = {
+            "schema": "unrest.v045.supersession-lineage.v1",
+            "edges": edges,
+        }
+        return self.render_json_bytes(payload)
+
+    def render_json_bytes(self, payload: object) -> bytes:
+        redacted = redact_sensitive_value(payload, self.inventory)
+        return (json.dumps(redacted, indent=2, ensure_ascii=False) + "\n").encode()
+
+    def render_text_bytes(self, content: str) -> bytes:
+        redacted = redact_sensitive_value(content, self.inventory)
+        if not isinstance(redacted, str):
+            raise TypeError("canonical text redaction returned a non-text value")
+        return redacted.encode()
+
     # ------------------------------------------------------------------
     # Project lifecycle
     # ------------------------------------------------------------------
@@ -532,6 +641,19 @@ class ProjectStore:
         # 2) Cursor layout (.unrest-runtime/)
         runtime.mkdir(parents=True, exist_ok=True)
         (runtime / "missions").mkdir(parents=True, exist_ok=True)
+        lock_path = runtime / "mutation.lock"
+        if not lock_path.exists():
+            descriptor = os.open(
+                lock_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+                0o600,
+            )
+            try:
+                os.fchmod(descriptor, 0o600)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            _fsync_directory(runtime)
 
         # 3) brief.md (atomic; do not overwrite if exists)
         brief_path = unrest / "brief.md"
@@ -646,6 +768,29 @@ class ProjectStore:
         if not path.exists():
             return None
         from pydantic import TypeAdapter
+
+        raw = json.loads(path.read_bytes())
+        if isinstance(raw, dict) and raw.get("state") == "attention_needed":
+            if set(raw) != {"state", "items"} or not isinstance(raw["items"], list):
+                raise ValueError("invalid attention-needed state")
+            legacy_keys = {"id", "report"}
+            public_keys = {
+                "id", "report", "kind", "mission_id", "node_id", "attempt_id",
+                "terminal_review_id",
+            }
+            for item in raw["items"]:
+                if not isinstance(item, dict):
+                    raise ValueError("invalid attention-needed state item")
+                if set(item) == legacy_keys:
+                    if not all(isinstance(item[key], str) for key in legacy_keys):
+                        raise ValueError("invalid legacy attention-needed state item")
+                elif set(item) == public_keys:
+                    AttentionItem.model_validate(item)
+                else:
+                    raise ValueError("invalid attention-needed state item")
+            # The internal attention cursor is authoritative. Controller projection
+            # reconstructs these public rows and never trusts stale state reports.
+            return AttentionNeeded(items=[])
 
         return TypeAdapter(ProjectState).validate_json(
             path.read_text(encoding="utf-8")
@@ -969,15 +1114,35 @@ class ProjectStore:
         *,
         summary: str = "",
     ) -> Path:
-        d = self.decisions_dir(project_id)
-        d.mkdir(parents=True, exist_ok=True)
-        n = self.next_decision_number(project_id)
+        path, content = self.plan_decision_record(
+            project_id, decisions, items, summary=summary
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(
+            path,
+            content,
+            trusted_root=self.bucket_root(project_id),
+            inventory=self.inventory,
+        )
+        return path
+
+    def plan_decision_record(
+        self,
+        project_id: str,
+        decisions: list[Decision],
+        items: list[AttentionItemInternal],
+        *,
+        summary: str = "",
+        number: int | None = None,
+        timestamp: str | None = None,
+    ) -> tuple[Path, str]:
+        n = self.next_decision_number(project_id) if number is None else number
         slug = slugify(summary or decisions[0].action if decisions else "decision")
-        path = d / f"{n:03d}-{slug}.md"
+        path = self.decisions_dir(project_id) / f"{n:03d}-{slug}.md"
         parts: list[str] = []
         parts.append(f"# Decision {n:03d}: {summary or 'decide_attention'}")
         parts.append("")
-        parts.append(f"- Timestamp: {utc_now_iso()}")
+        parts.append(f"- Timestamp: {timestamp or utc_now_iso()}")
         parts.append("")
         parts.append("## Resolved attention items")
         item_by_id = {it.id: it for it in items}
@@ -999,13 +1164,7 @@ class ProjectStore:
                 )
                 parts.append("```")
             parts.append("")
-        atomic_write_text(
-            path,
-            "\n".join(parts).rstrip() + "\n",
-            trusted_root=self.bucket_root(project_id),
-            inventory=self.inventory,
-        )
-        return path
+        return path, "\n".join(parts).rstrip() + "\n"
 
     # ------------------------------------------------------------------
     # Terminal review
@@ -1214,6 +1373,13 @@ class ProjectStore:
         )
         return md_path
 
+    def read_terminal_review(
+        self, project_id: str, mission_id: str, spawn_ts: str
+    ) -> TerminalReviewHandoff:
+        """Resolve one authorized private review by its persisted generation id."""
+        path = self.terminal_review_path(project_id, mission_id, spawn_ts)
+        return TerminalReviewHandoff.model_validate_json(path.read_bytes())
+
     # ------------------------------------------------------------------
     # Mission seal
     # ------------------------------------------------------------------
@@ -1227,18 +1393,31 @@ class ProjectStore:
         body: str,
     ) -> Path:
         path = self.mission_dir(project_id, mission_id) / "closeout.md"
-        header = (
-            f"# Mission {mission_id} closeout\n\n"
-            f"- status: {status}\n"
-            f"- sealed_at: {utc_now_iso()}\n\n"
+        content = self.render_mission_seal(
+            mission_id, status=status, body=body
         )
         atomic_write_text(
             path,
-            header + body.rstrip() + "\n",
+            content,
             trusted_root=self.bucket_root(project_id),
             inventory=self.inventory,
         )
         return path
+
+    def render_mission_seal(
+        self,
+        mission_id: str,
+        *,
+        status: str,
+        body: str,
+        timestamp: str | None = None,
+    ) -> str:
+        header = (
+            f"# Mission {mission_id} closeout\n\n"
+            f"- status: {status}\n"
+            f"- sealed_at: {timestamp or utc_now_iso()}\n\n"
+        )
+        return header + body.rstrip() + "\n"
 
     # ------------------------------------------------------------------
     # Workspace symlink shims

@@ -1,0 +1,55 @@
+{
+  "actions": [
+    "continue",
+    "nudge",
+    "stop_for_attention"
+  ],
+  "checkpoint_backoff_multipliers": [
+    1,
+    2,
+    4
+  ],
+  "checkpoint_wait_seconds": 60,
+  "creativity_guard": {
+    "elapsed_or_silence_authorizes_intervention": false,
+    "healthy_effect_resets_silence": true,
+    "method_style_token_stream_or_reasoning_scored": false
+  },
+  "durable_receipt_body_fields": [],
+  "durable_receipt_path": ".unrest/missions/{mission_id}/supervision-receipts.json",
+  "earliest_checkpoint_elapsed_seconds": 900,
+  "early_checkpoint_signals": [
+    "safe_blocker_code",
+    "scope_status_uncertain",
+    "scope_status_violation"
+  ],
+  "max_automatic_restarts": 0,
+  "max_checkpoint_requests": 2,
+  "max_nudge_bytes": 2048,
+  "max_nudges": 1,
+  "poll_seconds": 30,
+  "private_inbox_path": ".unrest-runtime/missions/{mission_id}/supervision/{attempt_id}.inbox.json",
+  "public_snapshot_fields": [
+    "attempt_id",
+    "blocker_code",
+    "checkpoint_requests",
+    "checkpoint_sequence",
+    "completed_target_ids",
+    "elapsed_nanoseconds",
+    "last_effect_sequence",
+    "mission_id",
+    "node_id",
+    "phase",
+    "project_id",
+    "remaining_target_ids",
+    "role",
+    "scope_status",
+    "supervision_status",
+    "terminal_review_id"
+  ],
+  "runtime_snapshot_path": ".unrest-runtime/missions/{mission_id}/supervision/{attempt_id}.json",
+  "schema": "unrest.v045.sparse-supervision.v1",
+  "silence_threshold_seconds": 600,
+  "stop_path": "cooperative_checkpoint_then_existing_attention_decision",
+  "time_only_action": "continue"
+}

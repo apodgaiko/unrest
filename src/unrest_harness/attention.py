@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 import secrets
 
 from .models import (
+    ActiveAttemptSnapshot,
     AttentionItemInternal,
     Task,
     TerminalReviewHandoff,
@@ -13,6 +15,14 @@ from .models import (
 
 def _new_id(prefix: str) -> str:
     return f"att-{prefix}-{secrets.token_hex(3)}"
+
+
+def _require_attempt_id(attempt_id: str | None) -> str:
+    if attempt_id is None or re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._:-]*", attempt_id
+    ) is None:
+        raise ValueError("node attention requires an immutable attempt identity")
+    return attempt_id
 
 
 def _handoff_report(task: Task, handoff: WorkHandoff | ValidateHandoff) -> str:
@@ -48,11 +58,14 @@ def node_failed(
     task: Task,
     handoff: WorkHandoff,
 ) -> AttentionItemInternal:
+    attempt_id = _require_attempt_id(handoff.attempt_id)
     return AttentionItemInternal(
         id=_new_id(task.id),
         kind="node_failed",
         mission_id=mission_id,
         node_id=task.id,
+        attempt_id=attempt_id,
+        terminal_review_id=None,
         report=_handoff_report(task, handoff),
     )
 
@@ -62,11 +75,14 @@ def node_attention(
     task: Task,
     handoff: WorkHandoff | ValidateHandoff,
 ) -> AttentionItemInternal:
+    attempt_id = _require_attempt_id(handoff.attempt_id)
     return AttentionItemInternal(
         id=_new_id(task.id),
         kind="node_attention",
         mission_id=mission_id,
         node_id=task.id,
+        attempt_id=attempt_id,
+        terminal_review_id=None,
         report=_handoff_report(task, handoff),
     )
 
@@ -146,6 +162,8 @@ def gate_failed(
         kind="gate_failed",
         mission_id=mission_id,
         node_id=gate.id,
+        attempt_id=None,
+        terminal_review_id=None,
         report=_gate_report(
             gate,
             cleared=False,
@@ -169,6 +187,8 @@ def gate_checkpoint(
         kind="gate_checkpoint",
         mission_id=mission_id,
         node_id=gate.id,
+        attempt_id=None,
+        terminal_review_id=None,
         report=_gate_report(
             gate,
             cleared=True,
@@ -180,12 +200,45 @@ def gate_checkpoint(
 def terminal_review(
     mission_id: str,
     review: TerminalReviewHandoff,
+    terminal_review_id: str | None = None,
 ) -> AttentionItemInternal:
+    """Build a review item; null remains only for the legacy shared call site."""
     return AttentionItemInternal(
         id=_new_id("terminal-review"),
         kind="terminal_review",
         mission_id=mission_id,
+        node_id=None,
+        attempt_id=None,
+        terminal_review_id=terminal_review_id,
         report=review.report or "(empty)",
+    )
+
+
+def cooperative_stop(
+    snapshot: ActiveAttemptSnapshot,
+    safe_handoff: str,
+) -> AttentionItemInternal:
+    """Route a checkpoint stop into existing attention authority."""
+    if snapshot.phase != "terminal" or snapshot.supervision_status != "terminal":
+        raise ValueError("cooperative stop requires a retained terminal snapshot")
+    if snapshot.role == "terminal_reviewer":
+        return AttentionItemInternal(
+            id=_new_id("terminal-review"),
+            kind="terminal_review",
+            mission_id=snapshot.mission_id,
+            node_id=None,
+            attempt_id=None,
+            terminal_review_id=snapshot.terminal_review_id,
+            report=safe_handoff,
+        )
+    return AttentionItemInternal(
+        id=_new_id(snapshot.node_id or "attempt"),
+        kind="node_attention",
+        mission_id=snapshot.mission_id,
+        node_id=snapshot.node_id,
+        attempt_id=snapshot.attempt_id,
+        terminal_review_id=None,
+        report=safe_handoff,
     )
 
 
@@ -195,4 +248,5 @@ __all__ = [
     "gate_failed",
     "gate_checkpoint",
     "terminal_review",
+    "cooperative_stop",
 ]

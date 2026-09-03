@@ -1,0 +1,50 @@
+{
+  "schema": "unrest.v045.product-transaction-cases.v1",
+  "crash_label_count": 90,
+  "install_order": [
+    "task_list",
+    "task_state",
+    "contract_state",
+    "supersession_lineage",
+    "mission_seal",
+    "project_record",
+    "decision_record",
+    "attention_cursor",
+    "project_state"
+  ],
+  "integrity_mutations": [
+    "missing_image",
+    "unsafe_image_mode",
+    "image_symlink",
+    "manifest_mismatch",
+    "third_state",
+    "two_committed",
+    "nonempty_commit",
+    "unsafe_transaction_mode",
+    "unexpected_staged_member"
+  ],
+  "unsupported_mutations": [
+    "missing_target",
+    "duplicate_target",
+    "wrong_order",
+    "escaping_path",
+    "absolute_path",
+    "bad_mission",
+    "bad_transaction",
+    "post_digest_mismatch"
+  ],
+  "lineage_cases": [
+    "legacy_absent",
+    "one_edge",
+    "converging_many",
+    "chained",
+    "cancelled_control",
+    "edge_256",
+    "edge_257_refused"
+  ],
+  "process_case": {
+    "inspectors": 2,
+    "mutator_order": ["A", "B"],
+    "mutators": 2
+  }
+}

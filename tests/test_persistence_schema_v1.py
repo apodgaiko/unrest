@@ -266,3 +266,26 @@ def test_state_mutations_fail_closed_without_rewrite(
 
     assert len(str(exc_info.value).encode()) < 4096
     assert state_path.read_bytes() == mutation
+
+
+def test_legacy_absent_lineage_projects_empty_without_write_on_inspect(
+    tmp_path: Path,
+) -> None:
+    corpus = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    home = tmp_path / "home"
+    controller = _materialize(home, workspace, corpus["scenarios"]["done"])
+    lineage = controller.store.supersession_lineage_path(
+        "fixture", "mission-001"
+    )
+    lock_path = controller.store.mutation_lock_path("fixture")
+    lock_path.touch(mode=0o600)
+    assert not lineage.exists()
+    before = _inventory(home)
+
+    envelope = controller.inspect_project("fixture")
+
+    assert envelope.supersession_lineage == []
+    assert not lineage.exists()
+    assert _inventory(home) == before
