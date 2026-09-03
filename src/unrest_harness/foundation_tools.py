@@ -158,11 +158,24 @@ class FoundationTools:
         return self._mutation_journal_factory(repository)
 
     def _find_inquiry(self, inquiry_id: str) -> InquiryManager:
-        roots = [self.config.harness_home / "foundation"]
-        roots.extend(self.store.bucket_root(item.id) for item in self.store.list_projects())
-        for root in roots:
-            if (root / ".unrest" / "inquiries" / inquiry_id.removeprefix("inquiry:")).is_dir():
-                return InquiryManager(root, self.config)
+        foundation_root = self.config.harness_home / "foundation"
+        if (
+            foundation_root
+            / ".unrest"
+            / "inquiries"
+            / inquiry_id.removeprefix("inquiry:")
+        ).is_dir():
+            return InquiryManager(foundation_root, self.config)
+        for item in self.store.list_projects():
+            root = self.store.bucket_root(item.id)
+            if (
+                root / ".unrest" / "inquiries" / inquiry_id.removeprefix("inquiry:")
+            ).is_dir():
+                return InquiryManager(
+                    root,
+                    self.config,
+                    workspace_root=Path(item.workspace_dir),
+                )
         raise FoundationToolError("not_found", "Inquiry was not found")
 
     def _find_workspace(self, workspace_id: str) -> WorkspaceManager:
@@ -232,9 +245,18 @@ class FoundationTools:
     def cancel_run(self, run_id: str, reason: str, idempotency_key: str) -> dict[str, Any]:
         return self.runs.cancel_run(run_id, reason, idempotency_key).as_dict()
 
-    def open_inquiry(self, question: str, budget: Mapping[str, int], idempotency_key: str, project_id: str | None = None) -> dict[str, Any]:
-        manager = InquiryManager(self._inquiry_root(project_id), self.config)
-        checked = InquiryBudget(**dict(budget))
+    def open_inquiry(self, question: str, budget: Mapping[str, object], idempotency_key: str, project_id: str | None = None) -> dict[str, Any]:
+        checked = InquiryBudget.from_mapping(budget)
+        root = self._inquiry_root(project_id)
+        manager = InquiryManager(
+            root,
+            self.config,
+            workspace_root=(
+                self._project_repository(project_id)
+                if project_id is not None
+                else root
+            ),
+        )
         return manager.open_inquiry(question=question, budget=checked, idempotency_key=idempotency_key, project_id=project_id).public_record()
 
     def inspect_inquiry(self, inquiry_id: str) -> dict[str, Any]:

@@ -21,8 +21,9 @@ import os
 from pathlib import Path
 import re
 import stat
-from typing import Any, Iterator, Literal, Protocol, cast
+from typing import Any, Iterator, Literal, Protocol, Self, cast
 
+from .capability_policy import finite_credential_values, redact_credential_values
 from .canonical_identity import (
     IdentityRecord,
     canonical_json_bytes,
@@ -60,6 +61,11 @@ BranchOutcome = Literal[
 ]
 
 BRANCH_ROLES = ("direct", "evidence", "critic", "analogy")
+_OUTPUT_CONTRACT_VERSION = 2
+_ANSWER_LIMIT_BYTES = 65_536
+_PROVIDER_RESPONSE_LIMIT_BYTES = 65_536
+_OUTPUT_SCHEMA_PREFIX = "<!-- INQUIRY_OUTPUT_SCHEMA "
+_OUTPUT_SCHEMA_SUFFIX = " -->"
 _INQUIRY_ID = re.compile(r"^inquiry:[a-z0-9-]+$")
 _CONSUMER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -95,6 +101,22 @@ class InquiryBudget:
             "timeout_seconds": self.timeout_seconds,
         }
 
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, object]) -> Self:
+        if not isinstance(value, Mapping) or not all(
+            isinstance(key, str) for key in value
+        ):
+            raise InquiryError("invalid_argument", "Inquiry budget is invalid")
+        required = {"max_steps", "timeout_seconds"}
+        optional = {"max_branches"}
+        if not required.issubset(value) or not set(value).issubset(required | optional):
+            raise InquiryError("invalid_argument", "Inquiry budget is invalid")
+        return cls(
+            max_steps=value["max_steps"],  # type: ignore[arg-type]
+            timeout_seconds=value["timeout_seconds"],  # type: ignore[arg-type]
+            max_branches=value.get("max_branches", len(BRANCH_ROLES)),  # type: ignore[arg-type]
+        )
+
 
 @dataclass(frozen=True)
 class InquirySummary:
@@ -102,10 +124,14 @@ class InquirySummary:
     state: InquiryState
     branch_outcomes: Mapping[str, BranchOutcome]
     receipt_id: str | None
+    answer: str | None
+    diagnostics: Mapping[str, object]
 
     def public_record(self) -> dict[str, object]:
         return {
+            "answer": self.answer,
             "branch_outcomes": dict(sorted(self.branch_outcomes.items())),
+            "diagnostics": dict(self.diagnostics),
             "inquiry_id": self.inquiry_id,
             "receipt_id": self.receipt_id,
             "state": self.state,
@@ -179,6 +205,86 @@ def _validate_text(value: str, *, empty: bool = False) -> None:
         canonical_json_bytes({"value": value})
     except (UnicodeError, ValueError) as exc:
         raise InquiryError("invalid_argument", "Inquiry request is invalid") from exc
+
+
+def _load_output_schema(path: Path) -> dict[str, Any]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise InquiryError("provider_unavailable", "Inquiry prompt is unavailable") from exc
+    markers = [
+        line.removeprefix(_OUTPUT_SCHEMA_PREFIX).removesuffix(_OUTPUT_SCHEMA_SUFFIX)
+        for line in lines
+        if line.startswith(_OUTPUT_SCHEMA_PREFIX) and line.endswith(_OUTPUT_SCHEMA_SUFFIX)
+    ]
+    if len(markers) != 1:
+        raise InquiryError("integrity_error", "Inquiry output contract is invalid")
+    try:
+        schema = json.loads(markers[0])
+    except json.JSONDecodeError as exc:
+        raise InquiryError("integrity_error", "Inquiry output contract is invalid") from exc
+    if (
+        not isinstance(schema, dict)
+        or schema.get("type") != "object"
+        or schema.get("additionalProperties") is not False
+        or not isinstance(schema.get("properties"), dict)
+        or not isinstance(schema.get("required"), list)
+        or set(schema["properties"]) != set(schema["required"])
+        or json.dumps(schema, sort_keys=True, separators=(",", ":")) != markers[0]
+    ):
+        raise InquiryError("integrity_error", "Inquiry output contract is invalid")
+    return schema
+
+
+def _schema_accepts(value: object, schema: Mapping[str, Any]) -> bool:
+    expected = schema.get("type")
+    if expected == "string":
+        if not isinstance(value, str):
+            return False
+        try:
+            value.encode("utf-8", errors="strict")
+        except UnicodeError:
+            return False
+    elif expected == "integer":
+        if isinstance(value, bool) or not isinstance(value, int):
+            return False
+        minimum = schema.get("minimum")
+        if isinstance(minimum, int) and value < minimum:
+            return False
+    elif expected == "array":
+        if not isinstance(value, list) or not isinstance(schema.get("items"), Mapping):
+            return False
+        if not all(_schema_accepts(item, schema["items"]) for item in value):
+            return False
+    elif expected == "object":
+        properties = schema.get("properties")
+        required = schema.get("required")
+        if (
+            not isinstance(value, Mapping)
+            or not all(isinstance(key, str) for key in value)
+            or not isinstance(properties, Mapping)
+            or not isinstance(required, list)
+            or set(value) != set(required)
+            or schema.get("additionalProperties") is not False
+        ):
+            return False
+        if not all(
+            isinstance(properties.get(key), Mapping)
+            and _schema_accepts(item, properties[key])
+            for key, item in value.items()
+        ):
+            return False
+    else:
+        return False
+    choices = schema.get("enum")
+    return not isinstance(choices, list) or value in choices
+
+
+def _bounded_utf8(value: str, limit: int) -> str:
+    encoded = value.encode("utf-8", errors="strict")
+    if len(encoded) <= limit:
+        return value
+    return encoded[:limit].decode("utf-8", errors="ignore")
 
 
 class _InquiryStore:
@@ -459,11 +565,17 @@ class InquiryManager:
         project_root: str | Path,
         config: HarnessConfig,
         *,
+        workspace_root: str | Path | None = None,
         custody_root_id: str = "unrest-inquiry-local-v1",
         provider_runner: InquiryProviderRunner | None = None,
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
         self.project_root = Path(project_root).resolve(strict=True)
+        self.workspace_root = Path(
+            workspace_root if workspace_root is not None else project_root
+        ).resolve(strict=True)
+        if not self.workspace_root.is_dir():
+            raise InquiryError("invalid_argument", "Inquiry workspace is invalid")
         self.config = config
         self.store = _InquiryStore(self.project_root)
         self.foundation = FoundationStore(
@@ -473,6 +585,12 @@ class InquiryManager:
         self.provider_runner = provider_runner or ProviderSessionRunner(config)
         self._now = now
         self._local_cancel: dict[str, asyncio.Event] = {}
+        self._output_schemas = {
+            role: _load_output_schema(
+                self.config.bundled_dir / "prompts" / role / "system_prompt.md"
+            )
+            for role in ("inquiry_branch", "inquiry_synthesis")
+        }
 
     def open_inquiry(
         self,
@@ -570,7 +688,7 @@ class InquiryManager:
                     "branch_id": branch_id,
                     "identity_digest": branch_identity.digest,
                     "outcome": "pending",
-                    "steps_used": 0,
+                    "output_contract_version": _OUTPUT_CONTRACT_VERSION,
                 }
             state: dict[str, Any] = {
                 "active_operation": {"state": "absent"},
@@ -607,6 +725,9 @@ class InquiryManager:
                     "inquiry_identity_digest": inquiry_identity.digest,
                     "privacy": "private-inquiry-adjacent-record",
                     "schema_version": 1,
+                    "workspace_digest": _sha(
+                        str(self.workspace_root).encode("utf-8")
+                    ),
                 },
             )
             self.store.append_event(state)
@@ -688,6 +809,24 @@ class InquiryManager:
                     current = self._load(inquiry_id)
                     self._apply_branch_results(current, results)
                     if current["state"] in {"paused", "cancelled"}:
+                        self._complete_operation(
+                            current,
+                            key_digest,
+                            request_digest,
+                            "advance_inquiry",
+                        )
+                        self._transition(current)
+                        return self._summary(current)
+                    outcomes = {
+                        branch["outcome"] for branch in current["branches"].values()
+                    }
+                    if "answered" not in outcomes:
+                        current["state"] = (
+                            "budget_exhausted"
+                            if outcomes == {"budget_exhausted"}
+                            else "failed"
+                        )
+                        current["receipt_id"] = {"state": "absent"}
                         self._complete_operation(
                             current,
                             key_digest,
@@ -867,7 +1006,7 @@ class InquiryManager:
             )
             private_question = self._load_private_question(inquiry_id)
             private_synthesis = self._load_provider_artifact(
-                self._private_path(inquiry_id, str(synthesis["artifact_relative_path"]))
+                self._synthesis_artifact_path(inquiry_id, synthesis)
             )
             artifact = {
                 "branch_denominator": branch_denominator,
@@ -963,15 +1102,25 @@ class InquiryManager:
             relative = f"branches/{role}/attempt-{attempt:04d}.json"
             artifact = self.store.private_root(inquiry_id) / relative
             self.store._ensure_directory(artifact.parent)
+            if artifact.is_file():
+                return (
+                    role,
+                    self._provider_result_from_artifact(
+                        artifact, expected_role="inquiry_branch"
+                    ),
+                    relative,
+                    attempt,
+                )
             prompt = self._branch_prompt(inquiry_id, role, branch, int(budget["max_steps"]))
             request = ProviderSessionRequest(
                 role="inquiry_branch",
                 prompt=prompt,
-                workspace_path=self.project_root,
+                workspace_path=self.workspace_root,
                 project_record_path=self.store.private_root(inquiry_id) / "provider-project-record.json",
                 private_artifact_path=artifact,
                 private_artifact_root=self.store.private_root(inquiry_id),
                 timeout_seconds=int(budget["timeout_seconds"]),
+                max_response_bytes=_PROVIDER_RESPONSE_LIMIT_BYTES,
             )
             async with semaphore:
                 result = await self.provider_runner.run(request, cancel_event=cancel_event)
@@ -1014,23 +1163,44 @@ class InquiryManager:
             branch = state["branches"][role]
             branch["attempts"] = attempt
             branch["provider"] = _without_none(result.public_metadata())
+            branch["output_contract_version"] = _OUTPUT_CONTRACT_VERSION
+            parsed: Mapping[str, Any] | None = None
             if relative:
-                branch["artifact_relative_path"] = relative
-                parsed = self._load_provider_artifact(
-                    self._private_path(str(state["inquiry_id"]), relative)
+                artifact_path = self._private_path(str(state["inquiry_id"]), relative)
+                artifact = self._load_provider_artifact(artifact_path)
+                branch["artifact_digest"] = _sha(artifact_path.read_bytes())
+                parsed = self._strict_provider_output(
+                    artifact, role="inquiry_branch"
                 )
-                steps_used = self._parsed_steps_used(parsed)
+            steps_used = parsed.get("steps_used") if parsed is not None else None
+            if steps_used is None:
+                branch.pop("steps_used", None)
             else:
-                steps_used = 0
-            branch["steps_used"] = steps_used
+                branch["steps_used"] = steps_used
             if interrupted:
                 branch["outcome"] = state["state"]
+                branch["error_code"] = "cancelled"
+            elif parsed is None or result.status != "completed" or not result.structured_output:
+                branch["outcome"] = "failed"
+                branch["error_code"] = (
+                    "invalid_structured_output"
+                    if result.status == "completed"
+                    else self._safe_error_code(result.error_code)
+                )
+            elif (
+                isinstance(steps_used, bool)
+                or not isinstance(steps_used, int)
+                or steps_used < 0
+            ):
+                raise InquiryError(
+                    "integrity_error", "Inquiry provider evidence is invalid"
+                )
             elif steps_used > int(state["budget"]["max_steps"]):
                 branch["outcome"] = "budget_exhausted"
-            elif result.status == "completed" and result.structured_output:
+                branch["error_code"] = "budget_exhausted"
+            elif result.status == "completed":
                 branch["outcome"] = "answered"
-            elif result.status == "cancelled":
-                branch["outcome"] = "cancelled"
+                branch.pop("error_code", None)
             else:
                 branch["outcome"] = "failed"
 
@@ -1046,15 +1216,24 @@ class InquiryManager:
             attempt = int(synthesis["value"].get("attempt", 0)) + 1
         relative = f"synthesis/attempt-{attempt:04d}.json"
         artifact = self.store.private_root(inquiry_id) / relative
+        if artifact.is_file():
+            return (
+                self._provider_result_from_artifact(
+                    artifact, expected_role="inquiry_synthesis"
+                ),
+                relative,
+                attempt,
+            )
         prompt = self._synthesis_prompt(state)
         request = ProviderSessionRequest(
             role="inquiry_synthesis",
             prompt=prompt,
-            workspace_path=self.project_root,
+            workspace_path=self.workspace_root,
             project_record_path=self.store.private_root(inquiry_id) / "provider-project-record.json",
             private_artifact_path=artifact,
             private_artifact_root=self.store.private_root(inquiry_id),
             timeout_seconds=int(state["budget"]["timeout_seconds"]),
+            max_response_bytes=_PROVIDER_RESPONSE_LIMIT_BYTES,
         )
         try:
             result = await self.provider_runner.run(request, cancel_event=cancel_event)
@@ -1083,7 +1262,13 @@ class InquiryManager:
         if result.status != "completed" or not result.structured_output or not relative:
             state["synthesis"] = {
                 "state": "present",
-                "value": {"attempt": attempt, "provider": provider, "status": "failed"},
+                "value": {
+                    "attempt": attempt,
+                    "error_code": self._safe_error_code(result.error_code),
+                    "output_contract_version": _OUTPUT_CONTRACT_VERSION,
+                    "provider": provider,
+                    "status": "failed",
+                },
             }
             outcomes = {branch["outcome"] for branch in state["branches"].values()}
             state["state"] = (
@@ -1093,22 +1278,52 @@ class InquiryManager:
             return
         path = self._private_path(str(state["inquiry_id"]), relative)
         artifact = self._load_provider_artifact(path)
-        parsed = artifact.get("output", {}).get("parsed")
-        if not isinstance(parsed, Mapping) or not self._valid_synthesis(parsed, state):
+        parsed = self._strict_provider_output(artifact, role="inquiry_synthesis")
+        if parsed is None or not self._valid_synthesis(parsed, state):
             state["synthesis"] = {
                 "state": "present",
-                "value": {"attempt": attempt, "provider": provider, "status": "failed"},
+                "value": {
+                    "attempt": attempt,
+                    "error_code": "invalid_structured_output",
+                    "output_contract_version": _OUTPUT_CONTRACT_VERSION,
+                    "provider": provider,
+                    "status": "failed",
+                },
             }
             state["state"] = "failed"
+            state["receipt_id"] = {"state": "absent"}
+            return
+        steps_used = int(parsed["steps_used"])
+        if steps_used > int(state["budget"]["max_steps"]):
+            state["synthesis"] = {
+                "state": "present",
+                "value": {
+                    "attempt": attempt,
+                    "error_code": "budget_exhausted",
+                    "output_contract_version": _OUTPUT_CONTRACT_VERSION,
+                    "provider": provider,
+                    "status": "budget_exhausted",
+                    "steps_used": steps_used,
+                },
+            }
+            state["state"] = "budget_exhausted"
+            state["receipt_id"] = {"state": "absent"}
             return
         try:
             synthesis_digest = _hash_record(dict(parsed))
         except ValueError:
             state["synthesis"] = {
                 "state": "present",
-                "value": {"attempt": attempt, "provider": provider, "status": "failed"},
+                "value": {
+                    "attempt": attempt,
+                    "error_code": "invalid_structured_output",
+                    "output_contract_version": _OUTPUT_CONTRACT_VERSION,
+                    "provider": provider,
+                    "status": "failed",
+                },
             }
             state["state"] = "failed"
+            state["receipt_id"] = {"state": "absent"}
             return
         branch_set_digest = _hash_record(
             [
@@ -1136,15 +1351,16 @@ class InquiryManager:
             "state": "present",
             "value": {
                 "artifact_digest": _sha(path.read_bytes()),
-                "artifact_relative_path": relative,
                 "attempt": attempt,
                 "branch_set_digest": branch_set_digest,
                 "citation_count": len(parsed["citations"]),
                 "dissent_present": isinstance(dissent, list) and bool(dissent),
                 "identity_digest": identity.digest,
                 "limitations_count": len(limitations) if isinstance(limitations, list) else 0,
+                "output_contract_version": _OUTPUT_CONTRACT_VERSION,
                 "provider": provider,
                 "status": "answered",
+                "steps_used": steps_used,
                 "synthesis_digest": synthesis_digest,
             },
         }
@@ -1179,14 +1395,20 @@ class InquiryManager:
             "direct": "Answer the question directly with a compact explicit argument.",
             "evidence": "Seek and weigh concrete evidence available in the read-only workspace.",
         }
+        schema = json.dumps(
+            self._output_schemas["inquiry_branch"],
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         return (
             f"Inquiry branch identity: {branch['identity_digest']}\n"
             f"Branch role: {role}\n"
             f"Finite step budget: {max_steps}\n"
             f"Role instruction: {instructions[role]}\n\n"
             f"Question:\n{question}\n\n"
-            "Return one JSON object. Include answer, evidence, limitations, and "
-            "steps_used (an integer no greater than the finite budget)."
+            "Return exactly one JSON object satisfying this closed schema; do not "
+            f"add or omit members: {schema}\n"
+            "steps_used must not exceed the finite step budget."
         )
 
     def _synthesis_prompt(self, state: Mapping[str, Any]) -> str:
@@ -1194,12 +1416,17 @@ class InquiryManager:
         denominator: list[dict[str, Any]] = []
         for role, branch in sorted(state["branches"].items()):
             parsed: Any = None
+            attempt = branch.get("attempts")
             relative = branch.get("artifact_relative_path")
+            if not isinstance(relative, str) and isinstance(attempt, int) and attempt > 0:
+                relative = f"branches/{role}/attempt-{attempt:04d}.json"
             if branch["outcome"] == "answered" and isinstance(relative, str):
                 artifact = self._load_provider_artifact(
                     self._private_path(inquiry_id, relative)
                 )
-                parsed = artifact.get("output", {}).get("parsed")
+                parsed = self._strict_provider_output(
+                    artifact, role="inquiry_branch"
+                )
             denominator.append(
                 _without_none(
                     {
@@ -1214,21 +1441,62 @@ class InquiryManager:
             "branches": denominator,
             "question": self._load_private_question(inquiry_id),
         }
+        schema = json.dumps(
+            self._output_schemas["inquiry_synthesis"],
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        failed = [
+            branch["identity_digest"]
+            for _, branch in sorted(state["branches"].items())
+            if branch["outcome"] != "answered"
+        ]
         return (
             "Independently synthesize this complete Inquiry denominator. Preserve "
-            "minority dissent, identify failed or missing evidence, and cite every "
-            "branch identity exactly once or more. Return a JSON object with answer, "
-            "citations (objects containing branch_identity and outcome), "
-            "minority_dissent (array), and limitations (array).\n\n"
+            "minority dissent and identify failed or missing evidence. Return "
+            "exactly one JSON object satisfying this closed schema; do not add or "
+            f"omit members: {schema}\n"
+            "citations must contain exactly one {branch_identity,outcome} object for "
+            "each supplied branch, in supplied role order. failed_branches must equal "
+            f"this exact identity array: {json.dumps(failed, separators=(',', ':'))}. "
+            f"steps_used must not exceed {int(state['budget']['max_steps'])}.\n\n"
             + json.dumps(payload, ensure_ascii=False, sort_keys=True)
         )
 
     @staticmethod
     def _valid_synthesis(parsed: Mapping[str, Any], state: Mapping[str, Any]) -> bool:
         citations = parsed.get("citations")
+        failed = parsed.get("failed_branches")
+        if not isinstance(citations, list) or not isinstance(failed, list):
+            return False
+        expected = [
+            {
+                "branch_identity": branch["identity_digest"],
+                "outcome": branch["outcome"],
+            }
+            for _, branch in sorted(state["branches"].items())
+        ]
+        expected_failed = [
+            branch["identity_digest"]
+            for _, branch in sorted(state["branches"].items())
+            if branch["outcome"] != "answered"
+        ]
+        return citations == expected and failed == expected_failed
+
+    @staticmethod
+    def _valid_legacy_synthesis(
+        parsed: Mapping[str, Any], state: Mapping[str, Any]
+    ) -> bool:
+        if not isinstance(parsed.get("answer"), str):
+            return False
+        citations = parsed.get("citations")
         dissent = parsed.get("minority_dissent")
         limitations = parsed.get("limitations")
-        if not isinstance(citations, list) or not isinstance(dissent, list) or not isinstance(limitations, list):
+        if (
+            not isinstance(citations, list)
+            or not isinstance(dissent, list)
+            or not isinstance(limitations, list)
+        ):
             return False
         expected = {
             (branch["identity_digest"], branch["outcome"])
@@ -1236,13 +1504,51 @@ class InquiryManager:
         }
         observed: set[tuple[str, str]] = set()
         for citation in citations:
-            if not isinstance(citation, Mapping):
+            if not isinstance(citation, Mapping) or set(citation) != {
+                "branch_identity",
+                "outcome",
+            }:
                 return False
             identity = citation.get("branch_identity")
             outcome = citation.get("outcome")
-            if isinstance(identity, str) and isinstance(outcome, str):
-                observed.add((identity, outcome))
-        return expected == observed
+            if not isinstance(identity, str) or not isinstance(outcome, str):
+                return False
+            observed.add((identity, outcome))
+        return observed == expected
+
+    def _normalize_additive_state(self, state: dict[str, Any]) -> None:
+        for branch in state["branches"].values():
+            attempts = branch.get("attempts", 0)
+            if (
+                isinstance(attempts, bool)
+                or not isinstance(attempts, int)
+                or attempts < 0
+            ):
+                raise InquiryError("integrity_error", "Inquiry record is invalid")
+            steps = branch.get("steps_used")
+            if steps is not None and (
+                isinstance(steps, bool) or not isinstance(steps, int) or steps < 0
+            ):
+                raise InquiryError("integrity_error", "Inquiry record is invalid")
+        synthesis = state["synthesis"]
+        if synthesis["state"] == "present":
+            value = synthesis["value"]
+            attempt = value.get("attempt", 0)
+            steps = value.get("steps_used")
+            if (
+                isinstance(attempt, bool)
+                or not isinstance(attempt, int)
+                or attempt < 0
+                or (
+                    steps is not None
+                    and (
+                        isinstance(steps, bool)
+                        or not isinstance(steps, int)
+                        or steps < 0
+                    )
+                )
+            ):
+                raise InquiryError("integrity_error", "Inquiry record is invalid")
 
     async def _watch_cancellation(
         self,
@@ -1298,15 +1604,61 @@ class InquiryManager:
                     != {"amount": int(budget["max_steps"]), "unit": "steps"}
                 ):
                     raise InquiryError("integrity_error", "Inquiry branch identity is invalid")
+                if branch.get("output_contract_version") == _OUTPUT_CONTRACT_VERSION:
+                    attempts = branch.get("attempts")
+                    artifact_digest = branch.get("artifact_digest")
+                    if (
+                        isinstance(attempts, int)
+                        and not isinstance(attempts, bool)
+                        and attempts > 0
+                        and isinstance(artifact_digest, str)
+                    ):
+                        relative = branch.get("artifact_relative_path")
+                        if not isinstance(relative, str):
+                            relative = f"branches/{role}/attempt-{attempts:04d}.json"
+                        artifact_path = self._private_path(inquiry_id, relative)
+                        if _sha(artifact_path.read_bytes()) != artifact_digest:
+                            raise InquiryError(
+                                "integrity_error", "Inquiry branch evidence is invalid"
+                            )
+                        artifact = self._load_provider_artifact(artifact_path)
+                        parsed = self._strict_provider_output(
+                            artifact, role="inquiry_branch"
+                        )
+                        if branch["outcome"] in {"answered", "budget_exhausted"} and (
+                            parsed is None
+                            or parsed.get("steps_used") != branch.get("steps_used")
+                        ):
+                            raise InquiryError(
+                                "integrity_error", "Inquiry branch evidence is invalid"
+                            )
             synthesis = state["synthesis"]
             if synthesis["state"] == "present" and synthesis["value"].get("status") == "answered":
                 value = synthesis["value"]
-                path = self._private_path(inquiry_id, str(value["artifact_relative_path"]))
+                path = self._synthesis_artifact_path(inquiry_id, value)
                 if _sha(path.read_bytes()) != value["artifact_digest"]:
                     raise InquiryError("integrity_error", "Inquiry synthesis evidence is invalid")
                 artifact = self._load_provider_artifact(path)
                 parsed = artifact.get("output", {}).get("parsed")
-                if not isinstance(parsed, Mapping) or not self._valid_synthesis(parsed, state):
+                contract_version = value.get("output_contract_version")
+                valid = (
+                    isinstance(parsed, Mapping)
+                    and (
+                        (
+                            contract_version == _OUTPUT_CONTRACT_VERSION
+                            and self._strict_provider_output(
+                                artifact, role="inquiry_synthesis"
+                            )
+                            is not None
+                            and self._valid_synthesis(parsed, state)
+                        )
+                        or (
+                            contract_version is None
+                            and self._valid_legacy_synthesis(parsed, state)
+                        )
+                    )
+                )
+                if not valid:
                     raise InquiryError("integrity_error", "Inquiry synthesis evidence is invalid")
                 synthesis_digest = _hash_record(dict(parsed))
                 branch_set_digest = _hash_record(
@@ -1374,7 +1726,21 @@ class InquiryManager:
             raise
         except (KeyError, OSError, TypeError, ValueError) as exc:
             raise InquiryError("integrity_error", "Inquiry record is invalid") from exc
+        self._normalize_additive_state(state)
         return state
+
+    def _synthesis_artifact_path(
+        self,
+        inquiry_id: str,
+        synthesis: Mapping[str, Any],
+    ) -> Path:
+        relative = synthesis.get("artifact_relative_path")
+        if not isinstance(relative, str):
+            attempt = synthesis.get("attempt")
+            if isinstance(attempt, bool) or not isinstance(attempt, int) or attempt < 1:
+                raise InquiryError("integrity_error", "Inquiry synthesis evidence is invalid")
+            relative = f"synthesis/attempt-{attempt:04d}.json"
+        return self._private_path(inquiry_id, relative)
 
     def _private_path(self, inquiry_id: str, relative: str) -> Path:
         path = Path(relative)
@@ -1414,14 +1780,81 @@ class InquiryManager:
             raise InquiryError("integrity_error", "Inquiry provider evidence is invalid")
         return value
 
-    @staticmethod
-    def _parsed_steps_used(artifact: Mapping[str, Any]) -> int:
+    def _strict_provider_output(
+        self,
+        artifact: Mapping[str, Any],
+        *,
+        role: Literal["inquiry_branch", "inquiry_synthesis"],
+    ) -> Mapping[str, Any] | None:
         output = artifact.get("output")
         parsed = output.get("parsed") if isinstance(output, Mapping) else None
-        steps = parsed.get("steps_used", 1) if isinstance(parsed, Mapping) else 0
-        if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
-            return 9_007_199_254_740_991
-        return steps
+        schema = self._output_schemas[role]
+        return cast(Mapping[str, Any], parsed) if _schema_accepts(parsed, schema) else None
+
+    @staticmethod
+    def _safe_error_code(value: object) -> str:
+        allowed = {
+            "adapter_not_configured",
+            "adapter_start_failed",
+            "budget_exhausted",
+            "cancelled",
+            "invalid_structured_output",
+            "output_limit_exceeded",
+            "protocol_error",
+            "timed_out",
+        }
+        return str(value) if isinstance(value, str) and value in allowed else "protocol_error"
+
+    def _provider_result_from_artifact(
+        self,
+        path: Path,
+        *,
+        expected_role: Literal["inquiry_branch", "inquiry_synthesis"],
+    ) -> ProviderSessionResult:
+        artifact = self._load_provider_artifact(path)
+        output = artifact.get("output")
+        provider = artifact.get("provider")
+        status = artifact.get("status")
+        response_bytes = output.get("response_bytes") if isinstance(output, Mapping) else None
+        response_truncated = (
+            output.get("response_truncated") if isinstance(output, Mapping) else None
+        )
+        adapter_exit_code = artifact.get("adapter_exit_code")
+        if (
+            artifact.get("role") != expected_role
+            or provider not in {"claude", "codex"}
+            or status not in {"completed", "failed", "timed_out", "cancelled"}
+            or isinstance(response_bytes, bool)
+            or not isinstance(response_bytes, int)
+            or response_bytes < 0
+            or not isinstance(response_truncated, bool)
+            or (
+                adapter_exit_code is not None
+                and (isinstance(adapter_exit_code, bool) or not isinstance(adapter_exit_code, int))
+            )
+        ):
+            raise InquiryError("integrity_error", "Inquiry provider evidence is invalid")
+        parsed = output.get("parsed") if isinstance(output, Mapping) else None
+        error_code = artifact.get("error_code")
+        return ProviderSessionResult(
+            role=expected_role,
+            provider=cast(Any, provider),
+            status=cast(Any, status),
+            stop_reason=(
+                str(artifact["stop_reason"])
+                if isinstance(artifact.get("stop_reason"), str)
+                else None
+            ),
+            response_bytes=response_bytes,
+            response_truncated=response_truncated,
+            structured_output=isinstance(parsed, dict),
+            adapter_exit_code=adapter_exit_code,
+            error_code=(
+                cast(Any, self._safe_error_code(error_code))
+                if error_code is not None
+                else None
+            ),
+        )
 
     def _capability_policy_digest(self) -> str:
         path = self.config.bundled_dir / "policies" / "role-capabilities.v1.json"
@@ -1563,8 +1996,120 @@ class InquiryManager:
         self._record_idempotency(state, key_digest, operation, request_digest)
         state["active_operation"] = {"state": "absent"}
 
-    @staticmethod
-    def _summary(state: Mapping[str, Any]) -> InquirySummary:
+    def _public_answer(self, state: Mapping[str, Any]) -> str | None:
+        synthesis = state["synthesis"]
+        if state["state"] != "answered" or synthesis["state"] != "present":
+            return None
+        value = synthesis["value"]
+        if value.get("status") != "answered":
+            return None
+        artifact = self._load_provider_artifact(
+            self._synthesis_artifact_path(str(state["inquiry_id"]), value)
+        )
+        output = artifact.get("output")
+        parsed = output.get("parsed") if isinstance(output, Mapping) else None
+        answer = parsed.get("answer") if isinstance(parsed, Mapping) else None
+        if not isinstance(answer, str):
+            raise InquiryError("integrity_error", "Inquiry synthesis evidence is invalid")
+        redacted = redact_credential_values(answer, finite_credential_values(os.environ))
+        return _bounded_utf8(redacted, _ANSWER_LIMIT_BYTES)
+
+    def _diagnostics(self, state: Mapping[str, Any]) -> dict[str, object]:
+        branch_attempts = 0
+        aggregate_known_steps = 0
+        unknown_step_attempts = 0
+        branch_steps: dict[str, int | None] = {}
+        error_codes: dict[str, str | None] = {}
+        for role, branch in sorted(state["branches"].items()):
+            attempts = int(branch["attempts"])
+            branch_attempts += attempts
+            steps = branch.get("steps_used")
+            provider = branch.get("provider")
+            structured = (
+                provider.get("structured_output")
+                if isinstance(provider, Mapping)
+                else None
+            )
+            known_steps = (
+                int(steps)
+                if (
+                    attempts > 0
+                    and branch.get("outcome") in {"answered", "budget_exhausted"}
+                    and structured is True
+                    and isinstance(steps, int)
+                    and not isinstance(steps, bool)
+                    and steps >= 0
+                )
+                else None
+            )
+            branch_steps[role] = known_steps
+            if known_steps is None:
+                unknown_step_attempts += attempts
+            else:
+                aggregate_known_steps += known_steps
+                unknown_step_attempts += max(0, attempts - 1)
+            error = branch.get("error_code")
+            if not isinstance(error, str):
+                outcome = branch.get("outcome")
+                provider_error = (
+                    provider.get("error_code")
+                    if isinstance(provider, Mapping)
+                    else None
+                )
+                if outcome == "budget_exhausted":
+                    error = "budget_exhausted"
+                elif outcome == "cancelled" and attempts > 0:
+                    error = "cancelled"
+                elif outcome == "failed":
+                    error = self._safe_error_code(provider_error)
+                else:
+                    error = None
+            error_codes[role] = str(error) if isinstance(error, str) else None
+        synthesis = state["synthesis"]
+        synthesis_attempts = 0
+        synthesis_steps: int | None = None
+        synthesis_error: str | None = None
+        if synthesis["state"] == "present":
+            value = synthesis["value"]
+            synthesis_attempts = int(value.get("attempt", 0))
+            steps = value.get("steps_used")
+            if (
+                value.get("status") in {"answered", "budget_exhausted"}
+                and isinstance(steps, int)
+                and not isinstance(steps, bool)
+                and steps >= 0
+            ):
+                synthesis_steps = steps
+                aggregate_known_steps += steps
+                unknown_step_attempts += max(0, synthesis_attempts - 1)
+            else:
+                unknown_step_attempts += synthesis_attempts
+            error = value.get("error_code")
+            if not isinstance(error, str):
+                status = value.get("status")
+                provider = value.get("provider")
+                provider_error = (
+                    provider.get("error_code")
+                    if isinstance(provider, Mapping)
+                    else None
+                )
+                if status == "budget_exhausted":
+                    error = "budget_exhausted"
+                elif status != "answered":
+                    error = self._safe_error_code(provider_error)
+            synthesis_error = str(error) if isinstance(error, str) else None
+        error_codes["synthesis"] = synthesis_error
+        return {
+            "aggregate_known_steps": aggregate_known_steps,
+            "branch_attempts": branch_attempts,
+            "branch_steps_used": dict(sorted(branch_steps.items())),
+            "error_codes": dict(sorted(error_codes.items())),
+            "synthesis_attempts": synthesis_attempts,
+            "synthesis_steps_used": synthesis_steps,
+            "unknown_step_attempts": unknown_step_attempts,
+        }
+
+    def _summary(self, state: Mapping[str, Any]) -> InquirySummary:
         receipt = state["receipt_id"]
         receipt_id = str(receipt["value"]) if receipt["state"] == "present" else None
         return InquirySummary(
@@ -1575,6 +2120,8 @@ class InquiryManager:
                 for role, branch in sorted(state["branches"].items())
             },
             receipt_id=receipt_id,
+            answer=self._public_answer(state),
+            diagnostics=self._diagnostics(state),
         )
 
 
