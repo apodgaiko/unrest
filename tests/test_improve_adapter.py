@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 import socket
 import subprocess
@@ -149,10 +150,32 @@ def _event_kinds(repository: Path) -> list[str]:
     return [json.loads(path.read_text(encoding="utf-8"))["event_kind"] for path in sorted(root.glob("*.json"))]
 
 
+def _admit(manager: EvolutionManager, request: ImprovementRequest) -> None:
+    manager.open_campaign(campaign_id=request.campaign_id, freeze=request.freeze)
+    manager.add_candidate(
+        campaign_id=request.campaign_id,
+        lease_id=request.lease_id,
+        action=request.action,
+        candidate_id=request.candidate_id,
+        author_id=request.author_id,
+        cost_steps=request.candidate_cost_steps,
+    )
+
+
+def _durable_bytes(repository: Path) -> dict[str, bytes]:
+    root = repository / ".unrest"
+    return {
+        str(path.relative_to(root)): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
 @pytest.mark.asyncio
 async def test_nominal_provider_free_open_add_evaluate_review_inspect(repository: Path) -> None:
     manager = _manager(repository)
     request = _request(repository, manager)
+    _admit(manager, request)
 
     result = await run_improvement(manager, request)
 
@@ -174,6 +197,7 @@ async def test_nominal_provider_free_open_add_evaluate_review_inspect(repository
 async def test_success_stops_at_reviewed_decision_needed(repository: Path) -> None:
     manager = _manager(repository)
     request = _request(repository, manager)
+    _admit(manager, request)
 
     result = await run_improvement(manager, request)
 
@@ -208,29 +232,56 @@ async def test_resume_from_persisted_candidate(repository: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_operation_failure_is_stable_and_bounded(repository: Path) -> None:
+async def test_missing_campaign_freeze_is_exact_and_inert(repository: Path) -> None:
     manager = _manager(repository)
-    request = ImprovementRequest(
-        campaign_id="campaign:improve",
-        freeze=_freeze(repository),
-        lease_id="invalid",
-        candidate_id="candidate:improve",
-        action="original",
-        author_id="worker:improve-author",
-        evaluation_id="evaluation:improve",
-        review_id="review:improve",
-    )
+    request = _request(repository, manager)
+    before = _durable_bytes(repository)
 
     with pytest.raises(ImprovementAdapterError) as caught:
         await run_improvement(manager, request)
 
-    assert caught.value.code == "operation_failed"
-    assert caught.value.operation == "add_candidate"
-    assert caught.value.cause_code == "invalid_lease_id"
-    snapshot = manager.inspect_campaign(request.campaign_id)
-    assert snapshot.candidates == ()
-    assert snapshot.evaluations == ()
-    assert snapshot.reviews == ()
+    assert caught.value.code == "missing_campaign_freeze"
+    assert _durable_bytes(repository) == before
+
+
+@pytest.mark.asyncio
+async def test_missing_lease_and_candidate_are_distinct_and_inert(repository: Path) -> None:
+    manager = _manager(repository)
+    request = _request(repository, manager)
+    manager.open_campaign(campaign_id=request.campaign_id, freeze=request.freeze)
+    missing_lease = replace(request, lease_id="lease:not-present")
+    before = _durable_bytes(repository)
+    with pytest.raises(ImprovementAdapterError) as caught:
+        await run_improvement(manager, missing_lease)
+    assert caught.value.code == "missing_returned_candidate_lease"
+    assert _durable_bytes(repository) == before
+
+    with pytest.raises(ImprovementAdapterError) as caught:
+        await run_improvement(manager, request)
+    assert caught.value.code == "missing_admitted_candidate"
+    assert _durable_bytes(repository) == before
+
+
+@pytest.mark.asyncio
+async def test_mismatched_freeze_lease_and_candidate_are_exact(repository: Path) -> None:
+    manager = _manager(repository)
+    request = _request(repository, manager)
+    manager.open_campaign(campaign_id=request.campaign_id, freeze=request.freeze)
+    wrong_freeze = replace(request, freeze=replace(_freeze(repository), seed=14))
+    with pytest.raises(ImprovementAdapterError) as caught:
+        await run_improvement(manager, wrong_freeze)
+    assert caught.value.code == "campaign_freeze_mismatch"
+
+    wrong_lease = replace(request, author_id="worker:other-author")
+    with pytest.raises(ImprovementAdapterError) as caught:
+        await run_improvement(manager, wrong_lease)
+    assert caught.value.code == "returned_candidate_lease_mismatch"
+
+    _admit(manager, request)
+    wrong_candidate = replace(request, candidate_cost_steps=1)
+    with pytest.raises(ImprovementAdapterError) as caught:
+        await run_improvement(manager, wrong_candidate)
+    assert caught.value.code == "admitted_candidate_mismatch"
 
 
 @pytest.mark.asyncio
@@ -278,6 +329,7 @@ async def test_resume_preserves_existing_review_outcome(repository: Path) -> Non
 async def test_serialization_is_canonical_and_resume_stable(repository: Path) -> None:
     manager = _manager(repository)
     request = _request(repository, manager)
+    _admit(manager, request)
 
     first = await run_improvement(manager, request)
     sequence = manager.inspect_campaign(request.campaign_id).sequence
@@ -294,6 +346,7 @@ async def test_public_result_preserves_provenance_without_private_content(reposi
     manager = _manager(repository)
     private_content = "private candidate source token\n"
     request = _request(repository, manager, content=private_content)
+    _admit(manager, request)
 
     result = await run_improvement(manager, request)
 
@@ -319,6 +372,7 @@ async def test_public_result_preserves_provenance_without_private_content(reposi
 async def test_no_later_decision_network_or_external_effect(repository: Path, monkeypatch) -> None:
     manager = _manager(repository)
     request = _request(repository, manager)
+    _admit(manager, request)
     original_head = _git(repository, "rev-parse", "HEAD")
 
     def unexpected_network(*_args, **_kwargs):
@@ -336,6 +390,21 @@ async def test_no_later_decision_network_or_external_effect(repository: Path, mo
     assert result.network_effect_count == 0
     assert result.external_effect_count == 0
     assert result.later_decision_action_count == 0
+    assert result.useful is False
+    assert result.improved is result.approved is result.promoted is result.released is False
+
+
+@pytest.mark.parametrize("field", ["candidate_cost_steps", "evaluation_cost_steps"])
+@pytest.mark.parametrize("value", [-1, True, 1.5, "1"])
+def test_invalid_costs_fail_during_request_construction(
+    repository: Path,
+    field: str,
+    value: object,
+) -> None:
+    manager = _manager(repository)
+    request = _request(repository, manager)
+    with pytest.raises(ImprovementAdapterError, match="invalid_argument"):
+        replace(request, **{field: value})
 
 
 @pytest.mark.asyncio

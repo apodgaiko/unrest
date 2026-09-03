@@ -1,0 +1,1 @@
+{"bounds":{"max_branches":2,"max_steps":8,"timeout_seconds":600},"brief":"Identify one constraint in this synthetic task example.","consumer_id":"example-consumer-v045","idempotency_key":"example-task-v045"}

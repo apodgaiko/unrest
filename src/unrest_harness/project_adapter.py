@@ -78,7 +78,22 @@ class ProjectNode:
     auto_merge: bool = True
 
     def __post_init__(self) -> None:
-        if not self.id or not self.body.strip() or not self.skill:
+        if (
+            not isinstance(self.id, str)
+            or not self.id
+            or not isinstance(self.body, str)
+            or not self.body.strip()
+            or not isinstance(self.skill, str)
+            or not self.skill
+            or not isinstance(self.auto_merge, bool)
+            or not isinstance(self.needs, tuple)
+            or not isinstance(self.writes, tuple)
+            or not isinstance(self.targets, tuple)
+            or any(not isinstance(item, str) or not item for item in self.needs)
+            or any(not isinstance(item, str) or not item for item in self.writes)
+            or any(not isinstance(item, str) or not item for item in self.targets)
+            or (self.result_path is not None and not isinstance(self.result_path, str))
+        ):
             raise ProjectAdapterError("invalid_node")
         if _WRITES_LINE.search(self.body):
             raise ProjectAdapterError("reserved_writes_declaration")
@@ -145,7 +160,12 @@ class ProjectDag:
     nodes: tuple[ProjectNode, ...]
 
     def __post_init__(self) -> None:
-        if not self.nodes or len(self.nodes) > _MAX_PROJECT_NODES:
+        if (
+            not isinstance(self.nodes, tuple)
+            or not self.nodes
+            or len(self.nodes) > _MAX_PROJECT_NODES
+            or any(not isinstance(node, ProjectNode) for node in self.nodes)
+        ):
             raise ProjectAdapterError("invalid_project_size")
         ids = [node.id for node in self.nodes]
         if len(ids) != len(set(ids)):
@@ -273,9 +293,12 @@ def run_project(
     withholds, and cleans its leases before control comes back to this adapter.
     """
 
-    if isinstance(max_steps, bool) or max_steps <= 0:
+    if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps <= 0:
         raise ProjectAdapterError("invalid_step_bound")
-    task_list = coordinator.store.load_task_list(coordinator.project_id, mission_id)
+    try:
+        task_list = coordinator.store.load_task_list(coordinator.project_id, mission_id)
+    except (FileNotFoundError, OSError, ValueError):
+        raise ProjectAdapterError("project_prerequisite_missing") from None
     expected = project.task_list()
     if task_list.model_dump(mode="json") != expected.model_dump(mode="json"):
         raise ProjectAdapterError("project_task_list_mismatch")

@@ -1,0 +1,1 @@
+{"budget":{"max_branches":2,"max_steps":8,"timeout_seconds":600},"idempotency_key":"example-inquiry-v045","project_id":null,"question":"Identify one constraint in this synthetic planning example."}

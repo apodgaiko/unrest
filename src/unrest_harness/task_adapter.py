@@ -74,6 +74,24 @@ _BRANCH_OUTCOMES = frozenset(
     }
 )
 _ACTIVE_STATES = frozenset({"open", "exploring", "synthesizing"})
+_INQUIRY_RESULT_FIELDS = frozenset(
+    {"answer", "branch_outcomes", "diagnostics", "inquiry_id", "receipt_id", "state"}
+)
+_LEGACY_INQUIRY_RESULT_FIELDS = frozenset(
+    {"branch_outcomes", "inquiry_id", "receipt_id", "state"}
+)
+_DIAGNOSTIC_FIELDS = frozenset(
+    {
+        "aggregate_known_steps",
+        "branch_attempts",
+        "branch_steps_used",
+        "error_codes",
+        "synthesis_attempts",
+        "synthesis_steps_used",
+        "unknown_step_attempts",
+    }
+)
+_MAX_ANSWER_BYTES = 65_536
 
 
 class TaskAdapterError(RuntimeError):
@@ -177,19 +195,106 @@ class TaskRequest:
             raise TaskAdapterError("invalid_argument", "Task request is invalid")
 
 
+def _non_negative_integer(value: object) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int) and value >= 0
+
+
+@dataclass(frozen=True)
+class InquiryDiagnostics:
+    """Closed, value-free accounting projected by the Inquiry owner."""
+
+    branch_attempts: int
+    branch_steps_used: Mapping[str, int | None]
+    synthesis_attempts: int
+    synthesis_steps_used: int | None
+    aggregate_known_steps: int
+    unknown_step_attempts: int
+    error_codes: Mapping[str, str | None]
+
+    @classmethod
+    def from_public(cls, value: object) -> InquiryDiagnostics:
+        if not isinstance(value, Mapping) or set(value) != _DIAGNOSTIC_FIELDS:
+            raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
+        branch_steps = value["branch_steps_used"]
+        error_codes = value["error_codes"]
+        integer_fields = (
+            value["branch_attempts"],
+            value["synthesis_attempts"],
+            value["aggregate_known_steps"],
+            value["unknown_step_attempts"],
+        )
+        synthesis_steps = value["synthesis_steps_used"]
+        if (
+            not all(_non_negative_integer(item) for item in integer_fields)
+            or (
+                synthesis_steps is not None
+                and not _non_negative_integer(synthesis_steps)
+            )
+            or not isinstance(branch_steps, Mapping)
+            or not isinstance(error_codes, Mapping)
+        ):
+            raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
+        checked_steps: dict[str, int | None] = {}
+        for role, steps in branch_steps.items():
+            if (
+                not isinstance(role, str)
+                or not role
+                or (steps is not None and not _non_negative_integer(steps))
+            ):
+                raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
+            checked_steps[role] = cast(int | None, steps)
+        checked_codes: dict[str, str | None] = {}
+        for role, code in error_codes.items():
+            if (
+                not isinstance(role, str)
+                or not role
+                or (code is not None and (not isinstance(code, str) or not code))
+            ):
+                raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
+            checked_codes[role] = code
+        if set(checked_steps) - set(checked_codes) or "synthesis" not in checked_codes:
+            raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
+        return cls(
+            branch_attempts=cast(int, value["branch_attempts"]),
+            branch_steps_used=dict(sorted(checked_steps.items())),
+            synthesis_attempts=cast(int, value["synthesis_attempts"]),
+            synthesis_steps_used=cast(int | None, synthesis_steps),
+            aggregate_known_steps=cast(int, value["aggregate_known_steps"]),
+            unknown_step_attempts=cast(int, value["unknown_step_attempts"]),
+            error_codes=dict(sorted(checked_codes.items())),
+        )
+
+    def public_record(self) -> dict[str, object]:
+        return {
+            "aggregate_known_steps": self.aggregate_known_steps,
+            "branch_attempts": self.branch_attempts,
+            "branch_steps_used": dict(sorted(self.branch_steps_used.items())),
+            "error_codes": dict(sorted(self.error_codes.items())),
+            "synthesis_attempts": self.synthesis_attempts,
+            "synthesis_steps_used": self.synthesis_steps_used,
+            "unknown_step_attempts": self.unknown_step_attempts,
+        }
+
+
 @dataclass(frozen=True)
 class InquiryRecord:
     inquiry_id: str
     state: InquiryState
     branch_outcomes: Mapping[str, BranchOutcome]
     receipt_id: str | None
+    answer: str | None = None
+    diagnostics: InquiryDiagnostics | None = None
 
     @classmethod
     def from_public(cls, value: Mapping[str, object]) -> InquiryRecord:
+        fields = frozenset(value)
+        if fields not in {_LEGACY_INQUIRY_RESULT_FIELDS, _INQUIRY_RESULT_FIELDS}:
+            raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
         inquiry_id = value.get("inquiry_id")
         state = value.get("state")
         outcomes = value.get("branch_outcomes")
         receipt_id = value.get("receipt_id")
+        answer = value.get("answer")
         if not isinstance(inquiry_id, str) or not inquiry_id:
             raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
         if not isinstance(state, str) or state not in _INQUIRY_STATES:
@@ -207,16 +312,30 @@ class InquiryRecord:
             checked_outcomes[role] = cast(BranchOutcome, outcome)
         if receipt_id is not None and not isinstance(receipt_id, str):
             raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
+        diagnostics: InquiryDiagnostics | None = None
+        if fields == _INQUIRY_RESULT_FIELDS:
+            if answer is not None and (
+                not isinstance(answer, str)
+                or len(answer.encode("utf-8")) > _MAX_ANSWER_BYTES
+            ):
+                raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
+            diagnostics = InquiryDiagnostics.from_public(value["diagnostics"])
         return cls(
             inquiry_id=inquiry_id,
             state=cast(InquiryState, state),
             branch_outcomes=dict(sorted(checked_outcomes.items())),
             receipt_id=receipt_id,
+            answer=cast(str | None, answer),
+            diagnostics=diagnostics,
         )
 
     def public_record(self) -> dict[str, object]:
         return {
+            "answer": self.answer,
             "branch_outcomes": dict(sorted(self.branch_outcomes.items())),
+            "diagnostics": (
+                self.diagnostics.public_record() if self.diagnostics is not None else None
+            ),
             "inquiry_id": self.inquiry_id,
             "receipt_id": self.receipt_id,
             "state": self.state,
@@ -278,13 +397,32 @@ class TaskResult:
     operations: tuple[TaskOperation, ...]
     schema_version: int = 1
 
+    @property
+    def answer(self) -> str | None:
+        return self.inquiry.answer
+
+    @property
+    def diagnostics(self) -> InquiryDiagnostics | None:
+        return self.inquiry.diagnostics
+
+    @property
+    def useful(self) -> bool:
+        """Only a consumable Inquiry answer constitutes useful task output."""
+
+        return self.answer is not None
+
     def public_record(self) -> dict[str, object]:
         return {
+            "answer": self.answer,
+            "diagnostics": (
+                self.diagnostics.public_record() if self.diagnostics is not None else None
+            ),
             "handoff": self.handoff.public_record() if self.handoff is not None else None,
             "inquiry": self.inquiry.public_record(),
             "operations": [operation.public_record() for operation in self.operations],
             "schema_version": self.schema_version,
             "terminal": self.terminal,
+            "useful": self.useful,
         }
 
     def canonical_bytes(self) -> bytes:

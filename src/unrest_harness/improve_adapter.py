@@ -18,6 +18,7 @@ from .evolution import (
     ReviewOutcome,
     ReviewRecord,
 )
+from .workspaces import WorkspaceError
 
 
 ImprovementOperation = Literal["open", "add_candidate", "evaluate", "review", "inspect"]
@@ -58,6 +59,14 @@ class ImprovementRequest:
     candidate_dissent_digests: Sequence[str] = ()
     evaluation_cost_steps: int = 0
 
+    def __post_init__(self) -> None:
+        costs = (self.candidate_cost_steps, self.evaluation_cost_steps)
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in costs
+        ):
+            raise ImprovementAdapterError("invalid_argument", operation="open")
+
 
 @dataclass(frozen=True)
 class ImprovementResult:
@@ -87,6 +96,11 @@ class ImprovementResult:
     external_effect_count: Literal[0] = 0
     later_decision_action_count: Literal[0] = 0
     schema_version: Literal[1] = 1
+    useful: Literal[False] = False
+    improved: Literal[False] = False
+    approved: Literal[False] = False
+    promoted: Literal[False] = False
+    released: Literal[False] = False
 
     def as_mapping(self) -> Mapping[str, object]:
         """Return the bounded public projection used for deterministic receipts."""
@@ -114,6 +128,12 @@ class ImprovementResult:
             },
             "operation_limit": self.operation_limit,
             "patch_digest": self.patch_digest,
+            "authority": {
+                "approved": self.approved,
+                "improved": self.improved,
+                "promoted": self.promoted,
+                "released": self.released,
+            },
             "review": {
                 "outcome": self.review_outcome,
                 "receipt_digest": self.review_receipt_digest,
@@ -122,6 +142,7 @@ class ImprovementResult:
             },
             "schema_version": self.schema_version,
             "stage": self.stage,
+            "useful": self.useful,
         }
 
     def to_json_bytes(self) -> bytes:
@@ -207,7 +228,7 @@ def _candidate(snapshot: CampaignSnapshot, request: ImprovementRequest) -> Candi
         or candidate.cost_steps != request.candidate_cost_steps
         or candidate.dissent_digests != expected_dissent
     ):
-        raise ImprovementAdapterError("resume_mismatch", operation="add_candidate")
+        raise ImprovementAdapterError("admitted_candidate_mismatch", operation="inspect")
     return candidate
 
 
@@ -251,27 +272,49 @@ async def run_improvement(
     if manager.provider_runner is not None:
         raise ImprovementAdapterError("provider_runner_configured", operation="open")
 
-    snapshot = _call(
-        "open",
-        lambda: manager.open_campaign(campaign_id=request.campaign_id, freeze=request.freeze),
-    )
+    try:
+        snapshot = manager.inspect_campaign(request.campaign_id)
+    except EvolutionError:
+        raise ImprovementAdapterError("missing_campaign_freeze", operation="inspect") from None
     _assert_no_later_decision(snapshot, "open")
+    try:
+        freeze = (
+            request.freeze
+            if isinstance(request.freeze, CampaignFreeze)
+            else CampaignFreeze.from_mapping(request.freeze)
+        )
+        freeze.validate()
+    except (EvolutionError, TypeError, ValueError):
+        raise ImprovementAdapterError("invalid_argument", operation="inspect") from None
+    if snapshot.freeze != freeze:
+        raise ImprovementAdapterError("campaign_freeze_mismatch", operation="inspect")
+
+    try:
+        lease = manager.workspace_manager.inspect_workspace(request.lease_id)
+    except WorkspaceError:
+        raise ImprovementAdapterError(
+            "missing_returned_candidate_lease", operation="inspect"
+        ) from None
+    if (
+        lease.state != "returned"
+        or lease.owner_id != request.author_id
+        or lease.base_revision != freeze.accepted_revision
+        or lease.patch_digest is None
+        or lease.candidate_identity_digest is None
+    ):
+        raise ImprovementAdapterError(
+            "returned_candidate_lease_mismatch", operation="inspect"
+        )
 
     candidate = _candidate(snapshot, request)
     if candidate is None:
-        candidate = _call(
-            "add_candidate",
-            lambda: manager.add_candidate(
-                campaign_id=request.campaign_id,
-                lease_id=request.lease_id,
-                action=request.action,
-                parent_candidate_id=request.parent_candidate_id,
-                candidate_id=request.candidate_id,
-                author_id=request.author_id,
-                outcome="admitted",
-                cost_steps=request.candidate_cost_steps,
-                dissent_digests=request.candidate_dissent_digests,
-            ),
+        raise ImprovementAdapterError("missing_admitted_candidate", operation="inspect")
+    if (
+        candidate.patch_digest != lease.patch_digest
+        or candidate.candidate_identity_digest != lease.candidate_identity_digest
+    ):
+        raise ImprovementAdapterError(
+            "returned_candidate_lease_mismatch", operation="inspect"
         )
 
     evaluation = _evaluation(snapshot, request)
@@ -314,3 +357,6 @@ async def run_improvement(
         review_digest=final_review.review_digest,
         review_receipt_digest=final_review.receipt_digest,
     )
+
+
+__all__ = ["ImprovementRequest", "ImprovementResult", "run_improvement"]

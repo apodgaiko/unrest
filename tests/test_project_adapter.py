@@ -330,3 +330,52 @@ def test_invalid_graphs_and_mismatched_runtime_fail_closed(
         run_project(runtime.coordinator, runtime.mission_id, different, max_steps=1)
     with pytest.raises(ProjectAdapterError, match="invalid_step_bound"):
         run_project(runtime.coordinator, runtime.mission_id, project, max_steps=0)
+
+
+@pytest.mark.parametrize("max_steps", [0, -1, True, 1.5, "1", None])
+def test_invalid_step_matrix_fails_before_coordinator_step(
+    config: HarnessConfig,
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    max_steps: object,
+) -> None:
+    project = _project()
+    runtime = _runtime(
+        config,
+        repository,
+        project,
+        lambda request: WorkHandoff(node_id=request.task.id, done=True, report="local"),
+    )
+    monkeypatch.setattr(
+        runtime.coordinator,
+        "step",
+        lambda: pytest.fail("coordinator step reached for invalid bound"),
+    )
+    with pytest.raises(ProjectAdapterError, match="invalid_step_bound"):
+        run_project(
+            runtime.coordinator,
+            runtime.mission_id,
+            project,
+            max_steps=max_steps,  # type: ignore[arg-type]
+        )
+
+
+def test_missing_submitted_dag_is_exact_and_never_coordinates(
+    config: HarnessConfig,
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project()
+    runtime = _runtime(
+        config,
+        repository,
+        project,
+        lambda request: WorkHandoff(node_id=request.task.id, done=True, report="local"),
+    )
+    monkeypatch.setattr(
+        runtime.coordinator,
+        "step",
+        lambda: pytest.fail("coordinator step reached without submitted DAG"),
+    )
+    with pytest.raises(ProjectAdapterError, match="project_prerequisite_missing"):
+        run_project(runtime.coordinator, "mission-missing", project, max_steps=1)

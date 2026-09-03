@@ -9,6 +9,7 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -1340,7 +1341,7 @@ class TestInitManagedRootSafety:
             }
             assert expected_counts[expected_outcome] in matching_line
         else:
-            asset_count = 4 if asset_kind == "provider-agent" else 6
+            asset_count = 4 if asset_kind == "provider-agent" else 7
             expected_value = 1 if expected_outcome != "verified" else asset_count
             assert f"{expected_outcome}={expected_value}" in matching_line
 
@@ -1371,7 +1372,7 @@ class TestInitManagedRootSafety:
         expected_verified = {
             "prompt": 1,
             "provider-agent": 4,
-            "bundled-skill": 6,
+            "bundled-skill": 7,
         }[asset_kind]
         assert f"created=0 repaired=0 verified={expected_verified}" in verified_line
 
@@ -1782,3 +1783,347 @@ class TestObserveProject:
         result = runner.invoke(cli, ["observe-project", "one", "--strict"])
         assert result.exit_code == 1
         assert result.output == "Error: invalid_project_id\n"
+
+
+_V045_EXAMPLES = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "unrest_harness"
+    / "bundled"
+    / "examples"
+    / "v0.4.5"
+)
+
+
+def _example(name: str) -> dict[str, object]:
+    value = json.loads((_V045_EXAMPLES / name).read_bytes())
+    assert isinstance(value, dict)
+    return value
+
+
+@pytest.mark.parametrize("command", ["run-task", "run-project", "run-improvement"])
+def test_adapter_help_surfaces_remain_reachable(
+    runner: CliRunner,
+    command: str,
+) -> None:
+    result = runner.invoke(cli, [command, "--help"])
+    assert result.exit_code == 0
+    assert "--request" in result.output
+
+
+def test_v045_examples_are_canonical_and_parse_with_production_surfaces() -> None:
+    from unrest_harness import api
+    from unrest_harness.api import run_improvement, run_project, run_task
+    from unrest_harness.improve_adapter import __all__ as improve_exports
+    from unrest_harness.inquiry import InquiryBudget
+    from unrest_harness.project_adapter import __all__ as project_exports
+    from unrest_harness.task_adapter import __all__ as task_exports
+
+    for path in sorted(_V045_EXAMPLES.glob("*.json")):
+        document = json.loads(path.read_bytes())
+        assert path.read_bytes() == (
+            json.dumps(document, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+            + "\n"
+        ).encode("utf-8")
+
+    inquiry = cli_module._closed_adapter_mapping(
+        _example("inquiry.json"),
+        required={"budget", "idempotency_key", "project_id", "question"},
+    )
+    budget = cli_module._closed_adapter_mapping(
+        inquiry["budget"],
+        required={"max_branches", "max_steps", "timeout_seconds"},
+    )
+    assert InquiryBudget(**budget).public_record() == budget
+    assert cli_module._task_request(_example("run-task.json")).bounds.max_branches == 2
+    project_id, mission_id, project, max_steps = cli_module._project_request(
+        _example("run-project.json")
+    )
+    assert (project_id, mission_id, len(project.nodes), max_steps) == (
+        "project-example-v045",
+        "mission-example-v045",
+        2,
+        12,
+    )
+    _repository, improvement = cli_module._improvement_request(
+        _example("run-improvement.json")
+    )
+    assert improvement.candidate_cost_steps == improvement.evaluation_cost_steps == 0
+    assert callable(run_task) and callable(run_project) and callable(run_improvement)
+    assert task_exports == [
+        "HandoffRecord",
+        "InquiryLifecycle",
+        "InquiryRecord",
+        "TaskAdapterError",
+        "TaskBounds",
+        "TaskOperation",
+        "TaskRequest",
+        "TaskResult",
+        "run_task",
+    ]
+    assert project_exports == [
+        "CancellationSignal",
+        "ProjectAdapterError",
+        "ProjectDag",
+        "ProjectNode",
+        "ProjectNodeResult",
+        "ProjectRunResult",
+        "run_project",
+    ]
+    assert improve_exports == ["ImprovementRequest", "ImprovementResult", "run_improvement"]
+    assert set(api.__all__) == {
+        "add_candidate",
+        "advance_inquiry",
+        "attach_run",
+        "cancel_inquiry",
+        "cancel_run",
+        "cleanup_workspace",
+        "evaluate_candidate",
+        "handoff_inquiry",
+        "inspect_campaign",
+        "inspect_inquiry",
+        "inspect_run",
+        "inspect_workspace",
+        "integrate_workspace",
+        "lease_workspace",
+        "measure_baseline",
+        "open_campaign",
+        "open_inquiry",
+        "pause_inquiry",
+        "promote_candidate",
+        "resume_inquiry",
+        "return_workspace",
+        "review_candidate",
+        "rollback_promotion",
+        "submit_run",
+    }
+    assert {"run_task", "run_project", "run_improvement"}.isdisjoint(api.__all__)
+
+
+def test_v045_skill_is_discoverable_as_the_seventh_bundled_skill(
+    harness_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unrest_harness.assets import AssetLoader
+
+    monkeypatch.setenv("UNREST_HOME", str(harness_home))
+    loader = AssetLoader(HarnessConfig.discover())
+    bundled = [skill for skill in loader.list_skills() if skill.source == "bundled"]
+    assert len(bundled) == 7
+    assert [skill.name for skill in bundled].count("v045-dogfood") == 1
+    skill = loader.load_skill("v045-dogfood")
+    assert skill.frontmatter == {
+        "name": "v045-dogfood",
+        "description": (
+            "Run the v0.4.5 Inquiry and adapter dogfood surfaces without inventing "
+            "prerequisites or authority."
+        ),
+    }
+    for example in ("inquiry.json", "run-task.json", "run-project.json", "run-improvement.json"):
+        assert example in skill.body
+        assert (_V045_EXAMPLES / example).is_file()
+    for phrase in (
+        "Only a non-null privacy-safe answer",
+        "blocked_missing_exact_request",
+        "decision_needed",
+        "zero unapproved provider attempts",
+        "Only INT-V045 consumes the return",
+    ):
+        assert phrase in skill.body
+
+
+def _write_adapter_request(tmp_path: Path, document: dict[str, object]) -> Path:
+    path = tmp_path / "request.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return path
+
+
+def _nested_mutation(
+    document: dict[str, object],
+    section: str,
+    field: str,
+    value: object,
+) -> dict[str, object]:
+    changed = json.loads(json.dumps(document))
+    nested = changed[section]
+    assert isinstance(nested, dict)
+    if value is _OMIT:
+        nested.pop(field, None)
+    else:
+        nested[field] = value
+    return changed
+
+
+_OMIT = object()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_steps", _OMIT),
+        ("timeout_seconds", _OMIT),
+        ("max_steps", 0),
+        ("max_steps", -1),
+        ("max_steps", True),
+        ("max_steps", "1"),
+        ("max_steps", 1.5),
+        ("max_steps", None),
+        ("timeout_seconds", 0),
+        ("timeout_seconds", -1),
+        ("timeout_seconds", True),
+        ("timeout_seconds", "1"),
+        ("timeout_seconds", 1.5),
+        ("timeout_seconds", None),
+        ("max_branches", 0),
+        ("max_branches", -1),
+        ("max_branches", True),
+        ("max_branches", 5),
+        ("max_branches", "1"),
+        ("max_branches", 1.5),
+        ("max_branches", None),
+    ],
+)
+def test_run_task_invalid_bounds_matrix_is_safe_and_pre_effect(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: object,
+) -> None:
+    from unrest_harness import api
+
+    document = _nested_mutation(_example("run-task.json"), "bounds", field, value)
+    monkeypatch.setattr(api, "run_task", lambda *_args, **_kwargs: pytest.fail("Inquiry reached"))
+    result = runner.invoke(cli, ["run-task", "--request", str(_write_adapter_request(tmp_path, document))])
+    assert result.exit_code == 1
+    assert result.output == "Error: invalid_argument\n"
+
+
+def test_run_task_default_branches_and_unknown_members() -> None:
+    document = _example("run-task.json")
+    bounds = document["bounds"]
+    assert isinstance(bounds, dict)
+    bounds.pop("max_branches")
+    assert cli_module._task_request(document).bounds.max_branches == 4
+    bounds["unknown_private_canary"] = "PRIVATE-CANARY"
+    with pytest.raises(click.ClickException, match="invalid_argument"):
+        cli_module._task_request(document)
+    document = _example("run-task.json")
+    document["unknown_private_canary"] = "PRIVATE-CANARY"
+    with pytest.raises(click.ClickException, match="invalid_argument"):
+        cli_module._task_request(document)
+
+
+@pytest.mark.parametrize("value", [_OMIT, 0, -1, True, "1", 1.5, None])
+def test_run_project_invalid_bound_matrix_is_safe_and_pre_construction(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    value: object,
+) -> None:
+    document = _example("run-project.json")
+    if value is _OMIT:
+        document.pop("max_steps")
+    else:
+        document["max_steps"] = value
+    monkeypatch.setattr(
+        cli_module,
+        "_project_adapter_coordinator",
+        lambda *_args: pytest.fail("coordinator constructed"),
+    )
+    result = runner.invoke(
+        cli,
+        ["run-project", "--request", str(_write_adapter_request(tmp_path, document))],
+    )
+    assert result.exit_code == 1
+    assert result.output == "Error: invalid_argument\n"
+
+
+def test_run_project_and_improvement_reject_unknown_members() -> None:
+    project = _example("run-project.json")
+    project["unknown_private_canary"] = "PRIVATE-CANARY"
+    with pytest.raises(click.ClickException, match="invalid_argument"):
+        cli_module._project_request(project)
+
+    improvement = _example("run-improvement.json")
+    request = improvement["request"]
+    assert isinstance(request, dict)
+    request["unknown_private_canary"] = "PRIVATE-CANARY"
+    with pytest.raises(click.ClickException, match="invalid_argument"):
+        cli_module._improvement_request(improvement)
+
+
+@pytest.mark.parametrize("field", ["candidate_cost_steps", "evaluation_cost_steps"])
+@pytest.mark.parametrize("value", [_OMIT, 0, 1])
+def test_run_improvement_compatible_cost_matrix(field: str, value: object) -> None:
+    document = _example("run-improvement.json")
+    request = document["request"]
+    assert isinstance(request, dict)
+    if value is _OMIT:
+        request.pop(field)
+        expected = 0
+    else:
+        request[field] = value
+        expected = value
+    _repository, parsed = cli_module._improvement_request(document)
+    assert getattr(parsed, field) == expected
+
+
+@pytest.mark.parametrize("field", ["candidate_cost_steps", "evaluation_cost_steps"])
+@pytest.mark.parametrize("value", [-1, True, "1", 1.5, None])
+def test_run_improvement_invalid_cost_matrix_is_safe_and_pre_manager(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: object,
+) -> None:
+    from unrest_harness import evolution
+
+    document = _nested_mutation(_example("run-improvement.json"), "request", field, value)
+    monkeypatch.setattr(
+        evolution,
+        "EvolutionManager",
+        lambda *_args, **_kwargs: pytest.fail("EvolutionManager constructed"),
+    )
+    result = runner.invoke(
+        cli,
+        ["run-improvement", "--request", str(_write_adapter_request(tmp_path, document))],
+    )
+    assert result.exit_code == 1
+    assert result.output == "Error: invalid_argument\n"
+
+
+@pytest.mark.parametrize(
+    ("command", "example_name", "expected_code"),
+    [
+        ("run-project", "run-project.json", "project_prerequisite_missing"),
+        ("run-improvement", "run-improvement.json", "missing_campaign_freeze"),
+    ],
+)
+def test_real_cli_prerequisite_blocks_are_safe(
+    runner: CliRunner,
+    env: dict[str, str],
+    workspace: Path,
+    command: str,
+    example_name: str,
+    expected_code: str,
+) -> None:
+    document = _example(example_name)
+    if command == "run-improvement":
+        document["repository"] = str(workspace)
+    request = _write_adapter_request(workspace, document)
+    result = runner.invoke(cli, [command, "--request", str(request)], env=env)
+    assert result.exit_code == 1
+    assert result.output == f"Error: {expected_code}\n"
+    assert "project-example-v045" not in result.output
+    assert "campaign:example-v045" not in result.output
+
+
+@pytest.mark.parametrize("command", ["run-task", "run-project", "run-improvement"])
+def test_missing_request_path_is_value_free(runner: CliRunner, command: str) -> None:
+    canary = "/PRIVATE-NOT-PRESENT-request.json"
+    result = runner.invoke(cli, [command, "--request", canary])
+    assert result.exit_code == 1
+    assert result.output == "Error: invalid_argument\n"
+    assert "PRIVATE" not in result.output
