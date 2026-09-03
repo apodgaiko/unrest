@@ -320,6 +320,7 @@ class InquiryRecord:
             if answer is not None and (
                 not isinstance(answer, str)
                 or len(answer.encode("utf-8")) > _MAX_ANSWER_BYTES
+                or state != "answered"
             ):
                 raise TaskAdapterError("invalid_result", "Inquiry result is invalid")
             diagnostics = InquiryDiagnostics.from_public(value["diagnostics"])
@@ -402,6 +403,15 @@ class TaskResult:
     operations: tuple[TaskOperation, ...]
     schema_version: int = 1
 
+    def __post_init__(self) -> None:
+        if self.terminal != _terminal(self.inquiry.state):
+            raise TaskAdapterError("invalid_result", "Task result is invalid")
+        if self.handoff is not None and (
+            self.inquiry.state != "answered"
+            or self.handoff.inquiry_id != self.inquiry.inquiry_id
+        ):
+            raise TaskAdapterError("invalid_result", "Task result is invalid")
+
     @property
     def answer(self) -> str | None:
         return self.inquiry.answer
@@ -414,7 +424,13 @@ class TaskResult:
     def useful(self) -> bool:
         """Only a consumable Inquiry answer constitutes useful task output."""
 
-        return self.answer is not None
+        return (
+            self.answer is not None
+            and self.terminal == "completed"
+            and self.inquiry.state == "answered"
+            and self.handoff is not None
+            and self.handoff.inquiry_id == self.inquiry.inquiry_id
+        )
 
     def public_record(self) -> dict[str, object]:
         return {
@@ -514,7 +530,10 @@ async def run_task(lifecycle: InquiryLifecycle, request: TaskRequest) -> TaskRes
                 _operation_key(request.idempotency_key, "handoff_inquiry"),
             )
         )
-        if handoff.inquiry_id != current.inquiry_id:
+        if (
+            handoff.inquiry_id != current.inquiry_id
+            or handoff.consumer_id != request.consumer_id
+        ):
             raise TaskAdapterError("invalid_result", "Inquiry handoff result is invalid")
         operations.append(TaskOperation("handoff_inquiry", handoff=handoff))
 

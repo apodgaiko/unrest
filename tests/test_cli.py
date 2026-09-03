@@ -1926,6 +1926,10 @@ def test_v045_skill_is_discoverable_as_the_seventh_bundled_skill(
         "Only a non-null privacy-safe answer",
         "blocked_missing_exact_request",
         "decision_needed",
+        "provider_approval_required",
+        "externally authenticated approval carrier",
+        "three provider attempts including synthesis",
+        "65,536-byte limit on every provider response",
         "zero unapproved provider attempts",
         "Only INT-V045 consumes the return",
     ):
@@ -2032,10 +2036,9 @@ def test_run_project_invalid_bound_matrix_is_safe_and_pre_construction(
         "_project_adapter_coordinator",
         lambda *_args: pytest.fail("coordinator constructed"),
     )
-    result = runner.invoke(
-        cli,
-        ["run-project", "--request", str(_write_adapter_request(tmp_path, document))],
-    )
+    request = _write_adapter_request(tmp_path, document)
+    monkeypatch.setattr(cli_module, "_RUN_PROJECT_REQUEST_PATH", request)
+    result = runner.invoke(cli, ["run-project", "--request", str(request)])
     assert result.exit_code == 1
     assert result.output == "Error: invalid_argument\n"
 
@@ -2087,10 +2090,9 @@ def test_run_improvement_invalid_cost_matrix_is_safe_and_pre_manager(
         "EvolutionManager",
         lambda *_args, **_kwargs: pytest.fail("EvolutionManager constructed"),
     )
-    result = runner.invoke(
-        cli,
-        ["run-improvement", "--request", str(_write_adapter_request(tmp_path, document))],
-    )
+    request = _write_adapter_request(tmp_path, document)
+    monkeypatch.setattr(cli_module, "_RUN_IMPROVEMENT_REQUEST_PATH", request)
+    result = runner.invoke(cli, ["run-improvement", "--request", str(request)])
     assert result.exit_code == 1
     assert result.output == "Error: invalid_argument\n"
 
@@ -2106,6 +2108,7 @@ def test_real_cli_prerequisite_blocks_are_safe(
     runner: CliRunner,
     env: dict[str, str],
     workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
     command: str,
     example_name: str,
     expected_code: str,
@@ -2114,6 +2117,12 @@ def test_real_cli_prerequisite_blocks_are_safe(
     if command == "run-improvement":
         document["repository"] = str(workspace)
     request = _write_adapter_request(workspace, document)
+    expected_attribute = (
+        "_RUN_PROJECT_REQUEST_PATH"
+        if command == "run-project"
+        else "_RUN_IMPROVEMENT_REQUEST_PATH"
+    )
+    monkeypatch.setattr(cli_module, expected_attribute, request)
     result = runner.invoke(cli, [command, "--request", str(request)], env=env)
     assert result.exit_code == 1
     assert result.output == f"Error: {expected_code}\n"
@@ -2126,5 +2135,199 @@ def test_missing_request_path_is_value_free(runner: CliRunner, command: str) -> 
     canary = "/PRIVATE-NOT-PRESENT-request.json"
     result = runner.invoke(cli, [command, "--request", canary])
     assert result.exit_code == 1
-    assert result.output == "Error: invalid_argument\n"
+    expected = (
+        "invalid_argument" if command == "run-task" else "blocked_missing_exact_request"
+    )
+    assert result.output == f"Error: {expected}\n"
     assert "PRIVATE" not in result.output
+
+
+def test_run_task_fails_closed_after_parser_and_exact_dogfood_ceiling(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unrest_harness import api
+
+    monkeypatch.setattr(api, "run_task", lambda *_args: pytest.fail("Inquiry reached"))
+    valid = _write_adapter_request(tmp_path, _example("run-task.json"))
+    result = runner.invoke(cli, ["run-task", "--request", str(valid)])
+    assert result.exit_code == 1
+    assert result.output == "Error: provider_approval_required\n"
+
+    above = _example("run-task.json")
+    bounds = above["bounds"]
+    assert isinstance(bounds, dict)
+    bounds["max_steps"] = 9
+    result = runner.invoke(
+        cli,
+        ["run-task", "--request", str(_write_adapter_request(tmp_path, above))],
+    )
+    assert result.exit_code == 1
+    assert result.output == "Error: dogfood_bounds_exceeded\n"
+
+    malformed = _example("run-task.json")
+    malformed_bounds = malformed["bounds"]
+    assert isinstance(malformed_bounds, dict)
+    malformed_bounds["max_steps"] = True
+    result = runner.invoke(
+        cli,
+        ["run-task", "--request", str(_write_adapter_request(tmp_path, malformed))],
+    )
+    assert result.exit_code == 1
+    assert result.output == "Error: invalid_argument\n"
+    assert (
+        cli_module._DOGFOOD_MAX_BRANCHES,
+        cli_module._DOGFOOD_MAX_STEPS,
+        cli_module._DOGFOOD_TIMEOUT_SECONDS,
+        cli_module._DOGFOOD_MAX_PROVIDER_ATTEMPTS,
+        cli_module._DOGFOOD_MAX_RESPONSE_BYTES_PER_ATTEMPT,
+    ) == (2, 8, 600, 3, 65_536)
+
+
+@pytest.mark.parametrize(
+    ("command", "constant"),
+    [
+        ("run-project", "_RUN_PROJECT_REQUEST_PATH"),
+        ("run-improvement", "_RUN_IMPROVEMENT_REQUEST_PATH"),
+    ],
+)
+def test_future_request_path_is_exact_regular_and_pre_parser(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    constant: str,
+) -> None:
+    exact = tmp_path / "external" / "request.v1.json"
+    exact.parent.mkdir()
+    alternate = tmp_path / "alternate.json"
+    alternate.write_text("{}", encoding="utf-8")
+    calls: list[str] = []
+
+    def forbidden_parser(_path: Path) -> dict[str, object]:
+        calls.append("parser")
+        raise AssertionError("parser reached")
+
+    monkeypatch.setattr(cli_module, constant, exact)
+    monkeypatch.setattr(cli_module, "_adapter_document", forbidden_parser)
+    for path in (exact, alternate):
+        result = runner.invoke(cli, [command, "--request", str(path)])
+        assert result.exit_code == 1
+        assert result.output == "Error: blocked_missing_exact_request\n"
+        assert calls == []
+
+    exact.symlink_to(alternate)
+    result = runner.invoke(cli, [command, "--request", str(exact)])
+    assert result.exit_code == 1
+    assert result.output == "Error: blocked_missing_exact_request\n"
+    assert calls == []
+
+
+def _manager_preflight_tree(repository: Path, campaign_id: str, lease_id: str) -> None:
+    directories = (
+        repository / ".unrest" / "evolution" / "campaigns" / campaign_id.removeprefix("campaign:"),
+        repository / ".unrest" / "evolution" / "private",
+        repository / ".unrest-runtime" / "evolution",
+        repository / ".unrest" / "workspaces" / "leases" / lease_id.removeprefix("lease:"),
+        repository / ".unrest" / "workspaces" / "patches",
+        repository / ".unrest-runtime" / "workspaces" / "trees",
+        repository / ".unrest-runtime" / "workspaces" / "processes",
+    )
+    for directory in directories:
+        directory.mkdir(parents=True, exist_ok=True)
+    (repository / ".unrest-runtime" / "evolution" / "manager.lock").touch()
+
+
+def test_improvement_prerequisites_use_typed_inspections_and_reuse_manager(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from unrest_harness import evolution, workspaces
+    from unrest_harness.improve_adapter import ImprovementAdapterError
+
+    repository, request = cli_module._improvement_request(_example("run-improvement.json"))
+    repository = tmp_path.resolve()
+    _manager_preflight_tree(repository, request.campaign_id, request.lease_id)
+    lease = SimpleNamespace(
+        lease_id=request.lease_id,
+        state="returned",
+        owner_id=request.author_id,
+        base_revision=request.freeze.accepted_revision,
+        patch_digest="sha256:" + "a" * 64,
+        candidate_identity_digest="sha256:" + "b" * 64,
+    )
+    candidate = SimpleNamespace(
+        candidate_id=request.candidate_id,
+        lease_id=request.lease_id,
+        outcome="admitted",
+        action=request.action,
+        parent_candidate_id=request.parent_candidate_id,
+        author_id=request.author_id,
+        candidate_digest=lease.patch_digest,
+        patch_digest=lease.patch_digest,
+        candidate_identity_digest=lease.candidate_identity_digest,
+        cost_steps=request.candidate_cost_steps,
+        dissent_digests=tuple(sorted(request.candidate_dissent_digests)),
+    )
+    snapshot = SimpleNamespace(freeze=request.freeze, candidates=(candidate,))
+    calls: list[tuple[str, str]] = []
+
+    class FakeWorkspaceManager:
+        def __init__(self, _repository: Path) -> None:
+            pass
+
+        def inspect_workspace(self, lease_id: str):
+            calls.append(("workspace", lease_id))
+            return lease
+
+    class FakeEvolutionManager:
+        def __init__(self, _repository: Path, *, workspace_manager: object) -> None:
+            self.workspace_manager = workspace_manager
+
+        def inspect_campaign(self, campaign_id: str):
+            calls.append(("campaign", campaign_id))
+            return snapshot
+
+    monkeypatch.setattr(workspaces, "WorkspaceManager", FakeWorkspaceManager)
+    monkeypatch.setattr(evolution, "EvolutionManager", FakeEvolutionManager)
+    before = _tree_content_inventory(repository)
+    manager = cli_module._improvement_prerequisites(repository, request)
+    assert isinstance(manager, FakeEvolutionManager)
+    assert calls == [
+        ("campaign", request.campaign_id),
+        ("workspace", request.lease_id),
+    ]
+    assert _tree_content_inventory(repository) == before
+
+    snapshot.freeze = object()
+    with pytest.raises(ImprovementAdapterError) as caught:
+        cli_module._improvement_prerequisites(repository, request)
+    assert caught.value.code == "campaign_freeze_mismatch"
+    snapshot.freeze = request.freeze
+
+    lease.state = "active"
+    with pytest.raises(ImprovementAdapterError) as caught:
+        cli_module._improvement_prerequisites(repository, request)
+    assert caught.value.code == "returned_candidate_lease_mismatch"
+    lease.state = "returned"
+
+    snapshot.candidates = ()
+    with pytest.raises(ImprovementAdapterError) as caught:
+        cli_module._improvement_prerequisites(repository, request)
+    assert caught.value.code == "missing_admitted_candidate"
+    snapshot.candidates = (candidate,)
+
+    candidate.author_id = "author:wrong"
+    with pytest.raises(ImprovementAdapterError) as caught:
+        cli_module._improvement_prerequisites(repository, request)
+    assert caught.value.code == "admitted_candidate_mismatch"
+    assert _tree_content_inventory(repository) == before
+    source = Path(cli_module.__file__).read_text(encoding="utf-8")
+    body = source.split("def _improvement_prerequisites", 1)[1].split(
+        '@cli.command("run-improvement")', 1
+    )[0]
+    assert ".glob(" not in body
+    assert ".read_bytes(" not in body
+    assert "verify_canonical_json_bytes" not in body

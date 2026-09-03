@@ -7,7 +7,7 @@ import shutil
 import stat
 import tomllib
 from collections.abc import Set as AbstractSet
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -172,6 +172,34 @@ def measure_baseline_cmd(
 
 
 _ADAPTER_REQUEST_LIMIT = 1_048_576
+_RUN_PROJECT_REQUEST_PATH = Path(
+    "/Users/aleksandrpodgaiko/Desktop/unrest-v045-returns/INT-V045/dogfood/"
+    "run-project-request.v1.json"
+)
+_RUN_IMPROVEMENT_REQUEST_PATH = Path(
+    "/Users/aleksandrpodgaiko/Desktop/unrest-v045-returns/V-REAL/dogfood/"
+    "run-improvement-request.v1.json"
+)
+_DOGFOOD_MAX_BRANCHES = 2
+_DOGFOOD_MAX_STEPS = 8
+_DOGFOOD_TIMEOUT_SECONDS = 600
+_DOGFOOD_MAX_PROVIDER_ATTEMPTS = 3
+_DOGFOOD_MAX_RESPONSE_BYTES_PER_ATTEMPT = 65_536
+
+
+def _exact_future_request(path: Path, expected: Path) -> Path:
+    """Accept only the externally created regular file at its exact lexical path."""
+
+    if not path.is_absolute() or path != expected:
+        raise click.ClickException("blocked_missing_exact_request")
+    try:
+        info = path.lstat()
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise click.ClickException("blocked_missing_exact_request") from None
+    if not stat.S_ISREG(info.st_mode) or resolved != expected:
+        raise click.ClickException("blocked_missing_exact_request")
+    return path
 
 
 def _adapter_document(path: Path) -> dict[str, object]:
@@ -249,18 +277,17 @@ def _task_request(value: object):
 def run_task_cmd(request_path: Path) -> None:
     """Run one bounded task from a closed JSON request file."""
 
-    from . import api
-    from .foundation_tools import FoundationToolError
-    from .task_adapter import TaskAdapterError
-
     request = _task_request(_adapter_document(request_path))
-    try:
-        result = asyncio.run(api.run_task(request))
-    except (FoundationToolError, TaskAdapterError) as exc:
-        raise click.ClickException(exc.code) from None
-    except (OSError, RuntimeError, ValueError):
-        raise click.ClickException("internal_error") from None
-    _emit_adapter_result(result.canonical_bytes())
+    if (
+        request.bounds.max_branches > _DOGFOOD_MAX_BRANCHES
+        or request.bounds.max_steps > _DOGFOOD_MAX_STEPS
+        or request.bounds.timeout_seconds > _DOGFOOD_TIMEOUT_SECONDS
+    ):
+        raise click.ClickException("dogfood_bounds_exceeded")
+    # The closed v0.4.5 carrier has no externally authenticated approval field.
+    # Live execution remains unavailable until INT-V045 and W-INQ provide that
+    # carrier plus enforceable attempt and per-response byte ceilings.
+    raise click.ClickException("provider_approval_required")
 
 
 def _project_request(value: object):
@@ -348,8 +375,9 @@ def run_project_adapter_cmd(request_path: Path) -> None:
     from . import api
     from .project_adapter import ProjectAdapterError
 
+    exact_request = _exact_future_request(request_path, _RUN_PROJECT_REQUEST_PATH)
     project_id, mission_id, project, max_steps = _project_request(
-        _adapter_document(request_path)
+        _adapter_document(exact_request)
     )
     try:
         coordinator = _project_adapter_coordinator(
@@ -416,12 +444,32 @@ def _improvement_request(value: object):
     return Path(repository), checked
 
 
-def _improvement_prerequisites(repository: Path, request: object) -> None:
-    """Verify immutable public prerequisite records before manager construction."""
+def _exact_existing_directory(path: Path, code: str) -> None:
+    try:
+        info = path.lstat()
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise click.ClickException(code) from None
+    if not stat.S_ISDIR(info.st_mode) or resolved != path:
+        raise click.ClickException(code)
 
-    from .canonical_identity import verify_canonical_json_bytes
-    from .evolution import CampaignFreeze
+
+def _exact_existing_regular_file(path: Path, code: str) -> None:
+    try:
+        info = path.lstat()
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise click.ClickException(code) from None
+    if not stat.S_ISREG(info.st_mode) or resolved != path:
+        raise click.ClickException(code)
+
+
+def _improvement_prerequisites(repository: Path, request: object):
+    """Inspect exact public prerequisite records and return the bound manager."""
+
+    from .evolution import CampaignFreeze, EvolutionError, EvolutionManager
     from .improve_adapter import ImprovementAdapterError, ImprovementRequest
+    from .workspaces import WorkspaceError, WorkspaceManager
 
     if not isinstance(request, ImprovementRequest):
         raise ImprovementAdapterError("invalid_argument", operation="inspect")
@@ -436,22 +484,6 @@ def _improvement_prerequisites(repository: Path, request: object) -> None:
         / "campaigns"
         / request.campaign_id.removeprefix("campaign:")
     )
-    try:
-        campaign_paths = sorted(campaign_dir.glob("*.json"))
-        first = verify_canonical_json_bytes(campaign_paths[0].read_bytes())
-    except (IndexError, OSError, ValueError):
-        raise ImprovementAdapterError(
-            "missing_campaign_freeze", operation="inspect"
-        ) from None
-    if (
-        not isinstance(first, dict)
-        or first.get("event_kind") != "campaign_opened"
-        or not isinstance(first.get("payload"), dict)
-        or first["payload"].get("freeze")
-        != json.loads(json.dumps(asdict(freeze), sort_keys=True))
-    ):
-        raise ImprovementAdapterError("campaign_freeze_mismatch", operation="inspect")
-
     lease_dir = (
         repository
         / ".unrest"
@@ -459,54 +491,75 @@ def _improvement_prerequisites(repository: Path, request: object) -> None:
         / "leases"
         / request.lease_id.removeprefix("lease:")
     )
+    _exact_existing_directory(campaign_dir, "missing_campaign_freeze")
+    _exact_existing_directory(lease_dir, "missing_returned_candidate_lease")
+    # Constructors create these roots. Requiring the already-established public
+    # manager surface keeps every rejected prerequisite path read-only.
+    for directory, code in (
+        (repository / ".unrest" / "evolution" / "private", "missing_campaign_freeze"),
+        (repository / ".unrest-runtime" / "evolution", "missing_campaign_freeze"),
+        (repository / ".unrest" / "workspaces" / "patches", "missing_returned_candidate_lease"),
+        (repository / ".unrest-runtime" / "workspaces" / "trees", "missing_returned_candidate_lease"),
+        (repository / ".unrest-runtime" / "workspaces" / "processes", "missing_returned_candidate_lease"),
+    ):
+        _exact_existing_directory(directory, code)
+    _exact_existing_regular_file(
+        repository / ".unrest-runtime" / "evolution" / "manager.lock",
+        "missing_campaign_freeze",
+    )
+
     try:
-        lease_paths = sorted(lease_dir.glob("*.json"))
-        lease = verify_canonical_json_bytes(lease_paths[-1].read_bytes())
-    except (IndexError, OSError, ValueError):
+        workspace_manager = WorkspaceManager(repository)
+        manager = EvolutionManager(repository, workspace_manager=workspace_manager)
+        snapshot = manager.inspect_campaign(request.campaign_id)
+    except EvolutionError:
+        raise ImprovementAdapterError("missing_campaign_freeze", operation="inspect") from None
+    except WorkspaceError:
+        raise ImprovementAdapterError(
+            "missing_returned_candidate_lease", operation="inspect"
+        ) from None
+    if snapshot.freeze != freeze:
+        raise ImprovementAdapterError("campaign_freeze_mismatch", operation="inspect")
+
+    try:
+        lease = manager.workspace_manager.inspect_workspace(request.lease_id)
+    except WorkspaceError:
         raise ImprovementAdapterError(
             "missing_returned_candidate_lease", operation="inspect"
         ) from None
     if (
-        not isinstance(lease, dict)
-        or lease.get("lease_id") != request.lease_id
-        or lease.get("state") != "returned"
-        or lease.get("owner_id") != request.author_id
-        or lease.get("base_revision") != freeze.accepted_revision
-        or not isinstance(lease.get("patch_digest"), str)
-        or not isinstance(lease.get("candidate_identity_digest"), str)
+        lease.lease_id != request.lease_id
+        or lease.state != "returned"
+        or lease.owner_id != request.author_id
+        or lease.base_revision != freeze.accepted_revision
+        or lease.patch_digest is None
+        or lease.candidate_identity_digest is None
     ):
         raise ImprovementAdapterError(
             "returned_candidate_lease_mismatch", operation="inspect"
         )
 
-    candidate_payload: dict[str, object] | None = None
-    try:
-        for path in campaign_paths[1:]:
-            event = verify_canonical_json_bytes(path.read_bytes())
-            if (
-                isinstance(event, dict)
-                and event.get("event_kind") == "candidate_added"
-                and isinstance(event.get("payload"), dict)
-                and event["payload"].get("candidate_id") == request.candidate_id
-            ):
-                candidate_payload = event["payload"]
-                break
-    except (OSError, ValueError):
-        raise ImprovementAdapterError(
-            "admitted_candidate_mismatch", operation="inspect"
-        ) from None
-    if candidate_payload is None:
+    candidate = next(
+        (item for item in snapshot.candidates if item.candidate_id == request.candidate_id),
+        None,
+    )
+    if candidate is None:
         raise ImprovementAdapterError("missing_admitted_candidate", operation="inspect")
     if (
-        candidate_payload.get("lease_id") != request.lease_id
-        or candidate_payload.get("outcome") != "admitted"
-        or candidate_payload.get("author_id") != request.author_id
-        or candidate_payload.get("candidate_digest") != lease.get("patch_digest")
-        or candidate_payload.get("candidate_identity_digest")
-        != lease.get("candidate_identity_digest")
-        or candidate_payload.get("cost_steps") != request.candidate_cost_steps
+        candidate.lease_id != request.lease_id
+        or candidate.outcome != "admitted"
+        or candidate.action != request.action
+        or candidate.parent_candidate_id != request.parent_candidate_id
+        or candidate.author_id != request.author_id
+        or candidate.candidate_digest != lease.patch_digest
+        or candidate.patch_digest != lease.patch_digest
+        or candidate.candidate_identity_digest != lease.candidate_identity_digest
+        or candidate.cost_steps != request.candidate_cost_steps
+        or candidate.dissent_digests
+        != tuple(sorted(request.candidate_dissent_digests))
     ):
         raise ImprovementAdapterError("admitted_candidate_mismatch", operation="inspect")
+    return manager
 
 
 @cli.command("run-improvement")
@@ -520,17 +573,17 @@ def run_improvement_cmd(request_path: Path) -> None:
     """Run one provider-free candidate through the reviewed decision boundary."""
 
     from . import api
-    from .evolution import EvolutionError, EvolutionManager
+    from .evolution import EvolutionError
     from .improve_adapter import ImprovementAdapterError
 
-    repository, request = _improvement_request(_adapter_document(request_path))
+    exact_request = _exact_future_request(request_path, _RUN_IMPROVEMENT_REQUEST_PATH)
+    repository, request = _improvement_request(_adapter_document(exact_request))
     try:
         api._validate_improvement_request(request)
         resolved_repository = repository.resolve(strict=True)
         if not resolved_repository.is_dir():
             raise ValueError
-        _improvement_prerequisites(resolved_repository, request)
-        manager = EvolutionManager(resolved_repository)
+        manager = _improvement_prerequisites(resolved_repository, request)
         result = asyncio.run(api.run_improvement(manager, request))
     except ImprovementAdapterError as exc:
         raise click.ClickException(exc.code) from None

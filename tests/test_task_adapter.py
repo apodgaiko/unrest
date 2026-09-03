@@ -16,6 +16,7 @@ from unrest_harness.task_adapter import (
     TaskBounds,
     TaskOperation,
     TaskRequest,
+    TaskResult,
     run_task,
 )
 
@@ -28,11 +29,13 @@ class FakeInquiryLifecycle:
         advance_error: Exception | None = None,
         include_answer_contract: bool = True,
         answered_value: str | None = "Synthetic bounded answer.",
+        handoff_consumer: str | None = None,
     ) -> None:
         self.advance_state = advance_state
         self.advance_error = advance_error
         self.include_answer_contract = include_answer_contract
         self.answered_value = answered_value
+        self.handoff_consumer = handoff_consumer
         self.state = "open"
         self.calls: list[str] = []
         self.provider_effects = 0
@@ -137,7 +140,7 @@ class FakeInquiryLifecycle:
             "receipt_id": "receipt:inquiry-evidence:handoff",
             "inquiry_id": inquiry_id,
             "handoff_id": "handoff:stable",
-            "consumer_id": consumer_id,
+            "consumer_id": self.handoff_consumer or consumer_id,
         }
 
     def inspect_inquiry(self, inquiry_id: str) -> Mapping[str, object]:
@@ -289,6 +292,39 @@ async def test_answered_receipt_without_answer_is_not_useful() -> None:
     assert result.terminal == "completed"
     assert result.inquiry.receipt_id is not None
     assert result.useful is False
+
+
+@pytest.mark.asyncio
+async def test_wrong_consumer_handoff_is_rejected_value_free() -> None:
+    lifecycle = FakeInquiryLifecycle(handoff_consumer="consumer:other")
+    with pytest.raises(TaskAdapterError) as caught:
+        await run_task(lifecycle, _request())
+    assert caught.value.code == "invalid_result"
+    assert str(caught.value) == "Inquiry handoff result is invalid"
+    assert "consumer:other" not in str(caught.value)
+
+
+@pytest.mark.parametrize("state", ["failed", "paused", "budget_exhausted"])
+def test_non_answered_state_with_answer_is_rejected(state: str) -> None:
+    value = FakeInquiryLifecycle(advance_state="answered")._inquiry()
+    value["state"] = state
+    value["answer"] = "inconsistent answer"
+    with pytest.raises(TaskAdapterError) as caught:
+        InquiryRecord.from_public(value)
+    assert caught.value.code == "invalid_result"
+
+
+@pytest.mark.asyncio
+async def test_answer_without_handoff_is_not_useful() -> None:
+    result = await run_task(FakeInquiryLifecycle(), _request())
+    without_handoff = TaskResult(
+        terminal=result.terminal,
+        inquiry=result.inquiry,
+        handoff=None,
+        operations=result.operations,
+    )
+    assert without_handoff.answer is not None
+    assert without_handoff.useful is False
 
 
 def test_old_inquiry_record_without_answer_fields_remains_readable() -> None:
