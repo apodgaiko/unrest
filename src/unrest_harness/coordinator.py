@@ -58,6 +58,7 @@ from .workspaces import (
 
 
 _WRITES_LINE = re.compile(r"(?im)^writes:\s*(?P<paths>[^\n]+)$")
+_MAX_GATE_REPORT_BYTES = 4096
 
 
 # ---------------------------------------------------------------------------
@@ -827,20 +828,27 @@ class MissionCoordinator:
         target in `task.targets`; missing expected items count as passed=False.
         """
         mid = self._lookup_mid_for_state()
-        validate_preds = self._upstream_validators(tl, gate.id)
-        by_id = {t.id: t for t in tl.tasks}
+        current_by_target = self._current_validators_by_target(tl, task_state, gate)
+        current_validator_ids = {
+            validator_id
+            for validators in current_by_target.values()
+            for validator_id in validators
+        }
+        expected_by_validator = {
+            task.id: [
+                target
+                for target in gate.targets
+                if task.id in current_by_target[target]
+            ]
+            for task in tl.tasks
+            if task.id in current_validator_ids
+        }
 
         validator_verdicts: dict[str, dict[str, bool]] = {}
         attempt_paths: dict[str, str] = {}
         missing_items: dict[str, list[str]] = {}
-        for v_task_id in validate_preds:
-            v_task = by_id.get(v_task_id)
-            if v_task is None:
-                continue
-            expected = [t for t in v_task.targets if t in gate.targets]
-            if not expected:
-                continue
-
+        rejected_evidence: list[str] = []
+        for v_task_id, expected in expected_by_validator.items():
             state_entry = task_state.tasks.get(v_task_id)
             generation = (
                 state_entry.last_attempt if state_entry is not None else None
@@ -861,16 +869,10 @@ class MissionCoordinator:
                         self.project_id, mid, generation, v_task_id
                     )
                 )
-                return _GateResult(
-                    cleared=False,
-                    reason=(
-                        f"validator evidence rejected for {v_task_id}: {exc}"
-                    )[:2000],
-                    failed_items=list(expected),
-                    validator_verdicts=validator_verdicts,
-                    attempt_paths=attempt_paths,
-                    missing_items=missing_items,
+                rejected_evidence.append(
+                    f"validator evidence rejected for {v_task_id}: {exc}"
                 )
+                continue
             attempt_paths[v_task_id] = str(
                 self.store.attempt_report_path(
                     self.project_id, mid, generation, v_task_id
@@ -884,8 +886,11 @@ class MissionCoordinator:
             verdicts: dict[str, bool] = {}
             returned_ids: set[str] = set()
             for item in handoff.items:
-                if item.item_id in gate.targets:
-                    verdicts[item.item_id] = bool(item.passed)
+                if item.item_id in expected:
+                    if item.item_id in returned_ids:
+                        verdicts[item.item_id] = False
+                    else:
+                        verdicts[item.item_id] = bool(item.passed)
                 returned_ids.add(item.item_id)
             missing = [t for t in expected if t not in returned_ids]
             for t in missing:
@@ -919,7 +924,7 @@ class MissionCoordinator:
                 attempt_paths=attempt_paths,
                 missing_items=missing_items,
             )
-        if all(item_passed.values()):
+        if all(item_passed.values()) and not rejected_evidence:
             return _GateResult(
                 cleared=True,
                 validator_verdicts=validator_verdicts,
@@ -942,39 +947,86 @@ class MissionCoordinator:
             if omitters:
                 parts.append(f"missing: {', '.join(omitters)}")
             dissent_detail.append(f"{tgt} ({'; '.join(parts)})")
+        reason_parts: list[str] = []
+        if rejected_evidence:
+            reason_parts.append("; ".join(rejected_evidence))
+        if dissent_detail:
+            reason_parts.append(f"failed items: {', '.join(dissent_detail)}")
         return _GateResult(
             cleared=False,
-            reason=f"failed items: {', '.join(dissent_detail)}",
+            reason="; ".join(reason_parts)[:2000],
             failed_items=failed,
             validator_verdicts=validator_verdicts,
             attempt_paths=attempt_paths,
             missing_items=missing_items,
         )
 
-    def _upstream_validators(self, tl: TaskList, gate_id: str) -> list[str]:
-        """Transitive predecessors of `gate_id` that are validate tasks.
+    @staticmethod
+    def _current_validators_by_target(
+        tl: TaskList,
+        task_state: TaskStateFile,
+        gate: Task,
+    ) -> dict[str, list[str]]:
+        """Return each target's reachable, non-superseded validator maxima.
 
-        Patches rewrite `depends_on` in-place when they supersede/cancel,
-        so the gate's reachable chain never includes retired validators —
-        no status filtering needed here.
+        Dependencies point from a task to its predecessors.  Currentness is
+        therefore graph dominance in the opposite direction: a covering
+        validator is historical for a target when another covering validator
+        is reachable downstream from it on the way to this gate.  Authored
+        task order is retained only as deterministic presentation order; it
+        has no currentness authority.
         """
         by_id = {t.id: t for t in tl.tasks}
-        gate = by_id.get(gate_id)
-        if gate is None:
-            return []
-        seen: set[str] = set()
+        reachable: set[str] = set()
         stack: list[str] = list(gate.depends_on)
-        result: list[str] = []
         while stack:
             cur = stack.pop()
-            if cur in seen or cur not in by_id:
+            if cur in reachable or cur not in by_id:
                 continue
-            seen.add(cur)
-            task = by_id[cur]
-            if task.type == "validate":
-                result.append(cur)
-            stack.extend(task.depends_on)
-        return result
+            reachable.add(cur)
+            stack.extend(by_id[cur].depends_on)
+
+        downstream: dict[str, list[str]] = {task.id: [] for task in tl.tasks}
+        for task in tl.tasks:
+            for dependency in task.depends_on:
+                if dependency in downstream:
+                    downstream[dependency].append(task.id)
+
+        candidates: dict[str, set[str]] = {
+            target: {
+                task.id
+                for task in tl.tasks
+                if task.id in reachable
+                and task.type == "validate"
+                and target in task.targets
+                and task_state.status_of(task.id) != "superseded"
+            }
+            for target in gate.targets
+        }
+        dominated: dict[str, set[str]] = {target: set() for target in gate.targets}
+        for target, covering in candidates.items():
+            for validator_id in covering:
+                seen: set[str] = set()
+                pending = list(downstream[validator_id])
+                while pending:
+                    current = pending.pop()
+                    if current in seen or current == gate.id:
+                        continue
+                    seen.add(current)
+                    if current in covering:
+                        dominated[target].add(validator_id)
+                        break
+                    pending.extend(downstream.get(current, []))
+
+        return {
+            target: [
+                task.id
+                for task in tl.tasks
+                if task.id in candidates[target]
+                and task.id not in dominated[target]
+            ]
+            for target in gate.targets
+        }
 
     def _validate_failure_needs_attention(
         self,
@@ -1051,11 +1103,7 @@ class MissionCoordinator:
             self.store.save_task_state(self.project_id, mid, task_state)
             self._raise_attention(
                 [
-                    attn_factory.gate_checkpoint(
-                        mid,
-                        event.gate,
-                        validator_verdicts=event.result.validator_verdicts,
-                    )
+                    self._bounded_gate_attention(mid, event, cleared=True)
                 ]
             )
             return StepResult.attention_needed("gate_checkpoint")
@@ -1064,17 +1112,109 @@ class MissionCoordinator:
             self.store.save_task_state(self.project_id, mid, task_state)
             self._raise_attention(
                 [
-                    attn_factory.gate_failed(
-                        mid,
-                        event.gate,
-                        event.result.reason or "",
-                        failed_items=event.result.failed_items or [],
-                        validator_verdicts=event.result.validator_verdicts,
-                        missing_items=event.result.missing_items,
-                    )
+                    self._bounded_gate_attention(mid, event, cleared=False)
                 ]
             )
             return StepResult.attention_needed("gate_failed")
+
+    @staticmethod
+    def _bounded_gate_attention(
+        mission_id: str,
+        event: "_GateEvent",
+        *,
+        cleared: bool,
+    ) -> AttentionItemInternal:
+        """Render the existing gate formatter with a bounded public projection."""
+
+        def render(
+            gate: Task,
+            verdicts: dict[str, dict[str, bool]],
+            missing: dict[str, list[str]],
+            reason: str,
+            failed_items: list[str],
+        ) -> AttentionItemInternal:
+            if cleared:
+                return attn_factory.gate_checkpoint(
+                    mission_id,
+                    gate,
+                    validator_verdicts=verdicts,
+                )
+            return attn_factory.gate_failed(
+                mission_id,
+                gate,
+                reason,
+                failed_items=failed_items,
+                validator_verdicts=verdicts,
+                missing_items=missing,
+            )
+
+        result = event.result
+        full = render(
+            event.gate,
+            result.validator_verdicts,
+            result.missing_items,
+            result.reason or "",
+            result.failed_items or [],
+        )
+        if len(full.report.encode("utf-8")) < _MAX_GATE_REPORT_BYTES:
+            return full
+
+        targets = [
+            target
+            for target in event.gate.targets
+            if len(target.encode("utf-8")) <= 128
+        ][:8]
+        gate_id = event.gate.id
+        if len(gate_id.encode("utf-8")) > 128:
+            gate_id = "gate-diagnostics-truncated"
+        projected_gate = event.gate.model_copy(
+            update={"id": gate_id, "targets": targets}
+        )
+        projected_verdicts: dict[str, dict[str, bool]] = {}
+        for validator_id in sorted(result.validator_verdicts):
+            if len(projected_verdicts) == 8:
+                break
+            if len(validator_id.encode("utf-8")) > 128:
+                continue
+            verdicts = {
+                target: result.validator_verdicts[validator_id][target]
+                for target in targets
+                if target in result.validator_verdicts[validator_id]
+            }
+            if verdicts:
+                projected_verdicts[validator_id] = verdicts
+        projected_missing = {
+            validator_id: [
+                target
+                for target in targets
+                if target in result.missing_items.get(validator_id, [])
+            ]
+            for validator_id in projected_verdicts
+        }
+        bounded = render(
+            projected_gate,
+            projected_verdicts,
+            projected_missing,
+            "current validator evidence failed closed; public diagnostics truncated"
+            if not cleared
+            else "",
+            [target for target in targets if target in (result.failed_items or [])],
+        )
+        if len(bounded.report.encode("utf-8")) < _MAX_GATE_REPORT_BYTES:
+            return bounded
+
+        minimal_gate = event.gate.model_copy(
+            update={"id": "gate-diagnostics-truncated", "targets": []}
+        )
+        return render(
+            minimal_gate,
+            {},
+            {},
+            "current validator evidence failed closed; public diagnostics truncated"
+            if not cleared
+            else "",
+            [],
+        )
 
     # ------------------------------------------------------------------
     # Terminal review
