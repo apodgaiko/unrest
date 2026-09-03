@@ -2054,23 +2054,18 @@ def test_run_project_invalid_bound_matrix_is_safe_and_pre_construction(
     assert effects == {"coordinator": 0, "run_project": 0}
 
 
-def test_run_project_and_improvement_reject_unknown_members() -> None:
+def test_run_project_rejects_unknown_members() -> None:
     project = _example("run-project.json")
     project["unknown_private_canary"] = "PRIVATE-CANARY"
     with pytest.raises(click.ClickException, match="invalid_argument"):
         cli_module._project_request(project)
 
-    improvement = _example("run-improvement.json")
-    request = improvement["request"]
-    assert isinstance(request, dict)
-    request["unknown_private_canary"] = "PRIVATE-CANARY"
-    with pytest.raises(click.ClickException, match="invalid_argument"):
-        cli_module._improvement_request(improvement)
-
-
 @pytest.mark.parametrize("field", ["candidate_cost_steps", "evaluation_cost_steps"])
-@pytest.mark.parametrize("value", [_OMIT, 0])
-def test_run_improvement_zero_cost_matrix(field: str, value: object) -> None:
+@pytest.mark.parametrize("value", [_OMIT, 0, 1, 1_000_000])
+def test_run_improvement_parser_accepts_compatible_cost_matrix(
+    field: str,
+    value: object,
+) -> None:
     document = _example("run-improvement.json")
     request = document["request"]
     assert isinstance(request, dict)
@@ -2084,19 +2079,49 @@ def test_run_improvement_zero_cost_matrix(field: str, value: object) -> None:
     assert getattr(parsed, field) == expected
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        (field, value)
+        for field in ("candidate_cost_steps", "evaluation_cost_steps")
+        for value in (-1, True, "1", 1.5, None)
+    ]
+    + [("unknown_private_canary", "PRIVATE-CANARY")],
+)
+def test_run_improvement_parser_rejects_invalid_cost_matrix(
+    field: str,
+    value: object,
+) -> None:
+    document = _nested_mutation(_example("run-improvement.json"), "request", field, value)
+    with pytest.raises(click.ClickException, match="invalid_argument"):
+        cli_module._improvement_request(document)
+
+
 @pytest.mark.parametrize("field", ["candidate_cost_steps", "evaluation_cost_steps"])
-@pytest.mark.parametrize("value", [-1, 1, 1_000_000, True, "1", 1.5, None])
-def test_run_improvement_invalid_cost_matrix_is_safe_and_pre_manager(
+@pytest.mark.parametrize("value", [1, 1_000_000])
+def test_run_improvement_cli_rejects_positive_costs_before_effects(
     runner: CliRunner,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     field: str,
     value: object,
 ) -> None:
-    from unrest_harness import api
+    from unrest_harness import api, evolution
 
     document = _nested_mutation(_example("run-improvement.json"), "request", field, value)
-    effects = {"prerequisites": 0, "run_improvement": 0}
+    document["repository"] = str(tmp_path)
+    effects = {
+        "api_validation": 0,
+        "evolution_manager": 0,
+        "prerequisites": 0,
+        "run_improvement": 0,
+    }
+
+    def api_validation_effect(*_args: object) -> None:
+        effects["api_validation"] += 1
+
+    def evolution_manager_effect(*_args: object, **_kwargs: object) -> None:
+        effects["evolution_manager"] += 1
 
     def prerequisite_effect(*_args: object) -> None:
         effects["prerequisites"] += 1
@@ -2104,14 +2129,23 @@ def test_run_improvement_invalid_cost_matrix_is_safe_and_pre_manager(
     async def run_improvement_effect(*_args: object, **_kwargs: object) -> None:
         effects["run_improvement"] += 1
 
+    monkeypatch.setattr(api, "_validate_improvement_request", api_validation_effect)
+    monkeypatch.setattr(evolution, "EvolutionManager", evolution_manager_effect)
     monkeypatch.setattr(cli_module, "_improvement_prerequisites", prerequisite_effect)
     monkeypatch.setattr(api, "run_improvement", run_improvement_effect)
     request = _write_adapter_request(tmp_path, document)
     monkeypatch.setattr(cli_module, "_RUN_IMPROVEMENT_REQUEST_PATH", request)
+    before = _tree_content_inventory(tmp_path)
     result = runner.invoke(cli, ["run-improvement", "--request", str(request)])
     assert result.exit_code == 1
     assert result.output == "Error: invalid_argument\n"
-    assert effects == {"prerequisites": 0, "run_improvement": 0}
+    assert effects == {
+        "api_validation": 0,
+        "evolution_manager": 0,
+        "prerequisites": 0,
+        "run_improvement": 0,
+    }
+    assert _tree_content_inventory(tmp_path) == before
 
 
 @pytest.mark.parametrize(

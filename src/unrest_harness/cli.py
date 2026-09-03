@@ -425,10 +425,6 @@ def _improvement_request(value: object):
     repository = document["repository"]
     if not isinstance(repository, str) or not repository:
         raise click.ClickException("invalid_argument")
-    for field in ("candidate_cost_steps", "evaluation_cost_steps"):
-        cost_steps = request.get(field, 0)
-        if isinstance(cost_steps, bool) or not isinstance(cost_steps, int) or cost_steps != 0:
-            raise click.ClickException("invalid_argument")
     try:
         freeze = CampaignFreeze.from_mapping(
             _closed_adapter_mapping(
@@ -586,6 +582,8 @@ def run_improvement_cmd(request_path: Path) -> None:
 
     exact_request = _exact_future_request(request_path, _RUN_IMPROVEMENT_REQUEST_PATH)
     repository, request = _improvement_request(_adapter_document(exact_request))
+    if request.candidate_cost_steps != 0 or request.evaluation_cost_steps != 0:
+        raise click.ClickException("invalid_argument")
     try:
         api._validate_improvement_request(request)
         resolved_repository = repository.resolve(strict=True)
