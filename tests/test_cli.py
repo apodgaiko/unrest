@@ -1896,8 +1896,10 @@ def test_v045_examples_are_canonical_and_parse_with_production_surfaces() -> Non
         "review_candidate",
         "rollback_promotion",
         "submit_run",
+        "run_task",
+        "run_project",
+        "run_improvement",
     }
-    assert {"run_task", "run_project", "run_improvement"}.isdisjoint(api.__all__)
 
 
 def test_v045_skill_is_discoverable_as_the_seventh_bundled_skill(

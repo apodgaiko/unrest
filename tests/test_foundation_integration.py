@@ -96,9 +96,15 @@ async def test_catalog_names_equal_mcp_and_library(harness_home: Path) -> None:
     }
     server_names = {tool.name for tool in await create_orchestrator_server(config).list_tools()}
     assert names <= server_names
-    assert names == set(api.__all__) - cli_library_names
+    assert names == (set(api.__all__) | {"steer_attempt"}) - cli_library_names - {
+        "run_improvement",
+        "run_project",
+        "run_task",
+    }
     assert cli_library_names == {"measure_baseline"}
     assert callable(api.measure_baseline)
+    assert callable(api.steer_attempt)
+    assert "steer_attempt" not in api.__all__
     for item in catalog["mcp_methods"]:
         callable_name = item["library_callable"].rsplit(".", 1)[-1]
         assert callable(getattr(api, callable_name))
@@ -126,6 +132,7 @@ def test_library_schema_validation_precedes_effect_and_blocks_bad_output(
                 "result": None,
                 "error": None,
                 "receipt_id": None,
+                "active_attempts": [],
             }
             if self.invalid_output:
                 result["private_detail"] = "must not escape"

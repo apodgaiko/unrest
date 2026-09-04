@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from unrest_harness.acp_runner import _acp_subprocess_env
+from unrest_harness import provider_sessions as provider_sessions_module
+from unrest_harness.acp_runner import LaunchError, _acp_subprocess_env
 from unrest_harness.capability_policy import (
     SAFE_PROFILE,
     UNSAFE_DEVELOPMENT_PROFILE,
@@ -21,6 +22,7 @@ from unrest_harness.capability_policy import (
 from unrest_harness.config import HarnessConfig
 from unrest_harness.provider_sessions import (
     ProviderSessionRequest,
+    ProviderSessionRole,
     ProviderSessionRunner,
 )
 from unrest_harness.providers import PROVIDERS
@@ -53,14 +55,29 @@ def _config(tmp_path: Path, command: str, *, profile: str = SAFE_PROFILE) -> Har
     )
 
 
-def _request(tmp_path: Path, *, max_response_bytes: int = 1024) -> ProviderSessionRequest:
+def _all_role_config(tmp_path: Path, command: str) -> HarnessConfig:
+    return replace(
+        _config(tmp_path, command),
+        validator_provider_name="claude",
+        validator_acp_command=command,
+        terminal_reviewer_provider_name="claude",
+        terminal_reviewer_acp_command=command,
+    )
+
+
+def _request(
+    tmp_path: Path,
+    *,
+    role: ProviderSessionRole = "inquiry_branch",
+    max_response_bytes: int = 65_536,
+) -> ProviderSessionRequest:
     workspace = tmp_path / "workspace"
     record = tmp_path / "record"
     private = record / "private"
     for path in (workspace, record, private):
         path.mkdir(exist_ok=True)
     return ProviderSessionRequest(
-        role="inquiry_branch",
+        role=role,
         prompt="Answer the bounded question.",
         workspace_path=workspace,
         project_record_path=record,
@@ -69,6 +86,155 @@ def _request(tmp_path: Path, *, max_response_bytes: int = 1024) -> ProviderSessi
         timeout_seconds=2,
         max_response_bytes=max_response_bytes,
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", SESSION_ROLES)
+async def test_every_session_role_preflights_and_spawns_one_identical_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    role: ProviderSessionRole,
+) -> None:
+    command = f"{sys.executable} {MOCK_ADAPTER}"
+    seen: list[tuple[str, object]] = []
+    actual_preflight = provider_sessions_module.preflight_launch
+    actual_spawn = provider_sessions_module._spawn_provider_launch
+    host_decoy = str(tmp_path / "host-path-decoy")
+
+    def recording_preflight(plan) -> None:
+        seen.append(("preflight", plan))
+        actual_preflight(plan)
+        monkeypatch.setenv("PATH", host_decoy)
+
+    async def recording_spawn(plan, **kwargs):
+        seen.append(("spawn", plan))
+        return await actual_spawn(plan, **kwargs)
+
+    monkeypatch.setattr(provider_sessions_module, "preflight_launch", recording_preflight)
+    monkeypatch.setattr(provider_sessions_module, "_spawn_provider_launch", recording_spawn)
+
+    request = _request(tmp_path, role=role)
+    result = await ProviderSessionRunner(_all_role_config(tmp_path, command)).run(request)
+
+    assert result.status == "completed"
+    assert [name for name, _ in seen] == ["preflight", "spawn"]
+    assert seen[0][1] is seen[1][1]
+    plan = seen[0][1]
+    assert plan.argv == (sys.executable, str(MOCK_ADAPTER))
+    assert plan.cwd == str(request.workspace_path)
+    assert plan.path == plan.environment.get("PATH")
+    assert plan.path != host_decoy
+    with pytest.raises(TypeError):
+        plan.environment["PATH"] = host_decoy
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", SESSION_ROLES)
+async def test_every_session_role_maps_preflight_rejection_without_spawn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    role: ProviderSessionRole,
+) -> None:
+    async def forbidden_spawn(*args, **kwargs):
+        raise AssertionError("rejected launch must not spawn")
+
+    monkeypatch.setattr(provider_sessions_module, "_spawn_provider_launch", forbidden_spawn)
+    result = await ProviderSessionRunner(
+        _all_role_config(tmp_path, "./missing-adapter")
+    ).run(_request(tmp_path, role=role))
+
+    assert result.public_metadata() == {
+        "adapter_exit_code": None,
+        "error_code": "adapter_start_failed",
+        "provider": "claude",
+        "response_bytes": 0,
+        "response_truncated": False,
+        "role": role,
+        "status": "failed",
+        "stop_reason": None,
+        "structured_output": False,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", SESSION_ROLES)
+@pytest.mark.parametrize(
+    "category", ("invalid_command", "missing", "directory", "not_executable", "startup_failed")
+)
+async def test_every_role_maps_each_launch_category_with_private_safe_diagnostic(
+    tmp_path: Path,
+    role: ProviderSessionRole,
+    category: str,
+) -> None:
+    launcher = tmp_path / f"private-canary-{category}"
+    if category == "invalid_command":
+        command = ""
+    elif category == "directory":
+        launcher.mkdir()
+        command = str(launcher)
+    elif category == "not_executable":
+        launcher.write_text("not executable\n", encoding="utf-8")
+        command = str(launcher)
+    elif category == "startup_failed":
+        launcher.write_text("invalid executable format\n", encoding="utf-8")
+        launcher.chmod(0o700)
+        command = str(launcher)
+    else:
+        command = str(launcher)
+
+    request = _request(tmp_path, role=role)
+    result = await ProviderSessionRunner(_all_role_config(tmp_path, command)).run(request)
+
+    assert result.public_metadata() == {
+        "adapter_exit_code": None,
+        "error_code": "adapter_start_failed",
+        "provider": "claude",
+        "response_bytes": 0,
+        "response_truncated": False,
+        "role": role,
+        "status": "failed",
+        "stop_reason": None,
+        "structured_output": False,
+    }
+    artifact = json.loads(request.private_artifact_path.read_text(encoding="utf-8"))
+    assert artifact["output"]["stderr"] == str(LaunchError(category))  # type: ignore[arg-type]
+    assert "private-canary" not in request.private_artifact_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", SESSION_ROLES)
+async def test_explicit_empty_command_is_invalid_without_fallback(
+    tmp_path: Path,
+    role: ProviderSessionRole,
+) -> None:
+    request = _request(tmp_path, role=role)
+    result = await ProviderSessionRunner(_all_role_config(tmp_path, "")).run(request)
+
+    assert result.status == "failed"
+    assert result.error_code == "adapter_start_failed"
+    artifact = json.loads(request.private_artifact_path.read_text(encoding="utf-8"))
+    assert artifact["output"]["stderr"] == "ACP adapter launch rejected: invalid_command"
+
+
+@pytest.mark.asyncio
+async def test_clean_exit_zero_without_response_is_failed_unknown_work(tmp_path: Path) -> None:
+    command = f"{sys.executable} -c pass"
+    request = _request(tmp_path)
+    result = await ProviderSessionRunner(_config(tmp_path, command)).run(request)
+
+    assert result.status == "failed"
+    assert result.error_code == "protocol_error"
+    assert result.adapter_exit_code == 0
+    assert result.stop_reason is None
+    assert result.response_bytes == 0
+    assert result.response_truncated is False
+    assert result.structured_output is False
+
+
+def test_response_limit_has_a_non_bypassable_65536_byte_ceiling(tmp_path: Path) -> None:
+    assert _request(tmp_path).max_response_bytes == 65_536
+    with pytest.raises(ValueError, match="safe ceiling"):
+        _request(tmp_path, max_response_bytes=65_537)
 
 
 @pytest.mark.parametrize("profile", (SAFE_PROFILE, UNSAFE_DEVELOPMENT_PROFILE))

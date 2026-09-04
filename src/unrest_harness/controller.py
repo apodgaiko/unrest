@@ -52,7 +52,12 @@ from .patch_transaction import (
     PatchTransactionError,
     TransactionTarget,
 )
-from .project_lock import ProjectLockError, project_access_guard, project_lock_path
+from .project_lock import (
+    ProjectLockBusyError,
+    ProjectLockError,
+    project_access_guard,
+    project_lock_path,
+)
 from .storage import ProjectStore
 from .storage import utc_now_iso
 from .supervision import (
@@ -170,7 +175,7 @@ class ProjectController:
         return self._build_envelope(record.id, dag_mode="none")
 
     def submit_plan(self, project_id: str, task_list: TaskList) -> Envelope:
-        with self._project_access(project_id):
+        with self._project_access(project_id, blocking=False):
             return self._submit_plan(project_id, task_list)
 
     def _submit_plan(self, project_id: str, task_list: TaskList) -> Envelope:
@@ -212,7 +217,7 @@ class ProjectController:
         project_id: str,
         max_steps: int | None = None,
     ) -> Envelope:
-        with self._project_access(project_id):
+        with self._project_access(project_id, blocking=False):
             return self._advance_project(project_id, max_steps)
 
     def _advance_project(
@@ -238,7 +243,7 @@ class ProjectController:
     def end_mission(
         self, project_id: str, deliverable_roots: list[str] | None = None
     ) -> Envelope:
-        with self._project_access(project_id):
+        with self._project_access(project_id, blocking=False):
             return self._end_mission(project_id, deliverable_roots)
 
     def _end_mission(
@@ -281,7 +286,7 @@ class ProjectController:
         project_id: str,
         decisions: list[Decision],
     ) -> Envelope:
-        with self._project_access(project_id):
+        with self._project_access(project_id, blocking=False):
             return self._decide_attention(project_id, decisions)
 
     def _decide_attention(
@@ -318,6 +323,16 @@ class ProjectController:
         with self._project_access(project_id):
             return self._build_envelope(project_id, dag_mode="full")
 
+    def inspect_project_live(self, project_id: str) -> Envelope:
+        """Project the canonical read-only envelope during an admitted operation.
+
+        This trusted seam is for the orchestrator and attached-run adapters while
+        an exact controller operation already owns the project mutation lock.  It
+        performs no recovery or mutation; the ordinary ``inspect_project`` entry
+        point remains the default for every unadmitted caller.
+        """
+        return self._build_envelope(project_id, dag_mode="full")
+
     def report_supervision_checkpoint(
         self, snapshot: ActiveAttemptSnapshot
     ) -> SteeringBinding:
@@ -353,7 +368,7 @@ class ProjectController:
         safe_handoff: str,
     ) -> Envelope:
         """Enter existing attention authority after a checkpoint stop handoff."""
-        with self._project_access(binding.project_id):
+        with self._project_access(binding.project_id, blocking=False):
             try:
                 recover_supervision(
                     self.store, binding.project_id, binding.mission_id
@@ -462,7 +477,7 @@ class ProjectController:
             return self._build_envelope(binding.project_id, dag_mode="none")
 
     def abort_project(self, project_id: str, reason: str) -> Envelope:
-        with self._project_access(project_id):
+        with self._project_access(project_id, blocking=False):
             return self._abort_project(project_id, reason)
 
     def _abort_project(self, project_id: str, reason: str) -> Envelope:
@@ -746,15 +761,19 @@ class ProjectController:
             return None
 
     @contextmanager
-    def _project_access(self, project_id: str) -> Iterator[None]:
+    def _project_access(
+        self, project_id: str, *, blocking: bool = True
+    ) -> Iterator[None]:
         try:
             lock_path = project_lock_path(self.store, project_id)
-            with project_access_guard(self.store, project_id):
+            with project_access_guard(self.store, project_id, blocking=blocking):
                 if lock_path is not None:
                     self.store.recover_patch_transactions(project_id)
                 yield
         except PatchTransactionError as exc:
             raise ToolError(exc.code, "project transaction unavailable") from exc
+        except ProjectLockBusyError as exc:
+            raise ToolError("project_busy", "project is busy") from exc
         except ProjectLockError as exc:
             raise ToolError("project_lock_error", "project lock unavailable") from exc
 

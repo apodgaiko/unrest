@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import shlex
 import signal
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,11 +14,15 @@ from .acp_runner import (
     MCP_STREAM_CAPTURE_LIMIT,
     SUBPROCESS_STREAM_LIMIT,
     ACPClient,
+    LaunchError,
+    LaunchPlan,
     _acp_subprocess_env,
     _augment_acp_command,
     _close_subprocess,
     _drain_stream_chunks,
     _extract_text_fragments,
+    build_launch_plan,
+    preflight_launch,
 )
 from .capability_policy import (
     RoleName,
@@ -52,7 +55,7 @@ ProviderSessionErrorCode = Literal[
 
 DEFAULT_SESSION_TIMEOUT_SECONDS = 300.0
 DEFAULT_PROMPT_LIMIT_BYTES = 256 * 1024
-DEFAULT_RESPONSE_LIMIT_BYTES = 512 * 1024
+DEFAULT_RESPONSE_LIMIT_BYTES = 65_536
 _SAFE_STOP_REASONS = frozenset(
     {"cancelled", "end_turn", "max_tokens", "refusal", "stop_sequence", "unknown"}
 )
@@ -60,6 +63,27 @@ _SAFE_STOP_REASONS = frozenset(
 
 class ProviderSessionError(RuntimeError):
     """Stable value-free failure at the provider-session persistence boundary."""
+
+
+async def _spawn_provider_launch(
+    plan: LaunchPlan,
+    *,
+    limit: int,
+) -> asyncio.subprocess.Process:
+    """Spawn one checked provider plan while retaining process-group cleanup."""
+    try:
+        return await asyncio.create_subprocess_exec(
+            *plan.argv,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=plan.cwd,
+            env=plan.environment,
+            limit=limit,
+            start_new_session=True,
+        )
+    except OSError:
+        raise LaunchError("startup_failed") from None
 
 
 @dataclass(frozen=True)
@@ -86,6 +110,8 @@ class ProviderSessionRequest:
             raise ValueError("provider session timeout must be positive")
         if self.max_prompt_bytes <= 0 or self.max_response_bytes <= 0:
             raise ValueError("provider session byte limits must be positive")
+        if self.max_response_bytes > DEFAULT_RESPONSE_LIMIT_BYTES:
+            raise ValueError("provider session response byte limit exceeds the safe ceiling")
         if (
             self.reasoning_effort is not None
             and self.reasoning_effort not in VALID_REASONING_EFFORTS
@@ -196,7 +222,7 @@ class ProviderSessionRunner:
                 "PROVIDER-SESSION-001 role policy is not structurally read-only"
             )
 
-        command = role_config.worker_acp_command or role_config.resolved_worker_acp_command
+        command = self._configured_command(request.role)
         credentials = finite_credential_values(os.environ)
         prompt = self._render_prompt(request.role, request.prompt)
         capture = _ResponseCapture(request.max_response_bytes, credentials)
@@ -212,90 +238,89 @@ class ProviderSessionRunner:
         stderr_task: asyncio.Task[str] | None = None
         adapter_exit_code: int | None = None
 
-        if not command:
+        if command is None:
             error_code = "adapter_not_configured"
         else:
             try:
-                command_parts = shlex.split(
+                environment = _acp_subprocess_env(
+                    provider,
+                    policy=policy,
+                    reasoning_effort=(
+                        request.reasoning_effort
+                        or role_config.worker_reasoning_effort
+                    ),
+                    model=request.model,
+                )
+                launch_plan = build_launch_plan(
                     _augment_acp_command(
                         command,
                         provider,
-                        request.reasoning_effort or role_config.worker_reasoning_effort,
+                        request.reasoning_effort
+                        or role_config.worker_reasoning_effort,
+                    ),
+                    cwd=workspace,
+                    environment=environment,
+                )
+                preflight_launch(launch_plan)
+                process = await _spawn_provider_launch(
+                    launch_plan,
+                    limit=min(
+                        SUBPROCESS_STREAM_LIMIT,
+                        max(64 * 1024, request.max_response_bytes * 2 + 64 * 1024),
+                    ),
+                )
+                client = ACPClient(
+                    process,
+                    str(workspace),
+                    policy=policy,
+                    terminal_environment=build_role_environment(
+                        policy,
+                        os.environ,
+                        include_credentials=False,
+                    ),
+                    session_update_handler=capture.handle_update,
+                )
+                client.set_credential_inventory(credentials)
+                stderr_task = asyncio.create_task(
+                    _drain_stream_chunks(
+                        process.stderr,
+                        capture_limit=MCP_STREAM_CAPTURE_LIMIT,
                     )
                 )
-                if not command_parts:
-                    error_code = "adapter_not_configured"
+                protocol_task = asyncio.create_task(
+                    self._run_protocol(client, provider, workspace, prompt)
+                )
+                waiters: set[asyncio.Task[Any]] = {protocol_task}
+                if cancel_event is not None:
+                    cancel_task = asyncio.create_task(cancel_event.wait())
+                    waiters.add(cancel_task)
+                done, _ = await asyncio.wait(
+                    waiters,
+                    timeout=request.timeout_seconds,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if protocol_task in done:
+                    prompt_result = protocol_task.result()
+                    stop_reason = self._safe_stop_reason(
+                        prompt_result.get("stopReason")
+                    )
+                    status = "completed"
+                elif cancel_task is not None and cancel_task in done:
+                    status = "cancelled"
+                    error_code = "cancelled"
                 else:
-                    process = await asyncio.create_subprocess_exec(
-                        *command_parts,
-                        stdin=asyncio.subprocess.PIPE,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        cwd=str(workspace),
-                        env=_acp_subprocess_env(
-                            provider,
-                            policy=policy,
-                            reasoning_effort=(
-                                request.reasoning_effort
-                                or role_config.worker_reasoning_effort
-                            ),
-                            model=request.model,
-                        ),
-                        limit=min(
-                            SUBPROCESS_STREAM_LIMIT,
-                            max(64 * 1024, request.max_response_bytes * 2 + 64 * 1024),
-                        ),
-                        start_new_session=True,
-                    )
-                    client = ACPClient(
-                        process,
-                        str(workspace),
-                        policy=policy,
-                        terminal_environment=build_role_environment(
-                            policy,
-                            os.environ,
-                            include_credentials=False,
-                        ),
-                        session_update_handler=capture.handle_update,
-                    )
-                    client.set_credential_inventory(credentials)
-                    stderr_task = asyncio.create_task(
-                        _drain_stream_chunks(
-                            process.stderr,
-                            capture_limit=MCP_STREAM_CAPTURE_LIMIT,
-                        )
-                    )
-                    protocol_task = asyncio.create_task(
-                        self._run_protocol(client, provider, workspace, prompt)
-                    )
-                    waiters: set[asyncio.Task[Any]] = {protocol_task}
-                    if cancel_event is not None:
-                        cancel_task = asyncio.create_task(cancel_event.wait())
-                        waiters.add(cancel_task)
-                    done, _ = await asyncio.wait(
-                        waiters,
-                        timeout=request.timeout_seconds,
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-                    if protocol_task in done:
-                        prompt_result = protocol_task.result()
-                        stop_reason = self._safe_stop_reason(
-                            prompt_result.get("stopReason")
-                        )
-                        status = "completed"
-                    elif cancel_task is not None and cancel_task in done:
-                        status = "cancelled"
-                        error_code = "cancelled"
-                    else:
-                        status = "timed_out"
-                        error_code = "timed_out"
-                    if protocol_task not in done:
-                        protocol_task.cancel()
-                    adapter_exit_code = process.returncode
+                    status = "timed_out"
+                    error_code = "timed_out"
+                if protocol_task not in done:
+                    protocol_task.cancel()
+                adapter_exit_code = process.returncode
             except asyncio.CancelledError:
                 if protocol_task is not None:
                     protocol_task.cancel()
                 raise
+            except LaunchError as exc:
+                stderr_text = str(exc)
+                error_code = "adapter_start_failed" if process is None else "protocol_error"
             except (OSError, ValueError):
                 error_code = "adapter_start_failed" if process is None else "protocol_error"
             except Exception:  # noqa: BLE001
@@ -374,6 +399,26 @@ class ProviderSessionRunner:
             adapter_exit_code=adapter_exit_code,
             error_code=error_code,
         )
+
+    def _configured_command(self, role: ProviderSessionRole) -> str | None:
+        """Resolve role fallbacks while preserving an explicitly configured empty value."""
+        if role in {"inquiry_branch", "candidate_author"}:
+            configured = self.config.worker_acp_command
+            return configured if configured is not None else self.config.resolved_worker_acp_command
+        if role in {"inquiry_synthesis", "independent_evaluator"}:
+            configured = self.config.validator_acp_command
+            if configured is not None:
+                return configured
+            worker = self.config.worker_acp_command
+            return worker if worker is not None else self.config.resolved_validator_acp_command
+        configured = self.config.terminal_reviewer_acp_command
+        if configured is not None:
+            return configured
+        validator = self.config.validator_acp_command
+        if validator is not None:
+            return validator
+        worker = self.config.worker_acp_command
+        return worker if worker is not None else self.config.resolved_terminal_reviewer_acp_command
 
     async def _run_protocol(
         self,

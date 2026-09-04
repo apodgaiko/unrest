@@ -37,8 +37,32 @@
     },
     "attention_item": {
       "additionalProperties": false,
-      "properties": {"id": {"type": "string"}, "report": {"type": "string"}},
-      "required": ["id", "report"],
+      "properties": {"attempt_id": {"type": ["string", "null"]}, "id": {"type": "string"}, "kind": {"enum": ["node_failed", "node_attention", "gate_failed", "gate_checkpoint", "terminal_review"]}, "mission_id": {"type": "string"}, "node_id": {"type": ["string", "null"]}, "report": {"type": "string"}, "terminal_review_id": {"type": ["string", "null"]}},
+      "required": ["id", "report", "kind", "mission_id", "node_id", "attempt_id", "terminal_review_id"],
+      "type": "object"
+    },
+    "active_attempt_snapshot": {
+      "additionalProperties": false,
+      "oneOf": [{"properties": {"node_id": {"type": "string"}, "terminal_review_id": {"type": "null"}}}, {"properties": {"node_id": {"type": "null"}, "terminal_review_id": {"type": "string"}}}],
+      "properties": {
+        "attempt_id": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "type": "string"},
+        "blocker_code": {"enum": ["dependency_unavailable", "scope_ambiguous", "scope_violation", "integrity_refusal", "authority_required", "delivery_blocked", null]},
+        "checkpoint_requests": {"maximum": 2, "minimum": 0, "type": "integer"},
+        "checkpoint_sequence": {"minimum": 0, "type": "integer"},
+        "completed_target_ids": {"items": {"pattern": "^[A-Z][A-Z0-9-]+$", "type": "string"}, "type": "array", "uniqueItems": true},
+        "elapsed_nanoseconds": {"minimum": 0, "type": "integer"},
+        "last_effect_sequence": {"minimum": 0, "type": "integer"},
+        "mission_id": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "type": "string"},
+        "node_id": {"type": ["string", "null"]},
+        "phase": {"enum": ["active", "waiting_at_checkpoint", "stopping", "terminal"]},
+        "project_id": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "type": "string"},
+        "remaining_target_ids": {"items": {"pattern": "^[A-Z][A-Z0-9-]+$", "type": "string"}, "type": "array", "uniqueItems": true},
+        "role": {"enum": ["worker", "validator", "terminal_reviewer"]},
+        "scope_status": {"enum": ["in_scope", "uncertain", "violation"]},
+        "supervision_status": {"enum": ["running", "waiting", "nudge_pending", "stop_requested", "terminal"]},
+        "terminal_review_id": {"type": ["string", "null"]}
+      },
+      "required": ["attempt_id", "blocker_code", "checkpoint_requests", "checkpoint_sequence", "completed_target_ids", "elapsed_nanoseconds", "last_effect_sequence", "mission_id", "node_id", "phase", "project_id", "remaining_target_ids", "role", "scope_status", "supervision_status", "terminal_review_id"],
       "type": "object"
     },
     "budget": {
@@ -95,7 +119,7 @@
     },
     "error_envelope": {
       "additionalProperties": false,
-      "properties": {"error": {"additionalProperties": false, "properties": {"code": {"enum": ["budget_exhausted", "busy", "cancelled", "conflict", "integrity_error", "internal_error", "invalid_argument", "invalid_transition", "not_found", "protected_path_changed", "provider_unavailable", "signature_suite_unsupported", "stale", "timeout", "unauthorized"]}, "message": {"type": "string"}}, "required": ["code", "message"], "type": "object"}},
+      "properties": {"error": {"additionalProperties": false, "properties": {"code": {"enum": ["budget_exhausted", "busy", "cancelled", "conflict", "integrity_error", "internal_error", "invalid_argument", "invalid_nudge_utf8", "invalid_transition", "not_at_semantic_checkpoint", "not_found", "nudge_limit_exceeded", "nudge_too_large", "protected_path_changed", "provider_unavailable", "signature_suite_unsupported", "stale", "stale_checkpoint_binding", "steering_action_replayed", "steering_binding_mismatch", "timeout", "unauthorized"]}, "message": {"type": "string"}}, "required": ["code", "message"], "type": "object"}},
       "required": ["error"],
       "type": "object"
     },
@@ -131,8 +155,57 @@
     },
     "inquiry_summary": {
       "additionalProperties": false,
-      "properties": {"branch_outcomes": {"additionalProperties": {"enum": ["answered", "budget_exhausted", "cancelled", "failed", "paused", "pending", "running"]}, "type": "object"}, "inquiry_id": {"type": "string"}, "receipt_id": {"type": ["string", "null"]}, "state": {"enum": ["answered", "budget_exhausted", "cancelled", "exploring", "failed", "open", "paused", "synthesizing"]}},
-      "required": ["inquiry_id", "state", "branch_outcomes", "receipt_id"],
+      "properties": {
+        "answer": {"type": ["string", "null"]},
+        "branch_outcomes": {
+          "additionalProperties": false,
+          "properties": {
+            "analogy": {"enum": ["answered", "budget_exhausted", "cancelled", "failed", "paused", "pending", "running"]},
+            "critic": {"enum": ["answered", "budget_exhausted", "cancelled", "failed", "paused", "pending", "running"]},
+            "direct": {"enum": ["answered", "budget_exhausted", "cancelled", "failed", "paused", "pending", "running"]},
+            "evidence": {"enum": ["answered", "budget_exhausted", "cancelled", "failed", "paused", "pending", "running"]}
+          },
+          "type": "object"
+        },
+        "diagnostics": {
+          "additionalProperties": false,
+          "properties": {
+            "aggregate_known_steps": {"minimum": 0, "type": "integer"},
+            "branch_attempts": {"minimum": 0, "type": "integer"},
+            "branch_steps_used": {
+              "additionalProperties": false,
+              "properties": {
+                "analogy": {"minimum": 0, "type": ["integer", "null"]},
+                "critic": {"minimum": 0, "type": ["integer", "null"]},
+                "direct": {"minimum": 0, "type": ["integer", "null"]},
+                "evidence": {"minimum": 0, "type": ["integer", "null"]}
+              },
+              "type": "object"
+            },
+            "error_codes": {
+              "additionalProperties": false,
+              "properties": {
+                "analogy": {"enum": ["adapter_not_configured", "adapter_start_failed", "budget_exhausted", "cancelled", "invalid_structured_output", "output_limit_exceeded", "protocol_error", "timed_out", null]},
+                "critic": {"enum": ["adapter_not_configured", "adapter_start_failed", "budget_exhausted", "cancelled", "invalid_structured_output", "output_limit_exceeded", "protocol_error", "timed_out", null]},
+                "direct": {"enum": ["adapter_not_configured", "adapter_start_failed", "budget_exhausted", "cancelled", "invalid_structured_output", "output_limit_exceeded", "protocol_error", "timed_out", null]},
+                "evidence": {"enum": ["adapter_not_configured", "adapter_start_failed", "budget_exhausted", "cancelled", "invalid_structured_output", "output_limit_exceeded", "protocol_error", "timed_out", null]},
+                "synthesis": {"enum": ["adapter_not_configured", "adapter_start_failed", "budget_exhausted", "cancelled", "invalid_structured_output", "output_limit_exceeded", "protocol_error", "timed_out", null]}
+              },
+              "required": ["synthesis"],
+              "type": "object"
+            },
+            "synthesis_attempts": {"minimum": 0, "type": "integer"},
+            "synthesis_steps_used": {"minimum": 0, "type": ["integer", "null"]},
+            "unknown_step_attempts": {"minimum": 0, "type": "integer"}
+          },
+          "required": ["aggregate_known_steps", "branch_attempts", "branch_steps_used", "error_codes", "synthesis_attempts", "synthesis_steps_used", "unknown_step_attempts"],
+          "type": "object"
+        },
+        "inquiry_id": {"type": "string"},
+        "receipt_id": {"type": ["string", "null"]},
+        "state": {"enum": ["answered", "budget_exhausted", "cancelled", "exploring", "failed", "open", "paused", "synthesizing"]}
+      },
+      "required": ["answer", "inquiry_id", "state", "branch_outcomes", "diagnostics", "receipt_id"],
       "type": "object"
     },
     "inspect_run_request": {
@@ -151,6 +224,12 @@
       "additionalProperties": false,
       "properties": {"base_revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}, "lease_seconds": {"default": 3600, "minimum": 1, "type": "integer"}, "project_id": {"minLength": 1, "type": "string"}, "write_paths": {"items": {"minLength": 1, "type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true}},
       "required": ["project_id", "base_revision", "write_paths", "idempotency_key"],
+      "type": "object"
+    },
+    "lineage_identity": {
+      "additionalProperties": false,
+      "properties": {"mission_id": {"type": "string"}, "node_id": {"type": "string"}},
+      "required": ["mission_id", "node_id"],
       "type": "object"
     },
     "measure_baseline_request": {
@@ -179,8 +258,8 @@
     },
     "project_envelope": {
       "additionalProperties": false,
-      "properties": {"dag": {"default": null, "type": ["string", "null"]}, "harnessRoot": {"type": "string"}, "projectId": {"type": "string"}, "projectRoot": {"type": "string"}, "state": {"$ref": "#/definitions/project_state"}},
-      "required": ["projectId", "state", "projectRoot", "harnessRoot"],
+      "properties": {"active_attempts": {"default": [], "items": {"$ref": "#/definitions/active_attempt_snapshot"}, "type": "array"}, "dag": {"default": null, "type": ["string", "null"]}, "frontier": {"default": null, "type": ["string", "null"]}, "harnessRoot": {"type": "string"}, "next_action": {"enum": ["abort_project", "submit_plan", "advance_project", "decide_attention", "end_mission", "none"]}, "projectId": {"type": "string"}, "projectRoot": {"type": "string"}, "state": {"$ref": "#/definitions/project_state"}, "supersession_lineage": {"default": [], "items": {"$ref": "#/definitions/supersession_lineage_entry"}, "type": "array"}},
+      "required": ["projectId", "state", "projectRoot", "harnessRoot", "next_action", "active_attempts", "supersession_lineage"],
       "type": "object"
     },
     "project_state": {
@@ -214,8 +293,29 @@
     },
     "run_summary": {
       "additionalProperties": false,
-      "properties": {"created_at": {"format": "date-time", "type": "string"}, "error": {"oneOf": [{"$ref": "#/definitions/error_envelope"}, {"type": "null"}]}, "idempotency_key": {"type": "string"}, "operation": {"enum": ["abort_project", "advance_project", "decide_attention", "end_mission", "start_project", "submit_plan"]}, "project_id": {"type": ["string", "null"]}, "receipt_id": {"type": ["string", "null"]}, "resource_key": {"type": "string"}, "result": {"oneOf": [{"$ref": "#/definitions/project_envelope"}, {"type": "null"}]}, "run_id": {"type": "string"}, "state": {"enum": ["attention", "cancel_requested", "cancelled", "draining", "effect_complete", "failed", "queued", "report_complete", "running", "succeeded"]}, "updated_at": {"format": "date-time", "type": "string"}},
-      "required": ["run_id", "operation", "state", "resource_key", "idempotency_key", "project_id", "created_at", "updated_at", "result", "error", "receipt_id"],
+      "properties": {"active_attempts": {"items": {"$ref": "#/definitions/active_attempt_snapshot"}, "type": "array"}, "created_at": {"format": "date-time", "type": "string"}, "error": {"oneOf": [{"$ref": "#/definitions/error_envelope"}, {"type": "null"}]}, "idempotency_key": {"type": "string"}, "operation": {"enum": ["abort_project", "advance_project", "decide_attention", "end_mission", "start_project", "submit_plan"]}, "project_id": {"type": ["string", "null"]}, "receipt_id": {"type": ["string", "null"]}, "resource_key": {"type": "string"}, "result": {"oneOf": [{"$ref": "#/definitions/project_envelope"}, {"type": "null"}]}, "run_id": {"type": "string"}, "state": {"enum": ["attention", "cancel_requested", "cancelled", "draining", "effect_complete", "failed", "queued", "report_complete", "running", "succeeded"]}, "updated_at": {"format": "date-time", "type": "string"}},
+      "required": ["run_id", "operation", "state", "resource_key", "idempotency_key", "project_id", "created_at", "updated_at", "result", "error", "receipt_id", "active_attempts"],
+      "type": "object"
+    },
+    "steering_request": {
+      "additionalProperties": false,
+      "allOf": [{"if": {"properties": {"action": {"const": "nudge"}}}, "then": {"properties": {"body": {"minLength": 1, "type": "string"}}, "required": ["body"]}, "else": {"properties": {"body": {"type": "null"}}}}],
+      "oneOf": [{"properties": {"node_id": {"type": "string"}, "terminal_review_id": {"type": "null"}}}, {"properties": {"node_id": {"type": "null"}, "terminal_review_id": {"type": "string"}}}],
+      "properties": {"action": {"enum": ["continue", "nudge", "stop_for_attention"]}, "actor": {"const": "orchestrator"}, "attempt_id": {"minLength": 1, "type": "string"}, "body": {"default": null}, "checkpoint_sequence": {"minimum": 0, "type": "integer"}, "mission_id": {"minLength": 1, "type": "string"}, "node_id": {"type": ["string", "null"]}, "project_id": {"minLength": 1, "type": "string"}, "terminal_review_id": {"type": ["string", "null"]}},
+      "required": ["project_id", "mission_id", "node_id", "terminal_review_id", "attempt_id", "checkpoint_sequence", "action", "actor"],
+      "type": "object"
+    },
+    "steer_attempt_request": {
+      "additionalProperties": false,
+      "properties": {"request": {"$ref": "#/definitions/steering_request"}, "run_id": {"minLength": 1, "type": "string"}},
+      "required": ["run_id", "request"],
+      "type": "object"
+    },
+    "supervision_receipt": {
+      "additionalProperties": false,
+      "oneOf": [{"properties": {"node_id": {"type": "string"}, "terminal_review_id": {"type": "null"}}}, {"properties": {"node_id": {"type": "null"}, "terminal_review_id": {"type": "string"}}}],
+      "properties": {"action": {"enum": ["continue", "nudge", "stop_for_attention"]}, "actor": {"enum": ["orchestrator", "maintainer", "timeout_policy"]}, "attempt_id": {"type": "string"}, "body_byte_count": {"maximum": 2048, "minimum": 0, "type": "integer"}, "body_sha256": {"type": ["string", "null"]}, "checkpoint_sequence": {"minimum": 0, "type": "integer"}, "code": {"enum": ["continued", "timeout_continue", "nudge_pending", "nudge_delivered", "nudge_consumed", "stop_requested", "delivery_blocked"]}, "delivery_status": {"enum": ["not_applicable", "pending", "delivered", "consumed", "delivery_blocked"]}, "mission_id": {"type": "string"}, "node_id": {"type": ["string", "null"]}, "project_id": {"type": "string"}, "receipt_sequence": {"minimum": 1, "type": "integer"}, "terminal_review_id": {"type": ["string", "null"]}},
+      "required": ["project_id", "mission_id", "node_id", "terminal_review_id", "attempt_id", "receipt_sequence", "checkpoint_sequence", "action", "actor", "body_byte_count", "body_sha256", "delivery_status", "code"],
       "type": "object"
     },
     "start_project_args": {
@@ -242,6 +342,12 @@
       ],
       "properties": {"arguments": {"type": "object"}, "idempotency_key": {"minLength": 1, "type": "string"}, "operation": {"enum": ["abort_project", "advance_project", "decide_attention", "end_mission", "start_project", "submit_plan"]}},
       "required": ["operation", "arguments", "idempotency_key"],
+      "type": "object"
+    },
+    "supersession_lineage_entry": {
+      "additionalProperties": false,
+      "properties": {"current": {"$ref": "#/definitions/lineage_identity"}, "superseded": {"items": {"$ref": "#/definitions/lineage_identity"}, "type": "array"}},
+      "required": ["current", "superseded"],
       "type": "object"
     },
     "task": {
@@ -302,8 +408,9 @@
     {"args_schema": "#/definitions/workspace_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.return_workspace", "name": "return_workspace", "resource_key": ["workspace_id"], "result_schema": "#/definitions/workspace_summary"},
     {"args_schema": "#/definitions/campaign_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.review_candidate", "name": "review_candidate", "resource_key": ["campaign_id", "candidate_id"], "result_schema": "#/definitions/campaign_summary"},
     {"args_schema": "#/definitions/rollback_promotion_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.rollback_promotion", "name": "rollback_promotion", "resource_key": ["campaign_id", "promotion_receipt_id"], "result_schema": "#/definitions/campaign_summary"},
+    {"args_schema": "#/definitions/steer_attempt_request", "errors": "#/stable_error_codes", "idempotency_key": null, "library_callable": "unrest_harness.api.steer_attempt", "name": "steer_attempt", "resource_key": ["run_id"], "result_schema": "#/definitions/supervision_receipt"},
     {"args_schema": "#/definitions/submit_run_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.submit_run", "name": "submit_run", "resource_key": ["operation", "arguments.project_id", "arguments.workspace_dir"], "result_schema": "#/definitions/queued_run_summary"}
   ],
-  "stable_error_codes": ["budget_exhausted", "busy", "cancelled", "conflict", "integrity_error", "internal_error", "invalid_argument", "invalid_transition", "not_found", "protected_path_changed", "provider_unavailable", "signature_suite_unsupported", "stale", "timeout", "unauthorized"],
+  "stable_error_codes": ["budget_exhausted", "busy", "cancelled", "conflict", "integrity_error", "internal_error", "invalid_argument", "invalid_nudge_utf8", "invalid_transition", "not_at_semantic_checkpoint", "not_found", "nudge_limit_exceeded", "nudge_too_large", "protected_path_changed", "provider_unavailable", "signature_suite_unsupported", "stale", "stale_checkpoint_binding", "steering_action_replayed", "steering_binding_mismatch", "timeout", "unauthorized"],
   "version": 1
 }

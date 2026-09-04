@@ -29,7 +29,11 @@ def execute(operation, arguments, context):
     finally:
         os.close(descriptor)
     mode = arguments.get("brief", "success")
-    if mode == "slow":
+    if (
+        mode == "slow"
+        or (operation == "advance_project" and arguments.get("max_steps") == 99)
+        or (operation == "end_mission" and arguments.get("deliverable_roots") == ["wait"])
+    ):
         while True:
             time.sleep(0.05)
     if mode == "crash":
@@ -161,6 +165,92 @@ def test_two_servers_share_idempotency_and_reject_competing_resource(project: Pa
     assert conflict.value.code == "conflict"
     second.cancel_run(run.run_id, "test cancellation", "cancel:shared")
     assert second.attach_run(run.run_id, timeout_seconds=5).state == "cancelled"
+
+
+@pytest.mark.parametrize("operation", ("advance_project", "end_mission"))
+def test_attached_inspect_and_steer_share_body_free_snapshot_without_run_mutation(
+    project: Path, operation: str,
+) -> None:
+    terminal = operation == "end_mission"
+    snapshot = {
+        "attempt_id": "attempt-1",
+        "blocker_code": None,
+        "checkpoint_requests": 1,
+        "checkpoint_sequence": 1,
+        "completed_target_ids": [],
+        "elapsed_nanoseconds": 900_000_000_000,
+        "last_effect_sequence": 0,
+        "mission_id": "mission-001",
+        "node_id": None if terminal else "worker-1",
+        "phase": "waiting_at_checkpoint",
+        "project_id": "project-1",
+        "remaining_target_ids": ["VAL-ONE"],
+        "role": "terminal_reviewer" if terminal else "worker",
+        "scope_status": "in_scope",
+        "supervision_status": "waiting",
+        "terminal_review_id": "attempt-1" if terminal else None,
+    }
+    receipts: list[dict[str, object]] = []
+
+    def steer(request):
+        receipt = {
+            key: request[key]
+            for key in (
+                "project_id",
+                "mission_id",
+                "node_id",
+                "terminal_review_id",
+                "attempt_id",
+                "checkpoint_sequence",
+                "action",
+                "actor",
+            )
+        }
+        receipt.update(
+            receipt_sequence=1,
+            body_byte_count=0,
+            body_sha256=None,
+            delivery_status="not_applicable",
+            code="continued",
+        )
+        receipts.append(receipt)
+        return receipt
+
+    control = RunControl(
+        project,
+        executor_ref="executor_fixture:execute",
+        project_inspector=lambda project_id: {"active_attempts": [snapshot]},
+        steering_handler=steer,
+    )
+    arguments: dict[str, object] = {"project_id": "project-1"}
+    if operation == "advance_project":
+        arguments["max_steps"] = 99
+    else:
+        arguments["deliverable_roots"] = ["wait"]
+    run = control.submit_run(operation, arguments, f"idem:attached-{operation}")
+    _wait_for_state(control, run.run_id, {"running"})
+    assert control.inspect_run(run.run_id).as_dict()["active_attempts"] == [snapshot]
+    request = {
+        key: snapshot[key]
+        for key in (
+            "project_id",
+            "mission_id",
+            "node_id",
+            "terminal_review_id",
+            "attempt_id",
+            "checkpoint_sequence",
+        )
+    }
+    request.update(action="continue", actor="orchestrator", body=None)
+    assert control.steer_attempt(run.run_id, request) == receipts[0]
+    token = run.run_id.removeprefix("run:")
+    durable = b"".join(
+        path.read_bytes()
+        for path in (project / ".unrest" / "runs" / token).glob("**/*")
+        if path.is_file()
+    )
+    assert b"body" not in durable
+    control.cancel_run(run.run_id, "test complete", f"cancel:attached-{operation}")
 
 
 def test_cancel_is_idempotent_records_boundaries_and_releases_resource(project: Path) -> None:

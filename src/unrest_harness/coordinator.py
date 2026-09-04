@@ -13,7 +13,9 @@ import os
 from pathlib import Path
 import re
 import subprocess
-from typing import Any, Literal
+import threading
+import time
+from typing import Any, Callable, Literal
 
 from . import attention as attn_factory
 from .accepted_point_authority import (
@@ -29,6 +31,7 @@ from .dispatcher import (
     TerminalReviewer,
 )
 from .models import (
+    ActiveAttemptSnapshot,
     AttentionItemInternal,
     AttentionNeeded,
     Aborted,
@@ -47,6 +50,17 @@ from .models import (
     WorkHandoff,
 )
 from .storage import AttemptValidationError, ProjectStore, utc_now_filesafe
+from .supervision import load_snapshot, save_snapshot, terminal_snapshot
+from .supervision import (
+    evaluate_checkpoint_policy,
+    initial_checkpoint_policy,
+    load_policy_state,
+    load_project_active_attempts,
+    policy_path,
+    record_checkpoint_request,
+    save_policy_state,
+    snapshot_path,
+)
 from .envelope import public_attention_items
 from .task_validation import gates_in_order
 from .workspaces import (
@@ -59,6 +73,7 @@ from .workspaces import (
 
 _WRITES_LINE = re.compile(r"(?im)^writes:\s*(?P<paths>[^\n]+)$")
 _MAX_GATE_REPORT_BYTES = 4096
+_SUPERVISION_POLL_SECONDS = 30.0
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +157,7 @@ class MissionCoordinator:
             )
             return StepResult.terminal("task_list missing")
         task_state = self.store.load_task_state(self.project_id, mid)
+        self.poll_supervision(mid, tl, now_nanoseconds=time.monotonic_ns())
         contract_state = self.store.load_contract_state(self.project_id, mid)
         if not contract_state.items:
             for assertion in self.store.list_contract_assertions(self.project_id, mid):
@@ -165,10 +181,159 @@ class MissionCoordinator:
             return self._dispatch_one(mid, selected[0])
         return self._dispatch_batch(mid, tl, task_state, selected)
 
+    def poll_supervision(
+        self,
+        mission_id: str,
+        task_list: TaskList,
+        *,
+        now_nanoseconds: int,
+    ) -> None:
+        """Advance only the returned advisory policy; it never steers or dispatches."""
+        for snapshot in load_project_active_attempts(
+            self.store, self.project_id, mission_id, task_list
+        ):
+            state = load_policy_state(
+                self.store,
+                self.project_id,
+                mission_id,
+                snapshot.attempt_id,
+            )
+            if state is None:
+                # Legacy active records predate coordinator-owned attempt starts.
+                # Preserve their observed elapsed time without allowing a role to
+                # advance the request counter.
+                started = max(0, now_nanoseconds - snapshot.elapsed_nanoseconds)
+                state = initial_checkpoint_policy(
+                    started,
+                    last_effect_sequence=snapshot.last_effect_sequence,
+                )
+            elapsed = max(0, now_nanoseconds - state.attempt_started_nanoseconds)
+            poll_elapsed = elapsed - (elapsed % (30 * 1_000_000_000))
+            poll_time = state.attempt_started_nanoseconds + poll_elapsed
+            evaluation = evaluate_checkpoint_policy(
+                snapshot,
+                state,
+                now_nanoseconds=poll_time,
+            )
+            request_due = (
+                evaluation.checkpoint_due
+                and snapshot.phase == "active"
+                and snapshot.supervision_status == "running"
+            )
+            if request_due:
+                evaluation_state = record_checkpoint_request(
+                    evaluation,
+                    now_nanoseconds=poll_time,
+                )
+            else:
+                evaluation_state = evaluation.state
+            projected_status = snapshot.supervision_status
+            if request_due:
+                projected_status = "checkpoint_due"
+            projected = snapshot.model_copy(
+                update={
+                    "checkpoint_requests": evaluation_state.checkpoint_requests,
+                    "elapsed_nanoseconds": poll_elapsed,
+                    "supervision_status": projected_status,
+                },
+                deep=True,
+            )
+            save_snapshot(
+                self.store,
+                projected,
+                assigned_target_ids=(
+                    list(
+                        dict.fromkeys(
+                            target for task in task_list.tasks for target in task.targets
+                        )
+                    )
+                    if projected.role == "terminal_reviewer"
+                    else next(
+                        task.targets
+                        for task in task_list.tasks
+                        if task.id == projected.node_id
+                    )
+                ),
+            )
+            save_policy_state(
+                self.store,
+                self.project_id,
+                mission_id,
+                snapshot.attempt_id,
+                evaluation_state,
+            )
+
+    def _begin_supervision_attempt(
+        self,
+        mission_id: str,
+        *,
+        attempt_id: str,
+        role: Literal["worker", "validator", "terminal_reviewer"],
+        assigned_target_ids: list[str],
+        node_id: str | None,
+        started_nanoseconds: int | None = None,
+    ) -> None:
+        """Persist the sole coordinator's zeroed attempt clock and counters."""
+        started = (
+            time.monotonic_ns()
+            if started_nanoseconds is None
+            else started_nanoseconds
+        )
+        snapshot = ActiveAttemptSnapshot(
+            attempt_id=attempt_id,
+            blocker_code=None,
+            checkpoint_requests=0,
+            checkpoint_sequence=0,
+            completed_target_ids=[],
+            elapsed_nanoseconds=0,
+            last_effect_sequence=0,
+            mission_id=mission_id,
+            node_id=node_id,
+            phase="active",
+            project_id=self.project_id,
+            remaining_target_ids=list(assigned_target_ids),
+            role=role,
+            scope_status="in_scope",
+            supervision_status="running",
+            terminal_review_id=(attempt_id if role == "terminal_reviewer" else None),
+        )
+        save_snapshot(
+            self.store,
+            snapshot,
+            assigned_target_ids=assigned_target_ids,
+        )
+        save_policy_state(
+            self.store,
+            self.project_id,
+            mission_id,
+            attempt_id,
+            initial_checkpoint_policy(started),
+        )
+
+    def _unique_attempt_id(self, mission_id: str, candidate: str) -> str:
+        """Avoid second-resolution generation collisions without hidden state."""
+        if load_snapshot(self.store, self.project_id, mission_id, candidate) is None:
+            return candidate
+        index = 1
+        while load_snapshot(
+            self.store, self.project_id, mission_id, f"{candidate}-{index:04d}"
+        ) is not None:
+            index += 1
+        return f"{candidate}-{index:04d}"
+
+    def _discard_unobserved_supervision_attempt(
+        self, mission_id: str, attempt_id: str
+    ) -> None:
+        """Leave no active record for an agent that never used checkpoints."""
+        snapshot = snapshot_path(self.store, self.project_id, mission_id, attempt_id)
+        policy = policy_path(self.store, self.project_id, mission_id, attempt_id)
+        for path in (snapshot, snapshot.with_suffix(".lock"), policy):
+            path.unlink(missing_ok=True)
+
     def _dispatch_one(self, mid: str, task: Task) -> StepResult:
         """Dispatch one work task or one validator."""
         self.store.refresh_inventory(os.environ)
-        spawn_ts = utc_now_filesafe()
+        spawn_ts = self._unique_attempt_id(mid, utc_now_filesafe())
         task_state = self.store.load_task_state(self.project_id, mid)
         task_state.set_status(task.id, "running")
         task_state.set_last_attempt(task.id, spawn_ts)
@@ -180,8 +345,17 @@ class MissionCoordinator:
             task=task,
             spawn_ts=spawn_ts,
         )
+        self._begin_supervision_attempt(
+            mid,
+            attempt_id=spawn_ts,
+            role="worker" if task.type == "work" else "validator",
+            assigned_target_ids=task.targets,
+            node_id=task.id,
+        )
         try:
-            handoff = self.dispatcher.dispatch(request)
+            handoff = self._await_role_effect(
+                mid, lambda: self.dispatcher.dispatch(request)
+            )
         except Exception as exc:  # noqa: BLE001
             synthetic = self._synthesize_handoff(
                 task, self._bounded_dispatch_failure("Dispatcher crashed: ", exc)
@@ -377,13 +551,22 @@ class MissionCoordinator:
         self.store.refresh_inventory(os.environ)
         batch_attempts: list[_BatchAttempt] = []
         for index, task in enumerate(batch):
-            spawn_ts = self._batch_spawn_ts(index)
+            spawn_ts = self._unique_attempt_id(mid, self._batch_spawn_ts(index))
             task_state.set_status(task.id, "running")
             task_state.set_last_attempt(task.id, spawn_ts)
             batch_attempts.append(
                 _BatchAttempt(task=task, spawn_ts=spawn_ts)
             )
         self.store.save_task_state(self.project_id, mid, task_state)
+
+        for attempt in batch_attempts:
+            self._begin_supervision_attempt(
+                mid,
+                attempt_id=attempt.spawn_ts,
+                role="worker" if attempt.task.type == "work" else "validator",
+                assigned_target_ids=attempt.task.targets,
+                node_id=attempt.task.id,
+            )
 
         requests = [
             DispatchRequest(
@@ -394,7 +577,7 @@ class MissionCoordinator:
             )
             for attempt in batch_attempts
         ]
-        handoffs = self._dispatch_requests(requests)
+        handoffs = self._dispatch_requests(mid, requests)
 
         attention: list[AttentionItemInternal] = []
         for attempt in sorted(batch_attempts, key=lambda item: item.task.id):
@@ -455,7 +638,7 @@ class MissionCoordinator:
             policy_digest = "sha256:" + hashlib.sha256(policy_bytes).hexdigest()
             batch_attempts: list[_BatchAttempt] = []
             for index, task in enumerate(batch):
-                spawn_ts = self._batch_spawn_ts(index)
+                spawn_ts = self._unique_attempt_id(mid, self._batch_spawn_ts(index))
                 lease = manager.lease_workspace(
                     base_revision=base,
                     owner_id=(
@@ -486,6 +669,14 @@ class MissionCoordinator:
             task_state.set_status(attempt.task.id, "running")
             task_state.set_last_attempt(attempt.task.id, attempt.spawn_ts)
         self.store.save_task_state(self.project_id, mid, task_state)
+        for attempt in batch_attempts:
+            self._begin_supervision_attempt(
+                mid,
+                attempt_id=attempt.spawn_ts,
+                role="worker",
+                assigned_target_ids=attempt.task.targets,
+                node_id=attempt.task.id,
+            )
 
         requests = [
             DispatchRequest(
@@ -497,7 +688,7 @@ class MissionCoordinator:
             )
             for attempt in batch_attempts
         ]
-        handoffs = self._dispatch_requests(requests)
+        handoffs = self._dispatch_requests(mid, requests)
         batch_error: str | None = None
         grants: list[HumanIntegrationGrant] = []
         bound_handoffs: dict[str, NodeHandoff] = {}
@@ -619,6 +810,7 @@ class MissionCoordinator:
 
     def _dispatch_requests(
         self,
+        mission_id: str,
         requests: list[DispatchRequest],
     ) -> dict[str, NodeHandoff]:
         if not requests:
@@ -627,7 +819,9 @@ class MissionCoordinator:
         batch_method = getattr(self.dispatcher, "dispatch_batch", None)
         if callable(batch_method):
             try:
-                handoffs = batch_method(requests)
+                handoffs = self._await_role_effect(
+                    mission_id, lambda: batch_method(requests)
+                )
                 if len(handoffs) != len(requests):
                     raise RuntimeError(
                         f"dispatch_batch returned {len(handoffs)} handoff(s) for "
@@ -661,7 +855,66 @@ class MissionCoordinator:
                 )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(requests)) as pool:
-            return dict(pool.map(_run, requests))
+            futures = [pool.submit(_run, request) for request in requests]
+            while True:
+                _, pending = concurrent.futures.wait(
+                    futures,
+                    timeout=_SUPERVISION_POLL_SECONDS,
+                )
+                if not pending:
+                    return dict(future.result() for future in futures)
+                self.poll_supervision(
+                    mission_id,
+                    self.store.load_task_list(self.project_id, mission_id),
+                    now_nanoseconds=time.monotonic_ns(),
+                )
+
+    def _await_role_effect(
+        self,
+        mission_id: str,
+        effect: Callable[[], Any],
+    ) -> Any:
+        """Run one role effect in a bounded future while this coordinator polls."""
+        future: concurrent.futures.Future[Any] = concurrent.futures.Future()
+
+        def run_effect() -> None:
+            if not future.set_running_or_notify_cancel():
+                return
+            try:
+                future.set_result(effect())
+            except BaseException as exc:  # noqa: BLE001
+                future.set_exception(exc)
+
+        role_thread = threading.Thread(
+            target=run_effect,
+            name="unrest-role-effect",
+            daemon=True,
+        )
+        role_thread.start()
+        poll_error: Exception | None = None
+        while True:
+            try:
+                result = future.result(timeout=_SUPERVISION_POLL_SECONDS)
+                if poll_error is not None:
+                    raise poll_error
+                role_thread.join()
+                return result
+            except concurrent.futures.TimeoutError:
+                if future.done():
+                    role_thread.join()
+                    raise
+                if poll_error is not None:
+                    continue
+                try:
+                    self.poll_supervision(
+                        mission_id,
+                        self.store.load_task_list(self.project_id, mission_id),
+                        now_nanoseconds=time.monotonic_ns(),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    # The dispatched effect still owns the transition. Remember a
+                    # policy failure, but never return while it can publish later.
+                    poll_error = exc
 
     def _bounded_dispatch_failure(self, prefix: str, exc: Exception) -> str:
         cause = redact_credential_values(str(exc), self.store.inventory)
@@ -691,10 +944,41 @@ class MissionCoordinator:
         handoff: NodeHandoff,
         spawn_ts: str,
     ) -> list[AttentionItemInternal]:
+        # Synthetic dispatch and recovery failures are created in memory before
+        # persistence binds their immutable dispatch generation.  Attention is
+        # authored at this common boundary, so bind the same generation here as
+        # well instead of allowing a null or derived identity to escape.
+        handoff = handoff.model_copy(update={"attempt_id": spawn_ts})
         tl = self.store.load_task_list(self.project_id, mid)
         task_state = self.store.load_task_state(self.project_id, mid)
         contract_state = self.store.load_contract_state(self.project_id, mid)
         attention: list[AttentionItemInternal] = []
+
+        snapshot = load_snapshot(self.store, self.project_id, mid, spawn_ts)
+        if snapshot is not None and snapshot.phase != "terminal":
+            if snapshot.checkpoint_sequence == 0:
+                self._discard_unobserved_supervision_attempt(mid, spawn_ts)
+                snapshot = None
+        if snapshot is not None and snapshot.phase != "terminal":
+            stopped = (
+                snapshot.phase == "stopping"
+                and snapshot.supervision_status == "stop_requested"
+            )
+            terminal = terminal_snapshot(snapshot)
+            save_snapshot(
+                self.store,
+                terminal,
+                assigned_target_ids=task.targets,
+            )
+            if stopped:
+                task_state.set_status(task.id, "failed")
+                self.store.save_task_state(self.project_id, mid, task_state)
+                return [
+                    attn_factory.cooperative_stop(
+                        terminal,
+                        "Attempt stopped cooperatively at a semantic checkpoint.",
+                    )
+                ]
 
         if task.type == "work":
             if not handoff.done:
@@ -705,6 +989,10 @@ class MissionCoordinator:
             task_state.set_status(task.id, "cleared")
             self.store.save_task_state(self.project_id, mid, task_state)
         elif task.type == "validate":
+            if not handoff.done:
+                task_state.set_status(task.id, "failed")
+                self.store.save_task_state(self.project_id, mid, task_state)
+                return [attn_factory.node_attention(mid, task, handoff)]
             task_state.set_status(task.id, "cleared")
             self.store.save_task_state(self.project_id, mid, task_state)
             if isinstance(handoff, ValidateHandoff):
@@ -1234,9 +1522,25 @@ class MissionCoordinator:
                 mid,
                 TerminalReviewConfig(deliverable_roots=resolved_roots),
             )
-        spawn_ts = utc_now_filesafe()
+        spawn_ts = self._unique_attempt_id(mid, utc_now_filesafe())
+        task_list = self.store.load_task_list(self.project_id, mid)
+        assigned = list(
+            dict.fromkeys(target for task in task_list.tasks for target in task.targets)
+        )
+        self._begin_supervision_attempt(
+            mid,
+            attempt_id=spawn_ts,
+            role="terminal_reviewer",
+            assigned_target_ids=assigned,
+            node_id=None,
+        )
         try:
-            report = self.terminal_reviewer.review(self.project_id, mid, spawn_ts)
+            report = self._await_role_effect(
+                mid,
+                lambda: self.terminal_reviewer.review(
+                    self.project_id, mid, spawn_ts
+                ),
+            )
         except Exception as exc:  # noqa: BLE001
             report = TerminalReviewHandoff(
                 done=False,
@@ -1247,8 +1551,38 @@ class MissionCoordinator:
                 ),
             )
             self.store.save_terminal_review(self.project_id, mid, spawn_ts, report)
-            self._raise_attention([attn_factory.terminal_review(mid, report)])
+            snapshot = load_snapshot(self.store, self.project_id, mid, spawn_ts)
+            if snapshot is not None and snapshot.checkpoint_sequence == 0:
+                self._discard_unobserved_supervision_attempt(mid, spawn_ts)
+            self._raise_attention(
+                [attn_factory.terminal_review(mid, report, spawn_ts)]
+            )
             return StepResult.attention_needed("terminal_review_crash")
+        snapshot = load_snapshot(self.store, self.project_id, mid, spawn_ts)
+        if snapshot is not None and snapshot.phase != "terminal":
+            if snapshot.checkpoint_sequence == 0:
+                self._discard_unobserved_supervision_attempt(mid, spawn_ts)
+                snapshot = None
+        if snapshot is not None and snapshot.phase != "terminal":
+            stopped = (
+                snapshot.phase == "stopping"
+                and snapshot.supervision_status == "stop_requested"
+            )
+            terminal = terminal_snapshot(snapshot)
+            save_snapshot(self.store, terminal, assigned_target_ids=assigned)
+            if stopped:
+                self.store.save_terminal_review(
+                    self.project_id, mid, spawn_ts, report
+                )
+                self._raise_attention(
+                    [
+                        attn_factory.cooperative_stop(
+                            terminal,
+                            "Terminal review stopped cooperatively at a semantic checkpoint.",
+                        )
+                    ]
+                )
+                return StepResult.attention_needed("terminal_review_stop")
         self.store.save_terminal_review(self.project_id, mid, spawn_ts, report)
         if report.done:
             self.store.seal_mission(
@@ -1259,7 +1593,7 @@ class MissionCoordinator:
             )
             self.store.save_state(self.project_id, Done())
             return StepResult.terminal("done")
-        self._raise_attention([attn_factory.terminal_review(mid, report)])
+        self._raise_attention([attn_factory.terminal_review(mid, report, spawn_ts)])
         return StepResult.attention_needed("terminal_review")
 
     # ------------------------------------------------------------------
@@ -1316,16 +1650,8 @@ class MissionCoordinator:
                     task,
                     "Coordinator rejected the persisted attempt: " + str(exc),
                 )
-                rejected_ts = f"{spawn_ts}-rejected"
-                self.store.save_attempt(
-                    self.project_id,
-                    mid,
-                    rejected_ts,
-                    task.id,
-                    handoff,
-                )
                 attention.extend(
-                    self._apply_handoff_collect(mid, task, handoff, rejected_ts)
+                    self._apply_handoff_collect(mid, task, handoff, spawn_ts)
                 )
                 continue
             if read_handoff is None:

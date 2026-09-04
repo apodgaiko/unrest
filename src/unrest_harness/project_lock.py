@@ -18,6 +18,10 @@ class ProjectLockError(RuntimeError):
     """The project lock could not be safely inspected or acquired."""
 
 
+class ProjectLockBusyError(ProjectLockError):
+    """The project lock is already held by another operation."""
+
+
 _HELD_LOCKS = threading.local()
 
 
@@ -182,7 +186,12 @@ def _lock_posix(lock_file: BinaryIO | int, *, blocking: bool) -> bool:
 
 
 @contextmanager
-def project_access_guard(store: ProjectStore, project_id: str) -> Iterator[None]:
+def project_access_guard(
+    store: ProjectStore,
+    project_id: str,
+    *,
+    blocking: bool = True,
+) -> Iterator[None]:
     """Hold the project lock across recovery and one controller operation.
 
     Server and runtime-executor callers already hold the same lock. That
@@ -197,7 +206,9 @@ def project_access_guard(store: ProjectStore, project_id: str) -> Iterator[None]
         path,
         create=path == store.mutation_lock_path(project_id),
     )
-    if not lock.acquire(blocking=True):  # pragma: no cover - POSIX blocks
+    if not lock.acquire(blocking=blocking):
+        if not blocking:
+            raise ProjectLockBusyError
         raise ProjectLockError
     try:
         yield

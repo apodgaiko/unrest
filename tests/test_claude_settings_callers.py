@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import stat
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -139,11 +140,11 @@ def _config(home: Path) -> HarnessConfig:
         projects_dir=home / "projects",
         orchestrator_provider_name="claude",
         worker_provider_name="claude",
-        worker_acp_command="spawn-trap",
+        worker_acp_command=sys.executable,
         validator_provider_name="claude",
-        validator_acp_command="spawn-trap",
+        validator_acp_command=sys.executable,
         terminal_reviewer_provider_name="claude",
-        terminal_reviewer_acp_command="spawn-trap",
+        terminal_reviewer_acp_command=sys.executable,
         capability_profile=SAFE_PROFILE,
         max_parallel_nodes=1,
     )

@@ -418,9 +418,9 @@ def test_whole_envelope_bytes_match_in_independent_process_after_restart(
     )
 
     process.start()
+    child_pid, observed = output.get(timeout=2)
     process.join(10)
     assert process.exitcode == 0
-    child_pid, observed = output.get(timeout=2)
     assert child_pid != multiprocessing.current_process().pid
     assert observed == expected
 

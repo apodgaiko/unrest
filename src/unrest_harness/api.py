@@ -41,6 +41,9 @@ from .task_adapter import (
     TaskResult,
     run_task as _run_task,
 )
+from .models import SteeringRequest
+from .run_control import RunControlError
+from .supervision import steer_attempt as apply_steering
 
 
 _PUBLIC_ID = re.compile(r"^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9-]*$")
@@ -48,12 +51,67 @@ _LEASE_ID = re.compile(r"^lease:[a-z0-9-]+$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
-def _tools() -> FoundationTools:
-    config = HarnessConfig.discover()
-    return FoundationTools(
-        config,
-        ProjectController(config, ACPNodeDispatcher(config), ACPTerminalReviewer(config)),
+class _IntegratedFoundationTools:
+    """Compose supervision without changing the authenticated foundation slice."""
+
+    def __init__(self, tools: Any, controller: ProjectController) -> None:
+        self._tools = tools
+        runs = getattr(tools, "runs", None)
+        if runs is not None:
+            def inspect_active_attempts(project_id: str) -> dict[str, Any]:
+                return {
+                    "active_attempts": [
+                        snapshot.model_dump(mode="json")
+                        for snapshot in controller.inspect_project_live(
+                            project_id
+                        ).active_attempts
+                    ]
+                }
+
+            runs.project_inspector = inspect_active_attempts
+            runs.steering_handler = lambda request: apply_steering(
+                controller.store,
+                SteeringRequest.model_validate(request),
+                project_guard=False,
+            ).model_dump(mode="json")
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._tools, name)
+
+    def steer_attempt(
+        self, run_id: str, request: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        try:
+            checked = SteeringRequest.model_validate(request)
+            return dict(
+                self._tools.runs.steer_attempt(
+                    run_id, checked.model_dump(mode="json")
+                )
+            )
+        except RunControlError as exc:
+            raise FoundationToolError(exc.code, exc.public_message) from exc
+        except Exception as exc:
+            raise FoundationToolError("invalid_argument", "invalid argument") from exc
+
+
+def _integrated_tools(
+    config: HarnessConfig,
+    controller: ProjectController,
+    *,
+    tools: Any | None = None,
+) -> _IntegratedFoundationTools:
+    return _IntegratedFoundationTools(
+        FoundationTools(config, controller) if tools is None else tools,
+        controller,
     )
+
+
+def _tools() -> _IntegratedFoundationTools:
+    config = HarnessConfig.discover()
+    controller = ProjectController(
+        config, ACPNodeDispatcher(config), ACPTerminalReviewer(config)
+    )
+    return _integrated_tools(config, controller)
 
 
 def _call(name: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -114,6 +172,10 @@ def attach_run(run_id: str) -> dict[str, Any]:
 
 def cancel_run(run_id: str, reason: str, idempotency_key: str) -> dict[str, Any]:
     return _call("cancel_run", run_id, reason, idempotency_key)
+
+
+def steer_attempt(run_id: str, request: Mapping[str, Any]) -> dict[str, Any]:
+    return _call("steer_attempt", run_id, request)
 
 
 def open_inquiry(question: str, budget: Mapping[str, int], idempotency_key: str, project_id: str | None = None) -> dict[str, Any]:
@@ -320,4 +382,5 @@ __all__ = [
     "integrate_workspace", "lease_workspace", "open_campaign", "open_inquiry",
     "pause_inquiry", "promote_candidate", "resume_inquiry", "return_workspace",
     "measure_baseline", "review_candidate", "rollback_promotion", "submit_run",
+    "run_task", "run_project", "run_improvement",
 ]

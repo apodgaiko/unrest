@@ -107,9 +107,13 @@ coordinator; the tool itself does not seal a mission.
   prompt convention.
 - `SEC-MCP-001`: worker, validator, and reviewer modes cannot call orchestrator
   lifecycle tools through their server.
-- `ARCH-STATE-001`: mutating orchestrator calls queue within one server and
-  fail fast with `project_busy` when another process holds the same project's
-  OS-owned mutation lock; controller work executes in a thread.
+- `ARCH-STATE-001`: durable project mutations delegate directly to the
+  controller's single nonblocking OS-lock and recovery boundary; same-project
+  mutation contention fails fast with `project_busy`, while different projects
+  remain independently admissible. Ordinary direct controller inspection and
+  standalone supervision use blocking/default acquisition; MCP and attached
+  inspection use the trusted read-only live projection. Controller work
+  executes in a thread.
 - Durable `submit_run` admission and synchronous Mission methods converge on
   the same per-project OS mutation lock and the same `ProjectController`;
   run custody is not a second Mission authority.
@@ -119,8 +123,9 @@ coordinator; the tool itself does not seal a mission.
 ## Failure modes
 
 - Wrong lifecycle state returns `wrong_state`.
-- Contended project mutation returns `project_busy`; inability to inspect or
-  acquire the mutation lock returns `project_lock_error` before controller entry.
+- Controller-detected contention returns `project_busy`; lock-path or
+  acquisition faults return `project_lock_error`. Recovery begins only after
+  successful admission.
 - Invalid plans, patches, and decisions return stable top-level errors plus
   stable validation details.
 - Invalid worker overrides fail before project creation.

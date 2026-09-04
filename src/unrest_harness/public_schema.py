@@ -58,7 +58,7 @@ def public_surface_catalog() -> dict[str, Any]:
     ):
         raise RuntimeError("public-surface catalog is incomplete")
     names = [method.get("name") for method in methods if isinstance(method, dict)]
-    if len(names) != 23 or len(set(names)) != 23 or not all(isinstance(name, str) for name in names):
+    if len(names) != 24 or len(set(names)) != 24 or not all(isinstance(name, str) for name in names):
         raise RuntimeError("public-surface MCP method inventory mismatch")
     if [command.get("name") for command in commands if isinstance(command, dict)] != [
         "measure-baseline"
@@ -341,6 +341,19 @@ def _validate(value: object, schema: dict[str, Any]) -> None:
 def validate_public_request(name: str, value: object) -> None:
     """Validate one additive request before any effect is allowed."""
     _validate(value, public_input_schema(name))
+    if name == "steer_attempt" and isinstance(value, dict):
+        request = value.get("request")
+        if isinstance(request, dict) and request.get("action") == "nudge":
+            body = request.get("body")
+            if not isinstance(body, str):
+                _fail("$.request.body", "type")
+                return
+            try:
+                byte_count = len(body.encode("utf-8"))
+            except UnicodeEncodeError:
+                _fail("$.request.body", "utf8")
+            if byte_count > 2048:
+                _fail("$.request.body", "maxBytes")
 
 
 def validate_public_result(name: str, value: object) -> None:

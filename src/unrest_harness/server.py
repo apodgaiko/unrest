@@ -9,14 +9,20 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
+import json
 import logging
 import os
+import re
+import stat
+import subprocess
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal, Mapping
 
 from fastmcp import Context, FastMCP
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from .capability_policy import (
     CapabilityPolicy,
@@ -30,6 +36,7 @@ from .controller import ProjectController, ToolError
 from .dispatcher import NodeDispatcher, TerminalReviewer
 from .foundation_tools import FoundationToolError, FoundationTools, public_error
 from .models import (
+    ActiveAttemptSnapshot,
     Decision,
     TaskList,
     TerminalReviewHandoff,
@@ -37,9 +44,15 @@ from .models import (
     ValidationItem,
     WorkHandoff,
 )
-from .project_lock import ProjectLockError, ProjectMutationLock, project_lock_path
 from .public_schema import catalog_tool
-from .storage import atomic_write_json, trusted_persistence_root
+from .storage import ProjectStore, atomic_write_json, trusted_persistence_root
+from .supervision import (
+    SupervisionSnapshotError,
+    SupervisionSteeringError,
+    load_snapshot,
+    report_supervision_checkpoint,
+    wait_for_steering_action,
+)
 
 logger = logging.getLogger(__name__)
 _SENSITIVE_INVENTORY_MAX_BYTES = 4 * 1024 * 1024
@@ -48,12 +61,426 @@ _Revision = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
 _Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 
+class _RoleSteeringResult(BaseModel):
+    """Private role-only checkpoint response; public receipts remain body-free."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["continue", "nudge", "stop_for_attention"]
+    body: str | None
+    code: str
+
+
+class _CompletionTarget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_id: str
+    status: Literal["completed", "blocked", "passed", "failed"]
+    return_ref: Annotated[str, Field(min_length=1, max_length=128)]
+    evidence_refs: Annotated[list[str], Field(min_length=1)]
+
+
+class _NodeCompletion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_name: Literal["unrest.v045.node-completion.v1"] = Field(
+        alias="schema",
+        serialization_alias="schema",
+    )
+    attempt_id: str
+    task_type: Literal["work", "validate"]
+    targets: Annotated[list[_CompletionTarget], Field(min_length=1)]
+    scope_status: Literal["in_scope", "uncertain", "violation"]
+    blocker_code: Literal[
+        "dependency_unavailable",
+        "scope_ambiguous",
+        "scope_violation",
+        "integrity_refusal",
+        "authority_required",
+        "delivery_blocked",
+    ] | None
+
+
+_COMPLETION_SCHEMA = "unrest.v045.node-completion.v1"
+_REFUSAL_SCHEMA = "unrest.v045.completion-refusal.v1"
+_COMPLETION_FIELD_NAMES = frozenset(
+    {
+        "attempt_id",
+        "blocker_code",
+        "evidence_refs",
+        "return_ref",
+        "schema",
+        "scope_status",
+        "status",
+        "target_id",
+        "targets",
+        "task_type",
+    }
+)
+
+
+_WORK_RETURN_REF = re.compile(r"git:[0-9a-f]{40}\Z")
+_VALIDATION_RETURN_REF = re.compile(r"verdict:sha256:[0-9a-f]{64}\Z")
+_EVIDENCE_REF = re.compile(r"evidence:sha256:[0-9a-f]{64}\Z")
+_RUNTIME_ASSIGNMENT_ENV = "UNREST_NODE_ASSIGNMENT"
+
+
+def _completion_return_ref_valid(value: str, *, task_type: str) -> bool:
+    pattern = _WORK_RETURN_REF if task_type == "work" else _VALIDATION_RETURN_REF
+    return pattern.fullmatch(value) is not None
+
+
+def _completion_evidence_ref_valid(value: str) -> bool:
+    return _EVIDENCE_REF.fullmatch(value) is not None
+
+
+def _completion_validation_fields(exc: Exception) -> list[str]:
+    """Reduce parser diagnostics to closed, body-free field names."""
+    rows: list[dict[str, Any]] = getattr(exc, "errors", lambda: [])()
+    if not rows:
+        return ["completion"]
+    fields: list[str] = []
+    for row in rows:
+        location = row.get("loc") or ()
+        if row.get("type") == "extra_forbidden":
+            fields.append("targets" if "targets" in location[:-1] else "completion")
+            continue
+        known = [
+            part
+            for part in location
+            if isinstance(part, str) and part in _COMPLETION_FIELD_NAMES
+        ]
+        fields.append(known[-1] if known else "completion")
+    return fields
+
+
+def _completion_evidence_ref(
+    *, attempt_id: str, target_id: str, status: str, return_ref: str
+) -> str:
+    payload = {
+        "attempt_id": attempt_id,
+        "return_ref": return_ref,
+        "status": status,
+        "target_id": target_id,
+    }
+    digest = hashlib.sha256(
+        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(
+            "ascii"
+        )
+    ).hexdigest()
+    return f"evidence:sha256:{digest}"
+
+
+def _completion_bound_store(
+    *, node_id: str, attempt_id: str, handoff_path: str
+) -> tuple[ProjectStore, str, str] | None:
+    project_id = os.environ.get("UNREST_PROJECT_ID")
+    mission_id = os.environ.get("UNREST_MISSION_ID")
+    if not project_id or not mission_id:
+        return None
+    store = ProjectStore(HarnessConfig.discover())
+    canonical_path = store.attempt_path(
+        project_id, mission_id, attempt_id, node_id
+    ).resolve(strict=False)
+    if Path(handoff_path).resolve(strict=False) != canonical_path:
+        return None
+    return store, project_id, mission_id
+
+
+def _runtime_assignment(node_type: str) -> tuple[str, list[str]] | None:
+    encoded = os.environ.get(_RUNTIME_ASSIGNMENT_ENV)
+    if encoded is None:
+        return None
+    try:
+        payload = json.loads(encoded)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError("targets") from exc
+    if not isinstance(payload, dict) or set(payload) != {"task_type", "targets"}:
+        raise ValueError("targets")
+    task_type = payload["task_type"]
+    if (
+        not isinstance(task_type, str)
+        or task_type not in {"work", "validate"}
+        or task_type != node_type
+    ):
+        raise ValueError("task_type")
+    targets = payload["targets"]
+    if (
+        not isinstance(targets, list)
+        or not all(isinstance(target, str) and target for target in targets)
+        or targets != sorted(set(targets))
+    ):
+        raise ValueError("targets")
+    return task_type, targets
+
+
+def _completion_context(
+    *,
+    node_id: str,
+    node_type: str,
+    attempt_id: str,
+    handoff_path: str,
+    items: list[ValidationItem],
+    done: bool,
+) -> tuple[_NodeCompletion | None, ProjectStore | None]:
+    bound = _completion_bound_store(
+        node_id=node_id, attempt_id=attempt_id, handoff_path=handoff_path
+    )
+    if bound is None:
+        return None, None
+    store, project_id, mission_id = bound
+    try:
+        task_list = store.load_task_list(project_id, mission_id)
+    except FileNotFoundError:
+        runtime_assignment = _runtime_assignment(node_type)
+        if runtime_assignment is None:
+            raise
+        task_type, targets = runtime_assignment
+    else:
+        task = next(
+            (candidate for candidate in task_list.tasks if candidate.id == node_id),
+            None,
+        )
+        if task is None or task.type != node_type or node_type not in {"work", "validate"}:
+            raise ValueError("task_type")
+        task_type = task.type
+        targets = sorted(set(task.targets))
+    workspace = store.workspace_dir(project_id)
+    if task_type == "work":
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=workspace,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        return_ref = f"git:{revision}"
+        statuses = {target: "completed" if done else "blocked" for target in targets}
+    else:
+        if sorted(item.item_id for item in items) != targets or len(
+            {item.item_id for item in items}
+        ) != len(items):
+            raise ValueError("items")
+        rows = sorted((item.item_id, item.passed) for item in items)
+        digest = hashlib.sha256(
+            (json.dumps(rows, separators=(",", ":")) + "\n").encode("ascii")
+        ).hexdigest()
+        return_ref = f"verdict:sha256:{digest}"
+        statuses = {
+            target: "passed" if verdict else "failed" for target, verdict in rows
+        }
+    completion = _NodeCompletion.model_validate(
+        {
+            "schema": "unrest.v045.node-completion.v1",
+            "attempt_id": attempt_id,
+            "task_type": task_type,
+            "targets": [
+                {
+                    "target_id": target,
+                    "status": statuses.get(target, "failed"),
+                    "return_ref": return_ref,
+                    "evidence_refs": [
+                        _completion_evidence_ref(
+                            attempt_id=attempt_id,
+                            target_id=target,
+                            status=statuses.get(target, "failed"),
+                            return_ref=return_ref,
+                        )
+                    ],
+                }
+                for target in targets
+            ],
+            "scope_status": "in_scope",
+            "blocker_code": None,
+        }
+    )
+    return completion, store
+
+
+def _completion_errors(
+    supplied: _NodeCompletion,
+    expected: _NodeCompletion,
+    *,
+    done: bool,
+    request_attention: bool,
+    passed: bool | None,
+) -> list[str]:
+    errors: set[str] = set()
+    if supplied.attempt_id != expected.attempt_id:
+        errors.add("attempt_id")
+    if supplied.task_type != expected.task_type:
+        errors.add("task_type")
+    supplied_ids = [target.target_id for target in supplied.targets]
+    expected_ids = [target.target_id for target in expected.targets]
+    if supplied_ids != sorted(set(supplied_ids)) or supplied_ids != expected_ids:
+        errors.add("targets")
+    by_id = {target.target_id: target for target in expected.targets}
+    for target in supplied.targets:
+        reference = by_id.get(target.target_id)
+        if reference is None:
+            continue
+        if target.status != reference.status:
+            errors.add("status")
+        if target.return_ref != reference.return_ref or not _completion_return_ref_valid(
+            target.return_ref, task_type=supplied.task_type
+        ):
+            errors.add("return_ref")
+        if (
+            target.evidence_refs != reference.evidence_refs
+            or len(target.evidence_refs) != 1
+            or not _completion_evidence_ref_valid(target.evidence_refs[0])
+        ):
+            errors.add("evidence_refs")
+    if supplied.task_type == "work" and any(
+        target.status == "completed" for target in supplied.targets
+    ) and not done:
+        errors.add("done")
+    if supplied.task_type == "validate":
+        all_passed = all(target.status == "passed" for target in supplied.targets)
+        if passed is None or passed != all_passed:
+            errors.add("passed")
+    if (
+        supplied.scope_status != "in_scope" or supplied.blocker_code is not None
+    ) and not request_attention:
+        errors.add("request_attention")
+    return sorted(errors)
+
+
+def _completion_refusal_path(
+    store: ProjectStore,
+    project_id: str,
+    mission_id: str,
+    attempt_id: str,
+    node_id: str,
+) -> Path:
+    token = hashlib.sha256(
+        f"{project_id}\0{mission_id}\0{node_id}\0{attempt_id}\0{_COMPLETION_SCHEMA}".encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    return (
+        store.mission_runtime_dir(project_id, mission_id)
+        / "completion-refusals"
+        / f"{token}.json"
+    )
+
+
+def _consume_completion_refusal(
+    path: Path,
+    *,
+    project_id: str,
+    mission_id: str,
+    node_id: str,
+    attempt_id: str,
+) -> bool:
+    """Atomically consume the one warm refusal for an exact attempt."""
+    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    payload = {
+        "attempt_id": attempt_id,
+        "carrier_schema": _COMPLETION_SCHEMA,
+        "consumed": True,
+        "mission_id": mission_id,
+        "node_id": node_id,
+        "project_id": project_id,
+        "schema": _REFUSAL_SCHEMA,
+    }
+    encoded = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+    # A process may die after creating its private temporary but before linking
+    # the marker. Such a temporary has no effect on the quota and is safe to
+    # remove on the next exact-attempt call.
+    prefix = f".{path.name}."
+    for orphan in sorted(path.parent.iterdir()):
+        if orphan.name.startswith(prefix) and orphan.name.endswith(".tmp"):
+            try:
+                orphan.unlink()
+            except FileNotFoundError:
+                pass
+
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        metadata = None
+    quota_already_claimed = metadata is not None
+    if metadata is not None:
+        valid_marker = (
+            stat.S_ISREG(metadata.st_mode)
+            and stat.S_IMODE(metadata.st_mode) == 0o600
+            and path.read_bytes() == encoded
+        )
+        if valid_marker:
+            return False
+        # A malformed, wrong-mode, or non-regular final cannot be trusted as a
+        # marker, but its final-name claim must not mint a second warm refusal.
+        # Canonicalize it below while keeping the quota consumed.
+        path.unlink()
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary = Path(temporary_name)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            descriptor = -1
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            metadata = path.lstat()
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+                or path.read_bytes() != encoded
+            ):
+                raise RuntimeError("completion refusal marker collision")
+            return False
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        return not quota_already_claimed
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        temporary.unlink(missing_ok=True)
+
+
+def _clear_completion_refusal(path: Path) -> None:
+    """Remove a terminal attempt's private refusal cursor."""
+    try:
+        path.unlink()
+    except OSError:
+        return
+    try:
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except OSError:
+        # The terminal handoff is already durable. A stale cursor is private,
+        # task-truth neutral, and remains exact-attempt bound.
+        pass
+
+
 class _FoundationBudget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    max_steps: int = Field(ge=1)
-    timeout_seconds: int = Field(ge=1)
-    max_branches: int = Field(default=4, ge=1, le=4)
+    max_steps: StrictInt = Field(ge=1)
+    timeout_seconds: StrictInt = Field(ge=1)
+    max_branches: StrictInt = Field(default=4, ge=1, le=4)
 
 
 def _read_sensitive_inventory_fd(fd: int | None) -> SensitiveValueInventory:
@@ -107,52 +534,66 @@ def create_orchestrator_server(
             "then call advance_project again."
         ),
     )
+    from .api import _integrated_tools
+
     _register_orchestrator_tools(mcp, controller)
-    _register_foundation_tools(mcp, FoundationTools(config, controller))
+    _register_foundation_tools(
+        mcp,
+        _integrated_tools(
+            config,
+            controller,
+            tools=FoundationTools(config, controller),
+        ),
+    )
     return mcp
 
 
 def create_worker_server(
     sensitive_inventory: Mapping[str, str] | None = None,
 ) -> FastMCP:
-    """1 worker tool. Configured at runtime via env: UNREST_NODE_TYPE,
+    """Two worker tools. Configured at runtime via env: UNREST_NODE_TYPE,
     UNREST_NODE_ID, UNREST_HANDOFF_PATH.
     """
     mcp = FastMCP(
         name="unrest-worker",
         instructions=(
-            "Worker MCP server. Mode: worker. 1 tool: end_node. "
+            "Worker MCP server. Mode: worker. Tools: "
+            "report_supervision_checkpoint and end_node. "
             "Call exactly once before exiting."
         ),
     )
     _register_worker_tools(mcp, sensitive_inventory=sensitive_inventory)
+    _register_role_supervision_tool(mcp, expected_role="worker")
     return mcp
 
 
 def create_validator_server(
     sensitive_inventory: Mapping[str, str] | None = None,
 ) -> FastMCP:
-    """1 validator tool using the shared strict node-completion protocol."""
+    """Validator completion plus the shared strict checkpoint protocol."""
     mcp = FastMCP(
         name="unrest-validator",
         instructions=(
-            "Validator MCP server. Mode: validator. 1 tool: end_node. "
+            "Validator MCP server. Mode: validator. Tools: "
+            "report_supervision_checkpoint and end_node. "
             "Call exactly once before exiting. Include `items` (one per assigned "
             "contract target) and the aggregate `passed`."
         ),
     )
     _register_worker_tools(mcp, sensitive_inventory=sensitive_inventory)
+    _register_role_supervision_tool(mcp, expected_role="validator")
     return mcp
 
 
 def create_terminal_reviewer_server(
     sensitive_inventory: Mapping[str, str] | None = None,
 ) -> FastMCP:
-    """1 reviewer tool. Configured via env: UNREST_TERMINAL_REVIEW_PATH."""
+    """Reviewer completion plus the shared strict checkpoint protocol."""
     mcp = FastMCP(
         name="unrest-terminal-reviewer",
         instructions=(
-            "Runtime closure-check MCP server. 1 tool: submit_terminal_review. "
+            "Runtime closure-check MCP server. Tools: "
+            "report_supervision_checkpoint and submit_terminal_review. "
             "Call exactly once with the structured gap list."
         ),
     )
@@ -160,7 +601,114 @@ def create_terminal_reviewer_server(
         mcp,
         sensitive_inventory=sensitive_inventory,
     )
+    _register_role_supervision_tool(mcp, expected_role="terminal_reviewer")
     return mcp
+
+
+def _register_role_supervision_tool(
+    mcp: FastMCP,
+    *,
+    expected_role: Literal["worker", "validator", "terminal_reviewer"],
+) -> None:
+    """Expose the same exact-attempt semantic boundary to every ACP role."""
+
+    @mcp.tool(
+        name="report_supervision_checkpoint",
+        description=(
+            "Report one body-free exact-attempt semantic checkpoint and wait at "
+            "most 60 seconds for bounded orchestrator steering. A timeout or "
+            "blocked delivery returns continue."
+        ),
+    )
+    async def report_checkpoint(
+        snapshot: ActiveAttemptSnapshot,
+    ) -> dict[str, Any]:
+        def error_result(code: str) -> dict[str, Any]:
+            return {"error": {"code": code, "message": code.replace("_", " ")}}
+
+        project_id = os.environ.get("UNREST_PROJECT_ID")
+        mission_id = os.environ.get("UNREST_MISSION_ID")
+        identity_path = os.environ.get(
+            "UNREST_TERMINAL_REVIEW_PATH"
+            if expected_role == "terminal_reviewer"
+            else "UNREST_HANDOFF_PATH"
+        )
+        attempt_id = (
+            Path(identity_path).stem.split("__", 1)[0] if identity_path else None
+        )
+        node_id = (
+            None
+            if expected_role == "terminal_reviewer"
+            else os.environ.get("UNREST_NODE_ID")
+        )
+        terminal_review_id = (
+            attempt_id
+            if expected_role == "terminal_reviewer"
+            else None
+        )
+        if (
+            not project_id
+            or not mission_id
+            or not attempt_id
+            or snapshot.project_id != project_id
+            or snapshot.mission_id != mission_id
+            or snapshot.attempt_id != attempt_id
+            or snapshot.role != expected_role
+            or snapshot.node_id != node_id
+            or snapshot.terminal_review_id != terminal_review_id
+        ):
+            return error_result("steering_binding_mismatch")
+
+        config = HarnessConfig.discover()
+        store = ProjectStore(config)
+        task_list = store.load_task_list(project_id, mission_id)
+        if node_id is None:
+            assigned = list(
+                dict.fromkeys(
+                    target for task in task_list.tasks for target in task.targets
+                )
+            )
+        else:
+            task = next((item for item in task_list.tasks if item.id == node_id), None)
+            if task is None:
+                return error_result("steering_binding_mismatch")
+            assigned = task.targets
+        current = load_snapshot(store, project_id, mission_id, attempt_id)
+        if current is None:
+            return error_result("attempt_not_started")
+        if snapshot.elapsed_nanoseconds != 0 or snapshot.checkpoint_requests != 0:
+            return error_result("child_policy_state_forbidden")
+        if snapshot.checkpoint_sequence != current.checkpoint_sequence + 1:
+            return error_result("stale_checkpoint_binding")
+        snapshot = snapshot.model_copy(
+            update={
+                "checkpoint_requests": current.checkpoint_requests,
+                "elapsed_nanoseconds": current.elapsed_nanoseconds,
+            },
+            deep=True,
+        )
+        try:
+            binding = await asyncio.to_thread(
+                report_supervision_checkpoint,
+                store,
+                snapshot,
+                assigned_target_ids=assigned,
+                project_guard=False,
+            )
+            outcome = await asyncio.to_thread(
+                wait_for_steering_action,
+                store,
+                binding,
+                project_guard=False,
+            )
+        except (SupervisionSnapshotError, SupervisionSteeringError) as exc:
+            code = exc.code if isinstance(exc, SupervisionSteeringError) else "invalid_checkpoint"
+            return error_result(code)
+        return _RoleSteeringResult(
+            action=outcome.action,
+            body=outcome.body,
+            code=outcome.code,
+        ).model_dump(mode="json")
 
 
 # ---------------------------------------------------------------------------
@@ -171,77 +719,23 @@ def create_terminal_reviewer_server(
 def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) -> None:
     def safe_payload(value: Any) -> dict[str, Any]:
         return _to_payload(value, inventory=controller.store.inventory)
+
     # SECURITY[SEC-MCP-001]: Lifecycle tools are registered only on the
     # orchestrator server; worker, validator, and reviewer modes construct
     # authority-limited servers.
-    # Same-process callers retain the existing queueing semantics. Once at the
-    # front of that queue, a caller must also acquire the shared OS lock before
-    # entering any mutating controller path. `inspect_project` is read-only.
-    project_locks: dict[str, asyncio.Lock] = {}
-    locks_guard = asyncio.Lock()
     detached_mutations: set[asyncio.Task[dict[str, Any]]] = set()
 
-    async def _project_lock(project_id: str) -> asyncio.Lock:
-        async with locks_guard:
-            lock = project_locks.get(project_id)
-            if lock is None:
-                lock = asyncio.Lock()
-                project_locks[project_id] = lock
-            return lock
-
     async def call_project_mutation(
-        project_id: str,
         call: Callable[[], Any],
     ) -> dict[str, Any]:
-        project_lock = await _project_lock(project_id)
-        await project_lock.acquire()
-        try:
-            lock_path = project_lock_path(controller.store, project_id)
-        except ProjectLockError:
-            project_lock.release()
-            return safe_payload(
-                ToolError("project_lock_error", "project mutation lock unavailable")
-            )
-        except BaseException:
-            project_lock.release()
-            raise
-
         def invoke() -> Any:
-            # Preserve the pre-lock behavior for invalid or nonexistent project
-            # identifiers: the controller remains the compatibility oracle.
-            if lock_path is None:
-                try:
-                    return call()
-                except ToolError as exc:
-                    return exc
-
-            mutation_lock = ProjectMutationLock(lock_path)
             try:
-                acquired = mutation_lock.try_acquire()
-            except ProjectLockError:
-                return ToolError(
-                    "project_lock_error", "project mutation lock unavailable"
-                )
-            if not acquired:
-                return ToolError(
-                    "project_busy", "another project mutation is in progress"
-                )
-            try:
-                try:
-                    return call()
-                except ToolError as exc:
-                    return exc
-            finally:
-                mutation_lock.release()
+                return call()
+            except ToolError as exc:
+                return exc
 
         async def run_mutation() -> dict[str, Any]:
-            try:
-                return safe_payload(await asyncio.to_thread(invoke))
-            finally:
-                # The task, not its caller, owns the same-process lease once the
-                # worker starts. A cancelled caller therefore cannot admit a
-                # second same-server mutation before the thread has finished.
-                project_lock.release()
+            return safe_payload(await asyncio.to_thread(invoke))
 
         mutation_task = asyncio.create_task(
             run_mutation(), name="unrest-project-mutation"
@@ -331,7 +825,7 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         ],
     ) -> dict[str, Any]:
         return await call_project_mutation(
-            project_id, lambda: controller.submit_plan(project_id, task_list)
+            lambda: controller.submit_plan(project_id, task_list)
         )
 
     @mcp.tool(
@@ -354,7 +848,7 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         return await call_project_mutation(
-            project_id, lambda: controller.advance_project(project_id, max_steps)
+            lambda: controller.advance_project(project_id, max_steps)
         )
 
     @mcp.tool(
@@ -386,7 +880,6 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         ] = None,
     ) -> dict[str, Any]:
         return await call_project_mutation(
-            project_id,
             lambda: controller.end_mission(project_id, deliverable_roots),
         )
 
@@ -408,7 +901,7 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         ],
     ) -> dict[str, Any]:
         return await call_project_mutation(
-            project_id, lambda: controller.decide_attention(project_id, decisions)
+            lambda: controller.decide_attention(project_id, decisions)
         )
 
     @mcp.tool(
@@ -423,8 +916,13 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
     ) -> dict[str, Any]:
         try:
             return safe_payload(
-                await asyncio.to_thread(controller.inspect_project, project_id)
+                await asyncio.to_thread(
+                    controller.inspect_project_live,
+                    project_id,
+                )
             )
+        except SupervisionSnapshotError as exc:
+            return safe_payload(ToolError("integrity_error", str(exc)))
         except ToolError as exc:
             return safe_payload(exc)
 
@@ -440,11 +938,11 @@ def _register_orchestrator_tools(mcp: FastMCP, controller: ProjectController) ->
         reason: Annotated[str, Field(description="Why we are aborting.")],
     ) -> dict[str, Any]:
         return await call_project_mutation(
-            project_id, lambda: controller.abort_project(project_id, reason)
+            lambda: controller.abort_project(project_id, reason)
         )
 
 
-def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
+def _register_foundation_tools(mcp: FastMCP, tools: Any) -> None:
     """Register the exact additive catalog on the orchestrator authority."""
 
     def failure(exc: Exception) -> dict[str, Any]:
@@ -495,6 +993,18 @@ def _register_foundation_tools(mcp: FastMCP, tools: FoundationTools) -> None:
         try:
             return await asyncio.to_thread(
                 tools.cancel_run, run_id, reason, idempotency_key
+            )
+        except Exception as exc:  # noqa: BLE001
+            return failure(exc)
+
+    @catalog_tool(mcp, "steer_attempt")
+    async def steer_attempt(
+        run_id: _NonEmpty,
+        request: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        try:
+            return await asyncio.to_thread(
+                getattr(tools, "steer_attempt"), run_id, request
             )
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
@@ -777,7 +1287,8 @@ def _register_worker_tools(
         description=(
             "Assigned-session runtime handoff. Report completion for the assigned "
             "work or validation task. Call exactly "
-            "once before exiting. After this call, do not invoke any other tools — the "
+            "once before exiting, except that completion_refused permits one repaired "
+            "same-attempt call. After a recorded call, do not invoke other tools — the "
             "session is finished. For validation tasks, include `items` (one per "
             "assigned contract target) and the aggregate `passed`."
         ),
@@ -809,6 +1320,13 @@ def _register_worker_tools(
                 description="Validation task only: aggregate True iff every items[].passed.",
             ),
         ] = None,
+        completion: Annotated[
+            Any | None,
+            Field(
+                default=None,
+                description="Optional closed unrest.v045.node-completion.v1 carrier.",
+            ),
+        ] = None,
     ) -> dict[str, Any]:
         node_type = os.environ.get("UNREST_NODE_TYPE", "work")
         handoff_path = os.environ.get("UNREST_HANDOFF_PATH")
@@ -818,6 +1336,75 @@ def _register_worker_tools(
         if not node_id:
             raise RuntimeError("UNREST_NODE_ID not set in worker env")
         attempt_id = Path(handoff_path).stem.split("__", 1)[0]
+
+        structural_errors: list[str] = []
+        expected_completion: _NodeCompletion | None = None
+        bound = _completion_bound_store(
+            node_id=node_id,
+            attempt_id=attempt_id,
+            handoff_path=handoff_path,
+        )
+        completion_store = bound[0] if bound is not None else None
+        try:
+            expected_completion, completion_store = _completion_context(
+                node_id=node_id,
+                node_type=node_type,
+                attempt_id=attempt_id,
+                handoff_path=handoff_path,
+                items=items or [],
+                done=done,
+            )
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            structural_errors.append(
+                str(exc)
+                if str(exc) in {"items", "targets", "task_type"}
+                else "return_ref"
+            )
+        supplied_completion: _NodeCompletion | None = None
+        if completion is not None:
+            try:
+                supplied_completion = _NodeCompletion.model_validate(completion)
+            except Exception as exc:
+                structural_errors.extend(_completion_validation_fields(exc))
+        elif expected_completion is not None:
+            supplied_completion = expected_completion
+        if supplied_completion is not None and expected_completion is not None:
+            structural_errors.extend(
+                _completion_errors(
+                    supplied_completion,
+                    expected_completion,
+                    done=done,
+                    request_attention=request_attention,
+                    passed=passed,
+                )
+            )
+
+        if structural_errors and completion_store is not None:
+            project_id = os.environ["UNREST_PROJECT_ID"]
+            mission_id = os.environ["UNREST_MISSION_ID"]
+            fields = sorted(set(structural_errors))
+            refusal_path = _completion_refusal_path(
+                completion_store,
+                project_id,
+                mission_id,
+                attempt_id,
+                node_id,
+            )
+            if _consume_completion_refusal(
+                refusal_path,
+                project_id=project_id,
+                mission_id=mission_id,
+                node_id=node_id,
+                attempt_id=attempt_id,
+            ):
+                return {
+                    "recorded": False,
+                    "code": "completion_refused",
+                    "fields": fields,
+                }
+            done = False
+            request_attention = True
+            report = "Structural completion refused: " + ", ".join(fields)
 
         handoff: WorkHandoff | ValidateHandoff
         if node_type == "validate":
@@ -844,6 +1431,18 @@ def _register_worker_tools(
             trusted_root=trusted_persistence_root(handoff_path),
             inventory=sensitive_inventory,
         )
+        if completion_store is not None:
+            project_id = os.environ["UNREST_PROJECT_ID"]
+            mission_id = os.environ["UNREST_MISSION_ID"]
+            _clear_completion_refusal(
+                _completion_refusal_path(
+                    completion_store,
+                    project_id,
+                    mission_id,
+                    attempt_id,
+                    node_id,
+                )
+            )
         return {
             "recorded": True,
             "message": "Session complete, your job is done now; do not call further tools and just end your job now.",

@@ -24,6 +24,50 @@ checker = importlib.util.module_from_spec(CHECKER_SPEC)
 CHECKER_SPEC.loader.exec_module(checker)
 
 
+def test_v045_public_assets_and_api_exports_are_in_source_package() -> None:
+    from unrest_harness import api
+
+    package = checker._source_package(ROOT)
+    required_assets = {
+        "unrest_harness/bundled/examples/v0.4.5/inquiry.json",
+        "unrest_harness/bundled/examples/v0.4.5/run-improvement.json",
+        "unrest_harness/bundled/examples/v0.4.5/run-project.json",
+        "unrest_harness/bundled/examples/v0.4.5/run-task.json",
+        "unrest_harness/bundled/foundation/public-surface.v1.json",
+        "unrest_harness/bundled/skills/v045-dogfood/SKILL.md",
+    }
+    assert required_assets <= package.keys()
+    assert set(api.__all__) == {
+        "add_candidate",
+        "advance_inquiry",
+        "attach_run",
+        "cancel_inquiry",
+        "cancel_run",
+        "cleanup_workspace",
+        "evaluate_candidate",
+        "handoff_inquiry",
+        "inspect_campaign",
+        "inspect_inquiry",
+        "inspect_run",
+        "inspect_workspace",
+        "integrate_workspace",
+        "lease_workspace",
+        "measure_baseline",
+        "open_campaign",
+        "open_inquiry",
+        "pause_inquiry",
+        "promote_candidate",
+        "resume_inquiry",
+        "return_workspace",
+        "review_candidate",
+        "rollback_promotion",
+        "run_improvement",
+        "run_project",
+        "run_task",
+        "submit_run",
+    }
+
+
 @pytest.fixture(scope="module")
 def built_distribution(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Build the candidate archives once in test-owned temporary storage."""

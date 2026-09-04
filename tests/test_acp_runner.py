@@ -140,6 +140,28 @@ async def test_real_mcp_inventory_fd_redacts_before_crash_and_restart(
         "UNREST_PROJECT_ID": project_id,
     }
     if mode == "worker":
+        git_environment = {
+            **os.environ,
+            "GIT_AUTHOR_DATE": "2000-01-01T00:00:00+00:00",
+            "GIT_AUTHOR_EMAIL": "test@example.invalid",
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_COMMITTER_DATE": "2000-01-01T00:00:00+00:00",
+            "GIT_COMMITTER_EMAIL": "test@example.invalid",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+        }
+        for git_args in (
+            ("init", "--quiet", "--initial-branch=main"),
+            ("commit", "--allow-empty", "--quiet", "-m", "base"),
+        ):
+            git_process = await asyncio.create_subprocess_exec(
+                "git",
+                *git_args,
+                cwd=workspace,
+                env=git_environment,
+            )
+            assert await git_process.wait() == 0
         artifact_path = store.attempt_path(
             project_id, mission_id, spawn_ts, "w-secret"
         )

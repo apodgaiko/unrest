@@ -1966,6 +1966,7 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
             f".unrest-runtime/missions/{mission_id}/tasks.json",
             f".unrest-runtime/missions/{mission_id}/task-state.json",
             f".unrest-runtime/missions/{mission_id}/contract-state.json",
+            f".unrest/missions/{mission_id}/supersession-lineage.json",
         }
         active_mutation_allowlist.update(
             relative

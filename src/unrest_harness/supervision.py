@@ -13,7 +13,7 @@ import os
 import stat
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, Literal, Sequence, cast
@@ -420,12 +420,23 @@ def report_supervision_checkpoint(
     snapshot: ActiveAttemptSnapshot,
     *,
     assigned_target_ids: Sequence[str],
+    project_guard: bool = True,
 ) -> SteeringBinding:
     """Publish one semantic checkpoint through the W-owned local adapter seam."""
     if snapshot.phase != "waiting_at_checkpoint" or snapshot.supervision_status != "waiting":
         raise SupervisionSteeringError("not_at_semantic_checkpoint")
-    with project_access_guard(store, snapshot.project_id):
-        recover_supervision(store, snapshot.project_id, snapshot.mission_id)
+    guard = (
+        project_access_guard(store, snapshot.project_id)
+        if project_guard
+        else nullcontext()
+    )
+    with guard:
+        recover_supervision(
+            store,
+            snapshot.project_id,
+            snapshot.mission_id,
+            project_guard=False,
+        )
         if snapshot.role == "worker":
             directory = supervision_runtime_dir(
                 store, snapshot.project_id, snapshot.mission_id
@@ -481,6 +492,7 @@ def steer_attempt(
     *,
     delivery_supported: bool = True,
     fault: Callable[[str], None] | None = None,
+    project_guard: bool = True,
 ) -> SupervisionReceipt:
     """Accept exactly one action for the current bound semantic checkpoint."""
     binding = SteeringBinding.model_validate(
@@ -495,8 +507,19 @@ def steer_attempt(
             }
         )
     )
-    with project_access_guard(store, request.project_id):
-        recover_supervision(store, request.project_id, request.mission_id, fault=fault)
+    guard = (
+        project_access_guard(store, request.project_id)
+        if project_guard
+        else nullcontext()
+    )
+    with guard:
+        recover_supervision(
+            store,
+            request.project_id,
+            request.mission_id,
+            fault=fault,
+            project_guard=False,
+        )
         snapshot = _require_bound_snapshot(store, binding)
         receipts = load_supervision_receipts(
             store, request.project_id, request.mission_id
@@ -608,6 +631,7 @@ def wait_for_steering_action(
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
     fault: Callable[[str], None] | None = None,
+    project_guard: bool = True,
 ) -> SteeringOutcome:
     """Wait no longer than 60 seconds, defaulting deterministically to continue."""
     if timeout_seconds < 0 or timeout_seconds > CHECKPOINT_WAIT_SECONDS:
@@ -617,8 +641,19 @@ def wait_for_steering_action(
     started = monotonic()
     deadline = started + timeout_seconds
     while True:
-        with project_access_guard(store, binding.project_id):
-            recover_supervision(store, binding.project_id, binding.mission_id, fault=fault)
+        guard = (
+            project_access_guard(store, binding.project_id)
+            if project_guard
+            else nullcontext()
+        )
+        with guard:
+            recover_supervision(
+                store,
+                binding.project_id,
+                binding.mission_id,
+                fault=fault,
+                project_guard=False,
+            )
             _require_current_or_stopping_checkpoint(store, binding)
             receipts = load_supervision_receipts(
                 store, binding.project_id, binding.mission_id
@@ -661,9 +696,11 @@ def recover_supervision(
     mission_id: str,
     *,
     fault: Callable[[str], None] | None = None,
+    project_guard: bool = True,
 ) -> None:
     """Repair receipt tails from private inbox truth without returning a body."""
-    with project_access_guard(store, project_id):
+    guard = project_access_guard(store, project_id) if project_guard else nullcontext()
+    with guard:
         _recover_supervision_locked(
             store, project_id, mission_id, fault=fault
         )

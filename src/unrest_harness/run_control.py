@@ -86,6 +86,7 @@ class RunSummary:
     result: Mapping[str, Any] | None
     error: Mapping[str, Any] | None
     receipt_id: str | None
+    active_attempts: tuple[Mapping[str, Any], ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -100,6 +101,7 @@ class RunSummary:
             "result": dict(self.result) if self.result is not None else None,
             "error": dict(self.error) if self.error is not None else None,
             "receipt_id": self.receipt_id,
+            "active_attempts": [dict(item) for item in self.active_attempts],
         }
 
 
@@ -361,7 +363,14 @@ def _pid_live(pid: int) -> bool:
 
 def _validate_project_envelope(result: Mapping[str, Any]) -> None:
     required = {"harnessRoot", "projectId", "projectRoot", "state"}
-    allowed = {*required, "dag"}
+    allowed = {
+        *required,
+        "active_attempts",
+        "dag",
+        "frontier",
+        "next_action",
+        "supersession_lineage",
+    }
     if set(result) - allowed or required - set(result):
         _fail("internal_error", "run executor returned an invalid result")
     if not all(isinstance(result[key], str) for key in ("harnessRoot", "projectId", "projectRoot")):
@@ -409,6 +418,8 @@ class RunControl:
         python_executable: str | None = None,
         worker_environment: Mapping[str, str] | None = None,
         secret_set_version_id: str = "secret-set:run-control:v1",
+        project_inspector: Callable[[str], Mapping[str, Any]] | None = None,
+        steering_handler: Callable[[Mapping[str, Any]], Mapping[str, Any]] | None = None,
         recover: bool = True,
     ) -> None:
         self.project_root = Path(os.path.abspath(os.fspath(project_root)))
@@ -421,6 +432,8 @@ class RunControl:
         self.python_executable = python_executable or sys.executable
         self.worker_environment = dict(worker_environment or {})
         self.secret_set_version_id = secret_set_version_id
+        self.project_inspector = project_inspector
+        self.steering_handler = steering_handler
         self.durable_root = self.project_root / ".unrest" / "runs"
         self.runtime_root = self.project_root / ".unrest-runtime" / "runs"
         for path in (self.durable_root, self.runtime_root, self.runtime_root / "locks"):
@@ -512,6 +525,20 @@ class RunControl:
         receipt_id = latest.details.get("receipt_id")
         if not isinstance(receipt_id, str):
             receipt_id = self._terminal_receipt_id(events)
+        active_attempts: tuple[Mapping[str, Any], ...] = ()
+        if (
+            request.operation in {"advance_project", "end_mission"}
+            and latest.state not in TERMINAL_RUN_STATES
+            and request.project_id is not None
+            and self.project_inspector is not None
+        ):
+            inspected = self.project_inspector(request.project_id)
+            rows = inspected.get("active_attempts", [])
+            if not isinstance(rows, list) or not all(
+                isinstance(item, Mapping) for item in rows
+            ):
+                _fail("integrity_error", "active attempt projection is invalid")
+            active_attempts = tuple(dict(item) for item in rows)
         return RunSummary(
             run_id=request.run_id,
             operation=request.operation,
@@ -524,7 +551,51 @@ class RunControl:
             result=result,
             error=dict(error) if error is not None else None,
             receipt_id=receipt_id,
+            active_attempts=active_attempts,
         )
+
+    def steer_attempt(
+        self,
+        run_id: str,
+        request: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        """Route attached steering without copying its private body into run state."""
+        summary = self.inspect_run(run_id)
+        admitted = self._load_request(run_id)
+        if (
+            admitted.operation not in {"advance_project", "end_mission"}
+            or summary.state in TERMINAL_RUN_STATES
+        ):
+            _fail(
+                "invalid_transition",
+                "run is not an active advance_project or end_mission",
+            )
+        if self.steering_handler is None:
+            _fail("provider_unavailable", "attached steering is unavailable")
+        if (
+            request.get("project_id") != admitted.project_id
+            or request.get("actor") != "orchestrator"
+        ):
+            _fail(
+                "steering_binding_mismatch",
+                "steering binding does not match the attached run",
+            )
+        try:
+            return dict(self.steering_handler(request))
+        except RunControlError:
+            raise
+        except Exception as exc:
+            code = str(getattr(exc, "code", "invalid_argument"))
+            if code not in {
+                "nudge_limit_exceeded",
+                "nudge_too_large",
+                "not_at_semantic_checkpoint",
+                "steering_action_replayed",
+                "steering_binding_mismatch",
+                "stale_checkpoint_binding",
+            }:
+                code = "invalid_argument"
+            raise RunControlError(code, code.replace("_", " ")) from exc
 
     def _admission_summary(self, run_id: str) -> RunSummary:
         request = self._load_request(run_id)
@@ -544,6 +615,7 @@ class RunControl:
             result=None,
             error=None,
             receipt_id=None,
+            active_attempts=(),
         )
 
     def attach_run(
@@ -633,6 +705,10 @@ class RunControl:
                 result=dict(value["result"]) if isinstance(value["result"], Mapping) else None,
                 error=dict(value["error"]) if isinstance(value["error"], Mapping) else None,
                 receipt_id=str(value["receipt_id"]) if value["receipt_id"] is not None else None,
+                active_attempts=tuple(
+                    dict(item) for item in value.get("active_attempts", [])
+                    if isinstance(item, Mapping)
+                ),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise RunControlError("integrity_error", "cancel replay record is invalid") from exc

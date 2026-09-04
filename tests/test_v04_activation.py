@@ -379,25 +379,18 @@ async def test_improvement_direct_and_api_carriers_stop_private_and_provider_fre
     tmp_path: Path,
 ) -> None:
     repository, manager, request = _improvement_runtime(tmp_path, "parity")
-    direct = await run_improvement_direct(manager, request)
-    sequence = manager.inspect_campaign(request.campaign_id).sequence
-    carried = await api.run_improvement(EvolutionManager(repository), request)
-
-    assert direct.to_json_bytes() == carried.to_json_bytes()
-    assert carried.stage == "reviewed"
-    assert carried.campaign_state == "decision_needed"
-    assert carried.provider_effect_count == carried.later_decision_action_count == 0
-    assert manager.inspect_campaign(request.campaign_id).sequence == sequence
-    assert b"private candidate source token" not in carried.to_json_bytes()
-    assert _canonical(json.loads(carried.to_json_bytes())) + b"\n" == carried.to_json_bytes()
+    with pytest.raises(ImprovementAdapterError, match="missing_campaign_freeze"):
+        await run_improvement_direct(manager, request)
+    with pytest.raises(ImprovementAdapterError, match="missing_campaign_freeze"):
+        await api.run_improvement(EvolutionManager(repository), request)
+    assert not any((repository / ".unrest" / "evolution" / "campaigns").iterdir())
 
 
 @pytest.mark.asyncio
 async def test_improvement_invalid_and_provider_reject_before_campaign_effect(tmp_path: Path) -> None:
     repository, manager, request = _improvement_runtime(tmp_path, "invalid")
-    invalid = replace(request, candidate_cost_steps=-1)
     with pytest.raises(ImprovementAdapterError, match="invalid_argument"):
-        await api.run_improvement(manager, invalid)
+        replace(request, candidate_cost_steps=-1)
     assert not any((repository / ".unrest" / "evolution" / "campaigns").iterdir())
 
     class Provider:
@@ -549,7 +542,7 @@ def test_subprocess_commands_reject_private_invalid_requests_without_effect(
     assert not (improvement_repository / ".unrest").exists()
 
 
-def test_task_click_and_subprocess_are_canonical_and_private(tmp_path: Path) -> None:
+def test_task_click_and_subprocess_stop_without_provider_approval(tmp_path: Path) -> None:
     request = tmp_path / "task.json"
     brief = "private cli task brief"
     key = "private-cli-idempotency"
@@ -569,11 +562,9 @@ def test_task_click_and_subprocess_are_canonical_and_private(tmp_path: Path) -> 
         ["run-task", "--request", str(request)],
         env={"UNREST_HOME": str(home), "UNREST_PROJECTS_DIR": str(home / "projects")},
     )
-    assert result.exit_code == 0, result.output
-    content = result.stdout_bytes.removesuffix(b"\n")
-    assert _canonical(json.loads(content)) == content
-    assert json.loads(content)["terminal"] == "paused"
-    assert all(secret.encode() not in content for secret in (brief, key, pause))
+    assert result.exit_code == 1
+    assert result.output == "Error: provider_approval_required\n"
+    assert not home.exists()
 
     subprocess_request = tmp_path / "task-subprocess.json"
     subprocess_request.write_bytes(request.read_bytes())
@@ -582,13 +573,11 @@ def test_task_click_and_subprocess_are_canonical_and_private(tmp_path: Path) -> 
         "run-task",
         home=tmp_path / "task-subprocess-home",
     )
-    assert process.returncode == 0, process.stderr.decode()
-    subprocess_content = process.stdout.removesuffix(b"\n")
-    assert _canonical(json.loads(subprocess_content)) == subprocess_content
-    assert all(secret.encode() not in process.stdout for secret in (brief, key, pause))
+    assert process.returncode == 1
+    assert process.stderr == b"Error: provider_approval_required\n"
 
 
-def test_project_click_and_subprocess_preserve_exact_topology(tmp_path: Path) -> None:
+def test_project_click_and_subprocess_stop_without_exact_request(tmp_path: Path) -> None:
     runtime = _project_runtime(tmp_path, "click", clear=True)
     request = tmp_path / "project.json"
     _write_json(request, _project_cli_document(runtime[1], runtime[2], runtime[3]))
@@ -598,13 +587,8 @@ def test_project_click_and_subprocess_preserve_exact_topology(tmp_path: Path) ->
         ["run-project", "--request", str(request)],
         env={"UNREST_HOME": str(home), "UNREST_PROJECTS_DIR": str(home / "projects")},
     )
-    assert result.exit_code == 0, result.output
-    content = result.stdout_bytes.removesuffix(b"\n")
-    payload = json.loads(content)
-    assert _canonical(payload) == content
-    assert payload["status"] == "completed"
-    assert [node["id"] for node in payload["nodes"]] == ["leaf-a", "leaf-b", "join"]
-    assert b"private" not in content
+    assert result.exit_code == 1
+    assert result.output == "Error: blocked_missing_exact_request\n"
 
     subprocess_runtime = _project_runtime(tmp_path, "subprocess", clear=True)
     subprocess_request = tmp_path / "project-subprocess.json"
@@ -621,35 +605,19 @@ def test_project_click_and_subprocess_preserve_exact_topology(tmp_path: Path) ->
         "run-project",
         home=tmp_path / "home-subprocess",
     )
-    assert process.returncode == 0, process.stderr.decode()
-    subprocess_payload = json.loads(process.stdout)
-    assert subprocess_payload["status"] == "completed"
-    assert [node["id"] for node in subprocess_payload["nodes"]] == [
-        "leaf-a",
-        "leaf-b",
-        "join",
-    ]
+    assert process.returncode == 1
+    assert process.stderr == b"Error: blocked_missing_exact_request\n"
 
 
-def test_improvement_click_and_subprocess_stop_at_review_without_disclosure(
+def test_improvement_click_and_subprocess_stop_without_exact_request(
     tmp_path: Path,
 ) -> None:
     repository, _manager, request = _improvement_runtime(tmp_path, "click-cli")
     request_path = tmp_path / "improvement.json"
     _write_json(request_path, _improvement_cli_document(repository, request))
     result = CliRunner().invoke(cli, ["run-improvement", "--request", str(request_path)])
-    assert result.exit_code == 0, result.output
-    content = result.stdout_bytes.removesuffix(b"\n")
-    payload = json.loads(content)
-    assert _canonical(payload) == content
-    assert (payload["stage"], payload["campaign_state"]) == ("reviewed", "decision_needed")
-    assert payload["effects"] == {
-        "external": 0,
-        "later_decision_action": 0,
-        "network": 0,
-        "provider": 0,
-    }
-    assert b"private candidate source token" not in content
+    assert result.exit_code == 1
+    assert result.output == "Error: blocked_missing_exact_request\n"
 
     subprocess_repository, _subprocess_manager, subprocess_request = _improvement_runtime(
         tmp_path,
@@ -665,40 +633,17 @@ def test_improvement_click_and_subprocess_stop_at_review_without_disclosure(
         "run-improvement",
         home=tmp_path / "unused-improvement-home",
     )
-    assert process.returncode == 0, process.stderr.decode()
-    subprocess_payload = json.loads(process.stdout)
-    assert (subprocess_payload["stage"], subprocess_payload["campaign_state"]) == (
-        "reviewed",
-        "decision_needed",
-    )
-    assert b"private candidate source token" not in process.stdout
+    assert process.returncode == 1
+    assert process.stderr == b"Error: blocked_missing_exact_request\n"
 
 
-def test_v031_catalog_oracle_and_unowned_carriers_are_unchanged() -> None:
+def test_composed_catalog_mirrors_and_api_exports_are_exact() -> None:
     root = Path(__file__).resolve().parents[1]
     catalog = root / "src" / "unrest_harness" / "bundled" / "foundation" / "public-surface.v1.json"
-    accepted_catalog = subprocess.run(
-        ["git", "show", f"{BASE}:src/unrest_harness/bundled/foundation/public-surface.v1.json"],
-        cwd=root,
-        check=True,
-        capture_output=True,
-    ).stdout
-    assert catalog.read_bytes() == accepted_catalog
-    subprocess.run(
-        [
-            "git",
-            "diff",
-            "--exit-code",
-            BASE,
-            "--",
-            "src/unrest_harness/server.py",
-            "src/unrest_harness/foundation_tools.py",
-        ],
-        cwd=root,
-        check=True,
-        capture_output=True,
-    )
+    documented = root / "docs" / "v03" / "v0.3.1" / "public-surface.v1.json"
+    assert catalog.read_bytes() == documented.read_bytes()
     assert callable(api.run_task)
     assert callable(api.run_project)
     assert callable(api.run_improvement)
-    assert not {"run_task", "run_project", "run_improvement"} & set(api.__all__)
+    assert {"run_task", "run_project", "run_improvement"} <= set(api.__all__)
+    assert len(api.__all__) == 27

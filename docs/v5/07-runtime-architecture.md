@@ -315,17 +315,23 @@ without sealing.
 
 ## 9. Same-project operation serialization
 
-Mutating orchestrator MCP calls first acquire one in-process `asyncio.Lock` per
-project, preserving same-process queueing. They then attempt a non-blocking OS
-file lock in that project's runtime directory before controller entry. A lock
-held by another server process returns `project_busy`; lock-path or acquisition
-failures return `project_lock_error`. Different projects use different locks.
+The five durable project mutations delegate directly to one controller-owned
+boundary and request nonblocking OS-lock acquisition. Contention returns
+`project_busy`, while lock-path or acquisition faults return
+`project_lock_error`. Ordinary direct controller inspection and standalone
+supervision adapters use the same boundary in blocking/default mode. Recovery
+runs only after successful admission. Trusted same-operation nesting reuses the
+admitted operation without reacquiring the lock, and different projects use
+different locks.
 
 The file is a stable rendezvous path, not a lease sentinel: ownership belongs
 to the open file handle and the operating system releases it on close or
 process exit. No deletion or operator cleanup is required. POSIX uses `flock`
-and Windows uses a one-byte `msvcrt.locking` range. `inspect_project` is
-read-only and does not take either lock.
+and Windows uses a one-byte `msvcrt.locking` range. A shielded server task keeps
+the controller call and its lock alive after caller cancellation until the
+operation completes normally; the server adds no admission queue, lock, or
+recovery boundary. MCP project inspection and attached run inspection remain
+responsive through the trusted read-only live projection.
 
 ## Change protocol
 

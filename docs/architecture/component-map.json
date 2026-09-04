@@ -186,16 +186,20 @@
       ],
       "paths": [
         "src/unrest_harness/controller.py",
+        "src/unrest_harness/patch_transaction.py",
         "src/unrest_harness/project_lock.py",
-        "src/unrest_harness/server.py"
+        "src/unrest_harness/server.py",
+        "src/unrest_harness/supervision.py"
       ],
       "specifications": [
         "docs/v5/07-runtime-architecture.md",
         "docs/v5/08-mcp-surface.md"
       ],
       "tests": [
+        "tests/test_patch_transaction.py",
         "tests/test_project_lock.py",
-        "tests/test_server.py"
+        "tests/test_server.py",
+        "tests/test_supervision.py"
       ]
     },
     {

@@ -1827,7 +1827,22 @@ class ACPNodeRunner:
         sensitive_inventory: dict[str, str],
         environment: dict[str, str],
     ) -> asyncio.subprocess.Process:
+        assignment = json.dumps(
+            {
+                "targets": sorted(set(task.targets)),
+                "task_type": task.type,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        supplied_assignment = environment.get("UNREST_NODE_ASSIGNMENT")
+        if supplied_assignment is not None and supplied_assignment != assignment:
+            raise ValueError("runtime assignment does not match task")
         read_fd, write_fd = os.pipe()
+        child_environment = {
+            **environment,
+            "UNREST_NODE_ASSIGNMENT": assignment,
+        }
         cmd = [
             sys.executable,
             "-m",
@@ -1849,7 +1864,7 @@ class ACPNodeRunner:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=workspace_dir,
-                env=environment,
+                env=child_environment,
                 limit=SUBPROCESS_STREAM_LIMIT,
                 pass_fds=(read_fd,),
             )

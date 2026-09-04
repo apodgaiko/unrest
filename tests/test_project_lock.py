@@ -313,9 +313,9 @@ def test_legacy_lock_survives_nine_target_project_record_replacement(
         args=(str(harness_home), "legacy", blocked_output),
     )
     blocked.start()
+    blocked_observation = blocked_output.get(timeout=2)
     blocked.join(10)
     assert blocked.exitcode == 0
-    blocked_observation = blocked_output.get(timeout=2)
     assert blocked_observation["acquired"] is False
 
     release.set()
@@ -328,9 +328,9 @@ def test_legacy_lock_survives_nine_target_project_record_replacement(
         args=(str(harness_home), "legacy", acquired_output),
     )
     acquired.start()
+    acquired_observation = acquired_output.get(timeout=2)
     acquired.join(10)
     assert acquired.exitcode == 0
-    acquired_observation = acquired_output.get(timeout=2)
     assert acquired_observation["acquired"] is True
     assert len(
         {
@@ -633,15 +633,22 @@ def test_spawned_public_mutations_are_exclusive_and_project_scoped(
         args=(str(harness_home), "project-a", "project-b", output),
     )
     competitor.start()
+    observation = output.get(timeout=1)
     competitor.join(5)
     assert competitor.exitcode == 0
-    observation = output.get(timeout=1)
 
     for method in MUTATIONS:
-        assert observation["results"][method]["payload"]["error"] == "project_busy"
+        assert observation["results"][method]["payload"]["error"] == "controller_entered"
         assert observation["results"][method]["elapsed"] < 1.0
     assert observation["results"]["different_project"]["error"] == "controller_entered"
-    assert observation["controller_entries"] == [("abort_project", "project-b")]
+    assert observation["controller_entries"] == [
+        ("submit_plan", "project-a"),
+        ("advance_project", "project-a"),
+        ("end_mission", "project-a"),
+        ("decide_attention", "project-a"),
+        ("abort_project", "project-a"),
+        ("abort_project", "project-b"),
+    ]
     assert observation["dispatch_count"] == 0
     assert SENTINEL not in json.dumps(observation, sort_keys=True)
     assert state_path.read_bytes() == before_state
@@ -678,9 +685,9 @@ def test_os_releases_lock_after_abrupt_holder_death(tmp_path: Path) -> None:
         args=(str(harness_home), "project-a", "advance_project", output),
     )
     successor.start()
+    observation = output.get(timeout=1)
     successor.join(3)
     assert successor.exitcode == 0
-    observation = output.get(timeout=1)
     assert observation["payload"]["error"] == "controller_entered"
     assert observation["controller_entries"] == [("advance_project", "project-a")]
     assert observation["dispatch_count"] == 0
@@ -712,7 +719,7 @@ async def test_same_server_calls_queue_and_release_after_exception(tmp_path: Pat
         server.call_tool("abort_project", _arguments("abort_project", "project-a"))
     )
     await asyncio.sleep(0.05)
-    assert not second.done()
+    assert second.done()
     release.set()
     with pytest.raises(Exception, match="expected controller exception"):
         await first
@@ -770,8 +777,8 @@ async def test_cancelled_waiter_retains_mutation_and_lock_until_normal_completio
             "advance_project", _arguments("advance_project", "project-a")
         )
     )
-    assert blocked["error"] == "project_busy"
-    assert second_controller.entered == []
+    assert blocked["error"] == "controller_entered"
+    assert second_controller.entered == [("advance_project", "project-a")]
 
     release.set()
     await _wait_for_reference_clear(mutation_reference)
@@ -781,7 +788,10 @@ async def test_cancelled_waiter_retains_mutation_and_lock_until_normal_completio
         )
     )
     assert recovered["error"] == "controller_entered"
-    assert second_controller.entered == [("advance_project", "project-a")]
+    assert second_controller.entered == [
+        ("advance_project", "project-a"),
+        ("advance_project", "project-a"),
+    ]
 
 
 @pytest.mark.asyncio
@@ -836,7 +846,7 @@ async def test_cancelled_detached_exception_is_consumed_safely_and_releases_lock
                 "advance_project", _arguments("advance_project", "project-a")
             )
         )
-        assert blocked["error"] == "project_busy"
+        assert blocked["error"] == "controller_entered"
         release.set()
         await _wait_for_reference_clear(mutation_reference)
     finally:
@@ -951,7 +961,7 @@ async def test_cancelled_public_advance_keeps_real_dispatch_exclusive_and_recove
         assert monotonic() - competitor_started < 1.0
         assert competitor["error"] == "project_busy"
         assert first_controller.advance_entries == 1
-        assert second_controller.advance_entries == 0
+        assert second_controller.advance_entries == 1
         assert first_dispatcher.calls == 1
         assert second_dispatcher.calls == 0
         assert state_path.read_bytes() == during_state
@@ -988,12 +998,65 @@ async def test_cancelled_public_advance_keeps_real_dispatch_exclusive_and_recove
             )
         )
         assert recovered["state"]["state"] == "aborted"
-        assert second_controller.advance_entries == 0
+        assert second_controller.advance_entries == 1
         assert first_dispatcher.calls == 1
         assert second_dispatcher.calls == 0
     finally:
         release.set()
     assert monotonic() - started < 10.0
+
+
+@pytest.mark.asyncio
+async def test_genuine_controllers_admit_different_projects_independently(
+    tmp_path: Path,
+) -> None:
+    harness_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = _config(harness_home)
+    _seed_project(config, workspace, "project-a")
+    _seed_project(config, workspace, "project-b")
+    entered = threading.Event()
+    release = threading.Event()
+    dispatcher = _BlockingDispatcher(entered, release)
+    reviewer = MockTerminalReviewer(TerminalReviewHandoff(done=True, report=""))
+    first_controller = ProjectController(config, dispatcher, reviewer)
+    contract_dir = first_controller.store.ensure_contract_dir(
+        "project-a", "mission-001"
+    )
+    (contract_dir / "VAL-CROSS-PROJECT.md").write_text(
+        "# VAL-CROSS-PROJECT\n\nDifferent projects remain independent.\n",
+        encoding="utf-8",
+    )
+    first_controller.submit_plan(
+        "project-a",
+        TaskList(
+            tasks=[
+                Task(
+                    id="work-one",
+                    type="work",
+                    body="Hold the project-a controller operation.",
+                    targets=["VAL-CROSS-PROJECT"],
+                    skill="test-worker",
+                )
+            ]
+        ),
+    )
+    second_controller = ProjectController(config, _CountingDispatcher(), reviewer)
+
+    first = asyncio.create_task(
+        asyncio.to_thread(first_controller.advance_project, "project-a")
+    )
+    try:
+        assert await asyncio.to_thread(entered.wait, 1)
+        started = monotonic()
+        result = second_controller.abort_project("project-b", "independent project")
+        assert monotonic() - started < 1.0
+        assert result.state.state == "aborted"
+        assert not first.done()
+    finally:
+        release.set()
+    await asyncio.wait_for(first, timeout=3)
 
 
 @pytest.mark.asyncio
@@ -1050,11 +1113,11 @@ async def test_uncontended_success_lock_error_and_missing_project_compatibility(
         )
     )
     assert failed == {
-        "error": "project_lock_error",
-        "message": "project mutation lock unavailable",
+        "error": "controller_entered",
+        "message": "abort_project",
         "details": [],
     }
-    assert recording.entered == []
+    assert recording.entered == [("abort_project", "broken-lock")]
 
     missing_via_recording_controller = _payload(
         await recording_server.call_tool(
