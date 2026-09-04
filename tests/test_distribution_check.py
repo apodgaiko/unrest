@@ -135,7 +135,7 @@ def _mutated_distribution(
     return target
 
 
-def test_checker_builds_and_executes_14_cases_with_extracted_provenance(
+def test_checker_builds_and_executes_15_cases_with_extracted_provenance(
     built_distribution: Path,
 ) -> None:
     environment = os.environ.copy()
@@ -144,7 +144,7 @@ def test_checker_builds_and_executes_14_cases_with_extracted_provenance(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "extracted restart oracle" in result.stdout
-    assert "'cases': 14" in result.stdout
+    assert "'cases': 15" in result.stdout
     assert str(ROOT.resolve()) not in result.stdout
 
 

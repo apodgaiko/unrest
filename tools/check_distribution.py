@@ -214,11 +214,11 @@ def _run_extracted_restart_oracle(
         )
     provenance = json.loads(marker_lines[0])
     nodeids = provenance.get("nodeids")
-    if not isinstance(nodeids, list) or len(nodeids) != 14:
-        raise RuntimeError(f"extracted sdist restart oracle collected {len(nodeids or [])}, expected 14")
+    if not isinstance(nodeids, list) or len(nodeids) != 15:
+        raise RuntimeError(f"extracted sdist restart oracle collected {len(nodeids or [])}, expected 15")
     normalized_output = process.stdout.replace("\r\n", "\n")
-    if re.search(r"\b14 passed\b", normalized_output) is None:
-        raise RuntimeError("extracted sdist restart oracle did not report exactly 14 passed")
+    if re.search(r"\b15 passed\b", normalized_output) is None:
+        raise RuntimeError("extracted sdist restart oracle did not report exactly 15 passed")
     if " skipped" in normalized_output or " deselected" in normalized_output:
         raise RuntimeError("extracted sdist restart oracle skipped or deselected cases")
 
@@ -244,7 +244,7 @@ def _run_extracted_restart_oracle(
     if any(_inside(path, checkout) for path in effective_paths):
         raise RuntimeError("extracted sdist sys.path leaked the source checkout")
     return {
-        "cases": 14,
+        "cases": 15,
         "cwd": str(cwd),
         "module": str(module),
         "source_path": str(source_path),

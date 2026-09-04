@@ -71,7 +71,7 @@ When CLI entry points, bundled assets, package data, or MCP surfaces change,
 also run `uv build`, `uv run python tools/check_distribution.py dist`, and the
 installed-wheel lifecycle from an unrelated temporary directory. The archive
 check must verify complete member bytes and safely extract the sdist, then run
-all 14 `tests/test_persistence_schema_v1.py` cases from that extracted tree
+all 15 `tests/test_persistence_schema_v1.py` cases from that extracted tree
 with package module, test module, cwd, and `sys.path` provenance excluding the
 checkout. Post-build verification is focused on archive membership and content,
 entry points, policy discovery, persistence/restart behavior, and fail-closed

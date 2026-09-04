@@ -151,7 +151,7 @@ uv run python tools/check_distribution.py dist
 ```
 
 The distribution checker must prove complete archive membership and bytes,
-safely extract the sdist, and execute all 14 protected
+safely extract the sdist, and execute all 15 protected
 `tests/test_persistence_schema_v1.py` cases from that extracted tree. Its
 package module, test module, cwd, and effective `sys.path` provenance must
 exclude the checkout. For packaging changes, also install the wheel and run

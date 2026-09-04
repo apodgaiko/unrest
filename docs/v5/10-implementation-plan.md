@@ -106,7 +106,7 @@ At a completed implementation slice, also run the milestone checks in the root
 `AGENTS.md`. When CLI entry points, bundled assets, package data, or MCP surfaces
 change, run the focused archive check and unrelated-cwd installed-wheel lifecycle
 required by the package tier. That check compares complete archive membership
-and bytes, safely extracts the source distribution, and runs all 14 protected
+and bytes, safely extracts the source distribution, and runs all 15 protected
 `tests/test_persistence_schema_v1.py` cases from the extracted tree while
 proving package module, test module, cwd, and effective `sys.path` provenance
 exclude the checkout. The sdist carries the test, all five JSON fixtures under
