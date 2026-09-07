@@ -1,6 +1,7 @@
 # Unrest v0.4.5 — activation candidate
 
-This is a frozen source candidate pending external gates. Source acceptance
+This is source preparation pending external gates, before final candidate freeze.
+Source acceptance
 is not benchmark certification or release eligibility. Candidate-specific
 integration, independent real-surface validation, the full Python 3.13 source
 suite, release packaging and installed-wheel verification remain pending.
@@ -55,8 +56,62 @@ See the [rollback procedure](lean-core-v0.4.5-rollback.md).
 Existing Mission, provider, budget, gate, promotion and release authorities
 remain in force. Supervision adds no second dispatcher, default provider call,
 or automatic restart. Inquiry and adapter results cannot approve or promote.
-Retry policy, benchmark-exception approval and credentials remain unresolved;
-source preparation supplies none of those decisions.
+The maintainer approved release profile `v045-correctness-release-exception-1`.
+The manifest binds the actual approval and preserved proposal by SHA256; approval
+is not completed validation and does not itself confer release eligibility.
+
+## Approved profile and pending obligations
+
+All 70 target dispositions remain explicit: 67 unchanged functional targets and
+three qualified targets, CROSS005, EVAL001 and EVAL002. All 52 original
+correctness cases remain required, including their visible/held-out split:
+11 C-INQ, 6 C-EVD, 13 C-LEG, 9 C-ACP, 9 C-ACT and 4 C-CROSS.
+Comparative quality, Mission-speed, resource and historical workflow campaigns
+are deferred, without a pass. `benchmark_certified` is false and
+`improvement_claims` is empty. Deferral never waives functional behavior.
+API judge credentials and benchmark spending are not prerequisites for this
+approved deferred-campaign route; original blocked/not_run records are preserved.
+
+Retry policy permits at most one whole correctness run retry, only for narrowly
+evidenced transport/resource infrastructure failure. Deterministic, candidate
+and semantic failures cannot be reclassified as infrastructure. Both attempts
+count against the original provider-free limits: 180 executions, 1200 seconds
+per execution and 21600 seconds aggregate. The retry does not expand budgets.
+
+The separate bounded live Inquiry lifecycle uses installed public-library
+`run_task` through existing Codex subscription access, with authenticated
+project_id and a concrete planning question. It requires gpt-6-astra at medium,
+at most two branches plus one synthesis, three attempts, 600 seconds aggregate,
+65536 response bytes per attempt and max_steps=8 per attempt. Steps are reported
+and validated via structured steps_used; unknown or over-budget results remain
+non-passes. This is not an eight-tool-call cap, nor a token or USD estimate.
+No automatic live replay, API purchase, API fallback or additional spending is
+authorized. Read-only capabilities, private provider artifacts separate from
+the product repository, schema-valid branch/synthesis objects, a non-null safe
+answer, named planner consumption and Mission before/after bytes remain required.
+The installed CLI's `provider_approval_required` refusal is a separate behavior;
+this approval does not add a CLI approval carrier or bypass library authority.
+
+The following gates remain pending:
+
+- Public profile and ABI implementation and independent acceptance; fresh
+  applicable planning acceptance; external correctness runner and ruler acceptance.
+- Integration and independent functional validation for all accepted contracts,
+  followed by independent execution of all 52 correctness cases and bounded live
+  Inquiry proof. Synthetic controls cannot substitute for the live lifecycle.
+- The final Python 3.13 source suite, including real process, ACP/MCP,
+  supervision, cancellation and cleanup checks. The full suite remains a single
+  frozen-candidate checkpoint, not a source-preparation check.
+- Exact wheel/sdist archive verification, installed lifecycle, fail-closed
+  startup, persistence/restart/recovery and all 15 extracted-sdist persistence cases.
+- A separate release decision packet binding actual accepted public semantics,
+  approval, final candidate and all preserved gate evidence, required CI and
+  publication authority. No containing commit or imagined public schema identity
+  is supplied by this source manifest.
+
+Source preparation can be accepted separately. Final candidate checkpoint
+admission waits for public profile, runner and ruler acceptance; final freeze,
+release eligibility and publication remain pending.
 
 ## Source and future artifacts
 

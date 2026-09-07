@@ -84,7 +84,7 @@ def test_v045_notes_and_rollback_keep_pending_scope_and_resolvable_links() -> No
         assert term in notes
     for term in (
         "provider_approval_required", "pending external gates", "Retry policy",
-        "benchmark-exception approval and credentials remain unresolved",
+        "is not completed validation",
         "does not verify those future archives",
     ):
         assert term in notes
@@ -126,3 +126,69 @@ def test_binding_cli_accepts_active_manifest_and_refuses_wrong_digest(tmp_path: 
     refusal = subprocess.run([*command, str(wrong)], cwd=ROOT, capture_output=True, text=True)
     assert refusal.returncode != 0
     assert "binding declaration mismatch" in refusal.stderr
+
+
+def test_v045_approved_profile_has_exact_closed_values_and_types() -> None:
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    expected = {'id': 'v045-correctness-release-exception-1',
+     'approval_sha256': '63f089865e5d507c68f936728d8c9e63521b49a203d2a0aa1f52cf21f699a449',
+     'approved_proposal_sha256': 'dbfe1888f84cc86d4071aed1ec409a5e9b5650f342c4b6bad386017a41e69758',
+     'approval_status': 'approved',
+     'benchmark_certified': False,
+     'improvement_claims': [],
+     'deferred_campaigns': ['quality', 'mission-speed', 'resource', 'historical-workflow'],
+     'correctness_cases': 52,
+     'unchanged_targets': 67,
+     'qualified_targets': ['CROSS005', 'EVAL001', 'EVAL002'],
+     'retry': {'unit': 'whole_correctness_run',
+               'maximum_infrastructure_retries': 1,
+               'provider_free_limits': {'maximum_executions': 180,
+                                        'maximum_execution_seconds': 1200,
+                                        'maximum_total_seconds': 21600},
+               'both_attempts_counted': True},
+     'live_smoke': {'route': 'installed-library-codex-subscription',
+                    'model': 'gpt-6-astra',
+                    'reasoning_effort': 'medium',
+                    'maximum_branches': 2,
+                    'maximum_syntheses': 1,
+                    'maximum_attempts': 3,
+                    'maximum_total_seconds': 600,
+                    'maximum_response_bytes': 65536,
+                    'max_steps': 8,
+                    'step_semantics': 'reported_and_validated',
+                    'automatic_retries': 0},
+     'remaining_gates': ['public-profile-and-ABI',
+                         'fresh-planning-acceptance',
+                         'external-runner-and-ruler',
+                         'integration',
+                         'independent-functional',
+                         'correctness52',
+                         'live-inquiry',
+                         'python313-source-suite',
+                         'archive-and-installed',
+                         'release-decision-and-CI',
+                         'publication']}
+    # JSON serialization distinguishes booleans from equal integer values.
+    assert json.dumps(manifest["release_profile"], sort_keys=True) == json.dumps(
+        expected, sort_keys=True
+    )
+
+
+def test_v045_notes_preserve_approval_limits_and_pending_validation() -> None:
+    notes = (RELEASE / "lean-core-v0.4.5.md").read_text(encoding="utf-8")
+    for term in (
+        "67 unchanged", "All 52 original", "one whole correctness run retry",
+        "Both attempts", "180 executions", "1200 seconds", "21600 seconds",
+        "three attempts", "600 seconds", "65536 response bytes", "max_steps=8",
+        "reported\nand validated", "No automatic live replay", "API fallback",
+        "installed public-library", "provider_approval_required",
+        "fresh\n  applicable planning acceptance", "all 15 extracted-sdist",
+        "admission waits for public profile, runner and ruler acceptance",
+        "release eligibility and publication remain pending",
+    ):
+        assert term in notes
+    for stale in (
+        "approval and credentials remain unresolved", "v0.4.5 ships",
+        "This is a frozen source candidate", "benchmark_certified: true",
+    ):
+        assert stale not in notes

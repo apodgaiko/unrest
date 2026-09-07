@@ -24,6 +24,63 @@
     "v0.4.0_carriers": "immutable bytes from tag v0.4.0"
   },
   "release": "unrest-v0.4.5",
+  "release_profile": {
+    "approval_sha256": "63f089865e5d507c68f936728d8c9e63521b49a203d2a0aa1f52cf21f699a449",
+    "approval_status": "approved",
+    "approved_proposal_sha256": "dbfe1888f84cc86d4071aed1ec409a5e9b5650f342c4b6bad386017a41e69758",
+    "benchmark_certified": false,
+    "correctness_cases": 52,
+    "deferred_campaigns": [
+      "quality",
+      "mission-speed",
+      "resource",
+      "historical-workflow"
+    ],
+    "id": "v045-correctness-release-exception-1",
+    "improvement_claims": [],
+    "live_smoke": {
+      "automatic_retries": 0,
+      "max_steps": 8,
+      "maximum_attempts": 3,
+      "maximum_branches": 2,
+      "maximum_response_bytes": 65536,
+      "maximum_syntheses": 1,
+      "maximum_total_seconds": 600,
+      "model": "gpt-6-astra",
+      "reasoning_effort": "medium",
+      "route": "installed-library-codex-subscription",
+      "step_semantics": "reported_and_validated"
+    },
+    "qualified_targets": [
+      "CROSS005",
+      "EVAL001",
+      "EVAL002"
+    ],
+    "remaining_gates": [
+      "public-profile-and-ABI",
+      "fresh-planning-acceptance",
+      "external-runner-and-ruler",
+      "integration",
+      "independent-functional",
+      "correctness52",
+      "live-inquiry",
+      "python313-source-suite",
+      "archive-and-installed",
+      "release-decision-and-CI",
+      "publication"
+    ],
+    "retry": {
+      "both_attempts_counted": true,
+      "maximum_infrastructure_retries": 1,
+      "provider_free_limits": {
+        "maximum_execution_seconds": 1200,
+        "maximum_executions": 180,
+        "maximum_total_seconds": 21600
+      },
+      "unit": "whole_correctness_run"
+    },
+    "unchanged_targets": 67
+  },
   "schema_version": 1,
   "scope": {
     "activation_surfaces": [
@@ -47,9 +104,9 @@
         "tests/**",
         "tools/**"
       ],
-      "sha256": "772c129f28165ef3d0b958b0d8b62ac92b496b39fc92b2e379b1c00d1007a871"
+      "sha256": "adf518df55b88c84314c0d8195a1f388e36cd1f3b16a246a44269bf36c182dc6"
     }
   },
-  "status": "frozen v0.4.5 source candidate pending external gates; not benchmark certified or release eligible",
+  "status": "source preparation pending external gates; not benchmark certified or release eligible",
   "version": "0.4.5"
 }
