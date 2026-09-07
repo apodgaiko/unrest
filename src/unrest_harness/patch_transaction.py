@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 from collections.abc import Callable, Iterable
@@ -119,6 +120,165 @@ def _open_exclusive(path: Path, body: bytes, mode: int) -> int:
         raise
 
 
+def _probe_rename_support(project_root: Path) -> None:
+    """Probe synthetic files under the cooperative mutation lock.
+
+    Creation descriptors establish file ownership; directory handles are borrowed.
+    Named observations detect custody loss, not arbitrary same-UID interference
+    after the final observation before a pathname syscall. Without runtime state,
+    same-directory admission proves only the basic primitive, not crossdir policy.
+    Recovery deliberately does not call this probe or collect its residue.
+    """
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    descriptors: list[int] = []
+    files: list[int] = []
+    directories: list[tuple[int | None, str, os.stat_result]] = []
+    names: list[tuple[int, str]] = []
+
+    def identity(info: os.stat_result) -> tuple[int, int]:
+        return info.st_dev, info.st_ino
+
+    def authenticate(parent: int | None, name: str, expected: os.stat_result) -> None:
+        actual = os.stat(name, dir_fd=parent, follow_symlinks=False)
+        if (
+            identity(actual) != identity(expected)
+            or actual.st_mode != expected.st_mode
+            or actual.st_uid != expected.st_uid
+        ):
+            raise OSError("rename probe custody lost")
+
+    def borrow(parent: int | None, name: str, info: os.stat_result) -> int:
+        descriptor = os.open(name, directory_flags, dir_fd=parent)
+        descriptors.append(descriptor)
+        actual = os.fstat(descriptor)
+        if not stat.S_ISDIR(actual.st_mode) or identity(actual) != identity(info):
+            raise OSError("rename probe directory replaced")
+        directories.append((parent, name, info))
+        authenticate(parent, name, info)
+        return descriptor
+
+    def check_directories() -> None:
+        for parent, name, info in directories:
+            authenticate(parent, name, info)
+
+    def absent(parent: int, name: str) -> None:
+        try:
+            os.stat(name, dir_fd=parent, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        raise OSError("rename probe name occupied")
+
+    def file(parent: int, name: str, body: bytes) -> tuple[int, os.stat_result]:
+        check_directories()
+        descriptor = os.open(
+            name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+            0o600, dir_fd=parent,
+        )
+        descriptors.append(descriptor)
+        files.append(descriptor)
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600
+            or info.st_uid != os.geteuid()
+        ):
+            raise OSError("unsafe rename probe file")
+        check_directories()
+        authenticate(parent, name, info)
+        view = memoryview(body)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("short rename probe write")
+            view = view[written:]
+        os.fsync(descriptor)
+        check_directories()
+        authenticate(parent, name, info)
+        os.fsync(parent)
+        return descriptor, info
+
+    def move(
+        source: int, source_name: str, destination: int, destination_name: str,
+        created: tuple[int, os.stat_result], prior: os.stat_result | None, body: bytes,
+    ) -> None:
+        descriptor, expected = created
+        check_directories()
+        authenticate(source, source_name, expected)
+        if prior is None:
+            absent(destination, destination_name)
+        else:
+            authenticate(destination, destination_name, prior)
+        os.replace(source_name, destination_name, src_dir_fd=source, dst_dir_fd=destination)
+        check_directories()
+        authenticate(destination, destination_name, expected)
+        absent(source, source_name)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        if os.read(descriptor, len(body) + 1) != body:
+            raise OSError("rename probe bytes differ")
+        os.fsync(descriptor)
+        os.fsync(source)
+        os.fsync(destination)
+        check_directories()
+        authenticate(destination, destination_name, expected)
+        absent(source, source_name)
+
+    try:
+        root_info = project_root.lstat()
+        root = borrow(None, str(project_root), root_info)
+        try:
+            runtime_info = os.stat(".unrest-runtime", dir_fd=root, follow_symlinks=False)
+        except FileNotFoundError:
+            destination = root
+        else:
+            if not stat.S_ISDIR(runtime_info.st_mode) or runtime_info.st_dev != root_info.st_dev:
+                raise OSError("unsafe rename probe runtime directory")
+            destination = borrow(root, ".unrest-runtime", runtime_info)
+        token = ".unrest-rename-probe-" + secrets.token_hex(16)
+        source_name, destination_name = token + "-source", token + "-destination"
+        names = [(root, source_name), (destination, destination_name)]
+        first = file(root, source_name, b"rename-probe-first\n")
+        move(root, source_name, destination, destination_name, first, None, b"rename-probe-first\n")
+        second = file(root, source_name, b"rename-probe-second\n")
+        move(root, source_name, destination, destination_name, second, first[1], b"rename-probe-second\n")
+    finally:
+        cleanup_error: OSError | None = None
+        owned: list[os.stat_result] = []
+        for descriptor in files:
+            try:
+                info = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600
+                    or info.st_uid != os.geteuid()
+                ):
+                    raise OSError("rename probe cleanup custody lost")
+                owned.append(info)
+            except OSError as exc:
+                cleanup_error = cleanup_error or exc
+        for parent, name in names:
+            try:
+                check_directories()
+                try:
+                    info = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                expected = next((item for item in owned if identity(item) == identity(info)), None)
+                if expected is None:
+                    raise OSError("rename probe cleanup custody lost")
+                authenticate(parent, name, expected)
+                os.unlink(name, dir_fd=parent)
+                absent(parent, name)
+                os.fsync(parent)
+                check_directories()
+            except OSError as exc:
+                cleanup_error = cleanup_error or exc
+        for descriptor in reversed(descriptors):
+            try:
+                # A failing close may already have released the FD; never retry it.
+                os.close(descriptor)
+            except OSError as exc:
+                cleanup_error = cleanup_error or exc
+        if cleanup_error is not None:
+            raise cleanup_error
+
 class PatchTransaction:
     """Prepare, commit, install, and recover one finite target generation."""
 
@@ -153,12 +313,15 @@ class PatchTransaction:
         self._validate_definition()
 
     def _validate_definition(self) -> None:
+        paths = [target.relative_path for target in self.targets]
+        kinds = [target.kind for target in self.targets]
+        # New-batch duplicates are unsupported even when count or order is invalid.
+        # Recovery remaps constructor refusals to persisted-manifest integrity errors.
+        if len(paths) != len(set(paths)) or len(kinds) != len(set(kinds)):
+            raise PatchTransactionError(UNSUPPORTED_BATCH)
         if not self.targets or len(self.targets) != len(INSTALL_ORDER):
             raise PatchTransactionError(INTEGRITY_ERROR)
         if tuple(target.kind for target in self.targets) != INSTALL_ORDER:
-            raise PatchTransactionError(INTEGRITY_ERROR)
-        paths = [target.relative_path for target in self.targets]
-        if len(paths) != len(set(paths)):
             raise PatchTransactionError(INTEGRITY_ERROR)
         if not self.mission_id or "/" in self.mission_id:
             raise PatchTransactionError(UNSUPPORTED_BATCH)
@@ -234,6 +397,11 @@ class PatchTransaction:
         )
 
     def execute(self) -> None:
+        try:
+            self._validate_same_filesystem()
+            _probe_rename_support(self.project_root)
+        except OSError as exc:
+            raise PatchTransactionError(UNSUPPORTED_BATCH) from exc
         try:
             self.prepare()
             if any(self._state(target) != target.precondition for target in self.targets):

@@ -7,6 +7,7 @@ import multiprocessing
 import os
 import queue
 import stat
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -364,8 +365,9 @@ def test_integrity_mutations_fail_closed(tmp_path: Path, mutation: str) -> None:
     "mutation",
     (
         "invalid_path",
-        "duplicate_path",
         "missing_target_class",
+        "invalid_order",
+        "empty",
     ),
 )
 def test_invalid_batch_definitions_are_integrity_errors_before_staging(
@@ -382,12 +384,12 @@ def test_invalid_batch_definitions_are_integrity_errors_before_staging(
     }
     if mutation == "invalid_path":
         targets[0] = TransactionTarget.from_images("task_list", "../escape", None, b"x")
-    elif mutation == "duplicate_path":
-        targets[-1] = TransactionTarget.from_images(
-            targets[-1].kind, targets[0].relative_path, b"pre\n", b"post\n"
-        )
     elif mutation == "missing_target_class":
         targets.pop()
+    elif mutation == "invalid_order":
+        targets.reverse()
+    elif mutation == "empty":
+        targets.clear()
     with pytest.raises(PatchTransactionError) as exc_info:
         PatchTransaction(root, "mission-001", "decision-001", targets)
     assert exc_info.value.code == INTEGRITY_ERROR
@@ -398,9 +400,91 @@ def test_invalid_batch_definitions_are_integrity_errors_before_staging(
     } == live_before
 
 
+def _inventory(root: Path) -> list[tuple[str, int, str | None]]:
+    return [
+        (
+            path.relative_to(root).as_posix(),
+            path.lstat().st_mode,
+            hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None,
+        )
+        for path in sorted(root.rglob("*"))
+    ]
+
+
+@pytest.mark.parametrize(
+    "mutation", ("path", "kind", "object", "appended", "short_duplicate", "valid")
+)
+def test_new_batch_duplicates_are_unsupported_without_any_write(
+    tmp_path: Path, mutation: str
+) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    # Preserve an existing staging tree as well as the live generation.
+    staging = tmp_path / ".unrest-runtime/missions/mission-001/patch-transactions"
+    _private_mkdir(staging / "unrelated")
+    (staging / "unrelated/sentinel").write_bytes(b"unchanged")
+    if mutation == "path":
+        targets[-1] = replace(targets[-1], relative_path=targets[0].relative_path)
+    elif mutation == "kind":
+        targets[-1] = replace(targets[-1], kind=targets[0].kind)
+    elif mutation == "object":
+        targets[-1] = targets[0]
+    elif mutation == "appended":
+        targets.append(targets[0])
+    elif mutation == "short_duplicate":
+        targets = [targets[0], targets[0]]
+    before = _inventory(tmp_path)
+    if mutation == "valid":
+        transaction = PatchTransaction(tmp_path, "mission-001", "decision-001", targets)
+        assert transaction.targets == tuple(targets)
+    else:
+        with pytest.raises(PatchTransactionError) as exc_info:
+            PatchTransaction(tmp_path, "mission-001", "decision-001", iter(targets))
+        assert exc_info.value.code == UNSUPPORTED_BATCH
+    assert _inventory(tmp_path) == before
+
+
+@pytest.mark.parametrize("committed", (False, True))
+@pytest.mark.parametrize("mutation", ("path", "kind", "object", "appended"))
+def test_persisted_duplicates_remain_integrity_errors_without_any_write(
+    tmp_path: Path, mutation: str, committed: bool
+) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    transaction = PatchTransaction(tmp_path, "mission-001", "decision-001", targets)
+    transaction.prepare()
+    if committed:
+        transaction.commit()
+    payload = json.loads(transaction.manifest_bytes())
+    rows = payload["targets"]
+    if mutation == "path":
+        rows[-1]["path"] = rows[0]["path"]
+    elif mutation == "kind":
+        rows[-1]["kind"] = rows[0]["kind"]
+        rows[-1]["post"] = rows[0]["post"]
+    elif mutation == "object":
+        rows[-1] = dict(rows[0])
+    elif mutation == "appended":
+        rows.append(dict(rows[0]))
+    # Keep the two records consistent so a mismatch cannot mask the duplicate.
+    body = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    for name in ("manifest.json", "preconditions.json"):
+        (transaction.transaction_dir / name).write_bytes(body)
+    before = _inventory(tmp_path)
+    with pytest.raises(PatchTransactionError) as exc_info:
+        recover_patch_transactions(tmp_path)
+    assert exc_info.value.code == INTEGRITY_ERROR
+    if mutation == "path":
+        cause = exc_info.value.__cause__
+        assert isinstance(cause, PatchTransactionError)
+        assert cause.code == UNSUPPORTED_BATCH
+    assert _inventory(tmp_path) == before
+    assert _generation(tmp_path, targets) == "pre"
+
+
 @pytest.mark.parametrize(
     "mutation",
-    ("bad_mission", "bad_transaction", "post_digest_mismatch"),
+    ("bad_mission", "bad_transaction", "post_digest_mismatch", "malformed_precondition"),
 )
 def test_unsupported_batches_refuse_before_staging(
     tmp_path: Path, mutation: str
@@ -414,6 +498,8 @@ def test_unsupported_batches_refuse_before_staging(
         mission_id = "../mission"
     elif mutation == "bad_transaction":
         transaction_id = "../transaction"
+    elif mutation == "malformed_precondition":
+        targets[0] = replace(targets[0], precondition="not-a-condition")
     elif mutation == "post_digest_mismatch":
         target = targets[0]
         targets[0] = TransactionTarget(
@@ -958,3 +1044,731 @@ def test_two_mutators_and_two_inspectors_are_process_linearizable(
             separators=(",", ":"),
         )
     )
+
+
+@pytest.mark.parametrize("timing", ["stable", "late", "supported"])
+def test_rename_capability_temporal_controls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, timing: str,
+) -> None:
+    import errno
+
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    before = [_condition(tmp_path / target.relative_path) for target in targets]
+    events: list[tuple[str, bool]] = []
+    enabled = timing == "stable"
+    real_replace = os.replace
+    real_fsync = os.fsync
+    tx_dir = tmp_path / ".unrest-runtime/missions/mission-001/patch-transactions/rename"
+
+    def replace_call(src: object, dst: object, **kwargs: object) -> None:
+        committed = (tx_dir / "COMMIT").exists()
+        events.append(("replace", committed))
+        if enabled:
+            raise OSError(errno.ENOTSUP, "injected rename capability")
+        if kwargs:
+            source_fd = kwargs["src_dir_fd"]
+            destination_fd = kwargs["dst_dir_fd"]
+            assert isinstance(source_fd, int) and isinstance(destination_fd, int)
+            assert os.fstat(source_fd).st_ino != os.fstat(destination_fd).st_ino
+            assert os.fstat(source_fd).st_dev == os.fstat(destination_fd).st_dev
+            assert not tx_dir.exists()
+        real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    def fsync_call(fd: int) -> None:
+        events.append(("directory_fsync" if stat.S_ISDIR(os.fstat(fd).st_mode)
+                       else "file_fsync", (tx_dir / "COMMIT").exists()))
+        real_fsync(fd)
+
+    def boundary(label: str) -> None:
+        nonlocal enabled
+        events.append((label, (tx_dir / "COMMIT").exists()))
+        if label == "after_commit_directory_fsync" and timing == "late":
+            enabled = True
+
+    monkeypatch.setattr(os, "replace", replace_call)
+    monkeypatch.setattr(os, "fsync", fsync_call)
+    transaction = PatchTransaction(
+        tmp_path, "mission-001", "rename", targets, fault_injector=boundary,
+    )
+    assert events == []  # The stable fault is already installed during construction.
+    if timing == "supported":
+        transaction.execute()
+        assert _generation(tmp_path, targets) == "post"
+    else:
+        with pytest.raises(PatchTransactionError) as caught:
+            transaction.execute()
+        assert caught.value.code == (UNSUPPORTED_BATCH if timing == "stable" else INTEGRITY_ERROR)
+        assert [_condition(tmp_path / target.relative_path) for target in targets] == before
+    replacements = [committed for label, committed in events if label == "replace"]
+    assert replacements[:1] == [False]
+    assert not _probe_files(tmp_path)
+    if timing == "stable":
+        assert replacements == [False]
+        assert not transaction.transactions_root.exists()
+        assert not any(label.startswith("before_post_image") for label, _ in events)
+    else:
+        assert replacements[:2] == [False, False]
+        first_prepare = next(i for i, (label, _) in enumerate(events)
+                             if label.startswith("before_post_image"))
+        assert sum(label == "replace" for label, _ in events[:first_prepare]) == 2
+        assert sum(label == "file_fsync" for label, _ in events[:first_prepare]) >= 4
+        assert sum(label == "directory_fsync" for label, _ in events[:first_prepare]) >= 6
+        if timing == "late":
+            assert replacements == [False, False, True]
+            assert (tx_dir / "COMMIT").exists()
+            enabled = False
+            # Existing journals recover even if new admission is unavailable.
+            import unrest_harness.patch_transaction as module
+
+            def forbidden_probe(root: Path) -> None:
+                raise AssertionError("recovery must not probe")
+
+            monkeypatch.setattr(module, "_probe_rename_support", forbidden_probe)
+            recover_patch_transactions(tmp_path)
+        assert _generation(tmp_path, targets) == "post"
+    recovered = [_condition(tmp_path / target.relative_path) for target in targets]
+    recover_patch_transactions(tmp_path)
+    assert [_condition(tmp_path / target.relative_path) for target in targets] == recovered
+    assert not tx_dir.exists()
+
+
+@pytest.mark.parametrize("operation,failure_call", [
+    *((operation, count) for operation in ("write", "replace", "read") for count in (1, 2)),
+    *(("open", count) for count in range(1, 5)),
+    *(("close", count) for count in range(1, 5)),
+    *(("lseek", count) for count in (1, 2)),
+    *(("fsync", count) for count in range(1, 12)),
+    ("unlink", 1),
+])
+def test_probe_io_failures_refuse_before_preparation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str, failure_call: int,
+) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    real = getattr(os, operation)
+    calls = 0
+
+    def fail_once(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == failure_call:
+            if operation == "close":
+                real(*args, **kwargs)
+            raise OSError("injected probe operation failure")
+        return real(*args, **kwargs)
+
+    transaction = PatchTransaction(tmp_path, "mission-001", "probe-failure", targets)
+    monkeypatch.setattr(os, operation, fail_once)
+    with pytest.raises(PatchTransactionError) as caught:
+        transaction.execute()
+    assert caught.value.code == UNSUPPORTED_BATCH
+    assert calls >= failure_call
+    assert _generation(tmp_path, targets) == "pre"
+    assert not transaction.transactions_root.exists()
+    residue = _probe_files(tmp_path)
+    if operation == "unlink":
+        # Cleanup itself was denied: residue is truthful and never a journal.
+        recover_patch_transactions(tmp_path)
+        assert residue == _probe_files(tmp_path)
+    else:
+        assert not residue
+
+
+@pytest.mark.parametrize("fault", ["short_write", "wrong_bytes", "noop_rename", "copy_rename"])
+def test_probe_verifies_real_effects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str,
+) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    if fault == "short_write":
+        monkeypatch.setattr(os, "write", lambda *args: 0)
+    elif fault == "wrong_bytes":
+        monkeypatch.setattr(os, "read", lambda *args: b"wrong")
+    elif fault == "noop_rename":
+        monkeypatch.setattr(os, "replace", lambda *args, **kwargs: None)
+    else:
+        def copy_rename(src: str, dst: str, *, src_dir_fd: int, dst_dir_fd: int) -> None:
+            os.link(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+
+        monkeypatch.setattr(os, "replace", copy_rename)
+    transaction = PatchTransaction(tmp_path, "mission-001", "probe-verification", targets)
+    with pytest.raises(PatchTransactionError) as caught:
+        transaction.execute()
+    assert caught.value.code == UNSUPPORTED_BATCH
+    assert _generation(tmp_path, targets) == "pre"
+    assert not transaction.transactions_root.exists()
+    assert not _probe_files(tmp_path)
+
+
+@pytest.mark.parametrize("competitor", ["file", "symlink", "directory"])
+def test_probe_never_adopts_competing_namespace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, competitor: str,
+) -> None:
+    import unrest_harness.patch_transaction as module
+
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    monkeypatch.setattr(module.secrets, "token_hex", lambda count: "collision")
+    path = tmp_path / ".unrest-rename-probe-collision-source"
+    victim = tmp_path / "unrelated"
+    victim.write_bytes(b"unrelated-canary")
+    if competitor == "file":
+        path.write_bytes(b"competing-canary")
+    elif competitor == "symlink":
+        path.symlink_to(victim)
+    else:
+        path.mkdir()
+    original = path.lstat()
+    transaction = PatchTransaction(tmp_path, "mission-001", "collision", targets)
+    with pytest.raises(PatchTransactionError) as caught:
+        transaction.execute()
+    assert caught.value.code == UNSUPPORTED_BATCH
+    assert path.lstat() == original
+    assert victim.read_bytes() == b"unrelated-canary"
+    assert not transaction.transactions_root.exists()
+    assert _generation(tmp_path, targets) == "pre"
+
+
+def test_probe_preserves_replaced_destination_and_private_custody(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    real_replace = os.replace
+    calls = 0
+    victim = tmp_path / "unrelated"
+    victim.write_bytes(b"private-body-canary")
+
+    def competing_replace(src: str, dst: str, *, src_dir_fd: int, dst_dir_fd: int) -> None:
+        nonlocal calls
+        calls += 1
+        assert stat.S_IMODE(os.stat(src, dir_fd=src_dir_fd).st_mode) == 0o600
+        real_replace(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+        os.unlink(dst, dir_fd=dst_dir_fd)
+        os.symlink(victim, dst, dir_fd=dst_dir_fd)
+
+    monkeypatch.setattr(os, "replace", competing_replace)
+    transaction = PatchTransaction(tmp_path, "mission-001", "competitor", targets)
+    with pytest.raises(PatchTransactionError) as caught:
+        transaction.execute()
+    assert caught.value.code == UNSUPPORTED_BATCH
+    assert calls == 1
+    assert victim.read_bytes() == b"private-body-canary"
+    destination, = _probe_files(tmp_path)
+    assert destination.is_symlink()
+    assert not transaction.transactions_root.exists()
+    assert _generation(tmp_path, targets) == "pre"
+    recover_patch_transactions(tmp_path)
+    assert destination.is_symlink()
+
+
+def _interrupt_rename_probe(root: str) -> None:
+    real_replace = os.replace
+
+    def interrupt(*args: object, **kwargs: object) -> None:
+        real_replace(*args, **kwargs)  # type: ignore[arg-type]
+        os._exit(73)
+
+    os.replace = interrupt  # type: ignore[assignment]
+    PatchTransaction(Path(root), "mission-001", "interrupted-probe", _targets(Path(root))).execute()
+
+
+def test_interrupted_probe_coexists_with_committed_recovery(tmp_path: Path) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    prior = PatchTransaction(tmp_path, "mission-001", "older-committed", targets)
+    prior.prepare()
+    prior.commit()
+    process = multiprocessing.get_context("spawn").Process(
+        target=_interrupt_rename_probe, args=(str(tmp_path),),
+    )
+    process.start()
+    process.join(10)
+    if process.is_alive():
+        process.kill()
+        process.join()
+    assert process.exitcode == 73
+    residue, = _probe_files(tmp_path)
+    inventory = (residue.lstat(), _condition(residue))
+    assert _generation(tmp_path, targets) == "pre"
+    assert (prior.transaction_dir / "COMMIT").exists()
+    recover_patch_transactions(tmp_path)
+    assert _generation(tmp_path, targets) == "post"
+    recover_patch_transactions(tmp_path)
+    assert inventory == (residue.lstat(), _condition(residue))
+    assert not prior.transaction_dir.exists()
+
+
+def test_probe_directory_replacement_is_not_cleaned_or_followed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    victim = tmp_path / "unrelated"
+    victim.mkdir()
+    (victim / "canary").write_bytes(b"not-probe-data")
+    real_open = os.open
+    swapped = False
+
+    def swap_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        nonlocal swapped
+        if path == ".unrest-runtime" and not swapped:
+            swapped = True
+            (tmp_path / ".unrest-runtime").rename(tmp_path / "displaced-runtime")
+            (tmp_path / ".unrest-runtime").symlink_to(victim, target_is_directory=True)
+        return real_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "open", swap_open)
+    transaction = PatchTransaction(tmp_path, "mission-001", "directory-swap", targets)
+    with pytest.raises(PatchTransactionError) as caught:
+        transaction.execute()
+    assert caught.value.code == UNSUPPORTED_BATCH
+    assert swapped
+    assert (victim / "canary").read_bytes() == b"not-probe-data"
+    assert (tmp_path / ".unrest-runtime").is_symlink()
+    assert (tmp_path / "displaced-runtime").is_dir()
+    assert not transaction.transactions_root.exists()
+    (tmp_path / ".unrest-runtime").unlink()
+    (tmp_path / "displaced-runtime").rename(tmp_path / ".unrest-runtime")
+    assert _generation(tmp_path, targets) == "pre"
+
+
+def test_probe_refuses_competing_overwrite_before_replace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    real_fsync = os.fsync
+    real_replace = os.replace
+    replacements = 0
+    swapped = False
+
+    def observe_replace(*args: object, **kwargs: object) -> None:
+        nonlocal replacements
+        replacements += 1
+        real_replace(*args, **kwargs)  # type: ignore[arg-type]
+
+    def substitute(fd: int) -> None:
+        nonlocal swapped
+        real_fsync(fd)
+        if replacements == 1 and not swapped:
+            swapped = True
+            target, = _probe_files(tmp_path)
+            target.unlink()
+            target.write_bytes(b"competing-canary")
+
+    monkeypatch.setattr(os, "fsync", substitute)
+    monkeypatch.setattr(os, "replace", observe_replace)
+    transaction = PatchTransaction(tmp_path, "mission-001", "overwrite-competitor", targets)
+    with pytest.raises(PatchTransactionError) as caught:
+        transaction.execute()
+    assert caught.value.code == UNSUPPORTED_BATCH
+    assert replacements == 1
+    target, = _probe_files(tmp_path)
+    assert target.read_bytes() == b"competing-canary"
+    assert not transaction.transactions_root.exists()
+    assert _generation(tmp_path, targets) == "pre"
+
+
+def _probe_files(root: Path) -> list[Path]:
+    return sorted([*root.glob(".unrest-rename-probe-*"),
+                   *(root / ".unrest-runtime").glob(".unrest-rename-probe-*")])
+
+
+@pytest.mark.parametrize("runtime_exists", [False, True])
+def test_probe_borrows_only_existing_directories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime_exists: bool,
+) -> None:
+    import unrest_harness.patch_transaction as module
+
+    if runtime_exists:
+        (tmp_path / ".unrest-runtime").mkdir(mode=0o755)
+    parents = [tmp_path, *([tmp_path / ".unrest-runtime"] if runtime_exists else [])]
+    identities = [(p.stat().st_dev, p.stat().st_ino, p.stat().st_mode) for p in parents]
+    real_open, real_replace, real_unlink = os.open, os.replace, os.unlink
+    replacements: list[bool] = []
+    creations: list[int] = []
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("probe must not mutate or enumerate directories")
+
+    def opened(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        if flags & os.O_CREAT:
+            assert flags & os.O_EXCL and flags & os.O_NOFOLLOW
+            assert isinstance(path, str) and path.startswith(".unrest-rename-probe-")
+            assert "/" not in path
+            assert kwargs["dir_fd"] in creations
+        else:
+            assert path in {str(tmp_path), ".unrest-runtime"}
+            assert flags & os.O_DIRECTORY and flags & os.O_NOFOLLOW
+        fd = real_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
+        creations.append(fd)
+        return fd
+
+    def replaced(src: str, dst: str, *, src_dir_fd: int, dst_dir_fd: int) -> None:
+        source = os.stat(src, dir_fd=src_dir_fd, follow_symlinks=False)
+        assert stat.S_ISREG(source.st_mode) and stat.S_IMODE(source.st_mode) == 0o600
+        assert (os.fstat(src_dir_fd).st_ino != os.fstat(dst_dir_fd).st_ino) == runtime_exists
+        assert os.fstat(src_dir_fd).st_dev == os.fstat(dst_dir_fd).st_dev
+        try:
+            os.stat(dst, dir_fd=dst_dir_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            overwrite = False
+        else:
+            overwrite = True
+        replacements.append(overwrite)
+        real_replace(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+        with pytest.raises(FileNotFoundError):
+            os.stat(src, dir_fd=src_dir_fd)
+        assert os.stat(dst, dir_fd=dst_dir_fd).st_ino == source.st_ino
+
+    def unlinked(path: str, *, dir_fd: int) -> None:
+        assert path.startswith(".unrest-rename-probe-") and "/" not in path
+        assert dir_fd in creations
+        real_unlink(path, dir_fd=dir_fd)
+
+    with monkeypatch.context() as patch:
+        for operation in ("mkdir", "rmdir", "chmod", "fchmod", "listdir", "scandir"):
+            patch.setattr(os, operation, forbidden)
+        patch.setattr(os, "open", opened)
+        patch.setattr(os, "replace", replaced)
+        patch.setattr(os, "unlink", unlinked)
+        module._probe_rename_support(tmp_path)
+    assert replacements == [False, True]
+    assert identities == [(p.stat().st_dev, p.stat().st_ino, p.stat().st_mode) for p in parents]
+    assert not _probe_files(tmp_path)
+    assert (tmp_path / ".unrest-runtime").exists() == runtime_exists
+    for fd in creations:
+        with pytest.raises(OSError):
+            os.fstat(fd)
+
+
+@pytest.mark.parametrize("timing", ["supported", "stable", "late"])
+def test_empty_project_admission_and_real_install_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, timing: str,
+) -> None:
+    import errno
+
+    targets = [TransactionTarget.from_images(kind, PATHS[kind], None, f"post:{kind}\n".encode())
+               for kind in INSTALL_ORDER]
+    real_replace = os.replace
+    enabled = timing == "stable"
+    moves: list[tuple[bool, bool]] = []
+    events: list[str] = []
+
+    def replaced(src: object, dst: object, **kwargs: object) -> None:
+        probe = bool(kwargs)
+        if probe:
+            assert kwargs["src_dir_fd"] == kwargs["dst_dir_fd"]
+            assert not (tmp_path / ".unrest-runtime").exists()
+        else:
+            assert Path(str(src)).parent != Path(str(dst)).parent
+        moves.append((probe, enabled))
+        if enabled:
+            raise OSError(errno.ENOTSUP, "injected stable or late capability failure")
+        real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    def boundary(label: str) -> None:
+        nonlocal enabled
+        events.append(label)
+        if label == "after_commit_directory_fsync" and timing == "late":
+            enabled = True
+
+    monkeypatch.setattr(os, "replace", replaced)
+    transaction = PatchTransaction(tmp_path, "mission-001", "empty", targets, fault_injector=boundary)
+    assert moves == []
+    if timing == "supported":
+        transaction.execute()
+    else:
+        with pytest.raises(PatchTransactionError) as caught:
+            transaction.execute()
+        assert caught.value.code == (UNSUPPORTED_BATCH if timing == "stable" else INTEGRITY_ERROR)
+        assert _generation(tmp_path, targets) == "pre"
+    if timing == "stable":
+        assert moves == [(True, True)] and events == []
+        assert list(tmp_path.iterdir()) == []
+    else:
+        assert moves[:2] == [(True, False), (True, False)]
+        assert any(not probe for probe, _ in moves)
+        if timing == "late":
+            assert (transaction.transaction_dir / "COMMIT").exists()
+        enabled = False
+        recover_patch_transactions(tmp_path)
+        assert _generation(tmp_path, targets) == "post"
+        snapshot = [_condition(tmp_path / t.relative_path) for t in targets]
+        recover_patch_transactions(tmp_path)
+        assert snapshot == [_condition(tmp_path / t.relative_path) for t in targets]
+        assert not transaction.transaction_dir.exists()
+    assert not _probe_files(tmp_path)
+
+
+@pytest.mark.parametrize("competitor", ["file", "symlink", "mode"])
+@pytest.mark.parametrize("observation", ["creation", "write", "rename", "read", "cleanup"])
+def test_probe_observed_file_substitution_preserves_competitors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, competitor: str, observation: str,
+) -> None:
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    victim = tmp_path / "unrelated"
+    victim.write_bytes(b"unrelated-canary")
+    displaced = tmp_path / "displaced-owned"
+    real_open, real_write, real_replace = os.open, os.write, os.replace
+    real_read, real_fstat = os.read, os.fstat
+    created: list[int] = []
+    changed: Path | None = None
+    original_inode: int | None = None
+    reads = 0
+
+    def substitute(path: Path) -> None:
+        nonlocal changed, original_inode
+        if changed is not None:
+            return
+        changed = path
+        original_inode = path.lstat().st_ino
+        if competitor == "mode":
+            path.chmod(0o644)
+        else:
+            path.rename(displaced)
+            if competitor == "symlink":
+                path.symlink_to(victim)
+            else:
+                path.write_bytes(b"competing-canary")
+                path.chmod(0o600)
+
+    def opened(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        fd = real_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
+        if flags & os.O_CREAT:
+            created.append(fd)
+            if observation == "creation":
+                substitute(tmp_path / str(path))
+                # This is still the exclusively created inode, before product fstat.
+                assert real_fstat(fd).st_ino == original_inode
+                if competitor != "mode":
+                    assert (tmp_path / str(path)).lstat().st_ino != real_fstat(fd).st_ino
+        return fd
+
+    def written(fd: int, body: object) -> int:
+        result = real_write(fd, body)  # type: ignore[arg-type]
+        if observation == "write":
+            path, = _probe_files(tmp_path)
+            substitute(path)
+        return result
+
+    def replaced(src: str, dst: str, *, src_dir_fd: int, dst_dir_fd: int) -> None:
+        real_replace(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+        if observation == "rename":
+            substitute(tmp_path / ".unrest-runtime" / dst)
+
+    def read(fd: int, size: int) -> bytes:
+        nonlocal reads
+        result = real_read(fd, size)
+        reads += 1
+        if observation == "read":
+            path, = _probe_files(tmp_path)
+            substitute(path)
+        return result
+
+    def fstat(fd: int) -> os.stat_result:
+        if observation == "cleanup" and reads == 2 and fd in created:
+            path, = _probe_files(tmp_path)
+            substitute(path)
+        return real_fstat(fd)
+
+    monkeypatch.setattr(os, "open", opened)
+    monkeypatch.setattr(os, "write", written)
+    monkeypatch.setattr(os, "replace", replaced)
+    monkeypatch.setattr(os, "read", read)
+    monkeypatch.setattr(os, "fstat", fstat)
+    transaction = PatchTransaction(tmp_path, "mission-001", "custody", targets)
+    with pytest.raises(PatchTransactionError) as caught:
+        transaction.execute()
+    assert caught.value.code == UNSUPPORTED_BATCH
+    assert changed is not None and changed.lstat()
+    assert victim.read_bytes() == b"unrelated-canary"
+    if competitor == "file":
+        assert changed.read_bytes() == b"competing-canary"
+    elif competitor == "symlink":
+        assert changed.is_symlink()
+    else:
+        assert stat.S_IMODE(changed.stat().st_mode) == 0o644
+    if competitor != "mode":
+        assert displaced.stat().st_ino == original_inode
+        if observation == "creation":
+            assert displaced.read_bytes() == b""  # No write through a lost name.
+    assert _generation(tmp_path, targets) == "pre"
+    assert not transaction.transactions_root.exists()
+    monkeypatch.undo()
+    snapshot = [(str(p), p.lstat(), _condition(p)) for p in _probe_files(tmp_path)]
+    recover_patch_transactions(tmp_path)
+    assert snapshot == [(str(p), p.lstat(), _condition(p)) for p in _probe_files(tmp_path)]
+    for fd in created:
+        with pytest.raises(OSError):
+            os.fstat(fd)
+
+
+@pytest.mark.parametrize("parent", ["root", "runtime"])
+def test_probe_borrowed_directory_substitution_after_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, parent: str,
+) -> None:
+    import unrest_harness.patch_transaction as module
+
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / ".unrest-runtime").mkdir()
+    real_open = os.open
+    displaced = tmp_path / "displaced"
+    target = root if parent == "root" else root / ".unrest-runtime"
+    swapped = False
+
+    def opened(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        nonlocal swapped
+        fd = real_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
+        if path == (str(root) if parent == "root" else ".unrest-runtime") and not swapped:
+            swapped = True
+            target.rename(displaced)
+            target.mkdir(mode=0o700)
+            (target / "canary").write_bytes(b"competitor")
+        return fd
+
+    monkeypatch.setattr(os, "open", opened)
+    with pytest.raises(OSError):
+        module._probe_rename_support(root)
+    assert swapped
+    assert (target / "canary").read_bytes() == b"competitor"
+    assert displaced.is_dir()
+    assert not _probe_files(root) and not _probe_files(displaced)
+
+
+def test_probe_uncertain_close_is_never_retried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import unrest_harness.patch_transaction as module
+
+    real_close = os.close
+    closed: list[int] = []
+    replacement: int | None = None
+
+    def close(fd: int) -> None:
+        nonlocal replacement
+        assert fd not in closed
+        closed.append(fd)
+        real_close(fd)
+        if replacement is None:
+            replacement = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+            assert replacement == fd
+            raise OSError("close released FD but reported failure")
+
+    monkeypatch.setattr(os, "close", close)
+    with pytest.raises(OSError):
+        module._probe_rename_support(tmp_path)
+    assert replacement is not None
+    assert stat.S_ISDIR(os.fstat(replacement).st_mode)
+    real_close(replacement)
+    assert len(closed) == 3  # Two created files and one borrowed root, each once.
+    assert not _probe_files(tmp_path)
+
+
+@pytest.mark.parametrize("operation", ["stat", "fstat"])
+def test_probe_each_metadata_observation_failure_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str,
+) -> None:
+    import unrest_harness.patch_transaction as module
+
+    real = getattr(os, operation)
+    real_probe = module._probe_rename_support
+    calls = 0
+    failure: int | None = None
+    active = False
+
+    def observed(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        if active:
+            calls += 1
+            if calls == failure:
+                raise OSError("injected named metadata observation failure")
+        return real(*args, **kwargs)
+
+    def probe(root: Path) -> None:
+        nonlocal active
+        active = True
+        try:
+            real_probe(root)
+        finally:
+            active = False
+
+    monkeypatch.setattr(os, operation, observed)
+    monkeypatch.setattr(module, "_probe_rename_support", probe)
+    control = tmp_path / "control"
+    control.mkdir()
+    (control / ".unrest-runtime").mkdir()
+    probe(control)
+    count = calls
+    assert count > 0
+    for point in range(1, count + 1):
+        root = tmp_path / str(point)
+        root.mkdir()
+        targets = _targets(root)
+        _seed(root, targets)
+        transaction = PatchTransaction(root, "mission-001", "metadata", targets)
+        calls, failure = 0, point
+        with pytest.raises(PatchTransactionError) as caught:
+            transaction.execute()
+        assert calls >= point
+        assert caught.value.code == UNSUPPORTED_BATCH
+        assert _generation(root, targets) == "pre"
+        assert not transaction.transactions_root.exists()
+        residue = [(p, p.lstat(), _condition(p)) for p in _probe_files(root)]
+        # An observation denied during cleanup cannot authorize deletion.
+        recover_patch_transactions(root)
+        assert residue == [(p, p.lstat(), _condition(p)) for p in _probe_files(root)]
+
+
+def test_probe_partial_writes_are_completed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import unrest_harness.patch_transaction as module
+
+    real_write = os.write
+    writes = 0
+
+    def partial(fd: int, body: bytes) -> int:
+        nonlocal writes
+        writes += 1
+        return real_write(fd, body[:1])
+
+    monkeypatch.setattr(os, "write", partial)
+    module._probe_rename_support(tmp_path)
+    assert writes == len(b"rename-probe-first\nrename-probe-second\n")
+    assert not _probe_files(tmp_path)
+
+
+@pytest.mark.parametrize("name", ["source", "destination"])
+@pytest.mark.parametrize("competitor", ["file", "symlink", "directory"])
+def test_probe_known_name_collision_preserves_inventory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, competitor: str,
+) -> None:
+    import unrest_harness.patch_transaction as module
+
+    targets = _targets(tmp_path)
+    _seed(tmp_path, targets)
+    monkeypatch.setattr(module.secrets, "token_hex", lambda count: "known")
+    parent = tmp_path if name == "source" else tmp_path / ".unrest-runtime"
+    path = parent / (".unrest-rename-probe-known-" + name)
+    victim = tmp_path / "canary"
+    victim.write_bytes(b"unrelated")
+    if competitor == "file":
+        path.write_bytes(b"competing")
+    elif competitor == "symlink":
+        path.symlink_to(victim)
+    else:
+        path.mkdir()
+        (path / "unknown").write_bytes(b"competing")
+    before = [(str(p.relative_to(tmp_path)), p.lstat().st_ino, p.lstat().st_mode,
+               _condition(p) if p.is_file() else None) for p in sorted(tmp_path.rglob("*"))]
+    transaction = PatchTransaction(tmp_path, "mission-001", "collision-known", targets)
+    with pytest.raises(PatchTransactionError) as caught:
+        transaction.execute()
+    assert caught.value.code == UNSUPPORTED_BATCH
+    assert before == [(str(p.relative_to(tmp_path)), p.lstat().st_ino, p.lstat().st_mode,
+                       _condition(p) if p.is_file() else None) for p in sorted(tmp_path.rglob("*"))]
+    assert _generation(tmp_path, targets) == "pre"
+    assert not transaction.transactions_root.exists()
