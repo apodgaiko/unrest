@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -15,6 +16,19 @@ ROOT = Path(__file__).resolve().parents[1]
 RELEASE = ROOT / "docs/release"
 MANIFEST = RELEASE / "lean-core-v0.4.5-manifest.json"
 PREDECESSOR = "8decbecf7cad32552dfd7d48e069d4050e04ffd3"
+
+
+# Audited source-preparation notes: any byte change requires a fresh whole-notes
+# review against approval and pending gates. This is not a prose truth classifier.
+AUDITED_NOTES_SHA256 = "59f0044fb3896dde0251989d24054b6ac845bc24f52230011f6e4b024bc92f28"
+
+
+def _audited_notes() -> str:
+    content = (RELEASE / "lean-core-v0.4.5.md").read_bytes()
+    assert hashlib.sha256(content).hexdigest() == AUDITED_NOTES_SHA256, (
+        "Release-preparation notes changed; review the complete notes before updating the snapshot"
+    )
+    return content.decode("utf-8")
 
 
 def test_v045_release_identity_scope_and_predecessor() -> None:
@@ -78,7 +92,7 @@ def test_v045_ci_archive_contract_and_required_gates() -> None:
 
 
 def test_v045_notes_and_rollback_keep_pending_scope_and_resolvable_links() -> None:
-    notes = (RELEASE / "lean-core-v0.4.5.md").read_text(encoding="utf-8")
+    notes = _audited_notes()
     rollback = (RELEASE / "lean-core-v0.4.5-rollback.md").read_text(encoding="utf-8")
     for term in ("Inquiry", "Evidence-frontier", "supervision", "ACP", "Dogfood", "end_node"):
         assert term in notes
@@ -175,7 +189,7 @@ def test_v045_approved_profile_has_exact_closed_values_and_types() -> None:
 
 
 def test_v045_notes_preserve_approval_limits_and_pending_validation() -> None:
-    notes = (RELEASE / "lean-core-v0.4.5.md").read_text(encoding="utf-8")
+    notes = _audited_notes()
     for term in (
         "67 unchanged", "All 52 original", "one whole correctness run retry",
         "Both attempts", "180 executions", "1200 seconds", "21600 seconds",
