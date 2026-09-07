@@ -56,22 +56,22 @@ jobs:
           set -e
           test "$status" -ne 0
           test "$output" = "unrest-server: startup configuration rejected"
-      - name: Generate and verify v0.4.0 build-local checksums
+      - name: Generate and verify v0.4.5 build-local checksums
         run: |
-          test -f dist/unrest_harness-0.4.0-py3-none-any.whl
-          test -f dist/unrest_harness-0.4.0.tar.gz
+          test -f dist/unrest_harness-0.4.5-py3-none-any.whl
+          test -f dist/unrest_harness-0.4.5.tar.gz
           cd dist
           sha256sum \
-            unrest_harness-0.4.0-py3-none-any.whl \
-            unrest_harness-0.4.0.tar.gz > SHA256SUMS
+            unrest_harness-0.4.5-py3-none-any.whl \
+            unrest_harness-0.4.5.tar.gz > SHA256SUMS
           sha256sum --check --strict SHA256SUMS
-      - name: Upload v0.4.0 archives and checksums
+      - name: Upload v0.4.5 archives and checksums
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: unrest-v0.4.0-python313
+          name: unrest-v0.4.5-python313
           path: |
-            dist/unrest_harness-0.4.0-py3-none-any.whl
-            dist/unrest_harness-0.4.0.tar.gz
+            dist/unrest_harness-0.4.5-py3-none-any.whl
+            dist/unrest_harness-0.4.5.tar.gz
             dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 90

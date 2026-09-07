@@ -1,0 +1,55 @@
+{
+  "artifacts": {
+    "checksums": "SHA256SUMS",
+    "ci_bundle": "unrest-v0.4.5-python313",
+    "sdist": "unrest_harness-0.4.5.tar.gz",
+    "wheel": "unrest_harness-0.4.5-py3-none-any.whl"
+  },
+  "base": {
+    "candidate_ref": "refs/heads/codex/v045-release-r2",
+    "predecessor_commit": "8decbecf7cad32552dfd7d48e069d4050e04ffd3",
+    "predecessor_tag": "v0.4.0",
+    "release_tag_ref": "refs/tags/v0.4.5"
+  },
+  "compatibility": {
+    "legacy_identity_and_lineage_reads": "missing/null and absent lineage remain readable without rewrite",
+    "python": ">=3.13",
+    "reverse_migration": "not promised; preserve new durable records and pre-upgrade backups"
+  },
+  "history": {
+    "active_binding_owner": "docs/release/lean-core-v0.4.5-manifest.json",
+    "v0.2_carriers": "immutable bytes from tag v0.2.0",
+    "v0.3.0_carriers": "immutable bytes from tag v0.3.0",
+    "v0.3.1_carriers": "immutable bytes from tag v0.3.1",
+    "v0.4.0_carriers": "immutable bytes from tag v0.4.0"
+  },
+  "release": "unrest-v0.4.5",
+  "schema_version": 1,
+  "scope": {
+    "activation_surfaces": [
+      "Inquiry",
+      "run-task",
+      "run-project",
+      "run-improvement"
+    ],
+    "dependencies_added": [],
+    "locked_dependency_upgrades": [],
+    "metadata_stage": "source-only"
+  },
+  "source": {
+    "binding_algorithm": "sha256(sorted(utf8_relative_path + NUL + raw_bytes + NUL))",
+    "final_product_package_test": {
+      "files": 206,
+      "paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "src/**",
+        "tests/**",
+        "tools/**"
+      ],
+      "sha256": "772c129f28165ef3d0b958b0d8b62ac92b496b39fc92b2e379b1c00d1007a871"
+    }
+  },
+  "status": "frozen v0.4.5 source candidate pending external gates; not benchmark certified or release eligible",
+  "version": "0.4.5"
+}

@@ -1,6 +1,6 @@
 [project]
 name = "unrest-harness"
-version = "0.4.0"
+version = "0.4.5"
 description = "Turn any coding agent into a mission orchestration system via MCP and ACP."
 readme = "README.md"
 requires-python = ">=3.13"
