@@ -52,6 +52,7 @@
       "step_semantics": "reported_and_validated"
     },
     "qualified_targets": [
+      "ACT006",
       "CROSS005",
       "EVAL001",
       "EVAL002"
@@ -79,7 +80,7 @@
       },
       "unit": "whole_correctness_run"
     },
-    "unchanged_targets": 67
+    "unchanged_targets": 66
   },
   "schema_version": 1,
   "scope": {
@@ -104,7 +105,7 @@
         "tests/**",
         "tools/**"
       ],
-      "sha256": "28e16dc76b8821c111a9849834c466ab514bd999e5b3623bf4bcd577c0725713"
+      "sha256": "d70655e644b5aa78d5db20971d0c0566580a69054b126567110fdf4f252b60ed"
     }
   },
   "status": "source preparation pending external gates; not benchmark certified or release eligible",

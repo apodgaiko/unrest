@@ -62,9 +62,12 @@ is not completed validation and does not itself confer release eligibility.
 
 ## Approved profile and pending obligations
 
-All 70 target dispositions remain explicit: 67 unchanged functional targets and
-three qualified targets, CROSS005, EVAL001 and EVAL002. All 52 original
-correctness cases remain required, including their visible/held-out split:
+All 70 target dispositions remain explicit: 66 unchanged functional targets and
+four qualified targets, ACT006, CROSS005, EVAL001 and EVAL002. The approved
+CLI applicability decision defers exactly nine historical CLI scenarios and
+45 assertions without counting them as passes or changing the 52-case
+inventory. All 52 original correctness cases remain required, including their
+visible/held-out split:
 11 C-INQ, 6 C-EVD, 13 C-LEG, 9 C-ACP, 9 C-ACT and 4 C-CROSS.
 Comparative quality, Mission-speed, resource and historical workflow campaigns
 are deferred, without a pass. `benchmark_certified` is false and

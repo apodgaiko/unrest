@@ -20,7 +20,7 @@ PREDECESSOR = "8decbecf7cad32552dfd7d48e069d4050e04ffd3"
 
 # Audited source-preparation notes: any byte change requires a fresh whole-notes
 # review against approval and pending gates. This is not a prose truth classifier.
-AUDITED_NOTES_SHA256 = "59f0044fb3896dde0251989d24054b6ac845bc24f52230011f6e4b024bc92f28"
+AUDITED_NOTES_SHA256 = "84705920537771d60dbc59fea9e3a77b796d3e8254cca9fc49a571d78c24e23f"
 
 
 def _audited_notes() -> str:
@@ -152,8 +152,8 @@ def test_v045_approved_profile_has_exact_closed_values_and_types() -> None:
      'improvement_claims': [],
      'deferred_campaigns': ['quality', 'mission-speed', 'resource', 'historical-workflow'],
      'correctness_cases': 52,
-     'unchanged_targets': 67,
-     'qualified_targets': ['CROSS005', 'EVAL001', 'EVAL002'],
+     'unchanged_targets': 66,
+     'qualified_targets': ['ACT006', 'CROSS005', 'EVAL001', 'EVAL002'],
      'retry': {'unit': 'whole_correctness_run',
                'maximum_infrastructure_retries': 1,
                'provider_free_limits': {'maximum_executions': 180,
@@ -191,7 +191,8 @@ def test_v045_approved_profile_has_exact_closed_values_and_types() -> None:
 def test_v045_notes_preserve_approval_limits_and_pending_validation() -> None:
     notes = _audited_notes()
     for term in (
-        "67 unchanged", "All 52 original", "one whole correctness run retry",
+        "66 unchanged", "four qualified targets", "All 52 original", "one whole correctness run retry",
+        "nine historical CLI scenarios", "45 assertions",
         "Both attempts", "180 executions", "1200 seconds", "21600 seconds",
         "three attempts", "600 seconds", "65536 response bytes", "max_steps=8",
         "reported\nand validated", "No automatic live replay", "API fallback",
