@@ -5,9 +5,12 @@ it does not approve the candidate, tag, installation, or publication.
 
 The earlier correctness-release profile remains historical authority for its
 scope and decisions. Its `correctness`, `runner`, and `ruler` gates are
-superseded because their temporary source baseline and accepted component
-commits are unavailable. They are neither passed nor silently deferred. The
-original 52 cases and historical assertions must never be reported as executed
+superseded because the temporary 52-case validator source baseline is
+incomplete and rebuilding that platform would delay the release. The five
+accepted product returns, referenced evidence and component commits have since
+been recovered and independently rechecked; this correction does not restore
+the missing external validator source. The superseded gates are neither passed
+nor silently deferred. The original 52 cases and historical assertions must never be reported as executed
 or passed by the replacement gate.
 
 The replacement gate requires fresh independent, candidate-bound integrated
