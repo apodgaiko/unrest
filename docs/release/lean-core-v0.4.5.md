@@ -59,6 +59,9 @@ or automatic restart. Inquiry and adapter results cannot approve or promote.
 The maintainer approved release profile `v045-correctness-release-exception-1`.
 The manifest binds the actual approval and preserved proposal by SHA256; approval
 is not completed validation and does not itself confer release eligibility.
+The later [integrated validation amendment](lean-core-v0.4.5-gate-amendment.md)
+supersedes that profile's correctness, runner, and ruler gates while retaining
+its other release boundaries.
 
 ## Approved profile and pending obligations
 
@@ -66,20 +69,27 @@ All 70 target dispositions remain explicit: 66 unchanged functional targets and
 four qualified targets, ACT006, CROSS005, EVAL001 and EVAL002. The approved
 CLI applicability decision defers exactly nine historical CLI scenarios and
 45 assertions without counting them as passes or changing the 52-case
-inventory. All 52 original correctness cases remain required, including their
-visible/held-out split:
-11 C-INQ, 6 C-EVD, 13 C-LEG, 9 C-ACP, 9 C-ACT and 4 C-CROSS.
-Comparative quality, Mission-speed, resource and historical workflow campaigns
+inventory. The original profile required all 52 correctness cases, including
+their visible/held-out split:
+11 C-INQ, 6 C-EVD, 13 C-LEG, 9 C-ACP, 9 C-ACT and 4 C-CROSS. Those cases
+are historical obligations superseded by the later amendment, not completed
+results. The effective gate now requires candidate-bound independent integrated
+dispositions for every one of the 70 contracts. The 67 product targets require
+real-surface verdicts; CROSS005, EVAL001, and EVAL002 follow the amendment's
+qualified governance obligations. Comparative quality, Mission-speed, resource
+and historical workflow campaigns
 are deferred, without a pass. `benchmark_certified` is false and
 `improvement_claims` is empty. Deferral never waives functional behavior.
 API judge credentials and benchmark spending are not prerequisites for this
 approved deferred-campaign route; original blocked/not_run records are preserved.
 
-Retry policy permits at most one whole correctness run retry, only for narrowly
-evidenced transport/resource infrastructure failure. Deterministic, candidate
+The historical correctness-run retry policy permitted at most one whole run
+retry, only for narrowly evidenced transport/resource infrastructure failure.
+Deterministic, candidate
 and semantic failures cannot be reclassified as infrastructure. Both attempts
 count against the original provider-free limits: 180 executions, 1200 seconds
-per execution and 21600 seconds aggregate. The retry does not expand budgets.
+per execution and 21600 seconds aggregate. That policy does not govern the
+replacement integrated matrix, and no correctness-run retry is claimed.
 
 The separate bounded live Inquiry lifecycle uses installed public-library
 `run_task` through existing Codex subscription access, with authenticated
@@ -95,13 +105,13 @@ answer, named planner consumption and Mission before/after bytes remain required
 The installed CLI's `provider_approval_required` refusal is a separate behavior;
 this approval does not add a CLI approval carrier or bypass library authority.
 
-The following gates remain pending:
+The following effective gates remain pending:
 
-- Public profile and ABI implementation and independent acceptance; fresh
-  applicable planning acceptance; external correctness runner and ruler acceptance.
+- Fresh applicable planning acceptance and the amendment's independent
+  integrated matrix for all 70 contract dispositions.
 - Integration and independent functional validation for all accepted contracts,
-  followed by independent execution of all 52 correctness cases and bounded live
-  Inquiry proof. Synthetic controls cannot substitute for the live lifecycle.
+  followed by bounded live Inquiry proof. Synthetic controls cannot substitute
+  for the live lifecycle or the integrated real-surface matrix.
 - The final Python 3.13 source suite, including real process, ACP/MCP,
   supervision, cancellation and cleanup checks. The full suite remains a single
   frozen-candidate checkpoint, not a source-preparation check.
@@ -113,8 +123,8 @@ The following gates remain pending:
   is supplied by this source manifest.
 
 Source preparation can be accepted separately. Final candidate checkpoint
-admission waits for public profile, runner and ruler acceptance; final freeze,
-release eligibility and publication remain pending.
+admission waits for the amended planning and independent integrated validation
+requirements; final freeze, release eligibility and publication remain pending.
 
 ## Source and future artifacts
 

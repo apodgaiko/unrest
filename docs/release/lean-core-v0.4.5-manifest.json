@@ -24,6 +24,28 @@
     "v0.4.0_carriers": "immutable bytes from tag v0.4.0"
   },
   "release": "unrest-v0.4.5",
+  "release_gate_amendment": {
+    "benchmark_certified": false,
+    "decision_date": "2026-09-28",
+    "decision_record": "docs/release/lean-core-v0.4.5-gate-amendment.md",
+    "id": "v045-independent-integrated-validation-1",
+    "improvement_claims": [],
+    "live_inquiry_required": true,
+    "product_target_verdicts": 67,
+    "qualified_governance_target_verdicts": [
+      "CROSS005",
+      "EVAL001",
+      "EVAL002"
+    ],
+    "release_decision_required": true,
+    "replacement_gate": "independent-integrated-70",
+    "status": "maintainer-approved",
+    "superseded_gates": [
+      "correctness",
+      "runner",
+      "ruler"
+    ]
+  },
   "release_profile": {
     "approval_sha256": "63f089865e5d507c68f936728d8c9e63521b49a203d2a0aa1f52cf21f699a449",
     "approval_status": "approved",
@@ -105,7 +127,7 @@
         "tests/**",
         "tools/**"
       ],
-      "sha256": "d70655e644b5aa78d5db20971d0c0566580a69054b126567110fdf4f252b60ed"
+      "sha256": "4430e576fe20ea0f8751070c717d1fef5a173fb276f2b4e74d3ab01976c9698a"
     }
   },
   "status": "source preparation pending external gates; not benchmark certified or release eligible",

@@ -20,7 +20,7 @@ PREDECESSOR = "8decbecf7cad32552dfd7d48e069d4050e04ffd3"
 
 # Audited source-preparation notes: any byte change requires a fresh whole-notes
 # review against approval and pending gates. This is not a prose truth classifier.
-AUDITED_NOTES_SHA256 = "84705920537771d60dbc59fea9e3a77b796d3e8254cca9fc49a571d78c24e23f"
+AUDITED_NOTES_SHA256 = "ffa890adf57c1fe8f3b73f4ed8285f9fdd574cc35e7e8010e27e03a102c97282"
 
 
 def _audited_notes() -> str:
@@ -97,7 +97,7 @@ def test_v045_notes_and_rollback_keep_pending_scope_and_resolvable_links() -> No
     for term in ("Inquiry", "Evidence-frontier", "supervision", "ACP", "Dogfood", "end_node"):
         assert term in notes
     for term in (
-        "provider_approval_required", "pending external gates", "Retry policy",
+        "provider_approval_required", "pending external gates", "historical correctness-run retry policy",
         "is not completed validation",
         "does not verify those future archives",
     ):
@@ -182,23 +182,37 @@ def test_v045_approved_profile_has_exact_closed_values_and_types() -> None:
                          'archive-and-installed',
                          'release-decision-and-CI',
                          'publication']}
-    # JSON serialization distinguishes booleans from equal integer values.
+    # The original approval remains immutable history; the later amendment is effective.
     assert json.dumps(manifest["release_profile"], sort_keys=True) == json.dumps(
         expected, sort_keys=True
     )
+    assert manifest["release_gate_amendment"] == {
+        "id": "v045-independent-integrated-validation-1",
+        "status": "maintainer-approved",
+        "decision_date": "2026-09-28",
+        "decision_record": "docs/release/lean-core-v0.4.5-gate-amendment.md",
+        "superseded_gates": ["correctness", "runner", "ruler"],
+        "replacement_gate": "independent-integrated-70",
+        "product_target_verdicts": 67,
+        "qualified_governance_target_verdicts": ["CROSS005", "EVAL001", "EVAL002"],
+        "benchmark_certified": False,
+        "improvement_claims": [],
+        "live_inquiry_required": True,
+        "release_decision_required": True,
+    }
 
 
 def test_v045_notes_preserve_approval_limits_and_pending_validation() -> None:
     notes = _audited_notes()
     for term in (
-        "66 unchanged", "four qualified targets", "All 52 original", "one whole correctness run retry",
+        "66 unchanged", "four qualified targets", "all 52 correctness cases", "one whole run",
         "nine historical CLI scenarios", "45 assertions",
         "Both attempts", "180 executions", "1200 seconds", "21600 seconds",
         "three attempts", "600 seconds", "65536 response bytes", "max_steps=8",
         "reported\nand validated", "No automatic live replay", "API fallback",
         "installed public-library", "provider_approval_required",
-        "fresh\n  applicable planning acceptance", "all 15 extracted-sdist",
-        "admission waits for public profile, runner and ruler acceptance",
+        "Fresh applicable planning acceptance", "all 15 extracted-sdist",
+        "admission waits for the amended planning and independent integrated validation",
         "release eligibility and publication remain pending",
     ):
         assert term in notes
