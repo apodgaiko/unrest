@@ -155,6 +155,9 @@ class _ResponseCapture:
     truncated: bool = False
     _buffer: bytearray = field(default_factory=bytearray, init=False)
     _redactor: StreamingCredentialRedactor = field(init=False)
+    _last_message_id: str | None = field(default=None, init=False)
+    _last_message_chunks: list[str] = field(default_factory=list, init=False)
+    _message_ids_complete: bool = field(default=True, init=False)
 
     def __post_init__(self) -> None:
         self._redactor = StreamingCredentialRedactor(self.credentials)
@@ -168,10 +171,25 @@ class _ResponseCapture:
         for text in _extract_text_fragments(update.get("content")):
             self.observed_bytes += len(text.encode("utf-8"))
             self._append(self._redactor.feed(text).encode("utf-8"))
+            message_id = update.get("messageId")
+            if not isinstance(message_id, str) or not message_id:
+                self._message_ids_complete = False
+                continue
+            if message_id != self._last_message_id:
+                self._last_message_id = message_id
+                self._last_message_chunks.clear()
+            if self.observed_bytes <= self.limit:
+                self._last_message_chunks.append(text)
 
     def finish(self) -> str:
         self._append(self._redactor.finish().encode("utf-8"))
         return self._buffer.decode("utf-8", errors="replace")
+
+    def final_message(self, full_response: str) -> str:
+        """ACP message IDs delimit the final answer from earlier commentary."""
+        if not self._message_ids_complete or self._last_message_id is None:
+            return full_response
+        return redact_credential_values("".join(self._last_message_chunks), self.credentials)
 
     def _append(self, payload: bytes) -> None:
         remaining = self.limit - len(self._buffer)
@@ -352,7 +370,9 @@ class ProviderSessionRunner:
                 status = "failed"
                 error_code = "output_limit_exceeded"
             else:
-                structured = self._parse_structured_response(response_text)
+                structured = self._parse_structured_response(
+                    capture.final_message(response_text)
+                )
                 if structured is None:
                     status = "failed"
                     error_code = "invalid_structured_output"

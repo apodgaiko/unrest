@@ -24,6 +24,7 @@ from unrest_harness.provider_sessions import (
     ProviderSessionRequest,
     ProviderSessionRole,
     ProviderSessionRunner,
+    _ResponseCapture,
 )
 from unrest_harness.providers import PROVIDERS
 
@@ -333,6 +334,79 @@ async def test_success_keeps_content_private_redacted_and_mode_0600(
     }
     assert artifact["input"]["prompt"].startswith("# Unrest Inquiry Branch")
     assert stat.S_IMODE(request.private_artifact_path.stat().st_mode) == 0o600
+
+
+@pytest.mark.asyncio
+async def test_provider_session_parses_final_acp_message_after_progress(tmp_path: Path) -> None:
+    command = f"{sys.executable} {MOCK_ADAPTER} --progress"
+    request = _request(tmp_path)
+    result = await ProviderSessionRunner(_config(tmp_path, command)).run(request)
+
+    assert result.status == "completed"
+    assert result.structured_output is True
+    assert result.response_bytes > len('{"answer": ""}'.encode())
+    artifact = json.loads(request.private_artifact_path.read_text(encoding="utf-8"))
+    assert artifact["output"]["response_text"].startswith("Inspecting the source.\n")
+    assert artifact["output"]["parsed"] == {"answer": ""}
+
+
+@pytest.mark.asyncio
+async def test_acp_message_ids_select_final_json_without_hiding_prior_bytes() -> None:
+    capture = _ResponseCapture(limit=65_536, credentials={"OPENAI_API_KEY": "secret-value"})
+    await capture.handle_update({
+        "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "messageId": "progress",
+            "content": {"type": "text", "text": "I will inspect the source.\n"},
+        }
+    })
+    await capture.handle_update({
+        "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "messageId": "final",
+            "content": {"type": "text", "text": '{"answer":"secret-value"}'},
+        }
+    })
+    full = capture.finish()
+    assert full.startswith("I will inspect the source.\n")
+    assert "secret-value" not in full
+    assert capture.observed_bytes == len("I will inspect the source.\n".encode()) + len('{"answer":"secret-value"}'.encode())
+    assert ProviderSessionRunner._parse_structured_response(capture.final_message(full)) == {
+        "answer": "<redacted:OPENAI_API_KEY>"
+    }
+
+
+@pytest.mark.asyncio
+async def test_acp_final_message_still_requires_whole_json_and_complete_ids() -> None:
+    for final_id in ("progress", "final"):
+        capture = _ResponseCapture(limit=65_536, credentials={})
+        await capture.handle_update({
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "messageId": "progress",
+                "content": {"type": "text", "text": "Preamble.\n"},
+            }
+        })
+        await capture.handle_update({
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "messageId": final_id,
+                "content": {"type": "text", "text": '{"answer":"ok"}'},
+            }
+        })
+        full = capture.finish()
+        parsed = ProviderSessionRunner._parse_structured_response(capture.final_message(full))
+        assert (parsed is not None) == (final_id == "final")
+
+    missing_id = _ResponseCapture(limit=65_536, credentials={})
+    await missing_id.handle_update({
+        "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Preamble.\n"}}
+    })
+    await missing_id.handle_update({
+        "update": {"sessionUpdate": "agent_message_chunk", "messageId": "final", "content": {"type": "text", "text": '{"answer":"ok"}'}}
+    })
+    full = missing_id.finish()
+    assert ProviderSessionRunner._parse_structured_response(missing_id.final_message(full)) is None
 
 
 @pytest.mark.asyncio

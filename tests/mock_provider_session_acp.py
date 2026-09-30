@@ -33,6 +33,7 @@ def main() -> None:
     parser.add_argument("--child-stop-path")
     parser.add_argument("--echo-credential")
     parser.add_argument("--invalid", action="store_true")
+    parser.add_argument("--progress", action="store_true")
     parser.add_argument("--payload-size", type=int, default=0)
     parser.add_argument("--sleep", type=float, default=0)
     parser.add_argument("--stderr-size", type=int, default=0)
@@ -74,6 +75,20 @@ def main() -> None:
                     if args.echo_credential:
                         answer = os.environ.get(args.echo_credential, "missing")
                     output = json.dumps({"answer": answer})
+                if args.progress:
+                    progress = {
+                        "jsonrpc": "2.0",
+                        "method": "session/update",
+                        "params": {
+                            "sessionId": "private-session-id",
+                            "update": {
+                                "sessionUpdate": "agent_message_chunk",
+                                "messageId": "progress",
+                                "content": [{"type": "text", "text": "Inspecting the source.\n"}],
+                            },
+                        },
+                    }
+                    sys.stdout.write(json.dumps(progress) + "\n")
                 midpoint = max(1, len(output) // 2)
                 for chunk in (output[:midpoint], output[midpoint:]):
                     update = {
