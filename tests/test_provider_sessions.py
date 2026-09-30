@@ -377,6 +377,29 @@ async def test_acp_message_ids_select_final_json_without_hiding_prior_bytes() ->
 
 
 @pytest.mark.asyncio
+async def test_raw_response_limit_survives_credential_redaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "s" * 100
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+    command = f"{sys.executable} {MOCK_ADAPTER} --oversize-credential"
+    request = _request(tmp_path)
+    result = await ProviderSessionRunner(_config(tmp_path, command)).run(request)
+
+    assert result.status == "failed"
+    assert result.error_code == "output_limit_exceeded"
+    assert result.structured_output is False
+    assert result.response_bytes > request.max_response_bytes
+    assert result.response_truncated is True
+    artifact_text = request.private_artifact_path.read_text(encoding="utf-8")
+    assert secret not in artifact_text
+    artifact = json.loads(artifact_text)
+    assert artifact["output"]["response_truncated"] is True
+    assert artifact["output"]["parsed"] is None
+
+
+@pytest.mark.asyncio
 async def test_acp_final_message_still_requires_whole_json_and_complete_ids() -> None:
     for final_id in ("progress", "final"):
         capture = _ResponseCapture(limit=65_536, credentials={})

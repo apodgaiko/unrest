@@ -107,10 +107,11 @@ No automatic live replay, API purchase, API fallback or additional spending is
 authorized. Read-only capabilities, private provider artifacts separate from
 the product repository, schema-valid branch/synthesis objects, a non-null safe
 answer, named planner consumption and Mission before/after bytes remain required.
-ACP provider sessions account for every assistant text chunk against the response-byte
-ceiling and keep the complete redacted stream in private artifacts. When ACP supplies
-message IDs for every chunk, the final assistant message alone must be a closed JSON
-object; earlier progress messages are not part of that object. Missing IDs fall back
+ACP provider sessions count raw assistant text bytes before credential redaction
+against the response-byte ceiling and keep a bounded redacted stream in private
+artifacts. When ACP supplies message IDs for every chunk, the final assistant
+message alone must be a closed JSON object; earlier progress messages are not
+part of that object. Missing IDs fall back
 to whole-stream parsing. A preamble in the final message, trailing prose, malformed
 JSON, or an over-limit full stream still fails closed.
 

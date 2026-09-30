@@ -34,6 +34,7 @@ def main() -> None:
     parser.add_argument("--echo-credential")
     parser.add_argument("--invalid", action="store_true")
     parser.add_argument("--progress", action="store_true")
+    parser.add_argument("--oversize-credential", action="store_true")
     parser.add_argument("--payload-size", type=int, default=0)
     parser.add_argument("--sleep", type=float, default=0)
     parser.add_argument("--stderr-size", type=int, default=0)
@@ -90,7 +91,11 @@ def main() -> None:
                     }
                     sys.stdout.write(json.dumps(progress) + "\n")
                 midpoint = max(1, len(output) // 2)
-                for chunk in (output[:midpoint], output[midpoint:]):
+                chunks = (output[:midpoint], output[midpoint:])
+                if args.oversize_credential:
+                    secret = os.environ.get("ANTHROPIC_API_KEY", "missing")
+                    chunks = (output, " ".join([secret] * 700))
+                for chunk in chunks:
                     update = {
                         "jsonrpc": "2.0",
                         "method": "session/update",

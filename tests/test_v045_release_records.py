@@ -20,7 +20,7 @@ PREDECESSOR = "8decbecf7cad32552dfd7d48e069d4050e04ffd3"
 
 # Audited source-preparation notes: any byte change requires a fresh whole-notes
 # review against approval and pending gates. This is not a prose truth classifier.
-AUDITED_NOTES_SHA256 = "9417c66fceb67960f65f74564bb828c3c8082c39fdbd3d847c672dc2129f6a10"
+AUDITED_NOTES_SHA256 = "da37ab198108ca738ddce1691090e9ed035edab2d9cafd498b0f8afa253c45bc"
 
 
 def _audited_notes() -> str:

@@ -170,6 +170,8 @@ class _ResponseCapture:
             return
         for text in _extract_text_fragments(update.get("content")):
             self.observed_bytes += len(text.encode("utf-8"))
+            if self.observed_bytes > self.limit:
+                self.truncated = True
             self._append(self._redactor.feed(text).encode("utf-8"))
             message_id = update.get("messageId")
             if not isinstance(message_id, str) or not message_id:
