@@ -221,7 +221,9 @@ a release candidate, verify the Python and uv versions, run focused checks, and
 prove in the intended execution lane that a tiny loopback socket can bind. None
 of these preflights may invoke the full source suite. Freeze the resulting
 tracked and untracked source binding, then run the full source suite exactly
-once on Python 3.13 with `env -u CODEX_PATH uv run pytest -q`, retaining its raw
+once on Python 3.13 with the v0.4.5 exception command
+`env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py` (see
+`docs/release/lean-core-v0.4.5-gate-amendment-3.md`), retaining its raw
 stdout, stderr, exit code, timing, environment metadata, and pre/post binding.
 Do not rerun the suite after build. Python 3.13 is the minimum supported runtime
 and the single CI compatibility and release lane. Changes to CLI entry points,

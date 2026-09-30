@@ -223,8 +223,8 @@ def test_each_rule_family_emits_its_bounded_code(
         ("mypy", "run: uv run mypy src", "run: uv run mypy tests"),
         (
             "source-suite",
-            "run: env -u CODEX_PATH uv run pytest -q",
-            "run: env -u CODEX_PATH uv run pytest -q tests/test_assets.py",
+            "run: env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py",
+            "run: env -u CODEX_PATH uv run pytest -q --ignore=tests",
         ),
         ("build", "run: uv build", "run: uv build --wheel"),
         (

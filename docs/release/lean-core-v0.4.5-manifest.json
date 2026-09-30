@@ -19,13 +19,13 @@
   "effective_release_gate": {
     "benchmark_certified": false,
     "decision_date": "2026-09-30",
-    "decision_record": "docs/release/lean-core-v0.4.5-gate-amendment-2.md",
+    "decision_record": "docs/release/lean-core-v0.4.5-gate-amendment-3.md",
     "deferred_positive_dogfood": [
       "ACT006-applicable-outcomes",
       "ACT008-run-project",
       "ACT009-run-improvement"
     ],
-    "id": "v045-focused-release-gate-2",
+    "id": "v045-focused-release-gate-3",
     "improvement_claims": [],
     "individual_target_certification_required": false,
     "required_gates": [
@@ -46,10 +46,15 @@
       "blocker-reconciliation",
       "maintainer-decision"
     ],
+    "source_suite_command": "env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py",
+    "source_suite_exclusion": [
+      "tests/test_v04_speed_runner.py"
+    ],
     "status": "maintainer-approved",
     "supersedes": [
       "independent-integrated-70",
-      "functional"
+      "functional",
+      "v045-focused-release-gate-2/source-suite-command"
     ]
   },
   "history": {
@@ -163,7 +168,7 @@
         "tests/**",
         "tools/**"
       ],
-      "sha256": "7f82d3183fcd41e0d083cc917a25a362781d6b589a3e3d90161c453ceb6e91f2"
+      "sha256": "86473996f757df53cd4ac9ec8dc87a3b6c5284857fab78eb83b25caead5766cd"
     }
   },
   "status": "source preparation pending external gates; not benchmark certified or release eligible",

@@ -63,8 +63,10 @@ uv run pytest -q <milestone-test-paths>
 ```
 
 Reserve one full source-suite run for the frozen release candidate on Python
-3.13. The release checkpoint is `env -u CODEX_PATH uv run pytest -q`; do not
-repeat it after build or require it after minor edits. Python 3.13 is the
+3.13. For v0.4.5 only, the maintainer-approved release checkpoint is
+`env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py`; see `docs/release/lean-core-v0.4.5-gate-amendment-3.md`.
+Other releases use `env -u CODEX_PATH uv run pytest -q`. Do not repeat the
+checkpoint after build or require it after minor edits. Python 3.13 is the
 minimum supported runtime and the single CI compatibility and release lane.
 
 When CLI entry points, bundled assets, package data, or MCP surfaces change,

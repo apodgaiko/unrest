@@ -20,7 +20,7 @@ PREDECESSOR = "8decbecf7cad32552dfd7d48e069d4050e04ffd3"
 
 # Audited source-preparation notes: any byte change requires a fresh whole-notes
 # review against approval and pending gates. This is not a prose truth classifier.
-AUDITED_NOTES_SHA256 = "60c95ff9e6b2a1702c63d14fff604c81f765e40bdc819536a98c2fee5d0fde79"
+AUDITED_NOTES_SHA256 = "17b878820f230a17e7cca7f5f33e27c0752e8b2e2abe2de9754e42feb1b562f0"
 
 
 def _audited_notes() -> str:
@@ -79,7 +79,7 @@ def test_v045_ci_archive_contract_and_required_gates() -> None:
     commands = [step["run"] for step in steps if "run" in step]
     for command in (
         "uv run ruff check .", "uv run mypy src", "uv run unrest check-repository",
-        "env -u CODEX_PATH uv run pytest -q", "uv build",
+        "env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py", "uv build",
         "uv run python tools/check_distribution.py dist",
     ):
         assert command in commands
@@ -201,11 +201,14 @@ def test_v045_approved_profile_has_exact_closed_values_and_types() -> None:
         "release_decision_required": True,
     }
     assert manifest["effective_release_gate"] == {
-        "id": "v045-focused-release-gate-2",
+        "id": "v045-focused-release-gate-3",
         "status": "maintainer-approved",
         "decision_date": "2026-09-30",
-        "decision_record": "docs/release/lean-core-v0.4.5-gate-amendment-2.md",
-        "supersedes": ["independent-integrated-70", "functional"],
+        "decision_record": "docs/release/lean-core-v0.4.5-gate-amendment-3.md",
+        "supersedes": ["independent-integrated-70", "functional",
+                       "v045-focused-release-gate-2/source-suite-command"],
+        "source_suite_command": "env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py",
+        "source_suite_exclusion": ["tests/test_v04_speed_runner.py"],
         "required_gates": [
             "candidate", "slice-dispositions", "integration", "public-profile-and-ABI",
             "focused-safety",

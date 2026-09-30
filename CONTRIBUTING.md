@@ -32,7 +32,10 @@ uv run pytest -q <milestone-test-paths>
 ```
 
 Run the full source suite once for the frozen release candidate on Python 3.13
-with `env -u CODEX_PATH uv run pytest -q`. Python 3.11 and 3.12 are focused
+for v0.4.5 with
+`env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py`; see
+`docs/release/lean-core-v0.4.5-gate-amendment-3.md`. Other releases use the
+full command. Python 3.11 and 3.12 are focused
 compatibility lanes, not duplicate full-suite lanes. When CLI entry points,
 bundled assets, package data, or MCP surfaces change, also run `uv build`,
 `uv run python tools/check_distribution.py dist`, and the installed-wheel

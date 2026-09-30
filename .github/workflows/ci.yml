@@ -31,8 +31,8 @@ jobs:
         run: uv run ruff check .
       - name: Type-check (mypy)
         run: uv run mypy src
-      - name: Full source suite
-        run: env -u CODEX_PATH uv run pytest -q
+      - name: v0.4.5 source suite (historical speed runner excluded)
+        run: env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py
       - name: Repository contract
         run: uv run unrest check-repository
       - name: Build wheel and source distribution

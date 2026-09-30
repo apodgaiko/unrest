@@ -63,7 +63,10 @@ The [2026-09-28 integrated validation amendment](lean-core-v0.4.5-gate-amendment
 superseded that profile's correctness, runner, and ruler gates. The later
 [focused release gate](lean-core-v0.4.5-gate-amendment-2.md) is effective for
 v0.4.5 and replaces the 70-target independent matrix with explicit bounded
-checks while preserving the earlier decisions as history.
+checks while preserving the earlier decisions as history. The subsequent
+[historical speed-runner exclusion](lean-core-v0.4.5-gate-amendment-3.md)
+removes one obsolete v0.4 benchmark test module from this release checkpoint;
+no benchmark pass is claimed.
 
 ## Approved profile and pending obligations
 
@@ -115,7 +118,8 @@ The following effective gates remain pending:
   ACP/MCP process behavior, restart, cancellation, and cleanup.
 - The separately bounded live Inquiry proof with named planner consumption.
   Synthetic controls cannot substitute for this live lifecycle.
-- The single final Python 3.13 source-suite checkpoint, recursive checks,
+- The single final Python 3.13 source-suite checkpoint excluding only
+  `tests/test_v04_speed_runner.py`, recursive checks,
   exact wheel/sdist archive verification, unrelated-directory installed
   lifecycle, fail-closed startup, and all 15 extracted-sdist persistence cases.
 - Successful CI on the exact final HEAD, blocker reconciliation, and a separate
