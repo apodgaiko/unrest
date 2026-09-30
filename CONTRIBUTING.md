@@ -37,7 +37,7 @@ compatibility lanes, not duplicate full-suite lanes. When CLI entry points,
 bundled assets, package data, or MCP surfaces change, also run `uv build`,
 `uv run python tools/check_distribution.py dist`, and the installed-wheel
 lifecycle from an unrelated working directory. The checker must compare complete
-archive membership and content, safely extract the sdist, and execute all 14
+archive membership and content, safely extract the sdist, and execute all 15
 protected `tests/test_persistence_schema_v1.py` cases there with package module,
 test module, cwd, and `sys.path` provenance excluding the checkout. Run this
 after the frozen candidate's single full source-suite run; do not rerun that

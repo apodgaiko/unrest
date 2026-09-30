@@ -145,7 +145,7 @@ def test_packaging_guidance_requires_executable_extracted_sdist_proof() -> None:
     )
     for relative in carriers:
         normalized = " ".join((ROOT / relative).read_text(encoding="utf-8").split()).lower()
-        assert "14" in normalized and "test_persistence_schema_v1.py" in normalized
+        assert "15" in normalized and "test_persistence_schema_v1.py" in normalized
         assert "extract" in normalized and "sdist" in normalized
         assert "package module" in normalized and "test module" in normalized
         assert "cwd" in normalized and "sys.path" in normalized

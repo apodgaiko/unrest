@@ -229,7 +229,7 @@ bundled assets, package data, or MCP surfaces additionally run `uv build`,
 `uv run python tools/check_distribution.py dist`, and the installed-wheel
 lifecycle from an unrelated working directory. The distribution check verifies
 complete archive membership and bytes, safely extracts the sdist, and runs all
-14 protected `tests/test_persistence_schema_v1.py` cases from the extracted
+15 protected `tests/test_persistence_schema_v1.py` cases from the extracted
 tree while proving the package module, test module, cwd, and effective
 `sys.path` do not leak the checkout. This executable archive proof follows the
 single full source-suite run and does not repeat it.

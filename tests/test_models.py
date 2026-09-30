@@ -139,6 +139,7 @@ class TestProjectState:
             state=payload,  # type: ignore[arg-type]
             projectRoot="/tmp/.unrest",
             harnessRoot="/home/u/.unrest/projects/p1",
+            next_action="none",
         )
         assert env.state.state == payload["state"]
 
@@ -147,10 +148,14 @@ class TestProjectState:
             projectId="p1",
             state={
                 "state": "attention_needed",
-                "items": [{"id": "a", "report": "Task report from w1\nreport:\nok"}],
+                "items": [{"id": "a", "report": "Task report from w1\nreport:\nok",
+                           "kind": "node_attention", "mission_id": "m1",
+                           "node_id": "w1", "attempt_id": "attempt-1",
+                           "terminal_review_id": None}],
             },  # type: ignore[arg-type]
             projectRoot="/tmp/.unrest",
             harnessRoot="/home/u/.unrest/projects/p1",
+            next_action="none",
         )
         assert isinstance(env.state, AttentionNeeded)
         assert env.state.items[0].id == "a"
@@ -164,6 +169,7 @@ class TestEnvelope:
             projectRoot="/tmp/.unrest",
             harnessRoot="/home/u/.unrest/projects/proj-1",
             dag=None,
+            next_action="none",
         )
         dumped = env.model_dump()
         assert set(dumped.keys()) == {
@@ -172,6 +178,10 @@ class TestEnvelope:
             "projectRoot",
             "harnessRoot",
             "dag",
+            "frontier",
+            "next_action",
+            "supersession_lineage",
+            "active_attempts",
         }
 
 

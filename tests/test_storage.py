@@ -918,6 +918,7 @@ class TestAttention:
                     id="x",
                     kind="gate_checkpoint",
                     mission_id="m1",
+                    node_id="g1",
                     report="Gate report from g1",
                 )
             ],
