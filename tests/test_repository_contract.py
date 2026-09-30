@@ -265,6 +265,27 @@ def test_ci_required_executable_and_lane_families_are_candidate_bound(
     ]
 
 
+def test_v045_source_suite_exclusion_is_version_scoped(tmp_path: Path) -> None:
+    repository = _copy_repository(tmp_path)
+    project = repository / "pyproject.toml"
+    project.write_text(
+        project.read_text(encoding="utf-8").replace('version = "0.4.5"', 'version = "0.4.6"', 1),
+        encoding="utf-8",
+    )
+    assert [(item.code, item.path) for item in _error(repository).diagnostics] == [
+        ("LEAN-REPO-CI", ".github/workflows/ci.yml")
+    ]
+    workflow = repository / ".github/workflows/ci.yml"
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(
+            "env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py",
+            "env -u CODEX_PATH uv run pytest -q",
+        ),
+        encoding="utf-8",
+    )
+    check_repository(repository)
+
+
 def _assert_distribution_checker_executes_extracted_oracle(repository: Path) -> None:
     tree = ast.parse((repository / "tools/check_distribution.py").read_text(encoding="utf-8"))
     check_function = next(

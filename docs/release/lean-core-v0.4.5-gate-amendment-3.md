@@ -20,7 +20,9 @@ For this release, the source-suite command is exactly:
 env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py
 ```
 
-Only `tests/test_v04_speed_runner.py` is excluded. Every other discovered
+The repository CI checker permits this command only when the package version
+and effective release manifest identify v0.4.5; later releases must restore the
+unqualified full-suite command. Only `tests/test_v04_speed_runner.py` is excluded. Every other discovered
 source test remains in the checkpoint. The exclusion is visible in CI and
 release records, has no PASS credit, and is not a diagnosis that the v0.4 speed
 benchmark works on v0.4.5. If any included test fails or errors, the source

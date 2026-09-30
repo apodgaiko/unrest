@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import subprocess
+import tomllib
 from typing import Any, Literal
 
 import yaml
@@ -428,7 +429,9 @@ def _has_installed_lifecycle(commands: tuple[tuple[str, ...], ...]) -> bool:
     )
 
 
-def _primary_job_is_complete(job: dict[str, Any]) -> bool:
+def _primary_job_is_complete(
+    job: dict[str, Any], *, source_suite_command: tuple[str, ...]
+) -> bool:
     commands = _run_commands(job)
     required = (
         ("uv", "run", "unrest", "--help"),
@@ -437,8 +440,7 @@ def _primary_job_is_complete(job: dict[str, Any]) -> bool:
         ("uv", "run", "python", "-m", "unrest_harness", "--help"),
         ("uv", "run", "ruff", "check", "."),
         ("uv", "run", "mypy", "src"),
-        ("env", "-u", "CODEX_PATH", "uv", "run", "pytest", "-q",
-         "--ignore=tests/test_v04_speed_runner.py"),
+        source_suite_command,
         ("uv", "run", "unrest", "check-repository"),
         ("uv", "build"),
         ("uv", "run", "python", "tools/check_distribution.py", "dist"),
@@ -449,6 +451,29 @@ def _primary_job_is_complete(job: dict[str, Any]) -> bool:
         and all(_has_exact_command(commands, command) for command in required)
         and _has_installed_lifecycle(commands)
     )
+
+
+def _source_suite_command(root: Path) -> tuple[str, ...]:
+    standard = ("env", "-u", "CODEX_PATH", "uv", "run", "pytest", "-q")
+    try:
+        project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+        manifest = json.loads(
+            (root / "docs/release/lean-core-v0.4.5-manifest.json").read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, ValueError, tomllib.TOMLDecodeError):
+        return standard
+    project_metadata = project.get("project")
+    if not isinstance(project_metadata, dict) or not isinstance(manifest, dict):
+        return standard
+    gate = manifest.get("effective_release_gate")
+    if (
+        project_metadata.get("version") == "0.4.5"
+        and manifest.get("version") == "0.4.5"
+        and isinstance(gate, dict)
+        and gate.get("id") == "v045-focused-release-gate-3"
+    ):
+        return (*standard, "--ignore=tests/test_v04_speed_runner.py")
+    return standard
 
 
 def _check_ci(root: Path, diagnostics: list[RepositoryDiagnostic]) -> None:
@@ -469,7 +494,11 @@ def _check_ci(root: Path, diagnostics: list[RepositoryDiagnostic]) -> None:
         diagnostics.append(RepositoryDiagnostic("LEAN-REPO-CI", ci_path))
         return
     workflow_jobs = tuple(job for job in jobs.values() if isinstance(job, dict))
-    if not any(_primary_job_is_complete(job) for job in workflow_jobs):
+    source_suite_command = _source_suite_command(root)
+    if not any(
+        _primary_job_is_complete(job, source_suite_command=source_suite_command)
+        for job in workflow_jobs
+    ):
         diagnostics.append(RepositoryDiagnostic("LEAN-REPO-CI", ci_path))
 
 
