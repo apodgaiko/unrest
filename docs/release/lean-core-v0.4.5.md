@@ -59,37 +59,39 @@ or automatic restart. Inquiry and adapter results cannot approve or promote.
 The maintainer approved release profile `v045-correctness-release-exception-1`.
 The manifest binds the actual approval and preserved proposal by SHA256; approval
 is not completed validation and does not itself confer release eligibility.
-The later [integrated validation amendment](lean-core-v0.4.5-gate-amendment.md)
-supersedes that profile's correctness, runner, and ruler gates while retaining
-its other release boundaries.
+The [2026-09-28 integrated validation amendment](lean-core-v0.4.5-gate-amendment.md)
+superseded that profile's correctness, runner, and ruler gates. The later
+[focused release gate](lean-core-v0.4.5-gate-amendment-2.md) is effective for
+v0.4.5 and replaces the 70-target independent matrix with explicit bounded
+checks while preserving the earlier decisions as history.
 
 ## Approved profile and pending obligations
 
-All 70 target dispositions remain explicit: 66 unchanged functional targets and
-four qualified targets, ACT006, CROSS005, EVAL001 and EVAL002. The approved
-CLI applicability decision defers exactly nine historical CLI scenarios and
-45 assertions without counting them as passes or changing the 52-case
-inventory. The original profile required all 52 correctness cases, including
-their visible/held-out split:
-11 C-INQ, 6 C-EVD, 13 C-LEG, 9 C-ACP, 9 C-ACT and 4 C-CROSS. Those cases
-are historical obligations superseded by the later amendment, not completed
-results. The effective gate now requires candidate-bound independent integrated
-dispositions for every one of the 70 contracts. The 67 product targets require
-real-surface verdicts; CROSS005, EVAL001, and EVAL002 follow the amendment's
-qualified governance obligations. Comparative quality, Mission-speed, resource
-and historical workflow campaigns
-are deferred, without a pass. `benchmark_certified` is false and
-`improvement_claims` is empty. Deferral never waives functional behavior.
-API judge credentials and benchmark spending are not prerequisites for this
-approved deferred-campaign route; original blocked/not_run records are preserved.
+All 70 target dispositions remain an intended-behavior inventory: 66
+unchanged targets and four qualified targets, ACT006, CROSS005, EVAL001 and
+EVAL002. The earlier CLI applicability decision deferred nine historical CLI
+scenarios and 45 assertions. The original profile required 52 correctness
+cases: 11 C-INQ, 6 C-EVD, 13 C-LEG, 9 C-ACP, 9 C-ACT and 4 C-CROSS. The
+2026-09-28 amendment replaced that campaign with a 70-target independent
+matrix. Neither campaign completed or passed. The effective focused gate
+requires a candidate-bound safety checklist, one bounded live Inquiry, final
+source and distribution checks, exact CI, and a separate maintainer decision.
+It does not certify all 70 targets. ACT006's 27 applicable outcome scenarios lack complete execution
+and positive ACT008/ACT009 dogfood proofs remain unrun and are explicitly
+deferred. No synthetic result is counted as a positive external dogfood run.
+
+Comparative quality, Mission-speed, resource and historical workflow campaigns
+are deferred without a pass. `benchmark_certified` is false and
+`improvement_claims` is empty. API judge credentials and benchmark spending
+are not prerequisites for this release route. Original blocked/not_run records
+are preserved.
 
 The historical correctness-run retry policy permitted at most one whole run
 retry, only for narrowly evidenced transport/resource infrastructure failure.
-Deterministic, candidate
-and semantic failures cannot be reclassified as infrastructure. Both attempts
+Deterministic, candidate and semantic failures cannot be reclassified as infrastructure. Both attempts
 count against the original provider-free limits: 180 executions, 1200 seconds
 per execution and 21600 seconds aggregate. That policy does not govern the
-replacement integrated matrix, and no correctness-run retry is claimed.
+focused release gate, and no correctness-run retry is claimed.
 
 The separate bounded live Inquiry lifecycle uses installed public-library
 `run_task` through existing Codex subscription access, with authenticated
@@ -107,24 +109,20 @@ this approval does not add a CLI approval carrier or bypass library authority.
 
 The following effective gates remain pending:
 
-- Fresh applicable planning acceptance and the amendment's independent
-  integrated matrix for all 70 contract dispositions.
-- Integration and independent functional validation for all accepted contracts,
-  followed by bounded live Inquiry proof. Synthetic controls cannot substitute
-  for the live lifecycle or the integrated real-surface matrix.
-- The final Python 3.13 source suite, including real process, ACP/MCP,
-  supervision, cancellation and cleanup checks. The full suite remains a single
-  frozen-candidate checkpoint, not a source-preparation check.
-- Exact wheel/sdist archive verification, installed lifecycle, fail-closed
-  startup, persistence/restart/recovery and all 15 extracted-sdist persistence cases.
-- A separate release decision packet binding actual accepted public semantics,
-  approval, final candidate and all preserved gate evidence, required CI and
-  publication authority. No containing commit or imagined public schema identity
-  is supplied by this source manifest.
+- Fresh candidate-bound integration reconciliation, planning review, and the
+  focused safety checklist covering public profile and ABI compatibility,
+  legacy reads and recovery, authority refusals, current evidence, privacy,
+  ACP/MCP process behavior, restart, cancellation, and cleanup.
+- The separately bounded live Inquiry proof with named planner consumption.
+  Synthetic controls cannot substitute for this live lifecycle.
+- The single final Python 3.13 source-suite checkpoint, recursive checks,
+  exact wheel/sdist archive verification, unrelated-directory installed
+  lifecycle, fail-closed startup, and all 15 extracted-sdist persistence cases.
+- Successful CI on the exact final HEAD, blocker reconciliation, and a separate
+  maintainer release decision before tagging, publication or installation.
 
-Source preparation can be accepted separately. Final candidate checkpoint
-admission waits for the amended planning and independent integrated validation
-requirements; final freeze, release eligibility and publication remain pending.
+Source preparation can be accepted separately. Final candidate freeze, release
+eligibility and publication remain pending until these results are recorded.
 
 ## Source and future artifacts
 
@@ -138,8 +136,7 @@ hashes. Historical v0.4.0 and older release records remain immutable.
 
 The release predecessor is `v0.4.0`, commit
 `8decbecf7cad32552dfd7d48e069d4050e04ffd3`; the accepted assembly parent is a
-separate identity recorded in the external candidate handoff. The candidate
-branch is `codex/v045-release-r2`.
+separate identity recorded in the external candidate handoff. The release-prep branch is `codex/v045-release-prep-20260928`.
 
 Expected future artifacts are `unrest_harness-0.4.5-py3-none-any.whl` and
 `unrest_harness-0.4.5.tar.gz`, with CI bundle `unrest-v0.4.5-python313`.

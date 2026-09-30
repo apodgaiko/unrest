@@ -6,7 +6,7 @@
     "wheel": "unrest_harness-0.4.5-py3-none-any.whl"
   },
   "base": {
-    "candidate_ref": "refs/heads/codex/v045-release-r2",
+    "candidate_ref": "refs/heads/codex/v045-release-prep-20260928",
     "predecessor_commit": "8decbecf7cad32552dfd7d48e069d4050e04ffd3",
     "predecessor_tag": "v0.4.0",
     "release_tag_ref": "refs/tags/v0.4.5"
@@ -15,6 +15,42 @@
     "legacy_identity_and_lineage_reads": "missing/null and absent lineage remain readable without rewrite",
     "python": ">=3.13",
     "reverse_migration": "not promised; preserve new durable records and pre-upgrade backups"
+  },
+  "effective_release_gate": {
+    "benchmark_certified": false,
+    "decision_date": "2026-09-30",
+    "decision_record": "docs/release/lean-core-v0.4.5-gate-amendment-2.md",
+    "deferred_positive_dogfood": [
+      "ACT006-applicable-outcomes",
+      "ACT008-run-project",
+      "ACT009-run-improvement"
+    ],
+    "id": "v045-focused-release-gate-2",
+    "improvement_claims": [],
+    "individual_target_certification_required": false,
+    "required_gates": [
+      "candidate",
+      "slice-dispositions",
+      "integration",
+      "public-profile-and-ABI",
+      "focused-safety",
+      "live-inquiry",
+      "process-runtime",
+      "archive",
+      "installed",
+      "extracted-persistence",
+      "milestone",
+      "source-suite",
+      "planning",
+      "ci",
+      "blocker-reconciliation",
+      "maintainer-decision"
+    ],
+    "status": "maintainer-approved",
+    "supersedes": [
+      "independent-integrated-70",
+      "functional"
+    ]
   },
   "history": {
     "active_binding_owner": "docs/release/lean-core-v0.4.5-manifest.json",
@@ -127,7 +163,7 @@
         "tests/**",
         "tools/**"
       ],
-      "sha256": "4430e576fe20ea0f8751070c717d1fef5a173fb276f2b4e74d3ab01976c9698a"
+      "sha256": "398b30c2a472be9b9fca77f187f3907485bbbd87afc791b8883824175eca2ca8"
     }
   },
   "status": "source preparation pending external gates; not benchmark certified or release eligible",

@@ -20,7 +20,7 @@ PREDECESSOR = "8decbecf7cad32552dfd7d48e069d4050e04ffd3"
 
 # Audited source-preparation notes: any byte change requires a fresh whole-notes
 # review against approval and pending gates. This is not a prose truth classifier.
-AUDITED_NOTES_SHA256 = "ffa890adf57c1fe8f3b73f4ed8285f9fdd574cc35e7e8010e27e03a102c97282"
+AUDITED_NOTES_SHA256 = "60c95ff9e6b2a1702c63d14fff604c81f765e40bdc819536a98c2fee5d0fde79"
 
 
 def _audited_notes() -> str:
@@ -37,7 +37,7 @@ def test_v045_release_identity_scope_and_predecessor() -> None:
     assert manifest["release"] == "unrest-v0.4.5"
     assert manifest["version"] == "0.4.5"
     assert manifest["base"] == {
-        "candidate_ref": "refs/heads/codex/v045-release-r2",
+        "candidate_ref": "refs/heads/codex/v045-release-prep-20260928",
         "predecessor_commit": PREDECESSOR,
         "predecessor_tag": "v0.4.0",
         "release_tag_ref": "refs/tags/v0.4.5",
@@ -200,20 +200,40 @@ def test_v045_approved_profile_has_exact_closed_values_and_types() -> None:
         "live_inquiry_required": True,
         "release_decision_required": True,
     }
+    assert manifest["effective_release_gate"] == {
+        "id": "v045-focused-release-gate-2",
+        "status": "maintainer-approved",
+        "decision_date": "2026-09-30",
+        "decision_record": "docs/release/lean-core-v0.4.5-gate-amendment-2.md",
+        "supersedes": ["independent-integrated-70", "functional"],
+        "required_gates": [
+            "candidate", "slice-dispositions", "integration", "public-profile-and-ABI",
+            "focused-safety",
+            "live-inquiry", "process-runtime", "archive", "installed",
+            "extracted-persistence", "milestone", "source-suite", "planning",
+            "ci", "blocker-reconciliation", "maintainer-decision",
+        ],
+        "individual_target_certification_required": False,
+        "deferred_positive_dogfood": [
+            "ACT006-applicable-outcomes", "ACT008-run-project", "ACT009-run-improvement"
+        ],
+        "benchmark_certified": False,
+        "improvement_claims": [],
+    }
 
 
 def test_v045_notes_preserve_approval_limits_and_pending_validation() -> None:
     notes = _audited_notes()
     for term in (
-        "66 unchanged", "four qualified targets", "all 52 correctness cases", "one whole run",
-        "nine historical CLI scenarios", "45 assertions",
+        "66\nunchanged targets", "four qualified targets", "52 correctness",
+        "nine historical CLI", "45 assertions", "one whole run",
         "Both attempts", "180 executions", "1200 seconds", "21600 seconds",
         "three attempts", "600 seconds", "65536 response bytes", "max_steps=8",
         "reported\nand validated", "No automatic live replay", "API fallback",
         "installed public-library", "provider_approval_required",
-        "Fresh applicable planning acceptance", "all 15 extracted-sdist",
-        "admission waits for the amended planning and independent integrated validation",
-        "release eligibility and publication remain pending",
+        "focused release gate", "does not certify all 70 targets",
+        "positive ACT008/ACT009 dogfood proofs", "all 15 extracted-sdist",
+        "Final candidate freeze, release", "eligibility and publication remain pending",
     ):
         assert term in notes
     for stale in (
