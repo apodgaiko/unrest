@@ -47,7 +47,10 @@ credential separation; observer records use an observer-owned tmpfs, without
 granting CHOWN. The observer alone retains SYS_PTRACE for observation across
 UIDs inside the private PID namespace; it loses the credential-changing
 capabilities and cannot receive requests for arbitrary execution. The
-source-control child drops its capability bounding
+observer also retains DAC_READ_SEARCH to enumerate/read the source UID's `/proc`
+descriptor directories and private journals. This is read authority within the
+container's finite mounts, not a payload capability. The source-control child
+drops its capability bounding
 set, supplementary groups, UID/GID and inherited nonstdio descriptors before
 exec. `no_new_privs` and Docker's seccomp policy remain active. The observer
 uses a distinct UID and a private records directory. Loopback IPC is allowed;

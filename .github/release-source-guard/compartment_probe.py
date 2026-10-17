@@ -191,7 +191,7 @@ def observer() -> None:
     if libc.prctl(8, 1, 0, 0, 0) != 0:  # PR_SET_KEEPCAPS, only in the observer.
         raise OSError(ctypes.get_errno(), "observer keepcaps")
     for capability in range(41):
-        if capability != 19 and libc.prctl(24, capability, 0, 0, 0) != 0:
+        if capability not in (2, 19) and libc.prctl(24, capability, 0, 0, 0) != 0:
             raise OSError(ctypes.get_errno(), "observer bounding-set reduction")
     os.setuid(OBSERVER_UID)
     class CapHeader(ctypes.Structure):
@@ -200,14 +200,15 @@ def observer() -> None:
         _fields_ = [("effective", ctypes.c_uint32), ("permitted", ctypes.c_uint32),
                     ("inheritable", ctypes.c_uint32)]
     header = CapHeader(0x20080522, 0)
-    caps = (CapData * 2)(CapData(1 << 19, 1 << 19, 0), CapData())
+    observer_caps = (1 << 2) | (1 << 19)
+    caps = (CapData * 2)(CapData(observer_caps, observer_caps, 0), CapData())
     if libc.capset(ctypes.byref(header), ctypes.byref(caps)) != 0:
         raise OSError(ctypes.get_errno(), "observer ptrace-only capability set")
     no_new_privileges()
     observer_identity = process_identity(os.getpid())
     if observer_identity["capabilities"] != {
-        "CapInh": 0, "CapPrm": 1 << 19, "CapEff": 1 << 19,
-        "CapBnd": 1 << 19, "CapAmb": 0,
+        "CapInh": 0, "CapPrm": observer_caps, "CapEff": observer_caps,
+        "CapBnd": observer_caps, "CapAmb": 0,
     }:
         raise RuntimeError("observer capability custody drift")
     canary = Path("/records/controller-canary")

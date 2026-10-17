@@ -19,7 +19,7 @@ def configuration():
             "Privileged": False, "ReadonlyRootfs": True, "NetworkMode": "none",
             "IpcMode": "private", "PidMode": "", "CgroupnsMode": "private",
             "PidsLimit": 128, "Memory": 1073741824, "CapDrop": ["ALL"],
-            "CapAdd": ["SETUID", "SETGID", "SETPCAP", "SYS_PTRACE"],
+            "CapAdd": ["SETUID", "SETGID", "SETPCAP", "SYS_PTRACE", "DAC_READ_SEARCH"],
             "SecurityOpt": ["no-new-privileges"],
             "Tmpfs": dict(controller.TMPFS),
         },
@@ -36,7 +36,8 @@ def test_exact_synthetic_configuration():
 
 def test_docker_canonical_capability_names():
     current = configuration()
-    current["HostConfig"]["CapAdd"] = ["CAP_SETGID", "CAP_SETPCAP", "CAP_SETUID", "CAP_SYS_PTRACE"]
+    current["HostConfig"]["CapAdd"] = ["CAP_SETGID", "CAP_SETPCAP", "CAP_SETUID",
+                                       "CAP_SYS_PTRACE", "CAP_DAC_READ_SEARCH"]
     controller.validate_container(current, Path("/public-support"))
 
 
