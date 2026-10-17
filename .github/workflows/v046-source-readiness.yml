@@ -1,0 +1,35 @@
+name: v0.4.6 source guard readiness
+
+on:
+  push:
+    branches:
+      - 'codex/source-guard-readiness-20261017-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v046-source-checkpoint-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  compartment-controls:
+    name: Linux compartment controls (not a source checkpoint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Synthetic kernel and observer controls
+        run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
+      - name: Upload encrypted control evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-source-readiness-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/source-readiness/evidence.cms
+            ${{ runner.temp }}/source-readiness/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
