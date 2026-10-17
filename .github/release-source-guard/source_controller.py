@@ -26,10 +26,18 @@ def tmpfs_for(selection):
     roots = dict(TMPFS)
     if selection.startswith('producer-'):
         roots.update({
+            '/source': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0755',
             '/source/build': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0700',
             '/source/src/unrest_harness.egg-info': 'rw,nosuid,nodev,noexec,size=8m,uid=20000,gid=20000,mode=0700',
         })
     return roots
+
+
+def source_bindings(source, selection):
+    if selection.startswith('producer-'):
+        return {'/source/' + path.name: str(path) for path in sorted(source.iterdir())
+                if path.name != 'build'}
+    return {'/source': str(source)}
 
 
 def validate(config, image, source, inputs, selection):
@@ -45,8 +53,9 @@ def validate(config, image, source, inputs, selection):
             or host['SecurityOpt'] != ['no-new-privileges'] or host['Tmpfs'] != tmpfs_for(selection)):
         raise RuntimeError('focused source privilege/namespace definition drift')
     mounts = config['Mounts']
-    wanted = {'/guard':str(SUPPORT), '/source':str(source), '/inputs':str(inputs)}
-    if len(mounts) != 3 or {m['Destination'] for m in mounts} != set(wanted):
+    wanted = {'/guard':str(SUPPORT), '/inputs':str(inputs),
+              **source_bindings(source, selection)}
+    if len(mounts) != len(wanted) or {m['Destination'] for m in mounts} != set(wanted):
         raise RuntimeError('focused source mount inventory drift')
     if any(m['Type'] != 'bind' or m['RW'] or m['Source'] != wanted[m['Destination']]
            or m['Propagation'] != 'rprivate' for m in mounts):
@@ -118,13 +127,16 @@ def main():
         value = json.loads(prepared.stdout)
         (inputs / 'source.json').write_text(json.dumps(value['manifest'], sort_keys=True, indent=2) + '\n')
         (inputs / 'registry.py').write_text(value['registry'])
+        payload_mounts = ['--mount=type=bind,src=' + str(SUPPORT) + ',dst=/guard,readonly',
+                          *['--mount=type=bind,src=' + origin + ',dst=' + target + ',readonly'
+                            for target,origin in source_bindings(source, selection).items()]]
         argv = ['docker','create','--name',container,'--read-only','--network=none',
                 '--ipc=private','--cgroupns=private','--cap-drop=ALL','--cap-add=SETUID',
                 '--cap-add=SETGID','--cap-add=SETPCAP','--cap-add=SYS_PTRACE',
                 '--cap-add=DAC_READ_SEARCH','--security-opt=no-new-privileges',
                 '--pids-limit=128','--memory=1g',
                 *['--tmpfs=' + path + ':' + options for path,options in tmpfs_for(selection).items()],
-                *mounts, '--mount=type=bind,src=' + str(inputs) + ',dst=/inputs,readonly',
+                *payload_mounts, '--mount=type=bind,src=' + str(inputs) + ',dst=/inputs,readonly',
                 '--entrypoint=/usr/local/bin/python',image,'-B','/guard/source_compartment.py']
         try:
             if run(argv, log).returncode:
