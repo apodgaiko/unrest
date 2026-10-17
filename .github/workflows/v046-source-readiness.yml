@@ -23,16 +23,16 @@ jobs:
           persist-credentials: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Whole original composed restart, stop, replacement and cancel source case
-        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-composed" "$RUNNER_TEMP/source-readiness" composed
-      - name: Upload encrypted composed-source evidence
+      - name: Original controlled backend, Bridge, preflight and native-pin negatives
+        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-backend" "$RUNNER_TEMP/source-readiness" backend
+      - name: Upload encrypted controlled-source evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: v046-source-composed-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v046-source-backend-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/source-composed/evidence.cms
-            ${{ runner.temp }}/source-composed/safe-provenance.json
+            ${{ runner.temp }}/source-backend/evidence.cms
+            ${{ runner.temp }}/source-backend/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload encrypted control evidence

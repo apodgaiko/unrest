@@ -147,6 +147,12 @@ def observer() -> None:
     gate_binding = importlib.util.module_from_spec(gate_spec)
     gate_spec.loader.exec_module(gate_binding)
     abi['profile_gate'] = gate_binding.verify()
+    native_spec = importlib.util.spec_from_file_location('native_metadata', '/guard/native_metadata.py')
+    assert native_spec is not None and native_spec.loader is not None
+    native_metadata = importlib.util.module_from_spec(native_spec)
+    native_spec.loader.exec_module(native_metadata)
+    abi['native_metadata'] = native_metadata.verify()
+
 
     socket_spec = importlib.util.spec_from_file_location('linux_sockets', '/guard/linux_sockets.py')
     assert socket_spec is not None and socket_spec.loader is not None

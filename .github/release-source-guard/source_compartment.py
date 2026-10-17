@@ -32,6 +32,8 @@ def main():
     closure_bytes = Path('/environment-closure.json').read_bytes()
     abi['dependency_closure'] = closure.verify_source_view(closure_bytes)
     abi['profile_gate'] = load('profile_gate_build', ROOT / 'profile_gate_build.py').verify()
+    abi['native_metadata'] = load('native_metadata', ROOT / 'native_metadata.py').verify()
+
 
     tracing = load('linux_trace', ROOT / 'linux_trace.py')
     policy = load('linux_supervisor', ROOT / 'linux_supervisor.py')

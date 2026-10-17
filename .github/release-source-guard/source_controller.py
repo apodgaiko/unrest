@@ -54,7 +54,7 @@ def run(argv, log, **kwargs):
 def main():
     root, controls = map(lambda s: Path(s).resolve(), sys.argv[1:3])
     selection = sys.argv[3] if len(sys.argv) == 4 else 'inprocess'
-    if selection not in {'inprocess', 'composed'}:
+    if selection not in {'inprocess', 'composed', 'backend'}:
         raise RuntimeError('unknown focused source selection')
     root.mkdir(mode=0o700)
     raw = root / 'raw'

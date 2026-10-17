@@ -9,6 +9,13 @@ import types
 import time
 
 INPROCESS = 'tests/test_server.py::test_completion_refusal_survives_server_restart'
+BACKEND = 'tests/test_controlled_python_acp.py'
+BACKEND_SELECTORS = [BACKEND + '::' + name for name in (
+    'test_real_local_boundaries[receipts]',
+    'test_lane_selection_survives_correction_rotation[None]',
+    'test_programmatic_private_preflight',
+    'test_native_pin_refusal_stays_native[launcher]',
+    'test_native_pin_refusal_stays_native[runtime]')]
 COMPOSED = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
 
 
@@ -27,10 +34,10 @@ def main():
     assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == pin
     manifest = json.loads(Path(path).read_bytes())
     case = manifest['source_case']
-    assert case in {INPROCESS, COMPOSED} and dict(os.environ) == manifest['root_environment']
+    assert case in {INPROCESS, COMPOSED, BACKEND} and dict(os.environ) == manifest['root_environment']
     expected = ({INPROCESS + '[' + repair + '-' + role + ']'
                  for repair in ('valid-repair','second-invalid') for role in ('work','validate')}
-                if case == INPROCESS else {COMPOSED})
+                if case == INPROCESS else set(BACKEND_SELECTORS) if case == BACKEND else {COMPOSED})
     sys.path[:0] = ['/opt/deps/lib/python3.13/site-packages', '/source/src', '/source']
     endpoint = load('endpoint', '/guard/finite/endpoint.py', manifest['endpoint']['sha256'])
     endpoint.early(manifest['endpoint'])
@@ -65,7 +72,8 @@ def main():
     custodian_status = None
     try:
         result = int(pytest.main(['-q', '-p', 'no:cacheprovider', '--basetemp=' + manifest['owned_root'] + '/pytest',
-                                 '--junitxml=/work/source.xml', case], plugins=[Plugin()]))
+                                 '--junitxml=/work/source.xml',
+                                 *(BACKEND_SELECTORS if case == BACKEND else [case])], plugins=[Plugin()]))
     finally:
         if custodian is not None:
             try:

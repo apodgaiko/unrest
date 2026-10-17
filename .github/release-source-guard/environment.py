@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 from pathlib import Path
 import subprocess
 import urllib.request
@@ -31,6 +32,11 @@ def build(root: Path, repository: Path, log: Path) -> str:
     )
     for name in ('profile_gate.c', 'profile_gate_build.py'):
         (root / name).write_bytes(Path(__file__).with_name(name).read_bytes())
+    native_spec = importlib.util.spec_from_file_location('native_metadata', Path(__file__).with_name('native_metadata.py'))
+    assert native_spec is not None and native_spec.loader is not None
+    native = importlib.util.module_from_spec(native_spec)
+    native_spec.loader.exec_module(native)
+    native.prepare(root / 'native-metadata')
     (root / "Dockerfile").write_text(
         "FROM " + BASE + "\n"
         "COPY " + wheel.name + " /bootstrap/\n"
@@ -50,6 +56,11 @@ def build(root: Path, repository: Path, log: Path) -> str:
         "RUN gcc -shared -fPIC -O2 -Wall -Wextra -Werror $(python3-config --includes) "
         "/opt/source-guard/profile_gate.c -o /opt/source-guard/profile_gate.so "
         "&& python -I /bootstrap/profile_gate_build.py && rm -rf /bootstrap\n"
+        "COPY native-metadata/index.js /native/lib/node_modules/@agentclientprotocol/codex-acp/dist/index.js\n"
+        "COPY native-metadata/node.data /native/bin/node\n"
+        "RUN chmod 0444 /native/bin/node "
+        "&& chmod 0555 /native/lib/node_modules/@agentclientprotocol/codex-acp/dist/index.js "
+        "&& ln -s ../lib/node_modules/@agentclientprotocol/codex-acp/dist/index.js /native/bin/codex-acp\n"
         "WORKDIR /\n"
     )
     image = "source-locked-environment:" + uuid.uuid4().hex

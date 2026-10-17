@@ -10,6 +10,7 @@ ROOT = Path('/source')
 SUPPORT = Path('/guard/finite')
 CASES = {
     'inprocess': 'tests/test_server.py::test_completion_refusal_survives_server_restart',
+    'backend': 'tests/test_controlled_python_acp.py',
     'composed': 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct',
 }
 
@@ -58,7 +59,7 @@ def main():
         'registry': {'path': '/inputs/registry.py', 'sha256': hashlib.sha256(registry_text.encode()).hexdigest()},
         'runtime': {'paths': ['/opt/deps/bin/python', '/usr/local/bin/python3.13'],
                     'realpath': '/usr/local/bin/python3.13', 'sha256': sha('/opt/deps/bin/python')},
-        'root_environment': {'HOME': '/work/home', 'PATH': '/opt/deps/bin:/usr/local/bin:/usr/bin:/bin',
+        'root_environment': {'HOME': '/work/home', 'PATH': ('/native/bin:' if selection == 'backend' else '') + '/opt/deps/bin:/usr/local/bin:/usr/bin:/bin',
                              'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8', 'TMPDIR': '/work/tmp'},
         'endpoint': {'nonce': nonce, 'socket': '/receipts/source.sock', 'requests': '/requests',
                      'responses': '/receipts', 'observer_pid': 1, 'observer_uid': 20001,
