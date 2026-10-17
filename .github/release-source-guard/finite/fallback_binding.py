@@ -3,6 +3,7 @@
 import ast
 import inspect
 import hashlib
+import importlib.machinery
 import os
 from pathlib import Path
 import sys
@@ -83,15 +84,27 @@ def matches(registration, argv, cwd, environment, state):
                     continue
                 tree = ast.parse(source.read_bytes())
                 source_binding = sources[source]
-                base_code = state["isolated_source_code"](source)
+                module = sys.modules.get(frame.f_globals.get("__name__"))
+                if module is None or vars(module) is not frame.f_globals:
+                    continue
+                loader = getattr(module, '__loader__', None)
+                if type(loader) is importlib.machinery.SourceFileLoader:
+                    specification = getattr(module, '__spec__', None)
+                    if (specification is None or specification.loader is not loader
+                            or Path(specification.origin).resolve() != source
+                            or Path(loader.path).resolve() != source or loader.name != module.__name__):
+                        continue
+                    # Application imports keep their assertions as CPython
+                    # compiles them; pytest rewrites only modules it selects.
+                    base_code = compile(source.read_bytes(), str(source), 'exec',
+                                        dont_inherit=True, optimize=sys.flags.optimize)
+                else:
+                    base_code = state["isolated_source_code"](source)
                 expected_code = (
                     base_code
                     if frame.f_code.co_name == "<module>"
                     else state["isolated_named"](base_code, frame.f_code.co_name)
                 )
-                module = sys.modules.get(frame.f_globals.get("__name__"))
-                if module is None or vars(module) is not frame.f_globals:
-                    continue
             if frame.f_code != expected_code:
                 continue
             for call in ast.walk(tree):
