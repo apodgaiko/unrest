@@ -1,0 +1,142 @@
+"""Linux SOCK_DIAG cookies and inode/FD bindings in the private network scope.
+
+UAPI layouts: Linux v6.12 include/uapi/linux/{inet_diag,unix_diag,netlink}.h.
+Only the trusted observer uses netlink; this does not authorize payload sockets.
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import socket
+import struct
+from typing import Any
+
+
+def dump(request: bytes) -> list[bytes]:
+    with socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 4) as stream:
+        stream.settimeout(1)
+        stream.bind((0, 0))
+        sequence = int.from_bytes(os.urandom(4), "little") or 1
+        port = stream.getsockname()[0]
+        header = struct.pack("=IHHII", 16 + len(request), 20, 0x301, sequence, port)
+        stream.sendto(header + request, (0, 0))
+        rows: list[bytes] = []
+        for _ in range(128):
+            packet, ancillary, flags, sender = stream.recvmsg(262144)
+            if sender != (0, 0) or ancillary or flags:
+                raise RuntimeError("socket diagnostic sender or datagram drift")
+            offset = 0
+            while offset < len(packet):
+                if len(packet) - offset < 16:
+                    raise RuntimeError("short socket diagnostic header")
+                length, kind, options, seq, destination = struct.unpack_from("=IHHII", packet, offset)
+                if (length < 16 or offset + length > len(packet) or seq != sequence
+                        or destination != port or options & 0x10):
+                    raise RuntimeError("socket diagnostic envelope drift")
+                body = packet[offset + 16:offset + length]
+                if kind == 3:
+                    return rows
+                if kind == 2:
+                    raise RuntimeError("socket diagnostic kernel error: " + str(
+                        struct.unpack_from("=i", body)[0]
+                    ))
+                if kind != 20 or len(rows) >= 4096:
+                    raise RuntimeError("unknown or unbounded socket diagnostic response")
+                rows.append(body)
+                offset += (length + 3) & ~3
+        raise RuntimeError("unbounded socket diagnostic dump")
+
+
+def tcp_table() -> dict[int, dict[str, Any]]:
+    request = struct.pack("=BBBBI", socket.AF_INET, socket.IPPROTO_TCP, 0, 0, 0xFFFFFFFF)
+    request += bytes(40) + b"\xff" * 8
+    rows = {}
+    for raw in dump(request):
+        if len(raw) < 72 or raw[0] != socket.AF_INET:
+            raise RuntimeError("unknown inet_diag ABI")
+        inode = struct.unpack_from("=I", raw, 68)[0]
+        if inode == 0:
+            continue  # TIME_WAIT entries have no live descriptor owner.
+        cookie = struct.unpack_from("=Q", raw, 44)[0]
+        if cookie == (1 << 64) - 1 or inode in rows:
+            raise RuntimeError("socket cookie unavailable or duplicate inode")
+        local, remote = struct.unpack_from("!HH", raw, 4)
+        rows[inode] = {
+            "inode": inode, "socket_cookie": cookie, "state": raw[1],
+            "local_host": socket.inet_ntop(socket.AF_INET, raw[8:12]),
+            "remote_host": socket.inet_ntop(socket.AF_INET, raw[24:28]),
+            "local_port": local, "remote_port": remote,
+            "socket_uid": struct.unpack_from("=I", raw, 64)[0],
+        }
+    return rows
+
+
+def unix_table() -> dict[int, dict[str, int]]:
+    request = struct.pack("=BBHIIIII", socket.AF_UNIX, 0, 0, 0xFFFFFFFF, 0, 0x44,
+                          0xFFFFFFFF, 0xFFFFFFFF)
+    rows = {}
+    for raw in dump(request):
+        if len(raw) < 16 or raw[0] != socket.AF_UNIX:
+            raise RuntimeError("unknown unix_diag ABI")
+        inode, cookie = struct.unpack_from("=IQ", raw, 4)
+        value = {"inode": inode, "socket_cookie": cookie, "state": raw[2], "type": raw[1]}
+        offset = 16
+        while offset < len(raw):
+            if len(raw) - offset < 4:
+                raise RuntimeError("short Unix diagnostic attribute")
+            length, kind = struct.unpack_from("=HH", raw, offset)
+            if length < 4 or offset + length > len(raw):
+                raise RuntimeError("Unix diagnostic attribute length drift")
+            if kind in (2, 7):
+                if length != 8:
+                    raise RuntimeError("Unix diagnostic peer/UID ABI drift")
+                value["peer_inode" if kind == 2 else "socket_uid"] = struct.unpack_from(
+                    "=I", raw, offset + 4
+                )[0]
+            offset += (length + 3) & ~3
+        if inode in rows or cookie == (1 << 64) - 1:
+            raise RuntimeError("Unix diagnostic cookie/inode drift")
+        rows[inode] = value
+    return rows
+
+
+def socket_fds(pid: int) -> dict[int, int]:
+    if type(pid) is not int or pid <= 0:
+        raise ValueError("positive owned PID required")
+    directory = Path("/proc") / str(pid) / "fd"
+    result = {}
+    for path in sorted(directory.iterdir(), key=lambda p: int(p.name)):
+        try:
+            target = os.readlink(path)
+        except FileNotFoundError:
+            if pid == os.getpid():
+                continue
+            raise RuntimeError("owned descriptor observation raced") from None
+        if target.startswith("socket:[") and target.endswith("]"):
+            result[int(path.name)] = int(target[8:-1])
+        if len(result) > 4096:
+            raise RuntimeError("unbounded owned socket inventory")
+    return result
+
+
+def sockets(pid: int) -> list[dict[str, Any]]:
+    before = socket_fds(pid)
+    table = tcp_table()
+    result = [{"pid": pid, "fd": fd, **table[inode]}
+              for fd, inode in before.items() if inode in table]
+    if socket_fds(pid) != before:
+        raise RuntimeError("owned descriptor binding changed during socket observation")
+    return result
+
+
+def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
+    if len(fds) != 2 or len(set(fds)) != 2:
+        raise ValueError("exactly two distinct Unix descriptors required")
+    before = socket_fds(pid)
+    table = unix_table()
+    rows = [{"fd": fd, **table[before[fd]]} for fd in fds]
+    if (socket_fds(pid) != before or any(row["type"] != socket.SOCK_STREAM for row in rows)
+            or rows[0]["inode"] != rows[1].get("peer_inode")
+            or rows[1]["inode"] != rows[0].get("peer_inode")):
+        raise RuntimeError("Unix pair kernel peer binding refused")
+    return rows

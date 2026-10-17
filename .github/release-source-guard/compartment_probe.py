@@ -125,7 +125,8 @@ def source_controls() -> None:
         ["/opt/deps/bin/python", "-I", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
          "--basetemp=/work/pytest", "/guard/test_linux_observation.py",
          "/guard/test_probe_controller.py", "/guard/test_linux_trace.py",
-         "/guard/test_dependency_closure.py", "/guard/test_linux_native_custody.py"],
+         "/guard/test_dependency_closure.py", "/guard/test_linux_native_custody.py",
+         "/guard/test_linux_sockets.py"],
         cwd="/work", check=False,
     )
     raise SystemExit(result.returncode)
@@ -148,16 +149,17 @@ def observer() -> None:
 
     read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
+    started_read, started_write = os.pipe2(os.O_CLOEXEC)
     pid = os.fork()
     if pid == 0:
         try:
             os.close(ready_write)
+            os.close(started_read)
             if os.read(ready_read, 1) != b"1":
                 raise RuntimeError("observer setup did not settle")
             os.dup2(write_fd, 1)
             os.dup2(write_fd, 2)
             # No descriptor from the observer survives except stdio pipes.
-            os.closerange(3, 1 << 20)
             libc = ctypes.CDLL(None, use_errno=True)
             last_capability = int(Path("/proc/sys/kernel/cap_last_cap").read_text())
             if last_capability != 40:
@@ -169,6 +171,10 @@ def observer() -> None:
             os.setgid(SOURCE_UID)
             os.setuid(SOURCE_UID)
             no_new_privileges()
+            os.write(started_write, b"R")
+            if os.read(ready_read, 1) != b"C":
+                raise RuntimeError("cross-UID observer fence did not settle")
+            os.closerange(3, 1 << 20)
             os.chdir("/work")
             os.execve(sys.executable, [sys.executable, "-I", "-B", __file__, "source"], {
                 "HOME": "/work/home", "PATH": "/usr/local/bin:/usr/bin:/bin",
@@ -178,10 +184,32 @@ def observer() -> None:
             os._exit(126)
     os.close(write_fd)
     os.close(ready_read)
+    os.close(started_write)
     os.setgroups([])
     os.setgid(OBSERVER_UID)
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(8, 1, 0, 0, 0) != 0:  # PR_SET_KEEPCAPS, only in the observer.
+        raise OSError(ctypes.get_errno(), "observer keepcaps")
+    for capability in range(41):
+        if capability != 19 and libc.prctl(24, capability, 0, 0, 0) != 0:
+            raise OSError(ctypes.get_errno(), "observer bounding-set reduction")
     os.setuid(OBSERVER_UID)
+    class CapHeader(ctypes.Structure):
+        _fields_ = [("version", ctypes.c_uint32), ("pid", ctypes.c_int)]
+    class CapData(ctypes.Structure):
+        _fields_ = [("effective", ctypes.c_uint32), ("permitted", ctypes.c_uint32),
+                    ("inheritable", ctypes.c_uint32)]
+    header = CapHeader(0x20080522, 0)
+    caps = (CapData * 2)(CapData(1 << 19, 1 << 19, 0), CapData())
+    if libc.capset(ctypes.byref(header), ctypes.byref(caps)) != 0:
+        raise OSError(ctypes.get_errno(), "observer ptrace-only capability set")
     no_new_privileges()
+    observer_identity = process_identity(os.getpid())
+    if observer_identity["capabilities"] != {
+        "CapInh": 0, "CapPrm": 1 << 19, "CapEff": 1 << 19,
+        "CapBnd": 1 << 19, "CapAmb": 0,
+    }:
+        raise RuntimeError("observer capability custody drift")
     canary = Path("/records/controller-canary")
     canary.write_bytes(os.urandom(32))
     canary.chmod(0o600)
@@ -189,6 +217,16 @@ def observer() -> None:
     broker.bind("/records/foreign-broker.sock")
     broker.listen(1)
     os.write(ready_write, b"1")
+    if os.read(started_read, 1) != b"R":
+        raise RuntimeError("source UID fence did not settle")
+    source_identity = process_identity(pid)
+    if source_identity["uids"] != [SOURCE_UID] * 4 or any(
+        source_identity["capabilities"].values()
+    ):
+        raise RuntimeError("source UID/capability kernel observation drift")
+    source_descriptors = descriptors(pid)
+    os.close(started_read)
+    os.write(ready_write, b"C")
     os.close(ready_write)
     log = bytearray()
     while block := os.read(read_fd, 65536):
@@ -205,6 +243,8 @@ def observer() -> None:
         "selected_carrier": None, "abi": abi,
         "observer": process_identity(os.getpid()),
         "source_child": pid, "actual_wait_raw": raw,
+        "source_preexec_identity": source_identity,
+        "source_preexec_descriptors": source_descriptors,
         "actual_wait_normalized": os.waitstatus_to_exitcode(raw),
         "python_sha256": hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),
     })

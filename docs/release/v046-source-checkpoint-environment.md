@@ -28,9 +28,13 @@ VM service. GitHub documents a fresh VM for each standard multi-CPU hosted job:
 [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 A Linux/amd64 public Python 3.13.12 OCI manifest is pinned to
 `sha256:9a4a5ceafb4ddd7468a09ade0049463a7bd1acbefda52adee748544110fd032d`.
-The five pure-Python packages needed for observer tests are downloaded by the
-trusted coordinator from their exact wheel URLs and SHA256 values in `uv.lock`.
-This bootstrap does not install or execute project source. Image content,
+The trusted coordinator downloads the public uv 0.9.5 Linux/amd64 wheel pinned
+to SHA256 `6507bbbcd788553ec4ad5a96fa19364dc0f58b023e31d79868773559a83ec181`.
+It installs the exact locked dependency closure with `--no-install-project`;
+the bootstrap image receives only `pyproject.toml` and `uv.lock`, without project
+modules. A complete installed-file byte/mode/symlink manifest is sealed into the
+read-only image and recomputed at boot. This bootstrap does not install or
+execute project source. Image content,
 Python/native-program hashes, kernel interfaces, support definitions and CI
 identities must accompany each result; Linux hashes do not stand for macOS
 hashes.
@@ -38,9 +42,12 @@ hashes.
 The synthetic probe uses private Docker PID, mount, network, IPC and cgroup
 scopes, a read-only image and public support mount, and finite writable tmpfs
 roots. The Docker socket, host home, checkout, runner credentials and provider
-configuration are absent. Root setup retains only SETUID/SETGID/SETPCAP for
+configuration are absent. Root setup retains SETUID/SETGID/SETPCAP for
 credential separation; observer records use an observer-owned tmpfs, without
-granting CHOWN. The source-control child drops its capability bounding
+granting CHOWN. The observer alone retains SYS_PTRACE for observation across
+UIDs inside the private PID namespace; it loses the credential-changing
+capabilities and cannot receive requests for arbitrary execution. The
+source-control child drops its capability bounding
 set, supplementary groups, UID/GID and inherited nonstdio descriptors before
 exec. `no_new_privs` and Docker's seccomp policy remain active. The observer
 uses a distinct UID and a private records directory. Loopback IPC is allowed;

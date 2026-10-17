@@ -47,9 +47,9 @@ def validate_container(value: dict, public_support: Path) -> None:
         raise RuntimeError("compartment scope/privilege configuration drift")
     # Docker inspect canonicalizes CLI capability names with the CAP_ prefix.
     capabilities = host["CapAdd"]
-    if host["CapDrop"] != ["ALL"] or len(capabilities) != 3 or {
+    if host["CapDrop"] != ["ALL"] or len(capabilities) != 4 or {
         value.removeprefix("CAP_") for value in capabilities
-    } != {"SETUID", "SETGID", "SETPCAP"}:
+    } != {"SETUID", "SETGID", "SETPCAP", "SYS_PTRACE"}:
         raise RuntimeError("bootstrap capability drift")
     if host["SecurityOpt"] != ["no-new-privileges"]:
         raise RuntimeError("compartment security option drift")
@@ -78,6 +78,8 @@ def main() -> int:
     assert spec is not None and spec.loader is not None
     environment = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(environment)
+    if environment.BASE != BASE:
+        raise RuntimeError("environment base identity drift")
     inputs = {"uv_bootstrap_sha256": environment.UV_SHA256,
               "uv_lock_sha256": sha(REPOSITORY / "uv.lock")}
     image = ""
@@ -95,6 +97,7 @@ def main() -> int:
             "docker", "create", "--name", container, "--read-only", "--network=none",
             "--ipc=private", "--cgroupns=private", "--cap-drop=ALL",
             "--cap-add=SETUID", "--cap-add=SETGID", "--cap-add=SETPCAP",
+            "--cap-add=SYS_PTRACE",
             "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=1g",
             *["--tmpfs=" + path + ":" + options for path, options in TMPFS.items()],
             "--mount=type=bind,src=" + str(SUPPORT) + ",dst=/guard,readonly",
