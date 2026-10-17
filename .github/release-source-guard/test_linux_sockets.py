@@ -51,3 +51,44 @@ def test_unix_pair_reciprocal_kernel_inodes():
     finally:
         left.close()
         right.close()
+
+
+def test_retained_closed_tcp_identity_and_descriptor_reuse():
+    import time
+    listener = socket.socket()
+    listener.bind(('127.0.0.1', 0))
+    listener.listen(1)
+    client = socket.socket()
+    client.connect(listener.getsockname())
+    server, _ = listener.accept()
+    descriptor = server.fileno()
+    try:
+        live = observation.retained_tcp_descriptor(os.getpid(), descriptor)
+        assert live is not None and live['state'] == 1
+        binding = (os.getpid(), live['socket_cookie'], live['inode'],
+                   server.getsockname()[1], client.getsockname()[1])
+        assert observation.closed_binding(live, {binding}) is None
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+        client.close()
+        deadline = time.monotonic() + 2
+        while True:
+            closed = observation.retained_tcp_descriptor(os.getpid(), descriptor)
+            if closed is not None and closed['state'] == 7:
+                break
+            assert time.monotonic() < deadline
+            time.sleep(.001)
+        assert closed['peer_address'] is None
+        assert (closed['inode'], closed['socket_cookie']) == (live['inode'], live['socket_cookie'])
+        assert observation.closed_binding(closed, {binding}) == binding
+        assert observation.closed_binding(closed, set()) is None
+        assert observation.closed_binding(closed, {(os.getpid() + 1, *binding[1:])}) is None
+        with socket.socket() as replacement:
+            os.dup2(replacement.fileno(), descriptor)
+            reused = observation.retained_tcp_descriptor(os.getpid(), descriptor)
+            assert reused is not None and reused['state'] == 7
+            assert reused['socket_cookie'] != live['socket_cookie']
+            assert observation.closed_binding(reused, {binding}) is None
+    finally:
+        server.close()
+        client.close()
+        listener.close()

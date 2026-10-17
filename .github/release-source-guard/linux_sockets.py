@@ -155,3 +155,41 @@ def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
             or rows[1]["inode"] != rows[0].get("peer_inode")):
         raise RuntimeError("Unix pair kernel peer binding refused")
     return rows
+
+
+def retained_tcp_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
+    """Query a retained file description even after TCP leaves the diag table."""
+    before = socket_fds(pid).get(descriptor)
+    if before is None:
+        return None
+    copied = duplicate_descriptor(pid, descriptor)
+    with socket.socket(fileno=copied) as stream:
+        if (stream.getsockopt(socket.SOL_SOCKET, socket.SO_DOMAIN) != socket.AF_INET
+                or stream.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM
+                or stream.getsockopt(socket.SOL_SOCKET, socket.SO_PROTOCOL) != socket.IPPROTO_TCP):
+            return None
+        info = os.fstat(stream.fileno())
+        cookie = struct.unpack('=Q', stream.getsockopt(socket.SOL_SOCKET, 57, 8))[0]
+        state = stream.getsockopt(socket.IPPROTO_TCP, socket.TCP_INFO, 104)[0]
+        local = stream.getsockname()
+        try:
+            remote = stream.getpeername()
+        except OSError as error:
+            import errno
+            if error.errno != errno.ENOTCONN:
+                raise
+            remote = None
+        if (info.st_ino != before or socket_fds(pid).get(descriptor) != before
+                or cookie == (1 << 64) - 1):
+            raise RuntimeError('retained descriptor changed during kernel query')
+        return {'pid': pid, 'fd': descriptor, 'inode': info.st_ino, 'socket_cookie': cookie,
+                'state': state, 'local_address': local, 'peer_address': remote,
+                'observation': 'pidfd_getfd held file description; actual TCP_INFO and SO_COOKIE'}
+
+
+def closed_binding(observed: dict[str, Any] | None, connections: set[tuple]) -> tuple | None:
+    if observed is None or observed['state'] != 7 or observed['peer_address'] is not None:
+        return None
+    key = (observed['pid'], observed['socket_cookie'], observed['inode'])
+    matches = [row for row in connections if row[:3] == key]
+    return matches[0] if len(matches) == 1 else None
