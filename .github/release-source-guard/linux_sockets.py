@@ -149,6 +149,8 @@ def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
         raise ValueError("exactly two distinct Unix descriptors required")
     before = socket_fds(pid)
     table = unix_table()
+    if any(fd not in before or before[fd] not in table for fd in fds):
+        raise RuntimeError("Unix pair no longer has two live kernel descriptors")
     rows = [{"fd": fd, **table[before[fd]]} for fd in fds]
     if (socket_fds(pid) != before or any(row["type"] != socket.SOCK_STREAM for row in rows)
             or rows[0]["inode"] != rows[1].get("peer_inode")

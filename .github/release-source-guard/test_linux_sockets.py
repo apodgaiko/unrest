@@ -123,3 +123,24 @@ def test_accepted_peer_survives_one_shot_listener_close():
     finally:
         listener.close()
         client.close()
+
+
+def test_stale_unix_pair_cannot_authorize_reused_tcp_descriptor():
+    import pytest
+    left, right = socket.socketpair()
+    descriptors = [left.fileno(), right.fileno()]
+    pair = observation.unix_pair(os.getpid(), descriptors)
+    right.close()
+    try:
+        with pytest.raises(RuntimeError, match='two live kernel descriptors'):
+            observation.unix_pair(os.getpid(), descriptors)
+        with socket.socket() as replacement:
+            os.dup2(replacement.fileno(), left.fileno())
+            with pytest.raises(RuntimeError, match='two live kernel descriptors'):
+                observation.unix_pair(os.getpid(), descriptors)
+            retained = observation.retained_tcp_descriptor(os.getpid(), left.fileno())
+            assert retained is not None
+            assert retained['socket_cookie'] not in {row['socket_cookie'] for row in pair}
+            assert observation.closed_binding(retained, set()) is None
+    finally:
+        left.close()
