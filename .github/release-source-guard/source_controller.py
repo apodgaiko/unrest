@@ -12,6 +12,7 @@ import tarfile
 import traceback
 
 from drain_controls import check as check_drain_controls
+from producer_controls import check as check_producer_controls
 
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
@@ -75,7 +76,7 @@ def run(argv, log, **kwargs):
 def main():
     root, controls = map(lambda s: Path(s).resolve(), sys.argv[1:3])
     selection = sys.argv[3] if len(sys.argv) == 4 else 'inprocess'
-    if selection not in {'inprocess', 'composed', 'backend', 'drain-controls', 'producer-contract', 'producer-distribution'}:
+    if selection not in {'inprocess', 'composed', 'backend', 'drain-controls', 'producer-contract', 'producer-distribution', 'producer-controls'}:
         raise RuntimeError('unknown focused source selection')
     root.mkdir(mode=0o700)
     raw = root / 'raw'
@@ -159,9 +160,10 @@ def main():
             run(['docker','rm','--force',container], log)
     control_exit = exit_code
     negative_proof = None
-    if selection == 'drain-controls':
+    if selection in {'drain-controls', 'producer-controls'}:
         try:
-            negative_proof = check_drain_controls(log, exit_code)
+            negative_proof = (check_drain_controls if selection == 'drain-controls'
+                              else check_producer_controls)(log, exit_code)
             (raw / 'negative-control-proof.json').write_text(json.dumps(negative_proof, sort_keys=True))
             control_exit = 0
         except Exception:

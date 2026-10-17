@@ -247,3 +247,14 @@ including a real long-argument exec with exact untruncated argv. Its ciphertext,
 GitHub identities, support bytes and decrypted records were checked locally.
 The separate distribution-test producer profile and primary CI integration
 remain pending. This is a focused source proof, not a release checkpoint.
+
+
+The separate unchanged distribution-test producer passed
+[run 39074587647](https://github.com/apodgaiko/unrest/actions/runs/39074587647)
+at `b2d548d07c917fc305db7363ca9364fe19f892d8`. Its one original case passed
+without errors/failures/skips, including the extracted fifteen-case persistence
+oracle. All eight kernel-observed child processes have actual original-parent
+waits, all three registered descendants were waited, the producer settled, and
+all four original backend helpers plus the isolated query were observed. Root
+returned zero with no poison. Both original producer profiles now have focused
+source proofs; negative producer controls and primary CI integration remain open.

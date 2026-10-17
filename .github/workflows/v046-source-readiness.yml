@@ -23,16 +23,16 @@ jobs:
           persist-credentials: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Original source distribution producer and extracted fifteen-case oracle
-        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-producer-distribution" "$RUNNER_TEMP/source-readiness" producer-distribution
+      - name: Caught unknown producer launch refuses before original query body
+        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-producer-controls" "$RUNNER_TEMP/source-readiness" producer-controls
       - name: Upload encrypted original producer evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: v046-source-producer-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v046-source-producer-controls-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/source-producer-distribution/evidence.cms
-            ${{ runner.temp }}/source-producer-distribution/safe-provenance.json
+            ${{ runner.temp }}/source-producer-controls/evidence.cms
+            ${{ runner.temp }}/source-producer-controls/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload encrypted control evidence

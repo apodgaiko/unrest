@@ -10,6 +10,7 @@ ROOT = Path('/source')
 SUPPORT = Path('/guard/finite')
 CASES = {
     'producer-contract': 'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix',
+    'producer-controls': 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
     'producer-distribution': 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
     'drain-controls': 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct',
     'inprocess': 'tests/test_server.py::test_completion_refusal_survives_server_restart',

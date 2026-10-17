@@ -167,6 +167,8 @@ class NativeProducers:
             'activation_sha256': digest('/guard/finite/native_producer.py'),
             'profile_support_sha256': digest('/guard/producer_profile.py'),
         }
+        if self.manifest['source_selection'] == 'producer-controls' and role == 'isolated-uv-query':
+            source_profile['caught_control'] = True
         header_pin = write(Path('/receipts/native-startup') / (str(pid) + '.json'), source_profile)
         pins = {'manifest_sha256': child_pin, 'guard_sha256': manifest['guard_sha256'],
                 'registry_sha256': manifest['registry']['sha256'],
