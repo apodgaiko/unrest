@@ -23,16 +23,16 @@ jobs:
           persist-credentials: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Original controlled backend, Bridge, preflight and native-pin negatives
-        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-backend" "$RUNNER_TEMP/source-readiness" backend
-      - name: Upload encrypted controlled-source evidence
+      - name: Negative failure-drain controls (original source failure expected)
+        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-drain" "$RUNNER_TEMP/source-readiness" drain-controls
+      - name: Upload encrypted failure-drain evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: v046-source-backend-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v046-source-drain-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/source-backend/evidence.cms
-            ${{ runner.temp }}/source-backend/safe-provenance.json
+            ${{ runner.temp }}/source-drain/evidence.cms
+            ${{ runner.temp }}/source-drain/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload encrypted control evidence

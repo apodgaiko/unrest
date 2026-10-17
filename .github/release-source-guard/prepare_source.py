@@ -9,6 +9,7 @@ import sys
 ROOT = Path('/source')
 SUPPORT = Path('/guard/finite')
 CASES = {
+    'drain-controls': 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct',
     'inprocess': 'tests/test_server.py::test_completion_refusal_survives_server_restart',
     'backend': 'tests/test_controlled_python_acp.py',
     'composed': 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct',
@@ -40,7 +41,7 @@ def main():
                 entry['executable_sha256'] = sha(path)
             else:
                 entry['executable_sha256'] = 'unavailable-on-linux'
-    if selection == 'composed':
+    if selection in {'composed', 'drain-controls'}:
         source = SUPPORT / 'restart_custody.py'
         function = next(node for node in ast.parse(source.read_bytes()).body
                         if isinstance(node, ast.FunctionDef) and node.name == 'start_custodian')
@@ -76,6 +77,8 @@ def main():
         'setup_mode': 'source',
         'source_only_support': [str(p) for p in sorted(SUPPORT.glob('*.py'))],
     })
+    if selection == 'drain-controls':
+        manifest['integration_mode'] = 'NONCANONICAL-drain-controls'
     print(json.dumps({'manifest': manifest, 'registry': registry_text}, sort_keys=True))
 
 if __name__ == '__main__':
