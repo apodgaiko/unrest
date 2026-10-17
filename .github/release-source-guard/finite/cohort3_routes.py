@@ -428,7 +428,7 @@ def select(
         if not python:
             resolved = shutil.which(argv[0], path=(env or os.environ).get("PATH"))
             known = (
-                "/opt/homebrew/bin/git"
+                "/usr/bin/git"
                 if argv[0] == "git"
                 else "/bin/ps"
                 if relative == "tests/test_server.py" and call.lineno == 3284 and argv[0] == "ps"
@@ -441,7 +441,7 @@ def select(
                 and argv[0] == "git"
             ):
                 known = (
-                    "/opt/homebrew/bin/git"
+                    "/usr/bin/git"
                     if case.startswith(
                         (
                             "tests/test_provider_review_frames.py::test_actual_runner_matching_id_order_and_owned_cleanup[",

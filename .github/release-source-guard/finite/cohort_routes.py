@@ -218,7 +218,7 @@ def select(
         python = argv[0] == sys.executable
         if not python:
             resolved = shutil.which(argv[0], path=(env or os.environ).get("PATH"))
-            known = "/opt/homebrew/bin/git" if argv[0] == "git" else "/bin/sleep"
+            known = "/usr/bin/git" if argv[0] == "git" else "/bin/sleep"
             if resolved != known or argv[1:] != expected_argv[1:]:
                 refuse("cohort_native_identity_drift")
             # The manifest pins native executable bytes independently of PATH.
