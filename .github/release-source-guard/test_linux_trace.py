@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import signal
@@ -61,6 +62,7 @@ def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, sta
         finally:
             os._exit(127)
     result = trace.OwnedTrace(child, allowed, timeout=30).run()
+    Path(f"/work/trace-control-{status}.json").write_text(json.dumps(result, sort_keys=True))
     assert result["root_parent_wait_raw"] == 0, result
     assert bool(result["poison"]) == poison
     records = result["records"]
@@ -69,6 +71,8 @@ def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, sta
     assert attempts[0]["accepted"] and attempts[1]["accepted"] == admit
     births = [row for row in records if row["kind"] == "kernel_child"]
     assert len(births) == 2 and all(row["parent"] == child for row in births)
+    assert all(row["identity"]["ppid"] == child and row["identity"]["start_ticks"] > 0
+               for row in births)
     waits = [row for row in records if row["kind"] == "original_parent_wait4"]
     assert [(row["parent"], row["child"], row["raw"], row["normalized"]) for row in waits] == [
         (child, births[0]["child"], status << 8, status),

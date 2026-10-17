@@ -199,11 +199,19 @@ def observer() -> None:
     source_result = Path("/work/source-controls.json")
     if source_result.is_file() and not source_result.is_symlink():
         Path("/records/source-controls.json").write_bytes(source_result.read_bytes())
+    for status in (0, 29, 31):
+        control = Path(f"/work/trace-control-{status}.json")
+        if control.is_file() and not control.is_symlink():
+            body = control.read_bytes()
+            if len(body) > 131072:
+                raise RuntimeError("trace control output exceeded its bound")
+            Path("/records", control.name).write_bytes(body)
     broker.close()
     envelope = {
         path.name: base64.b64encode(path.read_bytes()).decode("ascii")
         for path in sorted(Path("/records").iterdir())
-        if path.name in {"observer.json", "source-controls.json", "source-output.log"}
+        if path.name in {"observer.json", "source-controls.json", "source-output.log",
+                         "trace-control-0.json", "trace-control-29.json", "trace-control-31.json"}
     }
     print("PRIVATE-EVIDENCE:" + json.dumps(envelope, sort_keys=True), flush=True)
     raise SystemExit(os.waitstatus_to_exitcode(raw))

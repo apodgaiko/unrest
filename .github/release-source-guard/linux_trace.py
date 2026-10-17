@@ -10,11 +10,19 @@ from __future__ import annotations
 import ctypes
 import errno
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import signal
 import time
 from typing import Any
+
+_spec = importlib.util.spec_from_file_location(
+    "linux_observation", Path(__file__).with_name("linux_observation.py")
+)
+assert _spec is not None and _spec.loader is not None
+_observation = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_observation)
 
 LIBC = ctypes.CDLL(None, use_errno=True)
 LIBC.ptrace.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_void_p]
@@ -107,6 +115,7 @@ class OwnedTrace:
         self.pending: dict[int, dict[str, Any]] = {}
         self.denied: set[int] = set()
         self.newborn: set[int] = set()
+        self.identities: dict[int, dict[str, Any]] = {}
 
     def admit_exec(self, pid: int, value: Registers) -> None:
         path = os.fsdecode(read_string(pid, value.rdi))
@@ -176,6 +185,8 @@ class OwnedTrace:
         initial, status = os.waitpid(self.child, 0)
         if initial != self.child or not os.WIFSTOPPED(status) or os.WSTOPSIG(status) != signal.SIGSTOP:
             raise RuntimeError("owned pre-exec stop missing")
+        self.identities[self.child] = _observation.process_identity(self.child)
+        self.records.append({"kind": "kernel_root", "identity": self.identities[self.child]})
         # EXITKILL keeps tracer failure fail-closed; forks/clones are followed by
         # the kernel, not discovered by process-table polling.
         ptrace(0x4200, self.child, data=ctypes.c_void_p(0x100000 | 0x7F))
@@ -195,7 +206,8 @@ class OwnedTrace:
                 if os.WIFEXITED(raw) or os.WIFSIGNALED(raw):
                     self.active.remove(pid)
                     self.records.append({"kind": "tracer_terminal_wait", "pid": pid,
-                                         "raw": raw, "normalized": os.waitstatus_to_exitcode(raw)})
+                                         "raw": raw, "normalized": os.waitstatus_to_exitcode(raw),
+                                         "identity": self.identities[pid]})
                     if pid == self.child:
                         root_wait = raw
                     continue
@@ -209,8 +221,10 @@ class OwnedTrace:
                     ptrace(0x4201, pid, data=ctypes.byref(child))
                     self.active.add(child.value)
                     self.newborn.add(child.value)
+                    self.identities[child.value] = _observation.process_identity(child.value)
                     self.records.append({"kind": "kernel_child", "parent": pid,
-                                         "child": child.value, "event": event})
+                                         "child": child.value, "event": event,
+                                         "identity": self.identities[child.value]})
                 elif event == 4:
                     self.records.append({"kind": "kernel_exec", "pid": pid})
                 elif event == 5:
