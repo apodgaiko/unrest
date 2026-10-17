@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import shlex
 
-from ci_commands import bind
+from ci_commands import bind_generated
 
 FOCUSED = {'Install dependencies', 'Import package', 'Supported CLI surfaces',
            'Lint (ruff)', 'Type-check (mypy)', 'Repository contract'}
@@ -21,7 +21,7 @@ def sha(body):
 
 
 def plan(script, workflow):
-    duty = bind(script, workflow)
+    duty = bind_generated(script, workflow)
     if duty['name'] not in FOCUSED:
         # Package-domain and final source-carrier closure are separate data
         # obligations. A focused capsule cannot grant their authority.
@@ -49,13 +49,23 @@ def environment():
 def command_environment(value, root):
     """Only Bash and pinned UV's documented finite additions are admissible."""
     actual = dict(value)
+    virtual = actual.pop('VIRTUAL_ENV', None)
+    build = Path(virtual) if isinstance(virtual, str) else None
+    if (virtual is not None and virtual != '/source/.venv'
+            and not (build.parent == Path('/work/cache/builds-v0') and build.name.startswith('.tmp')
+                     and build.resolve() == build)):
+        return False
+    recursion = actual.pop('UV_RUN_RECURSION_DEPTH', None)
+    if recursion not in (None, '1'):
+        return False
     for key, allowed in {'PWD': {'/source'}, 'OLDPWD': {'/source'}, 'SHLVL': {'0', '1'},
                          '_': {SHELL, UV}, 'UV': {UV}, 'VIRTUAL_ENV': {'/source/.venv'},
                          'PYTHONIOENCODING': {'utf-8:backslashreplace'}}.items():
         if key in actual and actual.pop(key) not in allowed:
             return False
     path = actual.pop('PATH', None)
-    if path not in {root['PATH'], '/source/.venv/bin:' + root['PATH']}:
+    if path not in {root['PATH'], '/source/.venv/bin:' + root['PATH'],
+                    (virtual + '/bin:' + root['PATH']) if virtual else root['PATH']}:
         return False
     return actual == {key: value for key, value in root.items() if key != 'PATH'}
 
@@ -90,3 +100,18 @@ def backend_request(script, cache='/work/cache'):
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+
+
+def console(name):
+    entries = {'unrest': ('unrest_harness.cli', 'cli'),
+               'unrest-server': ('unrest_harness.server', 'main'),
+               'mypy': ('mypy.__main__', 'console_entry')}
+    module, function = entries[name]
+    return ('#!/source/.venv/bin/python\n# -*- coding: utf-8 -*-\n'
+            'import sys\nfrom ' + module + ' import ' + function + '\n'
+            'if __name__ == "__main__":\n'
+            '    if sys.argv[0].endswith("-script.pyw"):\n'
+            '        sys.argv[0] = sys.argv[0][:-11]\n'
+            '    elif sys.argv[0].endswith(".exe"):\n'
+            '        sys.argv[0] = sys.argv[0][:-4]\n'
+            '    sys.exit(' + function + '())\n').encode()

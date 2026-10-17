@@ -13,7 +13,7 @@ from ci_commands import REGISTRY
 
 def test_original_import_script_is_the_executed_shell_input():
     registry = json.loads(REGISTRY.read_bytes())
-    script = registry['Import package'].encode()
+    script = registry['Import package'].removesuffix('\n').encode()
     actual = plan(script, workflow(registry))
     assert actual['shell_argv'] == ['/bin/bash', '--noprofile', '--norc', '-e', '-o',
                                    'pipefail', '/inputs/github-script.sh']
@@ -27,7 +27,7 @@ def test_original_import_script_is_the_executed_shell_input():
 def test_focused_root_never_grants_full_or_package_authority(name):
     registry = json.loads(REGISTRY.read_bytes())
     with pytest.raises(RuntimeError, match='closure_missing'):
-        plan(registry[name].encode(), workflow(registry))
+        plan((registry[name] if '\n' in registry[name].rstrip('\n') else registry[name].removesuffix('\n')).encode(), workflow(registry))
 
 
 @pytest.mark.parametrize('addition', [{'OPENAI_API_KEY': 'forbidden'}, {'GITHUB_TOKEN': 'forbidden'},

@@ -36,6 +36,13 @@ jobs:
             ${{ runner.temp }}/primary-import/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
+      - name: Upload primary typed startup stage
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-primary-host-stage-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/primary-host-stage.json
+          if-no-files-found: error
       - name: Original CI mutation assertions
         run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/ci-mutations" "$RUNNER_TEMP/source-readiness" ci-mutations
       - name: Upload encrypted CI mutation evidence

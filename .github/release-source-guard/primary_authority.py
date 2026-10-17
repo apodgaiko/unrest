@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from primary_policy import PYTHON, UV, backend_request, command_environment
+from primary_policy import PYTHON, UV, backend_request, command_environment, console
 from producer_inputs import SOURCE_UV_ELF_SHA256
 from producer_profile import query_package
 from finite.linux_identity import identity
@@ -48,9 +48,20 @@ class Authority:
                                  'command_index': self.next_command - 1, 'identity': identity(pid)})
             return True
         context = previous if previous and previous['role'] == 'uv' else owner
+        command = context['command'] if context else []
+        if (context and command == ['uv', 'run', 'ruff', 'check', '.']
+                and path == '/source/.venv/bin/ruff' and vector == ['ruff', 'check', '.']
+                and digest(path) == digest('/opt/deps/bin/ruff') and not context['final']):
+            context['final'] = True
+            self.contexts[pid] = {'role': 'ruff', 'identity': identity(pid)}
+            return True
+        console_name = command[2] if command[:2] == ['uv', 'run'] and len(command) > 2 else None
+        is_console = (console_name in {'unrest', 'unrest-server', 'mypy'}
+                      and path == '/source/.venv/bin/' + console_name
+                      and vector == command[2:] and Path(path).read_bytes() == console(console_name))
         if (context is None or context['role'] != 'uv' or not vector
                 or context['python_calls'] >= 16 or path != vector[0]
-                or Path(path).resolve() != Path(PYTHON) or digest(path) != digest(PYTHON)):
+                or not (is_console or (Path(path).resolve() == Path(PYTHON) and digest(path) == digest(PYTHON)))):
             return self.refuse('unknown_descendant')
         if owner is context and identity(parent) != context['identity']:
             return self.refuse('uv_parent_identity')
@@ -58,7 +69,11 @@ class Authority:
         event = 'cpython.run_command'
         body = None
         flags = [0, 0, 1]
-        if len(vector) == 5 and vector[1:4] == ['-I', '-B', '-c']:
+        if is_console and not context['final']:
+            role, event, body = 'original_console', 'cpython.run_file', path
+            vector = ['/source/.venv/bin/python', path, *vector[1:]]
+            context['final'] = True
+        elif len(vector) == 5 and vector[1:4] == ['-I', '-B', '-c']:
             try:
                 query_package(vector[4], {'cache': '/work/cache'})
             except Exception:

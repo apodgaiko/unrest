@@ -87,7 +87,8 @@ def lookup(reader, expected, current_run_id):
             continue
         if run['head_sha'] != head or run['path'] != '.github/workflows/ci.yml':
             raise ReceiptRefused('Actions returned a different workflow or source commit')
-        if run['event'] != 'push':
+        if run['event'] != 'push' or not (run['head_branch'] == 'main'
+                or run['head_branch'].startswith('codex/release-v046-')):
             continue
         if run['status'] != 'completed':
             raise ReceiptRefused('another same-commit primary execution has not settled')
@@ -99,7 +100,7 @@ def lookup(reader, expected, current_run_id):
         if len(primary) != 1:
             raise ReceiptRefused('same-commit primary job identity is missing or ambiguous')
         source = [step for step in primary[0]['steps'] if step['name'] == 'v0.4.6 source suite']
-        if len(source) == 1 and source[0]['conclusion'] == 'success':
+        if len(source) == 1 and source[0]['conclusion'] not in (None, 'skipped'):
             executed.append(run['id'])
         if run['conclusion'] != 'success':
             continue
@@ -117,5 +118,5 @@ def lookup(reader, expected, current_run_id):
     if candidates:
         return candidates[0]
     if executed:
-        raise ReceiptRefused('a source checkpoint passed without complete package certification; do not rerun it')
+        raise ReceiptRefused('a source checkpoint ran without complete package certification; do not rerun it')
     return None

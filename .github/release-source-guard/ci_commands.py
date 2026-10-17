@@ -84,3 +84,36 @@ def bind(script, workflow):
     return {'name': name, 'script': script,
             'script_sha256': hashlib.sha256(command.encode()).hexdigest(),
             'full_source': name == 'v0.4.6 source suite'}
+
+
+def bind_generated(script, workflow):
+    """Bind GitHub's wire bytes without changing the file passed to Bash.
+
+    YAML plain scalars have no final newline; literal | blocks retain it. The
+    registry stores newline-terminated logical duties, independently checked by
+    bind. No alternate rendering of an executable block is accepted.
+    """
+    registry = json.loads(REGISTRY.read_bytes())
+    actual = primary_commands(workflow)
+    require_executable_duties(workflow, registry)
+    if any(actual.get(name) != original for name, original in registry.items()):
+        raise RuntimeError('original primary executable duty drift')
+    primary = False
+    name = None
+    matches = []
+    for line in workflow.splitlines():
+        if line == '  primary:':
+            primary = True
+        elif primary and line.startswith('  ') and not line.startswith('   ') and line.strip():
+            break
+        if primary and line.startswith('      - name: '):
+            name = line.removeprefix('      - name: ')
+        if primary and name in registry and line.startswith('        run: '):
+            value = line.removeprefix('        run: ')
+            expected = registry[name] if value == '|' else registry[name].removesuffix('\n')
+            if script == expected.encode():
+                matches.append(name)
+    if len(matches) != 1:
+        raise RuntimeError('unregistered generated primary script')
+    return {'name': matches[0], 'script': script, 'script_sha256': hashlib.sha256(script).hexdigest(),
+            'full_source': matches[0] == 'v0.4.6 source suite'}

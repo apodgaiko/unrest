@@ -11,6 +11,8 @@ import sys
 import tarfile
 
 from primary_policy import plan
+from ci_commands import bind_generated
+from checkpoint_decision import expected_identity
 from primary_environment import build
 from source_controller import source_bindings
 from structured_evidence import capture, execution_identity
@@ -58,14 +60,38 @@ def validate(config, image, mounts):
         raise RuntimeError('primary_container_entry')
 
 
+STAGE = 'startup'
+SCRIPT_PIN = None
+SCRIPT_SIZE = None
+
+
 def main():
+    global STAGE, SCRIPT_PIN, SCRIPT_SIZE
     if len(sys.argv) != 2:
         raise RuntimeError('primary_shell_argv')
     script_path = Path(sys.argv[1])
     if script_path.is_symlink() or not script_path.is_file() or script_path.stat().st_size > 16384:
         raise RuntimeError('primary_script_carrier')
     script = script_path.read_bytes()
-    spec = plan(script, (REPOSITORY / '.github/workflows/ci.yml').read_text())
+    SCRIPT_PIN, SCRIPT_SIZE = hashlib.sha256(script).hexdigest(), len(script)
+    STAGE = 'binding'
+    workflow = (REPOSITORY / '.github/workflows/ci.yml').read_text()
+    bound = bind_generated(script, workflow)
+    decision_path = Path(os.environ['RUNNER_TEMP']) / 'primary-decision.json'
+    if os.environ.get('GITHUB_WORKFLOW') == 'CI':
+        if decision_path.is_symlink():
+            raise RuntimeError('primary_decision_carrier')
+        decision = json.loads(decision_path.read_bytes())
+        if (decision['schema'] != 'unrest.v046.primary-decision.v1'
+                or decision['expected'] != expected_identity()):
+            raise RuntimeError('primary_decision_identity')
+        if decision['decision'] == 'reuse-authentic-full':
+            if not decision['receipt'] or decision['receipt']['head_sha'] != os.environ['GITHUB_SHA']:
+                raise RuntimeError('primary_reuse_identity')
+            return 0
+        if decision['decision'] != 'execute-first-full' or decision['receipt'] is not None:
+            raise RuntimeError('primary_decision_kind')
+    spec = plan(bound['script'], workflow)
     kind = KINDS[spec['duty']]
     root = Path(os.environ['RUNNER_TEMP']) / kind
     root.mkdir(mode=0o700)
@@ -77,7 +103,9 @@ def main():
         raise RuntimeError('primary_same_head_controls')
     if any(digest(SUPPORT / name) != pin for name, pin in control['support'].items()):
         raise RuntimeError('primary_support_drift')
+    STAGE = 'image'
     image = build(root / 'image', control['synthetic_dependencies']['image_id'], SUPPORT, log)
+    STAGE = 'snapshot'
     source = root / 'source'
     source.mkdir()
     names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=REPOSITORY).decode().split('\0')
@@ -107,10 +135,12 @@ def main():
             *['--tmpfs=' + path + ':' + options for path, options in TMPFS.items()],
             *['--mount=type=bind,src=' + origin + ',dst=' + target + ',readonly' for target, origin in mounts.items()],
             '--entrypoint=/usr/local/bin/python', image, '-B', '/guard/primary_compartment.py']
+    STAGE = 'identity'
     identity = execution_identity(SUPPORT, kind)
     status = 125
     records = {}
     stage = 'create'
+    STAGE = 'capsule'
     try:
         if run(argv, log).returncode:
             raise RuntimeError('primary_create_failed')
@@ -157,5 +187,8 @@ if __name__ == '__main__':
         status = main()
     except BaseException:
         status = 125
-    print(json.dumps({'schema': 'primary-executor-status-v1', 'exit_code': status}))
+    diagnostic = {'schema': 'primary-executor-status-v1', 'exit_code': status, 'stage': STAGE,
+                  'script_sha256': SCRIPT_PIN, 'script_size': SCRIPT_SIZE}
+    (Path(os.environ['RUNNER_TEMP']) / 'primary-host-stage.json').write_text(json.dumps(diagnostic, sort_keys=True))
+    print(json.dumps(diagnostic))
     raise SystemExit(status)

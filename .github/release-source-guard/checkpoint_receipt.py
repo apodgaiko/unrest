@@ -24,7 +24,7 @@ REQUIRED_STEPS = (
     'Upload v0.4.6 archives and checksums', 'Upload encrypted primary evidence',
 )
 DEFINITION_FIELDS = ('head_sha', 'source_tree', 'workflow_sha256', 'guard_definition_sha256',
-                     'runtime_definition_sha256', 'source_command_sha256')
+                     'runtime_definition_sha256', 'source_command_sha256', 'package_command_sha256', 'lock_sha256')
 
 
 class ReceiptRefused(RuntimeError):
@@ -93,7 +93,7 @@ def validate(archive, artifact, run, jobs, expected):
     source = receipt['source']
     require(source['argv'] == ['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']
             and source['collection_filters'] == [] and source['item_mutations'] == []
-            and source['deselected'] == 0 and source['exit_code'] == 0,
+            and source['deselected'] == 0 and type(source['exit_code']) is int and source['exit_code'] == 0,
             'full source execution was filtered, mutated or unsuccessful')
     counts = source['counts']
     require(all(type(counts[key]) is int and counts[key] >= 0
@@ -106,7 +106,8 @@ def validate(archive, artifact, run, jobs, expected):
             and source['missing_original_parent_waits'] == []
             and source['unknown_execs'] == [], 'source guard or wait obligations did not close')
     package = receipt['package']
-    require(package['build_exit_code'] == package['archive_exit_code']
+    require(all(type(package[key]) is int for key in ('build_exit_code', 'archive_exit_code', 'installed_lifecycle_exit_code'))
+            and package['build_exit_code'] == package['archive_exit_code']
             == package['installed_lifecycle_exit_code'] == 0,
             'package duties did not actually pass')
     require(package['extracted_oracle'] == {'cases': 15, 'failures': 0, 'errors': 0, 'skipped': 0}
