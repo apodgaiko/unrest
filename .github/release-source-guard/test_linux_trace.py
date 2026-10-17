@@ -1,0 +1,81 @@
+"""Real Linux ptrace seam controls; these do not run original source cases."""
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import os
+from pathlib import Path
+import signal
+import sys
+
+import pytest
+
+spec = importlib.util.spec_from_file_location("linux_trace", Path(__file__).with_name("linux_trace.py"))
+assert spec is not None and spec.loader is not None
+trace = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(trace)
+
+BODY = """
+import os, signal, sys
+child = os.fork()
+if child == 0:
+    try:
+        os.execve(sys.argv[1], [sys.argv[1]], {})
+    except FileNotFoundError:
+        os._exit(29)
+    except PermissionError:
+        os._exit(31)
+    os._exit(99)
+actual, raw = os.waitpid(child, 0)
+assert actual == child
+assert os.waitstatus_to_exitcode(raw) == int(sys.argv[2])
+child = os.fork()
+if child == 0:
+    os.kill(os.getpid(), signal.SIGTERM)
+    os._exit(99)
+actual, raw = os.waitpid(child, 0)
+assert actual == child and raw == signal.SIGTERM
+"""
+
+
+@pytest.mark.parametrize(("program", "status", "admit", "poison"), [
+    ("/usr/bin/true", 0, True, False),
+    ("/guard/finite-missing-exec", 29, True, False),
+    ("/usr/bin/false", 31, False, True),
+])
+def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, status, admit, poison):
+    assert sys.platform == "linux" and os.uname().machine == "x86_64"
+    argv = [sys.executable, "-I", "-S", "-c", BODY, program, str(status)]
+    allowed = [{"path": sys.executable, "argv": argv,
+                "sha256": hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}]
+    if admit:
+        path = Path(program)
+        allowed.append({"path": program, "argv": [program],
+                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest()
+                        if path.exists() else None, "expected_missing": not path.exists()})
+    child = os.fork()
+    if child == 0:
+        try:
+            trace.trace_me()
+            os.execve(sys.executable, argv, {})
+        finally:
+            os._exit(127)
+    result = trace.OwnedTrace(child, allowed, timeout=30).run()
+    assert result["root_parent_wait_raw"] == 0, result
+    assert bool(result["poison"]) == poison
+    records = result["records"]
+    attempts = [row for row in records if row["kind"] == "exec_attempt"]
+    assert [row["path"] for row in attempts] == [sys.executable, program]
+    assert attempts[0]["accepted"] and attempts[1]["accepted"] == admit
+    births = [row for row in records if row["kind"] == "kernel_child"]
+    assert len(births) == 2 and all(row["parent"] == child for row in births)
+    waits = [row for row in records if row["kind"] == "original_parent_wait4"]
+    assert [(row["parent"], row["child"], row["raw"], row["normalized"]) for row in waits] == [
+        (child, births[0]["child"], status << 8, status),
+        (child, births[1]["child"], signal.SIGTERM, -signal.SIGTERM),
+    ]
+    assert len([row for row in records if row["kind"] == "tracer_terminal_wait"]) == 3
+    if admit and status == 29:
+        assert any(row["kind"] == "exec_syscall_return" and row["return"] == -2 for row in records)
+    with pytest.raises(ChildProcessError):
+        os.waitpid(child, os.WNOHANG)

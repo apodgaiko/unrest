@@ -124,7 +124,7 @@ def source_controls() -> None:
     result = subprocess.run(
         [sys.executable, "-I", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
          "--basetemp=/work/pytest", "/guard/test_linux_observation.py",
-         "/guard/test_probe_controller.py"],
+         "/guard/test_probe_controller.py", "/guard/test_linux_trace.py"],
         cwd="/work", check=False,
     )
     raise SystemExit(result.returncode)
