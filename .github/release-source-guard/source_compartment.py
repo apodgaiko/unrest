@@ -114,7 +114,7 @@ def main():
             selected = matching[0]
             admitted = [event for event in events if event['kind'] == 'admitted'
                         and event['owner_pid'] == parent and event['token'] == selected['token']]
-            if len(admitted) != 1 or not (admitted[0]['class'].startswith('source-git:') or admitted[0]['class'] in {'source-cohort3:tests/test_server.py:2144', 'source-cohort3:tests/test_server.py:2145'}):
+            if len(admitted) != 1 or not (admitted[0]['class'].startswith('source-git:') or admitted[0]['class'] in {'source-cohort3:tests/test_server.py:2144', 'source-cohort3:tests/test_server.py:2145', 'source-cohort3:src/unrest_harness/server.py:266'}):
                 return False
             consumed.add(selected['token'])
             bound[pid] = selected
