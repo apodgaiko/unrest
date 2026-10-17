@@ -76,3 +76,50 @@ def test_raw_parent_wait_is_distinct_from_process_absence():
     assert not Path(f"/proc/{pid}").exists()
     with pytest.raises(ChildProcessError):
         os.waitpid(pid, os.WNOHANG)
+
+
+def test_kernel_children_include_thread_parent_and_unreaped_exit():
+    import threading
+    ready = threading.Event()
+    release = threading.Event()
+    read, write = os.pipe()
+    children = []
+
+    def fork_from_thread():
+        child = os.fork()
+        if child == 0:
+            os.close(write)
+            os.read(read, 1)
+            os._exit(19)
+        children.append(child)
+        ready.set()
+        release.wait(5)
+
+    thread = threading.Thread(target=fork_from_thread)
+    thread.start()
+    try:
+        assert ready.wait(5)
+        current = observation.direct_child_inventory(os.getpid())
+        child = children[0]
+        assert child in current['children']
+        assert child in current['thread_children'][str(thread.native_id)]
+        assert current['child_identities'][str(child)]['ppid'] == os.getpid()
+        os.write(write, b'1')
+        retained = os.waitid(os.P_PID, child, os.WEXITED | os.WNOWAIT)
+        assert retained.si_pid == child and retained.si_status == 19
+        zombie = observation.direct_child_inventory(os.getpid())
+        assert child in zombie['children']
+        assert zombie['child_identities'][str(child)]['state'] == 'Z'
+        actual, raw = os.waitpid(child, 0)
+        assert actual == child and raw == 19 << 8
+        assert child not in observation.direct_child_inventory(os.getpid())['children']
+    finally:
+        release.set()
+        thread.join(5)
+        os.close(read)
+        os.close(write)
+        for child in children:
+            try:
+                os.waitpid(child, 0)
+            except ChildProcessError:
+                pass

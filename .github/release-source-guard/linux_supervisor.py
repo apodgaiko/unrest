@@ -22,11 +22,13 @@ def load(name, path):
     return module
 
 
+observation = load("linux_observation", ROOT.parent / "linux_observation.py")
 identities = load("linux_identity", ROOT / "linux_identity.py")
 sockets = load("linux_sockets", ROOT.parent / "linux_sockets.py")
 receipts = load("linux_receipts", ROOT.parent / "linux_receipts.py")
 kernel = types.SimpleNamespace(
-    identity=identities.identity, sockets=sockets.sockets, unix_pair=sockets.unix_pair
+    identity=identities.identity, sockets=sockets.sockets, unix_pair=sockets.unix_pair,
+    direct_child_inventory=observation.direct_child_inventory
 )
 
 

@@ -1,6 +1,5 @@
 """Cleanup authority restricted to registered direct children of selected worker."""
 
-import ctypes
 
 COMMON = {"id", "kind", "nonce", "pid", "token", "identity"}
 
@@ -72,14 +71,11 @@ def handle(host, request, events, kernel):
             != host.manifest["product_pins"]["src/unrest_harness/run_worker.py"]
         ):
             raise RuntimeError("drain_source_drift")
-        query = kernel.LIB.proc_listchildpids
-        query.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
-        query.restype = ctypes.c_int
-        buffer = (ctypes.c_int * 64)()
-        count = query(request["pid"], buffer, ctypes.sizeof(buffer))
-        if count < 0 or count >= 64 or set(buffer[:count]) != set(registered) - set(waited):
+        inventory = kernel.direct_child_inventory(request['pid'])
+        if set(inventory['children']) != set(registered) - set(waited):
             raise RuntimeError("drain_unknown_kernel_child")
-        return {"bound_children": request["children"], "actual_parent": request["pid"]}
+        return {"bound_children": request["children"], "actual_parent": request["pid"],
+                "kernel_inventory": inventory}
     if set(registered) - set(waited):
         return {"pending_actual_wait": True}
     provenance = {}

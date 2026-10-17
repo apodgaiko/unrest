@@ -99,3 +99,28 @@ def require_linux_abi() -> dict[str, Any]:
     return {"system": "Linux", "machine": "x86_64",
             "kernel_release": platform.release(), "identity": identity,
             "pidfd": True}
+
+
+def direct_child_inventory(pid: int) -> dict[str, Any]:
+    parent = process_identity(pid)
+    directory = Path('/proc') / str(pid) / 'task'
+    tasks = sorted(int(path.name) for path in directory.iterdir())
+    children = {}
+    all_children: set[int] = set()
+    for task in tasks:
+        values = [int(value) for value in (directory / str(task) / 'children').read_text().split()]
+        if len(values) != len(set(values)) or any(value <= 0 for value in values):
+            raise RuntimeError('kernel children list ABI drift')
+        children[str(task)] = values
+        all_children.update(values)
+    if len(all_children) >= 64:
+        raise RuntimeError('kernel child inventory exceeds finite bound')
+    births = {str(child): process_identity(child) for child in sorted(all_children)}
+    if any(value['ppid'] != pid for value in births.values()):
+        raise RuntimeError('kernel child original parent drift')
+    after = process_identity(pid)
+    if (parent['start_ticks'] != after['start_ticks'] or parent['boot_id'] != after['boot_id']
+            or tasks != sorted(int(path.name) for path in directory.iterdir())):
+        raise RuntimeError('kernel parent/task birth changed during inventory')
+    return {'parent': parent, 'thread_children': children, 'children': sorted(all_children),
+            'child_identities': births, 'method': 'Linux proc per-thread children and retained birth'}
