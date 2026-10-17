@@ -134,8 +134,13 @@ def test_stale_unix_pair_cannot_authorize_reused_tcp_descriptor():
     try:
         with pytest.raises(RuntimeError, match='two live kernel descriptors'):
             observation.unix_pair(os.getpid(), descriptors)
+        retained_pair = observation.retained_unix_member(os.getpid(), left.fileno(), pair)
+        assert retained_pair is not None
+        assert retained_pair['socket_cookie'] == pair[0]['socket_cookie']
+        assert observation.retained_unix_member(os.getpid(), right.fileno(), pair) is None
         with socket.socket() as replacement:
             os.dup2(replacement.fileno(), left.fileno())
+            assert observation.retained_unix_member(os.getpid(), left.fileno(), pair) is None
             with pytest.raises(RuntimeError, match='two live kernel descriptors'):
                 observation.unix_pair(os.getpid(), descriptors)
             retained = observation.retained_tcp_descriptor(os.getpid(), left.fileno())

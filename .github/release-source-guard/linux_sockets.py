@@ -229,3 +229,22 @@ def reciprocal_peer(listener: dict[str, Any], client: dict[str, Any],
     if len(matches) > 1:
         raise RuntimeError('ambiguous reciprocal kernel peer')
     return matches[0] if matches else None
+
+
+def retained_unix_member(pid: int, descriptor: int,
+                         pair: list[dict[str, int]]) -> dict[str, int] | None:
+    saved = next((row for row in pair if row['fd'] == descriptor), None)
+    if saved is None:
+        return None
+    before = socket_fds(pid)
+    if before.get(descriptor) != saved['inode']:
+        return None
+    current = unix_table().get(saved['inode'])
+    if socket_fds(pid).get(descriptor) != saved['inode']:
+        raise RuntimeError('retained Unix descriptor changed during observation')
+    if (current is None or current['socket_cookie'] != saved['socket_cookie']
+            or current.get('socket_uid') != saved['socket_uid']
+            or current['type'] != socket.SOCK_STREAM
+            or current.get('peer_inode', 0) not in (0, saved['peer_inode'])):
+        return None
+    return {'fd': descriptor, **current}

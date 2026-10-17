@@ -302,6 +302,10 @@ class Supervisor:
                     try:
                         current_pair = kernel.unix_pair(pid, descriptors)
                     except RuntimeError:
+                        retained_pair_member = sockets.retained_unix_member(pid, request['fd'], pair)
+                        if retained_pair_member is not None:
+                            return {'retained_unix_pair_member': retained_pair_member,
+                                    'previous_authenticated_pair': pair}
                         continue
                     if current_pair == pair:
                         return {"pair": pair}
