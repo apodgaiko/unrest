@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import stat
 import types
+import traceback
 
 ROOT = Path('/guard')
 
@@ -134,6 +135,9 @@ def main():
     try:
         result = trace.run()
         tick(trace)
+    except Exception:
+        result = {'root_parent_wait_raw': None, 'poison': trace.poison,
+                  'records': trace.records, 'failure': traceback.format_exc()}
     finally:
         supervisor.close()
         os.close(read)

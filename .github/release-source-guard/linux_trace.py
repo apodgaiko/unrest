@@ -72,11 +72,17 @@ def read_bytes(pid: int, address: int, count: int) -> bytes:
 
 def read_string(pid: int, address: int) -> bytes:
     result = bytearray()
-    for offset in range(0, 8192, 8):
-        block = read_bytes(pid, address + offset, 8)
+    base = address & ~7
+    first = address - base
+    for offset in range(0, 8200, 8):
+        block = read_bytes(pid, base + offset, 8)
+        if offset == 0:
+            block = block[first:]
         end = block.find(b"\0")
         result.extend(block if end < 0 else block[:end])
         if end >= 0:
+            if len(result) > 8192:
+                raise RuntimeError("unbounded exec string")
             return bytes(result)
     raise RuntimeError("unbounded exec string")
 
@@ -126,6 +132,11 @@ class OwnedTrace:
         self.identities: dict[int, dict[str, Any]] = {}
 
     def admit_exec(self, pid: int, value: Registers) -> None:
+        self.records.append({"kind": "exec_memory_boundary", "pid": pid,
+                             "path_address": value.rdi, "argv_address": value.rsi,
+                             "environment_address": value.rdx,
+                             "observer_identity": _observation.process_identity(os.getpid()),
+                             "tracee_identity": _observation.process_identity(pid)})
         path = os.fsdecode(read_string(pid, value.rdi))
         vector = exec_vector(pid, value.rsi)
         environment_rows = exec_vector(pid, value.rdx)
@@ -272,13 +283,16 @@ class OwnedTrace:
         finally:
             for pid in sorted(self.active):
                 try:
-                    os.kill(pid, signal.SIGKILL)
+                    ptrace(8, pid)
                 except ProcessLookupError:
                     pass
             while self.active:
                 pid, raw = os.waitpid(-1, 0x40000000)
                 if os.WIFEXITED(raw) or os.WIFSIGNALED(raw):
                     self.active.discard(pid)
+                    self.records.append({"kind": "failure_cleanup_tracer_wait", "pid": pid,
+                                         "raw": raw, "normalized": os.waitstatus_to_exitcode(raw),
+                                         "root_original_parent": pid == self.child})
                 else:
                     ptrace(24, pid, data=ctypes.c_void_p(signal.SIGKILL))
         return {"root_parent_wait_raw": root_wait, "records": self.records,
