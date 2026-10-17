@@ -23,40 +23,16 @@ jobs:
           persist-credentials: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Caught unknown producer launch refuses before original query body
-        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-producer-controls" "$RUNNER_TEMP/source-readiness" producer-controls
-      - name: Changed native producer boundary producer-contract
-        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/producer-contract" "$RUNNER_TEMP/source-readiness" producer-contract
-      - name: Upload encrypted producer-contract evidence
+      - name: Original CI mutation assertions
+        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/ci-mutations" "$RUNNER_TEMP/source-readiness" ci-mutations
+      - name: Upload encrypted CI mutation evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: v046-source-producer-contract-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v046-source-ci-mutations-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/producer-contract/evidence.cms
-            ${{ runner.temp }}/producer-contract/safe-provenance.json
-          if-no-files-found: error
-          retention-days: 30
-      - name: Changed native producer boundary producer-distribution
-        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/producer-distribution" "$RUNNER_TEMP/source-readiness" producer-distribution
-      - name: Upload encrypted producer-distribution evidence
-        if: always()
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: v046-source-producer-distribution-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/producer-distribution/evidence.cms
-            ${{ runner.temp }}/producer-distribution/safe-provenance.json
-          if-no-files-found: error
-          retention-days: 30
-      - name: Upload encrypted original producer evidence
-        if: always()
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: v046-source-producer-controls-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/source-producer-controls/evidence.cms
-            ${{ runner.temp }}/source-producer-controls/safe-provenance.json
+            ${{ runner.temp }}/ci-mutations/evidence.cms
+            ${{ runner.temp }}/ci-mutations/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload encrypted control evidence

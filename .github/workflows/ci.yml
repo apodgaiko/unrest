@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: v046-source-checkpoint-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
   primary:
     name: primary source and package gate (py3.13)

@@ -49,9 +49,28 @@ def primary_commands(workflow):
     return commands
 
 
+def require_executable_duties(workflow, names):
+    primary = False
+    step = None
+    for line in workflow.splitlines():
+        if line == '  primary:':
+            primary = True
+        elif primary and line.startswith('  ') and not line.startswith('   ') and line.strip():
+            break
+        if not primary:
+            continue
+        if line.startswith('    if:'):
+            raise RuntimeError('conditional primary execution refused')
+        if line.startswith('      - name: '):
+            step = line.removeprefix('      - name: ')
+        if step in names and line.startswith('        if:'):
+            raise RuntimeError('conditional original executable duty refused')
+
+
 def bind(script, workflow):
     registry = json.loads(REGISTRY.read_bytes())
     actual = primary_commands(workflow)
+    require_executable_duties(workflow, registry)
     for name, original in registry.items():
         if actual.get(name) != original:
             raise RuntimeError('original primary executable duty drift: ' + name)

@@ -8,6 +8,12 @@ import sys
 import types
 import time
 
+CI = 'tests/test_repository_contract.py'
+CI_SELECTORS = [CI + '::' + name for name in (
+    'test_ci_constant_dead_guards_fail_through_candidate_cli',
+    'test_ci_literal_dead_shell_branches_fail_through_candidate_cli',
+    'test_ci_live_or_dynamic_guards_remain_accepted_through_candidate_cli')]
+
 INPROCESS = 'tests/test_server.py::test_completion_refusal_survives_server_restart'
 BACKEND = 'tests/test_controlled_python_acp.py'
 BACKEND_SELECTORS = [BACKEND + '::' + name for name in (
@@ -36,7 +42,7 @@ def main():
     assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == pin
     manifest = json.loads(Path(path).read_bytes())
     case = manifest['source_case']
-    assert case in {INPROCESS, COMPOSED, BACKEND, PRODUCER_CONTRACT, PRODUCER_DISTRIBUTION} and dict(os.environ) == manifest['root_environment']
+    assert case in {CI, INPROCESS, COMPOSED, BACKEND, PRODUCER_CONTRACT, PRODUCER_DISTRIBUTION} and dict(os.environ) == manifest['root_environment']
     expected = ({INPROCESS + '[' + repair + '-' + role + ']'
                  for repair in ('valid-repair','second-invalid') for role in ('work','validate')}
                 if case == INPROCESS else set(BACKEND_SELECTORS) if case == BACKEND
@@ -62,13 +68,19 @@ def main():
     import pytest
     class Plugin:
         def pytest_runtest_setup(self, item):
-            assert item.nodeid in expected
+            assert (any(item.nodeid.startswith(selector + '[') for selector in CI_SELECTORS)
+                    if case == CI else item.nodeid in expected)
             guard._STATE['case'] = item.nodeid
         def pytest_collection_finish(self, session):
             collected = [item.nodeid for item in session.items]
             Path('/work/collection.json').write_text(json.dumps(collected))
             if not session.testsfailed:
-                assert len(collected) == len(expected) and set(collected) == expected
+                if case == CI:
+                    assert len(collected) == 17 and len(set(collected)) == 17
+                    assert all(any(node.startswith(selector + '[') for selector in CI_SELECTORS)
+                               for node in collected)
+                else:
+                    assert len(collected) == len(expected) and set(collected) == expected
         def pytest_runtest_logreport(self, report):
             guard.append({'kind': 'test_outcome', 'nodeid': report.nodeid,
                           'phase': report.when, 'outcome': report.outcome})
@@ -77,7 +89,7 @@ def main():
     try:
         result = int(pytest.main(['-q', '-p', 'no:cacheprovider', '--basetemp=' + manifest['owned_root'] + '/pytest',
                                  '--junitxml=/work/source.xml',
-                                 *(BACKEND_SELECTORS if case == BACKEND else [case])], plugins=[Plugin()]))
+                                 *(CI_SELECTORS if case == CI else BACKEND_SELECTORS if case == BACKEND else [case])], plugins=[Plugin()]))
     finally:
         if custodian is not None:
             try:

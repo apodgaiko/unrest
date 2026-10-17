@@ -85,6 +85,7 @@ def verify(root, run, artifact, members, key, support):
                   'structured_records': len(records), 'source_checkpoint_ready': False,
                   'negative_verified': False}
     if scope == 'producer-controls':
+        require(type(metadata['source_exit_code']) is int, 'source_status_type')
         try:
             proof = check_producer(records, metadata['source_exit_code'])
         except Exception as error:
@@ -98,18 +99,40 @@ def verify(root, run, artifact, members, key, support):
                               query_raw=proof['query_exit_raw'], query_status=proof['query_exit_normalized'],
                               parent_waits=proof['all_kernel_process_parent_waits'],
                               source_body_dispatched=False, sticky_poison=True)
-    elif scope in {'producer-contract', 'producer-distribution'}:
+    elif scope == 'synthetic-controls':
+        observer = loads(records['observer.json'])
+        require(metadata['synthetic_exit_code'] == 0
+                and metadata['original_source_cases_executed'] == 0
+                and observer['actual_wait_raw'] == 0
+                and observer['actual_wait_normalized'] == 0, 'synthetic_actual_wait')
+        projection.update(synthetic_verified=True, source_cases=0, synthetic_raw=0,
+                          trace_controls=len(records) - 2)
+    elif scope in {'producer-contract', 'producer-distribution', 'ci-mutations'}:
         kernel = loads(records['kernel-source.json'])
         summary = loads(records['summary.json'])
         cases = ET.fromstring(records['source.xml']).findall('.//testcase')
-        expected_cases = 2 if scope == 'producer-contract' else 1
-        expected_name = ('test_installed_supported_provider_matrix' if scope == 'producer-contract'
-                         else 'test_checker_builds_and_executes_15_cases_with_extracted_provenance')
+        expected_cases = 17 if scope == 'ci-mutations' else 2 if scope == 'producer-contract' else 1
+        expected_names = ({'test_installed_supported_provider_matrix[claude]',
+                           'test_installed_supported_provider_matrix[codex]'}
+                          if scope == 'producer-contract' else {
+                              'test_checker_builds_and_executes_15_cases_with_extracted_provenance'})
+        if scope == 'ci-mutations':
+            expected_groups = {'test_ci_constant_dead_guards_fail_through_candidate_cli': 10,
+                               'test_ci_literal_dead_shell_branches_fail_through_candidate_cli': 3,
+                               'test_ci_live_or_dynamic_guards_remain_accepted_through_candidate_cli': 4}
+            names = [case.get('name', '') for case in cases]
+            require(len(names) == len(set(names)) == 17 and all(
+                sum(name.startswith(prefix + '[') for name in names) == count
+                for prefix, count in expected_groups.items()), 'ci_original_collection')
+        else:
+            require({case.get('name') for case in cases} == expected_names, 'positive_original_cases')
         require(len(cases) == expected_cases and all(
-            case.get('name', '').split('[')[0] == expected_name
-            and all(case.find(tag) is None for tag in ('failure', 'error', 'skipped'))
+            all(case.find(tag) is None for tag in ('failure', 'error', 'skipped'))
             for case in cases), 'positive_original_junit')
-        require(metadata['source_exit_code'] == 0 and summary['original_pytest_exit_code'] == 0
+        require(type(metadata['source_exit_code']) is int
+                and type(summary['original_pytest_exit_code']) is int
+                and type(kernel['root_parent_wait_raw']) is int
+                and metadata['source_exit_code'] == 0 and summary['original_pytest_exit_code'] == 0
                 and summary['ready'] is True and kernel['root_parent_wait_raw'] == 0
                 and kernel['poison'] == [] and kernel['guard_poison'] is False
                 and 'failure' not in kernel, 'positive_source_outcome')
@@ -120,7 +143,8 @@ def verify(root, run, artifact, members, key, support):
                          and wait['parent_tgid'] == birth['identity']['ppid']]) == 1
                     for birth in births), 'positive_kernel_wait_closure')
         events = kernel['source_events']
-        require(any(row['kind'] == 'operation_settled' for row in events), 'positive_settlement')
+        if scope != 'ci-mutations':
+            require(any(row['kind'] == 'operation_settled' for row in events), 'positive_settlement')
         projection.update(positive_verified=True, junit_cases=len(cases),
                           parent_waits=len(births), source_exit=0, sticky_poison=False,
                           query_returns=sum(row['kind'] == 'query_actual_main_return' for row in events),

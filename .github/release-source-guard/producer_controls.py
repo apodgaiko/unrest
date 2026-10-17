@@ -35,6 +35,7 @@ def check(raw: dict[str, bytes], source_exit: int) -> dict:
     assert kernel['root_parent_wait_raw'] == 2 << 8
     cases = ET.fromstring(raw['source.xml']).findall('.//testcase')
     assert len(cases) == 1 and cases[0].find('error') is not None
+    assert cases[0].get('name') == 'test_checker_builds_and_executes_15_cases_with_extracted_provenance'
     assert cases[0].find('skipped') is None
     summary = json.loads(raw['summary.json'])
     assert summary['original_pytest_exit_code'] == 1

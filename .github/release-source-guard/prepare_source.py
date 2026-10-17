@@ -9,6 +9,7 @@ import sys
 ROOT = Path('/source')
 SUPPORT = Path('/guard/finite')
 CASES = {
+    'ci-mutations': 'tests/test_repository_contract.py',
     'producer-contract': 'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix',
     'producer-controls': 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
     'producer-distribution': 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',

@@ -155,17 +155,37 @@ only as non-executable data for unchanged native-pin refusal assertions; it is
 not a Linux runtime and has no admitted exec route. Provider execution remains
 forbidden independently of absent credentials.
 
-Raw output and observer records travel only to the trusted coordinator's private
-log and are encrypted with OpenSSL CMS to the repository's public recipient
-certificate before artifact upload. Only the recipient's public certificate is
-in the repository; its private key belongs to the operator. Public provenance
-contains hashes, counts, CI identities and the explicit synthetic-only scope.
-Encryption does not establish execution: downloaded artifacts still require
-GitHub run/head/workflow/artifact identity checks and local decryption/inspection.
+Future readiness runs capture the current owned process output privately in the
+trusted coordinator and write `structured-envelope.json` directly into the
+private archive before CMS encryption. Its finite record map names only the
+kernel, collection, summary and original JUnit records (or the finite synthetic
+control records). Source stdout/stderr, coordinator output and diagnostic logs
+remain encrypted opaque members. No operator consumer parses a coordinator log.
+Past artifacts and failed attempts are unchanged.
+
+`consume_evidence.py` downloads an exact run/artifact/head identity, verifies the
+GitHub ZIP size/digest, ciphertext and plaintext archive hashes, complete support
+hash map and direct envelope identity, then opens only the named structured
+members. It rejects duplicate fields/members, unknown record names, unsafe paths,
+nonregular archive members, digest drift and scope escalation. Decryption uses a
+read-only 0600 private key and an owned 0700 root. It never extracts or opens log
+members. Operator output is a fixed enum/count/boolean/hash projection; original
+JUnit failure messages, command bodies and arbitrary record strings stay private.
+A negative-control pass retains the original failed source outcome and cannot
+become a full checkpoint or a selected carrier. Synthetic private-canary controls
+exercise the direct capture, archive consumption and CMS roundtrip.
+
+The native producer body boundaries check both the finite READY binding and the
+endpoint's sticky global poison. A caught launch refusal must stop the query
+before its original dispatch/main call, as well as prevent later backend or
+consumer progression. Historical failures retain their original outcomes;
+changed-seam Ubuntu controls are required before using this repair.
 
 ## Remaining source integration
 
-The primary CI workflow is not yet connected to these synthetic controls. Its
+The primary CI workflow serializes the same SHA with `cancel-in-progress: false`
+and the same concurrency group as readiness. It is not yet connected to the
+isolated command executor or receipt reuse decision. Its
 original source, type-check, repository, build, archive and installed lifecycle
 commands remain executable and unchanged. The new readiness workflow cannot be
 used to deduplicate a full primary checkpoint.

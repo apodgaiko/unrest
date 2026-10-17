@@ -51,3 +51,26 @@ def test_script_or_any_original_duty_drift_is_refused(mutation):
         actual = actual.replace('run: uv run mypy src', 'run: echo uv run mypy src')
     with pytest.raises(RuntimeError):
         commands.bind(script, actual)
+
+
+@pytest.mark.parametrize('control', ['job', 'step'])
+@pytest.mark.parametrize('condition', ['false', '${{ false && true }}', '${{ github.ref }}'])
+def test_actual_original_duties_cannot_be_made_conditional(control, condition):
+    registry = json.loads(commands.REGISTRY.read_bytes())
+    actual = workflow(registry)
+    if control == 'job':
+        actual = actual.replace('  primary:\n', '  primary:\n    if: ' + condition + '\n')
+    else:
+        actual = actual.replace('      - name: Type-check (mypy)\n',
+                                '      - name: Type-check (mypy)\n        if: ' + condition + '\n')
+    with pytest.raises(RuntimeError):
+        commands.bind(registry['v0.4.6 source suite'].encode(), actual)
+
+
+def test_current_primary_original_run_blocks_bind_and_literal_mutation_anchors_survive():
+    actual = (Path(__file__).resolve().parents[2] / '.github/workflows/ci.yml').read_text()
+    assert actual.count('  primary:\n    name: primary source and package gate (py3.13)') == 1
+    assert actual.count('      - name: Type-check (mypy)\n        run: uv run mypy src') == 1
+    registry = json.loads(commands.REGISTRY.read_bytes())
+    for name, script in registry.items():
+        assert commands.bind(script.encode(), actual)['name'] == name

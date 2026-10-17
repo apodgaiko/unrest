@@ -121,3 +121,9 @@ Linux source-guard environment work is tracked in the
 [source-checkpoint environment](v046-source-checkpoint-environment.md). Its
 synthetic readiness controls do not certify the source suite or discharge any
 remaining release obligation.
+
+Readiness evidence now has a direct encrypted structured-record path; operator
+consumption excludes private logs. Same-SHA CI runs serialize without cancelling
+in-progress work. The isolated primary command executor and successful full
+source/package receipt reuse remain incomplete; readiness artifacts cannot
+authorize either. See `v046-source-checkpoint-environment.md`.

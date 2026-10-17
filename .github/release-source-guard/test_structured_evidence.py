@@ -169,3 +169,11 @@ def test_cms_roundtrip_and_operator_projection_keep_private_canaries(tmp_path, c
     assert CANARY.encode() not in cipher.read_bytes()
     assert evidence.digest(key.read_bytes()) == key_pin
     assert capsys.readouterr() == ('', '')
+
+
+@pytest.mark.parametrize('kind', ['readiness', 'producer-controls', 'producer-contract',
+                                 'producer-distribution', 'ci-mutations'])
+def test_artifact_scope_identity_is_finite(kind):
+    current = identity()
+    current['artifact_name'] = 'v046-source-' + kind + '-12-1'
+    evidence.identity_check(current)

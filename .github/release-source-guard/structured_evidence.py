@@ -23,7 +23,7 @@ CONTROLS = {'observer.json', 'source-controls.json'} | {
     f'trace-control-{status}-{mode}.json' for status in (0, 29, 31) for mode in (False, True)
 } | {'trace-control-vfork-False.json', 'trace-control-vfork-True.json', 'trace-control-waitid.json'}
 OPAQUE = {'source-output.log', 'custodian.stderr', 'source-diagnostics.json'}
-SCOPES = {'synthetic-controls', 'inprocess', 'composed', 'backend', 'drain-controls',
+SCOPES = {'ci-mutations', 'synthetic-controls', 'inprocess', 'composed', 'backend', 'drain-controls',
           'producer-contract', 'producer-distribution', 'producer-controls'}
 IDENTITY = {'repository', 'head_sha', 'run_id', 'run_attempt', 'workflow_ref', 'workflow_sha',
             'artifact_name', 'support_sha256'}
@@ -72,7 +72,7 @@ def identity_check(value):
         require(type(value[key]) is str and re.fullmatch('[1-9][0-9]*', value[key]), 'run_identity')
     require(value['artifact_name'] in {
         f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}"
-        for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution')}, 'artifact_identity')
+        for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations')}, 'artifact_identity')
     require(type(value['workflow_ref']) is str and re.fullmatch(
         r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-[a-z0-9-]+',
         value['workflow_ref']), 'workflow_identity')
@@ -136,12 +136,13 @@ def export(current_stdout, raw, identity, scope):
 def consume(archive, expected, envelope_sha256):
     """Return private structured bytes. No generic extraction or log read exists."""
     identity_check(expected)
-    with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as source:
+    with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz', ignore_zeros=True) as source:
         members = source.getmembers()
         names = [member.name for member in members]
         require(len(names) == len(set(names)) and len(names) <= 40, 'archive_inventory')
+        require(sum(member.size for member in members) <= 2 * LIMIT, 'archive_bound')
         for member in members:
-            require(member.isfile() and 0 <= member.size <= LIMIT
+            require(member.isfile() and not member.issparse() and 0 <= member.size <= LIMIT
                     and PurePosixPath(member.name).name == member.name
                     and member.name not in ('.', '..'), 'archive_member')
         permitted = {MEMBER, 'coordinator.log', 'current-process.stdout', 'prepared.stdout',
