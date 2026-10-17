@@ -20,7 +20,20 @@ locally. Original JUnit records all four in-process completion-refusal restart
 parameters passing, with zero failures, errors or skips. Kernel records contain
 16 actual original-parent wait4 results, root wait word 0 and zero poison. This
 proof covers that source function and its Git descendants; it does not cover the
-whole source suite, composed owner, controlled backend or package certification.
+whole source suite, controlled backend or package certification.
+The native profile predicate and the same four original parameters also passed
+[run 39063771910](https://github.com/apodgaiko/unrest/actions/runs/39063771910)
+at `f366e4dde0a36de7630fc606e820ea1a6f471b85`.
+
+The whole original composed restart/stop/replacement/cancel test passed
+[run 39064611100](https://github.com/apodgaiko/unrest/actions/runs/39064611100)
+at `ba2cef976f7607fdd36e29b5097b677c823e3698`. Its original JUnit contains one
+passing case, no errors/failures/skips, and all original assertions. All 33
+registered descendants have actual waits; the kernel records 34 original-parent
+waits including the finite stock Git maintenance child, and 12 original stock
+`ps -axo pid=,ppid=,pgid=` inventories. Root and custodian returned zero, with
+zero kernel/guard poison. Downloaded artifact identities and all support hashes
+were independently checked locally before inspecting decrypted evidence.
 Earlier failures remain failures.
 
 ## Synthetic compartment prerequisite
@@ -83,16 +96,17 @@ The composed custodian exited before READY in that run; the composed source test
 was not invoked. Its wait word 256 remains a failure. Added private stderr and
 event export address the missing diagnostic capture for fresh runs.
 
-The selective observation filter It installs inherited
+The selective observation filter installs inherited
 seccomp TRACE stops for execve/execveat and wait4/waitid, keeps ptrace birth,
 exit and signal observation, and refuses foreign/x32 syscall ABIs. Unrelated
 syscalls need no ptrace round trip; original test deadlines stay unchanged.
 This changes kernel observation only, not finite Python source activation.
 The readiness controls prove successful, failed and caught unknown exec,
 both observation modes, vfork ordering and original waitid/wait4 custody before
-source execution. These controls do not prove the remaining composed or backend source domains.
+source execution. These controls do not prove the remaining backend source domain.
 
-A native callable for the existing profile skip predicate is under verification.
+A native callable for the existing profile skip predicate passed differential
+controls and the original in-process and composed cases cited above.
 It forwards the original frame, event and argument to the unchanged Python
 observer for selected source, pytest, isolated-code and operation events.
 `sys.getprofile()` and thread profile identity remain bound to that callable.
@@ -101,13 +115,45 @@ boot. Differential event, exception and thread controls must pass before source
 execution. No original source deadline, callback selection domain, source
 assertion or process activation flag changes with this implementation.
 
-The composed source still fails its unchanged `submit_run` deadline. Readiness
-run timing records show a 1.1-second custody acknowledgement; this is diagnostic
-evidence, not a timing acceptance claim. The Linux failure-drain inventory now
-uses real per-thread `/proc` children, including unreaped zombies. Zombie birth,
-parent and state are retained fields; missing zombie namespace links are never
-invented. Namespace custody stays attached to the earlier kernel birth record.
-Original failed JUnit and subsequent poison remain preserved.
+Earlier composed runs failed their unchanged `submit_run` deadline; those failed
+JUnit and subsequent poison remain preserved. The current proof above uses the
+same original deadline. The Linux failure-drain inventory uses real per-thread
+`/proc` children, including unreaped zombies. Zombie birth, parent and state are
+retained fields; missing zombie namespace links are never invented. Namespace
+custody stays attached to the earlier kernel birth record. The separate negative failure-drain controls passed
+[run 39068515729](https://github.com/apodgaiko/unrest/actions/runs/39068515729)
+at `17a5aaca2a316c079bbd37d84792701d4dbb39f1`. All five stale/foreign/late/source/
+identity controls refused, caught refusals retained poison, all 23 registered
+children and all 24 kernel-observed child processes had actual parent waits,
+and the final role/adapter each had raw 15 / normalized -15. Worker return 2,
+custodian return 1 and the original failed JUnit remain failed. Only the negative
+control check passed; it cannot substitute for the separately passing original
+composed test. Original source producer activation remains open.
+
+The five original controlled-backend selectors passed
+[run 39067921034](https://github.com/apodgaiko/unrest/actions/runs/39067921034)
+at `b8fec700cec31499b481a74842c4f8d2a53f5616`.
+Original JUnit records retained receipts, correction/rotation and fresh finals,
+programmatic authenticated private preflight, and both default-native launcher
+and runtime pin refusals passing without skips. All 12 registered descendants
+have actual parent waits; all 13 kernel-observed exec attempts, including the
+root, are the pinned Python runtime. Root returned zero, with no kernel or guard
+poison. No native provider child executed. The same run passed 67 prerequisite
+controls. This proves the controlled Python transport and experimental
+`complete_turn` boundaries, not native adapter conversion or provider acceptance.
+
+The Linux seams preserve one-shot listener acceptance by requiring its actual
+reciprocal accepted peer in the same birth-bound server after listener closure.
+An authenticated Unix socket-pair member retains authority through peer closure
+only for its original inode, cookie, UID and peer identity; a reused descriptor
+cannot inherit it. Focused controls cover listener closure, absent/foreign peer,
+Unix peer closure and descriptor reuse. Earlier failed runs remain unchanged.
+
+Public native adapter metadata is downloaded by the trusted image builder using
+pinned archive and member digests. The original Darwin Node image is present
+only as non-executable data for unchanged native-pin refusal assertions; it is
+not a Linux runtime and has no admitted exec route. Provider execution remains
+forbidden independently of absent credentials.
 
 Raw output and observer records travel only to the trusted coordinator's private
 log and are encrypted with OpenSSL CMS to the repository's public recipient
@@ -129,10 +175,10 @@ The following matrix distinguishes proved seams from remaining original source w
 | Domain | Required evidence | Current status |
 | --- | --- | --- |
 | Finite admission and activation | Original source/caller/AST/globals/argv/environment/cwd/READY bindings, including `-I`/`-S`, both producer profiles and backend/query descendants | Pending |
-| Kernel descendant lifecycle | Short-lived/native/failed-exec descendants, exact original-parent waits and fail-closed launch poison | Controls and focused in-process source proved with syscall tracing; selective exec/wait tracing pending |
-| Endpoint and receipt custody | Owned socket peers/listeners, stale/foreign/replay/late refusals before effects | Genuine Linux socket/receipt controls proved; composed integration pending |
-| Restart and failure drain | Source-owned custodian across frontend restart; fresh Linux raw/normalized parent waits with bounded real journal publication | Pending |
-| Original source slice | Whole composed owner, all four in-process restart parameters, producer settlements, controlled backend/Bridge/private preflight/complete_turn and default-native no-launch negatives | Four in-process parameters proved; other domains pending |
+| Kernel descendant lifecycle | Short-lived/native/failed-exec descendants, exact original-parent waits and fail-closed launch poison | Controls, focused in-process source and whole composed source proved with selective exec/wait tracing |
+| Endpoint and receipt custody | Owned socket peers/listeners, stale/foreign/replay/late refusals before effects | Genuine Linux socket/receipt controls and composed integration proved; one-shot Bridge changed seam and original backend integration proved |
+| Restart and failure drain | Source-owned custodian across frontend restart; fresh Linux raw/normalized parent waits with bounded real journal publication | Whole composed owner and separate Linux negative failure controls proved |
+| Original source slice | Whole composed owner, all four in-process restart parameters, producer settlements, controlled backend/Bridge/private preflight/complete_turn and default-native no-launch negatives | Four in-process parameters and whole composed owner proved; producer domains pending |
 | Frozen primary CI | Exact head/checkout/guard/runtime identity, unfiltered original command, package certification and verified same-commit deduplication | Pending |
 
 Existing failed/incomplete observations retain their original outcomes. The
@@ -142,3 +188,24 @@ experimental behavior stays off by default. No provider, model or benchmark
 campaign is part of readiness. Python audit hooks alone do not isolate arbitrary
 hostile native syscalls; finite source bindings and kernel containment remain
 complementary requirements.
+
+## Producer runtime work in progress
+
+The next image adds a separate source-only Linux uv 0.11.0 image, matching the finite
+producer renderer version already used by the portable operation bindings. Its
+public wheel is pinned to SHA256
+`30a08ee4291580784a5e276a1cbec8830994dba2ed5c94d878cce8b2121367cf`.
+The dependency builder keeps uv 0.9.5 and the existing complete dependency closure.
+Earlier successful proofs retain their original image identities.
+The source-build backend is the public setuptools 84.0.0 wheel, SHA256
+`51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670`.
+A trusted, source-free setup seeds its offline cache; source operations will receive
+only a finite writable copy. The local runtime/configuration is unchanged.
+
+A separate CPython entry compiled against the pinned image's actual libpython
+uses `PySys_AddAuditHook` before `Py_BytesMain`. Its source, bootstrap, compiler,
+shared library, stock runtime and compiled entry are sealed separately. The
+observer must supply a read-only UID/PID/birth/argv/environment/cwd-bound startup
+profile before a producer body can run. This entry does not change `-I`/`-S` or
+add environment injection. Native entry controls and original producer activation
+are still pending; the new runtime is not yet a source proof.

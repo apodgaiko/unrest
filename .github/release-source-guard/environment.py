@@ -30,13 +30,18 @@ def build(root: Path, repository: Path, log: Path) -> str:
     (root / "dependency_closure.py").write_bytes(
         Path(__file__).with_name("dependency_closure.py").read_bytes()
     )
-    for name in ('profile_gate.c', 'profile_gate_build.py'):
+    for name in ('profile_gate.c', 'profile_gate_build.py', 'native_entry.c', 'native_entry.py', 'native_entry_build.py'):
         (root / name).write_bytes(Path(__file__).with_name(name).read_bytes())
     native_spec = importlib.util.spec_from_file_location('native_metadata', Path(__file__).with_name('native_metadata.py'))
     assert native_spec is not None and native_spec.loader is not None
     native = importlib.util.module_from_spec(native_spec)
     native_spec.loader.exec_module(native)
     native.prepare(root / 'native-metadata')
+    producer_spec = importlib.util.spec_from_file_location('producer_inputs', Path(__file__).with_name('producer_inputs.py'))
+    assert producer_spec is not None and producer_spec.loader is not None
+    producer = importlib.util.module_from_spec(producer_spec)
+    producer_spec.loader.exec_module(producer)
+    producer.prepare(root / 'producer-inputs')
     (root / "Dockerfile").write_text(
         "FROM " + BASE + "\n"
         "COPY " + wheel.name + " /bootstrap/\n"
@@ -56,6 +61,15 @@ def build(root: Path, repository: Path, log: Path) -> str:
         "RUN gcc -shared -fPIC -O2 -Wall -Wextra -Werror $(python3-config --includes) "
         "/opt/source-guard/profile_gate.c -o /opt/source-guard/profile_gate.so "
         "&& python -I /bootstrap/profile_gate_build.py && rm -rf /bootstrap\n"
+        "COPY native_entry.c native_entry.py /opt/source-guard/\n"
+        "COPY native_entry_build.py /bootstrap/native_entry_build.py\n"
+        "RUN python -I /bootstrap/native_entry_build.py && rm -rf /bootstrap\n"
+        "COPY producer-inputs /opt/source-bootstrap\n"
+        "RUN UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy /opt/source-bootstrap/bin/uv pip install "
+        "--python /usr/local/bin/python --cache-dir /opt/source-bootstrap/cache "
+        "--no-index --find-links /opt/source-bootstrap/wheelhouse "
+        "--target /backend-seed setuptools==84.0.0 "
+        "&& rm -rf /backend-seed /opt/source-bootstrap/cache/interpreter-v4\n"
         "COPY native-metadata/index.js /native/lib/node_modules/@agentclientprotocol/codex-acp/dist/index.js\n"
         "COPY native-metadata/node.data /native/bin/node\n"
         "RUN chmod 0444 /native/bin/node "
