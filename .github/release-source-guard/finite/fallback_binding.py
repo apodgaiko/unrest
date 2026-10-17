@@ -89,7 +89,8 @@ def matches(registration, argv, cwd, environment, state):
                 if module is None or vars(module) is not frame.f_globals:
                     continue
                 loader = getattr(module, '__loader__', None)
-                if type(loader) is importlib.machinery.SourceFileLoader:
+                from beartype.claw._importlib._clawimpload import BeartypeSourceFileLoader
+                if type(loader) in (importlib.machinery.SourceFileLoader, BeartypeSourceFileLoader):
                     specification = getattr(module, '__spec__', None)
                     if (specification is None or specification.loader is not loader
                             or Path(specification.origin).resolve() != source
@@ -97,8 +98,12 @@ def matches(registration, argv, cwd, environment, state):
                         continue
                     # Application imports keep their assertions as CPython
                     # compiles them; pytest rewrites only modules it selects.
-                    base_code = compile(source.read_bytes(), str(source), 'exec',
-                                        dont_inherit=True, optimize=sys.flags.optimize)
+                    if type(loader) is BeartypeSourceFileLoader:
+                        base_code = BeartypeSourceFileLoader.source_to_code(
+                            loader, source.read_bytes(), str(source), _optimize=sys.flags.optimize)
+                    else:
+                        base_code = compile(source.read_bytes(), str(source), 'exec',
+                                            dont_inherit=True, optimize=sys.flags.optimize)
                 else:
                     base_code = state["isolated_source_code"](source)
                 expected_code = (

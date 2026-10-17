@@ -385,7 +385,7 @@ def admit(argv, cwd, environment=None):
                     'arguments_match': len(argv[1:]) == len(registration['argv']) and all(
                         match_arg(a, b) for a, b in zip(argv[1:], registration['argv'])),
                     'script_matches': digest(argv[1]) == registration.get('script_sha256')
-                        if 'script_sha256' in registration else None,
+                        if 'script_sha256' in registration and len(argv) > 1 and Path(argv[1]).is_file() else None,
                     'owned_cwd': owned(str(Path(cwd or os.getcwd()).resolve()))})
         if registration["class"].startswith("source-speed-nested"):
             continue
