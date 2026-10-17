@@ -6,6 +6,7 @@ This module does not admit launches or activate the finite source guard.
 from __future__ import annotations
 
 import os
+import importlib.util
 from pathlib import Path
 import platform
 import socket
@@ -115,7 +116,21 @@ def direct_child_inventory(pid: int) -> dict[str, Any]:
         all_children.update(values)
     if len(all_children) >= 64:
         raise RuntimeError('kernel child inventory exceeds finite bound')
-    births = {str(child): process_identity(child) for child in sorted(all_children)}
+    spec = importlib.util.spec_from_file_location(
+        'retained_linux_birth', Path(__file__).with_name('finite') / 'linux_identity.py')
+    assert spec is not None and spec.loader is not None
+    retained = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(retained)
+    births = {}
+    for child in sorted(all_children):
+        birth = retained.identity(child)
+        fields = (Path('/proc') / str(child) / 'stat').read_text().rpartition(') ')[2].split()
+        if int(fields[19]) != birth['start_ticks']:
+            raise RuntimeError('retained child birth changed during inventory')
+        # Zombie namespace links vanish before reaping. Birth/parent/state stay
+        # genuine; namespace custody comes from the earlier ptrace birth record.
+        births[str(child)] = {**birth, 'state': fields[0]}
+
     if any(value['ppid'] != pid for value in births.values()):
         raise RuntimeError('kernel child original parent drift')
     after = process_identity(pid)
