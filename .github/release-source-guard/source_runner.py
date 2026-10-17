@@ -42,7 +42,7 @@ def main():
     os.chdir('/source')
     custodian = None
     if case == COMPOSED:
-        custodian = sys.modules['restart_custody'].start_custodian(Path('/work'))
+        custodian = sys.modules['restart_custody'].start_custodian(Path(manifest['owned_root']))
         deadline = time.monotonic() + 8
         while not any(event['kind'] == 'custody_IPC_listener_ready' and event['owner_pid'] == custodian.pid
                       for event in guard.summarize(path)['events']):
@@ -63,7 +63,7 @@ def main():
                           'phase': report.when, 'outcome': report.outcome})
     result = 1
     try:
-        result = int(pytest.main(['-q', '-p', 'no:cacheprovider', '--basetemp=/work/pytest',
+        result = int(pytest.main(['-q', '-p', 'no:cacheprovider', '--basetemp=' + manifest['owned_root'] + '/pytest',
                                  '--junitxml=/work/source.xml', case], plugins=[Plugin()]))
     finally:
         if custodian is not None:

@@ -51,7 +51,7 @@ def main():
             credentials.source_credentials()
             tracing.install_observation_filter()
             os.setsid()
-            for name in ('home','tmp','events'):
+            for name in ('home','tmp','events','owned'):
                 (Path('/work') / name).mkdir(mode=0o700)
             os.chdir('/source')
             os.write(ready_write, b'R')
@@ -95,7 +95,7 @@ def main():
             if parent in maintenance:
                 return False
             accepted = git_policy.admit(native_context[parent], path, vector, environment, cwd,
-                                        manifest['git_maintenance_sha256'])
+                                        manifest['git_maintenance_sha256'], manifest['owned_root'])
             if accepted:
                 maintenance.add(parent)
             return accepted
@@ -188,7 +188,7 @@ def main():
     envelope = {'kernel-source.json': base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode(),
                 'source-output.log': base64.b64encode(log).decode()}
     for name in ('collection.json','summary.json','source.xml','custodian.stderr'):
-        path = Path('/work') / name
+        path = Path(manifest['owned_root'] if name == 'custodian.stderr' else '/work') / name
         if path.is_file() and not path.is_symlink():
             envelope[name] = base64.b64encode(path.read_bytes()).decode()
     print('PRIVATE-EVIDENCE:' + json.dumps(envelope, sort_keys=True), flush=True)

@@ -19,13 +19,13 @@ def regular(path: Path, limit: int) -> bytes:
 
 
 def admit(parent: dict, path: str, vector: list[str], environment: dict[str, str],
-          cwd: str, image_pin: str) -> bool:
+          cwd: str, image_pin: str, owned_root: str) -> bool:
     if (parent['argv'] != COMMIT or parent['cwd'] != cwd
             or path != MAINTENANCE[0] or vector != MAINTENANCE
             or hashlib.sha256(Path(path).read_bytes()).hexdigest() != image_pin):
         return False
     root = Path(cwd)
-    if not root.is_relative_to('/work/pytest') or root.resolve() != root:
+    if not root.is_relative_to(Path(owned_root) / 'pytest') or root.resolve() != root:
         return False
     git = root / '.git'
     head = regular(git / 'HEAD', 256).decode().strip()

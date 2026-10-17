@@ -51,7 +51,7 @@ def main():
                          'source_cwd_local': 'work', 'files': {str(target): sha(target)}})
     registry_text = '"""Finite vectors; unavailable platform images cannot match a byte pin."""\nCOMMANDS = ' + repr(registry) + '\n'
     manifest.update({
-        'checkout': '/source', 'owned_root': '/work', 'events': '/work/events',
+        'checkout': '/source', 'owned_root': '/work/owned', 'events': '/work/events',
         'source_case': case, 'source_selection': selection, 'scope': 'focused original ' + selection,
         'source_checkpoint_ready': False, 'selected_carrier': None,
         'guard': str(SUPPORT / 'runtime_guard.py'), 'guard_sha256': sha(SUPPORT / 'runtime_guard.py'),

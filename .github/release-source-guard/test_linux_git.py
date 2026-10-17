@@ -44,4 +44,4 @@ def test_exact_commit_maintenance_binding(tmp_path, mutation):
         environment['GIT_AUTHOR_DATE'] = '@1700000001 +0000'
     if mutation == 'object':
         object_path.write_bytes(zlib.compress(content + b'changed'))
-    assert git.admit(parent, vector[0], vector, environment, str(root), pin) is (mutation == 'none')
+    assert git.admit(parent, vector[0], vector, environment, str(root), pin, '/work') is (mutation == 'none')
