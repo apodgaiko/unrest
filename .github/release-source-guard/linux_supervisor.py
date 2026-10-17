@@ -267,7 +267,7 @@ class Supervisor:
                 or (own["remote_port"] != listener["local_port"])
                 or (own["state"] not in (2, 3, 1, 8))
             ):
-                raise RuntimeError("connected_binding_drift")
+                raise RuntimeError("connected_binding_drift:" + json.dumps({"admitted_listener": listener, "current_listener": current, "connecting_socket": own}, sort_keys=True))
             own_key = (
                 request["pid"],
                 own["socket_cookie"],
