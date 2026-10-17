@@ -11,6 +11,8 @@ import sys
 import tarfile
 import traceback
 
+from drain_controls import check as check_drain_controls
+
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
 TMPFS = {
@@ -130,6 +132,17 @@ def main():
             exit_code = 125
         finally:
             run(['docker','rm','--force',container], log)
+    control_exit = exit_code
+    negative_proof = None
+    if selection == 'drain-controls':
+        try:
+            negative_proof = check_drain_controls(log, exit_code)
+            (raw / 'negative-control-proof.json').write_text(json.dumps(negative_proof, sort_keys=True))
+            control_exit = 0
+        except Exception:
+            with log.open('a') as output:
+                traceback.print_exc(file=output)
+            control_exit = 125
     identity = {key: os.environ.get(name) for key,name in {
         'repository':'GITHUB_REPOSITORY','head_sha':'GITHUB_SHA','run_id':'GITHUB_RUN_ID',
         'run_attempt':'GITHUB_RUN_ATTEMPT','workflow_ref':'GITHUB_WORKFLOW_REF',
@@ -137,6 +150,7 @@ def main():
     identity.update({'scope':'focused-original-' + selection, 'source_exit_code':exit_code,
                      'source_checkpoint_ready':False,'selected_carrier':None,
                      'source_pins_sha256':sha(raw / 'source-pins.json'), 'image_id':image,
+                     'negative_control_proof':negative_proof, 'control_exit_code':control_exit,
                      'support':{str(p.relative_to(SUPPORT)):sha(p) for p in sorted(SUPPORT.rglob('*'))
                                 if p.is_file() and p.suffix in {'.py','.json','.pem','.c'}}})
     (raw / 'provenance.json').write_text(json.dumps(identity, sort_keys=True, indent=2))
@@ -156,7 +170,7 @@ def main():
     (root / 'safe-provenance.json').write_text(json.dumps(identity,sort_keys=True,indent=2) + '\n')
     shutil.rmtree(raw)
     archive.unlink()
-    return exit_code
+    return control_exit
 
 if __name__ == '__main__':
     raise SystemExit(main())

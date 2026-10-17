@@ -141,7 +141,8 @@ def install(guard, endpoint):
                 },
                 "original_return": value,
                 "source_sha256": pin,
-                "poison_preserved": poisoned,
+                "poison_preserved": (endpoint.STATE["poison"] or
+                                     (Path(endpoint.STATE["spec"]["responses"]) / "POISON.json").exists()),
             }
         )
 
