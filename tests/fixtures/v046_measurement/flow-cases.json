@@ -1,0 +1,754 @@
+{
+  "authority": {
+    "final_gate": "pending",
+    "final_turns_reserved": 2,
+    "max_active": 4,
+    "max_parked": 4,
+    "reuse_lane": 0
+  },
+  "base": "5a3d568aa881c746432b7034597bbb8a1ffe025f",
+  "cases": [
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 0,
+        "halt": null,
+        "rotations": 0,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 4
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 9,
+          "fresh_gate_completion": null,
+          "integration_ready": 10
+        },
+        "barrier/reuse": {
+          "first_validator_start": 9,
+          "fresh_gate_completion": null,
+          "integration_ready": 10
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null,
+          "integration_ready": 10
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null,
+          "integration_ready": 10
+        }
+      },
+      "id": "straggler/pass",
+      "outcomes": [
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "pass",
+      "validators": [
+        1,
+        1
+      ],
+      "workers": [
+        1,
+        9
+      ]
+    },
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 2,
+        "halt": null,
+        "rotations": 0,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 8
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 9,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 9,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "straggler/correction",
+      "outcomes": [
+        "sealed",
+        "defect",
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "correction",
+      "validators": [
+        1,
+        1
+      ],
+      "workers": [
+        1,
+        9
+      ]
+    },
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 2,
+        "halt": null,
+        "rotations": 2,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 12
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 9,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 9,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "straggler/rotation",
+      "outcomes": [
+        "sealed",
+        "defect",
+        "sealed",
+        "defect",
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "rotation",
+      "validators": [
+        1,
+        1
+      ],
+      "workers": [
+        1,
+        9
+      ]
+    },
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 0,
+        "halt": null,
+        "rotations": 0,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 4
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null,
+          "integration_ready": 6
+        },
+        "barrier/reuse": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null,
+          "integration_ready": 6
+        },
+        "streaming/fresh": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null,
+          "integration_ready": 6
+        },
+        "streaming/reuse": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null,
+          "integration_ready": 6
+        }
+      },
+      "id": "equal/pass",
+      "outcomes": [
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "pass",
+      "validators": [
+        1,
+        1
+      ],
+      "workers": [
+        5,
+        5
+      ]
+    },
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 2,
+        "halt": null,
+        "rotations": 0,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 8
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "equal/correction",
+      "outcomes": [
+        "sealed",
+        "defect",
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "correction",
+      "validators": [
+        1,
+        1
+      ],
+      "workers": [
+        5,
+        5
+      ]
+    },
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 2,
+        "halt": null,
+        "rotations": 2,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 12
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 5,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "equal/rotation",
+      "outcomes": [
+        "sealed",
+        "defect",
+        "sealed",
+        "defect",
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "rotation",
+      "validators": [
+        1,
+        1
+      ],
+      "workers": [
+        5,
+        5
+      ]
+    },
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 0,
+        "halt": null,
+        "rotations": 0,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 4
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 2,
+          "fresh_gate_completion": null,
+          "integration_ready": 11
+        },
+        "barrier/reuse": {
+          "first_validator_start": 2,
+          "fresh_gate_completion": null,
+          "integration_ready": 11
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null,
+          "integration_ready": 10
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null,
+          "integration_ready": 10
+        }
+      },
+      "id": "long-validator/pass",
+      "outcomes": [
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "pass",
+      "validators": [
+        9,
+        1
+      ],
+      "workers": [
+        1,
+        2
+      ]
+    },
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 2,
+        "halt": null,
+        "rotations": 0,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 8
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 2,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 2,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "long-validator/correction",
+      "outcomes": [
+        "sealed",
+        "defect",
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "correction",
+      "validators": [
+        9,
+        1
+      ],
+      "workers": [
+        1,
+        2
+      ]
+    },
+    {
+      "budget": 24,
+      "expected": {
+        "attention": false,
+        "corrections": 2,
+        "halt": null,
+        "rotations": 2,
+        "terminal": [
+          "passed",
+          "passed"
+        ],
+        "turn_count": 12
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 2,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 2,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "long-validator/rotation",
+      "outcomes": [
+        "sealed",
+        "defect",
+        "sealed",
+        "defect",
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "rotation",
+      "validators": [
+        9,
+        1
+      ],
+      "workers": [
+        1,
+        2
+      ]
+    },
+    {
+      "budget": 8,
+      "expected": {
+        "attention": true,
+        "corrections": 0,
+        "halt": null,
+        "rotations": 0,
+        "terminal": [
+          "attention"
+        ],
+        "turn_count": 2
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "noncorrectable",
+      "outcomes": [
+        "sealed",
+        "other"
+      ],
+      "transition_oracle": "noncorrectable",
+      "validators": [
+        1
+      ],
+      "workers": [
+        1
+      ]
+    },
+    {
+      "budget": 4,
+      "expected": {
+        "attention": false,
+        "corrections": 0,
+        "halt": "budget",
+        "rotations": 0,
+        "terminal": [
+          "correction"
+        ],
+        "turn_count": 2
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "budget-exhaustion",
+      "outcomes": [
+        "sealed",
+        "defect"
+      ],
+      "transition_oracle": "budget-exhaustion",
+      "validators": [
+        1
+      ],
+      "workers": [
+        1
+      ]
+    },
+    {
+      "budget": 10,
+      "expected": {
+        "attention": false,
+        "corrections": 0,
+        "halt": null,
+        "rotations": 0,
+        "terminal": [
+          "passed",
+          "passed",
+          "passed",
+          "passed"
+        ],
+        "turn_count": 8
+      },
+      "expected_by_arm": {
+        "barrier/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "barrier/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/fresh": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        },
+        "streaming/reuse": {
+          "first_validator_start": 1,
+          "fresh_gate_completion": null
+        }
+      },
+      "id": "four-lane-saturation",
+      "outcomes": [
+        "sealed",
+        "pass"
+      ],
+      "transition_oracle": "pass",
+      "validators": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "workers": [
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "fixture_bytes": {
+    "lane_a.txt": {
+      "base": "base\n",
+      "final": "A\n"
+    },
+    "lane_b.txt": {
+      "base": "base\n",
+      "final": "B\n"
+    },
+    "lane_c.txt": {
+      "base": "base\n",
+      "final": "C\n"
+    },
+    "lane_d.txt": {
+      "base": "base\n",
+      "final": "D\n"
+    }
+  },
+  "seed": 4605,
+  "transitions": {
+    "budget-exhaustion": [
+      {
+        "candidate": null,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "validate",
+        "outcome": "sealed",
+        "phase": "work"
+      },
+      {
+        "candidate": 0,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "correction",
+        "outcome": "defect",
+        "phase": "validate"
+      }
+    ],
+    "correction": [
+      {
+        "candidate": null,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "validate",
+        "outcome": "sealed",
+        "phase": "work"
+      },
+      {
+        "candidate": 0,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "correction",
+        "outcome": "defect",
+        "phase": "validate"
+      },
+      {
+        "candidate": 0,
+        "generation": 0,
+        "next_candidate": 1,
+        "next_phase": "recheck",
+        "outcome": "sealed",
+        "phase": "correction"
+      },
+      {
+        "candidate": 1,
+        "generation": 0,
+        "next_candidate": 1,
+        "next_phase": "passed",
+        "outcome": "pass",
+        "phase": "recheck"
+      }
+    ],
+    "noncorrectable": [
+      {
+        "candidate": null,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "validate",
+        "outcome": "sealed",
+        "phase": "work"
+      },
+      {
+        "candidate": 0,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "attention",
+        "outcome": "other",
+        "phase": "validate"
+      }
+    ],
+    "pass": [
+      {
+        "candidate": null,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "validate",
+        "outcome": "sealed",
+        "phase": "work"
+      },
+      {
+        "candidate": 0,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "passed",
+        "outcome": "pass",
+        "phase": "validate"
+      }
+    ],
+    "rotation": [
+      {
+        "candidate": null,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "validate",
+        "outcome": "sealed",
+        "phase": "work"
+      },
+      {
+        "candidate": 0,
+        "generation": 0,
+        "next_candidate": 0,
+        "next_phase": "correction",
+        "outcome": "defect",
+        "phase": "validate"
+      },
+      {
+        "candidate": 0,
+        "generation": 0,
+        "next_candidate": 1,
+        "next_phase": "recheck",
+        "outcome": "sealed",
+        "phase": "correction"
+      },
+      {
+        "candidate": 1,
+        "generation": 0,
+        "next_candidate": 1,
+        "next_phase": "work",
+        "outcome": "defect",
+        "phase": "recheck"
+      },
+      {
+        "candidate": 1,
+        "generation": 1,
+        "next_candidate": 2,
+        "next_phase": "validate",
+        "outcome": "sealed",
+        "phase": "work"
+      },
+      {
+        "candidate": 2,
+        "generation": 1,
+        "next_candidate": 2,
+        "next_phase": "passed",
+        "outcome": "pass",
+        "phase": "validate"
+      }
+    ]
+  },
+  "version": 2
+}

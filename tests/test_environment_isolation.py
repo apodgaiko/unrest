@@ -6,11 +6,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from unrest_harness.capability_policy import (
+    CAPABILITY_PROFILE_ENV,
+    CAPABILITY_VERSION_ENV,
+    UNSAFE_DEVELOPMENT_ENV,
+)
 from unrest_harness.config import (
     DEFAULT_MAX_PARALLEL_NODES,
     DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS,
     HARNESS_CONFIG_ENV_VARS,
     HarnessConfig,
+    _CONFIG_ENV,
 )
 
 _UNRELATED_ENV = "UNREST_TEST_ISOLATION_UNRELATED_SENTINEL"
@@ -62,11 +68,20 @@ def _adversarial_environment() -> dict[str, str]:
 
 
 def test_autouse_fixture_scrubs_complete_authoritative_inventory() -> None:
-    assert len(HARNESS_CONFIG_ENV_VARS) == 17
+    assert HARNESS_CONFIG_ENV_VARS == frozenset(
+        {
+            *_CONFIG_ENV.values(),
+            CAPABILITY_PROFILE_ENV,
+            CAPABILITY_VERSION_ENV,
+            UNSAFE_DEVELOPMENT_ENV,
+        }
+    )
+    assert "UNREST_APPROVAL_RECOVERY" in HARNESS_CONFIG_ENV_VARS
     assert HARNESS_CONFIG_ENV_VARS.isdisjoint(os.environ)
 
     config = HarnessConfig.discover()
 
+    assert config.approval_recovery is False
     assert config.max_parallel_nodes == DEFAULT_MAX_PARALLEL_NODES
     assert (
         config.terminal_review_timeout_seconds

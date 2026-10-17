@@ -24,6 +24,14 @@ schema_version: 1
 
 # Runtime architecture
 
+Experimental reuse/cohort dispatch and native approval recovery are disabled
+by default. Genuine native approval, ACP live reuse and final-candidate timing
+remain **UNVERIFIED** under the accepted 0.4.6 release risk. Controlled local
+checks prove bounded local behavior; OS write isolation, transient-write
+detection and comprehensive unknown-descendant termination remain unverified.
+Ordinary dispatch, providers, persistence and supervision retain their existing
+contracts. See the [release note](../release/lean-core-v0.4.6.md).
+
 ## Purpose
 
 Describe the current disk-resumable control loop from MCP request through
@@ -107,6 +115,51 @@ creation and again before replacement; symlinks and other non-directories fail
 closed at any nesting depth. Containment uses path components, and the writer
 does not resolve a redirected destination and then write through it.
 
+### Retained failure scheduling recovery
+
+`advance_project` first validates retained provider-review origins and restores
+stale pending blocked nodes to failed under ordinary project ownership, without
+rewriting their originating records. Invalid or conflicting carriers refuse
+before scheduling mutations; complete input validation precedes any status write.
+Single and batch allocation/dispatch boundaries exclude retained blocks, while
+independent work remains eligible and failed descendants remain blocked. Both
+additive attention patch paths preserve the denial. A completed continuation
+receipt does not permit fresh replay. The exact operator sequence and retention
+limits are defined in [provider review denial capture](../architecture/provider-review-denial.md).
+
+It then reconciles running attempts, evaluates ready gates,
+and dispatches ready work in authored order. Only when none of those transitions
+is available and no active supervision attempt remains does it look for a
+failed work or validator task in the unsatisfied dependency ancestry of pending
+tasks. A cleared dependency ends that search path. Unrelated failures and a
+completed mission's idle state do not trigger recovery.
+
+Recovery verifies the failed task's latest retained generation, handoff type,
+node identity and incomplete result. Missing, malformed, stale or contradictory
+evidence raises the existing attempt-validation error without inventing a
+handoff. The first eligible failure in authored order becomes ordinary
+`node_failed` attention for work or `node_attention` for validation. Its private
+report explicitly identifies scheduling recovery and retains the original
+failure report; routine public envelopes expose only the existing bounded
+attention fields. Recovery never executes an attempt, reapplies completion,
+or changes task, assertion or gate verdicts.
+
+The project mutation lock covers discovery and publication. Attention is saved
+before project state; after interruption, a fresh controller reuses an open
+item with the same mission, task, generation and kind. Repeated advance while
+attention is open is inert. A resolved event in decision history does not
+suppress a still-stranded failure.
+
+Operators use the existing `decide_attention` API and review the retained
+failure before deciding. An authorized retirement patch must explicitly cancel
+or supersede the failed task, preserve valid contract ownership, and leave
+historical attempts and failed assertions intact. A work `node_failed` patch
+that does not retire the task retains the existing retry behavior. Continuing
+validator attention does not clear an incomplete validator; it may surface
+again while it still blocks pending work. Accepted risk is not a passing
+verdict. Provider-review restrictions on continuation, retry and retirement
+remain authoritative; recovery provides no approval override or waiver.
+
 Initialization is the only caller that may supply an `allowed_ancestor` to the
 atomic writer. This permits an absent managed `.claude`, `.codex`, or `.agents`
 root to be created beneath an existing lexical workspace or user-home boundary.
@@ -179,7 +232,8 @@ Ready gate-validator lanes retain priority. Otherwise the coordinator considers
 the authored runnable prefix up to configured capacity. A work prefix runs
 serially unless every selected work task has one explicit `Writes: path, ...`
 line, the normalized scopes are pairwise disjoint, the dispatcher advertises
-isolated-workspace support, and the project is a clean Git root. In that case
+isolated-workspace support, each task has `auto_merge=true`, and the project is
+a clean Git root. In that case
 the parent leases distinct detached worktrees at one exact base, dispatches
 with each request's own `cwd`, scope-checks identity-bound returned patches,
 validates staged Git bytes, integrates the disjoint patch set serially, and
@@ -318,8 +372,9 @@ without sealing.
 The five durable project mutations delegate directly to one controller-owned
 boundary and request nonblocking OS-lock acquisition. Contention returns
 `project_busy`, while lock-path or acquisition faults return
-`project_lock_error`. Ordinary direct controller inspection and standalone
-supervision adapters use the same boundary in blocking/default mode. Recovery
+`project_lock_error`. Ordinary direct controller inspection uses the same
+boundary in blocking/default mode. Standalone supervision admission instead
+uses bounded acquisition as described below. Recovery
 runs only after successful admission. Trusted same-operation nesting reuses the
 admitted operation without reacquiring the lock, and different projects use
 different locks.
@@ -332,6 +387,108 @@ the controller call and its lock alive after caller cancellation until the
 operation completes normally; the server adds no admission queue, lock, or
 recovery boundary. MCP project inspection and attached run inspection remain
 responsive through the trusted read-only live projection.
+
+### Mission-shared supervision transactions
+
+Checkpoint publication, steering, each role poll and standalone recovery own
+one mission-wide OS lock at
+`.unrest-runtime/missions/<mission>/supervision/.transaction`. This private,
+extensionless regular file cannot alias a per-attempt snapshot lock. It stays
+at the same inode across calls and restarts: never unlink or replace it to
+recover ownership. Process death releases the open descriptor's `flock`.
+Receipt history remains durable in `.unrest`; private inboxes, snapshots and
+the ownership carrier remain runtime state.
+
+Snapshot saves validate the lexical bucket root and directory chain before
+creating directories or opening a carrier. Existing redirects, foreign-owned
+or writable parents, and a nonprivate supervision directory refuse without
+chmod normalization. Existing snapshot carriers must be single-link regular
+files owned by the effective user with mode 0600; symlinks (including dangling
+ones), hardlinks and nonregular files refuse before open. Opens use no-follow,
+nonblocking and close-on-exec flags. Descriptor safety is checked before
+locking; after acquisition the path, descriptor identity and safe state are
+checked again before the snapshot body runs. Benign competing first creation
+and restart reuse the same carrier. These checks apply to standalone saves
+and nested transaction writes. They detect static unsafe paths and observable
+carrier replacement, but do not provide hostile concurrent ancestor-swap
+isolation or change the trusted-process exception.
+
+Trusted `HarnessConfig` construction, including CLI and server discovery,
+expands and resolves both persistence roots, so relative paths, home spellings
+and aliases such as macOS `/var` select canonical roots before serving a project.
+`dataclasses.replace` normalizes each explicitly changed root independently.
+An immutable private established-root pair travels with replacements: unchanged
+roots are never resolved again, including during role/provider changes or when
+only the other root changes. This preserves refusal of later filesystem
+redirects; it is not a boundary against Python callers forging private fields.
+The pair adds no public configuration option or persisted field, and policy
+cache identity and validation are unchanged. The packaged installed-wheel
+checker resolves its newly created, owned temporary root before constructing
+that configuration, including with the default macOS `TMPDIR`. Snapshot
+acquisition never resolves a suspect root or carrier to make it acceptable.
+
+Lock order is optional project admission, then supervision transaction, then
+snapshot. Internal recovery uses the already-owned transaction and never
+recursively acquires it. All receipt read/decide/append, inbox publication and
+consumption, and corresponding checkpoint updates occur inside that boundary.
+The role MCP and attached-run steering retain `project_guard=False`; this
+bypasses only admission, allowing progress while a coordinator holds admission
+and waits for a role. Transaction ownership ends before each polling sleep
+and before provider work.
+
+Ordinary handoff and terminal-review finalization acquire the mission transaction
+and snapshot lock before rereading the attempt and publishing its terminal state.
+Receipt recovery runs inside the transaction first, so a durable stop survives a
+receipt-first crash. The fresh state determines cooperative-stop precedence;
+provider denial still overrides a passing ordinary handoff. Terminal-review
+success and runtime failure both finalize, and a stop takes precedence over either.
+A synthesized typed reviewer crash report is persisted before finalization, so
+ownership, path or storage refusal cannot discard the original diagnostic.
+Finalization refusal still propagates and never seals the mission. After successful
+finalization, a recovered stop selects cooperative-stop attention while the crash
+report remains durable.
+Sequence-zero attempts retain the same existing-schema terminal snapshot and
+stable carrier. Terminal records are hidden from active inspection, reject delayed
+checkpoint or stale save resurrection, and reserve the attempt identity across
+restart. Finalization never unlinks the snapshot, carrier or policy. A role's
+pre-transaction admission read cannot authorize publication over this terminal
+fence. The coordinator already owns project admission and skips reacquiring it;
+standalone finalization shares one absolute bound across admission, transaction
+and snapshot acquisition. No provider work occurs under these locks.
+
+Controlled dispatcher overlap tests exercise finalization against independent
+checkpoint writers. Ordinary ACP dispatch separately closes and reaps its adapter
+before returning, and the coordinator joins its effect thread; the controlled
+schedule does not establish an ordinary ACP teardown overlap.
+
+The waiter establishes its original absolute cutoff once. Admission,
+transaction and all nested snapshot contention share that cutoff, without
+reset, including recovery rows for other attempts. Other supervision callers
+have a five-second internal transaction contention limit, shared by every
+inner snapshot acquisition; this does not create a public attempt deadline.
+The transaction scopes the cutoff and its clock/sleep functions to saves in
+its mission's snapshot directory. Standalone coordinator saves retain separate
+snapshot ownership and do not acquire the mission transaction.
+Nonblocking acquisition attempts
+sleep at most ten milliseconds between retries. An immediately available lock
+can publish the existing timeout outcome at the cutoff; after contention
+reaches the cutoff, `project_busy` refuses without claiming success. Failure to
+acquire the outer transaction cannot publish a timeout receipt. If an inner
+snapshot lock is unavailable after a receipt became durable, that receipt
+remains available for reconciliation and mission ownership is released.
+Lock I/O faults use `project_lock_error`; invalid private
+carrier state uses `supervision_storage_integrity_error`, distinct from corrupt
+receipt history. These bounds do not promise preemption of filesystem syscalls.
+
+Restart reconciles a pending inbox published before its receipt, and completes
+a consumed receipt after durable inbox consumption. Nudge bodies return at
+most once. A crash or lost response after durable consumption may lose delivery;
+it never authorizes replay. Cleanup releases ownership even on exceptions and
+preserves the original operation error if descriptor cleanup also fails.
+Snapshot cleanup attempts both unlock and close, even if unlock fails; any
+acquisition/body `BaseException`, including cancellation, takes precedence over
+cleanup failures. Without an operation failure, the first cleanup failure is
+exposed. A cleanup exception alone is not evidence of a descriptor leak.
 
 ## Change protocol
 

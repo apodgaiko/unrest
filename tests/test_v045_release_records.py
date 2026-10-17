@@ -63,7 +63,15 @@ def test_v045_ci_archive_contract_and_required_gates() -> None:
         "sdist": "unrest_harness-0.4.5.tar.gz",
         "wheel": "unrest_harness-0.4.5-py3-none-any.whl",
     }
-    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    # v0.4.5 tag a77a8be304b736f54acfa6b7181661560aa8433d peels to
+    # 5a3d568aa881c746432b7034597bbb8a1ffe025f; .github/workflows/ci.yml
+    # is blob b15cd0a9b4930787c62ff96520f7f2bfa0f98da2. Keep its exact
+    # bytes here: the historical archive contract must survive later releases.
+    content = (ROOT / "tests/fixtures/v045-ci.yml").read_bytes()
+    assert hashlib.sha256(content).hexdigest() == (
+        "824bf856e1acd0d382138b01e2ba9e019a5dd0cc19a6b9f659f5fcb554612f1f"
+    )
+    workflow = yaml.safe_load(content)
     steps = workflow["jobs"]["primary"]["steps"]
     upload = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
     assert upload["with"]["name"] == artifacts["ci_bundle"]
@@ -127,13 +135,51 @@ def test_v040_release_carriers_remain_exact_tag_bytes() -> None:
 
 
 def test_binding_cli_accepts_active_manifest_and_refuses_wrong_digest(tmp_path: Path) -> None:
+    # Earlier release manifests bind their original bytes, not today's checkout.
+    # An empty Git repository makes these owned untracked files the candidate.
+    repository = tmp_path / "repository"
+    (repository / ".git/objects").mkdir(parents=True)
+    (repository / ".git/refs").mkdir()
+    (repository / ".git/HEAD").write_bytes(b"ref: refs/heads/main\n")
+    files = {
+        "tools/z.py": b"print('fixture')\n",
+        "tests/é.txt": b"\x00\xfftest\n",
+        "src/a.py": b"value = 46\n",
+        "uv.lock": b"version = 1\n",
+        "pyproject.toml": b"[project]\nname = 'binding-fixture'\n",
+    }
+    for relative, content in files.items():
+        destination = repository / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(content)
+    (repository / "README.md").write_bytes(b"outside the binding surface\n")
+    # Independent canonical stream: explicit UTF-8 path order and raw bytes,
+    # with NUL separators. Neither inventory nor serialization uses the CLI.
+    expected = hashlib.sha256(
+        b"pyproject.toml\0[project]\nname = 'binding-fixture'\n\0"
+        b"src/a.py\0value = 46\n\0"
+        b"tests/\xc3\xa9.txt\0\x00\xfftest\n\0"
+        b"tools/z.py\0print('fixture')\n\0"
+        b"uv.lock\0version = 1\n\0"
+    ).hexdigest()
+    manifest = {"source": {"final_product_package_test": {
+        "files": 5, "sha256": expected,
+    }}}
+    active = tmp_path / "active-manifest.json"
+    active.write_text(json.dumps(manifest), encoding="utf-8")
     command = [sys.executable, "-B", str(ROOT / "tools/release_binding.py"),
-               "--repository", str(ROOT), "--check-manifest"]
-    success = subprocess.run([*command, str(MANIFEST)], cwd=ROOT, capture_output=True, text=True)
+               "--repository", str(repository), "--check-manifest"]
+    success = subprocess.run([*command, str(active)], cwd=ROOT, capture_output=True, text=True)
     assert success.returncode == 0, success.stderr
     computed = json.loads(success.stdout)
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert computed["sha256"] == manifest["source"]["final_product_package_test"]["sha256"]
+    assert computed["sha256"] == expected
+    assert computed["files"] == 5
+    assert computed["entries"] == [
+        {"path": relative, "bytes": len(files[relative]),
+         "sha256": hashlib.sha256(files[relative]).hexdigest()}
+        for relative in sorted(files, key=lambda value: value.encode("utf-8"))
+    ]
     manifest["source"]["final_product_package_test"]["sha256"] = "0" * 64
     wrong = tmp_path / "wrong-manifest.json"
     wrong.write_text(json.dumps(manifest), encoding="utf-8")

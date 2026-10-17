@@ -30,8 +30,8 @@ from tools.v04_speed_runner import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURE = ROOT / "tests/fixtures/v04_speed_workloads.json"
-SCHEMA = ROOT / "src/unrest_harness/schemas/v04-speed-result.schema.json"
+FIXTURE = ROOT / "tests/fixtures/v04_speed_workloads.v2.json"
+SCHEMA = ROOT / "src/unrest_harness/schemas/v04-speed-result.v2.schema.json"
 HEAD = "c90a98626d7d595b40a3ac0d1ac954f24e1e12ad"
 TREE = "d05eec79be56cfa8a9011bfa8859e0a65bfc05ad"
 
@@ -44,30 +44,66 @@ def fixture() -> dict[str, Any]:
 @pytest.fixture(scope="module")
 def speed_runs(tmp_path_factory: pytest.TempPathFactory) -> tuple[tuple[dict[str, Any], Path], ...]:
     parent = tmp_path_factory.mktemp("v04-speed-runs")
+    return _collect_speed_runs(parent)
+
+
+def _collect_speed_runs(parent: Path) -> tuple[tuple[dict[str, Any], Path], ...]:
     roots = tuple(parent / f"run-{index}" for index in range(5))
     results = []
-    artifact_roots = []
+    observations: list[dict[str, Any]] = []
     for root in roots:
+        root.mkdir()
         artifact_root = root / "artifacts"
         output = root / "speed-result.json"
-        subprocess.run(
-            (
-                sys.executable,
-                str(ROOT / "tools/v04_speed_runner.py"),
-                "--fixture", str(FIXTURE),
-                "--schema", str(SCHEMA),
-                "--result-root", str(artifact_root),
-                "--output", str(output),
-                "--candidate-head", HEAD,
-                "--candidate-tree", TREE,
-            ),
-            cwd=ROOT,
-            env={"LANG": "C", "LC_ALL": "C", "PYTHONUTF8": "1", "TZ": "UTC"},
-            check=True,
-        )
-        results.append(json.loads(output.read_bytes()))
-        artifact_roots.append(artifact_root)
-    return tuple(zip(results, artifact_roots, strict=True))
+        observation: dict[str, Any] = {"run": root.name}
+        try:
+            completed = subprocess.run(
+                (
+                    sys.executable,
+                    str(ROOT / "tools/v04_speed_runner.py"),
+                    "--fixture", str(FIXTURE),
+                    "--schema", str(SCHEMA),
+                    "--result-root", str(artifact_root),
+                    "--output", str(output),
+                    "--candidate-head", HEAD,
+                    "--candidate-tree", TREE,
+                ),
+                cwd=ROOT,
+                env={"LANG": "C", "LC_ALL": "C", "PYTHONUTF8": "1", "TZ": "UTC"},
+                check=False,
+                capture_output=True,
+            )
+            (root / "stdout.bin").write_bytes(completed.stdout)
+            (root / "stderr.bin").write_bytes(completed.stderr)
+            observation["exit_code"] = completed.returncode
+        except OSError as error:
+            observation.update(exit_code=None, launch_error=type(error).__name__)
+        (root / "exit.json").write_text(json.dumps(observation, sort_keys=True) + "\n")
+        observations.append(observation)
+
+    errors = []
+    fixture = load_fixture(FIXTURE)
+    for root, observation in zip(roots, observations, strict=True):
+        if observation["exit_code"] != 0:
+            errors.append(f"{root.name}: exit {observation['exit_code']}")
+        try:
+            result = json.loads((root / "speed-result.json").read_bytes())
+            validate_result(result, root / "artifacts", fixture)
+        except (OSError, ValueError, SpeedRunnerError) as error:
+            observation["validation_error"] = str(error)
+            errors.append(f"{root.name}: invalid or missing result: {error}")
+            continue
+        observation["failed_gates"] = [
+            {"row": row["id"], **gate}
+            for row in result["rows"] for gate in row["gates"] if not gate["passed"]
+        ]
+        if result["release_pass"] is not True:
+            errors.append(f"{root.name}: failed gates {observation['failed_gates']}")
+        results.append((result, root / "artifacts"))
+    (parent / "collection.json").write_text(json.dumps(observations, sort_keys=True, indent=2) + "\n")
+    if errors:
+        pytest.fail("\n".join(errors))
+    return tuple(results)
 
 
 def _row(result: dict[str, Any], row_id: str) -> dict[str, Any]:
@@ -169,7 +205,7 @@ def _schema_objects(value: object) -> Iterator[dict[str, Any]]:
 
 
 def test_frozen_fixture_has_exact_planning_byte_identity() -> None:
-    assert len(FIXTURE.read_bytes()) == 4485
+    assert len(FIXTURE.read_bytes()) == 4471
     assert hashlib.sha256(FIXTURE.read_bytes()).hexdigest() == FIXTURE_SHA256
 
 
@@ -395,7 +431,7 @@ def test_pair_schedule_uuid_roots_medians_and_complete_raw_bytes(speed_runs, fix
 def test_uuid_domains_are_disjoint_and_retain_118_random_bits() -> None:
     assert set(runner._UUID_DOMAIN_NIBBLES) == {
         (row_id, arm)
-        for row_id in ("improvement-v1", "project-v1", "task-v1")
+        for row_id in ("improvement-v2", "project-v1", "task-v1")
         for arm in ("primitive", "adapter")
     }
     assert len(set(runner._UUID_DOMAIN_NIBBLES.values())) == 6
@@ -535,9 +571,9 @@ def test_project_workspace_identity_handles_a_symlinked_root(
 
 def test_improvement_is_executed_provider_free_and_stops_before_decision(speed_runs) -> None:
     result, result_root = speed_runs[0]
-    row = _row(result, "improvement-v1")
+    row = _row(result, "improvement-v2")
     raw = [_raw(result_root, item) for item in _artifacts(row)]
-    expected_calls = ("open_campaign", "add_candidate", "evaluate_candidate", "review_candidate", "inspect_campaign")
+    expected_calls = ("inspect_campaign", "evaluate_candidate", "review_candidate", "inspect_campaign")
     for item in raw:
         outcome = item["outcome"]
         assert tuple(outcome["operation_sequence"]) == expected_calls
@@ -547,7 +583,7 @@ def test_improvement_is_executed_provider_free_and_stops_before_decision(speed_r
         assert outcome["terminal"] == "decision_needed"
         assert outcome["candidate_before_sha256"] == outcome["candidate_after_sha256"]
         assert outcome["promotions"] == outcome["rollbacks"] == 0
-    assert row["primitive"]["public_invocations"] == 5
+    assert row["primitive"]["public_invocations"] == 4
     assert row["adapter"]["public_invocations"] == 1
     assert all(gate["passed"] for gate in row["gates"])
 
@@ -563,8 +599,8 @@ def test_improvement_retains_full_evaluation_and_review_chains(speed_runs, fixtu
     assert runner.IMPROVEMENT_EVALUATION_DIGEST_ROUNDS == 16_384
     assert runner.IMPROVEMENT_REVIEW_DIGEST_ROUNDS == 8_192
     result, result_root = speed_runs[0]
-    row = _row(result, "improvement-v1")
-    fixture_row = next(item for item in fixture["rows"] if item["id"] == "improvement-v1")
+    row = _row(result, "improvement-v2")
+    fixture_row = next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
     candidate_bytes = fixture_row["input"]["candidate_bytes_utf8"].encode("utf-8")
     evaluation_digest = _independent_chain(
         candidate_bytes, runner.IMPROVEMENT_EVALUATION_DIGEST_ROUNDS
@@ -605,7 +641,7 @@ def test_improvement_input_byte_changes_retained_evidence_for_both_arms(
     fixture, tmp_path: Path
 ) -> None:
     row = deepcopy(
-        next(item for item in fixture["rows"] if item["id"] == "improvement-v1")
+        next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
     )
     baseline: dict[str, dict[str, Any]] = {}
     changed: dict[str, dict[str, Any]] = {}
@@ -644,7 +680,7 @@ def test_validator_rejects_discarded_constant_review_digest(
     result = deepcopy(speed_runs[0][0])
     root = tmp_path / "discarded-review"
     shutil.copytree(speed_runs[0][1], root)
-    row = _row(result, "improvement-v1")
+    row = _row(result, "improvement-v2")
     artifact = _artifacts(row)[0]
     path = root / artifact["path"]
     raw = json.loads(path.read_bytes())
@@ -662,7 +698,7 @@ def test_validator_rejects_discarded_constant_review_digest(
 def test_improvement_uses_one_generic_transaction_per_public_invocation(
     fixture, tmp_path: Path
 ) -> None:
-    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v1")
+    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
     (tmp_path / "primitive").mkdir()
     primitive = asyncio.run(
         runner._improvement_workload("primitive", row, tmp_path / "primitive")
@@ -679,13 +715,12 @@ def test_improvement_uses_one_generic_transaction_per_public_invocation(
     )
     assert primitive_mechanics["logical_events"] == adapter_mechanics["logical_events"]
     assert primitive_mechanics["validation_calls"] == adapter_mechanics["validation_calls"]
-    assert primitive_mechanics["transaction_count"] == 5
+    assert primitive_mechanics["transaction_count"] == 4
     assert adapter_mechanics["transaction_count"] == 1
     assert primitive_mechanics["public_invocation_boundaries"] == row["primitive_calls"]
     assert adapter_mechanics["public_invocation_boundaries"] == row["adapter_calls"]
     assert [event["kind"] for event in adapter_mechanics["logical_events"]] == [
-        "campaign_opened",
-        "candidate_added",
+        "campaign_inspected",
         "evaluation_completed",
         "review_completed",
         "campaign_inspected",
@@ -695,7 +730,7 @@ def test_improvement_uses_one_generic_transaction_per_public_invocation(
 def test_each_recorded_sample_collects_before_clock_and_restores_gc(
     fixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v1")
+    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
     events: list[str] = []
     enabled = True
 
@@ -746,7 +781,7 @@ def test_each_recorded_sample_collects_before_clock_and_restores_gc(
 def test_improvement_measures_equal_real_digest_work_for_both_arms(
     fixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v1")
+    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
     original_sha256 = runner.hashlib.sha256
     counts: dict[str, int] = {"primitive": 0, "adapter": 0}
 
@@ -872,7 +907,7 @@ def test_inflated_task_workload_fails_before_evidence_mutation(
 def test_failed_timing_gate_retains_complete_row_evidence(
     fixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v1")
+    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
     result_root = tmp_path / "evidence"
     calls = {"primitive": 0, "adapter": 0}
 
@@ -1571,3 +1606,229 @@ def test_multiple_honest_fresh_runs_recompute_medians_and_meet_limits(speed_runs
                 medians[arm] = (samples[4] + samples[5]) // 2
             time_gate = row["gates"][-1]
             assert medians["adapter"] / medians["primitive"] <= time_gate["limit"]
+
+
+def test_historical_v1_bytes_remain_immutable() -> None:
+    for path, expected in (
+        ("tests/fixtures/v04_speed_workloads.json", "34ecc3c4a3dd053095efd205cc81dfcef39d3ac7453b4069d7fc185e4b2ece2f"),
+        ("src/unrest_harness/schemas/v04-speed-result.schema.json", "8d7a9ee59060697b968b67f1ab132e92e1a7a503c5503e76d1c57bf5f6578e6a"),
+    ):
+        assert hashlib.sha256((ROOT / path).read_bytes()).hexdigest() == expected
+
+
+@pytest.mark.parametrize("fault,code", [
+    ("invalid_freeze", "invalid_argument"),
+    ("mismatched_freeze", "campaign_freeze_mismatch"),
+    ("missing_candidate", "missing_admitted_candidate"),
+    ("active_lease", "returned_candidate_lease_mismatch"),
+    ("wrong_owner", "returned_candidate_lease_mismatch"),
+    ("wrong_base", "returned_candidate_lease_mismatch"),
+    ("missing_patch", "returned_candidate_lease_mismatch"),
+    ("missing_identity", "returned_candidate_lease_mismatch"),
+    ("stale_patch", "returned_candidate_lease_mismatch"),
+    ("stale_identity", "returned_candidate_lease_mismatch"),
+    ("candidate_lease", "admitted_candidate_mismatch"),
+    ("candidate_action", "admitted_candidate_mismatch"),
+    ("candidate_parent", "admitted_candidate_mismatch"),
+    ("candidate_author", "admitted_candidate_mismatch"),
+    ("candidate_outcome", "admitted_candidate_mismatch"),
+    ("candidate_cost", "admitted_candidate_mismatch"),
+    ("candidate_dissent", "admitted_candidate_mismatch"),
+])
+def test_prepared_improvement_rejects_invalid_provenance(
+    fault: str, code: str, fixture, tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+    from unrest_harness.improve_adapter import ImprovementAdapterError
+
+    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
+    manager = runner._LocalImprovementManager(
+        tmp_path, b"setting=adapter\n", runner._InvocationJournal(tmp_path),
+    )
+    request = runner._improvement_request(row)
+    if fault == "invalid_freeze":
+        request = replace(request, freeze={})
+    elif fault == "mismatched_freeze":
+        request = replace(request, freeze=replace(manager.snapshot.freeze, seed=131))
+    elif fault == "missing_candidate":
+        manager.snapshot = replace(manager.snapshot, candidates=())
+    elif fault.startswith("candidate_"):
+        changes = {
+            "candidate_lease": {"lease_id": "lease:other"},
+            "candidate_action": {"action": "revision"},
+            "candidate_parent": {"parent_candidate_id": "candidate:other"},
+            "candidate_author": {"author_id": "worker:other"},
+            "candidate_outcome": {"outcome": "rejected"},
+            "candidate_cost": {"cost_steps": 1},
+            "candidate_dissent": {"dissent_digests": ("sha256:" + "0" * 64,)},
+        }[fault]
+        manager.snapshot = replace(
+            manager.snapshot, candidates=(replace(manager.snapshot.candidates[0], **changes),),
+        )
+    else:
+        changes = {
+            "active_lease": {"state": "active"},
+            "wrong_owner": {"owner_id": "worker:other"},
+            "wrong_base": {"base_revision": "0" * 40},
+            "missing_patch": {"patch_digest": None},
+            "missing_identity": {"candidate_identity_digest": None},
+            "stale_patch": {"patch_digest": "sha256:" + "0" * 64},
+            "stale_identity": {"candidate_identity_digest": "sha256:" + "0" * 64},
+        }[fault]
+        manager.lease = replace(manager.lease, **changes)
+    original_inspector = runner.improve_adapter._inert_workspace_manager
+    before = manager.candidate_path.read_bytes()
+    with runner._controlled_workspace_inspector(manager):
+        with pytest.raises(ImprovementAdapterError) as error:
+            asyncio.run(runner.run_improvement(manager, request))
+    assert error.value.code == code
+    assert error.value.operation == "inspect"
+    assert manager.calls == ["inspect_campaign"]
+    assert manager.snapshot.evaluations == manager.snapshot.reviews == ()
+    assert manager.candidate_path.read_bytes() == before
+    assert runner.improve_adapter._inert_workspace_manager is original_inspector
+
+
+@pytest.mark.parametrize("fault", ["early_exit", "missing", "invalid", "invalid_result", "failed_gate", "launch"])
+def test_finite_collection_retains_later_runs_after_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str,
+) -> None:
+    calls = []
+    validated = []
+
+    def execute(command, **kwargs):
+        output = Path(command[command.index("--output") + 1])
+        root = output.parent
+        calls.append(root.name)
+        assert kwargs["check"] is False and kwargs["capture_output"] is True
+        artifacts = root / "artifacts"
+        artifacts.mkdir()
+        (artifacts / "raw.json").write_bytes(b'{"retained":true}\n')
+        result = {"run": root.name, "release_pass": True, "rows": []}
+        if root.name == "run-0":
+            if fault == "launch":
+                raise OSError("controlled launch refusal")
+            if fault == "failed_gate":
+                result.update(release_pass=False, rows=[{
+                    "id": "improvement-v2", "gates": [{"passed": False, "limit": 1.1}],
+                }])
+        if not (root.name == "run-0" and fault == "missing"):
+            output.write_text("invalid" if root.name == "run-0" and fault == "invalid"
+                              else json.dumps(result))
+        return subprocess.CompletedProcess(command, 1 if root.name == "run-0" and
+                                           fault == "early_exit" else 0,
+                                           b"stdout retained", b"stderr retained")
+
+    def validate(result, result_root, fixture):
+        validated.append(result["run"])
+        if result["run"] == "run-0" and fault == "invalid_result":
+            raise SpeedRunnerError("binding", "controlled_invalid_result")
+        assert (result_root / "raw.json").read_bytes() == b'{"retained":true}\n'
+
+    monkeypatch.setattr(subprocess, "run", execute)
+    monkeypatch.setitem(globals(), "validate_result", validate)
+    with pytest.raises(pytest.fail.Exception):
+        _collect_speed_runs(tmp_path)
+    assert calls == [f"run-{index}" for index in range(5)]
+    assert validated == calls[(1 if fault in ("missing", "invalid", "launch") else 0):]
+    observations = json.loads((tmp_path / "collection.json").read_bytes())
+    assert len(observations) == 5
+    for index in range(1, 5):
+        root = tmp_path / f"run-{index}"
+        assert (root / "speed-result.json").is_file()
+        assert (root / "artifacts/raw.json").is_file()
+        assert (root / "stdout.bin").read_bytes() == b"stdout retained"
+        assert (root / "stderr.bin").read_bytes() == b"stderr retained"
+        assert json.loads((root / "exit.json").read_bytes())["exit_code"] == 0
+    if fault == "early_exit":
+        assert observations[0]["exit_code"] == 1
+    elif fault == "failed_gate":
+        assert observations[0]["failed_gates"][0]["limit"] == 1.1
+    else:
+        assert "validation_error" in observations[0]
+
+
+@pytest.mark.parametrize("fault,code", [
+    ("author", "admitted_candidate_mismatch"),
+    ("dissent", "admitted_candidate_mismatch"),
+    ("identity", "resume_mismatch"),
+    ("evaluation", "resume_mismatch"),
+    ("review", "resume_mismatch"),
+])
+def test_improvement_rechecks_final_records_with_reused_expectations(
+    fixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str, code: str,
+) -> None:
+    from dataclasses import replace
+    from unrest_harness.improve_adapter import ImprovementAdapterError
+
+    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
+    manager: Any = runner._LocalImprovementManager(
+        tmp_path, b"setting=adapter\n", runner._InvocationJournal(tmp_path),
+    )
+    request = runner._improvement_request(row)
+    original = manager.inspect_campaign
+    count = 0
+
+    def inspect_campaign(campaign_id):
+        nonlocal count
+        count += 1
+        if count == 2:
+            if fault in ("author", "dissent", "identity"):
+                changes = {"author": {"author_id": "worker:other"},
+                           "dissent": {"dissent_digests": ("sha256:" + "0" * 64,)},
+                           "identity": {"candidate_identity_digest": "sha256:" + "0" * 64}}[fault]
+                manager.snapshot = replace(manager.snapshot, candidates=(
+                    replace(manager.snapshot.candidates[0], **changes),))
+            elif fault == "evaluation":
+                manager.snapshot = replace(manager.snapshot, evaluations=(
+                    replace(manager.snapshot.evaluations[0], evidence_digest="sha256:" + "0" * 64),))
+            else:
+                manager.snapshot = replace(manager.snapshot, reviews=(
+                    replace(manager.snapshot.reviews[0], review_digest="sha256:" + "0" * 64),))
+        return original(campaign_id)
+
+    monkeypatch.setattr(manager, "inspect_campaign", inspect_campaign)
+    with runner._controlled_workspace_inspector(manager):
+        with pytest.raises(ImprovementAdapterError) as caught:
+            asyncio.run(runner.run_improvement(manager, request))
+    assert caught.value.code == code
+    assert count == 2
+
+
+def test_improvement_copies_mutable_dissent_and_sorts_once(
+    fixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    row = next(item for item in fixture["rows"] if item["id"] == "improvement-v2")
+    manager: Any = runner._LocalImprovementManager(
+        tmp_path, b"setting=adapter\n", runner._InvocationJournal(tmp_path),
+    )
+    source = ["sha256:" + "b" * 64, "sha256:" + "a" * 64]
+    expected = tuple(source)
+    manager.snapshot = replace(manager.snapshot, candidates=(
+        replace(manager.snapshot.candidates[0], dissent_digests=tuple(sorted(source))),))
+    request = replace(runner._improvement_request(row), candidate_dissent_digests=source)
+    source.append("sha256:" + "0" * 64)
+    assert request.candidate_dissent_digests == expected
+    sorts = []
+    checks = []
+    original_candidate = runner.improve_adapter._candidate
+
+    def sort(values):
+        sorts.append(values)
+        return sorted(values)
+
+    def candidate(snapshot, actual_request, expected):
+        checks.append((snapshot.candidates, actual_request, expected))
+        return original_candidate(snapshot, actual_request, expected)
+
+    monkeypatch.setattr(runner.improve_adapter, "sorted", sort, raising=False)
+    monkeypatch.setattr(runner.improve_adapter, "_candidate", candidate)
+    with runner._controlled_workspace_inspector(manager):
+        result = asyncio.run(runner.run_improvement(manager, request))
+    assert sorts == [expected]
+    assert len(checks) == 2 and checks[0] == checks[1]
+    assert checks[0][2] is checks[1][2]
+    assert result.candidate_id == request.candidate_id
+    assert manager.calls == ["inspect_campaign", "evaluate_candidate", "review_candidate", "inspect_campaign"]

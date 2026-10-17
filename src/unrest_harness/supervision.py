@@ -11,9 +11,11 @@ import hashlib
 import json
 import os
 import stat
+import sys
 import tempfile
 import time
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, Literal, Sequence, cast
@@ -29,7 +31,7 @@ from .models import (
     SupervisionReceiptFile,
     TaskList,
 )
-from .project_lock import project_access_guard
+from .project_lock import ProjectLockBusyError, ProjectLockError, project_access_guard
 from .storage import ProjectStore, atomic_write_json
 
 POLL_NANOSECONDS = 30_000_000_000
@@ -41,6 +43,23 @@ CHECKPOINT_WAIT_SECONDS = 60
 MAX_NUDGE_BYTES = 2048
 MAX_NUDGES = 1
 MAX_AUTOMATIC_RESTARTS = 0
+TRANSACTION_CONTENTION_SECONDS = 5.0
+TRANSACTION_POLL_SECONDS = 0.01
+
+
+@dataclass(frozen=True)
+class _SnapshotAcquisition:
+    directory: Path
+    cutoff: float
+    monotonic: Callable[[], float]
+    sleep: Callable[[float], None]
+
+
+# Scoped to the owning synchronous transaction, including recovery of other
+# attempts. Standalone coordinator saves keep their separate snapshot ownership.
+_snapshot_acquisition: ContextVar[_SnapshotAcquisition | None] = ContextVar(
+    "supervision_snapshot_acquisition", default=None
+)
 
 
 class SupervisionSnapshotError(ValueError):
@@ -239,7 +258,7 @@ def save_snapshot(
     path = snapshot_path(
         store, snapshot.project_id, snapshot.mission_id, snapshot.attempt_id
     )
-    with _snapshot_lock(path):
+    with _snapshot_lock(path, root=store.bucket_root(snapshot.project_id)):
         current = load_snapshot(
             store, snapshot.project_id, snapshot.mission_id, snapshot.attempt_id
         )
@@ -262,6 +281,59 @@ def save_snapshot(
             inventory=store.inventory,
             mode=0o600,
         )
+
+
+def finalize_supervision_attempt(
+    store: ProjectStore,
+    project_id: str,
+    mission_id: str,
+    attempt_id: str,
+    *,
+    assigned_target_ids: Sequence[str],
+    project_guard: bool = True,
+) -> tuple[ActiveAttemptSnapshot | None, bool]:
+    """Fence late publishers; return fresh state and retained stop precedence.
+
+    Keep both the snapshot identity and its carrier, even at sequence zero.
+    The coordinator already owns admission and passes project_guard=False.
+    """
+    cutoff = time.monotonic() + TRANSACTION_CONTENTION_SECONDS
+    guard = (
+        _supervision_project_guard(store, project_id, deadline=cutoff)
+        if project_guard
+        else nullcontext()
+    )
+    path = snapshot_path(store, project_id, mission_id, attempt_id)
+    with guard, _supervision_transaction(
+        store, project_id, mission_id, deadline=cutoff
+    ):
+        _recover_supervision_locked(store, project_id, mission_id, fault=None)
+        with _snapshot_lock(path, root=store.bucket_root(project_id)):
+            current = load_snapshot(store, project_id, mission_id, attempt_id)
+            if current is None:
+                return None, False
+            stopped = (
+                current.phase == "stopping"
+                and current.supervision_status == "stop_requested"
+            ) or any(
+                row.action == "stop_for_attention" and row.code == "stop_requested"
+                for row in _binding_receipts(
+                    load_supervision_receipts(store, project_id, mission_id),
+                    binding_from_snapshot(current),
+                )
+            )
+            if current.phase == "terminal":
+                return current, stopped
+            terminal = terminal_snapshot(current)
+            _validate_monotonic_update(current, terminal, assigned_target_ids)
+            atomic_write_json(
+                path,
+                terminal.model_dump(mode="json"),
+                trusted_root=store.bucket_root(project_id),
+                inventory=store.inventory,
+                mode=0o600,
+            )
+            return current, stopped
 
 
 def _require_durable_resume_authority(
@@ -299,7 +371,7 @@ def _require_durable_resume_authority(
 
 
 def terminal_snapshot(snapshot: ActiveAttemptSnapshot) -> ActiveAttemptSnapshot:
-    """Return the private terminal record retained until ordinary cleanup."""
+    """Return the private terminal identity fence retained across restart."""
     return snapshot.model_copy(
         update={"phase": "terminal", "supervision_status": "terminal"}, deep=True
     )
@@ -426,16 +498,16 @@ def report_supervision_checkpoint(
     if snapshot.phase != "waiting_at_checkpoint" or snapshot.supervision_status != "waiting":
         raise SupervisionSteeringError("not_at_semantic_checkpoint")
     guard = (
-        project_access_guard(store, snapshot.project_id)
+        _supervision_project_guard(store, snapshot.project_id)
         if project_guard
         else nullcontext()
     )
-    with guard:
-        recover_supervision(
+    with guard, _supervision_transaction(store, snapshot.project_id, snapshot.mission_id):
+        _recover_supervision_locked(
             store,
             snapshot.project_id,
             snapshot.mission_id,
-            project_guard=False,
+            fault=None,
         )
         if snapshot.role == "worker":
             directory = supervision_runtime_dir(
@@ -508,17 +580,18 @@ def steer_attempt(
         )
     )
     guard = (
-        project_access_guard(store, request.project_id)
+        _supervision_project_guard(store, request.project_id)
         if project_guard
         else nullcontext()
     )
-    with guard:
-        recover_supervision(
+    with guard, _supervision_transaction(
+        store, request.project_id, request.mission_id, fault=fault
+    ):
+        _recover_supervision_locked(
             store,
             request.project_id,
             request.mission_id,
             fault=fault,
-            project_guard=False,
         )
         snapshot = _require_bound_snapshot(store, binding)
         receipts = load_supervision_receipts(
@@ -642,17 +715,21 @@ def wait_for_steering_action(
     deadline = started + timeout_seconds
     while True:
         guard = (
-            project_access_guard(store, binding.project_id)
+            _supervision_project_guard(
+                store, binding.project_id, deadline=deadline, monotonic=monotonic, sleep=sleep
+            )
             if project_guard
             else nullcontext()
         )
-        with guard:
-            recover_supervision(
+        with guard, _supervision_transaction(
+            store, binding.project_id, binding.mission_id,
+            deadline=deadline, monotonic=monotonic, sleep=sleep, fault=fault,
+        ):
+            _recover_supervision_locked(
                 store,
                 binding.project_id,
                 binding.mission_id,
                 fault=fault,
-                project_guard=False,
             )
             _require_current_or_stopping_checkpoint(store, binding)
             receipts = load_supervision_receipts(
@@ -699,8 +776,8 @@ def recover_supervision(
     project_guard: bool = True,
 ) -> None:
     """Repair receipt tails from private inbox truth without returning a body."""
-    guard = project_access_guard(store, project_id) if project_guard else nullcontext()
-    with guard:
+    guard = _supervision_project_guard(store, project_id) if project_guard else nullcontext()
+    with guard, _supervision_transaction(store, project_id, mission_id, fault=fault):
         _recover_supervision_locked(
             store, project_id, mission_id, fault=fault
         )
@@ -1230,7 +1307,10 @@ def _ensure_directory_chain(
             info = candidate.lstat()
         except FileNotFoundError:
             try:
-                candidate.mkdir(mode=0o755)
+                try:
+                    candidate.mkdir(mode=0o755)
+                except FileExistsError:
+                    pass
                 info = candidate.lstat()
                 _fsync_directory_strict(candidate.parent)
             except OSError as exc:
@@ -1331,26 +1411,235 @@ def _validate_monotonic_update(
 
 
 @contextmanager
-def _snapshot_lock(path: Path) -> Iterator[None]:
-    _ensure_private_supervision_dir(path.parent)
-    lock_path = path.with_suffix(".lock")
-    descriptor = os.open(
-        lock_path,
-        os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0),
-        0o600,
-    )
+def _supervision_project_guard(
+    store: ProjectStore,
+    project_id: str,
+    *,
+    deadline: float | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Iterator[None]:
+    cutoff = monotonic() + TRANSACTION_CONTENTION_SECONDS if deadline is None else deadline
+    with ExitStack() as stack:
+        while True:
+            try:
+                stack.enter_context(project_access_guard(store, project_id, blocking=False))
+                break
+            except ProjectLockBusyError:
+                remaining = cutoff - monotonic()
+                if remaining <= 0:
+                    raise SupervisionSteeringError("project_busy") from None
+                sleep(min(TRANSACTION_POLL_SECONDS, remaining))
+                if monotonic() >= cutoff:
+                    raise SupervisionSteeringError("project_busy") from None
+            except ProjectLockError as exc:
+                raise SupervisionSteeringError("project_lock_error") from exc
+        try:
+            yield
+        finally:
+            failing = sys.exc_info()[0] is not None
+            try:
+                stack.close()
+            except ProjectLockError as exc:
+                if not failing:
+                    raise SupervisionSteeringError("project_lock_error") from exc
+
+
+@contextmanager
+def _supervision_transaction(
+    store: ProjectStore,
+    project_id: str,
+    mission_id: str,
+    *,
+    deadline: float | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    fault: Callable[[str], None] | None = None,
+) -> Iterator[None]:
+    """Own the shared receipt/inbox transaction, never across a polling sleep.
+
+    Callers already own optional project admission; snapshot locks are inner.
+    The carrier is never unlinked, replaced, or used as a persisted lease.
+    A waiter supplies its original absolute cutoff; other callers have a finite
+    internal contention bound, not an attempt or provider deadline.
+    """
+    cutoff = monotonic() + TRANSACTION_CONTENTION_SECONDS if deadline is None else deadline
+    directory = supervision_runtime_dir(store, project_id, mission_id)
+    # No snapshot/policy/inbox filename can alias this extensionless carrier.
+    path = directory / ".transaction"
+    descriptor = -1
     try:
-        os.fchmod(descriptor, 0o600)
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode):
-            raise SupervisionSnapshotError("snapshot lock is not a regular file")
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        try:
+            try:
+                _snapshot_directory(store.bucket_root(project_id), directory, create=True)
+            except SupervisionSnapshotError as exc:
+                raise SupervisionSteeringError("supervision_storage_integrity_error") from exc
+            descriptor = os.open(
+                path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+                0o600,
+            )
+            info = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or stat.S_IMODE(info.st_mode) != 0o600
+                or info.st_nlink != 1
+                or info.st_uid != os.geteuid()
+            ):
+                raise SupervisionSteeringError("supervision_storage_integrity_error")
+            _fault(fault, "before_supervision_transaction")
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    _fault(fault, "supervision_transaction_contended")
+                    remaining = cutoff - monotonic()
+                    if remaining <= 0:
+                        raise SupervisionSteeringError("project_busy") from None
+                    sleep(min(TRANSACTION_POLL_SECONDS, remaining))
+                    if monotonic() >= cutoff:
+                        raise SupervisionSteeringError("project_busy")
+            current = path.lstat()
+            if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+                raise SupervisionSteeringError("supervision_storage_integrity_error")
+        except OSError as exc:
+            raise SupervisionSteeringError("project_lock_error") from exc
+        _fault(fault, "after_supervision_transaction")
+        token = _snapshot_acquisition.set(
+            _SnapshotAcquisition(directory, cutoff, monotonic, sleep)
+        )
+        try:
+            yield
+        finally:
+            _snapshot_acquisition.reset(token)
+    finally:
+        if descriptor >= 0:
+            # close releases OS ownership, including on cancellation. Preserve
+            # the original operation failure if cleanup also fails.
+            failing = sys.exc_info()[0] is not None
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                if not failing:
+                    raise SupervisionSteeringError("project_lock_error") from exc
+
+
+def _snapshot_directory(root: Path, parent: Path, *, create: bool) -> None:
+    """Check the lexical chain before mutation; never resolve redirects as trust.
+
+    This detects static unsafe paths, not hostile concurrent ancestor swaps.
+    Ancestors above the bucket may be shared (for example /private/tmp).
+    """
+    root, parent = root.absolute(), parent.absolute()
+    if ".." in root.parts or ".." in parent.parts or not parent.is_relative_to(root):
+        raise SupervisionSnapshotError("unsafe snapshot directory")
+    chain = list(reversed(parent.parents)) + [parent]
+    missing: list[Path] = []
+    for directory in chain:
+        try:
+            info = directory.lstat()
+        except FileNotFoundError:
+            if not create or not directory.is_relative_to(root) or directory == root:
+                raise SupervisionSnapshotError("missing snapshot root or directory") from None
+            missing.append(directory)
+            continue
+        _validate_snapshot_directory(directory, root, parent, info)
+    # All existing components passed before the first mkdir. A benign competing
+    # creator is allowed only after validating what it actually published.
+    for directory in missing:
+        try:
+            directory.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        _validate_snapshot_directory(directory, root, parent, directory.lstat())
+
+
+def _validate_snapshot_directory(
+    directory: Path, root: Path, parent: Path, info: os.stat_result,
+) -> None:
+    if not stat.S_ISDIR(info.st_mode) or (
+        directory.is_relative_to(root) and (
+            info.st_uid != os.geteuid()
+            or stat.S_IMODE(info.st_mode) & 0o022
+            or (directory == parent and stat.S_IMODE(info.st_mode) != 0o700)
+        )
+    ):
+        raise SupervisionSnapshotError("unsafe snapshot directory")
+
+
+def _validate_snapshot_carrier(info: os.stat_result) -> None:
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_IMODE(info.st_mode) != 0o600
+        or info.st_nlink != 1
+        or info.st_uid != os.geteuid()
+    ):
+        raise SupervisionSnapshotError("unsafe snapshot lock")
+
+
+@contextmanager
+def _snapshot_lock(path: Path, *, root: Path | None = None) -> Iterator[None]:
+    root = path.parent.parent if root is None else root
+    try:
+        _snapshot_directory(root, path.parent, create=True)
+        lock_path = path.with_suffix(".lock")
+        try:
+            _validate_snapshot_carrier(lock_path.lstat())
+        except FileNotFoundError:
+            pass
+        descriptor = os.open(
+            lock_path,
+            os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+            0o600,
+        )
+    except OSError as exc:
+        raise SupervisionSnapshotError("snapshot lock acquisition failed") from exc
+    try:
+        try:
+            info = os.fstat(descriptor)
+            _validate_snapshot_carrier(info)
+            acquisition = _snapshot_acquisition.get()
+            if acquisition is None or acquisition.directory != path.parent:
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+            else:
+                while True:
+                    try:
+                        # An immediately available lock is lawful even at cutoff:
+                        # timeout publication must still apply its durable receipt.
+                        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        remaining = acquisition.cutoff - acquisition.monotonic()
+                        if remaining <= 0:
+                            raise SupervisionSteeringError("project_busy") from None
+                        acquisition.sleep(min(TRANSACTION_POLL_SECONDS, remaining))
+                        if acquisition.monotonic() >= acquisition.cutoff:
+                            raise SupervisionSteeringError("project_busy")
+                    except OSError as exc:
+                        raise SupervisionSteeringError("project_lock_error") from exc
+            _snapshot_directory(root, path.parent, create=False)
+            current = lock_path.lstat()
+            _validate_snapshot_carrier(current)
+            _validate_snapshot_carrier(os.fstat(descriptor))
+            if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+                raise SupervisionSnapshotError("snapshot lock identity changed")
+        except OSError as exc:
+            raise SupervisionSnapshotError("snapshot lock acquisition failed") from exc
         yield
     finally:
+        failing = sys.exc_info()[0] is not None
+        cleanup_error: BaseException | None = None
         try:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
-        finally:
+        except BaseException as exc:
+            cleanup_error = exc
+        try:
             os.close(descriptor)
+        except BaseException as exc:
+            if cleanup_error is None:
+                cleanup_error = exc
+        if not failing and cleanup_error is not None:
+            raise cleanup_error
 
 
 def _validate_path_identifier(value: str) -> None:

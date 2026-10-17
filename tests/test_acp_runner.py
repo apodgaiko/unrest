@@ -54,6 +54,62 @@ from unrest_harness.models import (
 from unrest_harness.storage import ProjectStore
 
 
+@pytest.mark.parametrize("mode", ["early_exit", "never_ready", "ready", "cancel"])
+def test_readiness_attributes_local_child_and_drains(config, mode, caplog):
+    async def exercise():
+        runner = ACPNodeRunner(config=config, loader=AssetLoader(config))
+        if mode == "ready":
+            body = (
+                "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',0)); "
+                "s.listen(); print(s.getsockname()[1],flush=True); time.sleep(30)"
+            )
+        elif mode == "early_exit":
+            body = "import sys; print('private-prompt-credential',file=sys.stderr); sys.exit(23)"
+        else:
+            body = "import time; print('started',flush=True); time.sleep(30)"
+        child = await asyncio.create_subprocess_exec(
+            sys.executable, "-c", body,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            assert child.stdout is not None
+            if mode == "early_exit":
+                await child.wait()
+                port = 1
+            else:
+                line = await child.stdout.readline()
+                port = int(line) if mode == "ready" else 1
+            runner._start_mcp_drains(child)
+            task = asyncio.create_task(runner._wait_for_server_ready(
+                "127.0.0.1", port, timeout=.05 if mode == "never_ready" else 15,
+                process=child,
+            ))
+            if mode == "cancel":
+                await asyncio.sleep(0)
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+            elif mode == "ready":
+                await task
+                assert child.returncode is None
+            else:
+                with pytest.raises(TimeoutError) as caught:
+                    await task
+                diagnostic = str(caught.value)
+                assert "stage=tcp_readiness" in diagnostic
+                assert f"pid={child.pid}" in diagnostic
+                assert ("reason=child_exit" if mode == "early_exit" else "reason=deadline") in diagnostic
+                assert ("exit_code=23" if mode == "early_exit" else "exit_code=None") in diagnostic
+                assert "private-prompt-credential" not in diagnostic
+        finally:
+            await runner._close_mcp_process(child, {}, log_output=False, terminate=True)
+        assert child.returncode is not None
+        assert not runner._mcp_drains
+        assert "private-prompt-credential" not in caplog.text
+
+    asyncio.run(exercise())
+
+
 def _safe_policy(provider_name: str):
     root = Path(__file__).resolve().parents[1]
     bundled = root / "src" / "unrest_harness" / "bundled"

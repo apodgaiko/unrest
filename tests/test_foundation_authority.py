@@ -1,6 +1,7 @@
 """Public mutation authority, grant custody, and restart idempotency."""
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import subprocess
@@ -67,6 +68,25 @@ def _tools(config: HarnessConfig) -> tuple[FoundationTools, ProjectController]:
         MockTerminalReviewer(TerminalReviewHandoff(done=True, report="")),
     )
     return FoundationTools(config, controller), controller
+
+
+def test_async_worker_forwards_codex_broker_only_with_approval_recovery(
+    harness_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    broker = "/private/tmp/codex-app-tools.pipe"
+    provider_path = "/pinned/provider/bin:/usr/bin:/bin"
+    monkeypatch.setenv("CODEX_APP_TOOLS_PIPE_PATH", broker)
+    monkeypatch.setenv("PATH", provider_path)
+
+    disabled, _ = _tools(_config(harness_home / "disabled"))
+    assert "CODEX_APP_TOOLS_PIPE_PATH" not in disabled.runs.worker_environment
+    assert "PATH" not in disabled.runs.worker_environment
+
+    enabled, _ = _tools(
+        replace(_config(harness_home / "enabled"), approval_recovery=True)
+    )
+    assert enabled.runs.worker_environment["CODEX_APP_TOOLS_PIPE_PATH"] == broker
+    assert enabled.runs.worker_environment["PATH"] == provider_path
 
 
 class _FaultOnce:

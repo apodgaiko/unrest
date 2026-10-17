@@ -223,7 +223,7 @@ def test_each_rule_family_emits_its_bounded_code(
         ("mypy", "run: uv run mypy src", "run: uv run mypy tests"),
         (
             "source-suite",
-            "run: env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py",
+            "run: env -u CODEX_PATH uv run pytest -q",
             "run: env -u CODEX_PATH uv run pytest -q --ignore=tests",
         ),
         ("build", "run: uv build", "run: uv build --wheel"),
@@ -268,22 +268,50 @@ def test_ci_required_executable_and_lane_families_are_candidate_bound(
 def test_v045_source_suite_exclusion_is_version_scoped(tmp_path: Path) -> None:
     repository = _copy_repository(tmp_path)
     project = repository / "pyproject.toml"
-    project.write_text(
-        project.read_text(encoding="utf-8").replace('version = "0.4.5"', 'version = "0.4.6"', 1),
-        encoding="utf-8",
-    )
-    assert [(item.code, item.path) for item in _error(repository).diagnostics] == [
-        ("LEAN-REPO-CI", ".github/workflows/ci.yml")
-    ]
+    project_lines = project.read_text(encoding="utf-8").splitlines(keepends=True)
+    assert sum(line.startswith("version = ") for line in project_lines) == 1
+    manifest_path = repository / "docs/release/lean-core-v0.4.5-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     workflow = repository / ".github/workflows/ci.yml"
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace(
-            "env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py",
-            "env -u CODEX_PATH uv run pytest -q",
-        ),
-        encoding="utf-8",
-    )
-    check_repository(repository)
+    workflow_text = workflow.read_text(encoding="utf-8")
+    standard = "run: env -u CODEX_PATH uv run pytest -q"
+    historical = standard + " --ignore=tests/test_v04_speed_runner.py"
+    assert standard in workflow_text
+    assert historical not in workflow_text
+
+    for project_version, manifest_version in (
+        ("0.4.5", "0.4.5"),
+        ("0.4.6", "0.4.5"),
+        ("0.4.5", "0.4.6"),
+        ("0.4.6", "0.4.6"),
+    ):
+        project.write_text(
+            "".join(
+                f'version = "{project_version}"\n' if line.startswith("version = ") else line
+                for line in project_lines
+            ),
+            encoding="utf-8",
+        )
+        manifest["version"] = manifest_version
+        manifest["effective_release_gate"]["id"] = "v045-focused-release-gate-3"
+        _write_json(manifest_path, manifest)
+        workflow.write_text(workflow_text.replace(standard, historical), encoding="utf-8")
+        if project_version == manifest_version == "0.4.5":
+            check_repository(repository)
+        else:
+            assert [(item.code, item.path) for item in _error(repository).diagnostics] == [
+                ("LEAN-REPO-CI", ".github/workflows/ci.yml")
+            ]
+            workflow.write_text(workflow_text, encoding="utf-8")
+            check_repository(repository)
+
+        for exclusion in ("--ignore=tests/test_repository_contract.py", "--ignore=tests"):
+            workflow.write_text(
+                workflow_text.replace(standard, f"{standard} {exclusion}"), encoding="utf-8"
+            )
+            assert [(item.code, item.path) for item in _error(repository).diagnostics] == [
+                ("LEAN-REPO-CI", ".github/workflows/ci.yml")
+            ]
 
 
 def _assert_distribution_checker_executes_extracted_oracle(repository: Path) -> None:

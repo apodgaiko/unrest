@@ -49,8 +49,9 @@ Assertion statuses are `pending`, `passed`, or `failed`.
 - `ARCH-TASK-001`: every contract assertion has exactly one active,
   non-superseded work owner. Validators and gates may cover multiple targets.
 - `ARCH-DISPATCH-001`: authored list order is the topological tie-break; a
-  capacity slice containing work selects exactly its first task before state
-  persistence, while validator-only slices may batch.
+  capacity slice containing work selects its first task unless the isolated
+  admission conditions below permit a disjoint work batch. Validator-only
+  slices may batch.
 - `ARCH-GATE-001`: a gate clears only when every covering upstream validator
   passes each gate target; dissent, omitted items, and uncovered targets fail.
 - `COMPAT-PATCH-001`: supersede/cancel rewrites direct dependency edges in
@@ -107,9 +108,22 @@ a cleared gate cannot be superseded or cancelled.
 
 ## Dispatch
 
+Before gates, selection or fresh attempt allocation, ordinary advance validates
+all retained provider-review carriers under project ownership. A validated block
+on a stale pending node restores failed status without changing its originating
+attempt, dependencies or records. Single and batch final dispatch exclude blocked
+nodes; independent eligible tasks remain runnable and failed descendants remain
+blocked. Invalid or conflicting persistence refuses before reconciliation or
+launch. Retry, continue, cancellation, supersession and additive patching cannot
+override a denial; both patch paths retain its failed status. Completed native
+continuation receipts grant no fresh replay authority. See
+[provider review denial capture](../../docs/architecture/provider-review-denial.md)
+for retention and the supported ordinary advance sequence.
+
 Two or more independent mutable tasks may run concurrently only when each body
 contains one explicit `Writes: path, ...` line, the scopes are pairwise
-disjoint, the dispatcher supports isolated workspaces, and the project root is
+disjoint, each task has `auto_merge=true`, the dispatcher supports isolated
+workspaces, and the project root is
 a clean Git repository. Each child receives a distinct T1 worktree at the same
 base. The parent returns and scope-checks exact patches, validates staged Git
 bytes, and integrates serially. Missing/overlapping scopes, non-Git roots,
@@ -130,15 +144,17 @@ immediately only when no pending downstream gate will surface it.
 
 Outside ready-gate priority, dispatch considers the authored runnable prefix up
 to `max_parallel_nodes`. If that prefix contains work, only its first authored
-task is selected. Therefore work/work and work/validator intervals never
-overlap, and newly scheduled state never marks multiple work tasks `running`.
+task is selected unless at least two work tasks in that prefix satisfy the
+isolated-workspace admission above. An admitted batch contains those work tasks
+only; validators in the prefix wait. Multiple work tasks may be `running` only
+in an admitted isolated batch.
 If the prefix contains only validators, it may dispatch as one batch. Ready
 gate validator lanes retain their priority and may batch only up to the same
 capacity ceiling. At capacity one, a ready gate dispatches one validator per
 step.
 
 Batch-capable dispatchers and the coordinator's per-request fallback receive
-only validator-only batches. Historical state with multiple `running` tasks is
+validator-only batches or admitted isolated work batches. Historical state with multiple `running` tasks is
 reconciled completely before any fresh selection: landed attempts are consumed,
 missing attempts fail, and the reconciliation step returns without dispatching
 new work.

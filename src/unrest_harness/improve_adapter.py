@@ -79,6 +79,7 @@ class ImprovementRequest:
     evaluation_cost_steps: int = 0
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "candidate_dissent_digests", tuple(self.candidate_dissent_digests))
         costs = (self.candidate_cost_steps, self.evaluation_cost_steps)
         if any(
             isinstance(value, bool) or not isinstance(value, int) or value < 0
@@ -230,14 +231,17 @@ def _assert_no_later_decision(snapshot: CampaignSnapshot, operation: Improvement
         raise ImprovementAdapterError("later_decision_action_present", operation=operation)
 
 
-def _candidate(snapshot: CampaignSnapshot, request: ImprovementRequest) -> CandidateAttempt | None:
+def _candidate(
+    snapshot: CampaignSnapshot,
+    request: ImprovementRequest,
+    expected_dissent: tuple[str, ...],
+) -> CandidateAttempt | None:
     candidate = next(
         (item for item in snapshot.candidates if item.candidate_id == request.candidate_id),
         None,
     )
     if candidate is None:
         return None
-    expected_dissent = tuple(sorted(request.candidate_dissent_digests))
     if (
         candidate.lease_id != request.lease_id
         or candidate.action != request.action
@@ -329,7 +333,8 @@ async def run_improvement(
             "returned_candidate_lease_mismatch", operation="inspect"
         )
 
-    candidate = _candidate(snapshot, request)
+    expected_dissent = tuple(sorted(request.candidate_dissent_digests))
+    candidate = _candidate(snapshot, request, expected_dissent)
     if candidate is None:
         raise ImprovementAdapterError("missing_admitted_candidate", operation="inspect")
     if (
@@ -350,7 +355,7 @@ async def run_improvement(
 
     final = _call("inspect", lambda: manager.inspect_campaign(request.campaign_id))
     _assert_no_later_decision(final, "inspect")
-    final_candidate = _candidate(final, request)
+    final_candidate = _candidate(final, request, expected_dissent)
     final_evaluation = _evaluation(final, request)
     final_review = _review_record(final, request)
     if final_candidate is None or final_evaluation is None or final_review is None:

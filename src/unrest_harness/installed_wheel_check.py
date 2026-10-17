@@ -52,7 +52,8 @@ def _controller(config: HarnessConfig) -> ProjectController:
 
 def run_installed_wheel_check() -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="unrest-installed-wheel-") as raw_root:
-        root = Path(raw_root)
+        # Canonicalize our newly owned fixture before constructing direct config.
+        root = Path(raw_root).resolve()
         workspace = root / "unrelated-workspace"
         workspace.mkdir()
         discovered = HarnessConfig.discover()

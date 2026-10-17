@@ -27,6 +27,15 @@ withdraws the former repository governance language and duplicate root schemas.
 
 ## Canonical specifications
 
+- [Provider review denial capture](provider-review-denial.md) — blocked ordinary attempts.
+- [Native human approval recovery](approval-recovery.md) — default-off asynchronous retention, host form and one-use native routing.
+- [Experimental disposable cohort](experimental-cohort.md) — resource admission, sealed Git custody and retained process composition.
+- [Experimental candidate inputs](experimental-candidate.md) — nonpersistent committed-fixture observation.
+
+- [Controlled speed runner v2](controlled-speed-runner.md) — prepared-state compatibility measurement.
+
+- [Experimental lease boundary](experimental-lease.md) — opt-in trusted Codex reuse and controlled ACP/MCP setup; OS isolation unverified.
+- [Experimental scheduling/lifecycle model](experimental-flow-model.md) — provider-free research only.
 - [Task-list product contract](../../specs/task_list/PRODUCT.md)
 - [Memory v2 and storage product contract](../../specs/memory_v2/PRODUCT.md)
 - [Runtime architecture](../v5/07-runtime-architecture.md)

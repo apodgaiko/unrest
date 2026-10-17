@@ -16,7 +16,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 import gc
 import hashlib
 import json
@@ -34,9 +34,11 @@ import time
 from types import BuiltinMethodType, MethodType, SimpleNamespace
 from typing import Any, Iterator, Mapping, Sequence, TypeVar, cast
 import uuid
+from unittest.mock import patch
 
 from unrest_harness.improve_adapter import ImprovementRequest, run_improvement
-from unrest_harness.evolution import EvolutionManager
+from unrest_harness.evolution import CampaignFreeze, EvolutionManager
+from unrest_harness import improve_adapter
 from unrest_harness.coordinator import MissionCoordinator
 from unrest_harness.project_adapter import ProjectDag, ProjectNode, run_project
 from unrest_harness.task_adapter import (
@@ -48,13 +50,13 @@ from unrest_harness.task_adapter import (
 )
 
 
-SCHEMA = "unrest.v04.speed-result.v1"
-FIXTURE_SHA256 = "34ecc3c4a3dd053095efd205cc81dfcef39d3ac7453b4069d7fc185e4b2ece2f"
+SCHEMA = "unrest.v04.speed-result.v2"
+FIXTURE_SHA256 = "eba06eb6e9a24b4beaf1e92a03b6ec492b911c381af81b6fdbd46947e7b99cea"
 CLOCK = time.perf_counter_ns
 IMPROVEMENT_EVALUATION_DIGEST_ROUNDS = 16_384
 IMPROVEMENT_REVIEW_DIGEST_ROUNDS = 8_192
 TASK_EVIDENCE_DIGEST_ROUNDS = 4_096
-EXPECTED_ROWS = ("improvement-v1", "project-v1", "task-v1")
+EXPECTED_ROWS = ("improvement-v2", "project-v1", "task-v1")
 TOP_KEYS = {
     "schema", "accepted_base", "fixture_sha256", "candidate_head", "candidate_tree",
     "environment", "network_attempts", "rows", "release_pass",
@@ -74,8 +76,8 @@ _UUID4_PATTERN = re.compile(
 # Fixing one high nibble spends four of UUIDv4's 122 random bits, leaving 118.
 # The six row/arm domains make reuse structurally impossible across boundaries.
 _UUID_DOMAIN_NIBBLES = {
-    ("improvement-v1", "primitive"): 0x0,
-    ("improvement-v1", "adapter"): 0x2,
+    ("improvement-v2", "primitive"): 0x0,
+    ("improvement-v2", "adapter"): 0x2,
     ("project-v1", "primitive"): 0x4,
     ("project-v1", "adapter"): 0x6,
     ("task-v1", "primitive"): 0x8,
@@ -198,7 +200,7 @@ PROJECTION_PATHS: dict[str, tuple[str, ...]] = {
         "/outcome/mechanics/validation_calls",
         "/outcome/terminal", "/row_id",
     ),
-    "improvement-v1": (
+    "improvement-v2": (
         "/outcome/campaign_phase", "/outcome/candidate_after_sha256",
         "/outcome/candidate_before_sha256",
         "/outcome/evaluation", "/outcome/evaluation_digest",
@@ -221,7 +223,7 @@ OUTCOME_KEYS: dict[str, set[str]] = {
         "attempts", "leaf_events", "manual_checkpoints", "mechanics",
         "result_artifacts", "terminal", "workspace_identities",
     },
-    "improvement-v1": {
+    "improvement-v2": {
         "campaign_phase", "candidate_after_sha256", "candidate_before_sha256",
         "evaluation", "evaluation_digest", "manual_checkpoints",
         "mechanics", "operation_sequence", "promotions", "review", "review_digest",
@@ -848,11 +850,69 @@ class _Snapshot:
     campaign_identity_digest: str
     campaign_digest: str
     state: str
+    freeze: CampaignFreeze
     candidates: tuple[_Candidate, ...]
     evaluations: tuple[_Evaluation, ...]
     reviews: tuple[_Review, ...]
     promotions: tuple[object, ...] = ()
     rollbacks: tuple[object, ...] = ()
+
+
+def _improvement_freeze() -> CampaignFreeze:
+    # Synthetic identities describe prepared local state, never a live campaign.
+    freeze = CampaignFreeze(
+        accepted_revision="545ff97ef5cdab01859a0b56d9352c4715bdcabf",
+        accepted_working_point_digest=_digest("speed-v2:accepted-point"),
+        workload_digest="sha256:" + FIXTURE_SHA256,
+        oracle_digest=_digest("speed-v2:oracle"),
+        author_policy_digest=_digest("speed-v2:author-policy"),
+        evaluator_policy_digest=_digest("speed-v2:evaluator-policy"),
+        reviewer_policy_digest=_digest("speed-v2:reviewer-policy"),
+        capability_policy_digest=_digest("speed-v2:capability-policy"),
+        provider_configuration_digest=_digest("speed-v2:no-provider"),
+        route_profile_digest=_digest("speed-v2:local-route"),
+        context_digest=_digest("speed-v2:context"),
+        environment_digest=_digest("speed-v2:environment"),
+        secret_set_version_id="secret-set:speed:v2",
+        author_id="worker:speed", evaluator_id="validator:speed",
+        reviewer_id="reviewer:speed", budget_steps=20, seed=130,
+        stopping_rule_digest=_digest("speed-v2:stop-at-review"),
+        promotion_rule_digest=_digest("speed-v2:no-promotion"),
+        protected_paths=(".git", ".unrest", ".unrest-runtime"),
+    )
+    freeze.validate()
+    return freeze
+
+
+@dataclass(frozen=True)
+class _ReturnedLease:
+    lease_id: str
+    state: str
+    owner_id: str
+    base_revision: str
+    patch_digest: str | None
+    candidate_identity_digest: str | None
+
+
+@contextmanager
+def _controlled_workspace_inspector(manager: _LocalImprovementManager) -> Iterator[None]:
+    """Replace only persisted lease inspection inside this controlled workload.
+
+    Both arms use this factory; the real adapter still validates freeze and
+    candidate provenance. Never construct a git-backed WorkspaceManager here.
+    """
+    class Inspector:
+        def inspect_workspace(self, lease_id: str) -> _ReturnedLease:
+            manager.journal.validate("improvement_lease", lease_id == manager.lease.lease_id)
+            return manager.lease
+
+    def factory(repository: str | Path, *, custody_root_id: str | None = None) -> Inspector:
+        if Path(repository) != manager.repository or custody_root_id != "speed-v2":
+            raise SpeedRunnerError("binding", "controlled_workspace")
+        return Inspector()
+
+    with patch.object(improve_adapter, "_inert_workspace_manager", factory):
+        yield
 
 
 class _LocalImprovementManager:
@@ -869,44 +929,32 @@ class _LocalImprovementManager:
         self.candidate_path = root / "candidate.txt"
         self.candidate_path.write_bytes(candidate_bytes)
         self.journal.physical_write("candidate.txt")
-        digest = _digest("campaign:speed")
-        self.snapshot = _Snapshot("speed-campaign", _digest("campaign-identity"), digest, "open", (), (), ())
+        self.repository = root
+        self.workspace_manager = SimpleNamespace(
+            store=SimpleNamespace(custody_root_id="speed-v2")
+        )
+        freeze = _improvement_freeze()
+        content_digest = "sha256:" + _sha256(candidate_bytes)
+        candidate = _Candidate(
+            "lease:speed", "original", None, "worker:speed", "admitted", 0, (),
+            "speed-candidate", _digest("candidate-identity:" + content_digest),
+            content_digest, content_digest,
+        )
+        self.lease = _ReturnedLease(
+            "lease:speed", "returned", "worker:speed", freeze.accepted_revision,
+            candidate.patch_digest, candidate.candidate_identity_digest,
+        )
+        freeze_digest = "sha256:" + _sha256(_canonical(asdict(freeze)))
+        self.snapshot = _Snapshot(
+            "speed-campaign", _digest("campaign-identity:" + freeze_digest),
+            freeze_digest, "open", freeze, (candidate,), (), (),
+        )
         self.calls: list[str] = []
         self.sequence = 0
 
     def _event(self, kind: str) -> None:
         self.sequence += 1
-        self.journal.event(kind, {
-            "kind": kind,
-            "sequence": self.sequence,
-        })
-
-    def open_campaign(self, *, campaign_id: str, freeze: object) -> _Snapshot:
-        self.calls.append("open_campaign")
-        self.journal.validate(
-            "improvement_open", campaign_id == "speed-campaign" and freeze == {}
-        )
-        self._event("campaign_opened")
-        return self.snapshot
-
-    def add_candidate(self, *, campaign_id: str, lease_id: str, action: str, parent_candidate_id: str | None, candidate_id: str, author_id: str, outcome: str, cost_steps: int, dissent_digests: Sequence[str]) -> _Candidate:
-        self.calls.append("add_candidate")
-        self.journal.validate("improvement_add_candidate", bool(
-            campaign_id == "speed-campaign"
-            and lease_id
-            and action == "original"
-            and parent_candidate_id is None
-            and candidate_id == "speed-candidate"
-            and author_id
-            and outcome == "admitted"
-            and cost_steps == 0
-            and not dissent_digests
-        ))
-        content_digest = _digest(self.candidate_path.read_text(encoding="utf-8"))
-        candidate = _Candidate(lease_id, action, parent_candidate_id, author_id, outcome, cost_steps, tuple(sorted(dissent_digests)), candidate_id, _digest("candidate-identity:" + content_digest), content_digest, content_digest)
-        self.snapshot = _Snapshot(self.snapshot.campaign_id, self.snapshot.campaign_identity_digest, self.snapshot.campaign_digest, "open", (candidate,), (), ())
-        self._event("candidate_added")
-        return candidate
+        self.journal.event(kind, {"kind": kind, "sequence": self.sequence})
 
     async def evaluate_candidate(self, *, campaign_id: str, candidate_id: str, evaluation_id: str, cost_steps: int) -> _Evaluation:
         self.calls.append("evaluate_candidate")
@@ -920,7 +968,7 @@ class _LocalImprovementManager:
         for _ in range(IMPROVEMENT_EVALUATION_DIGEST_ROUNDS):
             evidence = hashlib.sha256(evidence).digest()
         evaluation = _Evaluation(candidate_id, evaluation_id, cost_steps, "completed_pass", "sha256:" + evidence.hex(), _digest("run-receipt"), _digest("evaluation-receipt"))
-        self.snapshot = _Snapshot(self.snapshot.campaign_id, self.snapshot.campaign_identity_digest, self.snapshot.campaign_digest, "open", self.snapshot.candidates, (evaluation,), ())
+        self.snapshot = replace(self.snapshot, evaluations=(evaluation,))
         self._event("evaluation_completed")
         return evaluation
 
@@ -937,7 +985,7 @@ class _LocalImprovementManager:
         for _ in range(IMPROVEMENT_REVIEW_DIGEST_ROUNDS):
             reviewed = hashlib.sha256(reviewed).digest()
         review = _Review(candidate_id, evaluation_id, review_id, "approve", "sha256:" + reviewed.hex(), _digest("review-receipt"))
-        self.snapshot = _Snapshot(self.snapshot.campaign_id, self.snapshot.campaign_identity_digest, self.snapshot.campaign_digest, "open", self.snapshot.candidates, self.snapshot.evaluations, (review,))
+        self.snapshot = replace(self.snapshot, reviews=(review,))
         self._event("review_completed")
         return review
 
@@ -953,7 +1001,7 @@ class _LocalImprovementManager:
 def _improvement_request(row: Mapping[str, Any]) -> ImprovementRequest:
     value = row["input"]
     return ImprovementRequest(
-        campaign_id=value["campaign_id"], freeze={}, lease_id="lease:speed",
+        campaign_id=value["campaign_id"], freeze=_improvement_freeze(), lease_id="lease:speed",
         candidate_id=value["candidate_id"], action="original", author_id="worker:speed",
         evaluation_id="evaluation:speed", review_id="review:speed",
     )
@@ -973,26 +1021,28 @@ async def _improvement_workload(arm: str, row: Mapping[str, Any], root: Path) ->
     before = _sha256(manager.candidate_path.read_bytes())
     evaluation_outcome: str
     review_outcome: str
-    if arm == "primitive":
-        with journal.invocation("open_campaign"):
-            manager.open_campaign(campaign_id=request.campaign_id, freeze=request.freeze)
-        with journal.invocation("add_candidate"):
-            manager.add_candidate(campaign_id=request.campaign_id, lease_id=request.lease_id, action=request.action, parent_candidate_id=None, candidate_id=request.candidate_id, author_id=request.author_id, outcome="admitted", cost_steps=0, dissent_digests=())
-        with journal.invocation("evaluate_candidate"):
-            evaluation = await manager.evaluate_candidate(campaign_id=request.campaign_id, candidate_id=request.candidate_id, evaluation_id=request.evaluation_id, cost_steps=0)
-        with journal.invocation("review_candidate"):
-            review = await manager.review_candidate(campaign_id=request.campaign_id, candidate_id=request.candidate_id, evaluation_id=request.evaluation_id, review_id=request.review_id)
-        with journal.invocation("inspect_campaign"):
-            snapshot = manager.inspect_campaign(request.campaign_id)
-        terminal, phase = "decision_needed", "reviewed"
-    else:
-        with journal.invocation("run_improvement"):
-            result = await run_improvement(cast(EvolutionManager, manager), request)
-            _public_boundary(result.as_mapping())
-        evaluation_outcome = result.evaluation_outcome
-        review_outcome = result.review_outcome
-        snapshot = manager.snapshot
-        terminal, phase = result.campaign_state, result.stage
+    with _controlled_workspace_inspector(manager):
+        if arm == "primitive":
+            with journal.invocation("inspect_campaign"):
+                manager.inspect_campaign(request.campaign_id)
+                improve_adapter._inert_workspace_manager(
+                    manager.repository, custody_root_id=manager.workspace_manager.store.custody_root_id,
+                ).inspect_workspace(request.lease_id)
+            with journal.invocation("evaluate_candidate"):
+                evaluation = await manager.evaluate_candidate(campaign_id=request.campaign_id, candidate_id=request.candidate_id, evaluation_id=request.evaluation_id, cost_steps=0)
+            with journal.invocation("review_candidate"):
+                review = await manager.review_candidate(campaign_id=request.campaign_id, candidate_id=request.candidate_id, evaluation_id=request.evaluation_id, review_id=request.review_id)
+            with journal.invocation("inspect_campaign"):
+                snapshot = manager.inspect_campaign(request.campaign_id)
+            terminal, phase = "decision_needed", "reviewed"
+        else:
+            with journal.invocation("run_improvement"):
+                result = await run_improvement(cast(EvolutionManager, manager), request)
+                _public_boundary(result.as_mapping())
+            evaluation_outcome = result.evaluation_outcome
+            review_outcome = result.review_outcome
+            snapshot = manager.snapshot
+            terminal, phase = result.campaign_state, result.stage
     if arm == "primitive":
         evaluation_outcome = evaluation.outcome
         review_outcome = review.outcome
@@ -1023,7 +1073,7 @@ async def _execute_workload(row: Mapping[str, Any], arm: str, root: Path) -> dic
         return await _task_workload(arm, row, root)
     if row["id"] == "project-v1":
         return _project_workload(arm, row, root)
-    if row["id"] == "improvement-v1":
+    if row["id"] == "improvement-v2":
         return await _improvement_workload(arm, row, root)
     raise SpeedRunnerError("schema", "unknown_row")
 
@@ -1259,7 +1309,7 @@ def _expected_symmetric_mechanics(row: Mapping[str, Any]) -> dict[str, object]:
         validation_names = ("project_leaf-a", "project_leaf-b", "project_join")
     else:
         kinds = (
-            "campaign_opened", "candidate_added", "evaluation_completed",
+            "campaign_inspected", "evaluation_completed",
             "review_completed", "campaign_inspected",
         )
         events = [
@@ -1271,7 +1321,7 @@ def _expected_symmetric_mechanics(row: Mapping[str, Any]) -> dict[str, object]:
             for index, kind in enumerate(kinds, 1)
         ]
         validation_names = (
-            "improvement_open", "improvement_add_candidate",
+            "improvement_inspect", "improvement_lease",
             "improvement_evaluate", "improvement_review", "improvement_inspect",
         )
     return {

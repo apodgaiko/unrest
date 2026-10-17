@@ -33,7 +33,9 @@ class WorkerCancelled(BaseException):
 class WorkerContext:
     """Executor context for descendants that must drain before lock release."""
 
-    def __init__(self) -> None:
+    def __init__(self, run_id: str | None = None, control: RunControl | None = None) -> None:
+        self.run_id = run_id
+        self.control = control
         self._descendant_pids: set[int] = set()
 
     def register_descendant(self, pid: int) -> None:
@@ -131,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
             ):
                 return 0
             operation, arguments = control.request_payload(options.run_id)
-            context = WorkerContext()
+            context = WorkerContext(options.run_id, control)
             result = executor(operation, arguments, context)
             if not isinstance(result, Mapping):
                 raise TypeError("executor result must be an object")

@@ -1,4 +1,4 @@
-"""Compute the release binding from Git-tracked regular files only."""
+"""Hash working-root bytes for the selected Git regular-file inventory."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from typing import Iterable, Sequence
 SURFACE_ROOTS = ("src", "tests", "tools")
 SURFACE_FILES = ("pyproject.toml", "uv.lock")
 REGULAR_GIT_MODES = {"100644", "100755"}
-ACTIVE_RELEASE_MANIFEST = PurePosixPath(
+HISTORICAL_RELEASE_MANIFEST = PurePosixPath(
     "docs/release/lean-core-v0.4.5-manifest.json"
 )
 
@@ -123,7 +123,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", type=Path, default=Path.cwd())
     parser.add_argument("--root", type=Path)
-    parser.add_argument("--revision")
+    parser.add_argument(
+        "--revision", help="Select paths from this revision; bytes still come from --root."
+    )
     parser.add_argument("--check-manifest", type=Path)
     args = parser.parse_args()
 

@@ -9,3 +9,17 @@ Internet and distributed under the Apache License, Version 2.0:
 Unrest contains independent modifications and additions. Intelligent Internet
 does not endorse Unrest. See docs/lineage.md for source baselines and imported
 change history.
+
+This product bundles the model catalogue from OpenAI Codex rust-v0.160.1:
+
+  src/unrest_harness/provider_data/codex-rust-v0.160.1-models.json
+  https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/models-manager/models.json
+
+OpenAI Codex
+Copyright 2025 OpenAI
+Distributed under the Apache License, Version 2.0. See LICENSE and:
+
+  https://github.com/openai/codex/blob/rust-v0.160.1/LICENSE
+
+This attribution covers the bundled catalogue; it does not imply endorsement
+by OpenAI.

@@ -285,6 +285,8 @@
       "required": ["campaign_id", "candidate_id", "human_grant_id", "idempotency_key"],
       "type": "object"
     },
+    "review_approval_request": {"additionalProperties": false, "properties": {"denial_id": {"maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "type": "string"}, "run_id": {"pattern": "^run:[0-9a-f]{64}$", "type": "string"}}, "required": ["run_id", "denial_id"], "type": "object"},
+    "review_approval_result": {"additionalProperties": false, "properties": {"denial_id": {"maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "type": "string"}, "disposition": {"enum": ["unavailable", "queued", "uncertain"]}, "run_id": {"pattern": "^run:[0-9a-f]{64}$", "type": "string"}}, "required": ["run_id", "denial_id", "disposition"], "type": "object"},
     "rollback_promotion_request": {
       "additionalProperties": false,
       "properties": {"campaign_id": {"minLength": 1, "type": "string"}, "human_grant_id": {"minLength": 1, "type": "string"}, "idempotency_key": {"minLength": 1, "type": "string"}, "promotion_receipt_id": {"minLength": 1, "type": "string"}},
@@ -406,6 +408,7 @@
     {"args_schema": "#/definitions/promote_candidate_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.promote_candidate", "name": "promote_candidate", "resource_key": ["campaign_id", "candidate_id"], "result_schema": "#/definitions/campaign_summary"},
     {"args_schema": "#/definitions/inquiry_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.resume_inquiry", "name": "resume_inquiry", "resource_key": ["inquiry_id"], "result_schema": "#/definitions/inquiry_summary"},
     {"args_schema": "#/definitions/workspace_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.return_workspace", "name": "return_workspace", "resource_key": ["workspace_id"], "result_schema": "#/definitions/workspace_summary"},
+    {"args_schema": "#/definitions/review_approval_request", "errors": "#/stable_error_codes", "idempotency_key": null, "library_callable": "unrest_harness.approval_recovery.review_approval", "name": "review_approval", "resource_key": ["run_id", "denial_id"], "result_schema": "#/definitions/review_approval_result"},
     {"args_schema": "#/definitions/campaign_action_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.review_candidate", "name": "review_candidate", "resource_key": ["campaign_id", "candidate_id"], "result_schema": "#/definitions/campaign_summary"},
     {"args_schema": "#/definitions/rollback_promotion_request", "errors": "#/stable_error_codes", "idempotency_key": "idempotency_key", "library_callable": "unrest_harness.api.rollback_promotion", "name": "rollback_promotion", "resource_key": ["campaign_id", "promotion_receipt_id"], "result_schema": "#/definitions/campaign_summary"},
     {"args_schema": "#/definitions/steer_attempt_request", "errors": "#/stable_error_codes", "idempotency_key": null, "library_callable": "unrest_harness.api.steer_attempt", "name": "steer_attempt", "resource_key": ["run_id"], "result_schema": "#/definitions/supervision_receipt"},

@@ -17,10 +17,13 @@ import time
 import weakref
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Awaitable, Callable, ClassVar, Coroutine, Literal
 
+from .provider_review import ProviderReviewCapture, blocked_handoff
+from .approval_recovery import ApprovalOwner, RunApprovalContext, verify_adapter
 from . import __version__
 from .assets import AssetLoader
 from .capability_policy import (
@@ -67,6 +70,20 @@ SUBPROCESS_STREAM_LIMIT = int(
 )
 MCP_STREAM_CAPTURE_LIMIT = 64 * 1024
 MCP_DRAIN_TIMEOUT_SECONDS = 2.0
+
+
+class _MCPReadinessError(TimeoutError):
+    """Body-free attribution captured before cleanup changes the exit status."""
+
+    def __init__(
+        self, reason: Literal["child_exit", "deadline"],
+        process: asyncio.subprocess.Process | None,
+    ) -> None:
+        super().__init__(
+            f"stage=tcp_readiness reason={reason} "
+            f"pid={process.pid if process is not None else None} "
+            f"startup_exit_code={process.returncode if process is not None else None}"
+        )
 
 
 @dataclass(frozen=True)
@@ -520,6 +537,37 @@ def _acp_subprocess_env(
 _NOT_FOUND = object()
 
 
+async def _finish_owned_cleanup(
+    steps: list[Callable[[], Awaitable[Any]]],
+    *,
+    primary: BaseException | None = None,
+) -> None:
+    """Drain every owned finalizer despite faults or repeated caller cancellation."""
+    async def finish() -> BaseException | None:
+        first: BaseException | None = None
+        for step in steps:
+            try:
+                await step()
+            except BaseException as exc:
+                if first is None:
+                    first = exc
+        return first
+
+    owner = asyncio.create_task(finish())
+    cancelled: asyncio.CancelledError | None = None
+    while not owner.done():
+        try:
+            await asyncio.shield(owner)
+        except asyncio.CancelledError as exc:
+            if cancelled is None:
+                cancelled = exc
+    failure = owner.result()
+    if failure is not None or cancelled is not None:
+        error = primary or cancelled or failure
+        assert error is not None
+        raise error
+
+
 async def _close_subprocess(process: asyncio.subprocess.Process, *, timeout: float = 5) -> None:
     if process.stdin is not None:
         try:
@@ -665,6 +713,10 @@ class ACPClient:
         policy: ResolvedRoleCapability,
         terminal_environment: dict[str, str],
         session_update_handler: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None,
+        *,
+        exclusive_callback: Callable[[str, dict[str, Any]], Any] | None = None,
+        transport_closed: Callable[[], None] | None = None,
+        wire_credentials: dict[str, str] | None = None,
     ):
         self._process = process
         self._working_dir = working_dir
@@ -674,6 +726,13 @@ class ACPClient:
             terminal_environment
         )
         self._session_update_handler = session_update_handler
+        self.provider_review: ProviderReviewCapture | None = None
+        self.retain_provider_denial = False
+        self._exclusive_callback = exclusive_callback
+        self._transport_closed = transport_closed
+        # Separate wire inventory is only for explicitly owned synthetic transport.
+        # Logs/results still use the ordinary credential inventory.
+        self._wire_credentials = wire_credentials
         self._request_id = 0
         self._pending: dict[int, asyncio.Future] = {}
         self._reader_task: asyncio.Task | None = None
@@ -681,6 +740,10 @@ class ACPClient:
         self._terminal_count = 0
         self._request_tasks: set[asyncio.Task] = set()
         self._closing = False
+        self._reader_finalizing = False
+        self._reader_error: ACPError | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
+        self._process_close_task: asyncio.Task[None] | None = None
 
     def set_credential_inventory(self, credentials: dict[str, str]) -> None:
         self._credentials = credentials.copy()
@@ -696,21 +759,27 @@ class ACPClient:
         msg = {
             "jsonrpc": "2.0",
             "method": method,
-            "params": _redact_json_value(params, self._credentials),
+            "params": params,
             "id": rid,
         }
         future: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending[rid] = future
         try:
             await self._write(msg)
-        except Exception:
+            return await future
+        finally:
             self._pending.pop(rid, None)
-            raise
-        return await future
+            if not future.done():
+                future.cancel()
+            elif not future.cancelled():
+                # EOF may settle the future while drain itself raises/cancels.
+                future.exception()
 
     async def _write(self, msg: dict[str, Any]) -> None:
         assert self._process.stdin is not None
-        safe_msg = _redact_json_value(msg, self._credentials)
+        safe_msg = _redact_json_value(
+            msg, self._credentials if self._wire_credentials is None else self._wire_credentials
+        )
         data = json.dumps(safe_msg).encode("utf-8") + b"\n"
         self._process.stdin.write(data)
         await self._process.stdin.drain()
@@ -724,33 +793,78 @@ class ACPClient:
                     continue
                 try:
                     data = json.loads(txt)
-                except json.JSONDecodeError:
-                    continue
+                except (ValueError, RecursionError):
+                    if self.provider_review is not None:
+                        self.provider_review.transport_invalid()
+                    self._reader_error = ACPError("Invalid ACP JSON frame")
+                    break
                 entries = data if isinstance(data, list) else [data]
                 for entry in entries:
                     if not isinstance(entry, dict):
                         continue
+                    if self.provider_review is not None:
+                        recognized = self.provider_review.consume_frame(entry)
+                        if (self.provider_review.blocked is not None
+                                and not self.retain_provider_denial):
+                            for future in self._pending.values():
+                                if not future.done():
+                                    future.set_exception(ACPError("provider review blocked"))
+                            if recognized:
+                                continue
                     if "result" in entry or "error" in entry:
                         self._handle_response(entry)
                     elif "method" in entry:
-                        task = asyncio.create_task(self._handle_request(entry))
-                        self._request_tasks.add(task)
-                        task.add_done_callback(self._request_tasks.discard)
-        except (BrokenPipeError, ConnectionResetError, OSError, asyncio.CancelledError):
-            pass
+                        if self._exclusive_callback is not None:
+                            # Serialize policy decisions with responses and EOF.
+                            await self._handle_request(entry)
+                        else:
+                            task = asyncio.create_task(self._handle_request(entry))
+                            self._request_tasks.add(task)
+                            task.add_done_callback(self._request_tasks.discard)
+        except asyncio.CancelledError:
+            if not self._closing:
+                self._reader_error = ACPError("ACP reader cancelled")
+        except Exception:  # Reader diagnostics must never include untrusted frame bytes.
+            self._reader_error = ACPError("ACP reader failed")
+            if self.provider_review is not None:
+                self.provider_review.transport_invalid()
         finally:
-            for t in list(self._request_tasks):
-                t.cancel()
+            self._reader_finalizing = True
+            # EOF owns the drain before cleanup can request reader cancellation.
+            finalizer = asyncio.create_task(self._finish_reader())
+            while not finalizer.done():
+                try:
+                    await asyncio.shield(finalizer)
+                except asyncio.CancelledError:
+                    pass
+            finalizer.result()
+
+    async def _finish_reader(self) -> None:
+        try:
+            if not self._closing and self._transport_closed is not None:
+                self._transport_closed()
+        finally:
+            callbacks = list(self._request_tasks)
+            for task in callbacks:
+                task.cancel()
+            if callbacks:
+                await asyncio.gather(*callbacks, return_exceptions=True)
             err = "ACP client shutting down" if self._closing else "ACP process exited"
-            for rid, fut in self._pending.items():
-                if not fut.done():
-                    fut.set_exception(ACPError(err))
+            for future in self._pending.values():
+                if not future.done():
+                    future.set_exception(self._reader_error or ACPError(err))
             self._pending.clear()
 
     def _handle_response(self, data: dict[str, Any]) -> None:
         rid = data.get("id")
-        if rid is not None and rid in self._pending:
+        # Preserve numeric response correlation, including JSON 1.0 for ID 1.
+        # Containers and booleans are not JSON-RPC IDs (bool aliases int in Python).
+        if rid is not None and type(rid) not in (int, float, str):
+            raise ACPError("Invalid ACP response ID")
+        if type(rid) in (int, float) and rid in self._pending:
             fut = self._pending.pop(rid)
+            if fut.done():
+                return
             if "error" in data:
                 error = _redact_json_value(data["error"], self._credentials)
                 fut.set_exception(ACPError(str(error)))
@@ -801,6 +915,11 @@ class ACPClient:
                 )
 
     async def _dispatch(self, method: str, params: dict[str, Any]) -> Any:
+        if self.provider_review is not None and self.provider_review.blocked is not None:
+            if method != "session/update":
+                raise ACPError("provider review blocked")
+        if self._exclusive_callback is not None:
+            return self._exclusive_callback(method, params)
         if method == "session/update":
             if self._session_update_handler is not None:
                 try:
@@ -1038,22 +1157,59 @@ class ACPClient:
 
     async def cleanup(self, *, close_main_process: bool = True) -> None:
         self._closing = True
-        for t in self._terminals.values():
-            if t.process.returncode is None:
+        if self._cleanup_task is None:
+            self._cleanup_task = asyncio.create_task(self._cleanup())
+        async def finish_client() -> None:
+            assert self._cleanup_task is not None
+            await asyncio.shield(self._cleanup_task)
+
+        async def finish_process() -> None:
+            if self._process_close_task is None:
+                self._process_close_task = asyncio.create_task(
+                    _close_subprocess(self._process, timeout=5))
+            await asyncio.shield(self._process_close_task)
+
+        steps: list[Callable[[], Awaitable[Any]]] = [finish_client]
+        if close_main_process:
+            steps.append(finish_process)
+        await _finish_owned_cleanup(steps)
+
+    async def _cleanup(self) -> None:
+        async def finish_terminal(terminal: ManagedTerminal) -> None:
+            if terminal.process.returncode is None:
                 try:
-                    t.process.terminate()
+                    terminal.process.terminate()
                 except OSError:
                     pass
-            await _close_subprocess(t.process, timeout=5)
-        self._terminals.clear()
-        if self._reader_task:
-            self._reader_task.cancel()
-            try:
-                await self._reader_task
-            except asyncio.CancelledError:
-                pass
-        if close_main_process:
-            await _close_subprocess(self._process, timeout=5)
+            await _close_subprocess(terminal.process, timeout=5)
+
+        async def wait_reader() -> None:
+            if self._reader_task:
+                if not self._reader_finalizing:
+                    self._reader_task.cancel()
+                try:
+                    await self._reader_task
+                except asyncio.CancelledError:
+                    pass
+
+        async def settle_reader() -> None:
+            if not self._reader_finalizing:
+                # Cancellation can beat the reader's first instruction.
+                self._reader_finalizing = True
+                await self._finish_reader()
+
+        async def drain_terminals() -> None:
+            # Request settlement can finish an in-flight terminal registration.
+            # Capture custody only after those producers have stopped.
+            await _finish_owned_cleanup([
+                partial(finish_terminal, terminal)
+                for terminal in self._terminals.values()
+            ])
+
+        try:
+            await _finish_owned_cleanup([wait_reader, settle_reader, drain_terminals])
+        finally:
+            self._terminals.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -1068,6 +1224,7 @@ class ACPNodeRunner:
     supports_progress_updates: ClassVar[bool] = True
     config: HarnessConfig
     loader: AssetLoader
+    approval_context: RunApprovalContext | None = None
     _mcp_drains: dict[
         int, tuple[asyncio.Task[str], asyncio.Task[str]]
     ] = field(default_factory=dict, init=False, repr=False)
@@ -1112,10 +1269,18 @@ class ACPNodeRunner:
         self,
         process: asyncio.subprocess.Process,
         credentials: dict[str, str],
+        *,
+        log_output: bool = True,
+        terminate: bool = False,
     ) -> str:
         drains = self._mcp_drains.pop(id(process), ())
         drained: list[str | BaseException] = []
         try:
+            if terminate and process.returncode is None:
+                try:
+                    process.terminate()
+                except OSError:
+                    pass
             await _close_subprocess(process, timeout=5)
         finally:
             if drains:
@@ -1138,7 +1303,7 @@ class ACPNodeRunner:
         )
         output_bytes = output.encode("utf-8")[: 2 * MCP_STREAM_CAPTURE_LIMIT]
         output = output_bytes.decode("utf-8", errors="ignore")
-        if process.returncode not in (None, 0) and output:
+        if log_output and process.returncode not in (None, 0) and output:
             logger.warning(
                 "MCP child exited with code %s: %s",
                 process.returncode,
@@ -1329,26 +1494,27 @@ class ACPNodeRunner:
                 ),
             )
             try:
-                await self._wait_for_server_ready("127.0.0.1", mcp_port)
-            except TimeoutError:
-                if mcp_process.returncode is None:
-                    mcp_process.terminate()
-                await self._close_mcp_process(mcp_process, secrets)
+                await self._wait_for_server_ready("127.0.0.1", mcp_port, process=mcp_process)
+            except TimeoutError as exc:
+                diagnostic = str(exc) if isinstance(exc, _MCPReadinessError) else "stage=tcp_readiness reason=deadline"
+                await _finish_owned_cleanup([
+                    partial(self._close_mcp_process, mcp_process, secrets, log_output=False, terminate=True),
+                ], primary=exc)
                 return self._synthesize_and_persist_missing_handoff(
                     handoff_path=handoff_path,
                     task=task,
                     spawn_ts=spawn_ts,
-                    summary="Worker MCP server failed to start",
+                    summary=f"Worker MCP server failed to start ({diagnostic})",
                     stop_reason=None,
                     exit_code=mcp_process.returncode,
                     stderr="",
                     session_error=None,
                     credentials=secrets,
                 )
-            except BaseException:
-                if mcp_process.returncode is None:
-                    mcp_process.terminate()
-                await self._close_mcp_process(mcp_process, secrets)
+            except BaseException as exc:
+                await _finish_owned_cleanup([
+                    partial(self._close_mcp_process, mcp_process, secrets, log_output=False, terminate=True),
+                ], primary=exc)
                 raise
 
         worker_mcp_cfg = {
@@ -1359,6 +1525,9 @@ class ACPNodeRunner:
             "env": [],
         }
 
+        recovery: ApprovalOwner | None = None
+        recovered = False
+        owned_prompts: set[asyncio.Task[Any]] = set()
         # 2) Render the prompt (system + template merged into one first message).
         try:
             first_message = self._render_prompts(
@@ -1370,6 +1539,19 @@ class ACPNodeRunner:
                 project_id=project_id,
             )
 
+            # The bridge is created at launch, never substituted after denial.
+            if (role_config.approval_recovery and self.approval_context is not None
+                    and role_config.worker_provider.name == "codex"):
+                verify_adapter(launch_plan.argv, workspace_dir, agent_env)
+                recovery = ApprovalOwner(
+                    role_config, self.approval_context, store, project_id, mission_id,
+                    spawn_ts, task.id, handoff_path, tuple(secrets.values()),
+                )
+                relay_environment = await recovery.launch_environment(agent_env)
+                launch_plan = build_launch_plan(
+                    runtime.command, cwd=workspace_dir, environment=relay_environment,
+                )
+                preflight_launch(launch_plan)
             # 3) Spawn the ACP agent.
             process = await spawn_launch(
                 launch_plan,
@@ -1379,6 +1561,8 @@ class ACPNodeRunner:
                 limit=SUBPROCESS_STREAM_LIMIT,
             )
         except LaunchError as exc:
+            if recovery is not None:
+                await recovery.close()
             if mcp_process.returncode is None:
                 mcp_process.terminate()
             await self._close_mcp_process(mcp_process, secrets)
@@ -1394,10 +1578,14 @@ class ACPNodeRunner:
                 credentials=secrets,
             )
         except BaseException:
+            if recovery is not None:
+                await recovery.close()
             if mcp_process.returncode is None:
                 mcp_process.terminate()
             await self._close_mcp_process(mcp_process, secrets)
             raise
+        if recovery is not None:
+            recovery.bind_adapter(process.pid)
         progress_tracker = ACPProgressTracker(
             callback=progress_callback,
             redactor=redact,
@@ -1419,6 +1607,7 @@ class ACPNodeRunner:
             set_credential_inventory(secrets)
         prompt_stop_reason: str | None = None
         session_error: str | None = None
+        session_failure: Exception | None = None
         worker_exit_code: int | None = None
         worker_stderr: str = ""
         stderr_task = asyncio.create_task(_drain_stream_chunks(process.stderr))
@@ -1446,6 +1635,15 @@ class ACPNodeRunner:
             provider = role_config.worker_provider
             session_resp = await client.send_request("session/new", session_params)
             session_id = session_resp["sessionId"]
+            if provider.name == "codex":
+                store.begin_provider_review(project_id, mission_id, spawn_ts, task.id, session_id)
+                client.provider_review = ProviderReviewCapture(
+                    session_id,
+                    lambda block: store.save_provider_review(
+                        project_id, mission_id, spawn_ts, task.id, session_id, block
+                    ),
+                    tuple(secrets.values()),
+                )
             await self._maybe_set_mode(
                 client,
                 session_id,
@@ -1453,10 +1651,59 @@ class ACPNodeRunner:
                 role_config.capability_profile,
             )
 
-            prompt_result = await client.send_request(
+            if recovery is not None:
+                client.retain_provider_denial = True
+            prompt_task = asyncio.create_task(client.send_request(
                 "session/prompt",
                 {"prompt": [{"type": "text", "text": first_message}], "sessionId": session_id},
-            )
+            ))
+            owned_prompts.add(prompt_task)
+            if recovery is None:
+                prompt_result = await prompt_task
+            else:
+                denial_waiter = asyncio.create_task(recovery.denied.wait())
+                owned_prompts.add(denial_waiter)
+                await asyncio.wait({prompt_task, denial_waiter}, return_when=asyncio.FIRST_COMPLETED)
+                if recovery.denied.is_set():
+                    await client._write({"jsonrpc": "2.0", "method": "session/cancel",
+                                         "params": {"sessionId": session_id}})
+                    await asyncio.wait_for(asyncio.shield(prompt_task), 5)
+                    await asyncio.wait_for(recovery.settled.wait(), min(5, recovery.remaining()))
+                    callbacks = list(client._request_tasks)
+                    if callbacks:
+                        await asyncio.wait_for(asyncio.gather(*callbacks), 5)
+                    capture = client.provider_review
+                    if (capture is None or capture.blocked is None
+                            or capture.blocked.reason != "denied" or recovery.event is None
+                            or capture.blocked.review is None
+                            or (capture.blocked.review.thread_id, capture.blocked.review.turn_id,
+                                capture.blocked.review.review_id) != (
+                                    session_id, recovery.event["turnId"], recovery.event["reviewId"])
+                            or not await recovery.wait_for_review()
+                            or not await recovery.submit()):
+                        raise ACPError("provider recovery unavailable")
+                    recovery.continuation_requested = True
+                    client.provider_review = ProviderReviewCapture(
+                        session_id, lambda _: recovery.record("re_denied"), tuple(secrets.values()),
+                    )
+                    # ACK only queues the native operation. Exclusive settled
+                    # ownership plus the provider FIFO orders this next input.
+                    continuation = asyncio.create_task(client.send_request("session/prompt", {
+                        "sessionId": session_id, "prompt": [{"type": "text", "text":
+                            "Continue in this same context after the native exact-action review; "
+                            "all actions remain subject to provider review."}],
+                    }))
+                    owned_prompts.add(continuation)
+                    client.retain_provider_denial = False
+                    prompt_result = await asyncio.wait_for(continuation, recovery.remaining())
+                    if (client.provider_review.blocked is not None or client._reader_error is not None
+                            or not recovery.context.is_running()):
+                        raise ACPError("provider recovery unavailable")
+                    recovered = True
+                else:
+                    prompt_result = await prompt_task
+                denial_waiter.cancel()
+                await asyncio.gather(denial_waiter, return_exceptions=True)
             if isinstance(prompt_result, dict):
                 sr = prompt_result.get("stopReason")
                 if isinstance(sr, str):
@@ -1501,35 +1748,87 @@ class ACPNodeRunner:
             # 4) Give the worker MCP server a short grace period to flush.
             await self._poll_attempt_file(handoff_path, timeout=2.0)
         except Exception as exc:  # noqa: BLE001
+            session_failure = exc
             session_error = redact(str(exc))
             logger.error("ACP session failed for node %s: %s", task.id, session_error)
         finally:
-            await progress_tracker.flush()
-            if process.returncode is None:
-                try:
-                    await asyncio.wait_for(process.wait(), timeout=0.5)
-                except asyncio.TimeoutError:
+            primary = sys.exception()
+
+            async def settle_prompts() -> None:
+                for owned in owned_prompts:
+                    if not owned.done():
+                        owned.cancel()
+                if owned_prompts:
+                    await asyncio.gather(*owned_prompts, return_exceptions=True)
+
+            async def finish_recovery() -> None:
+                if recovery is not None:
                     try:
-                        process.terminate()
+                        if recovery.submit_requested and (not recovered or primary or session_failure):
+                            recovery.record("uncertain")
+                    finally:
+                        await recovery.close()
+
+            async def finish_agent() -> None:
+                nonlocal worker_exit_code, worker_stderr
+                if process.returncode is None:
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        try:
+                            process.terminate()
+                        except OSError:
+                            pass
+                await _wait_for_process_exit(process, timeout=5)
+                worker_exit_code = process.returncode
+                try:
+                    worker_stderr = _truncate_text(
+                        redact(await asyncio.wait_for(stderr_task, timeout=0.5)), limit=2000,
+                    )
+                except Exception:  # noqa: BLE001
+                    worker_stderr = ""
+
+            async def finish_mcp() -> None:
+                if mcp_process.returncode is None:
+                    try:
+                        mcp_process.terminate()
                     except OSError:
                         pass
-            await _wait_for_process_exit(process, timeout=5)
-            worker_exit_code = process.returncode
-            try:
-                worker_stderr = _truncate_text(
-                    redact(await asyncio.wait_for(stderr_task, timeout=0.5)),
-                    limit=2000,
-                )
-            except (asyncio.TimeoutError, Exception):
-                worker_stderr = ""
-            await client.cleanup(close_main_process=False)
-            await _close_subprocess(process, timeout=0)
-            if mcp_process.returncode is None:
-                try:
-                    mcp_process.terminate()
-                except OSError:
-                    pass
-            await self._close_mcp_process(mcp_process, secrets)
+                await self._close_mcp_process(mcp_process, secrets)
+
+            await _finish_owned_cleanup([
+                settle_prompts,
+                finish_recovery,
+                progress_tracker.flush,
+                finish_agent,
+                lambda: client.cleanup(close_main_process=False),
+                lambda: _close_subprocess(process, timeout=0),
+                finish_mcp,
+            ], primary=primary or session_failure)
+
+        # The transport result takes precedence over a passing or absent handoff.
+        reader_error = getattr(client, "_reader_error", None)
+        capture = client.provider_review
+        if capture is not None:
+            if capture.blocked is not None:
+                if recovery is not None and recovery.submit_requested:
+                    recovery.record("re_denied")
+                base = (ValidateHandoff(node_id=task.id, done=False, report="", items=[], passed=False)
+                        if task.type == "validate" else
+                        WorkHandoff(node_id=task.id, done=False, report=""))
+                return blocked_handoff(base, capture.blocked, spawn_ts)
+            if reader_error is not None:
+                if recovery is not None and recovery.submit_requested:
+                    recovery.record("uncertain")
+                raise reader_error
+            if recovered and recovery is not None:
+                recovery.record("completed")
+            if not recovered:
+                store.finish_provider_review(project_id, mission_id, spawn_ts, task.id)
+        if reader_error is not None:
+            raise reader_error
+        if session_failure is not None and handoff_path.exists():
+            raise session_failure
 
         # 5) Parse and return.
         if handoff_path.exists():
@@ -1691,10 +1990,12 @@ class ACPNodeRunner:
         )
         try:
             try:
-                await self._wait_for_server_ready("127.0.0.1", mcp_port)
+                await self._wait_for_server_ready("127.0.0.1", mcp_port, process=mcp_process)
             except TimeoutError as exc:
+                diagnostic = str(exc) if isinstance(exc, _MCPReadinessError) else "stage=tcp_readiness reason=deadline"
                 raise RuntimeError(
-                    "Terminal reviewer MCP server failed to start; cannot run terminal review"
+                    "Terminal reviewer MCP server failed to start; cannot run terminal review "
+                    f"({diagnostic})"
                 ) from exc
 
             worker_mcp_cfg = {
@@ -1770,36 +2071,56 @@ class ACPNodeRunner:
             )
             await self._poll_attempt_file(report_path, timeout=2.0)
         finally:
-            try:
-                await tracker.flush()
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "Terminal-review progress callback failed: %s",
-                    redact(str(exc)),
-                )
-            if process is not None and process.returncode is None:
+            primary = sys.exception()
+
+            async def finish_agent() -> None:
+                if process is not None:
+                    if process.returncode is None:
+                        try:
+                            process.terminate()
+                        except OSError:
+                            pass
+                    await _wait_for_process_exit(process, timeout=5)
+
+            async def finish_stderr() -> None:
+                if stderr_task is not None:
+                    stderr_task.cancel()
+                    try:
+                        await stderr_task
+                    except asyncio.CancelledError:
+                        pass
+
+            async def finish_client() -> None:
+                if client is not None:
+                    await client.cleanup(close_main_process=False)
+
+            async def close_agent() -> None:
+                if process is not None:
+                    await _close_subprocess(process, timeout=0)
+
+            async def finish_mcp() -> None:
+                if mcp_process.returncode is None:
+                    try:
+                        mcp_process.terminate()
+                    except OSError:
+                        pass
+                await self._close_mcp_process(mcp_process, secrets, log_output=process is not None)
+
+            async def flush_progress() -> None:
                 try:
-                    process.terminate()
-                except OSError:
-                    pass
-            if process is not None:
-                await _wait_for_process_exit(process, timeout=5)
-            if stderr_task is not None:
-                stderr_task.cancel()
-                try:
-                    await stderr_task
-                except asyncio.CancelledError:
-                    pass
-            if client is not None:
-                await client.cleanup(close_main_process=False)
-            if process is not None:
-                await _close_subprocess(process, timeout=0)
-            if mcp_process.returncode is None:
-                try:
-                    mcp_process.terminate()
-                except OSError:
-                    pass
-            await self._close_mcp_process(mcp_process, secrets)
+                    await tracker.flush()
+                except Exception as exc:  # Observers do not own the saved verdict.
+                    logger.warning(
+                        "Terminal-review progress callback failed: %s", redact(str(exc)),
+                    )
+
+            await _finish_owned_cleanup([
+                flush_progress, finish_agent, finish_stderr, finish_client, close_agent, finish_mcp,
+            ], primary=primary)
+
+        reader_error = getattr(client, "_reader_error", None)
+        if reader_error is not None:
+            raise reader_error
 
         if report_path.exists():
             return TerminalReviewHandoff.model_validate(
@@ -1858,6 +2179,14 @@ class ACPNodeRunner:
             "--sensitive-inventory-fd",
             str(read_fd),
         ]
+        if self.config.approval_recovery and self.approval_context is not None:
+            cmd = [
+                sys.executable,
+                "-c",
+                "from unrest_harness.approval_recovery import run_owned_mcp; "
+                f"run_owned_mcp({os.getpid()})",
+                *cmd[3:],
+            ]
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -1943,17 +2272,34 @@ class ACPNodeRunner:
             raise
         return process
 
-    async def _wait_for_server_ready(self, host: str, port: int, *, timeout: float = 15) -> None:
-        deadline = asyncio.get_event_loop().time() + timeout
-        while asyncio.get_event_loop().time() < deadline:
+    async def _wait_for_server_ready(
+        self, host: str, port: int, *, timeout: float = 15,
+        process: asyncio.subprocess.Process | None = None,
+    ) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while True:
+            if process is not None and process.returncode is not None:
+                raise _MCPReadinessError("child_exit", process)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise _MCPReadinessError("deadline", process)
             try:
-                _, writer = await asyncio.open_connection(host, port)
+                _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), remaining)
                 writer.close()
-                await writer.wait_closed()
+                await asyncio.wait_for(writer.wait_closed(), max(0, deadline - loop.time()))
+                if process is not None and process.returncode is not None:
+                    raise _MCPReadinessError("child_exit", process)
                 return
+            except _MCPReadinessError:
+                raise
+            except TimeoutError:
+                reason: Literal["child_exit", "deadline"] = (
+                    "child_exit" if process is not None and process.returncode is not None else "deadline"
+                )
+                raise _MCPReadinessError(reason, process) from None
             except (ConnectionRefusedError, OSError):
-                await asyncio.sleep(0.3)
-        raise TimeoutError(f"MCP server on {host}:{port} not ready within {timeout}s")
+                await asyncio.sleep(min(0.3, max(0, deadline - loop.time())))
 
     async def _poll_attempt_file(self, path: Path, *, timeout: float) -> bool:
         deadline = asyncio.get_running_loop().time() + timeout
@@ -2211,11 +2557,13 @@ class ACPNodeDispatcher:
         store: ProjectStore | None = None,
         *,
         record_invocations: bool = False,
+        approval_context: RunApprovalContext | None = None,
     ):
         self.config = config
         self.store = store or ProjectStore(config)
         self.loader = AssetLoader(config)
-        self.runner = ACPNodeRunner(config=config, loader=self.loader)
+        self.runner = ACPNodeRunner(config=config, loader=self.loader,
+                                    approval_context=approval_context)
         self.record_invocations = record_invocations
 
     def dispatch(self, request: DispatchRequest) -> NodeHandoff:

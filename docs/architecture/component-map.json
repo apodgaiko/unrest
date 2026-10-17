@@ -8,15 +8,23 @@
       ],
       "paths": [
         "src/unrest_harness/acp_runner.py",
+        "src/unrest_harness/approval_native.py",
+        "src/unrest_harness/approval_recovery.py",
+        "src/unrest_harness/approval_relay.py",
+        "src/unrest_harness/provider_review.py",
         "src/unrest_harness/providers.py"
       ],
       "specifications": [
+        "docs/architecture/approval-recovery.md",
+        "docs/architecture/provider-review-denial.md",
         "docs/v5/07-runtime-architecture.md",
         "docs/v5/08-mcp-surface.md"
       ],
       "tests": [
         "tests/test_acp_runner.py",
         "tests/test_acp_sandbox.py",
+        "tests/test_approval_recovery.py",
+        "tests/test_provider_review.py",
         "tests/test_smoke_parallel_acp.py",
         "tests/test_smoke_real_acp.py",
         "tests/test_smoke_zai_claude.py"
@@ -38,6 +46,20 @@
       ],
       "tests": [
         "tests/test_assets.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-CANDIDATE-INPUTS",
+      "invariants": [],
+      "paths": [
+        "src/unrest_harness/experimental_candidate.py"
+      ],
+      "specifications": [
+        "docs/architecture/experimental-candidate.md"
+      ],
+      "tests": [
+        "tests/test_experimental_candidate.py"
       ]
     },
     {
@@ -104,9 +126,19 @@
       "paths": [
         "src/unrest_harness/attention.py",
         "src/unrest_harness/coordinator.py",
-        "src/unrest_harness/dispatcher.py"
+        "src/unrest_harness/dispatcher.py",
+        "src/unrest_harness/experimental_broker.py",
+        "src/unrest_harness/experimental_confinement.py",
+        "src/unrest_harness/experimental_diagnostics.py",
+        "src/unrest_harness/experimental_lease.py",
+        "src/unrest_harness/experimental_model.py",
+        "src/unrest_harness/experimental_provider.py",
+        "src/unrest_harness/experimental_relay.py",
+        "src/unrest_harness/experimental_session.py"
       ],
       "specifications": [
+        "docs/architecture/experimental-flow-model.md",
+        "docs/architecture/experimental-lease.md",
         "docs/v5/07-runtime-architecture.md",
         "docs/v5/10-implementation-plan.md",
         "specs/task_list/PRODUCT.md"
@@ -114,8 +146,34 @@
       "tests": [
         "tests/test_coordinator.py",
         "tests/test_coordinator_parallel.py",
+        "tests/test_experimental_lease.py",
+        "tests/test_experimental_model.py",
+        "tests/test_experimental_provider.py",
+        "tests/test_experimental_relay.py",
+        "tests/test_experimental_retained.py",
+        "tests/test_experimental_session.py",
+        "tests/test_experimental_startup_diagnostics.py",
         "tests/test_runnable_selection.py",
         "tests/test_terminal_review.py"
+      ]
+    },
+    {
+      "decisions": [],
+      "id": "COMP-EXPERIMENTAL-COHORT",
+      "invariants": [],
+      "paths": [
+        "src/unrest_harness/experimental_cohort.py",
+        "src/unrest_harness/experimental_custody.py",
+        "src/unrest_harness/experimental_provider_config.py",
+        "src/unrest_harness/provider_data/*.json",
+        "src/unrest_harness/experimental_resources.py"
+      ],
+      "specifications": [
+        "docs/architecture/experimental-cohort.md"
+      ],
+      "tests": [
+        "tests/test_experimental_cohort.py",
+        "tests/test_experimental_provider_config.py"
       ]
     },
     {
@@ -137,24 +195,27 @@
         "src/unrest_harness/inquiry.py",
         "src/unrest_harness/measurement.py",
         "src/unrest_harness/mutation_journal.py",
-        "src/unrest_harness/provider_sessions.py",
         "src/unrest_harness/project_adapter.py",
+        "src/unrest_harness/provider_sessions.py",
         "src/unrest_harness/public_schema.py",
         "src/unrest_harness/receipts.py",
         "src/unrest_harness/run_control.py",
         "src/unrest_harness/run_worker.py",
         "src/unrest_harness/runtime_executor.py",
         "src/unrest_harness/schemas/v04-speed-result.schema.json",
+        "src/unrest_harness/schemas/v04-speed-result.v2.schema.json",
         "src/unrest_harness/task_adapter.py",
         "src/unrest_harness/workspaces.py",
         "tools/v04_speed_runner.py"
       ],
       "specifications": [
+        "docs/architecture/controlled-speed-runner.md",
         "docs/v03/v0.3.1/mission.md",
         "docs/v03/v0.3.1/public-surface.v1.json"
       ],
       "tests": [
         "tests/fixtures/v04_speed_workloads.json",
+        "tests/fixtures/v04_speed_workloads.v2.json",
         "tests/test_canonical_identity.py",
         "tests/test_evolution.py",
         "tests/test_foundation_authority.py",

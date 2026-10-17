@@ -15,16 +15,23 @@ See `specs/memory_v2/PRODUCT.md` and `specs/task_list/PRODUCT.md`.
 """
 from __future__ import annotations
 
+import fcntl
+import hashlib
 import json
 import os
 import re
 import shutil
 import stat
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
+from typing import TYPE_CHECKING, Mapping
+
+if TYPE_CHECKING:
+    from .provider_review import ProviderReviewBlock
 
 from .capability_policy import redact_sensitive_value
 from .config import HarnessConfig
@@ -138,7 +145,10 @@ def _prepare_atomic_write_destination(
                     raise OSError(
                         f"atomic write trusted root does not exist: {root}"
                     ) from None
-                candidate.mkdir()
+                try:
+                    candidate.mkdir()
+                except FileExistsError:
+                    pass  # A competing creator must still pass lstat below.
                 candidate_stat = candidate.lstat()
             if not stat.S_ISDIR(candidate_stat.st_mode):
                 raise OSError(
@@ -154,7 +164,10 @@ def _prepare_atomic_write_destination(
         except FileNotFoundError:
             if not create_parents:
                 raise OSError(f"atomic write parent does not exist: {parent}") from None
-            parent.mkdir()
+            try:
+                parent.mkdir()
+            except FileExistsError:
+                pass  # Never trust exist_ok's symlink-following directory check.
             parent_stat = parent.lstat()
         if not stat.S_ISDIR(parent_stat.st_mode):
             raise OSError(
@@ -341,6 +354,65 @@ def atomic_write_json(
         mode=mode,
         _redact=False,
     )
+
+
+@contextmanager
+def completion_lock(path: str | Path, *, blocking: bool = True) -> Iterator[None]:
+    """Serialize publication and refusal changes for one handoff across processes."""
+    target = _lexical_absolute(path)
+    lock, _ = _prepare_atomic_write_destination(
+        target.with_name(f".{target.name}.lock"),
+        trusted_persistence_root(target),
+        create_parents=True,
+    )
+    descriptor = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise OSError("completion lock must be a regular file")
+        # Never unlink this inode: waiters must share it after crash/restart.
+        # The kernel releases ownership on process death, including SIGKILL.
+        fcntl.flock(descriptor, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def publish_completion_json(
+    path: str | Path,
+    payload: object,
+    *,
+    inventory: Mapping[str, str] | None = None,
+) -> bool:
+    """Link fully written bytes once; an existing name always retains ownership."""
+    target, parent = _prepare_atomic_write_destination(
+        path, trusted_persistence_root(path), create_parents=True,
+    )
+    content = json.dumps(
+        redact_sensitive_value(payload, inventory), indent=2, ensure_ascii=False,
+    ) + "\n"
+    descriptor, name = tempfile.mkstemp(
+        dir=parent, prefix=f".{target.name}.", suffix=".tmp",
+    )
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+            descriptor = -1
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        _prepare_atomic_write_destination(
+            target, trusted_persistence_root(target), create_parents=False,
+        )
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            return False
+        _fsync_directory(parent)
+        return True
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        temporary.unlink(missing_ok=True)
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:
@@ -907,6 +979,251 @@ class ProjectStore:
     #   - MD mirror      → .unrest/missions/<mid>/attempts/         (durable, agent-readable)
     # ------------------------------------------------------------------
 
+    def provider_review_paths(
+        self, project_id: str, mission_id: str, attempt_id: str, node_id: str
+    ) -> tuple[Path, Path]:
+        # Names are derived from local attempt identity, never provider payloads.
+        key = hashlib.sha256(f"{attempt_id}\0{node_id}".encode()).hexdigest()
+        return (
+            self.mission_dir(project_id, mission_id) / "provider-reviews" / f"{key}.json",
+            self.mission_runtime_dir(project_id, mission_id)
+            / "provider-reviews" / f"{key}.json",
+        )
+
+    def begin_provider_review(
+        self, project_id: str, mission_id: str, attempt_id: str, node_id: str,
+        session_id: str,
+    ) -> None:
+        from .provider_review import identity
+
+        _, cursor = self.provider_review_paths(project_id, mission_id, attempt_id, node_id)
+        if self.read_provider_review(project_id, mission_id, attempt_id, node_id) is not None:
+            raise ValueError("provider review context already exists")
+        value = {
+            "schema": "unrest.provider-review-cursor.v1", "session_id": identity(session_id),
+            "resumable": False, "phase": "active",
+            "project_id": project_id, "mission_id": mission_id,
+            "attempt_id": attempt_id, "node_id": node_id,
+        }
+        if len(json.dumps(value, ensure_ascii=True, indent=2).encode()) > 2048:
+            raise ValueError("provider review binding exceeds bound")
+        atomic_write_json(cursor, value, trusted_root=self.bucket_root(project_id))
+
+    def save_provider_review(
+        self, project_id: str, mission_id: str, attempt_id: str, node_id: str,
+        session_id: str, block: "ProviderReviewBlock",
+    ) -> None:
+        from dataclasses import asdict
+
+        durable, cursor = self.provider_review_paths(project_id, mission_id, attempt_id, node_id)
+        value = {
+            "schema": "unrest.provider-review-block.v1", "provider": "codex",
+            "project_id": project_id, "mission_id": mission_id,
+            "attempt_id": attempt_id, "node_id": node_id, "session_id": session_id,
+            "reason": block.reason,
+            "review": asdict(block.review) if block.review is not None else None,
+        }
+        if len(json.dumps(value, ensure_ascii=True, indent=2).encode()) > 4000:
+            raise ValueError("provider review record exceeds bound")
+        if durable.exists():
+            with durable.open("rb") as stream:
+                previous = stream.read(4097)
+            if len(previous) > 4096 or json.loads(previous) != value:
+                raise ValueError("provider review identity conflicts")
+            return
+        atomic_write_json(cursor, {
+            "schema": "unrest.provider-review-cursor.v1", "session_id": session_id,
+            "resumable": False, "phase": "blocked", "project_id": project_id,
+            "mission_id": mission_id, "attempt_id": attempt_id, "node_id": node_id,
+        }, trusted_root=self.bucket_root(project_id), inventory={})
+        atomic_write_json(durable, value, trusted_root=self.bucket_root(project_id), inventory={})
+
+    def read_provider_review(
+        self, project_id: str, mission_id: str, attempt_id: str, node_id: str,
+        *, allow_active: bool = False, replay_guard: bool = False,
+    ) -> "ProviderReviewBlock | None":
+        from .provider_review import ProviderReviewBlock, ReviewIdentity, identity
+
+        durable, cursor = self.provider_review_paths(project_id, mission_id, attempt_id, node_id)
+        try:
+            validate_atomic_write_destination(durable, trusted_root=self.bucket_root(project_id))
+            validate_atomic_write_destination(cursor, trusted_root=self.bucket_root(project_id))
+            if not durable.exists():
+                if not cursor.exists():
+                    return None
+                if allow_active:
+                    with cursor.open("rb") as stream:
+                        cursor_raw = stream.read(4097)
+                    if len(cursor_raw) > 4096:
+                        raise ValueError
+                    active = json.loads(cursor_raw)
+                    if not isinstance(active, dict):
+                        raise ValueError
+                    session = identity(active.get("session_id"))
+                    if active == {
+                        "schema": "unrest.provider-review-cursor.v1", "session_id": session,
+                        "resumable": False, "phase": "active", "project_id": project_id,
+                        "mission_id": mission_id, "attempt_id": attempt_id, "node_id": node_id,
+                    }:
+                        return None
+                if replay_guard:
+                    raise ValueError
+                return ProviderReviewBlock("interrupted")
+            with durable.open("rb") as stream:
+                raw = stream.read(4097)
+            if len(raw) > 4096:
+                raise ValueError
+            value = json.loads(raw)
+            if not isinstance(value, dict) or set(value) != {
+                "schema", "provider", "project_id", "mission_id", "attempt_id", "node_id",
+                "session_id", "reason", "review",
+            }:
+                raise ValueError
+            if (value["schema"], value["provider"], value["project_id"], value["mission_id"],
+                value["attempt_id"], value["node_id"]) != (
+                "unrest.provider-review-block.v1", "codex", project_id, mission_id,
+                attempt_id, node_id,
+            ):
+                raise ValueError
+            session_id = identity(value["session_id"])
+            with cursor.open("rb") as stream:
+                cursor_raw = stream.read(4097)
+            if len(cursor_raw) > 4096 or json.loads(cursor_raw) != {
+                "schema": "unrest.provider-review-cursor.v1", "session_id": session_id,
+                "resumable": False, "phase": "blocked",
+                "project_id": project_id, "mission_id": mission_id,
+                "attempt_id": attempt_id, "node_id": node_id,
+            }:
+                raise ValueError
+            reason = value["reason"]
+            if reason not in ("denied", "invalid_context", "persistence_unavailable"):
+                raise ValueError
+            review = value["review"]
+            binding = None
+            if review is not None:
+                if not isinstance(review, dict) or set(review) != {
+                    "thread_id", "turn_id", "review_id"
+                }:
+                    raise ValueError
+                binding = ReviewIdentity(**{key: identity(val) for key, val in review.items()})
+                if binding.thread_id != session_id:
+                    raise ValueError
+            if reason == "denied" and binding is None:
+                raise ValueError
+            appeal_path = durable.with_suffix(".appeal.json")
+            if appeal_path.exists():
+                validate_atomic_write_destination(appeal_path, trusted_root=self.bucket_root(project_id))
+                with appeal_path.open("rb") as stream:
+                    appeal_raw = stream.read(4097)
+                if len(appeal_raw) > 4096:
+                    raise ValueError
+                appeal = json.loads(appeal_raw)
+                if (not isinstance(appeal, dict) or set(appeal) != {
+                    "schema", "run_id", "project_id", "mission_id", "attempt_id", "node_id",
+                    "disposition", "origin",
+                } or appeal["schema"] != "unrest.provider-review-appeal.v1"
+                    or (appeal["project_id"], appeal["mission_id"], appeal["attempt_id"],
+                        appeal["node_id"]) != (project_id, mission_id, attempt_id, node_id)
+                    or binding is None or appeal["origin"] != {
+                        "threadId": binding.thread_id, "turnId": binding.turn_id,
+                        "reviewId": binding.review_id,
+                    } or not isinstance(appeal["run_id"], str)
+                    or re.fullmatch(r"run:[0-9a-f]{64}", appeal["run_id"]) is None):
+                    raise ValueError
+                if replay_guard and appeal["disposition"] not in (
+                    "submitting", "queued", "uncertain", "re_denied", "completed"
+                ):
+                    raise ValueError
+                # This receipt resolves a completed continuation; it grants no
+                # replay authority and cannot recreate an owner on restart.
+                if appeal["disposition"] == "completed" and not replay_guard:
+                    return None
+            return ProviderReviewBlock(reason, binding)
+        except (OSError, ValueError, TypeError, KeyError, RecursionError):
+            if replay_guard:
+                raise AttemptValidationError("invalid provider review persistence") from None
+            return ProviderReviewBlock("persistence_unavailable")
+
+    def provider_replay_guards(
+        self, project_id: str, mission_id: str, task_list: TaskList,
+        task_state: TaskStateFile,
+    ) -> dict[str, str]:
+        """Validate all retained carriers before authorizing any scheduler mutation.
+
+        A completed continuation receipt never authorizes a fresh dispatch. Scan
+        the carrier inventory rather than only last_attempt, which a stale reset
+        or later generation could otherwise use to hide the originating block.
+        """
+        bindings: set[tuple[str, str]] = set()
+        known = {task.id: task for task in task_list.tasks}
+        for directory in (
+            self.mission_dir(project_id, mission_id) / "provider-reviews",
+            self.mission_runtime_dir(project_id, mission_id) / "provider-reviews",
+        ):
+            validate_atomic_write_destination(
+                directory / "inventory.json", trusted_root=self.bucket_root(project_id)
+            )
+            for path in sorted(directory.glob("*.json")):
+                if path.name.endswith(".appeal.json"):
+                    origin = path.with_name(path.name.removesuffix(".appeal.json") + ".json")
+                    if not origin.is_file():
+                        raise AttemptValidationError("orphan provider review receipt")
+                    continue
+                try:
+                    validate_atomic_write_destination(path, trusted_root=self.bucket_root(project_id))
+                    with path.open("rb") as stream:
+                        raw = stream.read(4097)
+                    value = json.loads(raw) if len(raw) <= 4096 else None
+                    if not isinstance(value, dict):
+                        raise ValueError
+                    attempt, node = value["attempt_id"], value["node_id"]
+                    if (not isinstance(attempt, str) or not attempt
+                        or re.fullmatch(r"[A-Za-z0-9_.:-]+", attempt) is None
+                        or not isinstance(node, str) or node not in known):
+                        raise ValueError
+                    expected = self.provider_review_paths(project_id, mission_id, attempt, node)
+                    if path not in expected:
+                        raise ValueError
+                    bindings.add((attempt, node))
+                except (OSError, ValueError, TypeError, KeyError, RecursionError):
+                    raise AttemptValidationError("invalid provider review inventory") from None
+        guards: dict[str, str] = {}
+        for attempt, node in sorted(bindings):
+            block = self.read_provider_review(
+                project_id, mission_id, attempt, node, allow_active=True, replay_guard=True
+            )
+            entry = task_state.tasks.get(node)
+            if entry is None or entry.last_attempt != attempt:
+                raise AttemptValidationError("provider review generation conflicts with task state")
+            if block is None:
+                if entry.status != "running":
+                    raise AttemptValidationError("active provider review lacks running owner")
+                continue
+            if node in guards:
+                raise AttemptValidationError("conflicting provider review origins")
+            if (entry.status == "superseded" or (
+                entry.status == "cleared"
+                and self.read_provider_review(project_id, mission_id, attempt, node) is not None
+            )):
+                raise AttemptValidationError("provider review conflicts with task disposition")
+            # The typed reader checks handoff node and generation; no report or
+            # cursor is rewritten to repair an absent/mismatched counterpart.
+            handoff = self.read_attempt(project_id, mission_id, attempt, node)
+            expected_type = WorkHandoff if known[node].type == "work" else ValidateHandoff
+            if known[node].type == "gate" or (handoff is not None and not isinstance(handoff, expected_type)):
+                raise AttemptValidationError("provider review handoff type conflicts with task")
+            if handoff is None and entry.status != "running":
+                raise AttemptValidationError("provider review lacks originating handoff")
+            guards[node] = attempt
+        return guards
+
+    def finish_provider_review(
+        self, project_id: str, mission_id: str, attempt_id: str, node_id: str
+    ) -> None:
+        _, cursor = self.provider_review_paths(project_id, mission_id, attempt_id, node_id)
+        validate_atomic_write_destination(cursor, trusted_root=self.bucket_root(project_id))
+        cursor.unlink(missing_ok=True)
+
     def attempts_dir(self, project_id: str, mission_id: str) -> Path:
         """Durable attempt mirrors (agent-readable markdown)."""
         return self.mission_dir(project_id, mission_id) / "attempts"
@@ -950,6 +1267,11 @@ class ProjectStore:
         *,
         inventory: Mapping[str, str] | None = None,
     ) -> Path:
+        from .provider_review import blocked_handoff
+
+        block = self.read_provider_review(project_id, mission_id, spawn_ts, node_id)
+        if block is not None:
+            handoff = blocked_handoff(handoff, block, spawn_ts)
         handoff = handoff.model_copy(update={"attempt_id": spawn_ts})
         json_path = self.attempt_path(project_id, mission_id, spawn_ts, node_id)
         atomic_write_json(
@@ -985,6 +1307,11 @@ class ProjectStore:
             raise AttemptValidationError("attempt_id must not be null")
         if parsed.attempt_id_present and handoff.attempt_id != spawn_ts:
             raise AttemptValidationError("attempt_id does not match running generation")
+        from .provider_review import blocked_handoff
+
+        block = self.read_provider_review(project_id, mission_id, spawn_ts, node_id)
+        if block is not None:
+            handoff = blocked_handoff(handoff, block, spawn_ts)
         if parsed.attempt_id_present:
             return handoff
         # Base-era handoffs predate attempt_id. Their filename and requested task

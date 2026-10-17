@@ -103,7 +103,12 @@ class FiniteCredentialChoice(click.Choice):
 
 @click.group()
 def cli() -> None:
-    """Unrest CLI — set up + inspect long-running coding projects."""
+    """Unrest CLI — set up + inspect long-running coding projects.
+
+    Experimental reuse/cohort dispatch and approval recovery are disabled by
+    default. Genuine native approval, ACP live reuse and final-candidate timing
+    are UNVERIFIED. Controlled local tests establish bounded local behavior.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -894,6 +899,14 @@ def show_project_cmd(project_id: str) -> None:
         try:
             tl = store.load_task_list(record.id, mid)
             ts = store.load_task_state(record.id, mid)
+            from .provider_review import EXPLANATION
+
+            for node_id, entry in sorted(ts.tasks.items()):
+                if entry.last_attempt and store.read_provider_review(
+                    record.id, mid, entry.last_attempt, node_id
+                ) is not None:
+                    click.echo(f"provider-review: node={node_id} attempt={entry.last_attempt}")
+                    click.echo(EXPLANATION)
             rendered = render_task_list(tl, ts)
             if rendered:
                 click.echo("")

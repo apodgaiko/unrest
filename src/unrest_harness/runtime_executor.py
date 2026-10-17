@@ -97,7 +97,17 @@ def execute(operation: str, arguments: Mapping[str, Any], _context: Any) -> dict
     """Route one admitted operation exactly once through ``ProjectController``."""
 
     config = HarnessConfig.discover()
-    dispatcher = ACPNodeDispatcher(config)
+    from .approval_recovery import RunApprovalContext
+
+    approval_context = None
+    if (config.approval_recovery and operation == "advance_project"
+            and getattr(_context, "run_id", None) is not None
+            and getattr(_context, "control", None) is not None):
+        approval_context = RunApprovalContext(
+            _context.run_id,
+            lambda: _context.control.inspect_run(_context.run_id).state == "running",
+        )
+    dispatcher = ACPNodeDispatcher(config, approval_context=approval_context)
     reviewer = ACPTerminalReviewer(config)
     controller = ProjectController(config, dispatcher, reviewer)
     project_id = arguments.get("project_id")

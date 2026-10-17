@@ -50,16 +50,19 @@ from .models import (
     WorkHandoff,
 )
 from .storage import AttemptValidationError, ProjectStore, utc_now_filesafe
-from .supervision import load_snapshot, save_snapshot, terminal_snapshot
+from .supervision import (
+    finalize_supervision_attempt,
+    load_snapshot,
+    save_snapshot,
+    terminal_snapshot,
+)
 from .supervision import (
     evaluate_checkpoint_policy,
     initial_checkpoint_policy,
     load_policy_state,
     load_project_active_attempts,
-    policy_path,
     record_checkpoint_request,
     save_policy_state,
-    snapshot_path,
 )
 from .envelope import public_attention_items
 from .task_validation import gates_in_order
@@ -157,6 +160,7 @@ class MissionCoordinator:
             )
             return StepResult.terminal("task_list missing")
         task_state = self.store.load_task_state(self.project_id, mid)
+        self._reconcile_provider_denials(mid, tl, task_state)
         self.poll_supervision(mid, tl, now_nanoseconds=time.monotonic_ns())
         contract_state = self.store.load_contract_state(self.project_id, mid)
         if not contract_state.items:
@@ -174,12 +178,107 @@ class MissionCoordinator:
 
         runnable = self._all_runnable_tasks(tl, task_state)
         if not runnable:
+            recovered = self._recover_stranded_failure(mid, tl, task_state)
+            if recovered is not None:
+                return recovered
             return StepResult.idle("no runnable task work; call end_mission to request closure")
 
         selected = self._select_dispatch_tasks(tl, task_state, runnable)
         if len(selected) == 1:
             return self._dispatch_one(mid, selected[0])
         return self._dispatch_batch(mid, tl, task_state, selected)
+
+    def _reconcile_provider_denials(
+        self, mid: str, tl: TaskList, task_state: TaskStateFile
+    ) -> set[str]:
+        guards = self.store.provider_replay_guards(self.project_id, mid, tl, task_state)
+        changed = False
+        for node in guards:
+            if task_state.status_of(node) == "pending":
+                task_state.set_status(node, "failed")
+                changed = True
+        if changed:
+            self.store.save_task_state(self.project_id, mid, task_state)
+        return set(guards)
+
+    def _guard_dispatch(self, mid: str, tasks: list[Task]) -> list[Task]:
+        tl = self.store.load_task_list(self.project_id, mid)
+        task_state = self.store.load_task_state(self.project_id, mid)
+        blocked = self._reconcile_provider_denials(mid, tl, task_state)
+        runnable = {task.id for task in self._all_runnable_tasks(tl, task_state)}
+        return [task for task in tasks if task.id not in blocked and task.id in runnable]
+
+    def _assert_dispatch_unblocked(self, mid: str, requests: list[DispatchRequest]) -> None:
+        tl = self.store.load_task_list(self.project_id, mid)
+        task_state = self.store.load_task_state(self.project_id, mid)
+        guards = self.store.provider_replay_guards(self.project_id, mid, tl, task_state)
+        if any(request.task.id in guards for request in requests):
+            raise AttemptValidationError("provider review prohibits fresh dispatch")
+
+    def _recover_stranded_failure(
+        self, mid: str, tl: TaskList, task_state: TaskStateFile
+    ) -> StepResult | None:
+        if load_project_active_attempts(self.store, self.project_id, mid, tl):
+            return None
+        by_id = {task.id: task for task in tl.tasks}
+        blockers: set[str] = set()
+        for task in tl.tasks:
+            if task_state.status_of(task.id) != "pending":
+                continue
+            pending = list(task.depends_on)
+            visited: set[str] = set()
+            while pending:
+                node_id = pending.pop()
+                if node_id in visited:
+                    continue
+                visited.add(node_id)
+                status = task_state.status_of(node_id)
+                if status == "failed":
+                    blockers.add(node_id)
+                # A satisfied dependency no longer blocks its descendants.
+                if status in ("pending", "failed"):
+                    pending.extend(by_id[node_id].depends_on)
+        for task in tl.tasks:
+            if task.id not in blockers or task.type == "gate":
+                continue
+            entry = task_state.tasks[task.id]
+            attempt_id = entry.last_attempt
+            if attempt_id is None:
+                raise AttemptValidationError("stranded task has no retained generation")
+            attempts = self.store.list_attempts(self.project_id, mid, task.id)
+            if not attempts or attempts[-1].spawn_ts != attempt_id:
+                raise AttemptValidationError("stranded task generation is not the latest attempt")
+            handoff = self.store.read_attempt(self.project_id, mid, attempt_id, task.id)
+            expected = WorkHandoff if task.type == "work" else ValidateHandoff
+            if handoff is None or not isinstance(handoff, expected) or handoff.done:
+                raise AttemptValidationError("stranded task lacks a matching failed handoff")
+            if isinstance(handoff, ValidateHandoff) and handoff.passed:
+                raise AttemptValidationError("stranded validator has contradictory completion")
+            if task.type == "work":
+                assert isinstance(handoff, WorkHandoff)
+                item = attn_factory.node_failed(mid, task, handoff)
+            else:
+                item = attn_factory.node_attention(mid, task, handoff)
+            existing = self.store.load_attention(self.project_id)
+            matching = [
+                retained for retained in existing
+                if (retained.mission_id, retained.node_id, retained.attempt_id, retained.kind)
+                == (mid, task.id, attempt_id, item.kind)
+            ]
+            if not matching:
+                item.report = (
+                    "Scheduling recovery: retained failed attempt blocks pending tasks. "
+                    "No new attempt was executed.\n\n" + item.report
+                )
+                existing.append(item)
+                self.store.save_attention(self.project_id, existing)
+            # Attention is written first. A restart after that write reuses the
+            # open record; resolved records live only in the decision history.
+            self.store.save_state(
+                self.project_id, AttentionNeeded(items=public_attention_items(existing))
+            )
+            return StepResult.attention_needed("retained_failure")
+        return None
 
     def poll_supervision(
         self,
@@ -321,17 +420,10 @@ class MissionCoordinator:
             index += 1
         return f"{candidate}-{index:04d}"
 
-    def _discard_unobserved_supervision_attempt(
-        self, mission_id: str, attempt_id: str
-    ) -> None:
-        """Leave no active record for an agent that never used checkpoints."""
-        snapshot = snapshot_path(self.store, self.project_id, mission_id, attempt_id)
-        policy = policy_path(self.store, self.project_id, mission_id, attempt_id)
-        for path in (snapshot, snapshot.with_suffix(".lock"), policy):
-            path.unlink(missing_ok=True)
-
     def _dispatch_one(self, mid: str, task: Task) -> StepResult:
         """Dispatch one work task or one validator."""
+        if not self._guard_dispatch(mid, [task]):
+            return StepResult.idle("selected task is no longer eligible")
         self.store.refresh_inventory(os.environ)
         spawn_ts = self._unique_attempt_id(mid, utc_now_filesafe())
         task_state = self.store.load_task_state(self.project_id, mid)
@@ -352,6 +444,7 @@ class MissionCoordinator:
             assigned_target_ids=task.targets,
             node_id=task.id,
         )
+        self._assert_dispatch_unblocked(mid, [request])
         try:
             handoff = self._await_role_effect(
                 mid, lambda: self.dispatcher.dispatch(request)
@@ -543,9 +636,14 @@ class MissionCoordinator:
             if not all(task.type == "work" for task in batch):
                 raise RuntimeError("mutable and validation work cannot share a batch")
             if len(batch) < 2 or not self._isolated_work_supported(batch):
-                raise RuntimeError(
-                    "mutable work batch requires isolated disjoint workspaces"
-                )
+                raise RuntimeError("mutable work batch requires isolated disjoint workspaces")
+        batch = self._guard_dispatch(mid, batch)
+        if not batch:
+            return StepResult.idle("selected tasks are no longer eligible")
+        if len(batch) == 1:
+            return self._dispatch_one(mid, batch[0])
+        task_state = self.store.load_task_state(self.project_id, mid)
+        if any(task.type == "work" for task in batch):
             return self._dispatch_isolated_work_batch(mid, task_state, batch)
 
         self.store.refresh_inventory(os.environ)
@@ -614,6 +712,13 @@ class MissionCoordinator:
         Missing, malformed, overlapping, dirty-parent, or non-Git admission
         preserves the legacy serial path and makes no isolation claim.
         """
+
+        batch = self._guard_dispatch(mid, batch)
+        if not batch:
+            return StepResult.idle("selected tasks are no longer eligible")
+        if len(batch) == 1:
+            return self._dispatch_one(mid, batch[0])
+        task_state = self.store.load_task_state(self.project_id, mid)
 
         repository = self.store.workspace_dir(self.project_id).resolve(strict=True)
         manager: WorkspaceManager
@@ -815,6 +920,7 @@ class MissionCoordinator:
     ) -> dict[str, NodeHandoff]:
         if not requests:
             return {}
+        self._assert_dispatch_unblocked(mission_id, requests)
 
         batch_method = getattr(self.dispatcher, "dispatch_batch", None)
         if callable(batch_method):
@@ -948,37 +1054,31 @@ class MissionCoordinator:
         # persistence binds their immutable dispatch generation.  Attention is
         # authored at this common boundary, so bind the same generation here as
         # well instead of allowing a null or derived identity to escape.
+        from .provider_review import blocked_handoff
+
+        block = self.store.read_provider_review(self.project_id, mid, spawn_ts, task.id)
+        if block is not None:
+            handoff = blocked_handoff(handoff, block, spawn_ts)
         handoff = handoff.model_copy(update={"attempt_id": spawn_ts})
         tl = self.store.load_task_list(self.project_id, mid)
         task_state = self.store.load_task_state(self.project_id, mid)
         contract_state = self.store.load_contract_state(self.project_id, mid)
         attention: list[AttentionItemInternal] = []
 
-        snapshot = load_snapshot(self.store, self.project_id, mid, spawn_ts)
-        if snapshot is not None and snapshot.phase != "terminal":
-            if snapshot.checkpoint_sequence == 0:
-                self._discard_unobserved_supervision_attempt(mid, spawn_ts)
-                snapshot = None
-        if snapshot is not None and snapshot.phase != "terminal":
-            stopped = (
-                snapshot.phase == "stopping"
-                and snapshot.supervision_status == "stop_requested"
-            )
+        snapshot, stopped = finalize_supervision_attempt(
+            self.store, self.project_id, mid, spawn_ts,
+            assigned_target_ids=task.targets, project_guard=False,
+        )
+        if snapshot is not None and stopped:
             terminal = terminal_snapshot(snapshot)
-            save_snapshot(
-                self.store,
-                terminal,
-                assigned_target_ids=task.targets,
-            )
-            if stopped:
-                task_state.set_status(task.id, "failed")
-                self.store.save_task_state(self.project_id, mid, task_state)
-                return [
-                    attn_factory.cooperative_stop(
-                        terminal,
-                        "Attempt stopped cooperatively at a semantic checkpoint.",
-                    )
-                ]
+            task_state.set_status(task.id, "failed")
+            self.store.save_task_state(self.project_id, mid, task_state)
+            return [
+                attn_factory.cooperative_stop(
+                    terminal,
+                    "Attempt stopped cooperatively at a semantic checkpoint.",
+                )
+            ]
 
         if task.type == "work":
             if not handoff.done:
@@ -1066,6 +1166,14 @@ class MissionCoordinator:
         resume_result = self._reconcile_pending_attempts(mid, tl, task_state)
         if resume_result is not None:
             return resume_result
+
+        from .provider_review import EXPLANATION
+
+        for node_id, entry in sorted(task_state.tasks.items()):
+            if entry.last_attempt and self.store.read_provider_review(
+                self.project_id, mid, entry.last_attempt, node_id
+            ) is not None:
+                return StepResult.idle(EXPLANATION)
 
         gate_event = self._try_evaluate_a_gate(tl, task_state)
         if gate_event is not None:
@@ -1534,6 +1642,7 @@ class MissionCoordinator:
             assigned_target_ids=assigned,
             node_id=None,
         )
+        crashed = False
         try:
             report = self._await_role_effect(
                 mid,
@@ -1542,6 +1651,7 @@ class MissionCoordinator:
                 ),
             )
         except Exception as exc:  # noqa: BLE001
+            crashed = True
             report = TerminalReviewHandoff(
                 done=False,
                 report=(
@@ -1550,39 +1660,27 @@ class MissionCoordinator:
                     f"attention item.\n\nError: {exc}"
                 ),
             )
+            # Retain the original diagnostic even if finalization refuses ownership.
             self.store.save_terminal_review(self.project_id, mid, spawn_ts, report)
-            snapshot = load_snapshot(self.store, self.project_id, mid, spawn_ts)
-            if snapshot is not None and snapshot.checkpoint_sequence == 0:
-                self._discard_unobserved_supervision_attempt(mid, spawn_ts)
-            self._raise_attention(
-                [attn_factory.terminal_review(mid, report, spawn_ts)]
-            )
-            return StepResult.attention_needed("terminal_review_crash")
-        snapshot = load_snapshot(self.store, self.project_id, mid, spawn_ts)
-        if snapshot is not None and snapshot.phase != "terminal":
-            if snapshot.checkpoint_sequence == 0:
-                self._discard_unobserved_supervision_attempt(mid, spawn_ts)
-                snapshot = None
-        if snapshot is not None and snapshot.phase != "terminal":
-            stopped = (
-                snapshot.phase == "stopping"
-                and snapshot.supervision_status == "stop_requested"
-            )
+        snapshot, stopped = finalize_supervision_attempt(
+            self.store, self.project_id, mid, spawn_ts,
+            assigned_target_ids=assigned, project_guard=False,
+        )
+        if snapshot is not None and stopped:
             terminal = terminal_snapshot(snapshot)
-            save_snapshot(self.store, terminal, assigned_target_ids=assigned)
-            if stopped:
-                self.store.save_terminal_review(
-                    self.project_id, mid, spawn_ts, report
-                )
-                self._raise_attention(
-                    [
-                        attn_factory.cooperative_stop(
-                            terminal,
-                            "Terminal review stopped cooperatively at a semantic checkpoint.",
-                        )
-                    ]
-                )
-                return StepResult.attention_needed("terminal_review_stop")
+            self.store.save_terminal_review(
+                self.project_id, mid, spawn_ts, report
+            )
+            self._raise_attention(
+                [
+                    attn_factory.cooperative_stop(
+                        terminal,
+                        "Terminal review stopped cooperatively at a semantic checkpoint.",
+                    )
+                ]
+            )
+            return StepResult.attention_needed("terminal_review_stop")
+
         self.store.save_terminal_review(self.project_id, mid, spawn_ts, report)
         if report.done:
             self.store.seal_mission(
@@ -1594,7 +1692,9 @@ class MissionCoordinator:
             self.store.save_state(self.project_id, Done())
             return StepResult.terminal("done")
         self._raise_attention([attn_factory.terminal_review(mid, report, spawn_ts)])
-        return StepResult.attention_needed("terminal_review")
+        return StepResult.attention_needed(
+            "terminal_review_crash" if crashed else "terminal_review"
+        )
 
     # ------------------------------------------------------------------
     # Attention queue

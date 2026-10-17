@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
+import tarfile
 
 import pytest
 
@@ -25,8 +28,9 @@ HISTORICAL_CARRIERS = (
     ROOT / "docs/release/lean-core-v0.2.md",
     ROOT / "docs/release/lean-core-v0.2-rollback.md",
 )
-ACTIVE_MANIFEST = ROOT / release_binding.ACTIVE_RELEASE_MANIFEST
-ACTIVE_PROSE_CARRIERS = (
+PUBLISHED_V045_COMMIT = "5a3d568aa881c746432b7034597bbb8a1ffe025f"
+V045_MANIFEST = ROOT / release_binding.HISTORICAL_RELEASE_MANIFEST
+V045_PROSE_CARRIERS = (
     ROOT / "docs/release/lean-core-v0.4.5.md",
     ROOT / "docs/release/lean-core-v0.4.5-rollback.md",
 )
@@ -110,18 +114,36 @@ def test_v031_carriers_are_byte_identical_to_the_v031_tag() -> None:
         assert carrier.read_bytes() == tagged
 
 
-def test_v045_manifest_owns_the_live_candidate_binding() -> None:
-    computed = _computed()
-    manifest = json.loads(ACTIVE_MANIFEST.read_text(encoding="utf-8"))
+def test_v045_manifest_binds_only_its_published_source(tmp_path: Path) -> None:
+    paths = release_binding.tracked_regular_paths(ROOT, PUBLISHED_V045_COMMIT)
+    exported = subprocess.check_output(["git", "archive", PUBLISHED_V045_COMMIT], cwd=ROOT)
+    with tarfile.open(fileobj=io.BytesIO(exported)) as archive:
+        for relative in paths:
+            member = archive.getmember(relative)
+            assert member.isfile()
+            source = archive.extractfile(member)
+            assert source is not None
+            destination = tmp_path / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source.read())
+    computed = release_binding.inventory(tmp_path, paths)
+    assert V045_MANIFEST.read_bytes() == subprocess.check_output(
+        ["git", "show", f"{PUBLISHED_V045_COMMIT}:{V045_MANIFEST.relative_to(ROOT).as_posix()}"],
+        cwd=ROOT,
+    )
+    manifest = json.loads(V045_MANIFEST.read_text(encoding="utf-8"))
     declaration = release_binding.declared_binding(manifest)
     expected = {"files": computed["files"], "sha256": computed["sha256"]}
     assert {"files": declaration["files"], "sha256": declaration["sha256"]} == expected
     assert manifest["release"] == "unrest-v0.4.5"
     assert manifest["history"]["v0.2_carriers"] == "immutable bytes from tag v0.2.0"
-    assert str(release_binding.ACTIVE_RELEASE_MANIFEST) == ACTIVE_MANIFEST.relative_to(
+    assert str(release_binding.HISTORICAL_RELEASE_MANIFEST) == V045_MANIFEST.relative_to(
         ROOT
     ).as_posix()
-    for carrier in ACTIVE_PROSE_CARRIERS:
+    for carrier in V045_PROSE_CARRIERS:
+        assert carrier.read_bytes() == subprocess.check_output(
+            ["git", "show", f"{PUBLISHED_V045_COMMIT}:{carrier.relative_to(ROOT).as_posix()}"], cwd=ROOT
+        )
         text = carrier.read_text(encoding="utf-8")
         assert "0.4.5" in text
         assert "lean-core-v0.4.5-manifest.json" in text
@@ -132,6 +154,21 @@ def test_v045_manifest_owns_the_live_candidate_binding() -> None:
         release_binding.assert_declaration_matches(
             release_binding.declared_binding(drifted), computed
         )
+
+
+def test_current_candidate_binding_hashes_exact_current_source() -> None:
+    computed = _computed()
+    paths = release_binding.candidate_regular_paths(ROOT)
+    digest = hashlib.sha256()
+    for relative in paths:
+        digest.update(relative.encode("utf-8") + b"\0")
+        digest.update((ROOT / relative).read_bytes() + b"\0")
+    assert computed["files"] == len(paths)
+    assert computed["sha256"] == digest.hexdigest()
+    assert "src/unrest_harness/provider_data/codex-rust-v0.160.1-models.json" in paths
+    historical = release_binding.declared_binding(json.loads(V045_MANIFEST.read_text()))
+    with pytest.raises(ValueError, match="binding declaration mismatch"):
+        release_binding.assert_declaration_matches(historical, computed)
 
 
 def test_complete_measurement_report_machine_data() -> None:

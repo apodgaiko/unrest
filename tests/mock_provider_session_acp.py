@@ -41,14 +41,18 @@ def main() -> None:
     parser.add_argument("--stop-reason", default="end_turn")
     args = parser.parse_args()
 
-    child: subprocess.Popen[bytes] | None = None
+    owner: _ChildOwner | None = None
     if args.child_pid_path:
         if not args.child_stop_path:
             raise ValueError("--child-stop-path is required with --child-pid-path")
-        child = subprocess.Popen(
+        owner = _ChildOwner()
+        signal.signal(signal.SIGTERM, owner.handle_sigterm)
+        owner.child = subprocess.Popen(
             [sys.executable, __file__, "--child", args.child_stop_path],
         )
-        Path(args.child_pid_path).write_text(str(child.pid), encoding="utf-8")
+        if owner.termination_requested:
+            owner.cleanup()
+        Path(args.child_pid_path).write_text(str(owner.child.pid), encoding="utf-8")
 
     try:
         for line in sys.stdin:
@@ -115,8 +119,53 @@ def main() -> None:
             sys.stdout.write(json.dumps(_response(request_id, result)) + "\n")
             sys.stdout.flush()
     finally:
-        if child is not None and child.poll() is None:
-            child.terminate()
+        if owner is not None:
+            owner.cleanup()
+
+
+class _ChildOwner:
+    """Retain one reap sequence even when SIGTERM interrupts ordinary cleanup."""
+
+    def __init__(self, child: subprocess.Popen[bytes] | None = None) -> None:
+        self.child = child
+        self.cleaning = False
+        self.waited = False
+        self.termination_requested = False
+
+    def handle_sigterm(self, _signum: int, _frame: object) -> None:
+        # Ignore subsequent signals before any potentially interruptible wait.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        self.termination_requested = True
+        if self.child is not None:
+            self.cleanup()
+
+    def cleanup(self) -> None:
+        if self.cleaning or self.child is None:
+            return
+        self.cleaning = True
+        try:
+            if not self.waited:
+                try:
+                    self.child.wait(timeout=0)
+                except subprocess.TimeoutExpired:
+                    try:
+                        self.child.terminate()
+                    except ProcessLookupError:
+                        pass  # Exit raced with terminate; the owned handle still needs a wait.
+                    try:
+                        self.child.wait(timeout=0.5)
+                    except subprocess.TimeoutExpired:
+                        try:
+                            self.child.kill()
+                        except ProcessLookupError:
+                            pass
+                        self.child.wait(timeout=0.5)
+                self.waited = True
+        finally:
+            self.cleaning = False
+        if self.termination_requested:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            os.kill(os.getpid(), signal.SIGTERM)
 
 
 if __name__ == "__main__":

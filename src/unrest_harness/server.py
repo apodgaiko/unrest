@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Mapping
 
 from fastmcp import Context, FastMCP
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationInfo, field_validator
 
 from .capability_policy import (
     CapabilityPolicy,
@@ -45,7 +45,14 @@ from .models import (
     WorkHandoff,
 )
 from .public_schema import catalog_tool
-from .storage import ProjectStore, atomic_write_json, trusted_persistence_root
+from .storage import (
+    ProjectStore,
+    _prepare_atomic_write_destination,
+    atomic_write_json,
+    completion_lock,
+    publish_completion_json,
+    trusted_persistence_root,
+)
 from .supervision import (
     SupervisionSnapshotError,
     SupervisionSteeringError,
@@ -89,7 +96,7 @@ class _NodeCompletion(BaseModel):
     )
     attempt_id: str
     task_type: Literal["work", "validate"]
-    targets: Annotated[list[_CompletionTarget], Field(min_length=1)]
+    targets: list[_CompletionTarget]
     scope_status: Literal["in_scope", "uncertain", "violation"]
     blocker_code: Literal[
         "dependency_unavailable",
@@ -99,6 +106,15 @@ class _NodeCompletion(BaseModel):
         "authority_required",
         "delivery_blocked",
     ] | None
+
+    @field_validator("targets")
+    @classmethod
+    def validate_targets(
+        cls, targets: list[_CompletionTarget], info: ValidationInfo
+    ) -> list[_CompletionTarget]:
+        if info.data.get("task_type") == "validate" and not targets:
+            raise ValueError("validators require targets")
+        return targets
 
 
 _COMPLETION_SCHEMA = "unrest.v045.node-completion.v1"
@@ -374,7 +390,9 @@ def _consume_completion_refusal(
     attempt_id: str,
 ) -> bool:
     """Atomically consume the one warm refusal for an exact attempt."""
-    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    path, _ = _prepare_atomic_write_destination(
+        path, trusted_persistence_root(path), create_parents=True
+    )
     os.chmod(path.parent, 0o700)
     payload = {
         "attempt_id": attempt_id,
@@ -413,13 +431,8 @@ def _consume_completion_refusal(
             return False
         # A malformed, wrong-mode, or non-regular final cannot be trusted as a
         # marker, but its final-name claim must not mint a second warm refusal.
-        # Canonicalize it below while keeping the quota consumed.
-        path.unlink()
-        directory = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+        # Keep the claim present until its complete replacement is ready. The
+        # caller holds completion_lock; death during recovery cannot reset quota.
 
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent,
@@ -435,7 +448,10 @@ def _consume_completion_refusal(
             stream.flush()
             os.fsync(stream.fileno())
         try:
-            os.link(temporary, path)
+            if quota_already_claimed:
+                os.replace(temporary, path)
+            else:
+                os.link(temporary, path)
         except FileExistsError:
             metadata = path.lstat()
             if (
@@ -460,6 +476,9 @@ def _consume_completion_refusal(
 def _clear_completion_refusal(path: Path) -> None:
     """Remove a terminal attempt's private refusal cursor."""
     try:
+        path, _ = _prepare_atomic_write_destination(
+            path, trusted_persistence_root(path), create_parents=False
+        )
         path.unlink()
     except OSError:
         return
@@ -972,6 +991,16 @@ def _register_foundation_tools(mcp: FastMCP, tools: Any) -> None:
         except Exception as exc:  # noqa: BLE001
             return failure(exc)
 
+    @catalog_tool(mcp, "review_approval")
+    async def review_approval(run_id: str, denial_id: str) -> dict[str, Any]:
+        from fastmcp.server.dependencies import get_context
+        from .approval_recovery import review_approval as review_captured
+
+        try:
+            return await review_captured(tools.config, tools.runs, run_id, denial_id, get_context())
+        except Exception as exc:
+            return failure(exc)
+
     @catalog_tool(mcp, "inspect_run")
     async def inspect_run(run_id: _NonEmpty) -> dict[str, Any]:
         try:
@@ -1337,116 +1366,122 @@ def _register_worker_tools(
             raise RuntimeError("UNREST_NODE_ID not set in worker env")
         attempt_id = Path(handoff_path).stem.split("__", 1)[0]
 
-        structural_errors: list[str] = []
-        expected_completion: _NodeCompletion | None = None
-        bound = _completion_bound_store(
-            node_id=node_id,
-            attempt_id=attempt_id,
-            handoff_path=handoff_path,
-        )
-        completion_store = bound[0] if bound is not None else None
-        try:
-            expected_completion, completion_store = _completion_context(
+        with completion_lock(handoff_path):
+            # A restarted role server must not rewrite a finalized attempt, even
+            # when a late caller supplies a structurally invalid carrier.
+            if os.path.lexists(handoff_path):
+                return {"recorded": False, "code": "completion_finalized"}
+
+            structural_errors: list[str] = []
+            expected_completion: _NodeCompletion | None = None
+            bound = _completion_bound_store(
                 node_id=node_id,
-                node_type=node_type,
                 attempt_id=attempt_id,
                 handoff_path=handoff_path,
-                items=items or [],
-                done=done,
             )
-        except (OSError, subprocess.SubprocessError, ValueError) as exc:
-            structural_errors.append(
-                str(exc)
-                if str(exc) in {"items", "targets", "task_type"}
-                else "return_ref"
-            )
-        supplied_completion: _NodeCompletion | None = None
-        if completion is not None:
+            completion_store = bound[0] if bound is not None else None
             try:
-                supplied_completion = _NodeCompletion.model_validate(completion)
-            except Exception as exc:
-                structural_errors.extend(_completion_validation_fields(exc))
-        elif expected_completion is not None:
-            supplied_completion = expected_completion
-        if supplied_completion is not None and expected_completion is not None:
-            structural_errors.extend(
-                _completion_errors(
-                    supplied_completion,
-                    expected_completion,
+                expected_completion, completion_store = _completion_context(
+                    node_id=node_id,
+                    node_type=node_type,
+                    attempt_id=attempt_id,
+                    handoff_path=handoff_path,
+                    items=items or [],
                     done=done,
-                    request_attention=request_attention,
-                    passed=passed,
                 )
-            )
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                structural_errors.append(
+                    str(exc)
+                    if str(exc) in {"items", "targets", "task_type"}
+                    else "return_ref"
+                )
+            supplied_completion: _NodeCompletion | None = None
+            if completion is not None:
+                try:
+                    supplied_completion = _NodeCompletion.model_validate(completion)
+                except Exception as exc:
+                    structural_errors.extend(_completion_validation_fields(exc))
+            elif expected_completion is not None:
+                supplied_completion = expected_completion
+            if supplied_completion is not None and expected_completion is not None:
+                structural_errors.extend(
+                    _completion_errors(
+                        supplied_completion,
+                        expected_completion,
+                        done=done,
+                        request_attention=request_attention,
+                        passed=passed,
+                    )
+                )
 
-        if structural_errors and completion_store is not None:
-            project_id = os.environ["UNREST_PROJECT_ID"]
-            mission_id = os.environ["UNREST_MISSION_ID"]
-            fields = sorted(set(structural_errors))
-            refusal_path = _completion_refusal_path(
-                completion_store,
-                project_id,
-                mission_id,
-                attempt_id,
-                node_id,
-            )
-            if _consume_completion_refusal(
-                refusal_path,
-                project_id=project_id,
-                mission_id=mission_id,
-                node_id=node_id,
-                attempt_id=attempt_id,
-            ):
-                return {
-                    "recorded": False,
-                    "code": "completion_refused",
-                    "fields": fields,
-                }
-            done = False
-            request_attention = True
-            report = "Structural completion refused: " + ", ".join(fields)
-
-        handoff: WorkHandoff | ValidateHandoff
-        if node_type == "validate":
-            handoff = ValidateHandoff(
-                node_id=node_id,
-                attempt_id=attempt_id,
-                done=done,
-                report=report,
-                items=items or [],
-                passed=bool(passed) if passed is not None else all(i.passed for i in (items or [])),
-                request_attention=request_attention,
-            )
-        else:
-            handoff = WorkHandoff(
-                node_id=node_id,
-                attempt_id=attempt_id,
-                done=done,
-                report=report,
-                request_attention=request_attention,
-            )
-        atomic_write_json(
-            handoff_path,
-            handoff.model_dump(mode="json"),
-            trusted_root=trusted_persistence_root(handoff_path),
-            inventory=sensitive_inventory,
-        )
-        if completion_store is not None:
-            project_id = os.environ["UNREST_PROJECT_ID"]
-            mission_id = os.environ["UNREST_MISSION_ID"]
-            _clear_completion_refusal(
-                _completion_refusal_path(
+            if structural_errors and completion_store is not None:
+                project_id = os.environ["UNREST_PROJECT_ID"]
+                mission_id = os.environ["UNREST_MISSION_ID"]
+                fields = sorted(set(structural_errors))
+                refusal_path = _completion_refusal_path(
                     completion_store,
                     project_id,
                     mission_id,
                     attempt_id,
                     node_id,
                 )
-            )
-        return {
-            "recorded": True,
-            "message": "Session complete, your job is done now; do not call further tools and just end your job now.",
-        }
+                if _consume_completion_refusal(
+                    refusal_path,
+                    project_id=project_id,
+                    mission_id=mission_id,
+                    node_id=node_id,
+                    attempt_id=attempt_id,
+                ):
+                    return {
+                        "recorded": False,
+                        "code": "completion_refused",
+                        "fields": fields,
+                    }
+                done = False
+                request_attention = True
+                report = "Structural completion refused: " + ", ".join(fields)
+
+            handoff: WorkHandoff | ValidateHandoff
+            if node_type == "validate":
+                handoff = ValidateHandoff(
+                    node_id=node_id,
+                    attempt_id=attempt_id,
+                    done=done,
+                    report=report,
+                    items=items or [],
+                    passed=bool(passed) if passed is not None else all(i.passed for i in (items or [])),
+                    request_attention=request_attention,
+                )
+            else:
+                handoff = WorkHandoff(
+                    node_id=node_id,
+                    attempt_id=attempt_id,
+                    done=done,
+                    report=report,
+                    request_attention=request_attention,
+                )
+            if not publish_completion_json(
+                handoff_path,
+                handoff.model_dump(mode="json"),
+                inventory=sensitive_inventory,
+            ):
+                return {"recorded": False, "code": "completion_finalized"}
+            if completion_store is not None:
+                project_id = os.environ["UNREST_PROJECT_ID"]
+                mission_id = os.environ["UNREST_MISSION_ID"]
+                _clear_completion_refusal(
+                    _completion_refusal_path(
+                        completion_store,
+                        project_id,
+                        mission_id,
+                        attempt_id,
+                        node_id,
+                    )
+                )
+            return {
+                "recorded": True,
+                "message": "Session complete, your job is done now; do not call further tools and just end your job now.",
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -1581,7 +1616,7 @@ def main(
         )
 
     if args.transport == "stdio":
-        server.run(transport="stdio")
+        server.run(transport="stdio", show_banner=False)
     else:
         server.run(transport=args.transport, host=args.host, port=args.port)
 

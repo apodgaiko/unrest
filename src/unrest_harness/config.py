@@ -32,6 +32,7 @@ DEFAULT_MAX_PARALLEL_NODES = 4
 DEFAULT_TERMINAL_REVIEW_TIMEOUT_SECONDS = 900
 
 _CONFIG_ENV = {
+    "approval_recovery": "UNREST_APPROVAL_RECOVERY",
     "harness_home": "UNREST_HOME",
     "projects_dir": "UNREST_PROJECTS_DIR",
     "orchestrator_provider": "UNREST_ORCHESTRATOR_PROVIDER",
@@ -149,7 +150,25 @@ class HarnessConfig:
         compare=False,
     )
 
+    # replace() carries this pair so unrelated changes cannot bless a later
+    # filesystem redirect. Only a lexically changed root is a new selection.
+    _established_roots: tuple[Path, Path] | None = field(
+        default=None, repr=False, compare=False,
+    )
+
+    approval_recovery: bool = False
+
     def __post_init__(self) -> None:
+        established = self._established_roots
+        home = self.harness_home
+        projects = self.projects_dir
+        if established is None or home != established[0]:
+            home = home.expanduser().resolve()
+        if established is None or projects != established[1]:
+            projects = projects.expanduser().resolve()
+        object.__setattr__(self, "harness_home", home)
+        object.__setattr__(self, "projects_dir", projects)
+        object.__setattr__(self, "_established_roots", (home, projects))
         policy = (
             self._capability_policy
             if self._capability_policy_bundled_dir == self.bundled_dir
@@ -178,6 +197,9 @@ class HarnessConfig:
         bundled_dir: Path | None = None,
         policy_loader: Callable[[Path], CapabilityPolicy] | None = None,
     ) -> HarnessConfig:
+        recovery_value = os.environ.get("UNREST_APPROVAL_RECOVERY", "0")
+        if recovery_value not in ("0", "1"):
+            raise ValueError("UNREST_APPROVAL_RECOVERY must be 0 or 1")
         capability_policy_version, capability_profile = (
             resolve_profile_from_environment(os.environ)
         )
@@ -214,6 +236,7 @@ class HarnessConfig:
         loader = policy_loader or load_capability_policy
         policy = loader(resolved_bundled_dir)
         return cls(
+            approval_recovery=recovery_value == "1",
             bundled_dir=resolved_bundled_dir,
             harness_home=harness_home,
             projects_dir=projects_dir,

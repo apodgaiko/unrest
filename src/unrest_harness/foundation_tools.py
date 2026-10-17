@@ -12,7 +12,7 @@ from .accepted_point_authority import (
     PromotionRollbackPlan,
     WorkspaceIntegrationPlan,
 )
-from .capability_policy import FINITE_CREDENTIAL_NAMES
+from .capability_policy import FINITE_CREDENTIAL_NAMES, RoleName, validate_provider_support
 from .canonical_identity import canonical_json_bytes
 from .config import HARNESS_CONFIG_ENV_VARS, HarnessConfig
 from .controller import ProjectController
@@ -31,6 +31,7 @@ from .mutation_journal import (
     ExternalGrantVerifier,
 )
 from .provider_sessions import ProviderSessionRunner
+from .providers import ProviderDefinition
 from .run_control import RunControl
 from .workspaces import (
     HumanIntegrationGrant,
@@ -39,6 +40,9 @@ from .workspaces import (
     WorkspaceLease,
     WorkspaceManager,
 )
+
+
+_CODEX_BROKER_ENV_NAMES = ("CODEX_APP_TOOLS_PIPE_PATH", "PATH")
 
 
 def _sha(value: bytes) -> str:
@@ -117,6 +121,35 @@ class FoundationTools:
             for name in sorted(HARNESS_CONFIG_ENV_VARS | frozenset(FINITE_CREDENTIAL_NAMES))
             if os.environ.get(name)
         }
+        if config.approval_recovery:
+            # Preserve the already-selected provider launch configuration across
+            # the async boundary. Each agent still applies its existing role
+            # environment policy; default-off run launches are unchanged.
+            names: set[str] = set()
+            role_providers: tuple[tuple[RoleName, ProviderDefinition], ...] = (
+                ("worker", config.worker_provider),
+                ("validator", config.validator_provider),
+            )
+            for role, provider in role_providers:
+                declaration = validate_provider_support(
+                    provider,
+                    role=role,
+                    policy=config.capability_policy,
+                    profile=config.capability_profile,
+                ).environment
+                names.update(name for name in declaration.forward if name != "*")
+                names.update({"CODEX_PATH", "CODEX_CONFIG"} & set(declaration.internal))
+            worker_environment.update(
+                {name: os.environ[name] for name in sorted(names) if name in os.environ}
+            )
+            worker_environment.update(
+                {
+                    name: os.environ[name]
+                    for name in _CODEX_BROKER_ENV_NAMES
+                    if name in os.environ
+                }
+            )
+        worker_environment["UNREST_APPROVAL_RECOVERY"] = "1" if config.approval_recovery else "0"
         worker_environment["UNREST_HOME"] = str(config.harness_home)
         worker_environment["UNREST_PROJECTS_DIR"] = str(config.projects_dir)
         self.runs = RunControl(

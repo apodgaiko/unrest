@@ -190,6 +190,7 @@ def _valid_public_requests() -> dict[str, dict[str, object]]:
     budget = {"max_steps": 1, "timeout_seconds": 1}
     action = {"campaign_id": "campaign:1", "candidate_id": "candidate:1", "idempotency_key": "idem:1"}
     return {
+        "review_approval": {"run_id": "run:" + "a" * 64, "denial_id": "review-1"},
         "add_candidate": {
             "campaign_id": "campaign:1",
             "artifact_id": "artifact:1",
@@ -284,6 +285,8 @@ def _valid_public_requests() -> dict[str, dict[str, object]]:
 def _valid_public_results() -> dict[str, dict[str, object]]:
     timestamp = "2026-08-24T12:34:56Z"
     return {
+        "review_approval_result": {"run_id": "run:" + "a" * 64, "denial_id": "review-1",
+                                   "disposition": "unavailable"},
         "campaign_summary": {
             "campaign_id": "campaign:1",
             "state": "open",
@@ -385,7 +388,7 @@ async def test_orchestrator_tools_registered(config: HarnessConfig) -> None:
         ).read_text(encoding="utf-8")
     )
     additive = {method["name"] for method in catalog["mcp_methods"]}
-    assert names == additive | {
+    assert names == additive | {"review_approval"} | {
         "start_project",
         "submit_plan",
         "advance_project",
@@ -445,9 +448,14 @@ async def test_additive_mcp_schemas_are_exactly_catalog_backed(
         repository_root
         / "src/unrest_harness/bundled/foundation/public-surface.v1.json"
     ).read_bytes()
-    assert packaged == documented
+    current = json.loads(packaged)
+    frozen = json.loads(documented)
+    assert [m for m in current["mcp_methods"] if m["name"] != "review_approval"] == frozen["mcp_methods"]
+    assert {key: value for key, value in current["definitions"].items()
+            if key not in {"review_approval_request", "review_approval_result"}} == frozen["definitions"]
+    assert current["cli_commands"] == frozen["cli_commands"]
 
-    catalog = json.loads(documented)
+    catalog = current
     methods = {method["name"]: method for method in catalog["mcp_methods"]}
     tools = {
         tool.name: tool
@@ -2295,6 +2303,7 @@ def test_completion_refusal_clear_is_idempotent_when_unlink_faults(
     path = server_module._completion_refusal_path(
         store, "project", "mission", "attempt", "node"
     )
+    (config.projects_dir / "project").mkdir(parents=True, exist_ok=True)
     assert server_module._consume_completion_refusal(
         path,
         project_id="project",
@@ -2858,7 +2867,7 @@ async def test_end_node_requires_env_node_id(tmp_path: Path, monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_end_node_idempotent_overwrite(tmp_path: Path, monkeypatch) -> None:
+async def test_end_node_preserves_finalized_handoff(tmp_path: Path, monkeypatch) -> None:
     handoff_path = tmp_path / "handoff.json"
     monkeypatch.setenv("UNREST_HANDOFF_PATH", str(handoff_path))
     monkeypatch.setenv("UNREST_NODE_TYPE", "work")
@@ -2867,10 +2876,15 @@ async def test_end_node_idempotent_overwrite(tmp_path: Path, monkeypatch) -> Non
     await server.call_tool(
         "end_node", {"done": True, "report": "first"}
     )
-    await server.call_tool(
+    original = handoff_path.read_bytes()
+    result = await server.call_tool(
         "end_node", {"done": True, "report": "second"}
     )
-    assert json.loads(handoff_path.read_text())["report"] == "second"
+    assert result.structured_content == {
+        "recorded": False, "code": "completion_finalized"
+    }
+    assert handoff_path.read_bytes() == original
+    assert json.loads(original)["report"] == "first"
 
 
 @pytest.mark.asyncio
@@ -3197,6 +3211,7 @@ def _http_server_process(
     *,
     mode: str,
     role_environment: dict[str, str] | None = None,
+    entrypoint: str = "from unrest_harness.server import main; main()",
 ) -> Iterator[tuple[subprocess.Popen[bytes], str]]:
     port = _free_loopback_port()
     log = workspace / f".{mode}-{port}.log"
@@ -3220,7 +3235,7 @@ def _http_server_process(
         [
             sys.executable,
             "-c",
-            "from unrest_harness.server import main; main()",
+            entrypoint,
             "--mode",
             mode,
             "--transport",
@@ -5379,3 +5394,97 @@ def test_real_http_all_role_supervision_is_coordinator_causal(
         )
         assert post_stop["active_attempts"] == []
         assert third_process.poll() is None
+
+
+@pytest.mark.parametrize(("done", "attention"), [(True, False), (False, False), (True, True), (False, True)])
+def test_real_targetless_work_completion(
+    config: HarnessConfig, workspace: Path, done: bool, attention: bool
+) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--allow-empty", "-qm", "base"], cwd=workspace, check=True)
+    store = ProjectStore(config)
+    project_id = "targetless"
+    store.create_project("targetless", workspace, project_id=project_id)
+    task = Task(id="work", type="work", body="measure", targets=[], skill="test")
+    store.save_task_list(project_id, "mission-001", TaskList(tasks=[task]))
+    path = store.attempt_path(project_id, "mission-001", "attempt", task.id)
+    environment = {
+        "UNREST_PROJECT_ID": project_id, "UNREST_MISSION_ID": "mission-001",
+        "UNREST_NODE_ID": task.id, "UNREST_NODE_TYPE": "work",
+        "UNREST_HANDOFF_PATH": str(path),
+    }
+    with _http_server_process(config, workspace, mode="worker", role_environment=environment) as (_, url):
+        result = _call_process_mcp(url, "end_node", {"done": done, "report": "measured", "request_attention": attention})
+    assert result["recorded"] is True
+    finalized = path.read_bytes()
+    with _http_server_process(config, workspace, mode="worker", role_environment=environment) as (_, url):
+        for completion in [None, {}]:
+            duplicate = _call_process_mcp(url, "end_node", {"done": not done, "report": "late", "completion": completion})
+            assert duplicate == {"recorded": False, "code": "completion_finalized"}
+            assert path.read_bytes() == finalized
+    handoff = store.read_attempt(project_id, "mission-001", "attempt", task.id)
+    assert isinstance(handoff, WorkHandoff)
+    assert handoff.done is done
+    assert handoff.request_attention is attention
+    assert handoff.attempt_id == "attempt"
+
+
+@pytest.mark.parametrize("case", ["missing", "extra", "attempt", "type", "validator", "scope", "evidence"])
+def test_real_completion_target_binding(
+    config: HarnessConfig, workspace: Path, case: str
+) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--allow-empty", "-qm", "base"], cwd=workspace, check=True)
+    store = ProjectStore(config)
+    store.create_project("binding", workspace, project_id="binding")
+    role = "validate" if case == "validator" else "work"
+    targets = ["VAL-A"] if case in {"missing", "validator", "evidence"} else []
+    task = Task(id="node", type=role, body="check", targets=targets, skill="test")
+    store.save_task_list("binding", "mission-001", TaskList(tasks=[task]))
+    path = store.attempt_path("binding", "mission-001", "attempt", task.id)
+    carrier = _completion_oracle(workspace=workspace, attempt_id="attempt", task_type="work", targets=["VAL-EXTRA"] if case == "extra" else (["VAL-A"] if case == "evidence" else []), items=[], done=True)
+    if case == "scope":
+        carrier["scope_status"] = "violation"
+    if case == "evidence":
+        carrier["targets"][0]["evidence_refs"] = ["evidence:sha256:" + "0" * 64]
+    if case == "attempt":
+        carrier["attempt_id"] = "stale"
+    if case in {"type", "validator"}:
+        carrier["task_type"] = "validate"
+    environment = {"UNREST_PROJECT_ID": "binding", "UNREST_MISSION_ID": "mission-001", "UNREST_NODE_ID": task.id, "UNREST_NODE_TYPE": role, "UNREST_HANDOFF_PATH": str(path)}
+    with _http_server_process(config, workspace, mode="validator" if role == "validate" else "worker", role_environment=environment) as (_, url):
+        result = _call_process_mcp(url, "end_node", {"done": True, "report": "invalid", "completion": carrier})
+    assert result["code"] == "completion_refused"
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("attention", [False, True])
+def test_real_targetless_dispatch_consumption(
+    config: HarnessConfig, workspace: Path, attention: bool
+) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--allow-empty", "-qm", "base"], cwd=workspace, check=True)
+    adapter, trace = _write_composed_acp_adapter(workspace)
+    source = adapter.read_text()
+    begin = source.index("    snapshot = {")
+    end = source.index("\ndef response(", begin)
+    source = source[:begin] + f'''    completed = await call("end_node", {{"done": True, "report": "local measurement", "request_attention": {attention!r} if node == "measure" else True}})
+    record("targetless_completion", node=node, recorded=completed.get("recorded"))
+''' + source[end:]
+    adapter.write_text(source)
+    environment = {"UNREST_WORKER_ACP_COMMAND": f"{sys.executable} {adapter} {trace}"}
+    with _http_server_process(config, workspace, mode="orchestrator", role_environment=environment) as (_, url):
+        created = _call_process_mcp(url, "start_project", {"brief": "targetless measurement", "workspace_dir": str(workspace)})
+        project_id = str(created["projectId"])
+        contract = ProjectStore(config).ensure_contract_dir(project_id, "mission-001")
+        (contract / "VAL-RESULT.md").write_text("# Measurement result\nThe measurement must be reviewed.\n")
+        planned = _call_process_mcp(url, "submit_plan", {"project_id": project_id, "task_list": {"tasks": [{"id": "measure", "type": "work", "body": "measure", "targets": [], "skill": "test", "depends_on": []}, {"id": "publish", "type": "work", "body": "prepare reviewed result", "targets": ["VAL-RESULT"], "skill": "test", "depends_on": ["measure"]}, {"id": "review", "type": "validate", "body": "review measurement", "targets": ["VAL-RESULT"], "skill": "test", "depends_on": ["publish"]}, {"id": "gate", "type": "gate", "body": "", "targets": ["VAL-RESULT"], "depends_on": ["review"]}]}})
+        assert "state" in planned, planned
+        assert planned["state"]["state"] == "mission_running", planned
+        result = _call_process_mcp(url, "advance_project", {"project_id": project_id})
+        assert result["state"]["state"] == "attention_needed"
+        assert ProjectStore(config).load_attention(project_id)[0].node_id == ("measure" if attention else "publish")
+    store = ProjectStore(config)
+    assert store.load_task_state(project_id, "mission-001").status_of("measure") == "cleared"
+    rows = [json.loads(line) for line in trace.read_text().splitlines()]
+    assert [row["recorded"] for row in rows if row["event"] == "targetless_completion" and row["node"] == "measure"] == [True]

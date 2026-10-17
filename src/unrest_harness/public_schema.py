@@ -22,6 +22,7 @@ from typing import Any, TypeVar
 from fastmcp import FastMCP
 from fastmcp.tools import FunctionTool
 from pydantic import ValidationError, validate_call
+from mcp.types import ToolAnnotations
 
 _CATALOG_RESOURCE = "bundled/foundation/public-surface.v1.json"
 _F = TypeVar("_F", bound=Callable[..., Any])
@@ -58,7 +59,7 @@ def public_surface_catalog() -> dict[str, Any]:
     ):
         raise RuntimeError("public-surface catalog is incomplete")
     names = [method.get("name") for method in methods if isinstance(method, dict)]
-    if len(names) != 24 or len(set(names)) != 24 or not all(isinstance(name, str) for name in names):
+    if len(names) != 25 or len(set(names)) != 25 or not all(isinstance(name, str) for name in names):
         raise RuntimeError("public-surface MCP method inventory mismatch")
     if [command.get("name") for command in commands if isinstance(command, dict)] != [
         "measure-baseline"
@@ -392,7 +393,13 @@ def catalog_tool(mcp: FastMCP, name: str) -> Callable[[_F], _F]:
             parameters=public_input_schema(name),
             output_schema=public_output_schema(name),
             return_type=dict[str, Any],
+            annotations=(ToolAnnotations(readOnlyHint=False, destructiveHint=False,
+                                         idempotentHint=False, openWorldHint=True)
+                         if name == "review_approval" else None),
         )
+        if name == "review_approval":
+            tool.description = ("Review one captured denial through an actual host form. "
+                                "Opaque IDs select the original context; queued is not action success.")
         mcp.add_tool(tool)
         return function
 

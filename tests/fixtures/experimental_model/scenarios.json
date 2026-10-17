@@ -1,0 +1,17 @@
+{
+  "oracle_version": 1,
+  "base": "5a3d568aa881c746432b7034597bbb8a1ffe025f",
+  "fixture_bytes": {"lane_a.txt": {"base": "base\n", "final": "A\n"}, "lane_b.txt": {"base": "base\n", "final": "B\n"}},
+  "lifecycle": [
+    {"name": "pass", "outcomes": ["sealed", "pass"], "phases": ["work", "validate"], "generations": [0, 0], "terminal": "passed", "candidate": 0, "turns": 2, "dissent": 0},
+    {"name": "correction_pass", "outcomes": ["sealed", "defect", "sealed", "pass"], "phases": ["work", "validate", "correction", "recheck"], "generations": [0, 0, 0, 0], "terminal": "passed", "candidate": 1, "turns": 4, "dissent": 1},
+    {"name": "rotation_pass", "outcomes": ["sealed", "defect", "sealed", "defect", "sealed", "pass"], "phases": ["work", "validate", "correction", "recheck", "work", "validate"], "generations": [0, 0, 0, 0, 1, 1], "terminal": "passed", "candidate": 2, "turns": 6, "dissent": 2},
+    {"name": "rotation_fail", "outcomes": ["sealed", "defect", "sealed", "defect", "sealed", "defect"], "phases": ["work", "validate", "correction", "recheck", "work", "validate"], "generations": [0, 0, 0, 0, 1, 1], "terminal": "attention", "candidate": 2, "turns": 6, "dissent": 3},
+    {"name": "noncorrectable", "outcomes": ["sealed", "other"], "phases": ["work", "validate"], "generations": [0, 0], "terminal": "attention", "candidate": 0, "turns": 2, "dissent": 1}
+  ],
+  "timing": [
+    {"name": "straggler", "workers": [1, 9], "validators": [1, 1], "streaming_starts": [["z", "work", 0], ["a", "work", 0], ["z", "validate", 1], ["a", "validate", 9]], "barrier_starts": [["z", "work", 0], ["a", "work", 0], ["z", "validate", 9], ["a", "validate", 9]]},
+    {"name": "equal", "workers": [5, 5], "validators": [1, 1], "streaming_starts": [["z", "work", 0], ["a", "work", 0], ["z", "validate", 5], ["a", "validate", 5]], "barrier_starts": [["z", "work", 0], ["a", "work", 0], ["z", "validate", 5], ["a", "validate", 5]]},
+    {"name": "long_validator", "workers": [1, 2], "validators": [9, 1], "streaming_starts": [["z", "work", 0], ["a", "work", 0], ["z", "validate", 1], ["a", "validate", 2]], "barrier_starts": [["z", "work", 0], ["a", "work", 0], ["z", "validate", 2], ["a", "validate", 2]]}
+  ]
+}

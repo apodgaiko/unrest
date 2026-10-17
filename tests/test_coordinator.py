@@ -1975,6 +1975,20 @@ print(json.dumps({'cleared': result.cleared, 'matrix': result.validator_verdicts
             or relative.startswith(f".unrest/missions/{mission_id}/attempts/")
             or relative.startswith(".unrest/decisions/")
         )
+        # Completed generations now retain private terminal identity fences.
+        from unrest_harness.supervision import load_snapshot
+
+        for entry in after_state.tasks.values():
+            if entry.last_attempt is None:
+                continue
+            snapshot = load_snapshot(store, project_id, mission_id, entry.last_attempt)
+            if snapshot is None:
+                continue
+            assert snapshot.phase == snapshot.supervision_status == "terminal"
+            prefix = f".unrest-runtime/missions/{mission_id}/supervision/{entry.last_attempt}"
+            active_mutation_allowlist.update(
+                prefix + suffix for suffix in (".json", ".lock", ".policy.json")
+            )
         changed_paths = {
             path
             for path in set(before_all) | set(after_all)

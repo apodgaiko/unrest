@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  primary:
+    name: primary source and package gate (py3.13)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Import package
+        run: uv run python -c "import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()"
+      - name: Supported CLI surfaces
+        run: |
+          uv run unrest --help
+          uv run unrest measure-baseline --help
+          uv run unrest-server --help
+          uv run python -m unrest_harness --help
+      - name: Lint (ruff)
+        run: uv run ruff check .
+      - name: Type-check (mypy)
+        run: uv run mypy src
+      - name: v0.4.5 source suite (historical speed runner excluded)
+        run: env -u CODEX_PATH uv run pytest -q --ignore=tests/test_v04_speed_runner.py
+      - name: Repository contract
+        run: uv run unrest check-repository
+      - name: Build wheel and source distribution
+        run: uv build
+      - name: Check distribution archives
+        run: uv run python tools/check_distribution.py dist
+      - name: Smoke-test installed wheel
+        run: |
+          uv venv --clear .wheel-venv
+          uv pip install --python .wheel-venv/bin/python dist/*.whl
+          cd "$(mktemp -d)"
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" measure-baseline --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "from unrest_harness.config import HarnessConfig; assert HarnessConfig.discover().capability_policy.schema_version == 1"
+          env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CODEX_API_KEY -u GLM_API_KEY -u OPENAI_API_KEY -u ZAI_API_KEY "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness.installed_wheel_check
+          set +e
+          output="$(UNREST_CAPABILITY_PROFILE=unsupported "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --mode orchestrator 2>&1)"
+          status=$?
+          set -e
+          test "$status" -ne 0
+          test "$output" = "unrest-server: startup configuration rejected"
+      - name: Generate and verify v0.4.5 build-local checksums
+        run: |
+          test -f dist/unrest_harness-0.4.5-py3-none-any.whl
+          test -f dist/unrest_harness-0.4.5.tar.gz
+          cd dist
+          sha256sum \
+            unrest_harness-0.4.5-py3-none-any.whl \
+            unrest_harness-0.4.5.tar.gz > SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+      - name: Upload v0.4.5 archives and checksums
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: unrest-v0.4.5-python313
+          path: |
+            dist/unrest_harness-0.4.5-py3-none-any.whl
+            dist/unrest_harness-0.4.5.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90

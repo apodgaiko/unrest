@@ -78,3 +78,26 @@ with package module, test module, cwd, and `sys.path` provenance excluding the
 checkout. Post-build verification is focused on archive membership and content,
 entry points, policy discovery, persistence/restart behavior, and fail-closed
 startup; it does not rerun the full source suite.
+
+## Active v0.4.6 release disposition
+
+The mission-001 decision `release-evidence-disposition-20261009.md` records the human-approved unverified live approval/reuse and final-timing limitations. Preserve original evidence and false/incomplete results; do not equate controlled tests with genuine provider acceptance. Keep experimental features off by default and complete the full unexcluded Python3.13 source suite, archive/extracted persistence and unrelated-cwd functional lifecycle checks at release certification. Publication/local-update authority and protection of separate USER policy/untracked data remain unchanged. No extra native/provider or benchmark launch follows from this disposition.
+
+## Controlled ACP source-test method
+
+Controlled experimental tests may explicitly select the internal byte-pinned
+Python ACP transport with `controlled=True`. Fixture presence does not select it;
+omitted selection retains native construction and native pin refusal. Propagate
+selection through campaign/ProviderSetup/Coordinator, retained and rotated lanes,
+fresh finals and programmatic startup probes. Use the actual separate owned
+backend, authenticated Bridge/private preflight, ACP client and experimental
+`complete_turn`; ordinary `end_node` compatibility remains separate.
+
+Local protocol observations do not prove native adapter conversion or acceptance;
+that execution coverage is UNVERIFIED. Retain all local cases, parameters,
+assertions and failure evidence, including native no-launch negatives. Certification
+requires a finite byte/argv/identity-bound child guard inherited across all test
+processes; an unknown or forbidden launch fails even if caught. No generic Python
+allowlist, native redirection, provider permission override or inferred selection.
+The full unexcluded source checkpoint and all distribution, installed lifecycle,
+desktop, CI, publication and protected local-update requirements above remain.

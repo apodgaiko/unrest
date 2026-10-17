@@ -225,10 +225,21 @@ class ProjectController:
         project_id: str,
         max_steps: int | None = None,
     ) -> Envelope:
-        self.store.sync_workspace_skill_surfaces(project_id)
         coordinator = MissionCoordinator(
             self.store, project_id, self.dispatcher, self.terminal_reviewer
         )
+        state = self.store.load_state(project_id)
+        if isinstance(state, MissionRunning):
+            try:
+                task_list = self.store.load_task_list(project_id, state.mission_id)
+            except FileNotFoundError:
+                pass  # The coordinator retains its ordinary missing-plan failure.
+            else:
+                coordinator._reconcile_provider_denials(
+                    state.mission_id, task_list,
+                    self.store.load_task_state(project_id, state.mission_id),
+                )
+        self.store.sync_workspace_skill_surfaces(project_id)
         steps = 0
         while True:
             result = coordinator.step()
@@ -309,6 +320,8 @@ class ProjectController:
                 details=validation_errs,
             )
         item_by_id = {it.id: it for it in open_items}
+        for decision in decisions:
+            self._check_provider_decision(project_id, item_by_id[decision.item_id], decision)
         if any(decision.action == "patch" for decision in decisions):
             return self._apply_transactional_decisions(
                 project_id, decisions, open_items, item_by_id
@@ -318,6 +331,45 @@ class ProjectController:
         self.store.clear_attention(project_id)
         self.store.save_state(project_id, next_state)
         return self._build_envelope(project_id, dag_mode="none")
+
+    def _check_provider_decision(
+        self, project_id: str, item: AttentionItemInternal, decision: Decision
+    ) -> None:
+        from .provider_review import EXPLANATION
+
+        guards = self.store.provider_replay_guards(
+            project_id, item.mission_id,
+            self.store.load_task_list(project_id, item.mission_id),
+            self.store.load_task_state(project_id, item.mission_id),
+        )
+        if decision.patch is not None:
+            retired = set(decision.patch.cancel) | set(decision.patch.supersede)
+            if retired.intersection(guards):
+                raise ToolError("invalid_decisions", EXPLANATION)
+        if item.node_id not in guards or decision.action == "abort":
+            return
+        if (decision.action == "patch" and decision.patch is not None
+            and not decision.patch.cancel and not decision.patch.supersede):
+            return
+        raise ToolError("invalid_decisions", EXPLANATION)
+
+    def _provider_blocked(self, project_id: str, item: AttentionItemInternal) -> bool:
+        return bool(
+            item.node_id and item.attempt_id
+            and self.store.read_provider_review(
+                project_id, item.mission_id, item.attempt_id, item.node_id
+            ) is not None
+        )
+
+    def _provider_guarded_node(self, project_id: str, item: AttentionItemInternal) -> bool:
+        if not item.node_id:
+            return False
+        guards = self.store.provider_replay_guards(
+            project_id, item.mission_id,
+            self.store.load_task_list(project_id, item.mission_id),
+            self.store.load_task_state(project_id, item.mission_id),
+        )
+        return item.node_id in guards
 
     def inspect_project(self, project_id: str) -> Envelope:
         with self._project_access(project_id):
@@ -353,6 +405,15 @@ class ProjectController:
         delivery_supported: bool = True,
     ) -> SupervisionReceipt:
         """Orchestrator-only local seam; shared transport remains INT-owned."""
+        if request.node_id and request.action != "stop_for_attention":
+            block = self.store.read_provider_review(
+                request.project_id, request.mission_id, request.attempt_id, request.node_id,
+                allow_active=True,
+            )
+            if block is not None:
+                from .provider_review import EXPLANATION
+
+                raise ToolError("invalid_decisions", EXPLANATION)
         try:
             return apply_steering(
                 self.store, request, delivery_supported=delivery_supported
@@ -536,6 +597,8 @@ class ProjectController:
         open_items: list[AttentionItemInternal],
         item_by_id: dict[str, AttentionItemInternal],
     ) -> Envelope:
+        for decision in decisions:
+            self._check_provider_decision(project_id, item_by_id[decision.item_id], decision)
         record = self.store.load_project(project_id)
         mission_ids = {item.mission_id for item in open_items}
         if len(mission_ids) != 1:
@@ -585,6 +648,7 @@ class ProjectController:
                     item.kind in ("node_failed", "gate_failed")
                     and item.node_id
                     and item.node_id not in retired
+                    and not self._provider_guarded_node(project_id, item)
                 ):
                     task_state.set_status(item.node_id, "pending")
                 next_state = MissionRunning(mission_id=mission_id)
@@ -856,6 +920,7 @@ class ProjectController:
         item: AttentionItemInternal,
         decision: Decision,
     ) -> ProjectState | None:
+        self._check_provider_decision(project_id, item, decision)
         mid = item.mission_id
         kind = item.kind
         action = decision.action
@@ -870,7 +935,7 @@ class ProjectController:
                 set(decision.patch.supersede.keys()) | set(decision.patch.cancel)
             )
             if kind in ("node_failed", "gate_failed") and item.node_id:
-                if item.node_id not in retired_ids:
+                if item.node_id not in retired_ids and not self._provider_guarded_node(project_id, item):
                     task_state.set_status(item.node_id, "pending")
             self.store.save_task_state(project_id, mid, task_state)
             return MissionRunning(mission_id=mid)
@@ -951,9 +1016,15 @@ class ProjectController:
         record = self.store.load_project(project_id)
         state = self.store.load_state(project_id) or Draft()
         if isinstance(state, AttentionNeeded):
-            state = AttentionNeeded(
-                items=public_attention_items(self.store.load_attention(project_id))
-            )
+            internal = self.store.load_attention(project_id)
+            public = public_attention_items(internal)
+            for source, item in zip(internal, public, strict=True):
+                if self._provider_blocked(project_id, source):
+                    item.report = (
+                        "provider review blocked; prose consent is not an override; "
+                        "native recovery unavailable; inspect the originating attempt"
+                    )
+            state = AttentionNeeded(items=public)
         tl: TaskList | None = None
         task_state: TaskStateFile | None = None
         lineage = []
@@ -991,6 +1062,34 @@ class ProjectController:
             dag_mode=dag_mode,
             supersession_lineage=lineage,
         )
+        if mid and task_state is not None:
+            from .provider_review import EXPLANATION
+
+            blocked_attempts = []
+            pending_reviews = []
+            for node_id, entry in sorted(task_state.tasks.items()):
+                if not entry.last_attempt:
+                    continue
+                block = self.store.read_provider_review(
+                    project_id, mid, entry.last_attempt, node_id, allow_active=True
+                )
+                if block is not None:
+                    blocked_attempts.append(
+                        f"provider-review: node={node_id} attempt={entry.last_attempt} "
+                        f"outcome={block.reason}"
+                    )
+                    if block.reason == "denied" and block.review is not None:
+                        from .approval_recovery import pending_reference
+                        reference = pending_reference(self.store, project_id, mid,
+                            entry.last_attempt, node_id, block.review.review_id)
+                        if reference is not None:
+                            pending_reviews.append(reference)
+            if blocked_attempts:
+                envelope.frontier = "\n".join([
+                    envelope.frontier or "", *blocked_attempts, *(pending_reviews or [EXPLANATION]),
+                ]).lstrip("\n")
+                if envelope.next_action == "end_mission":
+                    envelope.next_action = "none"
         return envelope.model_copy(update={"active_attempts": active_attempts})
 
     @staticmethod
