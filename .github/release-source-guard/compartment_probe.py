@@ -122,9 +122,10 @@ def source_controls() -> None:
                                  "raw": raw_status, "normalized": -signal.SIGTERM},
     })
     result = subprocess.run(
-        [sys.executable, "-I", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
+        ["/opt/deps/bin/python", "-I", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
          "--basetemp=/work/pytest", "/guard/test_linux_observation.py",
-         "/guard/test_probe_controller.py", "/guard/test_linux_trace.py"],
+         "/guard/test_probe_controller.py", "/guard/test_linux_trace.py",
+         "/guard/test_dependency_closure.py", "/guard/test_linux_native_custody.py"],
         cwd="/work", check=False,
     )
     raise SystemExit(result.returncode)
@@ -134,6 +135,17 @@ def observer() -> None:
     assert os.getuid() == 0
     no_new_privileges()
     abi = require_linux_abi()
+    closure_spec = importlib.util.spec_from_file_location("dependency_closure", "/guard/dependency_closure.py")
+    assert closure_spec is not None and closure_spec.loader is not None
+    closure = importlib.util.module_from_spec(closure_spec)
+    closure_spec.loader.exec_module(closure)
+    expected_bytes = Path("/environment-closure.json").read_bytes()
+    expected_closure = json.loads(expected_bytes)
+    if closure.inventory(Path("/opt/deps")) != expected_closure:
+        raise RuntimeError("installed dependency closure drift")
+    abi["dependency_closure"] = {"sha256": hashlib.sha256(expected_bytes).hexdigest(),
+                                 "members": len(expected_closure), "verified": True}
+
     read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
     pid = os.fork()

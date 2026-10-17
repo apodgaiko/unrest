@@ -13,9 +13,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import tomllib
 import traceback
-import urllib.request
 import uuid
 
 BASE = "python@sha256:9a4a5ceafb4ddd7468a09ade0049463a7bd1acbefda52adee748544110fd032d"
@@ -74,41 +72,24 @@ def main() -> int:
     root.mkdir(mode=0o700)
     raw = root / "raw"
     raw.mkdir(mode=0o700)
-    build = root / "build"
-    build.mkdir()
-    wheels = build / "wheels"
-    wheels.mkdir()
-    lock = tomllib.loads((REPOSITORY / "uv.lock").read_text())
-    inputs = {}
-    for package in lock["package"]:
-        if package["name"] not in PACKAGES:
-            continue
-        candidates = [wheel for wheel in package["wheels"]
-                      if wheel["url"].endswith("-py3-none-any.whl")]
-        if len(candidates) != 1:
-            raise RuntimeError("nonfinite synthetic dependency selection")
-        wheel = candidates[0]
-        target = wheels / wheel["url"].rsplit("/", 1)[1]
-        with urllib.request.urlopen(wheel["url"], timeout=60) as response:
-            target.write_bytes(response.read())
-        if "sha256:" + sha(target) != wheel["hash"]:
-            raise RuntimeError("locked synthetic dependency bytes differ")
-        inputs[package["name"]] = {
-            "version": package["version"], "sha256": sha(target), "file": target.name,
-        }
-    if set(inputs) != PACKAGES:
-        raise RuntimeError("synthetic dependency closure incomplete")
-    (build / "Dockerfile").write_text(
-        "FROM " + BASE + "\nCOPY wheels /wheels\n"
-        "RUN python -m pip install --no-index --no-deps /wheels/*.whl "
-        "&& rm -rf /wheels\n"
-    )
     log = raw / "coordinator.log"
-    image = "source-observer-probe:" + uuid.uuid4().hex
-    result = run(["docker", "build", "--pull", "--network=none", "--tag", image,
-                  str(build)], log)
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("environment", SUPPORT / "environment.py")
+    assert spec is not None and spec.loader is not None
+    environment = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(environment)
+    inputs = {"uv_bootstrap_sha256": environment.UV_SHA256,
+              "uv_lock_sha256": sha(REPOSITORY / "uv.lock")}
+    image = ""
+    try:
+        image = environment.build(root / "build", REPOSITORY, log)
+        inputs["image_id"] = image
+        exit_code = 0
+    except Exception:
+        with log.open("a") as output:
+            traceback.print_exc(file=output)
+        exit_code = 125
     container = "source-observer-probe-" + uuid.uuid4().hex
-    exit_code = result.returncode
     if exit_code == 0:
         argv = [
             "docker", "create", "--name", container, "--read-only", "--network=none",
@@ -152,7 +133,8 @@ def main() -> int:
         "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
         "workflow_sha": os.environ.get("GITHUB_WORKFLOW_SHA"),
         "base_oci": BASE, "uv_lock_sha256": sha(REPOSITORY / "uv.lock"),
-        "support": {p.name: sha(p) for p in sorted(SUPPORT.iterdir()) if p.is_file()},
+        "support": {str(p.relative_to(SUPPORT)): sha(p) for p in sorted(SUPPORT.rglob("*"))
+                    if p.is_file() and p.suffix in {".py", ".json", ".pem"}},
         "synthetic_dependencies": inputs, "synthetic_exit_code": exit_code,
         "source_checkpoint_ready": False, "selected_carrier": None,
         "original_source_cases_executed": 0,

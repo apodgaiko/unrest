@@ -14,6 +14,7 @@ import importlib.util
 import os
 from pathlib import Path
 import signal
+import sys
 import time
 from typing import Any
 
@@ -47,6 +48,8 @@ def ptrace(request: int, pid: int, address: int = 0, data: Any = 0) -> int:
 
 
 def trace_me() -> None:
+    if sys.platform != "linux" or os.uname().machine != "x86_64":
+        raise RuntimeError("unsupported trace ABI")
     ptrace(0, 0)
     os.kill(os.getpid(), signal.SIGSTOP)
 
@@ -100,6 +103,8 @@ class OwnedTrace:
     """
 
     def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float):
+        if sys.platform != "linux" or os.uname().machine != "x86_64":
+            raise RuntimeError("unsupported trace ABI")
         if child <= 0 or timeout <= 0 or timeout > 180:
             raise ValueError("bounded owned trace required")
         if Path(f"/proc/{child}/status").read_text().split("PPid:", 1)[1].split()[0] != str(
@@ -120,6 +125,14 @@ class OwnedTrace:
     def admit_exec(self, pid: int, value: Registers) -> None:
         path = os.fsdecode(read_string(pid, value.rdi))
         vector = exec_vector(pid, value.rsi)
+        environment_rows = exec_vector(pid, value.rdx)
+        environment = {}
+        for row in environment_rows:
+            key, separator, content = row.partition("=")
+            if not separator or not key or key in environment:
+                raise RuntimeError("invalid or duplicate exec environment entry")
+            environment[key] = content
+        cwd = os.readlink(f"/proc/{pid}/cwd")
         matches = [row for row in self.allowed if row["path"] == path and row["argv"] == vector]
         accepted = len(matches) == 1
         image = Path(f"/proc/{pid}/root") / path.lstrip("/")
@@ -129,11 +142,13 @@ class OwnedTrace:
                 observed = hashlib.sha256(image.read_bytes()).hexdigest()
             except FileNotFoundError:
                 observed = None
-            accepted = observed == expected and (observed is not None or matches[0].get(
+            accepted = (environment == matches[0]["environment"] and cwd == matches[0]["cwd"]
+                        and observed == expected and (observed is not None or matches[0].get(
                 "expected_missing"
-            ) is True)
+            ) is True))
         self.records.append({"kind": "exec_attempt", "pid": pid, "path": path,
-                             "argv": vector, "accepted": accepted})
+                             "argv": vector, "cwd": cwd, "environment": environment,
+                             "accepted": accepted})
         if not accepted:
             self.poison.append("unknown_or_drifted_exec")
             self.denied.add(pid)
@@ -146,7 +161,9 @@ class OwnedTrace:
         info = ctypes.create_string_buffer(88)
         size = ptrace(0x420E, pid, 88, ctypes.byref(info))
         operation = info.raw[0]
-        if operation not in (1, 2) or size < (80 if operation == 1 else 33):
+        architecture = int.from_bytes(info.raw[4:8], "little")
+        if (architecture != 0xC000003E or operation not in (1, 2)
+                or size < (80 if operation == 1 else 33)):
             raise RuntimeError("unknown syscall observation ABI")
         value = registers(pid)
         entering = operation == 1

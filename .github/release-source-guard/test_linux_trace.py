@@ -48,12 +48,14 @@ def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, sta
     assert sys.platform == "linux" and os.uname().machine == "x86_64"
     argv = [sys.executable, "-I", "-S", "-c", BODY, program, str(status)]
     allowed = [{"path": sys.executable, "argv": argv,
-                "sha256": hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}]
+                "sha256": hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),
+                "environment": {}, "cwd": os.getcwd()}]
     if admit:
         path = Path(program)
         allowed.append({"path": program, "argv": [program],
                         "sha256": hashlib.sha256(path.read_bytes()).hexdigest()
-                        if path.exists() else None, "expected_missing": not path.exists()})
+                        if path.exists() else None, "expected_missing": not path.exists(),
+                        "environment": {}, "cwd": os.getcwd()})
     child = os.fork()
     if child == 0:
         try:

@@ -6,10 +6,20 @@ follows from the readiness workflow. `source_checkpoint_ready=false` and
 `selected_carrier=null` remain mandatory until the source guard and subsequent
 carrier/package certification are complete.
 
-Hosted execution has not occurred: the available push credential cannot write
-GitHub Actions workflow files. The readiness ref was rejected before creation.
-Local unit/static checks do not establish Linux boot, isolation, native `ps`,
-encryption/export or original source behavior.
+The first HTTPS credential could not write workflow files, and that rejected
+ref remains absent. A separately configured Git SSH credential subsequently
+authenticated to the same repository owner and accepted the authorized scratch
+branch through normal GitHub enforcement. The connected API's branch creation
+returned 403 despite its repository permission metadata; it was not retried.
+
+Hosted synthetic controls succeeded in
+[run 39049518199](https://github.com/apodgaiko/unrest/actions/runs/39049518199)
+at `35dac4e5541906b20516397b0fa227a51c7b4204`. The downloaded ciphertext,
+plaintext archive, actual GitHub run/artifact identities and support bytes were
+verified locally. The private evidence records 26 passing support tests, distinct
+observer/source UIDs, eight denial controls, native stock `ps`, loopback IPC and
+an actual parent wait with raw 15 / normalized -15. This is synthetic control
+evidence; original source cases executed: zero.
 
 ## Synthetic compartment prerequisite
 
@@ -29,7 +39,8 @@ The synthetic probe uses private Docker PID, mount, network, IPC and cgroup
 scopes, a read-only image and public support mount, and finite writable tmpfs
 roots. The Docker socket, host home, checkout, runner credentials and provider
 configuration are absent. Root setup retains only SETUID/SETGID/SETPCAP for
-credential separation; the source-control child drops its capability bounding
+credential separation; observer records use an observer-owned tmpfs, without
+granting CHOWN. The source-control child drops its capability bounding
 set, supplementary groups, UID/GID and inherited nonstdio descriptors before
 exec. `no_new_privs` and Docker's seccomp policy remain active. The observer
 uses a distinct UID and a private records directory. Loopback IPC is allowed;

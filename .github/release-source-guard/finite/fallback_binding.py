@@ -1,0 +1,149 @@
+"""Bind finite fallback vectors to an actual unchanged source call expression."""
+
+import ast
+import inspect
+import hashlib
+import os
+from pathlib import Path
+import sys
+
+
+def active_frames():
+    frame = inspect.currentframe().f_back
+    result = []
+    while frame:
+        result.append(frame)
+        frame = frame.f_back
+    module = sys.modules.get("asyncio")
+    if module is not None:
+        try:
+            task = module.current_task()
+        except RuntimeError:
+            task = None
+        coroutine = task.get_coro() if task else None
+        seen = set()
+        while coroutine is not None and id(coroutine) not in seen:
+            seen.add(id(coroutine))
+            candidate = getattr(coroutine, "cr_frame", None) or getattr(coroutine, "gi_frame", None)
+            if candidate is not None:
+                result.append(candidate)
+            coroutine = getattr(coroutine, "cr_await", None) or getattr(
+                coroutine, "gi_yieldfrom", None
+            )
+    return result
+
+
+def matches(registration, argv, cwd, environment, state):
+    source = Path(registration["source_binding"]["path"])
+    if not source.is_absolute():
+        source = Path(state["checkout"]) / source
+    sources = {source: None}
+    support = registration.get("caller_support_source")
+    if support is not None:
+        candidate = Path(support["path"])
+        if hashlib.sha256(candidate.read_bytes()).hexdigest() == support["sha256"]:
+            sources[candidate] = None
+    for binding in registration.get("caller_bindings", []):
+        candidate = Path(state["checkout"]) / binding["path"]
+        if (
+            state["product_pins"].get(binding["path"]) == binding["source_sha256"]
+            and hashlib.sha256(candidate.read_bytes()).hexdigest() == binding["source_sha256"]
+        ):
+            sources[candidate] = binding
+    payload = state.get("registered_payload")
+    if payload is not None and payload["mode"] == "script":
+        candidate = Path(payload["target"])
+        if (
+            candidate == Path(payload["source_binding"]["path"])
+            and hashlib.sha256(candidate.read_bytes()).hexdigest()
+            == payload["source_binding"]["sha256"]
+        ):
+            sources[candidate] = None
+    frames = active_frames()
+    try:
+        for frame in frames:
+            source = Path(frame.f_code.co_filename)
+            inline = (
+                payload is not None
+                and payload["mode"] == "inline"
+                and frame.f_globals is state.get("payload_globals")
+            )
+            if inline:
+                tree = ast.parse(payload["target"])
+                source_binding = None
+                code = state["payload_code"]
+                expected_code = (
+                    code
+                    if frame.f_code.co_name == "<module>"
+                    else state["isolated_named"](code, frame.f_code.co_name)
+                )
+                module = None
+            else:
+                if source not in sources:
+                    continue
+                tree = ast.parse(source.read_bytes())
+                source_binding = sources[source]
+                base_code = state["isolated_source_code"](source)
+                expected_code = (
+                    base_code
+                    if frame.f_code.co_name == "<module>"
+                    else state["isolated_named"](base_code, frame.f_code.co_name)
+                )
+                module = sys.modules.get(frame.f_globals.get("__name__"))
+                if module is None or vars(module) is not frame.f_globals:
+                    continue
+            if frame.f_code != expected_code:
+                continue
+            for call in ast.walk(tree):
+                if (
+                    not isinstance(call, ast.Call)
+                    or not call.lineno <= frame.f_lineno <= call.end_lineno
+                ):
+                    continue
+                if source_binding is not None and call.lineno != source_binding["line"]:
+                    continue
+                if ast.unparse(call.func) not in (
+                    "subprocess.run",
+                    "subprocess.Popen",
+                    "subprocess.check_output",
+                    "asyncio.create_subprocess_exec",
+                ):
+                    continue
+                try:
+
+                    def evaluate(node):
+                        return eval(
+                            compile(ast.Expression(node), str(source), "eval"),
+                            frame.f_globals,
+                            frame.f_locals,
+                        )
+
+                    if ast.unparse(call.func) == "asyncio.create_subprocess_exec":
+                        vector = []
+                        for argument in call.args:
+                            if isinstance(argument, ast.Starred):
+                                vector.extend(evaluate(argument.value))
+                            else:
+                                vector.append(evaluate(argument))
+                    else:
+                        vector = list(evaluate(call.args[0]))
+                    keywords = {keyword.arg: evaluate(keyword.value) for keyword in call.keywords}
+                    if (
+                        vector == argv
+                        and keywords.get("cwd") == cwd
+                        and keywords.get("env") == environment
+                        and os.getcwd() == state["checkout"]
+                    ):
+                        return {
+                            "source": str(source),
+                            "line": call.lineno,
+                            "function": frame.f_code.co_name,
+                            "globals_module": module.__name__
+                            if module
+                            else "authenticated registered inline payload",
+                        }
+                except (AttributeError, IndexError, KeyError, NameError, TypeError, ValueError):
+                    continue
+        return None
+    finally:
+        frames.clear()

@@ -1,0 +1,203 @@
+"""Finite unchanged cleanup owner vectors and exact scenario-backed adapter."""
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+
+CASE = "tests/test_acp_cleanup.py::test_recorded_transport_failures"
+
+
+def admit(argv, cwd, env, state, append, refuse):
+    if not state.get("case", "").startswith(CASE + "["):
+        return None
+    root = Path(state["checkout"])
+    source = root / "tests/test_acp_cleanup.py"
+    fallback = Path(state["guard"]).with_name("fallback_binding.py")
+    if (
+        hashlib.sha256(fallback.read_bytes()).hexdigest()
+        != state["direct_support"]["files"][str(fallback)]
+    ):
+        refuse("cleanup_support_drift")
+    namespace = {}
+    exec(compile(fallback.read_bytes(), str(fallback), "exec"), namespace)
+    frames = namespace["active_frames"]()
+    try:
+        server = root / "src/unrest_harness/server.py"
+        completion = next(
+            (
+                f
+                for f in frames
+                if f.f_code.co_filename == str(server) and f.f_code.co_name == "_completion_context"
+            ),
+            None,
+        )
+        if completion is not None and state["class"] == "source-owned-role:worker":
+            function = completion.f_globals["_completion_context"]
+            module = sys.modules.get(function.__module__)
+            pin = state["product_pins"]["src/unrest_harness/server.py"]
+            workspace = completion.f_locals["workspace"]
+            if (
+                hashlib.sha256(server.read_bytes()).hexdigest() != pin
+                or module is None
+                or vars(module) is not completion.f_globals
+                or function.__globals__ is not completion.f_globals
+                or function.__code__ is not completion.f_code
+                or completion.f_code
+                != state["isolated_named"](
+                    state["isolated_source_code"](server), "_completion_context"
+                )
+                or completion.f_lineno != 266
+                or argv != ["git", "rev-parse", "HEAD"]
+                or cwd != workspace
+                or env is not None
+                or not workspace.resolve().is_relative_to(Path(state["owned_root"]))
+            ):
+                refuse("cleanup_completion_git_drift")
+            binding = {
+                "path": str(server),
+                "line": 266,
+                "sha256": pin,
+                "owner": "_completion_context",
+            }
+            append({"kind": "exact_cleanup_completion_git_registration", "source_binding": binding})
+            return {
+                "class": "source-cleanup-completion-git",
+                "python": False,
+                "source_binding": binding,
+            }
+        frame = next(
+            (
+                f
+                for f in frames
+                if f.f_code.co_filename == str(source)
+                and f.f_code.co_name == "test_recorded_transport_failures"
+            ),
+            None,
+        )
+        if frame is None:
+            return None
+        pin = state["product_pins"][str(source.relative_to(root))]
+        function = frame.f_globals[frame.f_code.co_name]
+        module = sys.modules.get(function.__module__)
+        if (
+            hashlib.sha256(source.read_bytes()).hexdigest() != pin
+            or module is None
+            or vars(module) is not frame.f_globals
+            or function.__globals__ is not frame.f_globals
+            or function.__code__ is not frame.f_code
+            or frame.f_code
+            != state["isolated_named"](state["isolated_source_code"](source), frame.f_code.co_name)
+        ):
+            refuse("cleanup_owner_drift")
+        local = frame.f_locals
+        role, case = local["role"], local["case"]
+        if role not in ("work", "validate", "terminal_reviewer") or case not in (
+            "deep_json",
+            "array_id",
+            "object_id",
+            "success",
+        ):
+            refuse("cleanup_parameter_drift")
+        temporary = local["tmp_path"]
+        ws = local["ws"]
+        if (
+            not temporary.resolve().is_relative_to(Path(state["owned_root"]))
+            or not ws.resolve().is_relative_to(Path(state["owned_root"]))
+            or os.getcwd() != state["checkout"]
+        ):
+            refuse("cleanup_root_drift")
+        if argv[0] in ("git", "/usr/bin/git"):
+            expected = {
+                123: ["git", "init", "-q", str(ws)],
+                124: [
+                    "git",
+                    "-c",
+                    "user.name=Controlled",
+                    "-c",
+                    "user.email=controlled@example.invalid",
+                    "commit",
+                    "--allow-empty",
+                    "-qm",
+                    "Controlled",
+                ],
+            }
+            if frame.f_lineno not in expected:
+                return None
+            if (
+                argv != expected[frame.f_lineno]
+                or env is not None
+                or cwd != (ws if frame.f_lineno == 124 else None)
+            ):
+                refuse("cleanup_git_vector_drift")
+            kind, python, line = "source-cleanup-git:" + str(frame.f_lineno), False, frame.f_lineno
+        else:
+            fixture = root / "tests/fixtures/cleanup_acp_process.py"
+            if argv[:2] != [sys.executable, str(fixture)]:
+                return None
+            if (
+                hashlib.sha256(fixture.read_bytes()).hexdigest()
+                != state["product_pins"][str(fixture.relative_to(root))]
+            ):
+                refuse("cleanup_fixture_drift")
+            scenario = temporary / "scenario.json"
+            raw = (
+                None
+                if case == "success"
+                else (
+                    "[" * 10000 + "0" + "]" * 10000
+                    if case == "deep_json"
+                    else json.dumps(
+                        {"jsonrpc": "2.0", "id": [] if case == "array_id" else {}, "result": {}}
+                    )
+                )
+            )
+            if json.loads(scenario.read_bytes()) != {
+                "raw": raw,
+                "role": role,
+                "receipt": str(temporary / "receipt"),
+            }:
+                refuse("cleanup_scenario_drift")
+            launch = next(
+                (
+                    f
+                    for f in frames
+                    if f.f_code.co_filename == str(root / "src/unrest_harness/acp_runner.py")
+                    and f.f_code.co_name == "spawn_launch"
+                ),
+                None,
+            )
+            if launch is None:
+                return None
+            plan = launch.f_locals["plan"]
+            if (
+                argv != [sys.executable, str(fixture), str(scenario)]
+                or tuple(argv) != plan.argv
+                or cwd != plan.cwd
+                or Path(cwd) != ws
+                or env != plan.environment
+            ):
+                refuse("cleanup_launch_plan_drift")
+            kind, python, line = "source-cleanup-adapter", True, 409
+            source = root / "src/unrest_harness/acp_runner.py"
+            pin = state["product_pins"][str(source.relative_to(root))]
+        binding = {
+            "path": str(source),
+            "line": line,
+            "sha256": pin,
+            "owner": "test_recorded_transport_failures",
+        }
+        append(
+            {
+                "kind": "exact_cleanup_registration",
+                "source_binding": binding,
+                "class": kind,
+                "role": role,
+                "scenario": case,
+                "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest(),
+            }
+        )
+        return {"class": kind, "python": python, "source_binding": binding}
+    finally:
+        frames.clear()
