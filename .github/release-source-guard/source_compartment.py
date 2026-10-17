@@ -197,7 +197,7 @@ def main():
     def attached():
         os.write(start_write, b'1')
         os.close(start_write)
-    trace = tracing.OwnedTrace(child, allowed, 900 if producer_mode else 180, on_tick=tick, resolve_exec=resolve,
+    trace = tracing.OwnedTrace(child, allowed, 180, on_tick=tick, resolve_exec=resolve,
                               seize=True, on_attached=attached, selective=True)
     source_identity = observations.process_identity(child)
     if (source_identity['uids'] != [20000] * 4

@@ -26,7 +26,7 @@ def tmpfs_for(selection):
     roots = dict(TMPFS)
     if selection.startswith('producer-'):
         roots.update({
-            '/source/build': 'rw,nosuid,nodev,size=64m,uid=20000,gid=20000,mode=0700',
+            '/source/build': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0700',
             '/source/src/unrest_harness.egg-info': 'rw,nosuid,nodev,noexec,size=8m,uid=20000,gid=20000,mode=0700',
         })
     return roots

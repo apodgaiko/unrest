@@ -82,11 +82,11 @@ def prepare(manifest, input_pin):
     seed = Path('/opt/source-bootstrap/cache')
     expected_cache = closure.inventory(seed)
     actual_cache = closure.inventory(CACHE)
-    for value in expected_cache.values():
+    for name, value in expected_cache.items():
         if value['type'] == 'symlink':
-            target = Path(value['target'])
-            if not target.is_absolute():
-                raise RuntimeError('unknown native seed cache link representation')
+            target = (seed / name).resolve(strict=True)
+            if not target.is_relative_to(seed) or not target.is_dir():
+                raise RuntimeError('native seed link does not name an internal archive')
             value['target'] = str(CACHE / target.relative_to(seed))
     if actual_cache != expected_cache:
         raise RuntimeError('source cache differs from its finite native-produced seed')
