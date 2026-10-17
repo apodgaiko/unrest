@@ -47,7 +47,9 @@ static PyObject *gate_call(PyObject *object, PyObject *args, PyObject *kwargs) {
         return NULL;
     }
     PyObject *operations = PyDict_GetItemString(self->state, "operations");
-    if (operations && operations != Py_None) return PyObject_CallObject(self->callback, args);
+    PyObject *operation_sources = PyDict_GetItemString(self->state, "operation_profile_sources");
+    if (operations && operations != Py_None && (!operation_sources || !PyFrozenSet_Check(operation_sources)))
+        return PyObject_CallObject(self->callback, args);
     PyCodeObject *code = PyFrame_GetCode((PyFrameObject *)frame);
     if (!code) return NULL;
     int selected = PySet_Contains(self->sources, code->co_filename);

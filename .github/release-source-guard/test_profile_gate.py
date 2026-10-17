@@ -94,3 +94,54 @@ def test_callback_exception_and_thread_profile_identity():
             chosen()
     finally:
         sys.setprofile(None)
+
+
+def test_pinned_operation_observer_keeps_all_actual_effects_and_event_arguments():
+    import ast
+    from pathlib import Path
+    import shutil
+
+    source = Path('/guard/finite/source_operations.py')
+    tree = ast.parse(source.read_bytes(), filename=str(source))
+    operation = next(node for node in tree.body if isinstance(node, ast.ClassDef)
+                     and node.name == 'Operations')
+    method = next(node for node in operation.body if isinstance(node, ast.FunctionDef)
+                  and node.name == 'profile')
+    paths = frozenset({'/source/tests/producer.py'})
+    values = {'SOURCE_FRAME_PATHS': paths, 'REGISTRATIONS': [], 'shutil': shutil}
+    # Exercise the actual pinned observer method, not a copy of the C predicate.
+    exec(compile(ast.Module(body=[method], type_ignores=[]), str(source), 'exec'), values)
+    collected = []
+    observer = types.SimpleNamespace(
+        file_call=lambda frame: collected.append(('file_call', frame.f_code)),
+        returned=lambda frame, value: collected.append(('returned', frame.f_code, value)),
+        file_return=lambda frame, value: collected.append(('file_return', frame.f_code, value)),
+    )
+    selected = function('producer', next(iter(paths)), 'return len((1, 2))')
+    copying = function('copytree', shutil.__file__, 'return len((3,))')
+    ignored = function('ignored', '/deps/ignored.py', 'return len(())')
+    state = {'operations': observer, 'operation_profile_sources': paths,
+             'isolated_composition': types.SimpleNamespace(codes=None)}
+    sources = {*paths, shutil.__file__}
+
+    def actual(frame, event, value):
+        values['profile'](observer, frame, event, value)
+
+    native = gate.make(actual, state, sources)
+
+    def exercise(callback):
+        sys.setprofile(callback)
+        try:
+            selected()
+            copying()
+            ignored()
+        finally:
+            sys.setprofile(None)
+
+    exercise(actual)
+    expected = list(collected)
+    collected.clear()
+    exercise(native)
+    assert collected == expected
+    assert len(collected) == 6
+    assert {row[1].co_filename for row in collected} == sources

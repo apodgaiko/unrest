@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import errno
 import importlib.util
 import json
 import os
@@ -40,6 +41,21 @@ def source_child_setup():
     if os.getuid() != 20000 or CACHE.exists():
         raise RuntimeError('fresh unprivileged producer setup required')
     (Path('/work/owned') / 'tmp').mkdir(mode=0o700)
+    try:
+        descriptor = os.open('/source/pyproject.toml', os.O_WRONLY | os.O_NOFOLLOW)
+    except OSError as error:
+        if error.errno not in (errno.EROFS, errno.EACCES):
+            raise
+        source_denial = error.errno
+    else:
+        os.close(descriptor)
+        raise RuntimeError('candidate source entry is writable')
+    canary = Path('/source/.source-artifact-directory-canary')
+    canary.mkdir()
+    canary.rmdir()
+    Path('/work/producer-setup-controls.json').write_text(json.dumps({
+        'candidate_write_errno': source_denial, 'artifact_directory_create_remove': True,
+        'source_uid': os.getuid(), 'source_checkpoint_ready': False}, sort_keys=True))
     seed = Path('/opt/source-bootstrap/cache')
     CACHE.mkdir(mode=0o700)
     # Preserve native-produced file bytes. Only the finite cache-root prefix of
@@ -64,6 +80,12 @@ def prepare(manifest, input_pin):
         raise RuntimeError('fresh observer-owned producer inputs required')
     ROOT.mkdir(mode=0o755)
     (Path('/receipts') / 'native-startup').mkdir(mode=0o755)
+    setup_controls = json.loads(Path('/work/producer-setup-controls.json').read_bytes())
+    if (setup_controls['source_uid'] != 20000
+            or setup_controls['candidate_write_errno'] not in (errno.EROFS, errno.EACCES)
+            or setup_controls['artifact_directory_create_remove'] is not True):
+        raise RuntimeError('producer source view controls did not close')
+    write(ROOT / 'setup-controls.json', setup_controls)
     selected = ROOT / 'selected'
     (selected / 'bin').mkdir(parents=True, mode=0o755)
     site = selected / 'lib/python3.13/site-packages'

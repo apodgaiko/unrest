@@ -152,6 +152,15 @@ def require_ready(token):
             refuse("ready_activation_callback_replaced")
     support = _STATE.get("operation_support")
     if support is not None:
+        owner = _STATE.get('operations')
+        method = getattr(owner, 'profile', None)
+        if (owner is not _STATE.get('operation_profile_owner')
+                or getattr(method, '__func__', None) is not _STATE.get('operation_profile_function')
+                or method.__func__.__code__ is not _STATE.get('operation_profile_code')
+                or method.__func__.__globals__ is not _STATE.get('operation_profile_globals')
+                or _STATE.get('operation_profile_sources') != frozenset(
+                    method.__func__.__globals__['SOURCE_FRAME_PATHS'])):
+            refuse('ready_operation_profile_replaced')
         if (
             digest(support["path"]) != support["sha256"]
             or digest(support["spec_path"]) != support["spec_sha256"]
@@ -771,6 +780,11 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
         state["operation_spec"] = json.loads(Path(spec_path).read_text())
         operation_ns = checked_source(operation_support["path"], operation_support["sha256"])
         state["operations"] = operation_ns["Operations"](state, append, refuse, require_ready)
+        state['operation_profile_owner'] = state['operations']
+        state['operation_profile_function'] = state['operations'].profile.__func__
+        state['operation_profile_code'] = state['operations'].profile.__func__.__code__
+        state['operation_profile_globals'] = operation_ns
+        state['operation_profile_sources'] = frozenset(operation_ns['SOURCE_FRAME_PATHS'])
 
     activation_support = state.get("activation_support")
     if activation_support is not None:
@@ -795,6 +809,9 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
         )
     }
     profile_sources.add(signal.__file__)
+    if state.get('operation_profile_sources') is not None:
+        profile_sources.update(state['operation_profile_sources'])
+        profile_sources.add(shutil.__file__)
     for observer in (state["refusal_composition"], state["isolated_composition"]):
         for attribute in ("source", "product"):
             value = getattr(observer, attribute, None)
@@ -864,11 +881,11 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                     "audit_enforcement_retained": True,
                 }
             )
-        # Package operation observers retain their full callback surface. With
-        # no such observer, only these exact original source events are consumed;
-        # profiling metadata/AST/stdlib internals otherwise distorts source clocks.
+        # The pinned operation observer consumes its source files and shutil's
+        # copytree only. Their union with the existing observer domains preserves
+        # every consumed event without profiling ignored dependency internals.
         if (
-            state.get("operations") is None
+            (state.get("operations") is None or state.get('operation_profile_sources') is not None)
             and frame.f_code.co_filename not in profile_sources
             and not (
                 frame.f_code.co_name == "call_and_report"
