@@ -47,6 +47,32 @@ def ptrace(request: int, pid: int, address: int = 0, data: Any = 0) -> int:
     return result
 
 
+class FilterInstruction(ctypes.Structure):
+    _fields_ = [("code", ctypes.c_ushort), ("jt", ctypes.c_ubyte),
+                ("jf", ctypes.c_ubyte), ("k", ctypes.c_uint)]
+
+
+class FilterProgram(ctypes.Structure):
+    _fields_ = [("length", ctypes.c_ushort),
+                ("instructions", ctypes.POINTER(FilterInstruction))]
+
+
+def install_observation_filter() -> None:
+    """Inherit unremovable exec/wait stops without stopping unrelated syscalls."""
+    if sys.platform != "linux" or os.uname().machine != "x86_64":
+        raise RuntimeError("unsupported observation filter ABI")
+    rows = [(0x20, 0, 0, 4), (0x15, 1, 0, 0xC000003E),
+            (0x06, 0, 0, 0x80000000), (0x20, 0, 0, 0),
+            (0x35, 0, 1, 0x40000000), (0x06, 0, 0, 0x80000000)]
+    for number in (59, 61, 247, 322):  # execve, wait4, waitid, execveat
+        rows.extend([(0x15, 0, 1, number), (0x06, 0, 0, 0x7FF00000)])
+    rows.append((0x06, 0, 0, 0x7FFF0000))
+    instructions = (FilterInstruction * len(rows))(*(FilterInstruction(*row) for row in rows))
+    program = FilterProgram(len(rows), instructions)
+    if LIBC.prctl(38, 1, 0, 0, 0) != 0 or LIBC.prctl(22, 2, ctypes.byref(program), 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "inherited kernel observation filter refused")
+
+
 def trace_me() -> None:
     if sys.platform != "linux" or os.uname().machine != "x86_64":
         raise RuntimeError("unsupported trace ABI")
@@ -110,7 +136,7 @@ class OwnedTrace:
 
     def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float,
                  on_tick: Any = None, resolve_exec: Any = None,
-                 seize: bool = False, on_attached: Any = None):
+                 seize: bool = False, on_attached: Any = None, selective: bool = False):
         if sys.platform != "linux" or os.uname().machine != "x86_64":
             raise RuntimeError("unsupported trace ABI")
         if child <= 0 or timeout <= 0 or timeout > 180:
@@ -124,6 +150,7 @@ class OwnedTrace:
         self.timeout = timeout
         self.on_tick = on_tick
         self.resolve_exec = resolve_exec
+        self.selective = selective
         self.seize = seize
         self.on_attached = on_attached
         self.root_parent_wait: int | None = None
@@ -183,15 +210,16 @@ class OwnedTrace:
         size = ptrace(0x420E, pid, 88, ctypes.byref(info))
         operation = info.raw[0]
         architecture = int.from_bytes(info.raw[4:8], "little")
-        if (architecture != 0xC000003E or operation not in (1, 2)
-                or size < (80 if operation == 1 else 33)):
+        if (architecture != 0xC000003E or operation not in (1, 2, 3)
+                or size < (80 if operation in (1, 3) else 33)):
             raise RuntimeError("unknown syscall observation ABI")
         value = registers(pid)
-        entering = operation == 1
+        entering = operation in (1, 3)
         number = value.orig_rax
         if entering:
             self.pending[pid] = {"syscall": number, "status_address": value.rsi,
-                                 "wait_options": value.rdx}
+                                 "wait_options": value.rdx, "waitid_address": value.rdx,
+                                 "waitid_options": value.r10}
             if number == 59:  # execve
                 self.admit_exec(pid, value)
             elif number == 322:  # execveat has a distinct ABI; never silently admit.
@@ -210,18 +238,33 @@ class OwnedTrace:
             elif pending and pending["syscall"] == 61 and signed(value.rax) > 0:
                 address = pending["status_address"]
                 raw = int.from_bytes(read_bytes(pid, address, 4), "little") if address else None
+                if raw is None:
+                    self.poison.append("original_wait4_status_unobserved")
                 self.records.append({"kind": "original_parent_wait4", "parent": pid,
                                      "parent_tgid": self.identities[pid]["tgid"],
                                      "child": signed(value.rax), "raw": raw,
                                      "normalized": os.waitstatus_to_exitcode(raw)
                                      if raw is not None and (os.WIFEXITED(raw) or os.WIFSIGNALED(raw)) else None,
                                      "options": pending["wait_options"]})
+            elif pending and pending["syscall"] == 247 and signed(value.rax) == 0:
+                address = pending["waitid_address"]
+                wait_info = read_bytes(pid, address, 128) if address else None
+                if wait_info is None:
+                    self.poison.append("original_waitid_status_unobserved")
+                self.records.append({"kind": "original_parent_waitid", "parent": pid,
+                                     "parent_tgid": self.identities[pid]["tgid"],
+                                     "siginfo_hex": wait_info.hex() if wait_info else None,
+                                     "child": int.from_bytes(wait_info[16:20], "little") if wait_info else None,
+                                     "code": int.from_bytes(wait_info[8:12], "little", signed=True) if wait_info else None,
+                                     "status": int.from_bytes(wait_info[24:28], "little", signed=True) if wait_info else None,
+                                     "options": pending["waitid_options"],
+                                     "reaps": not bool(pending["waitid_options"] & 0x1000000)})
             elif pending and pending["syscall"] in (59, 322):
                 self.records.append({"kind": "exec_syscall_return", "pid": pid,
                                      "return": signed(value.rax)})
 
     def run(self) -> dict[str, Any]:
-        options = 0x100000 | 0x7F
+        options = 0x100000 | 0x7F | (0x80 if self.selective else 0)
         if self.seize:
             # SEIZE records the observer's credentials for access to the
             # nondumpable source child; TRACEME records the child's credentials.
@@ -243,7 +286,7 @@ class OwnedTrace:
         self.records.append({"kind": "kernel_root", "identity": self.identities[self.child]})
         # EXITKILL keeps tracer failure fail-closed; forks/clones are followed by
         # the kernel, not discovered by process-table polling.
-        ptrace(24, self.child)
+        ptrace(7 if self.selective else 24, self.child)
         started = time.monotonic()
         root_wait = None
         last_waited = 0
@@ -293,6 +336,8 @@ class OwnedTrace:
                                          "identity": self.identities[child.value]})
                 elif event == 4:
                     self.records.append({"kind": "kernel_exec", "pid": pid})
+                elif event == 7 and self.selective:
+                    self.syscall(pid)
                 elif event == 5:
                     self.records.append({"kind": "kernel_vfork_done", "pid": pid})
                 elif event == 6:
@@ -315,7 +360,8 @@ class OwnedTrace:
                     self.newborn.remove(pid)
                 else:
                     deliver = stop
-                ptrace(24, pid, data=ctypes.c_void_p(deliver))
+                request = 24 if not self.selective or pid in self.pending else 7
+                ptrace(request, pid, data=ctypes.c_void_p(deliver))
         finally:
             for pid in sorted(self.active):
                 try:

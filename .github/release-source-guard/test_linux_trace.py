@@ -39,12 +39,13 @@ assert actual == child and raw == signal.SIGTERM
 """
 
 
+@pytest.mark.parametrize("selective", [False, True])
 @pytest.mark.parametrize(("program", "status", "admit", "poison"), [
     ("/usr/bin/true", 0, True, False),
     ("/guard/finite-missing-exec", 29, True, False),
     ("/usr/bin/false", 31, False, True),
 ])
-def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, status, admit, poison):
+def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, status, admit, poison, selective):
     assert sys.platform == "linux" and os.uname().machine == "x86_64"
     argv = [sys.executable, "-I", "-S", "-c", BODY, program, str(status)]
     allowed = [{"path": sys.executable, "argv": argv,
@@ -59,12 +60,14 @@ def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, sta
     child = os.fork()
     if child == 0:
         try:
+            if selective:
+                trace.install_observation_filter()
             trace.trace_me()
             os.execve(sys.executable, argv, {})
         finally:
             os._exit(127)
-    result = trace.OwnedTrace(child, allowed, timeout=30).run()
-    Path(f"/work/trace-control-{status}.json").write_text(json.dumps(result, sort_keys=True))
+    result = trace.OwnedTrace(child, allowed, timeout=30, selective=selective).run()
+    Path(f"/work/trace-control-{status}-{selective}.json").write_text(json.dumps(result, sort_keys=True))
     assert result["root_parent_wait_raw"] == 0, result
     assert bool(result["poison"]) == poison
     records = result["records"]
@@ -87,7 +90,8 @@ def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, sta
         os.waitpid(child, os.WNOHANG)
 
 
-def test_seized_vfork_births_precede_native_effects_and_parent_waits():
+@pytest.mark.parametrize("selective", [False, True])
+def test_seized_vfork_births_precede_native_effects_and_parent_waits(selective):
     body = "import subprocess\nfor _ in range(8): subprocess.run(['/usr/bin/true'], check=True, env={})"
     argv = [sys.executable, "-I", "-S", "-c", body]
     allowed = [
@@ -99,6 +103,8 @@ def test_seized_vfork_births_precede_native_effects_and_parent_waits():
     read, write = os.pipe()
     child = os.fork()
     if child == 0:
+        if selective:
+            trace.install_observation_filter()
         os.close(write)
         os.read(read, 1)
         os.close(read)
@@ -110,8 +116,8 @@ def test_seized_vfork_births_precede_native_effects_and_parent_waits():
         os.write(write, b"1")
         os.close(write)
 
-    result = trace.OwnedTrace(child, allowed, timeout=30, seize=True, on_attached=attached).run()
-    Path('/work/trace-control-vfork.json').write_text(json.dumps(result, sort_keys=True))
+    result = trace.OwnedTrace(child, allowed, timeout=30, seize=True, on_attached=attached, selective=selective).run()
+    Path(f"/work/trace-control-vfork-{selective}.json").write_text(json.dumps(result, sort_keys=True))
     assert result['root_parent_wait_raw'] == 0 and not result['poison'], result
     records = result['records']
     births = [row['child'] for row in records if row['kind'] == 'kernel_child']
@@ -124,3 +130,36 @@ def test_seized_vfork_births_precede_native_effects_and_parent_waits():
         effect = next(i for i, row in enumerate(records)
                       if row['kind'] == 'kernel_exec' and row['pid'] == pid)
         assert birth < effect
+
+
+def test_selective_waitid_retains_original_siginfo_then_actual_reap():
+    body = """
+import os
+child = os.fork()
+if child == 0:
+    os._exit(23)
+result = os.waitid(os.P_PID, child, os.WEXITED | os.WNOWAIT)
+assert result.si_pid == child and result.si_status == 23
+actual, raw = os.waitpid(child, 0)
+assert actual == child and raw == 23 << 8
+"""
+    argv = [sys.executable, '-I', '-S', '-c', body]
+    allowed = [{'path': sys.executable, 'argv': argv, 'environment': {}, 'cwd': os.getcwd(),
+                'sha256': hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}]
+    child = os.fork()
+    if child == 0:
+        trace.install_observation_filter()
+        trace.trace_me()
+        os.execve(sys.executable, argv, {})
+        os._exit(127)
+    result = trace.OwnedTrace(child, allowed, timeout=30, selective=True).run()
+    Path('/work/trace-control-waitid.json').write_text(json.dumps(result, sort_keys=True))
+    assert result['root_parent_wait_raw'] == 0 and not result['poison'], result
+    observations = [row for row in result['records'] if row['kind'] == 'original_parent_waitid']
+    assert len(observations) == 1
+    observation = observations[0]
+    assert observation['code'] == 1 and observation['status'] == 23 and not observation['reaps']
+    assert len(bytes.fromhex(observation['siginfo_hex'])) == 128
+    waits = [row for row in result['records'] if row['kind'] == 'original_parent_wait4']
+    assert len(waits) == 1 and waits[0]['child'] == observation['child']
+    assert waits[0]['raw'] == 23 << 8 and waits[0]['normalized'] == 23

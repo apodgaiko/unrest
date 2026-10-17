@@ -464,9 +464,9 @@ def select(
             known = (
                 "/usr/bin/git"
                 if argv[0] == "git"
-                else "/bin/ps"
+                else "/usr/bin/ps"
                 if relative == "tests/test_server.py" and call.lineno == 3284 and argv[0] == "ps"
-                else "/bin/sleep"
+                else "/usr/bin/sleep"
             )
             if (
                 relative == "src/unrest_harness/server.py"

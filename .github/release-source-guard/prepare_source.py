@@ -8,13 +8,17 @@ import sys
 
 ROOT = Path('/source')
 SUPPORT = Path('/guard/finite')
-CASE = 'tests/test_server.py::test_completion_refusal_survives_server_restart'
+CASES = {
+    'inprocess': 'tests/test_server.py::test_completion_refusal_survives_server_restart',
+    'composed': 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct',
+}
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def main():
-    nonce = sys.argv[1]
+    nonce, selection = sys.argv[1:]
+    case = CASES[selection]
     if len(nonce) != 64 or any(c not in '0123456789abcdef' for c in nonce):
         raise RuntimeError('invalid source epoch')
     manifest = json.loads((SUPPORT / 'source-template.json').read_bytes())
@@ -35,10 +39,20 @@ def main():
                 entry['executable_sha256'] = sha(path)
             else:
                 entry['executable_sha256'] = 'unavailable-on-linux'
+    if selection == 'composed':
+        source = SUPPORT / 'restart_custody.py'
+        function = next(node for node in ast.parse(source.read_bytes()).body
+                        if isinstance(node, ast.FunctionDef) and node.name == 'start_custodian')
+        target = SUPPORT / 'custody_process.py'
+        registry.append({'class': 'restart-custodian', 'python': True, 'argv': [str(target)],
+                         'checkout_cwd': False,
+                         'source_binding': {'path': str(source), 'line': function.lineno, 'sha256': sha(source)},
+                         'source_function': function.name, 'source_function_line': function.lineno,
+                         'source_cwd_local': 'work', 'files': {str(target): sha(target)}})
     registry_text = '"""Finite vectors; unavailable platform images cannot match a byte pin."""\nCOMMANDS = ' + repr(registry) + '\n'
     manifest.update({
         'checkout': '/source', 'owned_root': '/work', 'events': '/work/events',
-        'source_case': CASE, 'scope': 'focused original in-process completion restart; all four parameters',
+        'source_case': case, 'source_selection': selection, 'scope': 'focused original ' + selection,
         'source_checkpoint_ready': False, 'selected_carrier': None,
         'guard': str(SUPPORT / 'runtime_guard.py'), 'guard_sha256': sha(SUPPORT / 'runtime_guard.py'),
         'registry': {'path': '/inputs/registry.py', 'sha256': hashlib.sha256(registry_text.encode()).hexdigest()},
@@ -53,7 +67,7 @@ def main():
                            'files': {str(p): sha(p) for p in sorted(SUPPORT.glob('*.py'))}},
         'git_maintenance_sha256': sha('/usr/lib/git-core/git'),
         'copy_git': {p: sha(p) for p in ['/usr/bin/git', '/bin/git']},
-        'console_routes': [], 'copied_console_pins': {}, 'cohort_native_pins': {p: sha(p) for p in ['/usr/bin/git','/bin/ps','/bin/sleep']},
+        'console_routes': [], 'copied_console_pins': {}, 'cohort_native_pins': {p: sha(p) for p in ['/usr/bin/git','/usr/bin/ps','/usr/bin/sleep']},
         'copy_console': [], 'native_sysctl_offsets': {'system': 'Linux', 'abi': 'proc-stat-start-ticks'},
         'setup_mode': 'source',
         'source_only_support': [str(p) for p in sorted(SUPPORT.glob('*.py'))],

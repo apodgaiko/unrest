@@ -52,6 +52,7 @@ def main():
             os.close(ready_read)
             os.close(start_write)
             credentials.source_credentials()
+            tracing.install_observation_filter()
             os.setsid()
             for name in ('home','tmp','events'):
                 (Path('/work') / name).mkdir(mode=0o700)
@@ -114,20 +115,40 @@ def main():
             selected = matching[0]
             admitted = [event for event in events if event['kind'] == 'admitted'
                         and event['owner_pid'] == parent and event['token'] == selected['token']]
-            if len(admitted) != 1 or not (admitted[0]['class'].startswith('source-git:') or admitted[0]['class'] in {'source-cohort3:tests/test_server.py:2144', 'source-cohort3:tests/test_server.py:2145', 'source-cohort3:src/unrest_harness/server.py:266'}):
+            if len(admitted) != 1 or parent not in supervisor.registered:
+                return False
+            registration = admitted[0]
+            binding = registration.get('source_binding', {})
+            source = binding.get('path', '')
+            if source.startswith('/source/'):
+                if manifest['product_pins'].get(source.removeprefix('/source/')) != binding.get('sha256'):
+                    return False
+            elif (registration['class'] != 'restart-custodian'
+                  or source != '/guard/finite/restart_custody.py'
+                  or manifest['direct_support']['files'].get(source) != binding.get('sha256')):
                 return False
             consumed.add(selected['token'])
             bound[pid] = selected
-        if vector[0] != 'git':
+        selected = bound[pid]
+        if selected['bootstrap_sha256'] is not None:
+            if (len(vector) < 3 or vector[-2] != '-c'
+                    or hashlib.sha256(vector[-1].encode()).hexdigest() != selected['bootstrap_sha256']
+                    or vector[0] not in manifest['runtime']['paths'] or path != vector[0]
+                    or sha(path) != manifest['runtime']['sha256']):
+                return False
+            return True
+        if vector[0] not in {'git', 'ps', 'sleep'}:
             return False
-        candidates = [directory + '/git' for directory in environment['PATH'].split(':')]
+        candidates = [directory + '/' + vector[0] for directory in environment['PATH'].split(':')]
         if path not in candidates:
             return False
         if not Path(path).exists():
             return True
-        if path not in manifest['copy_git'] or sha(path) != manifest['copy_git'][path]:
+        images = {**manifest['copy_git'], **manifest['cohort_native_pins']}
+        if path not in images or sha(path) != images[path]:
             return False
-        native_context[pid] = {'path': path, 'argv': vector, 'cwd': cwd, 'environment': environment}
+        if vector[0] == 'git':
+            native_context[pid] = {'path': path, 'argv': vector, 'cwd': cwd, 'environment': environment}
         return True
     def tick(current):
         supervisor.tick()
@@ -149,7 +170,7 @@ def main():
         os.write(start_write, b'1')
         os.close(start_write)
     trace = tracing.OwnedTrace(child, allowed, 180, on_tick=tick, resolve_exec=resolve,
-                              seize=True, on_attached=attached)
+                              seize=True, on_attached=attached, selective=True)
     source_identity = observations.process_identity(child)
     if (source_identity['uids'] != [20000] * 4
             or any(source_identity['capabilities'].values())

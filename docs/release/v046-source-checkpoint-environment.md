@@ -12,14 +12,16 @@ authenticated to the same repository owner and accepted the authorized scratch
 branch through normal GitHub enforcement. The connected API's branch creation
 returned 403 despite its repository permission metadata; it was not retried.
 
-Hosted synthetic controls succeeded in
-[run 39049518199](https://github.com/apodgaiko/unrest/actions/runs/39049518199)
-at `35dac4e5541906b20516397b0fa227a51c7b4204`. The downloaded ciphertext,
-plaintext archive, actual GitHub run/artifact identities and support bytes were
-verified locally. The private evidence records 26 passing support tests, distinct
-observer/source UIDs, eight denial controls, native stock `ps`, loopback IPC and
-an actual parent wait with raw 15 / normalized -15. This is synthetic control
-evidence; original source cases executed: zero.
+The first original focused source proof succeeded in
+[run 39060025630](https://github.com/apodgaiko/unrest/actions/runs/39060025630)
+at `c746f728306934178ebd5d3f945e1e6ded65514f`. Downloaded ciphertext,
+plaintext archive, GitHub run/artifact identities and support bytes were verified
+locally. Original JUnit records all four in-process completion-refusal restart
+parameters passing, with zero failures, errors or skips. Kernel records contain
+16 actual original-parent wait4 results, root wait word 0 and zero poison. This
+proof covers that source function and its Git descendants; it does not cover the
+whole source suite, composed owner, controlled backend or package certification.
+Earlier failures remain failures.
 
 ## Synthetic compartment prerequisite
 
@@ -63,6 +65,23 @@ probe uses the unchanged native `ps -axo pid=,ppid=,pgid=` vector from the pinne
 image. Process absence is never counted as a wait. Raw parent wait words and
 normalized return codes are distinct from a subprocess handle's cached status.
 
+The kernel observer follows fork/vfork/clone/exec/exit events and reads actual
+original-parent wait results. Finite source journals bind each exec to its exact
+admitted argv, effective environment, cwd, caller source and executable bytes.
+For inherited environments, the binding reads libc's actual environment instead
+of Python's potentially stale `os.environ` cache. Stock Git's one maintenance
+child is bound to the exact empty-commit call, image bytes, environment and
+content-addressed newly written commit object; this grants no other Git helper.
+
+A selective observation filter is under verification. It installs inherited
+seccomp TRACE stops for execve/execveat and wait4/waitid, keeps ptrace birth,
+exit and signal observation, and refuses foreign/x32 syscall ABIs. Unrelated
+syscalls need no ptrace round trip; original test deadlines stay unchanged.
+This changes kernel observation only, not finite Python source activation.
+The readiness controls must prove successful, failed and caught unknown exec,
+both observation modes, vfork ordering and original waitid/wait4 custody before
+source execution. No selective-mode source claim follows from the earlier run.
+
 Raw output and observer records travel only to the trusted coordinator's private
 log and are encrypted with OpenSSL CMS to the repository's public recipient
 certificate before artifact upload. Only the recipient's public certificate is
@@ -78,16 +97,15 @@ original source, type-check, repository, build, archive and installed lifecycle
 commands remain executable and unchanged. The new readiness workflow cannot be
 used to deduplicate a full primary checkpoint.
 
-The following Linux seams still require implementation and genuine evidence
-before an original source case can be invoked:
+The following matrix distinguishes proved seams from remaining original source work:
 
 | Domain | Required evidence | Current status |
 | --- | --- | --- |
 | Finite admission and activation | Original source/caller/AST/globals/argv/environment/cwd/READY bindings, including `-I`/`-S`, both producer profiles and backend/query descendants | Pending |
-| Kernel descendant lifecycle | Short-lived/native/failed-exec descendants, exact original-parent waits and fail-closed launch poison | Pending |
-| Endpoint and receipt custody | Owned socket peers/listeners, stale/foreign/replay/late refusals before effects | Pending |
+| Kernel descendant lifecycle | Short-lived/native/failed-exec descendants, exact original-parent waits and fail-closed launch poison | Controls and focused in-process source proved with syscall tracing; selective exec/wait tracing pending |
+| Endpoint and receipt custody | Owned socket peers/listeners, stale/foreign/replay/late refusals before effects | Genuine Linux socket/receipt controls proved; composed integration pending |
 | Restart and failure drain | Source-owned custodian across frontend restart; fresh Linux raw/normalized parent waits with bounded real journal publication | Pending |
-| Original source slice | Whole composed owner, all four in-process restart parameters, producer settlements, controlled backend/Bridge/private preflight/complete_turn and default-native no-launch negatives | Pending |
+| Original source slice | Whole composed owner, all four in-process restart parameters, producer settlements, controlled backend/Bridge/private preflight/complete_turn and default-native no-launch negatives | Four in-process parameters proved; other domains pending |
 | Frozen primary CI | Exact head/checkout/guard/runtime identity, unfiltered original command, package certification and verified same-commit deduplication | Pending |
 
 Existing failed/incomplete observations retain their original outcomes. The

@@ -52,7 +52,10 @@ def run(argv, log, **kwargs):
         return subprocess.run(argv, stdout=output, stderr=subprocess.STDOUT, check=False, **kwargs)
 
 def main():
-    root, controls = map(lambda s: Path(s).resolve(), sys.argv[1:])
+    root, controls = map(lambda s: Path(s).resolve(), sys.argv[1:3])
+    selection = sys.argv[3] if len(sys.argv) == 4 else 'inprocess'
+    if selection not in {'inprocess', 'composed'}:
+        raise RuntimeError('unknown focused source selection')
     root.mkdir(mode=0o700)
     raw = root / 'raw'
     raw.mkdir(mode=0o700)
@@ -90,7 +93,7 @@ def main():
               '--mount=type=bind,src=' + str(source) + ',dst=/source,readonly']
     prepare = ['docker','run','--rm','--network=none','--read-only','--cap-drop=ALL',
                '--security-opt=no-new-privileges','--user=20001:20001',*mounts,
-               '--entrypoint=/usr/local/bin/python',image,'-I','/guard/prepare_source.py',nonce]
+               '--entrypoint=/usr/local/bin/python',image,'-I','/guard/prepare_source.py',nonce,selection]
     with log.open('ab') as errors:
         prepared = subprocess.run(prepare, stdout=subprocess.PIPE, stderr=errors, check=False)
     (raw / 'prepared.stdout').write_bytes(prepared.stdout)
@@ -131,7 +134,7 @@ def main():
         'repository':'GITHUB_REPOSITORY','head_sha':'GITHUB_SHA','run_id':'GITHUB_RUN_ID',
         'run_attempt':'GITHUB_RUN_ATTEMPT','workflow_ref':'GITHUB_WORKFLOW_REF',
         'workflow_sha':'GITHUB_WORKFLOW_SHA'}.items()}
-    identity.update({'scope':'focused-original-in-process-restart', 'source_exit_code':exit_code,
+    identity.update({'scope':'focused-original-' + selection, 'source_exit_code':exit_code,
                      'source_checkpoint_ready':False,'selected_carrier':None,
                      'source_pins_sha256':sha(raw / 'source-pins.json'), 'image_id':image,
                      'support':{str(p.relative_to(SUPPORT)):sha(p) for p in sorted(SUPPORT.rglob('*'))
