@@ -72,6 +72,14 @@ class Supervisor:
     def refresh(self):
         events = self.events()
         for event in events:
+            if event['kind'] in {'admitted', 'actual_launch_binding', 'ready', 'source_entry',
+                                 'test_outcome', 'actual_parent_preexit_drain', 'custody_IPC_listener_ready'}:
+                marker = tuple(event.get(key) for key in ('owner_pid', 'kind', 'token', 'pid',
+                                                          'phase', 'outcome', 'class'))
+                if marker not in self.timed_events:
+                    self.timed_events.add(marker)
+                    self.event_timings.append({'event_sha256': hashlib.sha256(json.dumps(event, sort_keys=True).encode()).hexdigest(), 'event': event,
+                                               'observed_monotonic': time.monotonic()})
             if event["kind"] == "forbidden":
                 self.poison("finite_guard:" + event["reason"])
             if (
@@ -360,6 +368,8 @@ class Supervisor:
         self.manifest = json.loads(Path(spec["manifest"]).read_bytes())
         self.root = kernel.identity(child.pid)
         self.registered = {child.pid: {"identity": self.root, "token": "root"}}
+        self.timed_events = set()
+        self.event_timings = []
         self.listeners, self.plans, self.pairs = {}, {}, {}
         self.connections = set()
         self.connect_admissions = {}
@@ -451,6 +461,8 @@ class Supervisor:
                     except (RuntimeError, KeyError, StopIteration) as error:
                         self.poison(str(error))
                         result = {"ok": False, "request": request, "reason": str(error)}
+                    result['observer_timing'] = {'accepted_monotonic': state['started'],
+                                                 'finished_monotonic': time.monotonic()}
                     result["kernel_peer"] = state["peer"]
                     encoded = json.dumps(result, sort_keys=True).encode()
                     if len(encoded) > 16384:

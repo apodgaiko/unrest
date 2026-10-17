@@ -183,7 +183,7 @@ def main():
     finally:
         supervisor.close()
         os.close(read)
-    result.update({'source_events': supervisor.events(), 'guard_poison': supervisor.poisoned, 'receipts': supervisor.receipts,
+    result.update({'event_timings': supervisor.event_timings, 'source_events': supervisor.events(), 'guard_poison': supervisor.poisoned, 'receipts': supervisor.receipts,
                    'abi': abi, 'source_preexec_identity': source_identity,
                    'observer': observations.process_identity(os.getpid())})
     envelope = {'kernel-source.json': base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode(),
