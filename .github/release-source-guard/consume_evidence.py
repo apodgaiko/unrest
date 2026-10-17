@@ -12,6 +12,7 @@ from pathlib import Path
 import stat
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 from checkpoint_receipt import artifact_members
 from producer_controls import check as check_producer
@@ -97,6 +98,34 @@ def verify(root, run, artifact, members, key, support):
                               query_raw=proof['query_exit_raw'], query_status=proof['query_exit_normalized'],
                               parent_waits=proof['all_kernel_process_parent_waits'],
                               source_body_dispatched=False, sticky_poison=True)
+    elif scope in {'producer-contract', 'producer-distribution'}:
+        kernel = loads(records['kernel-source.json'])
+        summary = loads(records['summary.json'])
+        cases = ET.fromstring(records['source.xml']).findall('.//testcase')
+        expected_cases = 2 if scope == 'producer-contract' else 1
+        expected_name = ('test_installed_supported_provider_matrix' if scope == 'producer-contract'
+                         else 'test_checker_builds_and_executes_15_cases_with_extracted_provenance')
+        require(len(cases) == expected_cases and all(
+            case.get('name', '').split('[')[0] == expected_name
+            and all(case.find(tag) is None for tag in ('failure', 'error', 'skipped'))
+            for case in cases), 'positive_original_junit')
+        require(metadata['source_exit_code'] == 0 and summary['original_pytest_exit_code'] == 0
+                and summary['ready'] is True and kernel['root_parent_wait_raw'] == 0
+                and kernel['poison'] == [] and kernel['guard_poison'] is False
+                and 'failure' not in kernel, 'positive_source_outcome')
+        waits = [row for row in kernel['records'] if row['kind'] == 'original_parent_wait4']
+        births = [row for row in kernel['records'] if row['kind'] == 'kernel_child'
+                  and row['identity']['tgid'] == row['child']]
+        require(all(len([wait for wait in waits if wait['child'] == birth['child']
+                         and wait['parent_tgid'] == birth['identity']['ppid']]) == 1
+                    for birth in births), 'positive_kernel_wait_closure')
+        events = kernel['source_events']
+        require(any(row['kind'] == 'operation_settled' for row in events), 'positive_settlement')
+        projection.update(positive_verified=True, junit_cases=len(cases),
+                          parent_waits=len(births), source_exit=0, sticky_poison=False,
+                          query_returns=sum(row['kind'] == 'query_actual_main_return' for row in events),
+                          backend_calls=sum(row['kind'] == 'isolated_actual_backend_call' for row in events),
+                          settlements=sum(row['kind'] == 'operation_settled' for row in events))
     return projection
 
 

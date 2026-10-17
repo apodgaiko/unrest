@@ -73,6 +73,7 @@ def activate(profile, command):
     endpoint.attach(guard)
     guard.install(str(path), profile['manifest_sha256'], profile['token'], role, profile['case'])
     guard.require_ready(profile['token'])
+    endpoint.check()
     source_body = source.read_bytes()
     source_pin = hashlib.sha256(source_body).hexdigest()
     expected_body = compile(command, '<string>', 'exec', dont_inherit=True)
@@ -94,6 +95,7 @@ def activate(profile, command):
                 raise RuntimeError('native original command code drift')
             interface.consume(profile)
             guard.require_ready(profile['token'])
+            endpoint.check()
             if profile.get('caught_control'):
                 import subprocess
                 try:
@@ -101,6 +103,7 @@ def activate(profile, command):
                 except RuntimeError:
                     guard.append({'kind': 'native_producer_caught_refusal', 'role': role})
                 guard.require_ready(profile['token'])
+                endpoint.check()
             entered[0] = True
             guard.append({'kind': 'query_original_dispatch' if role == 'isolated-uv-query'
                           else 'isolated_original_dispatch', 'helper': helper,
@@ -128,6 +131,7 @@ def activate(profile, command):
             if module is None or vars(module) is not frame.f_globals:
                 raise RuntimeError('native producer globals drift')
             guard.require_ready(profile['token'])
+            endpoint.check()
             if role == 'isolated-uv-query':
                 if event == 'call':
                     guard.append({'kind': 'query_actual_main_call', 'source': activation.identity(source)})

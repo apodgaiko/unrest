@@ -83,7 +83,7 @@ def main():
     raw = root / 'raw'
     raw.mkdir(mode=0o700)
     log = raw / 'coordinator.log'
-    direct_identity = execution_identity(SUPPORT, 'producer-controls')
+    direct_identity = execution_identity(SUPPORT, selection)
     records = {}
     evidence_stage = 'prepare'
     control = json.loads((controls / 'safe-provenance.json').read_text())
