@@ -163,3 +163,23 @@ assert actual == child and raw == 23 << 8
     waits = [row for row in result['records'] if row['kind'] == 'original_parent_wait4']
     assert len(waits) == 1 and waits[0]['child'] == observation['child']
     assert waits[0]['raw'] == 23 << 8 and waits[0]['normalized'] == 23
+
+
+def test_long_finite_original_exec_argument_is_observed_without_truncation():
+    body = "assert len(__import__('sys').argv[1]) == 32768"
+    argv = [sys.executable, "-I", "-S", "-c", body, "x" * 32768]
+    allowed = [{"path": sys.executable, "argv": argv,
+                "sha256": hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),
+                "environment": {}, "cwd": os.getcwd()}]
+    child = os.fork()
+    if child == 0:
+        try:
+            trace.install_observation_filter()
+            trace.trace_me()
+            os.execve(sys.executable, argv, {})
+        finally:
+            os._exit(127)
+    result = trace.OwnedTrace(child, allowed, timeout=30, selective=True).run()
+    assert result["root_parent_wait_raw"] == 0 and not result["poison"]
+    attempts = [row for row in result["records"] if row["kind"] == "exec_attempt"]
+    assert len(attempts) == 1 and attempts[0]["argv"] == argv

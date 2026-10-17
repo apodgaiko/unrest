@@ -96,18 +96,22 @@ def read_bytes(pid: int, address: int, count: int) -> bytes:
     return bytes(result[:count])
 
 
+MAX_EXEC_STRING = 131071
+MAX_EXEC_VECTOR_BYTES = 2 * 1024 * 1024
+
+
 def read_string(pid: int, address: int) -> bytes:
     result = bytearray()
     base = address & ~7
     first = address - base
-    for offset in range(0, 8200, 8):
+    for offset in range(0, MAX_EXEC_STRING + 9, 8):
         block = read_bytes(pid, base + offset, 8)
         if offset == 0:
             block = block[first:]
         end = block.find(b"\0")
         result.extend(block if end < 0 else block[:end])
         if end >= 0:
-            if len(result) > 8192:
+            if len(result) > MAX_EXEC_STRING:
                 raise RuntimeError("unbounded exec string")
             return bytes(result)
     raise RuntimeError("unbounded exec string")
@@ -115,11 +119,16 @@ def read_string(pid: int, address: int) -> bytes:
 
 def exec_vector(pid: int, argv_address: int) -> list[str]:
     result: list[str] = []
+    total = 0
     for index in range(128):
         address = int.from_bytes(read_bytes(pid, argv_address + index * 8, 8), "little")
         if address == 0:
             return result
-        result.append(os.fsdecode(read_string(pid, address)))
+        body = read_string(pid, address)
+        total += len(body) + 1
+        if total > MAX_EXEC_VECTOR_BYTES:
+            raise RuntimeError("unbounded exec vector bytes")
+        result.append(os.fsdecode(body))
     raise RuntimeError("unbounded exec vector")
 
 
