@@ -21,7 +21,7 @@ def configuration():
             "PidsLimit": 128, "Memory": 1073741824, "CapDrop": ["ALL"],
             "CapAdd": ["SETUID", "SETGID", "SETPCAP"],
             "SecurityOpt": ["no-new-privileges"],
-            "Tmpfs": {"/work": "", "/tmp": "", "/records": ""},
+            "Tmpfs": dict(controller.TMPFS),
         },
         "Mounts": [{"Type": "bind", "Source": "/public-support", "Destination": "/guard",
                     "RW": False}],
@@ -32,6 +32,32 @@ def configuration():
 
 def test_exact_synthetic_configuration():
     controller.validate_container(configuration(), Path("/public-support"))
+
+
+def test_docker_canonical_capability_names():
+    current = configuration()
+    current["HostConfig"]["CapAdd"] = ["CAP_SETGID", "CAP_SETPCAP", "CAP_SETUID"]
+    controller.validate_container(current, Path("/public-support"))
+
+
+@pytest.mark.parametrize("capabilities", [
+    ["CAP_CAP_SETUID", "CAP_SETGID", "CAP_SETPCAP"],
+    ["CAP_SETUID", "CAP_SETGID", "CAP_SETPCAP", "SETUID"],
+    ["CAP_SETUID", "CAP_SETGID", "CAP_SYS_PTRACE"],
+])
+def test_capability_inventory_remains_finite(capabilities):
+    current = configuration()
+    current["HostConfig"]["CapAdd"] = capabilities
+    with pytest.raises(RuntimeError):
+        controller.validate_container(current, Path("/public-support"))
+
+
+@pytest.mark.parametrize("root", ["/work", "/tmp", "/records"])
+def test_writable_root_options_are_bound(root):
+    current = configuration()
+    current["HostConfig"]["Tmpfs"][root] = "rw,mode=0777"
+    with pytest.raises(RuntimeError):
+        controller.validate_container(current, Path("/public-support"))
 
 
 @pytest.mark.parametrize(("key", "value"), [

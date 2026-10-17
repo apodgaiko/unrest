@@ -134,19 +134,14 @@ def observer() -> None:
     assert os.getuid() == 0
     no_new_privileges()
     abi = require_linux_abi()
-    Path("/records").chmod(0o700)
-    os.chown("/records", OBSERVER_UID, OBSERVER_UID)
-    for path in (Path("/records/controller-canary"),):
-        path.write_bytes(os.urandom(32))
-        path.chmod(0o600)
-        os.chown(path, OBSERVER_UID, OBSERVER_UID)
-    broker = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    broker.bind("/records/foreign-broker.sock")
-    broker.listen(1)
     read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
+    ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
     pid = os.fork()
     if pid == 0:
         try:
+            os.close(ready_write)
+            if os.read(ready_read, 1) != b"1":
+                raise RuntimeError("observer setup did not settle")
             os.dup2(write_fd, 1)
             os.dup2(write_fd, 2)
             # No descriptor from the observer survives except stdio pipes.
@@ -170,10 +165,19 @@ def observer() -> None:
         finally:
             os._exit(126)
     os.close(write_fd)
+    os.close(ready_read)
     os.setgroups([])
     os.setgid(OBSERVER_UID)
     os.setuid(OBSERVER_UID)
     no_new_privileges()
+    canary = Path("/records/controller-canary")
+    canary.write_bytes(os.urandom(32))
+    canary.chmod(0o600)
+    broker = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    broker.bind("/records/foreign-broker.sock")
+    broker.listen(1)
+    os.write(ready_write, b"1")
+    os.close(ready_write)
     log = bytearray()
     while block := os.read(read_fd, 65536):
         log.extend(block)

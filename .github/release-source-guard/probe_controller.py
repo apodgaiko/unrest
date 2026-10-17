@@ -22,6 +22,11 @@ BASE = "python@sha256:9a4a5ceafb4ddd7468a09ade0049463a7bd1acbefda52adee748544110
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
 PACKAGES = {"pytest", "iniconfig", "packaging", "pluggy", "pygments"}
+TMPFS = {
+    "/work": "rw,nosuid,nodev,size=128m,uid=20000,gid=20000,mode=0711",
+    "/tmp": "rw,nosuid,nodev,noexec,size=64m,mode=1777",
+    "/records": "rw,nosuid,nodev,noexec,size=32m,uid=20001,gid=20001,mode=0700",
+}
 
 
 def sha(path: Path) -> str:
@@ -42,13 +47,15 @@ def validate_container(value: dict, public_support: Path) -> None:
     }
     if any(host.get(key) != wanted for key, wanted in expected.items()):
         raise RuntimeError("compartment scope/privilege configuration drift")
-    if host["CapDrop"] != ["ALL"] or set(host["CapAdd"]) != {
-        "SETUID", "SETGID", "SETPCAP",
-    }:
+    # Docker inspect canonicalizes CLI capability names with the CAP_ prefix.
+    capabilities = host["CapAdd"]
+    if host["CapDrop"] != ["ALL"] or len(capabilities) != 3 or {
+        value.removeprefix("CAP_") for value in capabilities
+    } != {"SETUID", "SETGID", "SETPCAP"}:
         raise RuntimeError("bootstrap capability drift")
     if host["SecurityOpt"] != ["no-new-privileges"]:
         raise RuntimeError("compartment security option drift")
-    if set(host["Tmpfs"]) != {"/work", "/tmp", "/records"}:
+    if host["Tmpfs"] != TMPFS:
         raise RuntimeError("writable root inventory drift")
     mounts = value["Mounts"]
     if len(mounts) != 1 or not all((
@@ -108,9 +115,7 @@ def main() -> int:
             "--ipc=private", "--cgroupns=private", "--cap-drop=ALL",
             "--cap-add=SETUID", "--cap-add=SETGID", "--cap-add=SETPCAP",
             "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=1g",
-            "--tmpfs=/work:rw,nosuid,nodev,size=128m,uid=20000,gid=20000,mode=0711",
-            "--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777",
-            "--tmpfs=/records:rw,nosuid,nodev,noexec,size=32m,mode=0700",
+            *["--tmpfs=" + path + ":" + options for path, options in TMPFS.items()],
             "--mount=type=bind,src=" + str(SUPPORT) + ",dst=/guard,readonly",
             "--entrypoint=/usr/local/bin/python", image,
             "-B", "/guard/compartment_probe.py",
