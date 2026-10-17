@@ -44,6 +44,7 @@ def main():
     manifest = json.loads(manifest_bytes)
     producer_mode = manifest['source_selection'].startswith('producer-')
     producer_setup = load('producer_setup', ROOT / 'producer_setup.py') if producer_mode else None
+    work_before = os.statvfs('/work')
     pin = hashlib.sha256(manifest_bytes).hexdigest()
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
@@ -214,6 +215,10 @@ def main():
     finally:
         supervisor.close()
         os.close(read)
+    work_after = os.statvfs('/work')
+    result['work_storage'] = {name: {field: getattr(value, field) for field in (
+        'f_bsize', 'f_frsize', 'f_blocks', 'f_bfree', 'f_bavail', 'f_files', 'f_ffree')}
+        for name, value in [('before', work_before), ('after', work_after)]}
     result.update({'event_timings': supervisor.event_timings, 'source_events': supervisor.events(), 'guard_poison': supervisor.poisoned, 'receipts': supervisor.receipts,
                    'receipt_ledger_poison': supervisor.ledger.poison,
                    'native_source_records': producers.records if producers is not None else [],

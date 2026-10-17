@@ -26,6 +26,7 @@ PRODUCER_CONTRACT = 'tests/contracts/test_lean_provider_security.py::test_instal
 PRODUCER_DISTRIBUTION = 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance'
 COMPOSED = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
 STAGE = 'startup'
+PYTEST_STATUS: int | None = None
 
 
 def load(name, path, pin):
@@ -39,7 +40,8 @@ def load(name, path, pin):
     return module
 
 def main():
-    global STAGE
+    global STAGE, PYTEST_STATUS
+    PYTEST_STATUS = None
     STAGE = 'manifest'
     path, pin = sys.argv[1:]
     assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == pin
@@ -90,14 +92,13 @@ def main():
             guard.append({'kind': 'test_outcome', 'nodeid': report.nodeid,
                           'phase': report.when, 'outcome': report.outcome})
     result = 1
-    completed_pytest_status = None
     custodian_status = None
     try:
         STAGE = 'pytest'
         result = int(pytest.main(['-q', '-p', 'no:cacheprovider', '--basetemp=' + manifest['owned_root'] + '/pytest',
                                  '--junitxml=/work/source.xml',
                                  *(CI_SELECTORS if case == CI else BACKEND_SELECTORS if case == BACKEND else [case])], plugins=[Plugin()]))
-        completed_pytest_status = result
+        PYTEST_STATUS = result
     finally:
         if custodian is not None:
             try:
@@ -124,20 +125,27 @@ def entry():
     except BaseException as error:
         frames = []
         trace = error.__traceback__
-        pytest_status = None
+        pytest_status = PYTEST_STATUS
         while trace is not None:
             frame = trace.tb_frame
             frames.append({'file_sha256': hashlib.sha256(frame.f_code.co_filename.encode()).hexdigest(),
                            'line': trace.tb_lineno})
-            if frame.f_code.co_name == 'main' and type(frame.f_locals.get('completed_pytest_status')) is int:
-                pytest_status = frame.f_locals['completed_pytest_status']
             trace = trace.tb_next
         kinds = {'AssertionError', 'AttributeError', 'KeyError', 'RuntimeError', 'TypeError', 'ValueError'}
         kind = type(error).__name__
-        Path('/work/runner-stage.json').write_text(json.dumps({
+        body = json.dumps({
             'schema': 'unrest.v046.runner-failure.v1', 'stage': STAGE,
             'error_code': kind if kind in kinds else 'other',
-            'frames': frames[-8:], 'original_pytest_exit_code': pytest_status}, sort_keys=True))
+            'frames': frames[-8:], 'original_pytest_exit_code': pytest_status}, sort_keys=True).encode()
+        temporary = '/work/.runner-stage.part'
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            if os.write(descriptor, body) != len(body):
+                raise RuntimeError('runner diagnostic short write')
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os.rename(temporary, '/work/runner-stage.json')
         return 125
 
 

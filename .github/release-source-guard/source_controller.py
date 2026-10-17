@@ -26,6 +26,8 @@ TMPFS = {
 
 def tmpfs_for(selection):
     roots = dict(TMPFS)
+    if selection == 'ci-mutations':
+        roots['/work'] = 'rw,nosuid,nodev,size=512m,uid=20000,gid=20000,mode=0711'
     if selection.startswith('producer-'):
         roots.update({
             '/source': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0755',

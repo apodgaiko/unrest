@@ -177,3 +177,33 @@ def test_artifact_scope_identity_is_finite(kind):
     current = identity()
     current['artifact_name'] = 'v046-source-' + kind + '-12-1'
     evidence.identity_check(current)
+
+
+def test_runner_failure_record_excludes_exception_text_and_code_bodies(tmp_path, capsys, monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('private_runner_control',
+                                                  Path(__file__).with_name('source_runner.py'))
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    def failed_main():
+        runner.STAGE = 'pytest'
+        raise RuntimeError(CANARY)
+    real_open, real_rename = runner.os.open, runner.os.rename
+    def owned_open(path, flags, mode):
+        assert path == '/work/.runner-stage.part'
+        return real_open(tmp_path / '.runner-stage.part', flags, mode)
+    def owned_rename(origin, target):
+        assert origin == '/work/.runner-stage.part' and target == '/work/runner-stage.json'
+        return real_rename(tmp_path / '.runner-stage.part', tmp_path / 'runner-stage.json')
+    monkeypatch.setattr(runner, 'main', failed_main)
+    monkeypatch.setattr(runner.os, 'open', owned_open)
+    monkeypatch.setattr(runner.os, 'rename', owned_rename)
+    assert runner.entry() == 125
+    body = (tmp_path / 'runner-stage.json').read_bytes()
+    record = json.loads(body)
+    assert CANARY.encode() not in body
+    assert record['stage'] == 'pytest' and record['error_code'] == 'RuntimeError'
+    assert record['original_pytest_exit_code'] is None
+    assert all(set(frame) == {'file_sha256', 'line'} for frame in record['frames'])
+    assert capsys.readouterr() == ('', '')
