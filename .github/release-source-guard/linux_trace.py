@@ -109,7 +109,8 @@ class OwnedTrace:
     """
 
     def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float,
-                 on_tick: Any = None, resolve_exec: Any = None):
+                 on_tick: Any = None, resolve_exec: Any = None,
+                 seize: bool = False, on_attached: Any = None):
         if sys.platform != "linux" or os.uname().machine != "x86_64":
             raise RuntimeError("unsupported trace ABI")
         if child <= 0 or timeout <= 0 or timeout > 180:
@@ -123,6 +124,9 @@ class OwnedTrace:
         self.timeout = timeout
         self.on_tick = on_tick
         self.resolve_exec = resolve_exec
+        self.seize = seize
+        self.on_attached = on_attached
+        self.root_parent_wait: int | None = None
         self.records: list[dict[str, Any]] = []
         self.poison: list[str] = []
         self.active = {child}
@@ -210,21 +214,35 @@ class OwnedTrace:
                                      "parent_tgid": self.identities[pid]["tgid"],
                                      "child": signed(value.rax), "raw": raw,
                                      "normalized": os.waitstatus_to_exitcode(raw)
-                                     if raw is not None else None,
+                                     if raw is not None and (os.WIFEXITED(raw) or os.WIFSIGNALED(raw)) else None,
                                      "options": pending["wait_options"]})
             elif pending and pending["syscall"] in (59, 322):
                 self.records.append({"kind": "exec_syscall_return", "pid": pid,
                                      "return": signed(value.rax)})
 
     def run(self) -> dict[str, Any]:
-        initial, status = os.waitpid(self.child, 0)
-        if initial != self.child or not os.WIFSTOPPED(status) or os.WSTOPSIG(status) != signal.SIGSTOP:
-            raise RuntimeError("owned pre-exec stop missing")
+        options = 0x100000 | 0x7F
+        if self.seize:
+            # SEIZE records the observer's credentials for access to the
+            # nondumpable source child; TRACEME records the child's credentials.
+            ptrace(0x4206, self.child, data=ctypes.c_void_p(options))
+            ptrace(0x4207, self.child)
+            initial, status = os.waitpid(self.child, 0x40000000)
+            if (initial != self.child or not os.WIFSTOPPED(status)
+                    or status >> 16 != 128):
+                raise RuntimeError("owned seize interrupt stop missing")
+            if self.on_attached is not None:
+                self.on_attached()
+        else:
+            initial, status = os.waitpid(self.child, 0)
+            if (initial != self.child or not os.WIFSTOPPED(status)
+                    or os.WSTOPSIG(status) != signal.SIGSTOP):
+                raise RuntimeError("owned pre-exec stop missing")
+            ptrace(0x4200, self.child, data=ctypes.c_void_p(options))
         self.identities[self.child] = _observation.process_identity(self.child)
         self.records.append({"kind": "kernel_root", "identity": self.identities[self.child]})
         # EXITKILL keeps tracer failure fail-closed; forks/clones are followed by
         # the kernel, not discovered by process-table polling.
-        ptrace(0x4200, self.child, data=ctypes.c_void_p(0x100000 | 0x7F))
         ptrace(24, self.child)
         started = time.monotonic()
         root_wait = None
@@ -247,6 +265,7 @@ class OwnedTrace:
                                          "identity": self.identities[pid]})
                     if pid == self.child:
                         root_wait = raw
+                        self.root_parent_wait = raw
                     continue
                 if not os.WIFSTOPPED(raw):
                     raise RuntimeError("unknown ptrace wait disposition")
@@ -271,6 +290,13 @@ class OwnedTrace:
                     ptrace(0x4201, pid, data=ctypes.byref(terminal))
                     self.records.append({"kind": "kernel_exit", "pid": pid,
                                          "raw": terminal.value})
+                elif event == 128 and pid in self.newborn:
+                    self.newborn.remove(pid)
+                elif event == 128 and self.seize and stop in (
+                    signal.SIGSTOP, signal.SIGTSTP, signal.SIGTTIN, signal.SIGTTOU
+                ):
+                    ptrace(0x4208, pid)  # LISTEN preserves the original group stop.
+                    continue
                 elif event:
                     raise RuntimeError("unknown ptrace event")
                 elif stop == signal.SIGTRAP | 0x80:
@@ -293,6 +319,8 @@ class OwnedTrace:
                     self.records.append({"kind": "failure_cleanup_tracer_wait", "pid": pid,
                                          "raw": raw, "normalized": os.waitstatus_to_exitcode(raw),
                                          "root_original_parent": pid == self.child})
+                    if pid == self.child:
+                        self.root_parent_wait = raw
                 else:
                     ptrace(24, pid, data=ctypes.c_void_p(signal.SIGKILL))
         return {"root_parent_wait_raw": root_wait, "records": self.records,

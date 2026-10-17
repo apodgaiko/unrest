@@ -41,28 +41,37 @@ def main():
     manifest = json.loads(manifest_bytes)
     pin = hashlib.sha256(manifest_bytes).hexdigest()
     read, write = os.pipe2(os.O_CLOEXEC)
+    ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
+    start_read, start_write = os.pipe2(os.O_CLOEXEC)
     argv = ['/opt/deps/bin/python', '-I', '-S', '/guard/source_runner.py', str(manifest_path), pin]
     child = os.fork()
     if child == 0:
         try:
             os.dup2(write, 1)
             os.dup2(write, 2)
+            os.close(ready_read)
+            os.close(start_write)
             credentials.source_credentials()
             os.setsid()
             for name in ('home','tmp','events'):
                 (Path('/work') / name).mkdir(mode=0o700)
             os.chdir('/source')
+            os.write(ready_write, b'R')
+            os.close(ready_write)
+            if os.read(start_read, 1) != b'1':
+                raise RuntimeError('source attach fence did not settle')
             os.closerange(3, 1 << 20)
-            tracing.trace_me()
             os.execve(argv[0], argv, manifest['root_environment'])
         finally:
             os._exit(126)
     os.close(write)
+    os.close(ready_write)
+    os.close(start_read)
     credentials.observer_credentials()
-    stopped = os.waitid(os.P_PID, child, os.WSTOPPED | os.WEXITED | os.WNOWAIT)
-    if stopped is None or stopped.si_code not in (os.CLD_STOPPED, os.CLD_TRAPPED):
+    if os.read(ready_read, 1) != b'R':
         actual, raw = os.waitpid(child, 0)
-        raise RuntimeError('source bootstrap did not stop: ' + str((actual, raw)))
+        raise RuntimeError('source bootstrap did not fence: ' + str((actual, raw)))
+    os.close(ready_read)
     spec = {'manifest': str(manifest_path), 'pins': {str(manifest_path): pin},
             'endpoint': manifest['endpoint']}
     for name in ('custody_host.py','drain_host.py'):
@@ -126,7 +135,11 @@ def main():
                 raise RuntimeError('bounded source output exceeded')
     allowed = [{'pid': child, 'path': argv[0], 'argv': argv, 'environment': manifest['root_environment'],
                 'cwd': '/source', 'sha256': manifest['runtime']['sha256']}]
-    trace = tracing.OwnedTrace(child, allowed, 180, on_tick=tick, resolve_exec=resolve)
+    def attached():
+        os.write(start_write, b'1')
+        os.close(start_write)
+    trace = tracing.OwnedTrace(child, allowed, 180, on_tick=tick, resolve_exec=resolve,
+                              seize=True, on_attached=attached)
     source_identity = observations.process_identity(child)
     if (source_identity['uids'] != [20000] * 4
             or any(source_identity['capabilities'].values())
@@ -136,7 +149,7 @@ def main():
         result = trace.run()
         tick(trace)
     except Exception:
-        result = {'root_parent_wait_raw': None, 'poison': trace.poison,
+        result = {'root_parent_wait_raw': trace.root_parent_wait, 'poison': trace.poison,
                   'records': trace.records, 'failure': traceback.format_exc()}
     finally:
         supervisor.close()
