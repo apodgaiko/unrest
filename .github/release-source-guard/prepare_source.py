@@ -82,6 +82,7 @@ def main():
     if selection.startswith('producer-'):
         manifest['root_environment'].update({
             'PATH': '/opt/source-bootstrap/bin:' + manifest['root_environment']['PATH'],
+            'TMPDIR': '/work/owned/tmp',
             'UV_CACHE_DIR': '/work/producer-cache', 'UV_OFFLINE': '1', 'UV_NO_INDEX': '1',
             'UV_FIND_LINKS': '/opt/source-bootstrap/wheelhouse',
             'UV_PYTHON': '/receipts/producers/selected/bin/python',

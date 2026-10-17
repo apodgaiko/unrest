@@ -39,6 +39,7 @@ def write(path, value):
 def source_child_setup():
     if os.getuid() != 20000 or CACHE.exists():
         raise RuntimeError('fresh unprivileged producer setup required')
+    (Path('/work/owned') / 'tmp').mkdir(mode=0o700)
     seed = Path('/opt/source-bootstrap/cache')
     CACHE.mkdir(mode=0o700)
     # Preserve native-produced file bytes. Only the finite cache-root prefix of
