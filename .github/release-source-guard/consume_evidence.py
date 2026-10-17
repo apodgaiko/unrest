@@ -84,6 +84,24 @@ def verify(root, run, artifact, members, key, support):
                   'archive_sha256': digest(body), 'scope': scope,
                   'structured_records': len(records), 'source_checkpoint_ready': False,
                   'negative_verified': False}
+    if 'runner-stage.json' in records:
+        stage = loads(records['runner-stage.json'])
+        require(set(stage) == {'schema', 'stage', 'error_code', 'frames', 'original_pytest_exit_code'}
+                and stage['schema'] == 'unrest.v046.runner-failure.v1'
+                and stage['stage'] in {'startup', 'manifest', 'guard_load', 'guard_install', 'pytest', 'summary'}
+                and stage['error_code'] in {'AssertionError', 'AttributeError', 'KeyError', 'RuntimeError',
+                                             'TypeError', 'ValueError', 'other'}, 'runner_stage_schema')
+        require(metadata['source_exit_code'] != 0 and type(stage['frames']) is list
+                and len(stage['frames']) <= 8, 'runner_stage_outcome')
+        import re
+        require(all(type(frame) is dict and set(frame) == {'file_sha256', 'line'}
+                    and type(frame['line']) is int and frame['line'] > 0
+                    and type(frame['file_sha256']) is str
+                    and re.fullmatch('[0-9a-f]{64}', frame['file_sha256'])
+                    for frame in stage['frames']), 'runner_stage_frames')
+        projection.update(error_code='source_runner_refused', runner_stage=stage['stage'],
+                          runner_error=stage['error_code'], frames=stage['frames'])
+        return projection
     if scope == 'producer-controls':
         require(type(metadata['source_exit_code']) is int, 'source_status_type')
         try:

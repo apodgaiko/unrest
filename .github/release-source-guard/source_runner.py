@@ -25,6 +25,7 @@ BACKEND_SELECTORS = [BACKEND + '::' + name for name in (
 PRODUCER_CONTRACT = 'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix'
 PRODUCER_DISTRIBUTION = 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance'
 COMPOSED = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
+STAGE = 'startup'
 
 
 def load(name, path, pin):
@@ -38,6 +39,8 @@ def load(name, path, pin):
     return module
 
 def main():
+    global STAGE
+    STAGE = 'manifest'
     path, pin = sys.argv[1:]
     assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == pin
     manifest = json.loads(Path(path).read_bytes())
@@ -49,11 +52,13 @@ def main():
                 else {PRODUCER_CONTRACT + '[' + provider + ']' for provider in ('claude','codex')}
                 if case == PRODUCER_CONTRACT else {case})
     sys.path[:0] = ['/opt/deps/lib/python3.13/site-packages', '/source/src', '/source']
+    STAGE = 'guard_load'
     endpoint = load('endpoint', '/guard/finite/endpoint.py', manifest['endpoint']['sha256'])
     endpoint.early(manifest['endpoint'])
     sys._finite_source_bootstrap_gate = {'active': True}
     guard = load('runtime_guard', manifest['guard'], manifest['guard_sha256'])
     endpoint.attach(guard)
+    STAGE = 'guard_install'
     guard.install(path, pin, case=case)
     guard.require_ready('root')
     os.chdir('/source')
@@ -85,11 +90,14 @@ def main():
             guard.append({'kind': 'test_outcome', 'nodeid': report.nodeid,
                           'phase': report.when, 'outcome': report.outcome})
     result = 1
+    completed_pytest_status = None
     custodian_status = None
     try:
+        STAGE = 'pytest'
         result = int(pytest.main(['-q', '-p', 'no:cacheprovider', '--basetemp=' + manifest['owned_root'] + '/pytest',
                                  '--junitxml=/work/source.xml',
                                  *(CI_SELECTORS if case == CI else BACKEND_SELECTORS if case == BACKEND else [case])], plugins=[Plugin()]))
+        completed_pytest_status = result
     finally:
         if custodian is not None:
             try:
@@ -100,6 +108,7 @@ def main():
                               'numeric_returncode': actual_status, 'source_assertions_completed': result == 0})
                 custodian_status = actual_status
 
+    STAGE = 'summary'
     summary = guard.observe_summary(path)
     summary['original_pytest_exit_code'] = result
     summary['actual_custodian_status'] = custodian_status
@@ -109,5 +118,28 @@ def main():
         return 2
     return result
 
+def entry():
+    try:
+        return main()
+    except BaseException as error:
+        frames = []
+        trace = error.__traceback__
+        pytest_status = None
+        while trace is not None:
+            frame = trace.tb_frame
+            frames.append({'file_sha256': hashlib.sha256(frame.f_code.co_filename.encode()).hexdigest(),
+                           'line': trace.tb_lineno})
+            if frame.f_code.co_name == 'main' and type(frame.f_locals.get('completed_pytest_status')) is int:
+                pytest_status = frame.f_locals['completed_pytest_status']
+            trace = trace.tb_next
+        kinds = {'AssertionError', 'AttributeError', 'KeyError', 'RuntimeError', 'TypeError', 'ValueError'}
+        kind = type(error).__name__
+        Path('/work/runner-stage.json').write_text(json.dumps({
+            'schema': 'unrest.v046.runner-failure.v1', 'stage': STAGE,
+            'error_code': kind if kind in kinds else 'other',
+            'frames': frames[-8:], 'original_pytest_exit_code': pytest_status}, sort_keys=True))
+        return 125
+
+
 if __name__ == '__main__':
-    raise SystemExit(main())
+    raise SystemExit(entry())

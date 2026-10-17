@@ -221,7 +221,7 @@ def main():
                    'observer': observations.process_identity(os.getpid())})
     envelope = {'kernel-source.json': base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode(),
                 'source-output.log': base64.b64encode(log).decode()}
-    for name in ('collection.json','summary.json','source.xml','custodian.stderr'):
+    for name in ('collection.json','summary.json','source.xml','runner-stage.json','custodian.stderr'):
         path = Path(manifest['owned_root'] if name == 'custodian.stderr' else '/work') / name
         if path.is_file() and not path.is_symlink():
             envelope[name] = base64.b64encode(path.read_bytes()).decode()
