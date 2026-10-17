@@ -1181,9 +1181,11 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
             )
         if registration["python"]:
             if state.get("operation_activation") is not None:
-                state["operation_activation"].before_python(
-                    argv, kwargs.get("cwd"), kwargs.get("env")
-                )
+                activation = state["operation_activation"]
+                if state.get("source_activation_support") is not None:
+                    activation.before_python(argv, kwargs.get("cwd"), kwargs.get("env"), registration)
+                else:
+                    activation.before_python(argv, kwargs.get("cwd"), kwargs.get("env"))
             flags = []
             i = 1
             while argv[i] in ("-I", "-S", "-B", "-u"):
