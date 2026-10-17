@@ -34,7 +34,8 @@ def handle(host, request, events, kernel):
         if e["kind"] == "actual_waitpid" and e["owner_pid"] == request["pid"]
     }
     if any(
-        e["class"] not in {"source-owned-role:worker", "source-composed-adapter"}
+        e["class"] not in {"source-owned-role:worker", "source-owned-role:validator",
+                          "source-owned-role:terminal-reviewer", "source-composed-adapter"}
         for e in registered.values()
     ):
         raise RuntimeError("drain_unbound_class")

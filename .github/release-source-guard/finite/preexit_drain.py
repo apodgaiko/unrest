@@ -10,7 +10,8 @@ import threading
 import time
 
 CASE = "tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct"
-CLASSES = {"source-owned-role:worker", "source-composed-adapter"}
+CLASSES = {"source-owned-role:worker", "source-owned-role:validator",
+           "source-owned-role:terminal-reviewer", "source-composed-adapter"}
 
 
 def install(guard, endpoint):
