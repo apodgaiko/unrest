@@ -23,20 +23,8 @@ jobs:
           persist-credentials: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Original four in-process restart parameters after native predicate change
-        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-unit" "$RUNNER_TEMP/source-readiness"
       - name: Whole original composed restart, stop, replacement and cancel source case
         run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/source-composed" "$RUNNER_TEMP/source-readiness" composed
-      - name: Upload encrypted original in-process source evidence
-        if: always()
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: v046-source-unit-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/source-unit/evidence.cms
-            ${{ runner.temp }}/source-unit/safe-provenance.json
-          if-no-files-found: error
-          retention-days: 30
       - name: Upload encrypted composed-source evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2

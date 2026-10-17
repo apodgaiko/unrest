@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import importlib.util
+import hashlib
 from pathlib import Path
 import platform
 import socket
@@ -97,9 +98,17 @@ def require_linux_abi() -> dict[str, Any]:
             raise RuntimeError("kernel pidfd identity unavailable")
     finally:
         os.close(fd)
+    aliases = {}
+    for name in ('git', 'ps', 'sleep'):
+        canonical, alias = Path('/usr/bin') / name, Path('/bin') / name
+        if canonical.resolve() != alias.resolve():
+            raise RuntimeError('stock Linux native alias identity drift')
+        aliases[name] = {'canonical': str(canonical), 'alias': str(alias),
+                         'realpath': str(canonical.resolve()),
+                         'sha256': hashlib.sha256(canonical.read_bytes()).hexdigest()}
     return {"system": "Linux", "machine": "x86_64",
             "kernel_release": platform.release(), "identity": identity,
-            "pidfd": True}
+            "pidfd": True, "stock_native_aliases": aliases}
 
 
 def direct_child_inventory(pid: int) -> dict[str, Any]:

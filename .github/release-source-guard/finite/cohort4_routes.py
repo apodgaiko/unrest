@@ -486,7 +486,9 @@ def select(
                     )
                     else "/usr/bin/git"
                 )
-            if resolved != known or argv[1:] != expected_argv[1:]:
+            aliases = {known, known.replace('/usr/bin/', '/bin/', 1)}
+            if (resolved not in aliases or Path(resolved).resolve() != Path(known).resolve()
+                    or argv[1:] != expected_argv[1:]):
                 refuse("cohort_native_identity_drift")
             # The manifest pins native executable bytes independently of PATH.
             if (
