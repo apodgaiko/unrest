@@ -104,7 +104,6 @@ class OwnedTrace:
         self.records: list[dict[str, Any]] = []
         self.poison: list[str] = []
         self.active = {child}
-        self.in_syscall: dict[int, bool] = {}
         self.pending: dict[int, dict[str, Any]] = {}
         self.denied: set[int] = set()
         self.newborn: set[int] = set()
@@ -133,9 +132,15 @@ class OwnedTrace:
             ptrace(13, pid, data=ctypes.byref(value))
 
     def syscall(self, pid: int) -> None:
+        # GET_SYSCALL_INFO identifies entry/exit even for a newborn task whose
+        # first stop can be a clone return. Alternation guesses lose that edge.
+        info = ctypes.create_string_buffer(88)
+        size = ptrace(0x420E, pid, 88, ctypes.byref(info))
+        operation = info.raw[0]
+        if operation not in (1, 2) or size < (80 if operation == 1 else 33):
+            raise RuntimeError("unknown syscall observation ABI")
         value = registers(pid)
-        entering = not self.in_syscall.get(pid, False)
-        self.in_syscall[pid] = entering
+        entering = operation == 1
         number = value.orig_rax
         if entering:
             self.pending[pid] = {"syscall": number, "status_address": value.rsi,
@@ -153,6 +158,8 @@ class OwnedTrace:
                 value.rax = ((1 << 64) - errno.EPERM)
                 ptrace(13, pid, data=ctypes.byref(value))
                 self.denied.remove(pid)
+                self.records.append({"kind": "exec_syscall_return", "pid": pid,
+                                     "return": -errno.EPERM, "denied": True})
             elif pending and pending["syscall"] == 61 and signed(value.rax) > 0:
                 address = pending["status_address"]
                 raw = int.from_bytes(read_bytes(pid, address, 4), "little") if address else None
@@ -202,8 +209,6 @@ class OwnedTrace:
                     ptrace(0x4201, pid, data=ctypes.byref(child))
                     self.active.add(child.value)
                     self.newborn.add(child.value)
-                    # A newborn's first syscall stop is the clone/fork exit.
-                    self.in_syscall[child.value] = True
                     self.records.append({"kind": "kernel_child", "parent": pid,
                                          "child": child.value, "event": event})
                 elif event == 4:
