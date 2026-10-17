@@ -102,7 +102,8 @@ class OwnedTrace:
     requests to execute host commands. All records belong to its caller.
     """
 
-    def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float):
+    def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float,
+                 on_tick: Any = None, resolve_exec: Any = None):
         if sys.platform != "linux" or os.uname().machine != "x86_64":
             raise RuntimeError("unsupported trace ABI")
         if child <= 0 or timeout <= 0 or timeout > 180:
@@ -114,6 +115,8 @@ class OwnedTrace:
         self.child = child
         self.allowed = allowed
         self.timeout = timeout
+        self.on_tick = on_tick
+        self.resolve_exec = resolve_exec
         self.records: list[dict[str, Any]] = []
         self.poison: list[str] = []
         self.active = {child}
@@ -133,7 +136,8 @@ class OwnedTrace:
                 raise RuntimeError("invalid or duplicate exec environment entry")
             environment[key] = content
         cwd = os.readlink(f"/proc/{pid}/cwd")
-        matches = [row for row in self.allowed if row["path"] == path and row["argv"] == vector]
+        matches = [row for row in self.allowed if row["path"] == path and row["argv"] == vector
+                   and row.get("pid", pid) == pid]
         accepted = len(matches) == 1
         image = Path(f"/proc/{pid}/root") / path.lstrip("/")
         if accepted:
@@ -146,6 +150,8 @@ class OwnedTrace:
                         and observed == expected and (observed is not None or matches[0].get(
                 "expected_missing"
             ) is True))
+        if not accepted and self.resolve_exec is not None:
+            accepted = self.resolve_exec(pid, path, vector, environment, cwd)
         self.records.append({"kind": "exec_attempt", "pid": pid, "path": path,
                              "argv": vector, "cwd": cwd, "environment": environment,
                              "accepted": accepted})
@@ -190,6 +196,7 @@ class OwnedTrace:
                 address = pending["status_address"]
                 raw = int.from_bytes(read_bytes(pid, address, 4), "little") if address else None
                 self.records.append({"kind": "original_parent_wait4", "parent": pid,
+                                     "parent_tgid": self.identities[pid]["tgid"],
                                      "child": signed(value.rax), "raw": raw,
                                      "normalized": os.waitstatus_to_exitcode(raw)
                                      if raw is not None else None,
@@ -212,6 +219,8 @@ class OwnedTrace:
         root_wait = None
         try:
             while self.active:
+                if self.on_tick is not None:
+                    self.on_tick(self)
                 if time.monotonic() - started > self.timeout:
                     raise TimeoutError("owned trace deadline exceeded")
                 pid, raw = os.waitpid(-1, os.WNOHANG | 0x40000000)

@@ -29,11 +29,12 @@ class ReceiptLedger:
     # still requires a genuine registered peer; policy rechecks source ownership.
     DRAIN_METHODS = {"custody_close", "custody_signal", "drain_inventory",
                      "drain_child", "drain_complete"}
-    def __init__(self, nonce: str, source_uid: int):
+    def __init__(self, nonce: str, source_uid: int, root_pid: int | None = None):
         if len(nonce) != 64 or any(c not in "0123456789abcdef" for c in nonce):
             raise ValueError("exact epoch nonce required")
         self.nonce = nonce
         self.source_uid = source_uid
+        self.root_pid = root_pid
         self.registered: dict[int, tuple[str, dict[str, Any]]] = {}
         self.seen: set[str] = set()
         self.closed: set[int] = set()
@@ -44,7 +45,10 @@ class ReceiptLedger:
         raise ReceiptRefused(reason)
 
     def register(self, pid: int, token: str) -> None:
-        if pid in self.registered or len(token) != 32:
+        root = pid == self.root_pid and token == "root"
+        if pid in self.registered or (not root and (
+            len(token) != 32 or any(c not in "0123456789abcdef" for c in token)
+        )):
             self.refuse("duplicate_or_invalid_registration")
         identity = _identity.identity(pid)
         if identity["uid"] != self.source_uid:
@@ -69,7 +73,9 @@ class ReceiptLedger:
             self.refuse("foreign_unregistered_receipt")
         assert saved is not None
         token, birth = saved
-        if (_identity.identity(pid) != birth or request.get("identity") != birth
+        claimed_birth = request.get("identity")
+        initial_ready = claimed_birth is None and request.get("kind") == "ready"
+        if (_identity.identity(pid) != birth or (claimed_birth != birth and not initial_ready)
                 or request.get("token") != token or request.get("nonce") != self.nonce):
             self.refuse("stale_or_foreign_receipt_binding")
         identifier = request.get("id")

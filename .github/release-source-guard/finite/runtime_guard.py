@@ -146,6 +146,13 @@ def require_ready(token):
 
 def refuse(reason):
     append({"kind": "forbidden", "reason": reason})
+    # Publish before returning to a caller that may catch the local refusal.
+    endpoint = sys.modules.get("endpoint")
+    if endpoint is not None and _STATE is not None:
+        try:
+            endpoint.request("poison", reason=reason, token=_STATE["token"])
+        except Exception:
+            pass  # The protected observer retains a rejected poison request too.
     raise GuardRefusal("finite source guard: " + reason)
 
 

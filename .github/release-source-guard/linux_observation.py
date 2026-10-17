@@ -12,7 +12,7 @@ import socket
 import struct
 from typing import Any
 
-NAMESPACES = ("ipc", "mnt", "net", "pid", "user", "uts")
+NAMESPACES = ("ipc", "mnt", "net", "pid", "user", "uts", "cgroup")
 
 
 def process_identity(pid: int) -> dict[str, Any]:
@@ -31,6 +31,7 @@ def process_identity(pid: int) -> dict[str, Any]:
     )
     result = {
         "pid": pid,
+        "tgid": int(status["Tgid"]),
         "ppid": int(fields[1]),
         "pgid": int(fields[2]),
         "sid": int(fields[3]),

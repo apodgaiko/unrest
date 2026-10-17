@@ -6,12 +6,20 @@ import json
 import os
 from pathlib import Path
 import socket
+import struct
 import stat
 import sys
 import threading
 import time
 import uuid
 import types
+
+_CONTROL_SOCKET = socket.socket
+_CONTROL_CONNECT = socket.socket.connect
+_CONTROL_SENDALL = socket.socket.sendall
+_CONTROL_RECV = socket.socket.recv
+_CONTROL_GETSOCKOPT = socket.socket.getsockopt
+_CONTROL_CLOSE = socket.socket.close
 
 STATE = {"ready": False, "poison": False}
 LOCAL = threading.local()
@@ -37,31 +45,41 @@ def request(kind, **values):
         "identity": STATE.get("identity"),
         **values,
     }
-    directory = Path(spec["requests"])
-    pending = directory / (token + ".tmp")
-    pending.write_text(json.dumps(body, sort_keys=True))
-    pending.rename(directory / (token + ".json"))
-    response = Path(spec["responses"]) / (token + ".json")
-    deadline = time.monotonic() + 4
-    while not response.exists():
-        if time.monotonic() > deadline:
-            STATE["poison"] = True
-            raise EndpointRefusal("supervisor_receipt_timeout")
-        time.sleep(0.0005)
-    fd = os.open(response, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    encoded = json.dumps(body, sort_keys=True).encode()
+    if not 0 < len(encoded) <= 8192:
+        STATE["poison"] = True
+        raise EndpointRefusal("request_size_refused")
+    stream = _CONTROL_SOCKET(socket.AF_UNIX, socket.SOCK_STREAM)
+    stream.settimeout(4)
+    LOCAL.control_stream = stream
     try:
-        info = os.fstat(fd)
-        if (
-            not stat.S_ISREG(info.st_mode)
-            or info.st_uid != spec["observer_uid"]
-            or info.st_nlink != 1
-            or info.st_size > 16384
-        ):
-            STATE["poison"] = True
-            raise EndpointRefusal("response_carrier_refused")
-        answer = json.loads(os.read(fd, 16385))
+        _CONTROL_CONNECT(stream, spec["socket"])
+        peer_pid, peer_uid, _ = struct.unpack(
+            "3i", _CONTROL_GETSOCKOPT(stream, socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+        )
+        if peer_pid != spec["observer_pid"] or peer_uid != spec["observer_uid"]:
+            raise EndpointRefusal("observer_kernel_peer_refused")
+        _CONTROL_SENDALL(stream, struct.pack("!I", len(encoded)) + encoded)
+
+        def exact(size):
+            result = bytearray()
+            while len(result) < size:
+                block = _CONTROL_RECV(stream, size - len(result))
+                if not block:
+                    raise EndpointRefusal("receipt_channel_closed")
+                result.extend(block)
+            return bytes(result)
+
+        length = struct.unpack("!I", exact(4))[0]
+        if not 0 < length <= 16384:
+            raise EndpointRefusal("response_size_refused")
+        answer = json.loads(exact(length))
+    except (OSError, ValueError, EndpointRefusal):
+        STATE["poison"] = True
+        raise
     finally:
-        os.close(fd)
+        LOCAL.control_stream = None
+        _CONTROL_CLOSE(stream)
     if (
         answer.get("request") == body
         and answer.get("pending_owned_listener") is True
@@ -90,6 +108,10 @@ def check():
 
 
 def audit(event, args):
+    if event == "socket.connect":
+        stream, address = args
+        if stream is getattr(LOCAL, "control_stream", None) and address == STATE["spec"]["socket"]:
+            return
     if STATE.get("dependency_window") and event == "exec":
         filename = args[0].co_filename
         checkout = STATE["checkout"]
