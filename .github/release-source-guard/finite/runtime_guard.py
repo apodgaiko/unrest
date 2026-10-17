@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import ast
+import ctypes
 import hashlib
 import json
 import inspect
@@ -20,6 +21,22 @@ import time
 import types
 import uuid
 import weakref
+
+
+def inherited_environment():
+    # execve inherits libc's environment, which native dependencies can change
+    # without updating os.environ. Bind those actual bytes rather than a cache.
+    rows = ctypes.POINTER(ctypes.c_char_p).in_dll(ctypes.CDLL(None), "environ")
+    result = {}
+    for index in range(4096):
+        row = rows[index]
+        if row is None:
+            return result
+        key, separator, value = os.fsdecode(row).partition("=")
+        if not separator or not key or key in result:
+            refuse("invalid_native_inherited_environment")
+        result[key] = value
+    refuse("unbounded_native_inherited_environment")
 
 # Capture before product imports can patch the shared os module. The journal
 # keeps its append protocol; atomic replacement users retain their own custody.
@@ -1188,7 +1205,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                 else None,
                 "environment_sha256": hashlib.sha256(
                     json.dumps(
-                        dict(os.environ if kwargs.get("env") is None else kwargs["env"]),
+                        inherited_environment() if kwargs.get("env") is None else dict(kwargs["env"]),
                         sort_keys=True,
                     ).encode()
                 ).hexdigest(),

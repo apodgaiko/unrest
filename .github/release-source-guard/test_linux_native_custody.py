@@ -42,3 +42,23 @@ def test_linux_native_custody_before_and_after_exit():
 def test_unknown_native_abi_refuses():
     with pytest.raises(RuntimeError, match="ABI drift"):
         custody.prepare({"system": "Darwin", "abi": "proc-stat-start-ticks"})
+
+
+def test_native_inherited_environment_binds_libc_bytes_without_mutation():
+    runtime_spec = importlib.util.spec_from_file_location(
+        "runtime_environment_probe", Path(__file__).with_name("finite") / "runtime_guard.py"
+    )
+    assert runtime_spec is not None and runtime_spec.loader is not None
+    runtime = importlib.util.module_from_spec(runtime_spec)
+    runtime_spec.loader.exec_module(runtime)
+    key = "FINITE_LIBC_ENVIRONMENT_CONTROL"
+    assert key not in os.environ
+    before = dict(os.environ)
+    os.putenv(key, "actual-native-value")
+    try:
+        observed = runtime.inherited_environment()
+        assert observed[key] == "actual-native-value"
+        assert dict(os.environ) == before
+    finally:
+        os.unsetenv(key)
+    assert key not in runtime.inherited_environment()
