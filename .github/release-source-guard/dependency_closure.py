@@ -34,9 +34,15 @@ def inventory(root: Path) -> dict[str, Any]:
     return result
 
 
-def verify_source_view(expected_bytes: bytes) -> dict[str, Any]:
+def verify_source_view(expected_bytes: bytes, console: bytes | None = None) -> dict[str, Any]:
     expected = json.loads(expected_bytes)
     observed = inventory(Path('/opt/deps'))
+    observed_count = len(observed)
+    if console is not None:
+        if observed.pop('bin/unrest', None) != {
+            'type': 'file', 'mode': 0o444, 'size': len(console),
+            'sha256': hashlib.sha256(console).hexdigest()}:
+            raise RuntimeError('finite declared source console drift')
     if observed != expected:
         raise RuntimeError('installed dependency closure drift')
     name = 'lib/python3.13/site-packages/unrest-source.pth'
@@ -48,7 +54,8 @@ def verify_source_view(expected_bytes: bytes) -> dict[str, Any]:
     if hashlib.sha256(base).hexdigest() != 'adac11fb5bbc8307263d775b8b89c776d1d71ee238ded6a764e480d862c34fac':
         raise RuntimeError('pinned dependency base changed')
     return {'sha256': hashlib.sha256(expected_bytes).hexdigest(),
-            'members': len(observed), 'base_sha256': hashlib.sha256(base).hexdigest(),
+            'members': observed_count,
+            'source_console_sha256': hashlib.sha256(console).hexdigest() if console is not None else None, 'base_sha256': hashlib.sha256(base).hexdigest(),
             'source_view_sha256': hashlib.sha256(body).hexdigest(), 'verified': True}
 
 

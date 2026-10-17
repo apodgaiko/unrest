@@ -301,3 +301,20 @@ one query return and one settlement. All were verified from exact direct record
 members against their actual run/head/artifact/support and archive identities.
 Earlier unaffected in-process, composed and controlled-backend proofs retain
 their original OS/runtime/hash attribution. No full checkpoint was run.
+
+
+The CI mutation readiness profile selects the original ten constant-dead-guard,
+three dead-shell-branch and four live/dynamic-guard cases. Its work mount is a
+finite 512 MiB under the unchanged 1 GiB container memory limit. Seventeen public
+repository copies require 168,370,176 file-page bytes before journals, exceeding
+the earlier 128 MiB mount. Other source profiles retain their existing work
+mount sizes. The observer records actual filesystem block/inode counts before
+and after this profile. No source bytes, test parameters, assertions, deadlines,
+external network authority or launch admissions change with this capacity bound.
+
+Source-free synthetic controls now export their original JUnit as a separate
+named encrypted record. Repository-dependent support checks run separately.
+Source runner failures use atomic typed stage records with error enums and
+hashed frame locations; incomplete pytest execution retains a null exit record.
+Missing/empty records refuse verification. They never trigger a private-log
+fallback. Failed prior readiness trials remain failed and separately preserved.

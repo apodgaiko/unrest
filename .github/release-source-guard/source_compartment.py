@@ -30,7 +30,12 @@ def main():
     abi = observations.require_linux_abi()
     closure = load('dependency_closure', ROOT / 'dependency_closure.py')
     closure_bytes = Path('/environment-closure.json').read_bytes()
-    abi['dependency_closure'] = closure.verify_source_view(closure_bytes)
+    initial_manifest = json.loads(Path('/inputs/source.json').read_bytes())
+    source_console = None
+    if initial_manifest['source_selection'] == 'ci-mutations':
+        source_console = load('source_console', ROOT / 'source_console.py').render(
+            Path('/source/pyproject.toml').read_bytes())
+    abi['dependency_closure'] = closure.verify_source_view(closure_bytes, source_console)
     abi['profile_gate'] = load('profile_gate_build', ROOT / 'profile_gate_build.py').verify()
     abi['native_metadata'] = load('native_metadata', ROOT / 'native_metadata.py').verify()
     for name in ('native_entry_build', 'producer_inputs'):

@@ -51,6 +51,8 @@ def download(root, run_id, artifact_id, head):
 
 
 def verify(root, run, artifact, members, key, support):
+    require(not root.is_symlink() and stat.S_IMODE(root.stat().st_mode) == 0o700
+            and root.stat().st_uid == os.getuid(), 'private_root_permissions')
     metadata = loads(members['safe-provenance.json'])
     require(metadata['ciphertext_sha256'] == digest(members['evidence.cms']), 'ciphertext_digest')
     pins = {str(path.relative_to(support)): digest(path.read_bytes())

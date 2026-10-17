@@ -81,6 +81,8 @@ def main():
         'setup_mode': 'source',
         'source_only_support': [str(p) for p in sorted(SUPPORT.glob('*.py'))],
     })
+    if selection == 'ci-mutations':
+        manifest['copied_console_pins'] = {'unrest': sha('/opt/deps/bin/unrest')}
     if selection.startswith('producer-'):
         manifest['root_environment'].update({
             'PATH': '/opt/source-bootstrap/bin:' + manifest['root_environment']['PATH'],

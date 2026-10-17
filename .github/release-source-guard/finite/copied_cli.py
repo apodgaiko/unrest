@@ -51,7 +51,7 @@ def translate(argv, cwd, env, state, append, refuse):
                     refuse("copied_cli_console_bytes")
                 if (
                     executable.read_bytes().splitlines()[0]
-                    != ("#!" + str(checkout / ".venv/bin/python3")).encode()
+                    != ("#!" + sys.executable).encode()
                 ):
                     refuse("copied_cli_console_interpreter")
                 binding = {

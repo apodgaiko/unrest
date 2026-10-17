@@ -12,6 +12,7 @@ import tarfile
 import traceback
 
 from structured_evidence import capture, execution_identity
+from source_console import TARGET as CONSOLE_TARGET, render as render_console
 from drain_controls import check as check_drain_controls
 from producer_controls import check as check_producer_controls
 
@@ -59,6 +60,8 @@ def validate(config, image, source, inputs, selection):
     mounts = config['Mounts']
     wanted = {'/guard':str(SUPPORT), '/inputs':str(inputs),
               **source_bindings(source, selection)}
+    if selection == 'ci-mutations':
+        wanted[CONSOLE_TARGET] = str(inputs / 'console-unrest')
     if len(mounts) != len(wanted) or {m['Destination'] for m in mounts} != set(wanted):
         raise RuntimeError('focused source mount inventory drift')
     if any(m['Type'] != 'bind' or m['RW'] or m['Source'] != wanted[m['Destination']]
@@ -119,11 +122,17 @@ def main():
     (raw / 'source-pins.json').write_text(json.dumps(pins, sort_keys=True))
     inputs = root / 'inputs'
     inputs.mkdir()
+    console_mounts = []
+    if selection == 'ci-mutations':
+        console = inputs / 'console-unrest'
+        console.write_bytes(render_console((source / 'pyproject.toml').read_bytes()))
+        console.chmod(0o444)
+        console_mounts = ['--mount=type=bind,src=' + str(console) + ',dst=' + CONSOLE_TARGET + ',readonly']
     nonce = secrets.token_hex(32)
     mounts = ['--mount=type=bind,src=' + str(SUPPORT) + ',dst=/guard,readonly',
               '--mount=type=bind,src=' + str(source) + ',dst=/source,readonly']
     prepare = ['docker','run','--rm','--network=none','--read-only','--cap-drop=ALL',
-               '--security-opt=no-new-privileges','--user=20001:20001',*mounts,
+               '--security-opt=no-new-privileges','--user=20001:20001',*mounts,*console_mounts,
                '--entrypoint=/usr/local/bin/python',image,'-I','/guard/prepare_source.py',nonce,selection]
     with log.open('ab') as errors:
         prepared = subprocess.run(prepare, stdout=subprocess.PIPE, stderr=errors, check=False)
@@ -134,7 +143,7 @@ def main():
         value = json.loads(prepared.stdout)
         (inputs / 'source.json').write_text(json.dumps(value['manifest'], sort_keys=True, indent=2) + '\n')
         (inputs / 'registry.py').write_text(value['registry'])
-        payload_mounts = ['--mount=type=bind,src=' + str(SUPPORT) + ',dst=/guard,readonly',
+        payload_mounts = [*console_mounts, '--mount=type=bind,src=' + str(SUPPORT) + ',dst=/guard,readonly',
                           *['--mount=type=bind,src=' + origin + ',dst=' + target + ',readonly'
                             for target,origin in source_bindings(source, selection).items()]]
         argv = ['docker','create','--name',container,'--read-only','--network=none',
