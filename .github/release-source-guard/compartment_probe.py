@@ -123,7 +123,7 @@ def source_controls() -> None:
     })
     result = subprocess.run(
         ["/opt/deps/bin/python", "-I", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
-         "--basetemp=/work/pytest", "/guard/test_linux_observation.py",
+         "--basetemp=/work/pytest", "--junitxml=/work/control-suite.xml", "/guard/test_linux_observation.py",
          "/guard/test_probe_controller.py", "/guard/test_linux_trace.py",
          "/guard/test_dependency_closure.py", "/guard/test_profile_gate.py", "/guard/test_linux_native_custody.py",
          "/guard/test_checkpoint_receipt.py", "/guard/test_checkpoint_lookup.py", "/guard/test_ci_commands.py",
@@ -275,6 +275,9 @@ def observer() -> None:
         "actual_wait_normalized": os.waitstatus_to_exitcode(raw),
         "python_sha256": hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),
     })
+    suite_result = Path("/work/control-suite.xml")
+    if suite_result.is_file() and not suite_result.is_symlink():
+        Path("/records/control-suite.xml").write_bytes(suite_result.read_bytes())
     source_result = Path("/work/source-controls.json")
     if source_result.is_file() and not source_result.is_symlink():
         Path("/records/source-controls.json").write_bytes(source_result.read_bytes())
@@ -293,7 +296,7 @@ def observer() -> None:
     envelope = {
         path.name: base64.b64encode(path.read_bytes()).decode("ascii")
         for path in sorted(Path("/records").iterdir())
-        if path.name in ({"observer.json", "source-controls.json", "source-output.log"} | controls)
+        if path.name in ({"observer.json", "source-controls.json", "source-output.log", "control-suite.xml"} | controls)
     }
     print("PRIVATE-EVIDENCE:" + json.dumps(envelope, sort_keys=True), flush=True)
     raise SystemExit(os.waitstatus_to_exitcode(raw))

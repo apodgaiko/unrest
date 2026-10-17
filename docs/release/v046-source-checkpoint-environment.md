@@ -278,3 +278,26 @@ waits, all three registered descendants were waited, the producer settled, and
 all four original backend helpers plus the isolated query were observed. Root
 returned zero with no poison. Both original producer profiles now have focused
 source proofs; negative producer controls and primary CI integration remain open.
+
+
+## Direct-record producer verification
+
+The fresh negative trial in [run 39076926173](https://github.com/apodgaiko/unrest/actions/runs/39076926173)
+failed: the query caught a launch refusal and continued into its original main.
+Its failed outcome and direct encrypted records remain preserved. This does not
+diagnose the separate earlier interrupted run, whose private failure remains
+unverified and whose ciphertext was preserved without log interpretation.
+
+After adding global-poison checks at native producer entry/body boundaries,
+[run 39077210671](https://github.com/apodgaiko/unrest/actions/runs/39077210671)
+passed the negative control with original source exit 2, query wait raw 22016 /
+status 86, two genuine kernel parent waits, retained poison and no original query
+body or consumer dispatch. Its deliberately failed original JUnit stays failed.
+The same run serially repeated only the two affected positive producer profiles:
+the installed-provider fixtures passed both cases with 18 genuine parent waits,
+four backend calls, two query returns and two settlements; the original
+distribution fixture passed with eight genuine parent waits, four backend calls,
+one query return and one settlement. All were verified from exact direct record
+members against their actual run/head/artifact/support and archive identities.
+Earlier unaffected in-process, composed and controlled-backend proofs retain
+their original OS/runtime/hash attribution. No full checkpoint was run.

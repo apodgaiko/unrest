@@ -19,7 +19,7 @@ SCHEMA = 'unrest.v046.direct-private-records.v1'
 MEMBER = 'structured-envelope.json'
 LIMIT = 64 * 1024 * 1024
 SOURCE = {'kernel-source.json', 'collection.json', 'summary.json', 'source.xml'}
-CONTROLS = {'observer.json', 'source-controls.json'} | {
+CONTROLS = {'control-suite.xml', 'observer.json', 'source-controls.json'} | {
     f'trace-control-{status}-{mode}.json' for status in (0, 29, 31) for mode in (False, True)
 } | {'trace-control-vfork-False.json', 'trace-control-vfork-True.json', 'trace-control-waitid.json'}
 OPAQUE = {'source-output.log', 'custodian.stderr', 'source-diagnostics.json'}
@@ -111,7 +111,7 @@ def export(current_stdout, raw, identity, scope):
     transport = loads(lines[0])
     allowed = CONTROLS if scope == 'synthetic-controls' else SOURCE
     require(type(transport) is dict and set(transport) <= allowed | OPAQUE, 'unknown_record')
-    required = CONTROLS if scope == 'synthetic-controls' else {'kernel-source.json'}
+    required = CONTROLS - {'control-suite.xml'} if scope == 'synthetic-controls' else {'kernel-source.json'}
     require(required <= set(transport), 'missing_record')
     records = {}
     descriptors = {}
@@ -169,7 +169,7 @@ def consume(archive, expected, envelope_sha256):
         allowed = CONTROLS if envelope['scope'] == 'synthetic-controls' else SOURCE
         descriptors = envelope['records']
         require(type(descriptors) is dict and set(descriptors) <= allowed, 'unknown_record')
-        required = CONTROLS if envelope['scope'] == 'synthetic-controls' else {'kernel-source.json'}
+        required = CONTROLS - {'control-suite.xml'} if envelope['scope'] == 'synthetic-controls' else {'kernel-source.json'}
         require(required <= set(descriptors), 'missing_record')
         result = {}
         for name, descriptor in descriptors.items():

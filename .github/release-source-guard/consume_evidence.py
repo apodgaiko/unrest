@@ -101,12 +101,24 @@ def verify(root, run, artifact, members, key, support):
                               source_body_dispatched=False, sticky_poison=True)
     elif scope == 'synthetic-controls':
         observer = loads(records['observer.json'])
-        require(metadata['synthetic_exit_code'] == 0
-                and metadata['original_source_cases_executed'] == 0
-                and observer['actual_wait_raw'] == 0
-                and observer['actual_wait_normalized'] == 0, 'synthetic_actual_wait')
-        projection.update(synthetic_verified=True, source_cases=0, synthetic_raw=0,
-                          trace_controls=len(records) - 2)
+        projection.update(synthetic_raw=observer['actual_wait_raw'],
+                          synthetic_status=observer['actual_wait_normalized'],
+                          trace_controls=sum(name.startswith('trace-control-') for name in records))
+        if 'control-suite.xml' in records:
+            cases = ET.fromstring(records['control-suite.xml']).findall('.//testcase')
+            failures = [case for case in cases if any(case.find(tag) is not None
+                                                     for tag in ('failure', 'error'))]
+            projection.update(control_cases=len(cases), control_failures=len(failures),
+                              failed_case_hashes=[digest((case.get('classname', '') + '::'
+                                                         + case.get('name', '')).encode())
+                                                  for case in failures])
+        if metadata['synthetic_exit_code'] != 0 or observer['actual_wait_raw'] != 0:
+            projection.update(error_code='synthetic_suite_failed', synthetic_verified=False)
+            return projection
+        require(metadata['original_source_cases_executed'] == 0
+                and observer['actual_wait_normalized'] == 0
+                and projection.get('control_failures', 0) == 0, 'synthetic_actual_wait')
+        projection.update(synthetic_verified=True, source_cases=0)
     elif scope in {'producer-contract', 'producer-distribution', 'ci-mutations'}:
         kernel = loads(records['kernel-source.json'])
         summary = loads(records['summary.json'])

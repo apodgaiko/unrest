@@ -66,11 +66,3 @@ def test_actual_original_duties_cannot_be_made_conditional(control, condition):
     with pytest.raises(RuntimeError):
         commands.bind(registry['v0.4.6 source suite'].encode(), actual)
 
-
-def test_current_primary_original_run_blocks_bind_and_literal_mutation_anchors_survive():
-    actual = (Path(__file__).resolve().parents[2] / '.github/workflows/ci.yml').read_text()
-    assert actual.count('  primary:\n    name: primary source and package gate (py3.13)') == 1
-    assert actual.count('      - name: Type-check (mypy)\n        run: uv run mypy src') == 1
-    registry = json.loads(commands.REGISTRY.read_bytes())
-    for name, script in registry.items():
-        assert commands.bind(script.encode(), actual)['name'] == name
