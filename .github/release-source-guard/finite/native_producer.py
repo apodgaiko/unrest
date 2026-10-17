@@ -158,6 +158,19 @@ def activate(profile, command):
         except BaseException as error:
             refuse(error)
 
+    def backend_exception(frame, event, value):
+        if (role != 'isolated-uv-helper' or frame.f_code.co_filename != str(source)
+                or frame.f_code.co_name != helper):
+            return None
+        if event == 'exception':
+            kind, error, _ = value
+            guard.append({'kind': 'original_backend_exception', 'helper': helper,
+                          'exception_type': kind.__module__ + '.' + kind.__qualname__,
+                          'message': str(error), 'errno': getattr(error, 'errno', None)})
+        return backend_exception
+
+    if role == 'isolated-uv-helper':
+        sys.settrace(backend_exception)
     if role == 'isolated-uv-helper' and os.getcwd() != spec['project']:
         lineage = inputs.extracted_source(spec, Path.cwd(), interface.events(spec), os.getppid())
         guard.append({'kind': 'isolated_actual_extraction_consumption', 'lineage': lineage})
