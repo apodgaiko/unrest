@@ -138,7 +138,7 @@ def main() -> int:
         "workflow_sha": os.environ.get("GITHUB_WORKFLOW_SHA"),
         "base_oci": BASE, "uv_lock_sha256": sha(REPOSITORY / "uv.lock"),
         "support": {str(p.relative_to(SUPPORT)): sha(p) for p in sorted(SUPPORT.rglob("*"))
-                    if p.is_file() and p.suffix in {".py", ".json", ".pem"}},
+                    if p.is_file() and p.suffix in {".py", ".json", ".pem", ".c"}},
         "synthetic_dependencies": inputs, "synthetic_exit_code": exit_code,
         "source_checkpoint_ready": False, "selected_carrier": None,
         "original_source_cases_executed": 0,

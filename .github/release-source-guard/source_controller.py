@@ -138,7 +138,7 @@ def main():
                      'source_checkpoint_ready':False,'selected_carrier':None,
                      'source_pins_sha256':sha(raw / 'source-pins.json'), 'image_id':image,
                      'support':{str(p.relative_to(SUPPORT)):sha(p) for p in sorted(SUPPORT.rglob('*'))
-                                if p.is_file() and p.suffix in {'.py','.json','.pem'}}})
+                                if p.is_file() and p.suffix in {'.py','.json','.pem','.c'}}})
     (raw / 'provenance.json').write_text(json.dumps(identity, sort_keys=True, indent=2))
     archive = root / 'raw.tar.gz'
     with tarfile.open(archive,'w:gz') as output:

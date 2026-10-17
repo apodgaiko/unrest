@@ -31,6 +31,8 @@ def main():
     closure = load('dependency_closure', ROOT / 'dependency_closure.py')
     closure_bytes = Path('/environment-closure.json').read_bytes()
     abi['dependency_closure'] = closure.verify_source_view(closure_bytes)
+    abi['profile_gate'] = load('profile_gate_build', ROOT / 'profile_gate_build.py').verify()
+
     tracing = load('linux_trace', ROOT / 'linux_trace.py')
     policy = load('linux_supervisor', ROOT / 'linux_supervisor.py')
     manifest_path = Path('/inputs/source.json')

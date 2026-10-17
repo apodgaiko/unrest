@@ -125,7 +125,7 @@ def source_controls() -> None:
         ["/opt/deps/bin/python", "-I", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
          "--basetemp=/work/pytest", "/guard/test_linux_observation.py",
          "/guard/test_probe_controller.py", "/guard/test_linux_trace.py",
-         "/guard/test_dependency_closure.py", "/guard/test_linux_native_custody.py",
+         "/guard/test_dependency_closure.py", "/guard/test_profile_gate.py", "/guard/test_linux_native_custody.py",
          "/guard/test_linux_sockets.py", "/guard/test_linux_git.py", "/guard/test_linux_receipts.py"],
         cwd="/work", check=False,
     )
@@ -142,6 +142,12 @@ def observer() -> None:
     closure_spec.loader.exec_module(closure)
     expected_bytes = Path("/environment-closure.json").read_bytes()
     abi['dependency_closure'] = closure.verify_source_view(expected_bytes)
+    gate_spec = importlib.util.spec_from_file_location('profile_gate_build', '/guard/profile_gate_build.py')
+    assert gate_spec is not None and gate_spec.loader is not None
+    gate_binding = importlib.util.module_from_spec(gate_spec)
+    gate_spec.loader.exec_module(gate_binding)
+    abi['profile_gate'] = gate_binding.verify()
+
     socket_spec = importlib.util.spec_from_file_location('linux_sockets', '/guard/linux_sockets.py')
     assert socket_spec is not None and socket_spec.loader is not None
     kernel_sockets = importlib.util.module_from_spec(socket_spec)

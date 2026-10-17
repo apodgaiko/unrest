@@ -69,6 +69,9 @@ def main():
         'copy_git': {p: sha(p) for p in ['/usr/bin/git', '/bin/git']},
         'console_routes': [], 'copied_console_pins': {}, 'cohort_native_pins': {p: sha(p) for p in ['/usr/bin/git','/usr/bin/ps','/usr/bin/sleep']},
         'copy_console': [], 'native_sysctl_offsets': {'system': 'Linux', 'abi': 'proc-stat-start-ticks'},
+        'linux_profile_gate': {'path': '/opt/source-guard/profile_gate.so',
+                               'sha256': sha('/opt/source-guard/profile_gate.so'),
+                               'source_sha256': sha('/guard/profile_gate.c')},
         'setup_mode': 'source',
         'source_only_support': [str(p) for p in sorted(SUPPORT.glob('*.py'))],
     })

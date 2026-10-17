@@ -92,6 +92,23 @@ The readiness controls prove successful, failed and caught unknown exec,
 both observation modes, vfork ordering and original waitid/wait4 custody before
 source execution. These controls do not prove the remaining composed or backend source domains.
 
+A native callable for the existing profile skip predicate is under verification.
+It forwards the original frame, event and argument to the unchanged Python
+observer for selected source, pytest, isolated-code and operation events.
+`sys.getprofile()` and thread profile identity remain bound to that callable.
+The C source, compiled module, compiler, CPython image and ABI are byte-bound at
+boot. Differential event, exception and thread controls must pass before source
+execution. No original source deadline, callback selection domain, source
+assertion or process activation flag changes with this implementation.
+
+The composed source still fails its unchanged `submit_run` deadline. Readiness
+run timing records show a 1.1-second custody acknowledgement; this is diagnostic
+evidence, not a timing acceptance claim. The Linux failure-drain inventory now
+uses real per-thread `/proc` children, including unreaped zombies. Zombie birth,
+parent and state are retained fields; missing zombie namespace links are never
+invented. Namespace custody stays attached to the earlier kernel birth record.
+Original failed JUnit and subsequent poison remain preserved.
+
 Raw output and observer records travel only to the trusted coordinator's private
 log and are encrypted with OpenSSL CMS to the repository's public recipient
 certificate before artifact upload. Only the recipient's public certificate is

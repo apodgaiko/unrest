@@ -8,6 +8,7 @@ import ctypes
 import hashlib
 import json
 import inspect
+import importlib.util
 import os
 import re
 from pathlib import Path
@@ -1074,6 +1075,22 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                 "constructor_audit_READY_identity_wait_enforcement_retained": True,
             }
         )
+    if profile_observer is selected_port:
+        native = state['linux_profile_gate']
+        if (digest(native['path']) != native['sha256']
+                or digest(Path(state['guard']).parent.parent / 'profile_gate.c') != native['source_sha256']):
+            refuse('native_profile_predicate_drift')
+        specification = importlib.util.spec_from_file_location('profile_gate', native['path'])
+        if specification is None or specification.loader is None:
+            refuse('native_profile_predicate_loader_missing')
+        module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(module)
+        selected_port = module.make(selected_port, state, profile_sources)
+        profile_observer = selected_port
+        append({'kind': 'native_profile_predicate_installed',
+                'module_sha256': native['sha256'], 'source_sha256': native['source_sha256'],
+                'profile_sources_sha256': hashlib.sha256(json.dumps(sorted(profile_sources)).encode()).hexdigest(),
+                'original_Python_observer_and_event_arguments_retained': True})
     sys.setprofile(profile_observer)
     threading.setprofile(profile_observer)
     original_init = subprocess.Popen.__init__

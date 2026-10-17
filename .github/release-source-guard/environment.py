@@ -29,6 +29,8 @@ def build(root: Path, repository: Path, log: Path) -> str:
     (root / "dependency_closure.py").write_bytes(
         Path(__file__).with_name("dependency_closure.py").read_bytes()
     )
+    for name in ('profile_gate.c', 'profile_gate_build.py'):
+        (root / name).write_bytes(Path(__file__).with_name(name).read_bytes())
     (root / "Dockerfile").write_text(
         "FROM " + BASE + "\n"
         "COPY " + wheel.name + " /bootstrap/\n"
@@ -43,6 +45,11 @@ def build(root: Path, repository: Path, log: Path) -> str:
         "COPY dependency_closure.py /bootstrap/dependency_closure.py\n"
         "RUN python -I /bootstrap/dependency_closure.py /opt/deps /environment-closure.json "
         "&& rm -rf /bootstrap\n"
+        "COPY profile_gate.c /opt/source-guard/profile_gate.c\n"
+        "COPY profile_gate_build.py /bootstrap/profile_gate_build.py\n"
+        "RUN gcc -shared -fPIC -O2 -Wall -Wextra -Werror $(python3-config --includes) "
+        "/opt/source-guard/profile_gate.c -o /opt/source-guard/profile_gate.so "
+        "&& python -I /bootstrap/profile_gate_build.py && rm -rf /bootstrap\n"
         "WORKDIR /\n"
     )
     image = "source-locked-environment:" + uuid.uuid4().hex
