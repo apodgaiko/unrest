@@ -246,18 +246,28 @@ class OwnedTrace:
         ptrace(24, self.child)
         started = time.monotonic()
         root_wait = None
+        last_waited = 0
         try:
             while self.active:
                 if self.on_tick is not None:
                     self.on_tick(self)
                 if time.monotonic() - started > self.timeout:
                     raise TimeoutError("owned trace deadline exceeded")
-                pid, raw = os.waitpid(-1, os.WNOHANG | 0x40000000)
+                # A newborn stop may become waitable before its parent's
+                # fork event. Do not harvest or resume it until that kernel
+                # event supplies its identity; rotate known tasks fairly.
+                known = sorted(self.active)
+                pivot = next((index for index, value in enumerate(known)
+                              if value > last_waited), 0)
+                pid, raw = 0, 0
+                for candidate in known[pivot:] + known[:pivot]:
+                    pid, raw = os.waitpid(candidate, os.WNOHANG | 0x40000000)
+                    if pid:
+                        last_waited = pid
+                        break
                 if not pid:
                     time.sleep(0.0001)
                     continue
-                if pid not in self.active:
-                    raise RuntimeError("unregistered tracer wait")
                 if os.WIFEXITED(raw) or os.WIFSIGNALED(raw):
                     self.active.remove(pid)
                     self.records.append({"kind": "tracer_terminal_wait", "pid": pid,

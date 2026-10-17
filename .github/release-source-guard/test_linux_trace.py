@@ -85,3 +85,41 @@ def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, sta
         assert any(row["kind"] == "exec_syscall_return" and row["return"] == -2 for row in records)
     with pytest.raises(ChildProcessError):
         os.waitpid(child, os.WNOHANG)
+
+
+def test_seized_vfork_births_precede_native_effects_and_parent_waits():
+    body = "import subprocess\nfor _ in range(8): subprocess.run(['/usr/bin/true'], check=True)"
+    argv = [sys.executable, "-I", "-S", "-c", body]
+    allowed = [
+        {"path": sys.executable, "argv": argv, "environment": {}, "cwd": os.getcwd(),
+         "sha256": hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()},
+        {"path": "/usr/bin/true", "argv": ["/usr/bin/true"], "environment": {},
+         "cwd": os.getcwd(), "sha256": hashlib.sha256(Path('/usr/bin/true').read_bytes()).hexdigest()},
+    ]
+    read, write = os.pipe()
+    child = os.fork()
+    if child == 0:
+        os.close(write)
+        os.read(read, 1)
+        os.close(read)
+        os.execve(sys.executable, argv, {})
+        os._exit(127)
+    os.close(read)
+
+    def attached():
+        os.write(write, b"1")
+        os.close(write)
+
+    result = trace.OwnedTrace(child, allowed, timeout=30, seize=True, on_attached=attached).run()
+    assert result['root_parent_wait_raw'] == 0 and not result['poison']
+    records = result['records']
+    births = [row['child'] for row in records if row['kind'] == 'kernel_child']
+    waits = [row for row in records if row['kind'] == 'original_parent_wait4']
+    assert len(births) == 8 and len(set(births)) == 8
+    assert [(row['child'], row['raw']) for row in waits] == [(pid, 0) for pid in births]
+    for pid in births:
+        birth = next(i for i, row in enumerate(records)
+                     if row['kind'] == 'kernel_child' and row['child'] == pid)
+        effect = next(i for i, row in enumerate(records)
+                      if row['kind'] == 'kernel_exec' and row['pid'] == pid)
+        assert birth < effect
