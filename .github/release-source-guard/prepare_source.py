@@ -9,6 +9,8 @@ import sys
 ROOT = Path('/source')
 SUPPORT = Path('/guard/finite')
 CASES = {
+    'producer-contract': 'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix',
+    'producer-distribution': 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
     'drain-controls': 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct',
     'inprocess': 'tests/test_server.py::test_completion_refusal_survives_server_restart',
     'backend': 'tests/test_controlled_python_acp.py',
@@ -77,6 +79,15 @@ def main():
         'setup_mode': 'source',
         'source_only_support': [str(p) for p in sorted(SUPPORT.glob('*.py'))],
     })
+    if selection.startswith('producer-'):
+        manifest['root_environment'].update({
+            'PATH': '/opt/source-bootstrap/bin:' + manifest['root_environment']['PATH'],
+            'UV_CACHE_DIR': '/work/producer-cache', 'UV_OFFLINE': '1', 'UV_NO_INDEX': '1',
+            'UV_FIND_LINKS': '/opt/source-bootstrap/wheelhouse',
+            'UV_PYTHON': '/receipts/producers/selected/bin/python',
+            'UV_PYTHON_DOWNLOADS': 'never', 'UV_CONFIG_FILE': '/receipts/producers/uv.toml',
+            'PYTHONDONTWRITEBYTECODE': '1', 'SOURCE_DATE_EPOCH': '1700000000',
+        })
     if selection == 'drain-controls':
         manifest['integration_mode'] = 'NONCANONICAL-drain-controls'
     print(json.dumps({'manifest': manifest, 'registry': registry_text}, sort_keys=True))

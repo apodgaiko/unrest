@@ -42,6 +42,8 @@ def main():
     manifest_path = Path('/inputs/source.json')
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
+    producer_mode = manifest['source_selection'].startswith('producer-')
+    producer_setup = load('producer_setup', ROOT / 'producer_setup.py') if producer_mode else None
     pin = hashlib.sha256(manifest_bytes).hexdigest()
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
@@ -59,11 +61,19 @@ def main():
             os.setsid()
             for name in ('home','tmp','events','owned'):
                 (Path('/work') / name).mkdir(mode=0o700)
+            if producer_mode:
+                producer_setup.source_child_setup()
             os.chdir('/source')
             os.write(ready_write, b'R')
             os.close(ready_write)
             if os.read(start_read, 1) != b'1':
                 raise RuntimeError('source attach fence did not settle')
+            if producer_mode:
+                derived = Path('/receipts/source.json')
+                info = derived.stat()
+                if info.st_uid != 20001 or info.st_mode & 0o777 != 0o444 or derived.is_symlink():
+                    raise RuntimeError('derived producer manifest custody drift')
+                argv = [argv[0], '-I', '-S', '/guard/source_runner.py', str(derived), sha(derived)]
             os.closerange(3, 1 << 20)
             os.execve(argv[0], argv, manifest['root_environment'])
         finally:
@@ -76,12 +86,18 @@ def main():
         actual, raw = os.waitpid(child, 0)
         raise RuntimeError('source bootstrap did not fence: ' + str((actual, raw)))
     os.close(ready_read)
+    common = None
+    if producer_mode:
+        manifest_path, pin, common = producer_setup.prepare(manifest, pin)
+        argv = [argv[0], '-I', '-S', '/guard/source_runner.py', str(manifest_path), pin]
     spec = {'manifest': str(manifest_path), 'pins': {str(manifest_path): pin},
             'endpoint': manifest['endpoint']}
     for name in ('custody_host.py','drain_host.py'):
         path = ROOT / 'finite' / name
         spec['pins'][str(path)] = sha(path)
     supervisor = policy.Supervisor(spec, types.SimpleNamespace(pid=child))
+    producers = (load('linux_producers', ROOT / 'linux_producers.py').NativeProducers(
+        manifest, supervisor, common) if producer_mode else None)
     objects = []
     for descriptor in (read, supervisor.channel.fileno()):
         info = os.fstat(descriptor)
@@ -97,6 +113,10 @@ def main():
     trace = None
     def resolve(pid, path, vector, environment, cwd):
         parent = trace.identities[pid]['ppid']
+        if producers is not None:
+            native_admission = producers.resolve_child(pid, parent, path, vector, environment, cwd)
+            if native_admission is not None:
+                return native_admission
         if parent in native_context:
             if parent in maintenance:
                 return False
@@ -131,7 +151,7 @@ def main():
                   or manifest['direct_support']['files'].get(source) != binding.get('sha256')):
                 return False
             consumed.add(selected['token'])
-            bound[pid] = selected
+            bound[pid] = {**selected, 'registration': registration}
         selected = bound[pid]
         if selected['bootstrap_sha256'] is not None:
             if (len(vector) < 3 or vector[-2] != '-c'
@@ -140,6 +160,9 @@ def main():
                     or sha(path) != manifest['runtime']['sha256']):
                 return False
             return True
+        if producers is not None and selected['registration']['class'] in {'source-build', 'source-install'}:
+            return producers.admit_uv(pid, path, vector, environment, cwd, parent,
+                                      selected['registration'], selected)
         if vector[0] not in {'git', 'ps', 'sleep'}:
             return False
         candidates = [directory + '/' + vector[0] for directory in environment['PATH'].split(':')]
@@ -154,6 +177,8 @@ def main():
             native_context[pid] = {'path': path, 'argv': vector, 'cwd': cwd, 'environment': environment}
         return True
     def tick(current):
+        if producers is not None:
+            producers.tick(current)
         supervisor.tick()
         if current.poison and not supervisor.poisoned:
             supervisor.poison('kernel_exec_poison')
@@ -172,7 +197,7 @@ def main():
     def attached():
         os.write(start_write, b'1')
         os.close(start_write)
-    trace = tracing.OwnedTrace(child, allowed, 180, on_tick=tick, resolve_exec=resolve,
+    trace = tracing.OwnedTrace(child, allowed, 900 if producer_mode else 180, on_tick=tick, resolve_exec=resolve,
                               seize=True, on_attached=attached, selective=True)
     source_identity = observations.process_identity(child)
     if (source_identity['uids'] != [20000] * 4
@@ -191,6 +216,7 @@ def main():
         os.close(read)
     result.update({'event_timings': supervisor.event_timings, 'source_events': supervisor.events(), 'guard_poison': supervisor.poisoned, 'receipts': supervisor.receipts,
                    'receipt_ledger_poison': supervisor.ledger.poison,
+                   'native_source_records': producers.records if producers is not None else [],
                    'abi': abi, 'source_preexec_identity': source_identity,
                    'observer': observations.process_identity(os.getpid())})
     envelope = {'kernel-source.json': base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode(),

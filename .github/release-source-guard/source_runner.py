@@ -16,6 +16,8 @@ BACKEND_SELECTORS = [BACKEND + '::' + name for name in (
     'test_programmatic_private_preflight',
     'test_native_pin_refusal_stays_native[launcher]',
     'test_native_pin_refusal_stays_native[runtime]')]
+PRODUCER_CONTRACT = 'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix'
+PRODUCER_DISTRIBUTION = 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance'
 COMPOSED = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
 
 
@@ -34,10 +36,12 @@ def main():
     assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == pin
     manifest = json.loads(Path(path).read_bytes())
     case = manifest['source_case']
-    assert case in {INPROCESS, COMPOSED, BACKEND} and dict(os.environ) == manifest['root_environment']
+    assert case in {INPROCESS, COMPOSED, BACKEND, PRODUCER_CONTRACT, PRODUCER_DISTRIBUTION} and dict(os.environ) == manifest['root_environment']
     expected = ({INPROCESS + '[' + repair + '-' + role + ']'
                  for repair in ('valid-repair','second-invalid') for role in ('work','validate')}
-                if case == INPROCESS else set(BACKEND_SELECTORS) if case == BACKEND else {COMPOSED})
+                if case == INPROCESS else set(BACKEND_SELECTORS) if case == BACKEND
+                else {PRODUCER_CONTRACT + '[' + provider + ']' for provider in ('claude','codex')}
+                if case == PRODUCER_CONTRACT else {case})
     sys.path[:0] = ['/opt/deps/lib/python3.13/site-packages', '/source/src', '/source']
     endpoint = load('endpoint', '/guard/finite/endpoint.py', manifest['endpoint']['sha256'])
     endpoint.early(manifest['endpoint'])

@@ -1163,6 +1163,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
         if registration["class"] == "isolated-scratch-wheel" or (
             registration["class"] == "source-build"
             and state.get("source_activation_support") is not None
+            and not state["operation_activation"].spec.get("native_preinit")
         ):
             original_environment = dict(os.environ if kwargs.get("env") is None else kwargs["env"])
             kwargs["env"] = {

@@ -22,7 +22,17 @@ TMPFS = {
     '/receipts': 'rw,nosuid,nodev,noexec,size=32m,uid=20001,gid=20001,mode=0755',
 }
 
-def validate(config, image, source, inputs):
+def tmpfs_for(selection):
+    roots = dict(TMPFS)
+    if selection.startswith('producer-'):
+        roots.update({
+            '/source/build': 'rw,nosuid,nodev,size=64m,uid=20000,gid=20000,mode=0700',
+            '/source/src/unrest_harness.egg-info': 'rw,nosuid,nodev,noexec,size=8m,uid=20000,gid=20000,mode=0700',
+        })
+    return roots
+
+
+def validate(config, image, source, inputs, selection):
     host = config['HostConfig']
     expected = {'Privileged':False, 'ReadonlyRootfs':True, 'NetworkMode':'none',
                 'PidMode':'', 'IpcMode':'private', 'CgroupnsMode':'private',
@@ -32,7 +42,7 @@ def validate(config, image, source, inputs):
             or host['CapDrop'] != ['ALL'] or len(capabilities) != 5
             or {c.removeprefix('CAP_') for c in capabilities} != {
                 'SETUID','SETGID','SETPCAP','SYS_PTRACE','DAC_READ_SEARCH'}
-            or host['SecurityOpt'] != ['no-new-privileges'] or host['Tmpfs'] != TMPFS):
+            or host['SecurityOpt'] != ['no-new-privileges'] or host['Tmpfs'] != tmpfs_for(selection)):
         raise RuntimeError('focused source privilege/namespace definition drift')
     mounts = config['Mounts']
     wanted = {'/guard':str(SUPPORT), '/source':str(source), '/inputs':str(inputs)}
@@ -56,7 +66,7 @@ def run(argv, log, **kwargs):
 def main():
     root, controls = map(lambda s: Path(s).resolve(), sys.argv[1:3])
     selection = sys.argv[3] if len(sys.argv) == 4 else 'inprocess'
-    if selection not in {'inprocess', 'composed', 'backend', 'drain-controls'}:
+    if selection not in {'inprocess', 'composed', 'backend', 'drain-controls', 'producer-contract', 'producer-distribution'}:
         raise RuntimeError('unknown focused source selection')
     root.mkdir(mode=0o700)
     raw = root / 'raw'
@@ -87,6 +97,9 @@ def main():
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(expected)
         pins[name] = sha(destination)
+    if selection.startswith('producer-'):
+        (source / 'build').mkdir()
+        (source / 'src/unrest_harness.egg-info').mkdir(exist_ok=True)
     (raw / 'source-pins.json').write_text(json.dumps(pins, sort_keys=True))
     inputs = root / 'inputs'
     inputs.mkdir()
@@ -110,7 +123,7 @@ def main():
                 '--cap-add=SETGID','--cap-add=SETPCAP','--cap-add=SYS_PTRACE',
                 '--cap-add=DAC_READ_SEARCH','--security-opt=no-new-privileges',
                 '--pids-limit=128','--memory=1g',
-                *['--tmpfs=' + path + ':' + options for path,options in TMPFS.items()],
+                *['--tmpfs=' + path + ':' + options for path,options in tmpfs_for(selection).items()],
                 *mounts, '--mount=type=bind,src=' + str(inputs) + ',dst=/inputs,readonly',
                 '--entrypoint=/usr/local/bin/python',image,'-B','/guard/source_compartment.py']
         try:
@@ -119,7 +132,7 @@ def main():
             inspected = subprocess.check_output(['docker','inspect',container])
             (raw / 'container-inspect.json').write_bytes(inspected)
             config = json.loads(inspected)[0]
-            validate(config, image, source, inputs)
+            validate(config, image, source, inputs, selection)
             run(['docker','start','--attach',container], log)
             state = json.loads(subprocess.check_output(['docker','inspect','--format={{json .State}}',container]))
             (raw / 'container-state.json').write_text(json.dumps(state, sort_keys=True))

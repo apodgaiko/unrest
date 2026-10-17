@@ -136,17 +136,13 @@ class Supervisor:
             ),
             None,
         )
-        if ready is None or any(
-            (
-                ready[key] != expected
-                for key, expected in (
-                    ("manifest_sha256", self.manifest_pin),
-                    ("guard_sha256", self.manifest["guard_sha256"]),
-                    ("registry_sha256", self.manifest["registry"]["sha256"]),
-                    ("runtime_sha256", self.manifest["runtime"]["sha256"]),
-                )
-            )
-        ):
+        pins = saved.get('ready_pins', {
+            'manifest_sha256': self.manifest_pin,
+            'guard_sha256': self.manifest['guard_sha256'],
+            'registry_sha256': self.manifest['registry']['sha256'],
+            'runtime_sha256': self.manifest['runtime']['sha256'],
+        })
+        if ready is None or any(ready[key] != expected for key, expected in pins.items()):
             raise RuntimeError("authenticated_READY_missing")
         return saved
 
