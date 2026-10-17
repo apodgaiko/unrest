@@ -33,3 +33,14 @@ def test_outside_symlink_refuses(tmp_path):
     (tmp_path / "outside").symlink_to("/etc/passwd")
     with pytest.raises(RuntimeError, match="escapes"):
         closure.inventory(tmp_path)
+
+
+@pytest.mark.parametrize('member', ['lib/python3.13/site-packages/unrest-source.pth', 'pyvenv.cfg'])
+def test_actual_readonly_environment_rejects_changed_manifest(member):
+    import json
+    expected = Path('/environment-closure.json').read_bytes()
+    assert closure.verify_source_view(expected)['verified']
+    changed = json.loads(expected)
+    changed[member]['sha256'] = '0' * 64
+    with pytest.raises(RuntimeError, match='closure drift'):
+        closure.verify_source_view(json.dumps(changed).encode())

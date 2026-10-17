@@ -30,10 +30,7 @@ def main():
     abi = observations.require_linux_abi()
     closure = load('dependency_closure', ROOT / 'dependency_closure.py')
     closure_bytes = Path('/environment-closure.json').read_bytes()
-    if (hashlib.sha256(closure_bytes).hexdigest() !=
-            'adac11fb5bbc8307263d775b8b89c776d1d71ee238ded6a764e480d862c34fac'
-            or closure.inventory(Path('/opt/deps')) != json.loads(closure_bytes)):
-        raise RuntimeError('source dependency closure drift')
+    abi['dependency_closure'] = closure.verify_source_view(closure_bytes)
     tracing = load('linux_trace', ROOT / 'linux_trace.py')
     policy = load('linux_supervisor', ROOT / 'linux_supervisor.py')
     manifest_path = Path('/inputs/source.json')
@@ -185,12 +182,12 @@ def main():
     finally:
         supervisor.close()
         os.close(read)
-    result.update({'guard_poison': supervisor.poisoned, 'receipts': supervisor.receipts,
+    result.update({'source_events': supervisor.events(), 'guard_poison': supervisor.poisoned, 'receipts': supervisor.receipts,
                    'abi': abi, 'source_preexec_identity': source_identity,
                    'observer': observations.process_identity(os.getpid())})
     envelope = {'kernel-source.json': base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode(),
                 'source-output.log': base64.b64encode(log).decode()}
-    for name in ('collection.json','summary.json','source.xml'):
+    for name in ('collection.json','summary.json','source.xml','custodian.stderr'):
         path = Path('/work') / name
         if path.is_file() and not path.is_symlink():
             envelope[name] = base64.b64encode(path.read_bytes()).decode()

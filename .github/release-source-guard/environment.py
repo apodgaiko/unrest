@@ -39,6 +39,7 @@ def build(root: Path, repository: Path, log: Path) -> str:
         "RUN UV_PROJECT_ENVIRONMENT=/opt/deps UV_PYTHON_DOWNLOADS=never "
         "UV_NO_CACHE=1 UV_LINK_MODE=copy "
         "uv sync --locked --no-install-project --all-groups --python /usr/local/bin/python\n"
+        "RUN python -c \"from pathlib import Path; Path('/opt/deps/lib/python3.13/site-packages/unrest-source.pth').write_bytes(b'/source/src\\n')\"\n"
         "COPY dependency_closure.py /bootstrap/dependency_closure.py\n"
         "RUN python -I /bootstrap/dependency_closure.py /opt/deps /environment-closure.json "
         "&& rm -rf /bootstrap\n"

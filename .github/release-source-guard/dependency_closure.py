@@ -34,6 +34,24 @@ def inventory(root: Path) -> dict[str, Any]:
     return result
 
 
+def verify_source_view(expected_bytes: bytes) -> dict[str, Any]:
+    expected = json.loads(expected_bytes)
+    observed = inventory(Path('/opt/deps'))
+    if observed != expected:
+        raise RuntimeError('installed dependency closure drift')
+    name = 'lib/python3.13/site-packages/unrest-source.pth'
+    body = b'/source/src\n'
+    if expected.pop(name, None) != {'type': 'file', 'mode': 0o644, 'size': len(body),
+                                    'sha256': hashlib.sha256(body).hexdigest()}:
+        raise RuntimeError('read-only source view mapping drift')
+    base = (json.dumps(expected, sort_keys=True, separators=(',', ':')) + '\n').encode()
+    if hashlib.sha256(base).hexdigest() != 'adac11fb5bbc8307263d775b8b89c776d1d71ee238ded6a764e480d862c34fac':
+        raise RuntimeError('pinned dependency base changed')
+    return {'sha256': hashlib.sha256(expected_bytes).hexdigest(),
+            'members': len(observed), 'base_sha256': hashlib.sha256(base).hexdigest(),
+            'source_view_sha256': hashlib.sha256(body).hexdigest(), 'verified': True}
+
+
 if __name__ == "__main__":
     root, output = map(Path, sys.argv[1:])
     output.write_text(json.dumps(inventory(root), sort_keys=True, separators=(",", ":")) + "\n")

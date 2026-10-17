@@ -35,7 +35,11 @@ to SHA256 `6507bbbcd788553ec4ad5a96fa19364dc0f58b023e31d79868773559a83ec181`.
 It installs the exact locked dependency closure with `--no-install-project`;
 the bootstrap image receives only `pyproject.toml` and `uv.lock`, without project
 modules. A complete installed-file byte/mode/symlink manifest is sealed into the
-read-only image and recomputed at boot. This bootstrap does not install or
+read-only image and recomputed at boot. The dependency base remains pinned to
+SHA256 `adac11fb5bbc8307263d775b8b89c776d1d71ee238ded6a764e480d862c34fac`;
+one separately pinned, non-executable `.pth` line maps the read-only `/source/src`
+view for ordinary site initialization. `-S` still omits site processing. The
+complete closure must match both the base and that exact added member. This bootstrap does not install or
 execute project source. Image content,
 Python/native-program hashes, kernel interfaces, support definitions and CI
 identities must accompany each result; Linux hashes do not stand for macOS
@@ -73,14 +77,20 @@ of Python's potentially stale `os.environ` cache. Stock Git's one maintenance
 child is bound to the exact empty-commit call, image bytes, environment and
 content-addressed newly written commit object; this grants no other Git helper.
 
-A selective observation filter is under verification. It installs inherited
+Selective observation passed the kernel controls and all four in-process
+parameters in [run 39060461310](https://github.com/apodgaiko/unrest/actions/runs/39060461310).
+The composed custodian exited before READY in that run; the composed source test
+was not invoked. Its wait word 256 remains a failure. Added private stderr and
+event export address the missing diagnostic capture for fresh runs.
+
+The selective observation filter It installs inherited
 seccomp TRACE stops for execve/execveat and wait4/waitid, keeps ptrace birth,
 exit and signal observation, and refuses foreign/x32 syscall ABIs. Unrelated
 syscalls need no ptrace round trip; original test deadlines stay unchanged.
 This changes kernel observation only, not finite Python source activation.
-The readiness controls must prove successful, failed and caught unknown exec,
+The readiness controls prove successful, failed and caught unknown exec,
 both observation modes, vfork ordering and original waitid/wait4 custody before
-source execution. No selective-mode source claim follows from the earlier run.
+source execution. These controls do not prove the remaining composed or backend source domains.
 
 Raw output and observer records travel only to the trusted coordinator's private
 log and are encrypted with OpenSSL CMS to the repository's public recipient

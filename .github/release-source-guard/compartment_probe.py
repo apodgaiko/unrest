@@ -141,11 +141,7 @@ def observer() -> None:
     closure = importlib.util.module_from_spec(closure_spec)
     closure_spec.loader.exec_module(closure)
     expected_bytes = Path("/environment-closure.json").read_bytes()
-    expected_closure = json.loads(expected_bytes)
-    if closure.inventory(Path("/opt/deps")) != expected_closure:
-        raise RuntimeError("installed dependency closure drift")
-    abi["dependency_closure"] = {"sha256": hashlib.sha256(expected_bytes).hexdigest(),
-                                 "members": len(expected_closure), "verified": True}
+    abi['dependency_closure'] = closure.verify_source_view(expected_bytes)
 
     read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
@@ -252,19 +248,22 @@ def observer() -> None:
     source_result = Path("/work/source-controls.json")
     if source_result.is_file() and not source_result.is_symlink():
         Path("/records/source-controls.json").write_bytes(source_result.read_bytes())
-    for status in (0, 29, 31):
-        control = Path(f"/work/trace-control-{status}.json")
-        if control.is_file() and not control.is_symlink():
-            body = control.read_bytes()
-            if len(body) > 131072:
-                raise RuntimeError("trace control output exceeded its bound")
-            Path("/records", control.name).write_bytes(body)
+    controls = {f'trace-control-{status}-{mode}.json' for status in (0, 29, 31)
+                for mode in (False, True)} | {'trace-control-vfork-False.json',
+                'trace-control-vfork-True.json', 'trace-control-waitid.json'}
+    for name in sorted(controls):
+        control = Path('/work') / name
+        if not control.is_file() or control.is_symlink():
+            raise RuntimeError('required kernel control evidence missing')
+        body = control.read_bytes()
+        if len(body) > 131072:
+            raise RuntimeError('trace control output exceeded its bound')
+        Path('/records', name).write_bytes(body)
     broker.close()
     envelope = {
         path.name: base64.b64encode(path.read_bytes()).decode("ascii")
         for path in sorted(Path("/records").iterdir())
-        if path.name in {"observer.json", "source-controls.json", "source-output.log",
-                         "trace-control-0.json", "trace-control-29.json", "trace-control-31.json"}
+        if path.name in ({"observer.json", "source-controls.json", "source-output.log"} | controls)
     }
     print("PRIVATE-EVIDENCE:" + json.dumps(envelope, sort_keys=True), flush=True)
     raise SystemExit(os.waitstatus_to_exitcode(raw))

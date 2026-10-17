@@ -367,7 +367,7 @@ def attach(guard):
 
                 subprocess.Popen(["/usr/bin/true"])
             sys.path.insert(
-                0, str(Path(guard._STATE["checkout"]) / ".venv/lib/python3.13/site-packages")
+                0, "/opt/deps/lib/python3.13/site-packages"
             )
             import fastmcp
             from fastmcp.utilities.version_check import check_for_newer_version
