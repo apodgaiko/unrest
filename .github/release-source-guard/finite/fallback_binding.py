@@ -61,6 +61,7 @@ def matches(registration, argv, cwd, environment, state):
         ):
             sources[candidate] = None
     frames = active_frames()
+    diagnostics = []
     try:
         for frame in frames:
             source = Path(frame.f_code.co_filename)
@@ -105,6 +106,10 @@ def matches(registration, argv, cwd, environment, state):
                     if frame.f_code.co_name == "<module>"
                     else state["isolated_named"](base_code, frame.f_code.co_name)
                 )
+            diagnostics.append({'path': str(source), 'function': frame.f_code.co_name,
+                                'line': frame.f_lineno, 'code_matches': frame.f_code == expected_code,
+                                'loader': type(getattr(module, '__loader__', None)).__module__ + '.' +
+                                          type(getattr(module, '__loader__', None)).__name__})
             if frame.f_code != expected_code:
                 continue
             for call in ast.walk(tree):
@@ -141,6 +146,10 @@ def matches(registration, argv, cwd, environment, state):
                     else:
                         vector = list(evaluate(call.args[0]))
                     keywords = {keyword.arg: evaluate(keyword.value) for keyword in call.keywords}
+                    diagnostics.append({'call_line': call.lineno, 'vector_matches': vector == argv,
+                                        'cwd_matches': keywords.get('cwd') == cwd,
+                                        'environment_matches': keywords.get('env') == environment,
+                                        'parent_cwd_matches': os.getcwd() == state['checkout']})
                     if (
                         vector == argv
                         and keywords.get("cwd") == cwd
@@ -157,6 +166,10 @@ def matches(registration, argv, cwd, environment, state):
                         }
                 except (AttributeError, IndexError, KeyError, NameError, TypeError, ValueError):
                     continue
+        sys.modules['runtime_guard'].append({'kind': 'finite_fallback_diagnostic',
+            'candidate': registration['class'], 'frames': diagnostics,
+            'active_source_frames': [{'path': f.f_code.co_filename, 'function': f.f_code.co_name,
+                                     'line': f.f_lineno} for f in frames if f.f_code.co_filename.startswith(state['checkout'])]})
         return None
     finally:
         frames.clear()

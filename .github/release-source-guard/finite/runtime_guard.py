@@ -379,6 +379,14 @@ def admit(argv, cwd, environment=None):
     if direct is not None:
         return direct, argv
     for registration in state["commands"]:
+        if registration['class'] in {'canonical-backend', 'controlled-acp'}:
+            append({'kind': 'source_registry_diagnostic', 'candidate': registration['class'],
+                    'python_detected': python,
+                    'arguments_match': len(argv[1:]) == len(registration['argv']) and all(
+                        match_arg(a, b) for a, b in zip(argv[1:], registration['argv'])),
+                    'script_matches': digest(argv[1]) == registration.get('script_sha256')
+                        if 'script_sha256' in registration else None,
+                    'owned_cwd': owned(str(Path(cwd or os.getcwd()).resolve()))})
         if registration["class"].startswith("source-speed-nested"):
             continue
         if registration["python"] != python:
