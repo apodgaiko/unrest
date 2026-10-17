@@ -1,17 +1,12 @@
 """Check the actual failed source run; a control pass is not source acceptance."""
 from __future__ import annotations
 
-import base64
 import json
-from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
-def check(log: Path, source_exit: int) -> dict:
-    lines = [line for line in log.read_text().splitlines() if line.startswith('PRIVATE-EVIDENCE:')]
-    assert len(lines) == 1 and source_exit == 2
-    envelope = json.loads(lines[0].split(':', 1)[1])
-    raw = {name: base64.b64decode(body, validate=True) for name, body in envelope.items()}
+def check(raw: dict[str, bytes], source_exit: int) -> dict:
+    assert source_exit == 2
     kernel = json.loads(raw['kernel-source.json'])
     summary = json.loads(raw['summary.json'])
     cases = ET.fromstring(raw['source.xml']).findall('.//testcase')

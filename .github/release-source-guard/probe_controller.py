@@ -16,6 +16,8 @@ import tarfile
 import traceback
 import uuid
 
+from structured_evidence import capture, execution_identity
+
 BASE = "python@sha256:9a4a5ceafb4ddd7468a09ade0049463a7bd1acbefda52adee748544110fd032d"
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
@@ -73,6 +75,7 @@ def main() -> int:
     raw = root / "raw"
     raw.mkdir(mode=0o700)
     log = raw / "coordinator.log"
+    direct_identity = execution_identity(SUPPORT, "readiness")
     import importlib.util
     spec = importlib.util.spec_from_file_location("environment", SUPPORT / "environment.py")
     assert spec is not None and spec.loader is not None
@@ -112,7 +115,7 @@ def main() -> int:
             inspected = subprocess.check_output(["docker", "inspect", container])
             (raw / "container-inspect.json").write_bytes(inspected)
             validate_container(json.loads(inspected)[0], SUPPORT)
-            result = run(["docker", "start", "--attach", container], log)
+            result, _ = capture(["docker", "start", "--attach", container], raw, direct_identity, "synthetic-controls")
             # Inspect real exit state; docker start --attach need not return it.
             state = subprocess.check_output([
                 "docker", "inspect", "--format={{json .State}}", container,
@@ -121,7 +124,7 @@ def main() -> int:
             if state_value["Running"] or state_value["OOMKilled"]:
                 raise RuntimeError("compartment did not settle normally")
             exit_code = state_value["ExitCode"]
-            # The fixed evidence envelope remains in the private coordinator log.
+            # Direct records are archived separately from private process output.
             (raw / "container-state.json").write_bytes(state)
         except Exception:
             with log.open("a") as output:
@@ -130,6 +133,8 @@ def main() -> int:
         finally:
             run(["docker", "rm", "--force", container], log)
     safe_identity = {
+        "direct_identity": direct_identity,
+        "structured_envelope_sha256": sha(raw / "structured-envelope.json") if (raw / "structured-envelope.json").is_file() else None,
         "repository": os.environ.get("GITHUB_REPOSITORY"),
         "head_sha": os.environ.get("GITHUB_SHA"),
         "run_id": os.environ.get("GITHUB_RUN_ID"),

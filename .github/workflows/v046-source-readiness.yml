@@ -3,7 +3,7 @@ name: v0.4.6 source guard readiness
 on:
   push:
     branches:
-      - 'codex/source-guard-readiness-20261017-*'
+      - 'codex/source-guard-structured-20261018-*'
 
 permissions:
   contents: read

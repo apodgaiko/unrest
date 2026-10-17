@@ -11,6 +11,7 @@ import sys
 import tarfile
 import traceback
 
+from structured_evidence import capture, execution_identity
 from drain_controls import check as check_drain_controls
 from producer_controls import check as check_producer_controls
 
@@ -82,6 +83,9 @@ def main():
     raw = root / 'raw'
     raw.mkdir(mode=0o700)
     log = raw / 'coordinator.log'
+    direct_identity = execution_identity(SUPPORT, 'producer-controls')
+    records = {}
+    evidence_stage = 'prepare'
     control = json.loads((controls / 'safe-provenance.json').read_text())
     if (control['head_sha'] != os.environ['GITHUB_SHA'] or control['synthetic_exit_code'] != 0
             or control['source_checkpoint_ready'] is not False):
@@ -146,7 +150,9 @@ def main():
             (raw / 'container-inspect.json').write_bytes(inspected)
             config = json.loads(inspected)[0]
             validate(config, image, source, inputs, selection)
-            run(['docker','start','--attach',container], log)
+            evidence_stage = 'capture'
+            _, records = capture(['docker','start','--attach',container], raw, direct_identity, selection)
+            evidence_stage = 'settled'
             state = json.loads(subprocess.check_output(['docker','inspect','--format={{json .State}}',container]))
             (raw / 'container-state.json').write_text(json.dumps(state, sort_keys=True))
             if state['Running'] or state['OOMKilled']:
@@ -163,13 +169,15 @@ def main():
     if selection in {'drain-controls', 'producer-controls'}:
         try:
             negative_proof = (check_drain_controls if selection == 'drain-controls'
-                              else check_producer_controls)(log, exit_code)
+                              else check_producer_controls)(records, exit_code)
             (raw / 'negative-control-proof.json').write_text(json.dumps(negative_proof, sort_keys=True))
             control_exit = 0
+            evidence_stage = 'negative_verified'
         except Exception:
             with log.open('a') as output:
                 traceback.print_exc(file=output)
             control_exit = 125
+            evidence_stage = 'negative_refused'
     identity = {key: os.environ.get(name) for key,name in {
         'repository':'GITHUB_REPOSITORY','head_sha':'GITHUB_SHA','run_id':'GITHUB_RUN_ID',
         'run_attempt':'GITHUB_RUN_ATTEMPT','workflow_ref':'GITHUB_WORKFLOW_REF',
@@ -178,6 +186,8 @@ def main():
                      'source_checkpoint_ready':False,'selected_carrier':None,
                      'source_pins_sha256':sha(raw / 'source-pins.json'), 'image_id':image,
                      'negative_control_proof':negative_proof, 'control_exit_code':control_exit,
+                     'direct_identity':direct_identity, 'evidence_stage':evidence_stage,
+                     'structured_envelope_sha256':sha(raw / 'structured-envelope.json') if (raw / 'structured-envelope.json').is_file() else None,
                      'support':{str(p.relative_to(SUPPORT)):sha(p) for p in sorted(SUPPORT.rglob('*'))
                                 if p.is_file() and p.suffix in {'.py','.json','.pem','.c'}}})
     (raw / 'provenance.json').write_text(json.dumps(identity, sort_keys=True, indent=2))

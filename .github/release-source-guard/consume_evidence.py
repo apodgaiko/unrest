@@ -1,0 +1,127 @@
+"""Download one exact artifact and consume direct records without opening logs.
+
+All process diagnostics stay in the owned private root. Stdout is a closed
+numeric/hash/enum projection; caught exceptions never contribute text.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+import sys
+
+from checkpoint_receipt import artifact_members
+from producer_controls import check as check_producer
+from structured_evidence import canonical, consume, digest, loads, require
+
+
+class PrivateFailure(RuntimeError):
+    pass
+
+
+def gh(path):
+    result = subprocess.run(['gh', 'api', 'repos/apodgaiko/unrest/' + path],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if result.returncode:
+        raise PrivateFailure('metadata_download')
+    return result.stdout
+
+
+def download(root, run_id, artifact_id, head):
+    run_body = gh(f'actions/runs/{run_id}')
+    artifact_body = gh(f'actions/artifacts/{artifact_id}')
+    run, artifact = loads(run_body), loads(artifact_body)
+    require(run['id'] == run_id and run['head_sha'] == head
+            and run['head_repository']['full_name'] == 'apodgaiko/unrest'
+            and run['path'] == '.github/workflows/v046-source-readiness.yml'
+            and run['event'] == 'push' and run['status'] == 'completed', 'run_identity')
+    require(artifact['id'] == artifact_id and artifact['expired'] is False
+            and artifact['workflow_run']['id'] == run_id
+            and artifact['workflow_run']['head_sha'] == head, 'artifact_identity')
+    archive = gh(f'actions/artifacts/{artifact_id}/zip')
+    members = artifact_members(archive, artifact)
+    for name, body in [('run.json', run_body), ('artifact.json', artifact_body),
+                       ('artifact.zip', archive), *sorted(members.items())]:
+        (root / name).write_bytes(body)
+    return run, artifact, members
+
+
+def verify(root, run, artifact, members, key, support):
+    metadata = loads(members['safe-provenance.json'])
+    require(metadata['ciphertext_sha256'] == digest(members['evidence.cms']), 'ciphertext_digest')
+    pins = {str(path.relative_to(support)): digest(path.read_bytes())
+            for path in sorted(support.rglob('*'))
+            if path.is_file() and path.suffix in {'.py', '.json', '.pem', '.c'}}
+    require(metadata['support'] == pins, 'current_support_digest')
+    direct = metadata['direct_identity']
+    expected = {'repository': 'apodgaiko/unrest', 'head_sha': run['head_sha'],
+                'workflow_sha': run['head_sha'], 'run_id': str(run['id']),
+                'run_attempt': str(run['run_attempt']), 'artifact_name': artifact['name'],
+                'workflow_ref': 'apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@refs/heads/' + run['head_branch'],
+                'support_sha256': digest(canonical(pins))}
+    require(direct == expected, 'direct_identity')
+    require(metadata['source_checkpoint_ready'] is False and metadata['selected_carrier'] is None,
+            'scope_escalation')
+    require(not key.is_symlink() and stat.S_IMODE(key.stat().st_mode) == 0o600,
+            'key_permissions')
+    plaintext = root / 'private-archive.tar.gz'
+    with (root / 'decrypt.stderr').open('wb') as errors:
+        result = subprocess.run(['openssl', 'cms', '-decrypt', '-binary', '-inform', 'DER',
+                                 '-in', str(root / 'evidence.cms'), '-inkey', str(key),
+                                 '-out', str(plaintext)], stdout=subprocess.DEVNULL,
+                                stderr=errors, check=False)
+    require(result.returncode == 0, 'decryption_failed')
+    body = plaintext.read_bytes()
+    require(digest(body) == metadata['plaintext_archive_sha256'], 'plaintext_digest')
+    scope, records = consume(body, expected, metadata['structured_envelope_sha256'])
+    projection = {'schema': 'direct-record-verification-v1', 'run_id': run['id'],
+                  'artifact_id': artifact['id'], 'head_sha': run['head_sha'],
+                  'ciphertext_sha256': digest(members['evidence.cms']),
+                  'archive_sha256': digest(body), 'scope': scope,
+                  'structured_records': len(records), 'source_checkpoint_ready': False,
+                  'negative_verified': False}
+    if scope == 'producer-controls':
+        try:
+            proof = check_producer(records, metadata['source_exit_code'])
+        except Exception as error:
+            # A support line number is a typed stage locator, never exception text.
+            trace = error.__traceback__
+            while trace.tb_next is not None:
+                trace = trace.tb_next
+            projection.update(error_code='negative_predicate_refused', predicate_line=trace.tb_lineno)
+        else:
+            projection.update(negative_verified=True, source_exit=proof['original_source_exit_code'],
+                              query_raw=proof['query_exit_raw'], query_status=proof['query_exit_normalized'],
+                              parent_waits=proof['all_kernel_process_parent_waits'],
+                              source_body_dispatched=False, sticky_poison=True)
+    return projection
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('root', type=Path)
+    parser.add_argument('run', type=int)
+    parser.add_argument('artifact', type=int)
+    parser.add_argument('head')
+    parser.add_argument('--key', type=Path, required=True)
+    parser.add_argument('--support', type=Path, default=Path(__file__).resolve().parent)
+    args = parser.parse_args()
+    os.umask(0o077)
+    args.root.mkdir(mode=0o700)
+    output = {'schema': 'direct-record-verification-v1', 'error_code': 'verification_refused'}
+    try:
+        run, artifact, members = download(args.root, args.run, args.artifact, args.head)
+        output = verify(args.root, run, artifact, members, args.key, args.support)
+    except Exception:
+        # No command, source, exception, stdout or stderr body reaches the operator.
+        pass
+    (args.root / 'verification.json').write_bytes(canonical(output))
+    print(json.dumps(output, sort_keys=True))
+    return 0 if 'error_code' not in output else 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -4,17 +4,12 @@ The source JUnit remains failed. Only this negative guard control may pass.
 """
 from __future__ import annotations
 
-import base64
 import json
-from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
-def check(log: Path, source_exit: int) -> dict:
-    lines = [line for line in log.read_text().splitlines() if line.startswith('PRIVATE-EVIDENCE:')]
-    assert len(lines) == 1 and source_exit == 2
-    raw = {name: base64.b64decode(body, validate=True)
-           for name, body in json.loads(lines[0].split(':', 1)[1]).items()}
+def check(raw: dict[str, bytes], source_exit: int) -> dict:
+    assert source_exit == 2
     kernel = json.loads(raw['kernel-source.json'])
     assert kernel['guard_poison'] is True and kernel['poison'] == [] and 'failure' not in kernel
     events = kernel['source_events']
