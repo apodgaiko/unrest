@@ -88,9 +88,19 @@ def main():
     consumed = set()
     bound = {}
     native_context = {}
+    maintenance = set()
+    git_policy = load('linux_git', ROOT / 'linux_git.py')
     trace = None
     def resolve(pid, path, vector, environment, cwd):
         parent = trace.identities[pid]['ppid']
+        if parent in native_context:
+            if parent in maintenance:
+                return False
+            accepted = git_policy.admit(native_context[parent], path, vector, environment, cwd,
+                                        manifest['git_maintenance_sha256'])
+            if accepted:
+                maintenance.add(parent)
+            return accepted
         if pid not in bound:
             digest = hashlib.sha256(json.dumps(vector).encode()).hexdigest()
             env_digest = hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest()

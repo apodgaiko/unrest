@@ -51,6 +51,7 @@ def main():
                      'sha256': sha(SUPPORT / 'endpoint.py')},
         'direct_support': {'path': str(SUPPORT / 'direct_routes.py'),
                            'files': {str(p): sha(p) for p in sorted(SUPPORT.glob('*.py'))}},
+        'git_maintenance_sha256': sha('/usr/lib/git-core/git'),
         'copy_git': {p: sha(p) for p in ['/usr/bin/git', '/bin/git']},
         'console_routes': [], 'copied_console_pins': {}, 'cohort_native_pins': {p: sha(p) for p in ['/usr/bin/git','/bin/ps','/bin/sleep']},
         'copy_console': [], 'native_sysctl_offsets': {'system': 'Linux', 'abi': 'proc-stat-start-ticks'},
