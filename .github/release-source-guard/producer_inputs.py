@@ -19,6 +19,7 @@ SOURCE_UV_URL = (
     'uv-0.11.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl'
 )
 SOURCE_UV_SHA256 = '30a08ee4291580784a5e276a1cbec8830994dba2ed5c94d878cce8b2121367cf'
+SOURCE_UV_ELF_SHA256 = '0a6ec289b04da0352d8b439cb0b05fbe43dff1face7707bd5764fdd4478c1561'
 SETUPTOOLS_SHA256 = '51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670'
 
 
@@ -44,9 +45,16 @@ def prepare(root: Path) -> Path:
     if len(uv_wheel) != 24508501 or hashlib.sha256(uv_wheel).hexdigest() != SOURCE_UV_SHA256:
         raise RuntimeError('public source UV wheel drift')
     with zipfile.ZipFile(io.BytesIO(uv_wheel)) as archive:
-        binary = archive.read('uv/uv')
-    if binary[:4] != b'\x7fELF':
+        binary = archive.read('uv-0.11.0.data/scripts/uv')
+        licenses = {name: archive.read('uv-0.11.0.dist-info/licenses/' + name)
+                    for name in ('LICENSE-APACHE', 'LICENSE-MIT')}
+    if hashlib.sha256(binary).hexdigest() != SOURCE_UV_ELF_SHA256:
+        raise RuntimeError('source UV ELF differs from its authenticated wheel member')
+    if binary[:6] != b'\x7fELF\x02\x01' or binary[18:20] != b'\x3e\x00':
         raise RuntimeError('source UV is not the pinned Linux ELF member')
+    (root / 'licenses').mkdir()
+    for name, data in licenses.items():
+        (root / 'licenses' / name).write_bytes(data)
     (root / 'bin').mkdir()
     executable = root / 'bin/uv'
     executable.write_bytes(binary)
@@ -57,3 +65,17 @@ def prepare(root: Path) -> Path:
         'setuptools_wheel_sha256': SETUPTOOLS_SHA256,
     }, sort_keys=True) + '\n')
     return wheel
+
+
+def verify() -> dict:
+    root = Path('/opt/source-bootstrap')
+    expected = {'source_uv_wheel_sha256': SOURCE_UV_SHA256,
+                'source_uv_elf_sha256': SOURCE_UV_ELF_SHA256,
+                'setuptools_wheel_sha256': SETUPTOOLS_SHA256}
+    if json.loads((root / 'input-binding.json').read_bytes()) != expected:
+        raise RuntimeError('producer input binding drift')
+    for path, pin in ((root / 'bin/uv', SOURCE_UV_ELF_SHA256),
+                      (root / 'wheelhouse/setuptools-84.0.0-py3-none-any.whl', SETUPTOOLS_SHA256)):
+        if not path.is_file() or path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != pin:
+            raise RuntimeError('producer immutable input bytes drift')
+    return expected

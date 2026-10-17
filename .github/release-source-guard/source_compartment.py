@@ -33,6 +33,8 @@ def main():
     abi['dependency_closure'] = closure.verify_source_view(closure_bytes)
     abi['profile_gate'] = load('profile_gate_build', ROOT / 'profile_gate_build.py').verify()
     abi['native_metadata'] = load('native_metadata', ROOT / 'native_metadata.py').verify()
+    for name in ('native_entry_build', 'producer_inputs'):
+        abi[name] = load(name, ROOT / (name + '.py')).verify()
 
 
     tracing = load('linux_trace', ROOT / 'linux_trace.py')

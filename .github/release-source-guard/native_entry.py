@@ -24,7 +24,12 @@ def activate(event: str, arguments: tuple) -> None:
             raise RuntimeError('native startup profile custody drift')
         with os.fdopen(descriptor, 'rb', closefd=False) as stream:
             body = stream.read(65537)
-        if len(body) > 65536 or os.fstat(descriptor) != info:
+        def identity(item):
+            return (item.st_dev, item.st_ino, item.st_mode, item.st_uid, item.st_gid,
+                    item.st_size, item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
+        if (len(body) > 65536 or len(body) != info.st_size
+                or identity(os.fstat(descriptor)) != identity(info)
+                or identity(path.lstat()) != identity(info)):
             raise RuntimeError('native startup profile size or identity drift')
     finally:
         os.close(descriptor)

@@ -152,6 +152,12 @@ def observer() -> None:
     native_metadata = importlib.util.module_from_spec(native_spec)
     native_spec.loader.exec_module(native_metadata)
     abi['native_metadata'] = native_metadata.verify()
+    for name in ('native_entry_build', 'producer_inputs'):
+        spec = importlib.util.spec_from_file_location(name, '/guard/' + name + '.py')
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        abi[name] = module.verify()
 
 
     socket_spec = importlib.util.spec_from_file_location('linux_sockets', '/guard/linux_sockets.py')
