@@ -191,6 +191,13 @@ def main():
         path = Path(manifest['owned_root'] if name == 'custodian.stderr' else '/work') / name
         if path.is_file() and not path.is_symlink():
             envelope[name] = base64.b64encode(path.read_bytes()).decode()
+    diagnostics = {}
+    for pattern in ('*/workspace/.*-*.log', '*/workspace/.hermetic-acp-trace.jsonl'):
+        for path in sorted((Path(manifest['owned_root']) / 'pytest').glob(pattern)):
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > 4 * 1024 * 1024:
+                raise RuntimeError('finite source diagnostic carrier drift')
+            diagnostics[str(path.relative_to(manifest['owned_root']))] = base64.b64encode(path.read_bytes()).decode()
+    envelope['source-diagnostics.json'] = base64.b64encode(json.dumps(diagnostics, sort_keys=True).encode()).decode()
     print('PRIVATE-EVIDENCE:' + json.dumps(envelope, sort_keys=True), flush=True)
     return 0 if result['root_parent_wait_raw'] == 0 and not result['poison'] and not supervisor.poisoned else 2
 

@@ -6,10 +6,25 @@ Only the trusted observer uses netlink; this does not authorize payload sockets.
 from __future__ import annotations
 
 import os
+import ctypes
 from pathlib import Path
 import socket
 import struct
 from typing import Any
+
+
+def duplicate_descriptor(pid: int, descriptor: int) -> int:
+    if type(pid) is not int or pid <= 0 or type(descriptor) is not int or descriptor < 0:
+        raise ValueError('finite process descriptor required')
+    pidfd = os.pidfd_open(pid, 0)
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        result = libc.syscall(438, pidfd, descriptor, 0)  # x86-64 pidfd_getfd
+        if result < 0:
+            raise OSError(ctypes.get_errno(), 'kernel descriptor duplication refused')
+        return result
+    finally:
+        os.close(pidfd)
 
 
 def dump(request: bytes) -> list[bytes]:

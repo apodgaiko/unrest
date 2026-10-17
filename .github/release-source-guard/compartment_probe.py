@@ -142,6 +142,17 @@ def observer() -> None:
     closure_spec.loader.exec_module(closure)
     expected_bytes = Path("/environment-closure.json").read_bytes()
     abi['dependency_closure'] = closure.verify_source_view(expected_bytes)
+    socket_spec = importlib.util.spec_from_file_location('linux_sockets', '/guard/linux_sockets.py')
+    assert socket_spec is not None and socket_spec.loader is not None
+    kernel_sockets = importlib.util.module_from_spec(socket_spec)
+    socket_spec.loader.exec_module(kernel_sockets)
+    copied = kernel_sockets.duplicate_descriptor(os.getpid(), 1)
+    try:
+        assert os.fstat(copied) == os.fstat(1)
+        abi['pidfd_getfd'] = True
+    finally:
+        os.close(copied)
+
 
     read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
