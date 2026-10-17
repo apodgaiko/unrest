@@ -191,7 +191,7 @@ complementary requirements.
 
 ## Producer runtime work in progress
 
-The next image adds a separate source-only Linux uv 0.11.0 image, matching the finite
+The producer image adds a separate source-only Linux uv 0.11.0 image, matching the finite
 producer renderer version already used by the portable operation bindings. Its
 public wheel is pinned to SHA256
 `30a08ee4291580784a5e276a1cbec8830994dba2ed5c94d878cce8b2121367cf`.
@@ -207,5 +207,43 @@ uses `PySys_AddAuditHook` before `Py_BytesMain`. Its source, bootstrap, compiler
 shared library, stock runtime and compiled entry are sealed separately. The
 observer must supply a read-only UID/PID/birth/argv/environment/cwd-bound startup
 profile before a producer body can run. This entry does not change `-I`/`-S` or
-add environment injection. Native entry controls and original producer activation
-are still pending; the new runtime is not yet a source proof.
+add environment injection. Native entry controls passed
+[run 39069697864](https://github.com/apodgaiko/unrest/actions/runs/39069697864):
+all four ordinary/`-I`/`-S`/`-I -S` unregistered bodies exited 86 before their
+marker effects. The 72 controls in
+[run 39073851823](https://github.com/apodgaiko/unrest/actions/runs/39073851823)
+also passed the differential check against the actual portable operation
+profile method. These are prerequisite controls; original producer acceptance
+remains pending. That run's original producer failed in the observer's bounded
+exec-string reader and retains its failed result.
+
+The original sdist helper creates and removes a temporary artifact directory in
+its original `/source` cwd. The producer mount view therefore uses an empty,
+finite writable tmpfs for directory metadata at `/source`, with every candidate
+top-level file or subtree mounted separately read-only. Only `build` and the
+finite generated egg metadata have declared writable overlays. An actual source
+UID write attempt against `pyproject.toml` must fail before source dispatch;
+creating/removing an artifact directory must succeed. This does not grant source
+file writes or a host path. The finite trusted-source binding remains necessary:
+Python audit hooks do not claim arbitrary hostile-native filesystem isolation.
+
+A same-commit receipt parser and trusted read-only Actions lookup are under
+implementation. They reject readiness, another SHA, incomplete package duties,
+missing parent waits, poison, filtered collection and artifact/definition drift.
+The signed artifact download receives no API authorization header. Controlled
+parser fixtures are not CI acceptance, and these modules do not yet replace or
+skip any executable primary duty.
+
+
+The original contract producer and both unchanged installed-provider parameters
+passed [run 39074209663](https://github.com/apodgaiko/unrest/actions/runs/39074209663)
+at `3a9bb6a3e24de4ebcc770be987eeb3f6d2562c58`. Original JUnit has two passing
+cases with no failures/errors/skips. Both UV source operations settled after
+genuine parent waits; both query returns and all four original setuptools helper
+bodies were observed under the native pre-initialization entry. All 12 registered
+descendants and all 18 kernel-observed child processes have real original-parent
+waits; root returned zero and poison is absent. The same run passed 73 controls,
+including a real long-argument exec with exact untruncated argv. Its ciphertext,
+GitHub identities, support bytes and decrypted records were checked locally.
+The separate distribution-test producer profile and primary CI integration
+remain pending. This is a focused source proof, not a release checkpoint.
