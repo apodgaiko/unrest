@@ -213,3 +213,17 @@ def live_binding(observed: dict[str, Any] | None, connections: set[tuple]) -> tu
     key = (observed['pid'], observed['socket_cookie'], observed['inode'],
            observed['local_address'][1], observed['peer_address'][1])
     return key if key in connections else None
+
+
+def reciprocal_peer(listener: dict[str, Any], client: dict[str, Any],
+                    server_sockets: list[dict[str, Any]]) -> dict[str, Any] | None:
+    matches = [peer for peer in server_sockets
+               if peer['pid'] == listener['pid'] and peer['socket_uid'] == listener['socket_uid']
+               and peer['state'] in (1, 8)
+               and peer['local_host'] == client['remote_host'] == '127.0.0.1'
+               and peer['remote_host'] == client['local_host'] == '127.0.0.1'
+               and peer['local_port'] == client['remote_port'] == listener['local_port']
+               and peer['remote_port'] == client['local_port']]
+    if len(matches) > 1:
+        raise RuntimeError('ambiguous reciprocal kernel peer')
+    return matches[0] if matches else None

@@ -95,3 +95,31 @@ def test_retained_closed_tcp_identity_and_descriptor_reuse():
         server.close()
         client.close()
         listener.close()
+
+
+def test_accepted_peer_survives_one_shot_listener_close():
+    listener = socket.socket()
+    listener.bind(('127.0.0.1', 0))
+    listener.listen(1)
+    client = socket.socket()
+    try:
+        admitted = next(row for row in observation.sockets(os.getpid())
+                        if row['fd'] == listener.fileno())
+        client.connect(listener.getsockname())
+        server, _ = listener.accept()
+        with server:
+            listener.close()
+            rows = observation.sockets(os.getpid())
+            own = next(row for row in rows if row['fd'] == client.fileno())
+            peer = observation.reciprocal_peer(admitted, own, rows)
+            assert peer is not None and peer['fd'] == server.fileno()
+            assert peer['socket_cookie'] == cookie(server)
+            assert observation.reciprocal_peer(admitted, own, []) is None
+            for key in ('pid', 'socket_uid', 'local_port'):
+                changed = {**admitted, key: admitted[key] + 1}
+                assert observation.reciprocal_peer(changed, own, rows) is None
+            changed = {**own, 'local_port': own['local_port'] + 1}
+            assert observation.reciprocal_peer(admitted, changed, rows) is None
+    finally:
+        listener.close()
+        client.close()

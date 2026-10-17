@@ -256,18 +256,23 @@ class Supervisor:
             listener = self.connect_admissions.get((request["pid"], request["fd"]))
             if listener is None:
                 raise RuntimeError("connection_without_listener_admission")
+            server_sockets = self.observe(listener["pid"])
             current = next(
-                (s for s in self.observe(listener["pid"]) if s["fd"] == listener["fd"]), None
+                (s for s in server_sockets if s["fd"] == listener["fd"]), None
             )
             own = next((s for s in self.observe(request["pid"]) if s["fd"] == request["fd"]), None)
             if (
-                current != listener
-                or not own
+                not own
                 or own["remote_host"] != "127.0.0.1"
                 or (own["remote_port"] != listener["local_port"])
                 or (own["state"] not in (2, 3, 1, 8))
             ):
                 raise RuntimeError("connected_binding_drift:" + json.dumps({"admitted_listener": listener, "current_listener": current, "connecting_socket": own}, sort_keys=True))
+            accepted = sockets.reciprocal_peer(listener, own, server_sockets)
+            # A one-shot listener can close after accept. Its exact kernel peer
+            # in the same birth-bound server is then the surviving authority.
+            if current != listener and accepted is None:
+                raise RuntimeError("closed_listener_without_owned_accepted_peer")
             own_key = (
                 request["pid"],
                 own["socket_cookie"],
@@ -276,23 +281,14 @@ class Supervisor:
                 own["remote_port"],
             )
             self.connections.add(own_key)
-            for peer in self.observe(listener["pid"]):
-                if (
-                    peer["state"] in (1, 8)
-                    and peer["local_host"] == own["remote_host"]
-                    and (peer["remote_host"] == own["local_host"])
-                    and (peer["local_port"] == own["remote_port"])
-                    and (peer["remote_port"] == own["local_port"])
-                ):
-                    peer_key = (
-                        listener["pid"],
-                        peer["socket_cookie"],
-                        peer["inode"],
-                        peer["local_port"],
-                        peer["remote_port"],
-                    )
-                    self.connections.add(peer_key)
-                    return {"socket": own, "accepted_peer": peer}
+            if accepted is not None:
+                peer_key = (
+                    listener["pid"], accepted["socket_cookie"], accepted["inode"],
+                    accepted["local_port"], accepted["remote_port"],
+                )
+                self.connections.add(peer_key)
+                return {"socket": own, "accepted_peer": accepted,
+                        "listener_still_open": current == listener}
             if listener["pid"] == request["pid"]:
                 return {"socket": own, "same_process_listener": listener}
             raise AwaitOwnedPeer("accepted_peer_not_yet_observable")
