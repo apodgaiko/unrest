@@ -68,6 +68,9 @@ def test_retained_closed_tcp_identity_and_descriptor_reuse():
         binding = (os.getpid(), live['socket_cookie'], live['inode'],
                    server.getsockname()[1], client.getsockname()[1])
         assert observation.closed_binding(live, {binding}) is None
+        assert observation.live_binding(live, {binding}) == binding
+        assert observation.live_binding(live, set()) is None
+        assert observation.live_binding(live, {(*binding[:4], binding[4] + 1)}) is None
         client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
         client.close()
         deadline = time.monotonic() + 2

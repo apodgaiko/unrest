@@ -301,14 +301,18 @@ class Supervisor:
                         continue
                     if current_pair == pair:
                         return {"pair": pair}
+            retained = sockets.retained_tcp_descriptor(request['pid'], request['fd'])
+            if retained is not None and retained['socket_uid'] != self.root['uid']:
+                raise RuntimeError('retained_socket_UID_drift')
+            binding = sockets.live_binding(retained, self.connections)
+            if binding is not None:
+                return {'retained_live_socket': retained, 'previous_authenticated_binding': binding}
+            binding = sockets.closed_binding(retained, self.connections)
+            if binding is not None:
+                return {'retained_closed_socket': retained,
+                        'previous_authenticated_binding': binding,
+                        'closed_descriptor_has_no_peer': True}
             own = next((s for s in self.observe(request["pid"]) if s["fd"] == request["fd"]), None)
-            if own is None:
-                retained = sockets.retained_tcp_descriptor(request['pid'], request['fd'])
-                binding = sockets.closed_binding(retained, self.connections)
-                if binding is not None:
-                    return {'retained_closed_socket': retained,
-                            'previous_authenticated_binding': binding,
-                            'closed_descriptor_has_no_peer': True}
             if not own or own["local_host"] != "127.0.0.1" or own["remote_host"] != "127.0.0.1":
                 raise RuntimeError("unregistered_payload_socket:" + json.dumps(own, sort_keys=True))
             key = (

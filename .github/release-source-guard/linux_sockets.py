@@ -159,11 +159,21 @@ def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
 
 def retained_tcp_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
     """Query a retained file description even after TCP leaves the diag table."""
-    before = socket_fds(pid).get(descriptor)
-    if before is None:
+    path = Path('/proc') / str(pid) / 'fd' / str(descriptor)
+    try:
+        target = os.readlink(path)
+    except FileNotFoundError:
         return None
+    if not target.startswith('socket:[') or not target.endswith(']'):
+        return None
+    before = int(target[8:-1])
     copied = duplicate_descriptor(pid, descriptor)
-    with socket.socket(fileno=copied) as stream:
+    try:
+        stream = socket.socket(fileno=copied)
+    except OSError:
+        os.close(copied)
+        raise RuntimeError('retained descriptor ceased to be a socket') from None
+    with stream:
         if (stream.getsockopt(socket.SOL_SOCKET, socket.SO_DOMAIN) != socket.AF_INET
                 or stream.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM
                 or stream.getsockopt(socket.SOL_SOCKET, socket.SO_PROTOCOL) != socket.IPPROTO_TCP):
@@ -179,11 +189,11 @@ def retained_tcp_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
             if error.errno != errno.ENOTCONN:
                 raise
             remote = None
-        if (info.st_ino != before or socket_fds(pid).get(descriptor) != before
+        if (info.st_ino != before or os.readlink(path) != target
                 or cookie == (1 << 64) - 1):
             raise RuntimeError('retained descriptor changed during kernel query')
         return {'pid': pid, 'fd': descriptor, 'inode': info.st_ino, 'socket_cookie': cookie,
-                'state': state, 'local_address': local, 'peer_address': remote,
+                'state': state, 'socket_uid': info.st_uid, 'local_address': local, 'peer_address': remote,
                 'observation': 'pidfd_getfd held file description; actual TCP_INFO and SO_COOKIE'}
 
 
@@ -193,3 +203,13 @@ def closed_binding(observed: dict[str, Any] | None, connections: set[tuple]) -> 
     key = (observed['pid'], observed['socket_cookie'], observed['inode'])
     matches = [row for row in connections if row[:3] == key]
     return matches[0] if len(matches) == 1 else None
+
+
+def live_binding(observed: dict[str, Any] | None, connections: set[tuple]) -> tuple | None:
+    if observed is None or observed['state'] not in (1, 8) or observed['peer_address'] is None:
+        return None
+    if observed['local_address'][0] != '127.0.0.1' or observed['peer_address'][0] != '127.0.0.1':
+        return None
+    key = (observed['pid'], observed['socket_cookie'], observed['inode'],
+           observed['local_address'][1], observed['peer_address'][1])
+    return key if key in connections else None

@@ -62,6 +62,7 @@ def main():
             guard.append({'kind': 'test_outcome', 'nodeid': report.nodeid,
                           'phase': report.when, 'outcome': report.outcome})
     result = 1
+    custodian_status = None
     try:
         result = int(pytest.main(['-q', '-p', 'no:cacheprovider', '--basetemp=' + manifest['owned_root'] + '/pytest',
                                  '--junitxml=/work/source.xml', case], plugins=[Plugin()]))
@@ -73,11 +74,14 @@ def main():
                 actual_status = custodian.wait(timeout=25)
                 guard.append({'kind': 'root_actual_custodian_wait', 'pid': custodian.pid,
                               'numeric_returncode': actual_status, 'source_assertions_completed': result == 0})
-                assert actual_status == 0
+                custodian_status = actual_status
 
     summary = guard.observe_summary(path)
+    summary['original_pytest_exit_code'] = result
+    summary['actual_custodian_status'] = custodian_status
     Path('/work/summary.json').write_text(json.dumps(summary, sort_keys=True, indent=2))
-    if not summary['ready'] or endpoint.STATE['poison']:
+    if (not summary['ready'] or endpoint.STATE['poison']
+            or custodian_status not in (None, 0)):
         return 2
     return result
 

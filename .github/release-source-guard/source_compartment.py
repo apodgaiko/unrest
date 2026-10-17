@@ -176,7 +176,8 @@ def main():
     try:
         result = trace.run()
         tick(trace)
-    except Exception:
+    except Exception as error:
+        supervisor.poison('controller_failure:' + type(error).__name__)
         result = {'root_parent_wait_raw': trace.root_parent_wait, 'poison': trace.poison,
                   'records': trace.records, 'failure': traceback.format_exc()}
     finally:
