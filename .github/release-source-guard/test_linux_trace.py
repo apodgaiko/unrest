@@ -88,7 +88,7 @@ def test_native_failed_and_caught_exec_preserve_actual_parent_waits(program, sta
 
 
 def test_seized_vfork_births_precede_native_effects_and_parent_waits():
-    body = "import subprocess\nfor _ in range(8): subprocess.run(['/usr/bin/true'], check=True)"
+    body = "import subprocess\nfor _ in range(8): subprocess.run(['/usr/bin/true'], check=True, env={})"
     argv = [sys.executable, "-I", "-S", "-c", body]
     allowed = [
         {"path": sys.executable, "argv": argv, "environment": {}, "cwd": os.getcwd(),
@@ -111,7 +111,8 @@ def test_seized_vfork_births_precede_native_effects_and_parent_waits():
         os.close(write)
 
     result = trace.OwnedTrace(child, allowed, timeout=30, seize=True, on_attached=attached).run()
-    assert result['root_parent_wait_raw'] == 0 and not result['poison']
+    Path('/work/trace-control-vfork.json').write_text(json.dumps(result, sort_keys=True))
+    assert result['root_parent_wait_raw'] == 0 and not result['poison'], result
     records = result['records']
     births = [row['child'] for row in records if row['kind'] == 'kernel_child']
     waits = [row for row in records if row['kind'] == 'original_parent_wait4']
