@@ -860,6 +860,8 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
     profile_sources.update(("<string>", "<source-registered-inline>"))
 
     def selected_port(frame, event, value):
+        if state.get('primary_snapshot_observer') is not None:
+            state['primary_snapshot_observer'](frame, event, value)
         if (
             event == "call"
             and state["token"] == "root"

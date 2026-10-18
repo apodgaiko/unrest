@@ -896,3 +896,11 @@ A dependency-site mismatch may emit one closed current comparison of the exact
 PRIMARY site and immutable dependency mirror. It includes counts and hashes,
 never module contents. The comparison supplies no admission authority and the
 original mismatch still refuses.
+
+The composed comparison can also retain bounded timing for its original
+`inspect_run` and `inspect_project` returns. It records only the checkpoint
+sequence, elapsed value, phase and hashed identities/snapshots. The existing
+native profile gate still selects and forwards the original events; no global
+Python profiling wrapper, RPC replacement, metadata normalization or deadline
+change is introduced. A current field difference does not classify an older
+failure without its own causal evidence.

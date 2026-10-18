@@ -11,6 +11,12 @@ from test_producer_startup import restore_producer_profile, restore_primary_cach
 ROOT = Path(__file__).parent
 
 class StripTelemetry(ast.NodeTransformer):
+    def visit_If(self, node):
+        if ast.unparse(node.test) == "state.get('primary_snapshot_observer') is not None":
+            assert ast.unparse(node) == "if state.get('primary_snapshot_observer') is not None:\n    state['primary_snapshot_observer'](frame, event, value)"
+            return None
+        return self.generic_visit(node)
+
     def visit_ClassDef(self, node):
         if node.name == 'DiagnosticTrace':
             return None

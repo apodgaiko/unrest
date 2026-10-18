@@ -78,6 +78,51 @@ class Observer:
         self.deselected = 0
         self.custodian = None
         self.collection_timer = None
+        self.snapshot_rpc_started = {}
+        self.snapshot_rpc_counts = {}
+        guard._STATE['primary_snapshot_observer'] = self.observe_snapshot_rpc
+
+    def observe_snapshot_rpc(self, frame, event, value):
+        if (self.guard._STATE.get('case') != 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
+                or frame.f_code.co_filename != '/source/tests/test_server.py'
+                or frame.f_code.co_name != '_call_process_mcp'
+                or event not in {'call', 'return'}):
+            return
+        method = frame.f_locals.get('name')
+        if method not in {'inspect_run', 'inspect_project'} or self.snapshot_rpc_counts.get(method, 0) >= 2:
+            return
+        original = frame.f_globals.get('_call_process_mcp')
+        module = sys.modules.get(frame.f_globals.get('__name__'))
+        if (module is None or vars(module) is not frame.f_globals
+                or getattr(original, '__code__', None) is not frame.f_code
+                or getattr(original, '__globals__', None) is not frame.f_globals):
+            return
+        if event == 'call':
+            if len(self.snapshot_rpc_started) < 4:
+                self.snapshot_rpc_started[id(frame)] = time.monotonic_ns()
+            return
+        started = self.snapshot_rpc_started.pop(id(frame), None)
+        if started is None or type(value) is not dict:
+            return
+        attempts = value.get('active_attempts')
+        if type(attempts) is not list or len(attempts) != 1 or type(attempts[0]) is not dict:
+            return
+        snapshot = attempts[0]
+        if (snapshot.get('role') != 'worker' or snapshot.get('checkpoint_sequence') != 1
+                or snapshot.get('phase') not in {'active', 'waiting_at_checkpoint'}
+                or type(snapshot.get('elapsed_nanoseconds')) is not int
+                or snapshot['elapsed_nanoseconds'] < 0):
+            return
+        if self.guard.digest('/source/tests/test_server.py') != self.manifest['product_pins']['tests/test_server.py']:
+            self.guard.refuse('primary_snapshot_source_drift')
+        identity = {k: snapshot.get(k) for k in ('project_id', 'mission_id', 'node_id', 'attempt_id', 'role')}
+        self.snapshot_rpc_counts[method] = self.snapshot_rpc_counts.get(method, 0) + 1
+        self.guard.append({'kind': 'primary_composed_snapshot_rpc', 'method': method,
+                           'start_monotonic_ns': started, 'return_monotonic_ns': time.monotonic_ns(),
+                           'elapsed_nanoseconds': snapshot['elapsed_nanoseconds'],
+                           'checkpoint_sequence': 1, 'phase': snapshot['phase'],
+                           'snapshot_sha256': hashlib.sha256(canonical(snapshot)).hexdigest(),
+                           'identity_sha256': hashlib.sha256(canonical(identity)).hexdigest()})
 
     def pytest_configure(self, config):
         expected = ['-q']

@@ -740,3 +740,44 @@ def test_source_return_diagnostic_controls_are_wired_before_source():
     for name in ('test_linux_supervisor.py', 'test_cache_snapshot_diagnostics.py',
                  'test_startup_phases.py', 'test_producer_startup.py'):
         assert arguments.count('/guard/' + name) == 1
+
+
+@pytest.mark.parametrize('method', ['inspect_run', 'inspect_project'])
+def test_rpc_snapshot_diagnostic_keeps_original_fields_and_callback_chain(monkeypatch, method):
+    import sys
+    import types
+    entry = module('primary_source_entry')
+    rows = []
+    case = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
+    guard = SimpleNamespace(_STATE={'case': case}, append=rows.append, digest=lambda path: 'pin')
+    observer = entry.Observer(guard, None, {'product_pins': {'tests/test_server.py': 'pin'}}, {})
+    original_module = types.ModuleType('owned_snapshot_source')
+    monkeypatch.setitem(sys.modules, original_module.__name__, original_module)
+    exec(compile('def _call_process_mcp(url, name, arguments):\n    return None\n',
+                 '/source/tests/test_server.py', 'exec'), vars(original_module))
+    original = original_module._call_process_mcp
+    frame = SimpleNamespace(f_code=original.__code__, f_globals=vars(original_module),
+                            f_locals={'name': method})
+    value = {'active_attempts': [snapshot()]}
+    before = copy.deepcopy(value)
+    for _ in range(4):
+        observer.observe_snapshot_rpc(frame, 'call', None)
+        observer.observe_snapshot_rpc(frame, 'return', value)
+    assert value == before and original_module._call_process_mcp is original
+    assert len(rows) == 2 and observer.snapshot_rpc_started == {}
+    assert all(row['method'] == method and row['elapsed_nanoseconds'] == 0
+               and row['return_monotonic_ns'] >= row['start_monotonic_ns'] for row in rows)
+    assert 'private' not in json.dumps(rows)
+    assert guard._STATE['primary_snapshot_observer'] == observer.observe_snapshot_rpc
+
+
+def test_rpc_diagnostic_filter_does_not_widen_native_profile_gate():
+    import test_startup_phases as baseline
+    tree = ast.parse((ROOT / 'finite/runtime_guard.py').read_bytes())
+    tree = baseline.StripTelemetry().visit(tree)
+    assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() == baseline.BASELINE_AST_SHA256['finite/runtime_guard.py']
+    source = (ROOT / 'finite/runtime_guard.py').read_text()
+    before = "state['primary_snapshot_observer'](frame, event, value)"
+    assert before in source
+    with pytest.raises(AssertionError):
+        baseline.StripTelemetry().visit(ast.parse(source.replace(before, 'return None')))
