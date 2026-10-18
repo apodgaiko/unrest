@@ -3,7 +3,7 @@ import ast
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PosixPath
 import stat
 import types
 
@@ -106,7 +106,7 @@ def load(name, original=False):
     assert hashlib.sha256(REFERENCE[name].encode()).hexdigest() == REFERENCE_SHA256[name]
     names = {'identity', 'tree', 'root_identity', 'tree_identity'}
     nodes = [n for n in ast.parse(body).body if isinstance(n, ast.FunctionDef) and n.name in names]
-    namespace = {'Path': Path, 'os': os, 'stat': stat, 'hashlib': hashlib}
+    namespace = {'Path': Path, 'PosixPath': PosixPath, 'os': os, 'stat': stat, 'hashlib': hashlib}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(ROOT / 'finite' / name), 'exec'), namespace)
     return namespace
 
@@ -307,3 +307,52 @@ def test_shared_startup_runs_both_checks_again_after_first_call(tmp_path):
     with pytest.raises(RuntimeError, match='source_shared_startup_membership_drift'):
         namespace['shared'](self)
     assert calls == ['ready', 'inputs', 'ready', 'inputs', 'ready']
+
+
+def test_path_subclasses_keep_original_lexical_conversion(tmp_path):
+    class AlteredPath(PosixPath):
+        def __str__(self):
+            raise AssertionError('subclass string conversion must not supply pathname')
+    root = fixture(tmp_path / 'tree')
+    for name in REFERENCE:
+        a, b = load(name, True), load(name)
+        path = AlteredPath(root / 'a/payload')
+        assert b['identity'](path) == a['identity'](path)
+
+
+def test_real_post_read_mutation_refuses_in_both_implementations(tmp_path, monkeypatch):
+    for index, name in enumerate(REFERENCE):
+        root = fixture(tmp_path / str(index))
+        path = root / 'a/payload'
+        digest = hashlib.file_digest
+        def read_and_change(stream, algorithm):
+            value = digest(stream, algorithm)
+            path.write_bytes(b'modified')
+            return value
+        a, b = load(name, True), load(name)
+        with monkeypatch.context() as patch:
+            patch.setattr(hashlib, 'file_digest', read_and_change)
+            expected = outcome(a['identity'], path)
+            path.write_bytes(b'original')
+            observed = outcome(b['identity'], path)
+        assert expected == observed
+        assert observed[0] == 'refusal'
+
+
+def test_actual_directory_replacement_during_capture_refuses(tmp_path):
+    for index, original in enumerate([True, False]):
+        namespace = load('source_operations.py', original)
+        root = fixture(tmp_path / str(index))
+        capture = namespace['root_identity']
+        count = 0
+        def replacing(path):
+            nonlocal count
+            if Path(path) == root:
+                count += 1
+                if count == 2:
+                    root.rename(tmp_path / ('old-' + str(index)))
+                    fixture(root)
+            return capture(path)
+        namespace['root_identity'] = replacing
+        observed = outcome(namespace['tree_identity'], root)
+        assert observed == ('refusal', 'RuntimeError', 'operation root replaced during capture')

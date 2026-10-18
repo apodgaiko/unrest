@@ -7,7 +7,7 @@ import hashlib
 import inspect
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PosixPath
 import shutil
 import stat
 import sys
@@ -60,8 +60,7 @@ def hashed(value):
 
 
 def identity(path):
-    path = Path(path)
-    pathname = str(path)
+    pathname = str(path) if type(path) is PosixPath else str(Path(path))
     before = os.stat(pathname, follow_symlinks=False)
     if not stat.S_ISREG(before.st_mode):
         raise RuntimeError("operation input is not a regular file")
@@ -79,7 +78,8 @@ def identity(path):
     def key(s):
         return (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns, s.st_mode)
 
-    if key(before) != key(after) or key(after) != key(os.stat(pathname, follow_symlinks=False)):
+    before_key, after_key = key(before), key(after)
+    if before_key != after_key or after_key != key(os.stat(pathname, follow_symlinks=False)):
         raise RuntimeError("operation input changed during capture")
     return {
         "path": pathname,

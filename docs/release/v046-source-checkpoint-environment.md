@@ -708,3 +708,10 @@ and closed phase. Repeated launches still execute every admission, identity,
 READY, IPC and original-parent wait check. Only diagnostic emission is bounded;
 its values never supply authority. A transport-bound failure remains a failure
 and supplies no SOURCE acceptance proof.
+
+Within one fresh capture, a concrete POSIX Path already has the original lexical
+pathname; other inputs still pass through Path construction. Immutable stat
+results contribute one local tuple each to the same short-circuit comparisons.
+The shared tree's type check still makes its own fresh no-follow stat. These
+changes remove object/conversion work without removing any filesystem observation
+or sharing an identity across captures.

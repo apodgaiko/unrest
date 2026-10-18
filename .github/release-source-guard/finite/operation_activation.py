@@ -12,7 +12,7 @@ import importlib.util
 import json
 import marshal
 import os
-from pathlib import Path
+from pathlib import Path, PosixPath
 import stat
 import sys
 import types
@@ -24,8 +24,7 @@ def hashed(value):
 
 
 def identity(path):
-    path = Path(path)
-    pathname = str(path)
+    pathname = str(path) if type(path) is PosixPath else str(Path(path))
     before = os.stat(pathname, follow_symlinks=False)
     if not stat.S_ISREG(before.st_mode):
         raise RuntimeError('activation_nonregular_input')
@@ -40,16 +39,17 @@ def identity(path):
     def key(info):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_size,
                 info.st_mtime_ns, info.st_ctime_ns)
-    if key(before) != key(opened) or key(after) != key(before) or key(after) != key(os.stat(pathname, follow_symlinks=False)):
+    before_key, after_key = key(before), key(after)
+    if before_key != key(opened) or after_key != before_key or after_key != key(os.stat(pathname, follow_symlinks=False)):
         raise RuntimeError('activation_input_read_race')
-    return {'path': pathname, 'identity': list(key(after)), 'sha256': digest}
+    return {'path': pathname, 'identity': list(after_key), 'sha256': digest}
 
 
 def tree(root):
     root = Path(root)
     result = []
     for path in [root, *sorted(root.rglob('*'), key=lambda path: path.parts)]:
-        info = path.lstat()
+        info = os.stat(str(path), follow_symlinks=False)
         if stat.S_ISDIR(info.st_mode):
             result.append({'path': str(path), 'directory': [info.st_dev, info.st_ino, info.st_mode]})
         else:
