@@ -9,7 +9,7 @@ from pathlib import Path
 import stat
 
 from checkpoint_packages import WHEEL, SDIST, LIMIT
-from primary_custody import CHECKSUM, ORDER
+from primary_custody import CHECKSUM, ORDER, file_identity
 
 
 def export(duty, root=Path('/source/dist')):
@@ -30,7 +30,8 @@ def export(duty, root=Path('/source/dist')):
                 raise RuntimeError('primary_package_output_identity')
             with os.fdopen(descriptor, 'rb', closefd=False) as stream:
                 body = stream.read(LIMIT + 1)
-            if len(body) != info.st_size or os.fstat(descriptor) != info or path.lstat() != info:
+            if (len(body) != info.st_size or file_identity(os.fstat(descriptor))
+                    != file_identity(info) or file_identity(path.lstat()) != file_identity(info)):
                 raise RuntimeError('primary_package_output_race')
         finally:
             os.close(descriptor)

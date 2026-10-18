@@ -394,10 +394,63 @@ source execution cannot silently rerun at the same SHA.
 
 The release-ref trigger is wired, but current readiness scratch refs cannot
 activate primary full execution. Focused capsule execution and receipt controls
-are implementation evidence. Full source/package capsule integration and an
-original complete certificate remain incomplete: non-focused duties refuse
-closed, and no original full certificate or actual same-SHA reuse is claimed.
+are implementation evidence. Full source/package capsule integration remains
+incomplete: non-focused duties refuse closed, and no original full certificate
+or actual same-SHA reuse is claimed.
 Source checkpoint readiness remains false and selected carrier remains null.
 The existing downstream source carrier/package/final closure, single frozen
 Python3.13 source checkpoint, certification, independent checks, desktop/exact-head
 CI, publication and protected local update remain required.
+
+## Current-run phase custody and original certificate export
+
+Successful primary capsule captures enter a host-only custody journal. Its
+per-run MAC key is never mounted into a capsule or included in evidence. Each
+phase binds the frozen definition, actual workflow script hash, run/attempt,
+committed input-byte map and directly captured structured records. Admission
+rechecks actual kernel parent waits, including reaping waitid observations;
+cached handle status, a wrong parent, caught refusals, unknown births, native
+pre-init refusal or poison cannot produce a successful phase record.
+
+The package-output interface permits only the versioned wheel and sdist from
+the original build. Archive checking and installed lifecycle must consume those
+same bytes. The final checksum phase can add only the exact `SHA256SUMS` bytes.
+Phase links, output digests and the current-run MAC are checked before an input
+directory can cross a compartment boundary. No environment, cache, interpreter,
+or arbitrary file is a package output. The observer-side exporter checks regular
+files, source UID, link count, bounds and stable file identity. Atime is excluded
+from mutation detection because reading the output may update it.
+
+`checkpoint_issuer.py` reduces the authenticated phase journal into the original
+receipt schema. It requires every original duty, a complete unexcluded
+collection/JUnit correspondence and unchanged items, root READY, zero poison,
+actual waits, the same package bytes across all phases, complete archive-member
+byte digests, the original extracted fifteen-case result and original installed
+restart/persistence effects from an unrelated cwd. Package return observations
+must link to the observer's original native-startup identity and pinned source
+function; supplying a result boolean or readiness metadata is insufficient.
+
+`checkpoint_finalize.py` performs that reduction before creating its output
+directory, encrypts only the current structured phase records and public input
+hash map, and exports the original receipt and exact current package bytes.
+It never exports the custody key. The existing decision control plane obtains
+the current primary job identity through its existing Actions read credential;
+the finalizer requires no API credential. The finalizer follows the checksum
+duty and precedes artifact upload. Same-head reuse preserves its separate marker
+and original ciphertext instead of minting another original certificate. The
+existing authenticated GitHub run/job/artifact consumer remains the external
+eligibility boundary.
+
+The reducer/exporter and negative controls have controlled synthetic proofs;
+these are not an original source checkpoint or release certificate. The current
+full source and package producers still lack the primary execution/activation
+integration needed to supply these records. The new custody and issuer
+interfaces do not resolve that missing implementation. Full activation stays
+closed, `source_checkpoint_ready=false`, and `selected_carrier=null`.
+
+The original lint and mypy duties passed through actual isolated primary
+execution in [run 39086693592](https://github.com/apodgaiko/unrest/actions/runs/39086693592)
+at `b7779dec07635061d93a588919e32ccf0b6fd230`. Direct encrypted kernel records
+show five genuine parent waits per duty, root zero, no missing waits or poison,
+and no native pre-init refusal. This result retains that head's support/input
+identity; later issuer/export changes are separate implementation changes.

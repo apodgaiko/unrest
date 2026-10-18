@@ -180,7 +180,7 @@ def main():
         run(['docker', 'rm', '--force', container], log)
     phase_sha256 = None
     if status == 0:
-        phase = custody.record(spec['duty'], spec['script_sha256'], records)
+        phase = custody.record(spec['duty'], spec['script_sha256'], records, input_pins=source_pins)
         from structured_evidence import canonical
         phase_sha256 = hashlib.sha256(canonical(phase)).hexdigest()
     metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,

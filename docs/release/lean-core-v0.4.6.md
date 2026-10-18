@@ -134,3 +134,8 @@ same-SHA reuse against original full certificates and exact package bytes.
 Focused readiness remains false; full source/package integration and the first
 complete certificate remain pending. See
 [v0.4.6 source checkpoint environment](v046-source-checkpoint-environment.md).
+
+Primary phase custody and the original-certificate reducer/exporter now have
+focused implementation checks. The original lint and mypy duties also have
+isolated hosted execution evidence. Full source/package execution remains
+incomplete; no original full certificate or release certification is claimed.

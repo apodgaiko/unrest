@@ -92,6 +92,8 @@ jobs:
             unrest_harness-0.4.6.tar.gz > SHA256SUMS
           sha256sum --check --strict SHA256SUMS
         shell: python3 .github/release-source-guard/ci_shell.py {0}
+      - name: Issue original full checkpoint
+        run: python3 .github/release-source-guard/checkpoint_finalize.py
       - name: Upload v0.4.6 archives and checksums
         uses: actions/upload-artifact@v4.6.2
         with:

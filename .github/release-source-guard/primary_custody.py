@@ -33,6 +33,13 @@ def sha(body):
     return hashlib.sha256(body).hexdigest()
 
 
+def file_identity(info):
+    # Reading can update atime; it is not evidence of an output-byte mutation.
+    return tuple(getattr(info, name) for name in (
+        'st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_gid', 'st_nlink',
+        'st_size', 'st_mtime_ns', 'st_ctime_ns'))
+
+
 @dataclass(frozen=True)
 class Binding:
     definition: dict
@@ -60,7 +67,7 @@ def read_regular(path, limit, mode=None):
         with os.fdopen(descriptor, 'rb', closefd=False) as stream:
             body = stream.read(limit + 1)
         after = os.fstat(descriptor)
-        require(before == after and before == Path(path).lstat()
+        require(file_identity(before) == file_identity(after) == file_identity(Path(path).lstat())
                 and len(body) == before.st_size, 'custody_file_changed')
         return body
     finally:
@@ -80,7 +87,7 @@ def exclusive(path, body, mode=0o600):
 
 def kernel_success(records, script_sha256):
     kernel = loads(records['kernel-source.json'])
-    require(kernel.get('root_parent_wait_raw') == 0
+    require(type(kernel.get('root_parent_wait_raw')) is int and kernel['root_parent_wait_raw'] == 0
             and kernel.get('poison') == [] and kernel.get('primary_denials') == []
             and kernel.get('failure_code') is None
             and kernel.get('native_preinit_refusal') is False
@@ -156,7 +163,7 @@ class Custody:
         require(value['binding'] == self.binding and value['duty'] == duty, 'custody_phase_identity')
         return value
 
-    def record(self, duty, script_sha256, records):
+    def record(self, duty, script_sha256, records, *, input_pins=None):
         """Called only with direct records from the current owned capture."""
         from ci_commands import REGISTRY
         from structured_evidence import SOURCE as RECORDS
@@ -177,6 +184,7 @@ class Custody:
         else:
             require('package-output.json' not in records, 'custody_foreign_phase_output')
         value = {'binding': self.binding, 'duty': duty, 'script_sha256': script_sha256,
+                 'input_pins': dict(input_pins or {}),
                  'previous_sha256': sha(canonical(prior)) if prior else None,
                  'records': {name: base64.b64encode(body).decode() for name, body in sorted(records.items())},
                  'outputs': {name: sha(body) for name, body in sorted(outputs.items())}}

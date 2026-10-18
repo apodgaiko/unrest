@@ -61,6 +61,16 @@ def main():
     current = int(os.environ['GITHUB_RUN_ID'])
     attempt = int(os.environ['GITHUB_RUN_ATTEMPT'])
     result = decide(reader, expected_identity(), current)
+    jobs = reader.api(f'actions/runs/{current}/attempts/{attempt}/jobs?per_page=100')
+    require(jobs['total_count'] <= 100, 'current_primary_job_inventory')
+    from checkpoint_receipt import PRIMARY
+    primary = [job for job in jobs['jobs'] if job['name'] == PRIMARY and job['run_id'] == current]
+    require(len(primary) == 1, 'current_primary_job_identity')
+    job_path = Path(os.environ['RUNNER_TEMP']) / 'primary-job.json'
+    with job_path.open('x') as stream:
+        json.dump({'id': primary[0]['id'], 'name': PRIMARY, 'run_id': current,
+                   'run_attempt': attempt, 'expected': result['expected']}, stream, sort_keys=True)
+    job_path.chmod(0o600)
     name = f'unrest-v046-primary-{current}-{attempt}'
     if result['receipt'] is not None:
         receipt = result['receipt']
