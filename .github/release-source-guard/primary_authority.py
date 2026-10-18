@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
 
 from primary_policy import PYTHON, UV, backend_request, command_environment, console

@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 
 from checkpoint_lookup import ActionsReader, lookup
 from checkpoint_receipt import COMMAND, ReceiptRefused

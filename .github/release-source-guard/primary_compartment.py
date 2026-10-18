@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import resource
 import shutil
-import sys
 
 from linux_compartment import source_credentials, observer_credentials
 from linux_observation import process_identity

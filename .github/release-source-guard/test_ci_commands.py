@@ -66,3 +66,24 @@ def test_actual_original_duties_cannot_be_made_conditional(control, condition):
     with pytest.raises(RuntimeError):
         commands.bind(registry['v0.4.6 source suite'].encode(), actual)
 
+
+
+def test_generated_scalar_and_literal_wire_bytes_are_distinct_and_not_rewritten():
+    registry = json.loads(commands.REGISTRY.read_bytes())
+    actual = workflow(registry)
+    scalar = registry['Import package'].removesuffix('\n').encode()
+    literal = registry['Supported CLI surfaces'].encode()
+    assert commands.bind_generated(scalar, actual)['script'] is scalar
+    assert commands.bind_generated(literal, actual)['script'] is literal
+    for drift in (scalar + b'\n', b'true\n' + scalar, literal.rstrip(b'\n')):
+        with pytest.raises(RuntimeError):
+            commands.bind_generated(drift, actual)
+
+
+@pytest.mark.parametrize('field', ['continue-on-error: true', 'working-directory: /foreign'])
+def test_duty_cannot_change_failure_or_working_directory_semantics(field):
+    registry = json.loads(commands.REGISTRY.read_bytes())
+    actual = workflow(registry).replace('      - name: Type-check (mypy)\n',
+        '      - name: Type-check (mypy)\n        ' + field + '\n')
+    with pytest.raises(RuntimeError):
+        commands.bind_generated(registry['Type-check (mypy)'].removesuffix('\n').encode(), actual)
