@@ -110,3 +110,14 @@ def test_unrelated_comparisons_are_not_observed(change):
         left[0]['foreign'] = 'private'
     assert observer.pytest_assertrepr_compare(None, op, left, right) is None
     assert rows == []
+
+
+def test_exact_current_cache_snapshot_refs_are_finite():
+    tree = ast.parse((ROOT / 'ci_shell.py').read_text())
+    sets = [node for node in ast.walk(tree) if isinstance(node, ast.SetComp)
+            and 'cache-snapshot-' in ast.unparse(node)]
+    assert len(sets) == 1
+    values = eval(compile(ast.Expression(sets[0]), '<closed ref set>', 'eval'), {})
+    prefix = 'refs/heads/codex/source-guard-structured-20261018-cache-snapshot-'
+    assert values == {prefix + f'{n:02}' for n in range(1, 7)}
+    assert prefix + '07' not in values and prefix + '02-extra' not in values
