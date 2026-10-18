@@ -10,6 +10,8 @@ from producer_setup import write
 class DependencySourceAuthority(SourceAuthority):
     def start(self, pid, output_fd, *, trace=None, primary=None):
         super().start(pid, output_fd, trace=trace, primary=primary)
+        from primary_ready_snapshot import install
+        install(self.supervisor, self.producers)
         import primary_dependency
         descriptor = self.primary_dependency_declaration
         body, receipt = primary_dependency.read(descriptor['path'], 20001)

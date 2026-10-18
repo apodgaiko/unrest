@@ -1038,3 +1038,11 @@ only that exact pinned wrapper, with its endpoint globals and guard closure,
 and checks the original installer function against the pinned guard code and
 globals. The actual constructor caller must be that original function and carry
 the same local state; its nested launch constructor remains bound by identity.
+
+An observer-pinned producer can publish READY between a receipt tick’s initial
+event census and request handling. If only that producer’s initial READY is
+absent, its `ready` request reacquires the current original journal once. Nonce,
+PID/token, current birth and every manifest/guard/registry/runtime pin remain
+mandatory. A present mismatching record, missing current record, ordinary
+registration or different request kind still refuses. No retry loop or receipt
+deadline extension is introduced.
