@@ -383,6 +383,8 @@ class Supervisor:
         self.tick_count = 0
         self.event_count = 0
         self.trace_progress = {}
+        self.next_service = 0
+        self.service_count = 0
 
     def pending_progress(self):
         # Wake pending transactions on their actual dependencies, not on each
@@ -392,7 +394,7 @@ class Supervisor:
                 tuple(sorted((key, job['phase']) for key, job in jobs.items())))
 
     def channel_snapshot(self, state, outcome):
-        request = state['request'] or {}
+        request = state['request'] if type(state['request']) is dict else {}
         kind = request.get('kind')
         known = {'ready', 'poison', 'plan', 'listen', 'connect', 'connected',
                  'socketpair', 'payload', 'custody_owner', 'custody_peer',
@@ -418,10 +420,20 @@ class Supervisor:
                 'tick_count': self.tick_count, 'accepted_tick': state['accepted_tick'],
                 'event_count': self.event_count, 'trace_progress': dict(self.trace_progress),
                 'policy_attempts': state.get('policy_attempts', 0),
-                'policy_seconds': state.get('policy_seconds', 0)}
+                'policy_seconds': state.get('policy_seconds', 0),
+                'service_count': self.service_count}
 
     def tick(self):
         self.tick_count += 1
+        now = time.monotonic()
+        # A ptrace poll is not a receipt/event work item. Bound repeated scans
+        # so runnable source peers get CPU between nonblocking service rounds.
+        # Expired clients bypass the cadence; their original clocks never reset.
+        expired = any(now - state['started'] > 4 for state in self.clients.values())
+        if now < self.next_service and not expired:
+            return
+        self.next_service = now + .005
+        self.service_count += 1
         events = self.refresh()
         self.event_count = len(events)
         while len(self.clients) < 128:
@@ -544,7 +556,8 @@ class Supervisor:
                 del self.clients[stream]
 
     def close(self):
-        for stream in self.clients:
+        for stream, state in self.clients.items():
+            self.channel_diagnostics.append(self.channel_snapshot(state, "closed"))
             stream.close()
         self.clients.clear()
         self.channel.close()

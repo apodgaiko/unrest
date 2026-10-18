@@ -21,6 +21,7 @@ def test_closed_diagnostic_does_not_copy_request_material():
     supervisor.registered = {}
     supervisor.tick_count, supervisor.event_count = 3, 7
     supervisor.trace_progress = {'records': 11, 'active': 2, 'pending': 1}
+    supervisor.service_count = 2
     state = {'request': {'kind': ['secret'], 'nonce': 'private', 'body': 'private'},
              'buffer': bytearray(struct.pack('!I', 19)), 'authenticated': False,
              'output': None, 'started': host.time.monotonic(), 'accepted_tick': 1,
@@ -43,6 +44,11 @@ def transport(tmp_path, monkeypatch):
                            'socket': str(tmp_path / 'receipt.sock')}}
     supervisor = host.Supervisor(config, type('Child', (), {'pid': os.getpid()})())
     monkeypatch.setattr(supervisor, 'refresh', lambda: [])
+    clock = [host.time.monotonic()]
+    def monotonic():
+        clock[0] += .006
+        return clock[0]
+    monkeypatch.setattr(host.time, 'monotonic', monotonic)
     effects = []
     def handle(request, events):
         if request['kind'] == 'custody_spawned':
@@ -77,6 +83,13 @@ def test_pending_client_does_not_starve_another_authenticated_request(transport)
     assert second.recv(16388) and not supervisor.poisoned
     state = next(iter(supervisor.clients.values()))
     assert state['pending_reason'] == 'finite_custody_pending'
+    attempts = state['policy_attempts']
+    for _ in range(10):
+        supervisor.tick()
+    assert state['policy_attempts'] == attempts
+    supervisor.trace_progress = {'records': 1}
+    supervisor.tick()
+    assert state['policy_attempts'] == attempts + 1
     state['started'] -= 5
     supervisor.tick()
     assert supervisor.poisoned and not supervisor.clients
@@ -133,3 +146,18 @@ def test_incomplete_frame_disconnect_retains_poison_without_effect(transport):
     supervisor.tick()
     assert supervisor.poisoned and not effects and not supervisor.clients
     assert supervisor.channel_diagnostics[-1]['pending_reason'] == 'frame'
+
+
+def test_pending_transaction_wakes_on_custody_phase_without_trace_change(transport):
+    supervisor, effects, connect = transport
+    client, frame = connect('custody_spawned')
+    client.sendall(frame)
+    supervisor.custody = {'jobs': {'private': {'phase': 'queued'}}}
+    supervisor.tick()
+    state = next(iter(supervisor.clients.values()))
+    assert state['policy_attempts'] == 1
+    supervisor.tick()
+    assert state['policy_attempts'] == 1
+    supervisor.custody['jobs']['private']['phase'] = 'executing'
+    supervisor.tick()
+    assert state['policy_attempts'] == 2 and not effects
