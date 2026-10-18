@@ -46,6 +46,20 @@ class Authority:
             self.records.append({'kind': 'primary_original_uv', 'pid': pid,
                                  'command_index': self.next_command - 1, 'identity': identity(pid)})
             return True
+        if (owner and owner['role'] == 'original_console' and owner.get('repository')
+                and vector == ['git', '-C', '/source', 'rev-parse', '--show-toplevel']
+                and path in [directory + '/git' for directory in environment['PATH'].split(':')]
+                and identity(parent) == owner['identity']):
+            if not Path(path).exists():
+                return True
+            if path != '/usr/bin/git' or digest(path) != digest('/usr/lib/git-core/git'):
+                return self.refuse('unknown_descendant')
+            if owner.get('git_dispatched'):
+                return self.refuse('unknown_descendant')
+            owner['git_dispatched'] = True
+            self.contexts[pid] = {'role': 'git', 'identity': identity(pid)}
+            self.records.append({'kind': 'primary_repository_git', 'pid': pid, 'identity': identity(pid)})
+            return True
         context = previous if previous and previous['role'] == 'uv' else owner
         command = context['command'] if context else []
         if (context and command == ['uv', 'run', 'ruff', 'check', '.']
@@ -98,7 +112,9 @@ class Authority:
         profile = {'pid': pid, 'parent': parent, 'start_ticks': actual['start_ticks'],
                    'boot_id': actual['boot_id'], 'orig_argv': vector, 'environment': environment,
                    'cwd': cwd, 'event': event, 'flags': flags,
-                   'body_sha256': hashlib.sha256(body.encode()).hexdigest()}
+                   'body_sha256': hashlib.sha256(body.encode()).hexdigest(),
+                   'repository': context['command'] == ['uv', 'run', 'unrest', 'check-repository'],
+                   'repository_source_sha256': digest('/source/src/unrest_harness/repository_contract.py')}
         path = Path('/receipts/primary-startup') / (str(pid) + '.json')
         if path.exists():
             return self.refuse('duplicate_profile')
@@ -106,6 +122,5 @@ class Authority:
         path.chmod(0o444)
         self.records.append({'kind': 'primary_native_preinit', 'pid': pid, 'parent': parent,
                              'identity': actual, 'role': role, 'profile_sha256': digest(path)})
-        if pid != self.root:
-            self.contexts[pid] = {'role': role, 'identity': actual}
+        self.contexts[pid] = {'role': role, 'identity': actual, 'repository': profile['repository']}
         return True

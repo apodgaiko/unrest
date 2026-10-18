@@ -120,6 +120,14 @@ def main():
         target.write_bytes(body)
         source_pins[name] = hashlib.sha256(body).hexdigest()
     (source / 'src/unrest_harness.egg-info').mkdir(exist_ok=True)
+    # Minimal public read-only discovery metadata, with no runner Git config,
+    # hooks, credentials, alternate object path or private history.
+    git_root = source / '.git'
+    git_root.mkdir()
+    (git_root / 'objects').mkdir()
+    (git_root / 'refs').mkdir()
+    (git_root / 'HEAD').write_text(os.environ['GITHUB_SHA'] + '\n')
+    (git_root / 'config').write_text('[core]\nrepositoryformatversion = 0\nbare = false\n')
     inputs = root / 'inputs'
     inputs.mkdir()
     (inputs / 'github-script.sh').write_bytes(script)

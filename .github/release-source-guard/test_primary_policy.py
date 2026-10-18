@@ -47,3 +47,16 @@ def test_shell_finite_environment_additions():
                                     'with open("/private/response", "w") as fp:\n fp.write(1)'])
 def test_unregistered_native_helpers_refused(script):
     assert backend_request(script) is None
+
+
+def test_native_backend_renderer_is_closed_and_bound_to_finite_cache():
+    prefix = ('import sys\n\nif sys.path[0] == "":\n    sys.path.pop(0)\n\n'
+              'sys.path = [] + sys.path\n\nimport setuptools.build_meta as backend\n')
+    request = '/work/cache/builds-v0/.tmpUnit/get_requires_for_build_editable.txt'
+    script = (prefix + '\nimport json\n\nget_requires_for_build = getattr(backend, "get_requires_for_build_editable", None)\n'
+                'if get_requires_for_build:\n    requires = get_requires_for_build({})\nelse:\n    requires = []\n\n'
+                f'with open("{request}", "w") as fp:\n    json.dump(requires, fp)\n')
+    assert backend_request(script) == 'get_requires_for_build_editable'
+    for drift in (script + '\nprint(1)', script.replace('/work/cache/', '/foreign/'),
+                  script.replace('requires = []', 'requires = ["foreign"]')):
+        assert backend_request(drift) is None

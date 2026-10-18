@@ -90,7 +90,18 @@ def backend_request(script, cache='/work/cache'):
     if path.name == 'get_requires_for_build_editable.txt' and script == requires:
         return 'get_requires_for_build_editable'
     # The output directory is a native UV-owned sibling of the response file.
-    output = str(path.parent)
+    calls = [node for node in ast.walk(ast.parse(script)) if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Attribute) and node.func.attr == 'build_editable']
+    if len(calls) != 1 or len(calls[0].args) != 3 or not isinstance(calls[0].args[0], ast.Constant):
+        return None
+    output = calls[0].args[0].value
+    if not isinstance(output, str):
+        return None
+    target = Path(output)
+    if (target.resolve() != target or not target.is_relative_to(cache)
+            or not any(target.is_relative_to(Path(cache) / name)
+                       for name in ('builds-v0', 'built-wheels-v5'))):
+        return None
     build = (prefix + f'\n\nwheel_filename = backend.build_editable("{output}", {{}}, None)\n'
              f'with open("{request}", "w") as fp:\n    fp.write(wheel_filename)\n')
     if path.name == 'build_editable.txt' and script == build:

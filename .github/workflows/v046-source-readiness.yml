@@ -23,6 +23,19 @@ jobs:
           persist-credentials: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
+      - name: Install dependencies
+        run: uv sync --locked
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
+      - name: Upload encrypted primary-install evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-source-primary-install-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-install/evidence.cms
+            ${{ runner.temp }}/primary-install/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Import package
         run: uv run python -c "import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()"
         shell: python3 .github/release-source-guard/ci_shell.py {0}
@@ -34,6 +47,36 @@ jobs:
           path: |
             ${{ runner.temp }}/primary-import/evidence.cms
             ${{ runner.temp }}/primary-import/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Supported CLI surfaces
+        run: |
+          uv run unrest --help
+          uv run unrest measure-baseline --help
+          uv run unrest-server --help
+          uv run python -m unrest_harness --help
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
+      - name: Upload encrypted primary-help evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-source-primary-help-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-help/evidence.cms
+            ${{ runner.temp }}/primary-help/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Repository contract
+        run: uv run unrest check-repository
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
+      - name: Upload encrypted primary-repository evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-source-primary-repository-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-repository/evidence.cms
+            ${{ runner.temp }}/primary-repository/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload primary typed startup stage
