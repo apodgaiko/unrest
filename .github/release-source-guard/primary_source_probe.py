@@ -5,7 +5,7 @@ import json
 import hashlib
 import xml.etree.ElementTree as ET
 
-from primary_policy import TEST_CASE
+from primary_policy import TEST_SELECTIONS, TEST_SEAM_CASES
 
 
 def check(records, mode):
@@ -21,10 +21,10 @@ def check(records, mode):
             or kernel['native_preinit_refusal'] or kernel['unregistered_processes']
             or kernel['receipt_ledger_poison']
             or kernel['missing_parent_waits'] or not kernel['all_commands_dispatched']
-            or collection != [TEST_CASE] or provenance['collection_before'] != collection
+            or tuple(collection) not in TEST_SELECTIONS or provenance['collection_before'] != collection
             or provenance['collection_after'] != collection or provenance['deselected'] != 0
-            or provenance['exitstatus'] != 0 or provenance['invocation_args'] != ['-q', TEST_CASE]
-            or len(cases) != 1 or any(list(case) for case in cases)
+            or provenance['exitstatus'] != 0 or provenance['invocation_args'] != ['-q', *collection]
+            or len(cases) != len(collection) or any(list(case) for case in cases)
             or not any(row['kind'] == 'ready' and row['token'] == 'root' for row in summary['events'])):
         raise RuntimeError('primary_source_test_original_case_not_proved')
     births = [row for row in kernel['records'] if row['kind'] == 'kernel_child'
@@ -46,7 +46,21 @@ def check(records, mode):
     children = [row for row in summary['events'] if row['kind'] == 'registered' and row['python']]
     if not starts or not children or not {row['pid'] for row in starts} <= {row['pid'] for row in children}:
         raise RuntimeError('primary_source_test_python_bridge_missing')
-    negative = mode == 'TEST-poison'
+    if tuple(collection) == TEST_SEAM_CASES:
+        events = summary['events']
+        ordinary = {row['class'] for row in events
+                    if row['kind'] == 'source_ordinary_startup_consumption'}
+        references = {row['class'] for row in events
+                      if row['kind'] == 'source_reference_startup_consumption'}
+        consumers = {row['class'] for row in events
+                     if row['kind'] == 'source_producer_python_startup_consumption'}
+        if ('source-composed-adapter' not in ordinary
+                or references != {'reference-integrity:' + name for name in
+                                  ('test_skips', 'test_fails', 'test_waits', 'test_passes')}
+                or not {'source-checker', 'source-extracted-oracle',
+                        'source-installed-provider-matrix'} <= consumers):
+            raise RuntimeError('primary_source_affected_seams_missing')
+    negative = mode == 'TEST-poison' 
     if (kernel['guard_poison'] is not negative or summary['ready'] is negative
             or kernel['failure_code'] != ('source_guard_refused' if negative else None)
             or bool(summary['failures']) is not negative):

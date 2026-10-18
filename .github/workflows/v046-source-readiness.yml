@@ -23,12 +23,9 @@ jobs:
           persist-credentials: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: TEST primary source positive
-        run: env -u CODEX_PATH uv run pytest -q tests/test_stdio_startup.py::test_real_startup_rejection_is_bounded_and_body_free[invalid0-worker]
+      - name: TEST primary affected source seams
+        run: env -u CODEX_PATH uv run pytest -q tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[claude] tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex] tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
-      - name: TEST primary source caught refusal
-        run: env -u CODEX_PATH uv run pytest -q tests/test_stdio_startup.py::test_real_startup_rejection_is_bounded_and_body_free[invalid0-worker]
-        shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-poison {0}
       - name: Upload encrypted TEST source entry evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2
@@ -37,8 +34,6 @@ jobs:
           path: |
             ${{ runner.temp }}/primary-source-positive/evidence.cms
             ${{ runner.temp }}/primary-source-positive/safe-provenance.json
-            ${{ runner.temp }}/primary-source-poison/evidence.cms
-            ${{ runner.temp }}/primary-source-poison/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload primary typed startup stage

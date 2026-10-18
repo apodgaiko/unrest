@@ -143,5 +143,7 @@ incomplete; no original full certificate or release certification is claimed.
 
 Primary SOURCE entry integration is documented in
 [v046-source-checkpoint-environment.md](v046-source-checkpoint-environment.md).
-Its bounded TEST probes do not constitute the frozen unexcluded source checkpoint;
+Its root/Git TEST probes passed; ordinary Python activation remains blocked by
+the immutable producer callback. These probes do not constitute the frozen
+unexcluded source checkpoint;
 source carrier, package and final closure remain required.

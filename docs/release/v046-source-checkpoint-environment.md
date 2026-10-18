@@ -530,3 +530,12 @@ Only bounded TEST proofs are eligible at this stage. Complete source-carrier,
 package and final input closure remain downstream; readiness remains false and
 the selected carrier remains null. One full frozen unexcluded Python3.13 source
 checkpoint and all remaining release checks are still required.
+
+The closed primary TEST selection also admits one exact four-case tuple: the
+original composed restart/stop/replacement/cancel case, both controlled installed
+provider matrix parameters (claude and codex), and the original distribution
+checker extracted-provenance case. Arbitrary selectors, filters, reordered or
+partial tuples refuse. The reducer requires actual ordinary composed-adapter,
+four reference-integrity classes and producer consumer startup consumption,
+with unchanged native custody, READY and actual original-parent waits. These
+fixture builds are setup evidence only; TEST remains certificate-ineligible.

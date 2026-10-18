@@ -89,7 +89,8 @@ def main():
         if (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
                 or not os.environ.get('GITHUB_REF', '').startswith((
                     'refs/heads/codex/source-guard-structured-20261018-source-entry-',
-                    'refs/heads/codex/source-guard-structured-20261018-source-composition-'))):
+                    'refs/heads/codex/source-guard-structured-20261018-source-composition-',
+                    'refs/heads/codex/source-guard-structured-20261018-source-seams-'))):
             raise RuntimeError('primary_test_workflow_identity')
     elif len(sys.argv) != 2:
         raise RuntimeError('primary_shell_argv')

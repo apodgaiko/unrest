@@ -19,6 +19,14 @@ SOURCE = 'v0.4.6 source suite'
 SOURCE_BUDGET = {'root_seconds': 7200, 'collection_seconds': 300, 'drain_seconds': 60}
 TEST_CASE = 'tests/test_stdio_startup.py::test_real_startup_rejection_is_bounded_and_body_free[invalid0-worker]'
 
+TEST_SEAM_CASES = (
+    'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct',
+    'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[claude]',
+    'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex]',
+    'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
+)
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES)
+
 
 def sha(body):
     return hashlib.sha256(body).hexdigest()

@@ -101,3 +101,21 @@ def test_source_temp_root_and_env_addition_do_not_broaden_focused_policy():
     assert not command_environment(value, root)
     for change in ({'_': '/foreign/env'}, {'OPENAI_API_KEY': 'forbidden'}, {'PYTHONPATH': '/foreign'}):
         assert not command_environment({**value, **change}, root, source=True)
+
+
+def test_affected_seams_are_one_closed_original_parameter_tuple():
+    from primary_policy import TEST_SEAM_CASES
+    text, value = inputs()
+    script = (COMMAND + ' ' + ' '.join(TEST_SEAM_CASES)).encode()
+    result = make_test_plan(script, text, 'TEST-positive')
+    assert result['commands'][0][7:] == list(TEST_SEAM_CASES)
+    assert result['source_checkpoint_ready'] is False
+    assert result['selected_carrier'] is None
+    public_plan(result)
+    for selection in (TEST_SEAM_CASES[:1], TEST_SEAM_CASES[::-1],
+                      (*TEST_SEAM_CASES, '-k', 'installed'),
+                      (*TEST_SEAM_CASES, 'tests/test_server.py')):
+        with pytest.raises(RuntimeError, match='primary_source_test_script'):
+            make_test_plan((COMMAND + ' ' + ' '.join(selection)).encode(), text, 'TEST-positive')
+    with pytest.raises(RuntimeError):
+        plan(script, text, value)

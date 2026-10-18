@@ -6,7 +6,7 @@ import json
 import re
 import shlex
 
-from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_CASE, canonical, sha)
+from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, canonical, sha)
 
 
 def require_full_input(value, script, workflow):
@@ -33,8 +33,9 @@ def require_full_input(value, script, workflow):
 def test_plan(script, workflow, mode):
     if mode not in {'TEST-positive', 'TEST-poison'}:
         raise RuntimeError('primary_source_test_identity')
-    expected = ('env -u CODEX_PATH uv run pytest -q ' + TEST_CASE).encode()
-    if script != expected:
+    allowed = [('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
+               for cases in TEST_SELECTIONS]
+    if script not in allowed:
         raise RuntimeError('primary_source_test_script')
     return {'schema': 'unrest.v046.primary-script-plan.v1',
             'duty': 'TEST-source-' + mode.removeprefix('TEST-'),
