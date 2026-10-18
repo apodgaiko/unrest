@@ -18,7 +18,7 @@ ORIGINAL_RESOLVE = 'ea4f0caa50410102a19484d98bd759be780bdb5254ca684bbc7182528e2e
 class Inverse(ast.NodeTransformer):
     def visit_If(self, node):
         if ast.unparse(node.test) == "role == 'isolated-uv-helper' and 'primary_producer' in spec":
-            assert hashlib.sha256(ast.dump(node, include_attributes=False).encode()).hexdigest() == 'af7fbccd78873c43e8b98fdf8d4ac75a60d1ec6bf6454e3ddf42cc3753310684'
+            assert hashlib.sha256(ast.dump(node, include_attributes=False).encode()).hexdigest() == '7117e6bfe90deac2a50e6a7bc1dacff5078b50b3ffbd7b415014e26b203c9d59'
             return None
         return self.generic_visit(node)
 

@@ -127,7 +127,7 @@ def runtime_fixture(tmp_path, monkeypatch):
     activation_spec = importlib.util.spec_from_file_location('runtime_activation', ROOT / 'finite/operation_activation.py')
     activation = importlib.util.module_from_spec(activation_spec)
     activation_spec.loader.exec_module(activation)
-    root = tmp_path / 'cache/builds-v0/exact-runtime'
+    root = tmp_path / 'cache/builds-v0/.tmp-exact-runtime'
     (root / 'bin').mkdir(parents=True)
     site = root / 'lib/python3.13/site-packages'
     site.mkdir(parents=True)
@@ -169,7 +169,13 @@ def runtime_fixture(tmp_path, monkeypatch):
         info = original_stat(path, *args, **kwargs)
         return BaseInfo(info) if path == base else info
     monkeypatch.setattr(Path, 'stat', owned_base_stat)
-    selected = {'prefix': str(root), 'python_link': str(root / 'bin/python')}
+    import zipfile
+    wheel = tmp_path / 'backend.whl'
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        archive.writestr('backend.py', b'pinned original backend')
+    spec['wheel'] = str(wheel)
+    selected = {'prefix': str(root), 'python_link': str(root / 'bin/python'),
+                'generated': [], 'caches': []}
     output = declare(spec, selected)
     return root, base, spec, selected, output, declare, inventory
 
@@ -181,7 +187,7 @@ def test_current_declared_runtime_is_separate_from_dependency_domain(runtime_fix
     with pytest.raises(RuntimeError, match='dependency symlink escapes'):
         closure.inventory(cache)
     rows = inventory(cache, {str(root): output})
-    assert rows['builds-v0/exact-runtime/bin/python']['resolved_sha256'] == hashlib.sha256(base.read_bytes()).hexdigest()
+    assert rows['builds-v0/.tmp-exact-runtime/bin/python']['resolved_sha256'] == hashlib.sha256(base.read_bytes()).hexdigest()
     assert output['members']['bin/python']['target_identity']['sha256'] == hashlib.sha256(base.read_bytes()).hexdigest()
 
 
@@ -274,8 +280,8 @@ def test_runtime_consumption_requires_current_original_operation(tmp_path, monke
         argv = ['/work/cache/builds-v0/runtime/bin/python', '-c', 'exact original helper']
         child = {'parent_operation': dict(build, record_sha256=hashed(admission)),
                  'cache': spec['cache'], 'base_identity': spec['base_identity'], 'output': spec['output'],
-                 'primary_runtime_output': {'root': '/work/cache/builds-v0/runtime', 'members': {}}}
-        header = {'pid': pid, 'ppid': 10, 'token': 'child-' + str(pid), 'role': 'isolated-uv-helper',
+                 'primary_runtime_output': {'root': '/work/cache/builds-v0/runtime', 'root_identity': [1, 2, 0o40700, 20000], 'members': {}}}
+        header = {'pid': pid, 'ppid': 10, 'start_ticks': pid * 100, 'boot_id': 'current-boot', 'token': 'child-' + str(pid), 'role': 'isolated-uv-helper',
                   'spec': 'spec-' + str(pid), 'spec_sha256': 'pin-' + str(pid),
                   'manifest_sha256': 'manifest-' + str(pid), 'orig_argv': argv}
         rows.extend([{'kind': 'isolated_original_dispatch', 'owner_pid': pid, 'parent_pid': 10,
@@ -329,7 +335,11 @@ def test_runtime_consumption_requires_current_original_operation(tmp_path, monke
     function = load_function('original_runtime_outputs', 'producer_profile.py', {
         'Path': mapped, 'os': os, 'stat': stat, 'hashlib': hashlib, 'json': json,
         'events': lambda spec: rows,
-        'hashed': hashed, 'protected_json': protected})
+        'hashed': hashed, 'protected_json': protected,
+        'read_response': lambda pid: {'profile_sha256': hashlib.sha256((headers / (str(pid) + '.json')).read_bytes()).hexdigest(),
+            'child_start_ticks': pid * 100, 'child_boot_sha256': hashlib.sha256(b'current-boot').hexdigest(), 'pid': pid,
+            'helper': names[pid - 100], 'member': names[pid - 100] + '.txt'},
+        'response_member': lambda *args: {'type': 'file'}, 'load': lambda *args: None})
     if change == 'none':
         assert set(function(spec, owner)) == {'/work/cache/builds-v0/runtime'}
     else:
@@ -397,3 +407,131 @@ def test_runtime_declaration_refuses_symlink_swap_during_read(runtime_fixture, m
     monkeypatch.setattr(os, 'readlink', swap)
     with pytest.raises(RuntimeError):
         declare(spec, selected)
+
+
+def test_runtime_declaration_rejects_extra_empty_site_directory(runtime_fixture):
+    root, base, spec, selected, output, declare, inventory = runtime_fixture
+    (root / 'lib/python3.13/site-packages/unknown-empty').mkdir()
+    with pytest.raises(RuntimeError):
+        declare(spec, selected)
+
+
+@pytest.mark.parametrize('change', ['none', 'operation', 'parent', 'parent_birth', 'wait',
+                                    'path', 'bytes', 'replacement', 'member', 'owner'])
+def test_response_consumption_requires_prior_wait_and_exact_current_file(runtime_fixture, change):
+    from test_producer_startup import load_function
+    root, base, spec, selected, output, declare, inventory = runtime_fixture
+    path = root / 'get_requires_for_build_sdist.txt'
+    path.write_bytes(b'[]')
+    identity_spec = importlib.util.spec_from_file_location('response_test_identity', ROOT / 'finite/operation_activation.py')
+    identity_module = importlib.util.module_from_spec(identity_spec)
+    identity_spec.loader.exec_module(identity_module)
+    file = identity_module.identity(path)
+    spec['parent_operation'] = {'pid': 10, 'token': 'current-operation', 'identity': {'start_ticks': 100}}
+    receipt = {'member': path.name, 'member_sha256': hashlib.sha256(str(path).encode()).hexdigest(),
+               'runtime_root_sha256': hashlib.sha256(str(root).encode()).hexdigest(),
+               'operation_sha256': hashlib.sha256(b'current-operation').hexdigest(), 'parent': 10,
+               'parent_identity_sha256': hashlib.sha256(json.dumps({'start_ticks':100},sort_keys=True,separators=(',', ':')).encode()).hexdigest(), 'parent_wait_raw': 0,
+               'file_identity': file['identity'], 'sha256': file['sha256'], 'uid': 20000, 'nlink': 1}
+    if change == 'operation':
+        receipt['operation_sha256'] = hashlib.sha256(b'stale-operation').hexdigest()
+    elif change == 'parent':
+        receipt['parent'] = 11
+    elif change == 'parent_birth':
+        receipt['parent_identity_sha256'] = hashlib.sha256(b'foreign-birth').hexdigest()
+    elif change == 'wait':
+        receipt['parent_wait_raw'] = 256
+    elif change == 'path':
+        receipt['member_sha256'] = hashlib.sha256(b'foreign-path').hexdigest()
+    elif change == 'bytes':
+        path.write_bytes(b'foreign')
+    elif change == 'replacement':
+        path.unlink()
+        path.write_bytes(b'[]')
+    elif change == 'member':
+        receipt['member'] = 'unknown.txt'
+    elif change == 'owner':
+        receipt['uid'] = 20001
+    function = load_function('response_member', 'producer_profile.py', {'hashlib': hashlib,
+        'hashed': lambda value: hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',', ':')).encode()).hexdigest()})
+    if change == 'none':
+        result = function(receipt, spec, root, identity_module)
+        assert result['file'] == file and result['uid'] == 20000
+    else:
+        with pytest.raises(RuntimeError):
+            function(receipt, spec, root, identity_module)
+
+
+def test_runtime_accepts_response_only_after_original_producer_receipt(runtime_fixture):
+    root, base, spec, selected, output, declare, inventory = runtime_fixture
+    path = root / 'get_requires_for_build_sdist.txt'
+    path.write_bytes(b'[]')
+    rows = []
+    with pytest.raises(RuntimeError):
+        declare(spec, selected, rows.append)
+    assert rows[0]['member_sha256'] == hashlib.sha256(path.name.encode()).hexdigest()
+
+
+def test_new_response_observer_preserves_original_exit_poison():
+    tree = ast.parse((ROOT / 'linux_producers.py').read_bytes())
+    function = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'tick')
+    class Strip(ast.NodeTransformer):
+        def visit_Expr(self, node):
+            if ast.unparse(node) == 'self.completed_response(event, trace)':
+                return None
+            return self.generic_visit(node)
+    restored = Strip().visit(function)
+    assert hashlib.sha256(ast.dump(restored, include_attributes=False).encode()).hexdigest() == '84bad09261eee236b6ecd3200544c51a27c4c34a929c87b20074ce5ad4092b2c'
+
+
+@pytest.mark.parametrize('change', ['none', 'wait', 'parent', 'body', 'ready', 'call', 'path'])
+def test_original_response_capture_uses_original_renderer_and_real_file(runtime_fixture, change):
+    import stat
+    from test_producer_startup import load_function
+    root, base, spec, selected, output, declare, inventory = runtime_fixture
+    identity_spec = importlib.util.spec_from_file_location('capture_response_identity', ROOT / 'finite/operation_activation.py')
+    identity_module = importlib.util.module_from_spec(identity_spec)
+    identity_spec.loader.exec_module(identity_module)
+    helper = 'get_requires_for_build_sdist'
+    request = root / (helper + '.txt')
+    request.write_bytes(b'[]')
+    spec.update(cache=str(root.parent.parent), full_build=True, root=str(root),
+                primary_runtime_output={'root': str(root)},
+                parent_operation={'pid': 10, 'token': 'current-operation', 'identity': {'start_ticks': 100}})
+    prefix = ('import sys\n\nif sys.path[0] == "":\n    sys.path.pop(0)\n\n'
+              'sys.path = [] + sys.path\n\nimport setuptools.build_meta as backend\n')
+    script = (prefix + '\nimport json\n\nget_requires_for_build = getattr(backend, "get_requires_for_build_sdist", None)\n'
+              'if get_requires_for_build:\n    requires = get_requires_for_build({})\nelse:\n    requires = []\n\n'
+              f'with open("{request}", "w") as fp:\n    json.dump(requires, fp)\n')
+    renderer = load_function('helper_class', 'finite/isolated_activation.py', {'Path': Path, 'ast': ast})
+    child = {'helper': helper, 'pid': 11, 'parent': 10, 'token': 'child',
+             'identity': {'start_ticks': 110, 'boot_id': 'current-boot'}, 'profile_sha256': 'a' * 64}
+    header = {'orig_argv': [str(root / 'bin/python'), '-c', script], 'manifest_sha256': 'b' * 64}
+    wait = {'raw': 0, 'parent_tgid': 10}
+    rows = [{'kind': 'isolated_actual_backend_call', 'owner_pid': 11, 'parent_pid': 10, 'helper': helper},
+            {'kind': 'ready', 'owner_pid': 11, 'token': 'child', 'manifest_sha256': 'b' * 64}]
+    if change == 'wait':
+        wait['raw'] = 256
+    elif change == 'parent':
+        wait['parent_tgid'] = 12
+    elif change == 'body':
+        request.write_bytes(b'foreign')
+    elif change == 'ready':
+        rows.pop()
+    elif change == 'call':
+        rows.pop(0)
+    elif change == 'path':
+        header['orig_argv'][-1] = script.replace(str(request), str(root.parent / (helper + '.txt')))
+    namespace = {'Path': Path, 'ast': ast, 'stat': stat, 'hashlib': hashlib,
+                 'hashed': lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest(),
+                 'events': lambda spec: rows,
+                 'load': lambda name, path: identity_module if path.endswith('operation_activation.py') else SimpleNamespace(helper_class=renderer)}
+    function = load_function('response_receipt', 'producer_profile.py', namespace)
+    if change == 'none':
+        receipt = function(spec, header, child, wait)
+        assert receipt['sha256'] == hashlib.sha256(b'[]').hexdigest()
+        assert receipt['parent_wait_raw'] == 0 and receipt['uid'] == 20000
+        assert not any('current-operation' in str(value) for value in receipt.values())
+    else:
+        with pytest.raises(RuntimeError):
+            function(spec, header, child, wait)

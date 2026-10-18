@@ -53,6 +53,7 @@ class NativeProducers:
         self.records = []
         self.producer_diagnostic_keys = set()
         self.poisoned_exits = set()
+        self.response_receipts = {}
 
     def admit_uv(self, pid, path, vector, environment, cwd, parent, registration, selected):
         if (registration['class'] not in {'source-build', 'source-install'}
@@ -161,7 +162,7 @@ class NativeProducers:
             return False
         token = secrets.token_hex(16)
         if role == 'isolated-uv-helper' and 'primary_producer' in spec:
-            spec['primary_runtime_output'] = self.interface.runtime_members(spec, selected, self.records.append)
+            spec['primary_runtime_output'] = self.interface.runtime_members(spec, selected, self.records.append, self.response_receipts)
         spec_path = ROOT / ('spec-' + str(pid) + '.json')
         spec_pin = write(spec_path, spec)
         manifest = dict(self.manifest)
@@ -203,8 +204,47 @@ class NativeProducers:
         self.records.append(item)
         return True
 
+    def completed_response(self, event, trace):
+        if not getattr(self, 'common', {}).get('primary_producer'):
+            return
+        if event['kind'] != 'original_parent_wait4' or event['child'] not in self.children:
+            return
+        pid = event['child']
+        child = self.children[pid]
+        if pid in self.response_receipts or child['role'] != 'isolated-uv-helper' or event['raw'] != 0:
+            return
+        context = self.uv[child['parent']]
+        if event['parent_tgid'] != context['pid']:
+            raise RuntimeError('primary_response_foreign_parent_wait')
+        for native in (child['identity'], context['identity']):
+            birth = trace.identities[native['pid']]
+            if (any(birth[key] != native[key] for key in ('pid', 'ppid', 'start_ticks', 'boot_id', 'pgid', 'sid', 'clock_ticks_per_second'))
+                    or native['uid'] != 20000 or birth['uids'] != [20000] * 4):
+                raise RuntimeError('primary_response_birth_drift')
+        path = Path('/receipts/native-startup') / (str(pid) + '.json')
+        info = path.lstat()
+        import stat
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 20001
+                or stat.S_IMODE(info.st_mode) != 0o444 or info.st_nlink != 1):
+            raise RuntimeError('primary_response_profile_custody')
+        body = path.read_bytes()
+        if hashlib.sha256(body).hexdigest() != child['profile_sha256']:
+            raise RuntimeError('primary_response_profile_drift')
+        header = json.loads(body)
+        spec = self.interface.protected_json(header['spec'], header['spec_sha256'])
+        if 'primary_producer' not in spec:
+            return
+        receipt = self.interface.response_receipt(spec, header, child, event)
+        pin = write(ROOT / ('response-' + str(pid) + '.json'), receipt)
+        self.response_receipts[pid] = receipt
+        self.records.append({'kind': 'original_UV_response_receipt', 'pid': pid,
+                             'parent': child['parent'], 'helper': child['helper'],
+                             'receipt_sha256': pin, 'response_sha256': receipt['sha256'],
+                             'parent_wait_raw': event['raw'], 'member_sha256': receipt['member_sha256']})
+
     def tick(self, trace):
         for event in trace.records:
+            self.completed_response(event, trace)
             if (event['kind'] == 'kernel_exit' and event['pid'] in self.children
                     and event['raw'] == 86 << 8 and event['pid'] not in self.poisoned_exits):
                 self.poisoned_exits.add(event['pid'])

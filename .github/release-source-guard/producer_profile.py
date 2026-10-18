@@ -136,6 +136,93 @@ def consume(profile):
     return spec
 
 
+def response_receipt(spec, header, child, wait):
+    """Observe the exact original helper response after its numeric UV wait."""
+    activation = load('response_identity', '/guard/finite/operation_activation.py')
+    resolver = load('response_renderer', '/guard/finite/isolated_activation.py')
+    helper = resolver.helper_class(header['orig_argv'][-1], spec)
+    if helper != child['helper'] or wait['raw'] != 0 or wait['parent_tgid'] != child['parent']:
+        raise RuntimeError('primary_response_original_wait_drift')
+    nodes = ast.parse(header['orig_argv'][-1]).body
+    request = Path(nodes[-1].items[0].context_expr.args[0].value)
+    root = Path(spec['primary_runtime_output']['root'])
+    if request != root / (helper + '.txt'):
+        raise RuntimeError('primary_response_original_path_drift')
+    rows = events(spec)
+    calls = [r for r in rows if r['kind'] == 'isolated_actual_backend_call'
+             and r['owner_pid'] == child['pid'] and r['parent_pid'] == child['parent']
+             and r['helper'] == helper]
+    ready = [r for r in rows if r['kind'] == 'ready' and r['owner_pid'] == child['pid']
+             and r['token'] == child['token']]
+    if len(calls) != 1 or len(ready) != 1 or ready[0]['manifest_sha256'] != header['manifest_sha256']:
+        raise RuntimeError('primary_response_original_call_ready_missing')
+    if helper.startswith('get_requires_for_build_'):
+        expected = b'[]'
+        role = 'requirements-response'
+    else:
+        outputs = [r for r in rows if r['kind'] == 'isolated_backend_output'
+                   and r['owner_pid'] == child['pid'] and r['parent_pid'] == child['parent']
+                   and r['helper'] == helper]
+        if len(outputs) != 1 or activation.identity(outputs[0]['artifact']['path']) != outputs[0]['artifact']:
+            raise RuntimeError('primary_response_actual_archive_missing')
+        expected = Path(outputs[0]['artifact']['path']).name.encode()
+        role = 'archive-name-response'
+    info = request.lstat()
+    file = activation.identity(request)
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 20000
+            or file['sha256'] != hashlib.sha256(expected).hexdigest()
+            or activation.identity(request) != file):
+        raise RuntimeError('primary_response_original_body_custody_drift')
+    return {'schema': 'unrest.v046.original-uv-response.v1', 'role': role,
+            'helper': helper, 'pid': child['pid'], 'parent': child['parent'],
+            'child_identity_sha256': hashed(child['identity']),
+            'child_start_ticks': child['identity']['start_ticks'],
+            'child_boot_sha256': hashlib.sha256(child['identity']['boot_id'].encode()).hexdigest(),
+            'parent_identity_sha256': hashed(spec['parent_operation']['identity']),
+            'operation_sha256': hashlib.sha256(spec['parent_operation']['token'].encode()).hexdigest(),
+            'profile_sha256': child['profile_sha256'],
+            'runtime_root_sha256': hashlib.sha256(str(root).encode()).hexdigest(),
+            'member': helper + '.txt', 'member_sha256': hashlib.sha256(str(request).encode()).hexdigest(),
+            'file_identity': file['identity'], 'sha256': file['sha256'],
+            'uid': info.st_uid, 'nlink': info.st_nlink, 'parent_wait_raw': wait['raw']}
+
+
+def response_member(receipt, spec, root, activation):
+    parent = spec['parent_operation']
+    names = {helper + '.txt' for helper in ('get_requires_for_build_sdist', 'build_sdist',
+                                          'get_requires_for_build_wheel', 'build_wheel')}
+    name = receipt['member']
+    path = root / name
+    if (name not in names or receipt['member_sha256'] != hashlib.sha256(str(path).encode()).hexdigest()
+            or receipt['runtime_root_sha256'] != hashlib.sha256(str(root).encode()).hexdigest()
+            or receipt['operation_sha256'] != hashlib.sha256(parent['token'].encode()).hexdigest()
+            or receipt['parent'] != parent['pid'] or receipt['parent_identity_sha256'] != hashed(parent['identity'])
+            or receipt['parent_wait_raw'] != 0):
+        raise RuntimeError('primary_response_current_operation_drift')
+    file = activation.identity(path)
+    info = path.lstat()
+    if (file['identity'] != receipt['file_identity'] or file['sha256'] != receipt['sha256']
+            or info.st_uid != receipt['uid'] or info.st_uid != 20000 or info.st_nlink != receipt['nlink']):
+        raise RuntimeError('primary_response_current_file_drift')
+    return {'type': 'file', 'file': file, 'uid': info.st_uid, 'nlink': info.st_nlink}
+
+
+def read_response(pid):
+    path = ROOT / ('response-' + str(pid) + '.json')
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 20001
+            or stat.S_IMODE(info.st_mode) != 0o444 or info.st_nlink != 1):
+        raise RuntimeError('primary_response_receipt_custody')
+    body = path.read_bytes()
+    after = path.lstat()
+    def key(item):
+        return (item.st_dev, item.st_ino, item.st_mode, item.st_uid, item.st_nlink,
+                item.st_size, item.st_mtime_ns, item.st_ctime_ns)
+    if key(after) != key(info):
+        raise RuntimeError('primary_response_receipt_read_race')
+    return json.loads(body)
+
+
 def runtime_metadata(spec, root):
     """Render only the pinned UV0.11.0 Linux, nonrelocatable CPython outputs."""
     directory = str(root)
@@ -161,7 +248,7 @@ def runtime_metadata(spec, root):
     return result
 
 
-def runtime_members(spec, selected, emit=None):
+def runtime_members(spec, selected, emit=None, responses=None):
     """Declare one already validated original UV backend environment at exec."""
     activation = load('runtime_member_identity', '/guard/finite/operation_activation.py')
     root = Path(selected['prefix'])
@@ -170,6 +257,20 @@ def runtime_members(spec, selected, emit=None):
         raise RuntimeError('primary_runtime_declared_python_drift')
     site = root / 'lib/python3.13/site-packages'
     metadata = runtime_metadata(spec, root)
+    responses = {} if responses is None else responses
+    declared_responses = {}
+    for receipt in responses.values():
+        if receipt['runtime_root_sha256'] == hashlib.sha256(str(root).encode()).hexdigest():
+            declared_responses[receipt['member']] = response_member(receipt, spec, root, activation)
+    import zipfile
+    with zipfile.ZipFile(spec['wheel']) as archive:
+        wheel_names = archive.namelist()
+    site_files = {name for name in wheel_names if not name.endswith('/')}
+    site_files.update(str(Path(item['path']).relative_to(site)) for item in selected['generated'])
+    site_files.update(str(Path(item['cache']['path']).relative_to(site)) for item in selected['caches'])
+    site_directories = {parent.as_posix() for name in site_files
+                        for parent in Path(name).parents if parent != Path('.')}
+    site_directories.update(name.rstrip('/') for name in wheel_names if name.endswith('/'))
     rows = {}
     def refuse(code, name, kind):
         if emit is not None:
@@ -208,20 +309,25 @@ def runtime_members(spec, selected, emit=None):
                           'target_uid': target.stat().st_uid}
         elif path.is_dir():
             if not (path in {root / 'bin', root / 'lib', root / 'lib/python3.13'}
-                    or path.is_relative_to(site)):
+                    or path == site or (path.is_relative_to(site)
+                        and path.relative_to(site).as_posix() in site_directories)):
                 refuse('primary_runtime_unbound_directory', name, 'directory')
             rows[name] = {'type': 'directory', 'identity': [info.st_dev, info.st_ino,
                                                           info.st_mode, info.st_uid]}
         elif path.is_file():
-            if name in metadata:
+            if name in declared_responses:
+                if activation.identity(path) != declared_responses[name]['file']:
+                    refuse('primary_runtime_response_drift', name, 'file')
+            elif name in metadata:
                 if path.read_bytes() != metadata[name]:
                     refuse('primary_runtime_metadata_bytes', name, 'file')
-            elif not (path == root / 'pyvenv.cfg' or path.is_relative_to(site)):
+            elif not (path == root / 'pyvenv.cfg' or (path.is_relative_to(site)
+                    and path.relative_to(site).as_posix() in site_files)):
                 refuse('primary_runtime_unbound_file', name, 'file')
             rows[name] = {'type': 'file', 'file': activation.identity(path), 'uid': info.st_uid, 'nlink': info.st_nlink}
         else:
             raise RuntimeError('primary_runtime_nonregular_member')
-    if not set(metadata) <= set(rows):
+    if not set(metadata) | set(declared_responses) <= set(rows):
         raise RuntimeError('primary_runtime_metadata_missing')
     info = root.lstat()
     return {'root': str(root), 'root_identity': [info.st_dev, info.st_ino, info.st_mode, info.st_uid],
@@ -273,7 +379,26 @@ def original_runtime_outputs(spec, operations):
         # Each helper validates this same generated environment before dispatch.
         # Keep the earliest inode identities; later admissions cannot replace it.
         if root not in outputs:
-            outputs[root] = output
+            outputs[root] = {'root': root, 'root_identity': output['root_identity'],
+                             'members': dict(output['members'])}
+        else:
+            for name, member in output['members'].items():
+                old = outputs[root]['members'].get(name)
+                if old is not None and old != member:
+                    raise RuntimeError('primary_runtime_prior_member_drift')
+                outputs[root]['members'][name] = member
+        receipt = read_response(pid)
+        if (receipt['profile_sha256'] != hashlib.sha256(path.read_bytes()).hexdigest()
+                or receipt['child_start_ticks'] != header['start_ticks']
+                or receipt['child_boot_sha256'] != hashlib.sha256(header['boot_id'].encode()).hexdigest()
+                or receipt['pid'] != pid or receipt['helper'] != helper['helper']):
+            raise RuntimeError('primary_runtime_response_profile_drift')
+        activation = load('response_consumption', '/guard/finite/operation_activation.py')
+        response = response_member(receipt, child, Path(root), activation)
+        old = outputs[root]['members'].get(receipt['member'])
+        if old is not None and old != response:
+            raise RuntimeError('primary_runtime_prior_response_drift')
+        outputs[root]['members'][receipt['member']] = response
     return outputs
 
 

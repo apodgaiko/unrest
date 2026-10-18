@@ -840,3 +840,10 @@ configuration remain finite and byte-checked. These files confer no process
 or provider admission authority.
 
 The public renderer reference is [UV0.11.0 virtualenv creation](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/virtualenv.rs).
+
+Original helper response files are separate produced outputs. The observer binds
+only the exact validated helper request path, authenticated original call/READY,
+matching kernel parent/child births and actual numeric parent wait0. It seals an
+immutable observer-owned receipt containing file identity and hashes. Later
+helpers and the final cache consumer require that receipt; a matching filename
+or freshly observed writable file does not supply original-operation authority.
