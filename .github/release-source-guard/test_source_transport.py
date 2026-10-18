@@ -236,3 +236,52 @@ def test_transmitted_invocation_identity_is_a_digest_of_fresh_nonce():
     exec(compile(ast.Module(body=[assignment], type_ignores=[]), 'actual_invocation_derivation', 'exec'), namespace)
     assert namespace['source_invocation'] == hashlib.sha256(b'x' * 32).hexdigest()
     assert namespace['source_invocation'] != (b'x' * 32).hex()
+
+
+@pytest.mark.parametrize('name', ['result', 'record'])
+def test_actual_kernel_serialization_preserves_every_value(name):
+    import ast
+    tree = ast.parse(Path(__file__).with_name('primary_compartment.py').read_bytes())
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Attribute) and node.func.attr == 'dumps'
+             and node.args and isinstance(node.args[0], ast.Name)
+             and node.args[0].id == name]
+    assert len(calls) == 1
+    # Evaluate the actual producer expression; the original JSON data is the
+    # independent oracle. Only insignificant inter-token spaces may disappear.
+    value = {'records': [{'kind': 'original_parent_wait4', 'raw': 0,
+                          'parent_tgid': 42, 'child': 43, 'text': 'a b\n雪'}],
+             'poison': [], 'missing_parent_waits': [], 'guard_poison': False,
+             'failure_code': None, 'nested': [True, -3, 1.25, {}, []]}
+    compact = eval(compile(ast.Expression(calls[0]), 'actual_kernel_json', 'eval'),
+                   {'json': json, name: value}).encode()
+    original = json.dumps(value, sort_keys=True).encode()
+    assert compact == evidence.canonical(value)
+    assert json.loads(compact) == json.loads(original) == value
+    assert len(compact) < len(original)
+
+
+def test_compact_kernel_uses_original_transport_without_data_loss(tmp_path, capsys):
+    kernel, records = vector()
+    # Receipt-shaped records exercise separator overhead without changing the
+    # transport/parser or making an assertion about unobserved hosted bytes.
+    kernel['receipts'] = [{'ok': True, 'operation': 'ready', 'sequence': n,
+                           'identity': {'pid': 42, 'ppid': 41}, 'values': [0, None, False]}
+                          for n in range(10000)]
+    records['kernel-source.json'] = evidence.canonical(kernel)
+    source = str(Path(evidence.__file__).parent)
+    code = ('import sys,json;sys.path.insert(0,' + repr(source)
+            + ');from structured_evidence import emit_source;'
+            + 'k=json.loads(sys.stdin.buffer.readline());'
+            + 'r={"kernel-source.json":json.dumps(k,sort_keys=True,separators=(",",":")).encode()};'
+            + 'emit_source(r,k,' + repr(identity()) + ',' + repr(INVOCATION) + ',2)')
+    result, actual = evidence.capture([sys.executable, '-I', '-c', code], tmp_path, identity(),
+                                     'primary-executor', source_invocation=INVOCATION,
+                                     input=records['kernel-source.json'] + b'\n')
+    assert result.returncode == 0
+    assert actual['kernel-source.json'] == records['kernel-source.json']
+    assert json.loads(actual['kernel-source.json']) == kernel
+    header = evidence.loads((tmp_path / evidence.HEADER).read_bytes())
+    assert header['original_counts']['receipt_ok'] == 10000
+    assert header['records']['kernel-source.json']['sha256'] == evidence.digest(actual['kernel-source.json'])
+    assert capsys.readouterr() == ('', '')

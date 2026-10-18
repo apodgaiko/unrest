@@ -238,7 +238,7 @@ def main():
     status = 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
                    and not authority.denials and not native_failure and not failure
                    and not children - waits and result['all_commands_dispatched']) else 2
-    records['kernel-source.json'] = json.dumps(result, sort_keys=True).encode()
+    records['kernel-source.json'] = json.dumps(result, sort_keys=True, separators=(',', ':')).encode()
     emit_source(records, result, transport_identity['identity'], transport_identity['invocation_sha256'], status)
     return status
 
@@ -255,7 +255,7 @@ if __name__ == '__main__':
         record = {'failure_code': 'bootstrap_failure', 'stage': STAGE, 'frame_lines': lines[-8:],
                   'source_checkpoint_ready': False, 'selected_carrier': None}
         transport_identity = read_transport_binding()
-        emit_source({'kernel-source.json': json.dumps(record, sort_keys=True).encode()}, record,
+        emit_source({'kernel-source.json': json.dumps(record, sort_keys=True, separators=(',', ':')).encode()}, record,
                     transport_identity['identity'], transport_identity['invocation_sha256'], 125)
         status = 125
     raise SystemExit(status)

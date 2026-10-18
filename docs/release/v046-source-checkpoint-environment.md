@@ -872,3 +872,9 @@ already-bound profile rather than independently admitting Git refs. Its Linux
 control prerequisite includes the original channel-snapshot AST test and the
 cache, producer and startup diagnostic controls. Authenticated response handling
 does not add a diagnostic classification to the original channel snapshot.
+
+Kernel evidence uses compact JSON separators before the existing base64 frame.
+This preserves every original record and value while avoiding whitespace
+overhead at the fixed transport bound. Header hashes and lengths bind the actual
+compact bytes. The original aggregate and per-record caps still refuse oversized
+streams; an authenticated header without the full envelope proves no acceptance.
