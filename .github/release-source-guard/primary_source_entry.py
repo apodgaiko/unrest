@@ -78,7 +78,6 @@ class Observer:
         self.deselected = 0
         self.custodian = None
         self.collection_timer = None
-        self.poison_checked = False
 
     def pytest_configure(self, config):
         expected = ['-q']
@@ -141,17 +140,6 @@ class Observer:
             self.custodian = None
             if status:
                 self.guard.refuse('primary_source_custodian_status')
-        if (report.when == 'teardown' and self.profile['source_mode'] == 'TEST-poison'
-                and not self.poison_checked):
-            self.poison_checked = True
-            import subprocess
-            try:
-                subprocess.run(['/bin/true'], check=False)
-            except BaseException:
-                pass
-            # Continue pytest normally. The observer and custody must refuse
-            # despite a caught exception and an otherwise successful test.
-
     def pytest_sessionfinish(self, session, exitstatus):
         if self.collection_timer is not None:
             self.collection_timer.cancel()
@@ -159,6 +147,14 @@ class Observer:
         timer.daemon = True
         timer.start()
         try:
+            if self.profile['source_mode'] == 'TEST-poison':
+                import subprocess
+                try:
+                    subprocess.run(['/bin/true'], check=False)
+                except BaseException:
+                    pass
+                # Preserve the original test's successful return. The capsule
+                # must still fail from the caught guard refusal below.
             summary = self.guard.observe_summary(self.profile['manifest'])
             summary['original_pytest_exit_code'] = int(exitstatus)
             Path('/work/summary.json').write_bytes(canonical(summary))

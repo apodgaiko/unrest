@@ -17,7 +17,7 @@ PYTHON = '/usr/local/bin/python-primary-audit'
 SOURCE = 'v0.4.6 source suite'
 # Independent of focused capsules and every original test's own deadline.
 SOURCE_BUDGET = {'root_seconds': 7200, 'collection_seconds': 300, 'drain_seconds': 60}
-TEST_CASE = 'tests/test_server.py::test_completion_refusal_survives_server_restart[valid-repair-work]'
+TEST_CASE = 'tests/test_stdio_startup.py::test_real_startup_rejection_is_bounded_and_body_free[invalid0-worker]'
 
 
 def sha(body):

@@ -229,12 +229,16 @@ def main():
         if status:
             stage = 'custody_refused'
     negative_verified = False
-    if test_mode == 'TEST-poison':
-        kernel = json.loads(records.get('kernel-source.json', b'{}'))
-        negative_verified = (status == 2 and kernel.get('guard_poison') is True
-                             and kernel.get('missing_parent_waits') == []
-                             and kernel.get('unregistered_processes') == []
-                             and any(row['kind'] == 'forbidden' for row in kernel.get('source_events', [])))
+    test_proof = None
+    if test_mode:
+        from primary_source_probe import check
+        expected_status = 2 if test_mode == 'TEST-poison' else 0
+        if status == expected_status:
+            try:
+                test_proof = check(records, test_mode)
+                negative_verified = test_mode == 'TEST-poison'
+            except Exception:
+                status, stage = 125, 'source_test_refused'
     metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,
                 'source_exit_code': status, 'stage': stage, 'primary_plan': public_plan(spec),
                 'head_sha': os.environ['GITHUB_SHA'], 'source_tree': expected['source_tree'], 'image_id': image,
@@ -242,6 +246,7 @@ def main():
                 'support': control['support'],
                 'custody_phase_sha256': phase_sha256,
                 'source_test_identity': test_mode, 'negative_verified': negative_verified,
+                'source_test_proof': test_proof,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'
     with tarfile.open(archive, 'w:gz') as stream:
