@@ -311,6 +311,13 @@ PRIMARY_CACHE_BRANCH_AST = '6a80bae6754714e7af88928d900ef9b5bbed452e201d6978a561
 
 def restore_primary_cache(tree):
     method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'cache_tree')
+    # Remove only the closed diagnostic sink, leaving the original authority
+    # prefix's separately pinned expression program intact.
+    for node in ast.walk(method):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Subscript)
+                and ast.unparse(node.func) == "namespace['primary_cache_tree']"):
+            assert ast.unparse(node) == "namespace['primary_cache_tree'](self.spec, self.emit)"
+            node.args = node.args[:1]
     prefix = ast.Module(body=method.body[:2], type_ignores=[])
     assert hashlib.sha256(ast.dump(prefix, include_attributes=False).encode()).hexdigest() == PRIMARY_CACHE_BRANCH_AST
     method.body = method.body[2:]

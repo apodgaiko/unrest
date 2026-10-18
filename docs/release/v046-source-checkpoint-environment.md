@@ -817,3 +817,9 @@ The original single-backend cache path remains unchanged for other source modes.
 Build-to-install comparisons retain original device/inode/ctime/file-byte rows.
 Primary editable outputs outside this finite descriptor require their own
 original producer lineage; their mere presence is insufficient.
+
+The PRIMARY cache and composed snapshot diagnostics record only the first cache
+escape's declared role, member/target hashes, type/owner/pin facts and one failed
+original snapshot comparison's key differences, numeric/status values and hashes.
+They retain the original dependency-only refusal and assertion operands; neither
+diagnostic grants runtime admission or proves SOURCE acceptance.

@@ -136,7 +136,7 @@ def consume(profile):
     return spec
 
 
-def primary_cache_tree(spec):
+def primary_cache_tree(spec, emit=None):
     """Validate the primary's whole native seed plus original finite UV additions.
 
     Extra dependency wheels have immutable image provenance. A writable member
@@ -152,7 +152,23 @@ def primary_cache_tree(spec):
     if expected != primary['cache_seed_inventory']:
         raise RuntimeError('source_primary_cache_seed_drift')
     root = Path(spec['cache'])
-    current = closure.inventory(root)
+    def escape(root, path, resolved, info):
+        if emit is None:
+            return
+        name = path.relative_to(root).as_posix()
+        emit({'kind': 'primary_cache_first_escape',
+              'input_role': 'immutable_seed' if name in expected else 'uv_runtime_addition',
+              'member_sha256': hashlib.sha256(name.encode()).hexdigest(),
+              'target_sha256': hashlib.sha256(str(resolved).encode()).hexdigest(),
+              'contained': resolved.is_relative_to(root),
+              'target_is_file': resolved.is_file(), 'target_is_directory': resolved.is_dir(),
+              'link_mode': stat.S_IMODE(info.st_mode), 'link_uid': info.st_uid,
+              'target_uid': resolved.stat().st_uid,
+              'target_matches_runtime': resolved == Path(spec['base']),
+              'target_bytes_match_runtime': resolved.is_file()
+                  and digest(resolved) == spec['base_identity']['sha256'],
+              'declared_seed': name in expected})
+    current = closure.inventory(root, on_escape=escape)
     for name, item in expected.items():
         wanted = dict(item)
         if item['type'] == 'symlink':

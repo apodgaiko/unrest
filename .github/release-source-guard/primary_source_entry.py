@@ -129,6 +129,43 @@ class Observer:
                     self.guard.refuse('primary_source_custodian_not_ready')
                 time.sleep(.01)
 
+    def pytest_assertrepr_compare(self, config, op, left, right):
+        case = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
+        if (self.guard._STATE.get('case') != case or op != '=='
+                or getattr(self, 'snapshot_diagnostic_emitted', False)
+                or type(left) is not list or type(right) is not list
+                or len(left) != 1 or len(right) != 1
+                or type(left[0]) is not dict or type(right[0]) is not dict):
+            return None
+        keys = {'attempt_id', 'blocker_code', 'checkpoint_requests', 'checkpoint_sequence',
+                'completed_target_ids', 'elapsed_nanoseconds', 'last_effect_sequence',
+                'mission_id', 'node_id', 'phase', 'project_id', 'remaining_target_ids',
+                'role', 'scope_status', 'supervision_status', 'terminal_review_id'}
+        if set(left[0]) != keys or set(right[0]) != keys:
+            return None
+        differences = sorted(k for k in keys if left[0][k] != right[0][k])
+        numeric = {'checkpoint_requests', 'checkpoint_sequence', 'elapsed_nanoseconds',
+                   'last_effect_sequence'}
+        statuses = {'active', 'waiting_at_checkpoint', 'stopping', 'terminal',
+                    'running', 'waiting', 'stop_requested', 'in_scope', 'scope_drift'}
+        values = {}
+        for key in differences:
+            pair = [left[0][key], right[0][key]]
+            if key in numeric and all(type(v) is int and v >= 0 for v in pair):
+                values[key] = pair
+            elif key in {'phase', 'supervision_status', 'scope_status'} and all(
+                    type(v) is str and v in statuses for v in pair):
+                values[key] = pair
+        self.snapshot_diagnostic_emitted = True
+        self.guard.append({'kind': 'primary_composed_snapshot_difference',
+                           'source_path': 'tests/test_server.py', 'line': 3869,
+                           'exception_class': 'AssertionError',
+                           'cardinalities': [len(left), len(right)],
+                           'differing_keys': differences, 'values': values,
+                           'operand_sha256': [hashlib.sha256(canonical(v)).hexdigest()
+                                              for v in (left, right)]})
+        return None
+
     def pytest_runtest_logreport(self, report):
         self.guard.append({'kind': 'test_outcome', 'nodeid': report.nodeid,
                            'phase': report.when, 'outcome': report.outcome})

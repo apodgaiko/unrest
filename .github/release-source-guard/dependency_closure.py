@@ -10,7 +10,7 @@ import sys
 from typing import Any
 
 
-def inventory(root: Path) -> dict[str, Any]:
+def inventory(root: Path, *, on_escape: Any = None) -> dict[str, Any]:
     root = root.resolve(strict=True)
     result: dict[str, Any] = {}
     for path in sorted(root.rglob("*")):
@@ -25,6 +25,8 @@ def inventory(root: Path) -> dict[str, Any]:
         elif stat.S_ISLNK(info.st_mode):
             resolved = path.resolve(strict=True)
             if not resolved.is_relative_to(root) and resolved != Path("/usr/local/bin/python3.13"):
+                if on_escape is not None:
+                    on_escape(root, path, resolved, info)
                 raise RuntimeError("dependency symlink escapes its finite runtime closure")
             result[name] = {"type": "symlink", "target": os.readlink(path)}
             if resolved.is_file():

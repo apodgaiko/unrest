@@ -92,7 +92,7 @@ class SourceActivation(IsolatedActivation):
             namespace = {'__name__': '_primary_cache_profile', '__file__': support['path']}
             exec(compile(body, support['path'], 'exec', dont_inherit=True), namespace)
             try:
-                return namespace['primary_cache_tree'](self.spec)
+                return namespace['primary_cache_tree'](self.spec, self.emit)
             except (OSError, RuntimeError) as error:
                 self.refuse(str(error))
                 raise RuntimeError('refusal callback returned') from error
