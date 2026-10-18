@@ -12,7 +12,8 @@ spec.loader.exec_module(commands)
 
 
 def workflow(registry):
-    lines = ['jobs:\n', '  primary:\n', '    steps:\n']
+    lines = ['jobs:\n', '  primary:\n', '    name: primary source and package gate (py3.13)\n',
+             '    runs-on: ubuntu-latest\n', '    steps:\n']
     for name, script in registry.items():
         lines.append('      - name: ' + name + '\n')
         if '\n' in script.rstrip('\n'):
@@ -87,3 +88,20 @@ def test_duty_cannot_change_failure_or_working_directory_semantics(field):
         '      - name: Type-check (mypy)\n        ' + field + '\n')
     with pytest.raises(RuntimeError):
         commands.bind_generated(registry['Type-check (mypy)'].removesuffix('\n').encode(), actual)
+
+
+@pytest.mark.parametrize('field', ['"if": false', 'if : false', '<<: *dead',
+                                  '"continue-on-error": true', 'env: {UV_NO_SYNC: "1"}'])
+def test_noncanonical_or_merged_execution_controls_are_refused(field):
+    registry = json.loads(commands.REGISTRY.read_bytes())
+    actual = workflow(registry).replace('      - name: Type-check (mypy)\n',
+        '      - name: Type-check (mypy)\n        ' + field + '\n')
+    with pytest.raises(RuntimeError):
+        commands.bind_generated(registry['Type-check (mypy)'].removesuffix('\n').encode(), actual)
+
+
+def test_generated_script_cannot_be_bound_to_a_different_primary_job():
+    registry = json.loads(commands.REGISTRY.read_bytes())
+    actual = workflow(registry).replace('primary source and package gate (py3.13)', 'foreign job')
+    with pytest.raises(RuntimeError, match='identity'):
+        commands.bind_generated(registry['Import package'].removesuffix('\n').encode(), actual)

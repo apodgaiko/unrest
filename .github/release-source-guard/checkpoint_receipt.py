@@ -36,6 +36,14 @@ def require(condition, reason):
         raise ReceiptRefused(reason)
 
 
+def unique_fields(pairs):
+    result = {}
+    for key, value in pairs:
+        require(key not in result, 'duplicate_receipt_field')
+        result[key] = value
+    return result
+
+
 def sha256(value):
     return hashlib.sha256(value).hexdigest()
 
@@ -55,6 +63,13 @@ def artifact_members(archive, artifact):
 
 
 def validate(archive, artifact, run, jobs, expected):
+    require(all(type(value) is int and value > 0 for value in
+                (run['id'], run['run_attempt'], artifact['id'], artifact['workflow_run']['id'])),
+            'execution_identity_types')
+    require(set(expected) == set(DEFINITION_FIELDS), 'definition_fields')
+    require(all(type(expected[key]) is str and re.fullmatch(
+        '[0-9a-f]{40}' if key in {'head_sha', 'source_tree'} else '[0-9a-f]{64}', expected[key])
+        for key in DEFINITION_FIELDS), 'definition_digest_types')
     require(run['status'] == 'completed' and run['conclusion'] == 'success',
             'original primary run did not complete successfully')
     require(run['path'] == WORKFLOW and run['head_repository']['full_name'] == REPOSITORY,
@@ -76,7 +91,10 @@ def validate(archive, artifact, run, jobs, expected):
         require(len(steps) == 1 and steps[0]['status'] == 'completed'
                 and steps[0]['conclusion'] == 'success', 'required executable duty did not pass: ' + name)
     members = artifact_members(archive, artifact)
-    receipt = json.loads(members['safe-provenance.json'])
+    receipt = json.loads(members['safe-provenance.json'], object_pairs_hook=unique_fields)
+    require(type(receipt) is dict, 'receipt_type')
+    require(all(type(receipt[key]) is int and receipt[key] > 0
+                for key in ('run_id', 'run_attempt', 'job_id')), 'receipt_identity_types')
     require(set(receipt) == set(DEFINITION_FIELDS) | {'schema', 'execution_kind', 'repository',
             'workflow', 'run_id', 'run_attempt', 'job_id', 'source_command', 'ciphertext_sha256',
             'source', 'package'}, 'receipt_fields')

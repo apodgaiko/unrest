@@ -178,3 +178,12 @@ def test_promotion_never_substitutes_for_original_full_certificate(mutation):
         reader.runs = reader.runs[1:]
     with pytest.raises(ReceiptRefused):
         lookup.lookup(reader, reader.expected, 99)
+
+
+@pytest.mark.parametrize('path', ['actions/../issues', 'actions/%2e%2e/issues',
+                                  'actions/workflows/foreign.yml/runs?per_page=100',
+                                  'actions/runs/1/logs', 'actions/artifacts/0',
+                                  'actions/runs/1/artifacts?per_page=100&page=2'])
+def test_reader_has_only_the_declared_finite_metadata_endpoints(path):
+    with pytest.raises(ReceiptRefused):
+        lookup.ActionsReader('controlled').api(path)

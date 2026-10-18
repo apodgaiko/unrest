@@ -17,7 +17,7 @@ import primary_entry_build
 
 CASES = {
     'isolated_no_site': ('import os,sys;assert os.getuid()==20000;assert sys.flags.isolated;assert sys.flags.no_site', 0),
-    'private_path': ('from pathlib import Path;assert not Path("/runner-private-canary").exists()', 0),
+    'private_path': ('import json;from pathlib import Path;v=json.loads(Path("/inputs/controls.json").read_bytes());assert not Path(v["private_host_path"]).exists()', 0),
     'native_unknown_caught': ('import subprocess\ntry: subprocess.run(["/bin/true"])\nexcept BaseException: pass\n', 86),
     'native_network': ('import socket;socket.create_connection(("127.0.0.1",1))', 86),
     'foreign_fd': ('raise AssertionError("body must not run")', 86),

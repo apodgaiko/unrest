@@ -113,12 +113,12 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
 
 
-def console(name):
+def console(name, interpreter='/source/.venv/bin/python'):
     entries = {'unrest': ('unrest_harness.cli', 'cli'),
                'unrest-server': ('unrest_harness.server', 'main'),
                'mypy': ('mypy.__main__', 'console_entry')}
     module, function = entries[name]
-    return ('#!/source/.venv/bin/python\n# -*- coding: utf-8 -*-\n'
+    return ('#!' + interpreter + '\n# -*- coding: utf-8 -*-\n'
             'import sys\nfrom ' + module + ' import ' + function + '\n'
             'if __name__ == "__main__":\n'
             '    if sys.argv[0].endswith("-script.pyw"):\n'
@@ -126,3 +126,17 @@ def console(name):
             '    elif sys.argv[0].endswith(".exe"):\n'
             '        sys.argv[0] = sys.argv[0][:-4]\n'
             '    sys.exit(' + function + '())\n').encode()
+
+
+def public_plan(spec):
+    """Public evidence carries only closed identities/counts and input hashes."""
+    import re
+    if (spec['duty'] not in FOCUSED or spec['timeout_seconds'] != 180
+            or spec['source_checkpoint_ready'] is not False or spec['selected_carrier'] is not None
+            or any(not isinstance(spec[key], str) or not re.fullmatch('[0-9a-f]{64}', spec[key])
+                   for key in ('script_sha256', 'workflow_sha256'))):
+        raise RuntimeError('primary_public_plan_refused')
+    return {'schema': 'unrest.v046.primary-script-identity.v1', 'duty': spec['duty'],
+            'script_sha256': spec['script_sha256'], 'workflow_sha256': spec['workflow_sha256'],
+            'command_count': len(spec['commands']), 'timeout_seconds': 180,
+            'source_checkpoint_ready': False, 'selected_carrier': None}

@@ -31,6 +31,15 @@ def main():
     raw = root / 'raw'
     raw.mkdir(mode=0o700)
     log = raw / 'coordinator.log'
+    private = root / 'host-private'
+    private.mkdir(mode=0o700)
+    canary = private / 'canary.bin'
+    canary.write_bytes(os.urandom(32))
+    canary.chmod(0o600)
+    inputs = root / 'inputs'
+    inputs.mkdir(mode=0o755)
+    (inputs / 'controls.json').write_text(json.dumps({'private_host_path': str(canary.resolve())}))
+    (inputs / 'controls.json').chmod(0o444)
     previous = json.loads(prerequisite.read_bytes())
     image = previous['image_id']
     if (previous['head_sha'] != os.environ['GITHUB_SHA'] or previous['source_exit_code'] != 0
@@ -45,6 +54,7 @@ def main():
             '--security-opt=no-new-privileges', '--pids-limit=128', '--memory=1g',
             *['--tmpfs=' + path + ':' + value for path, value in mounts.items()],
             '--mount=type=bind,src=' + str(SUPPORT) + ',dst=/guard,readonly',
+            '--mount=type=bind,src=' + str(inputs) + ',dst=/inputs,readonly',
             '--entrypoint=/usr/local/bin/python', image, '-B', '/guard/primary_controls.py']
     direct = execution_identity(SUPPORT, 'primary-controls')
     status = 125
@@ -63,9 +73,10 @@ def main():
                     'SETUID', 'SETGID', 'SETPCAP', 'SYS_PTRACE', 'DAC_READ_SEARCH'}):
             raise RuntimeError('primary_controls_privileges')
         bound = config['Mounts']
-        if (len(bound) != 1 or bound[0]['Type'] != 'bind' or bound[0]['RW']
-                or bound[0]['Source'] != str(SUPPORT) or bound[0]['Destination'] != '/guard'
-                or bound[0]['Propagation'] != 'rprivate'):
+        wanted = {'/guard': str(SUPPORT), '/inputs': str(inputs)}
+        if (len(bound) != 2 or {row['Destination'] for row in bound} != set(wanted)
+                or any(row['Type'] != 'bind' or row['RW'] or row['Propagation'] != 'rprivate'
+                       or row['Source'] != wanted[row['Destination']] for row in bound)):
             raise RuntimeError('primary_controls_mounts')
         if (config['Image'] != image or config['Config']['OpenStdin']
                 or config['Config']['Entrypoint'] != ['/usr/local/bin/python']
@@ -91,6 +102,8 @@ def main():
     metadata = {'direct_identity': direct, 'head_sha': os.environ['GITHUB_SHA'],
                 'source_exit_code': status, 'image_id': image, 'support': previous['support'],
                 'source_checkpoint_ready': False, 'selected_carrier': None,
+                'host_private_canary_sha256': digest(canary),
+                'private_canary_outside_mounts': True,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json'),
                 'plaintext_archive_sha256': digest(archive), 'ciphertext_sha256': digest(root / 'evidence.cms')}
     (root / 'safe-provenance.json').write_text(json.dumps(metadata, sort_keys=True))

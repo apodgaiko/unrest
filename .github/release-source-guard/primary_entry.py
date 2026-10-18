@@ -67,7 +67,10 @@ def main(event, arguments):
         original_exception(kind, error, error.__traceback__)
     sys.excepthook = exception
     # Source cannot inherit a credential, controller socket or unrelated file.
-    for descriptor in range(3, 128):
+    descriptors = [int(name) for name in os.listdir('/proc/self/fd')]
+    if len(descriptors) > 4096:
+        os._exit(86)
+    for descriptor in sorted(value for value in descriptors if value >= 3):
         try:
             os.fstat(descriptor)
         except OSError:
@@ -75,8 +78,19 @@ def main(event, arguments):
         os._exit(86)
     denied = {'subprocess.Popen', 'os.exec', 'os.posix_spawn', 'os.system', 'os.fork',
               'os.forkpty', 'socket.connect', 'socket.bind', 'ctypes.dlopen'}
+    console_code = None
+    console_started = [False]
+    if event == 'cpython.run_file':
+        source = Path(arguments[0]).read_bytes()
+        if hashlib.sha256(source).hexdigest() != profile['console_source_sha256']:
+            os._exit(86)
+        console_code = compile(source, str(arguments[0]), 'exec', dont_inherit=True)
     used_git = [False]
     def audit(name, args):
+        if name == 'exec' and console_code is not None and args[0].co_filename == console_code.co_filename:
+            if console_started[0] or args[0] != console_code:
+                os._exit(86)
+            console_started[0] = True
         if name == 'import' and len(args) > 1 and isinstance(args[1], str) and args[1].endswith('.so'):
             library = Path(args[1])
             site = Path('/source/.venv/lib/python3.13/site-packages')

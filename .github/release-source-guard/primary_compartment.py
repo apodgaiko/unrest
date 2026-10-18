@@ -65,7 +65,7 @@ def main():
             os.close(ready_write)
             if os.read(start_read, 1) != b'1':
                 os._exit(126)
-            os.closerange(3, 128)
+            os.closerange(3, 1 << 20)
             os.execve(spec['shell_argv'][0], spec['shell_argv'], env)
         finally:
             os._exit(126)

@@ -73,9 +73,19 @@ def identity_check(value):
     require(value['artifact_name'] in {
         f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}"
         for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations', 'primary-install', 'primary-import', 'primary-help', 'primary-repository', 'primary-lint', 'primary-types', 'primary-controls')}, 'artifact_identity')
-    require(type(value['workflow_ref']) is str and re.fullmatch(
+    require(type(value['workflow_ref']) is str, 'workflow_identity')
+    readiness = re.fullmatch(
         r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-[a-z0-9-]+',
-        value['workflow_ref']), 'workflow_identity')
+        value['workflow_ref'])
+    primary = re.fullmatch(
+        r'apodgaiko/unrest/\.github/workflows/ci\.yml@refs/(?:heads/(?:main|codex/release-v046-[a-z0-9-]+)|pull/[1-9][0-9]*/merge)',
+        value['workflow_ref'])
+    primary_kinds = {'readiness', 'primary-install', 'primary-import', 'primary-help',
+                     'primary-repository', 'primary-lint', 'primary-types', 'primary-controls'}
+    primary_artifact = value['artifact_name'] in {
+        f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}" for kind in primary_kinds}
+    require(readiness is not None or primary is not None and primary_artifact, 'workflow_identity')
+
 
 
 def execution_identity(support, kind):

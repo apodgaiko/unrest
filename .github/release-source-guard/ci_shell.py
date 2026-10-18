@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tarfile
 
-from primary_policy import plan
+from primary_policy import plan, public_plan
 from ci_commands import bind_generated
 from checkpoint_decision import expected_identity
 from primary_environment import build
@@ -168,7 +168,7 @@ def main():
     finally:
         run(['docker', 'rm', '--force', container], log)
     metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,
-                'source_exit_code': status, 'stage': stage, 'primary_plan': spec,
+                'source_exit_code': status, 'stage': stage, 'primary_plan': public_plan(spec),
                 'head_sha': os.environ['GITHUB_SHA'], 'image_id': image,
                 'source_pins_sha256': hashlib.sha256(json.dumps(source_pins, sort_keys=True).encode()).hexdigest(),
                 'support': control['support'],

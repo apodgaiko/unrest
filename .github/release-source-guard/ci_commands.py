@@ -59,11 +59,17 @@ def require_executable_duties(workflow, names):
             break
         if not primary:
             continue
+        if line.startswith('    ') and not line.startswith('     ') and line.strip():
+            key = line.strip().partition(':')[0].strip()
+            if not key.startswith('#') and key not in {'name', 'runs-on', 'timeout-minutes', 'steps'}:
+                raise RuntimeError('unregistered primary job control')
         if line.startswith(('    if:', '    continue-on-error:')):
             raise RuntimeError('conditional primary execution refused')
         if line.startswith('      - name: '):
             step = line.removeprefix('      - name: ')
-        if step in names and line.startswith(('        if:', '        continue-on-error:', '        working-directory:')):
+        if (step in names and line.startswith('        ') and not line.startswith('         ')
+                and line.strip() and not line.strip().startswith('#')
+                and line.strip().partition(':')[0].strip() not in {'run', 'shell'}):
             raise RuntimeError('conditional original executable duty refused')
 
 
@@ -94,6 +100,8 @@ def bind_generated(script, workflow):
     bind. No alternate rendering of an executable block is accepted.
     """
     registry = json.loads(REGISTRY.read_bytes())
+    if workflow.count('  primary:\n    name: primary source and package gate (py3.13)\n') != 1:
+        raise RuntimeError('primary_job_identity_drift')
     actual = primary_commands(workflow)
     require_executable_duties(workflow, registry)
     if any(actual.get(name) != original for name, original in registry.items()):

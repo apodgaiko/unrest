@@ -69,11 +69,19 @@ class Authority:
             self.contexts[pid] = {'role': 'ruff', 'identity': identity(pid)}
             return True
         console_name = command[2] if command[:2] == ['uv', 'run'] and len(command) > 2 else None
-        is_console = (console_name in {'unrest', 'unrest-server', 'mypy'}
-                      and path == '/source/.venv/bin/' + console_name
-                      and vector == command[2:] and Path(path).read_bytes() == console(console_name))
+        console_interpreter = None
+        if (console_name in {'unrest', 'unrest-server', 'mypy'}
+                and path == '/source/.venv/bin/' + console_name and vector == command[2:]):
+            for candidate in ('/source/.venv/bin/python', '/source/.venv/bin/python3',
+                              '/source/.venv/bin/python3.13'):
+                if (Path(candidate).resolve() == Path(PYTHON)
+                        and digest(candidate) == digest(PYTHON)
+                        and Path(path).read_bytes() == console(console_name, candidate)):
+                    console_interpreter = candidate
+                    break
+        is_console = console_interpreter is not None
         if (context is None or context['role'] != 'uv' or not vector
-                or context['python_calls'] >= 16 or path != vector[0]
+                or context['python_calls'] >= 16 or (path != vector[0] and not is_console)
                 or not (is_console or (Path(path).resolve() == Path(PYTHON) and digest(path) == digest(PYTHON)))):
             return self.refuse('unknown_descendant')
         if owner is context and identity(parent) != context['identity']:
@@ -84,7 +92,7 @@ class Authority:
         flags = [0, 0, 1]
         if is_console and not context['final']:
             role, event, body = 'original_console', 'cpython.run_file', path
-            vector = ['/source/.venv/bin/python', path, *vector[1:]]
+            vector = [console_interpreter, path, *vector[1:]]
             context['final'] = True
         elif len(vector) == 5 and vector[1:4] == ['-I', '-B', '-c']:
             try:
@@ -102,7 +110,7 @@ class Authority:
                 return self.refuse('original_body_argv')
             if len(vector) == 3 and vector[1] == '-c':
                 role, body = 'original_command', vector[2] + '\n'
-            elif len(vector) == 3 and vector[1] == '-m':
+            elif len(vector) >= 3 and vector[1] == '-m':
                 role, event, body = 'original_module', 'cpython.run_module', vector[2]
             else:
                 return self.refuse('original_body_shape')
@@ -114,7 +122,8 @@ class Authority:
                    'cwd': cwd, 'event': event, 'flags': flags,
                    'body_sha256': hashlib.sha256(body.encode()).hexdigest(),
                    'repository': context['command'] == ['uv', 'run', 'unrest', 'check-repository'],
-                   'repository_source_sha256': digest('/source/src/unrest_harness/repository_contract.py')}
+                   'repository_source_sha256': digest('/source/src/unrest_harness/repository_contract.py'),
+                   'console_source_sha256': digest(body) if role == 'original_console' else None}
         path = Path('/receipts/primary-startup') / (str(pid) + '.json')
         if path.exists():
             return self.refuse('duplicate_profile')

@@ -30,13 +30,17 @@ class ActionsReader:
         self.token = token
 
     def api(self, path):
-        if not re.fullmatch(r'actions/[A-Za-z0-9_./?=&%-]+', path) or '..' in path:
+        patterns = (r'actions/workflows/ci\.yml/runs\?head_sha=[0-9a-f]{40}&per_page=100',
+                    r'actions/runs/[1-9][0-9]*/attempts/[1-9][0-9]*/jobs\?per_page=100',
+                    r'actions/runs/[1-9][0-9]*/artifacts\?per_page=100',
+                    r'actions/artifacts/[1-9][0-9]*')
+        if not any(re.fullmatch(pattern, path) for pattern in patterns):
             raise ReceiptRefused('unrecognized repository Actions read path')
         request = urllib.request.Request(API + path, headers={
             'Authorization': 'Bearer ' + self.token, 'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'unrest-source-checkpoint',
         })
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.build_opener(NoRedirect).open(request, timeout=60) as response:
             body = response.read(8 * 1024 * 1024 + 1)
         if len(body) > 8 * 1024 * 1024:
             raise ReceiptRefused('Actions metadata exceeds its finite bound')

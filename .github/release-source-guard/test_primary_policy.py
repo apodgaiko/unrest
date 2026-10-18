@@ -60,3 +60,19 @@ def test_native_backend_renderer_is_closed_and_bound_to_finite_cache():
     for drift in (script + '\nprint(1)', script.replace('/work/cache/', '/foreign/'),
                   script.replace('requires = []', 'requires = ["foreign"]')):
         assert backend_request(drift) is None
+
+
+def test_public_evidence_never_carries_actual_script_argv_or_arbitrary_fields():
+    from primary_policy import public_plan
+    registry = json.loads(REGISTRY.read_bytes())
+    spec = plan(registry['Import package'].removesuffix('\n').encode(), workflow(registry))
+    spec['commands'] = [['PRIVATE-CANARY-PRIMARY-ARGV']]
+    spec['shell_argv'] = ['PRIVATE-CANARY-PRIMARY-SHELL']
+    spec['unrecognized'] = 'PRIVATE-CANARY-PRIMARY-UNKNOWN'
+    result = public_plan(spec)
+    assert 'PRIVATE-CANARY' not in json.dumps(result)
+    assert set(result) == {'schema', 'duty', 'script_sha256', 'workflow_sha256', 'command_count',
+                           'timeout_seconds', 'source_checkpoint_ready', 'selected_carrier'}
+    spec['script_sha256'] = 'PRIVATE-CANARY-PRIMARY-HASH'
+    with pytest.raises(RuntimeError):
+        public_plan(spec)

@@ -123,6 +123,12 @@ def verify(root, run, artifact, members, key, support):
             require(row['poison'] == (['unknown_or_drifted_exec']
                     if row['control_id'] == 'kernel_unknown_caught' else []), 'primary_control_poison')
             results[row['control_id']] = valid
+        if 'host_private_canary_sha256' in metadata:
+            require(metadata['private_canary_outside_mounts'] is True
+                    and isinstance(metadata['host_private_canary_sha256'], str)
+                    and len(metadata['host_private_canary_sha256']) == 64, 'primary_canary_identity')
+            projection['private_canary_outside_mounts'] = True
+            projection['host_private_canary_sha256'] = metadata['host_private_canary_sha256']
         projection.update(primary_controls_verified=all(results.values()) and metadata['source_exit_code'] == 0,
                           controls=results, actual_root_parent_waits=len(controls))
         if not projection['primary_controls_verified']:

@@ -20,6 +20,7 @@ spec.loader.exec_module(receipt)
 def fixture():
     expected = {key: 'a' * 64 for key in receipt.DEFINITION_FIELDS}
     expected['head_sha'] = 'b' * 40
+    expected['source_tree'] = 'c' * 40
     expected['source_command_sha256'] = hashlib.sha256(receipt.COMMAND.encode()).hexdigest()
     run = {'status': 'completed', 'conclusion': 'success', 'path': receipt.WORKFLOW,
            'head_repository': {'full_name': receipt.REPOSITORY}, 'event': 'push',
