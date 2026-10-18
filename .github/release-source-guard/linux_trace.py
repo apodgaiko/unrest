@@ -12,6 +12,7 @@ import errno
 import hashlib
 import importlib.util
 import os
+import math
 from pathlib import Path
 import signal
 import sys
@@ -184,11 +185,19 @@ class OwnedTrace:
 
     def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float,
                  on_tick: Any = None, resolve_exec: Any = None,
-                 seize: bool = False, on_attached: Any = None, selective: bool = False):
+                 seize: bool = False, on_attached: Any = None, selective: bool = False,
+                 primary_allocation: Any = None):
         if sys.platform != "linux" or os.uname().machine != "x86_64":
             raise RuntimeError("unsupported trace ABI")
-        if child <= 0 or timeout <= 0 or timeout > 180:
+        if (child <= 0 or type(timeout) not in (int, float)
+                or (type(timeout) is float and not math.isfinite(timeout)) or timeout <= 0):
             raise ValueError("bounded owned trace required")
+        if primary_allocation is None:
+            if timeout > 180:
+                raise ValueError("bounded owned trace required")
+        else:
+            from primary_policy import require_primary_root_allocation
+            require_primary_root_allocation(primary_allocation, timeout, child, allowed)
         if Path(f"/proc/{child}/status").read_text().split("PPid:", 1)[1].split()[0] != str(
             os.getpid()
         ):

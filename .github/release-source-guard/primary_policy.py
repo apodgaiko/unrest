@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import shlex
+from typing import NamedTuple
 
 from ci_commands import bind_generated
 
@@ -26,6 +27,7 @@ TEST_SEAM_CASES = (
     'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
 )
 TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES)
+TEST_SEAM_ROOT_SECONDS = 600
 
 
 def sha(body):
@@ -158,7 +160,7 @@ def public_plan(spec):
     """Public evidence carries only closed identities/counts and input hashes."""
     import re
     if (spec['duty'] not in FOCUSED | {SOURCE, 'TEST-source-positive', 'TEST-source-poison'}
-            or spec['timeout_seconds'] != (SOURCE_BUDGET['root_seconds'] if spec.get('source_mode') == 'SOURCE' else 180)
+            or spec['timeout_seconds'] != root_seconds(spec)
             or spec['source_checkpoint_ready'] is not False or spec['selected_carrier'] is not None
             or any(not isinstance(spec[key], str) or not re.fullmatch('[0-9a-f]{64}', spec[key])
                    for key in ('script_sha256', 'workflow_sha256'))):
@@ -167,3 +169,82 @@ def public_plan(spec):
             'script_sha256': spec['script_sha256'], 'workflow_sha256': spec['workflow_sha256'],
             'command_count': len(spec['commands']), 'timeout_seconds': spec['timeout_seconds'],
             'source_checkpoint_ready': False, 'selected_carrier': None}
+
+
+def root_seconds(spec):
+    """Closed setup resources; none of these values changes a test deadline."""
+    mode = spec.get('source_mode')
+    if mode == 'SOURCE':
+        return SOURCE_BUDGET['root_seconds']
+    if mode in {'TEST-positive', 'TEST-poison'}:
+        script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_SEAM_CASES)).encode()
+        if (spec['commands'] == [shlex.split(script.decode())]
+                and spec['script_sha256'] == sha(script)
+                and spec['shell_argv'] == [SHELL, *SHELL_FLAGS, '/inputs/github-script.sh']
+                and spec['duty'] == 'TEST-source-' + mode.removeprefix('TEST-')
+                and spec['source_budget'] == SOURCE_BUDGET
+                and spec['source_input_sha256'] == sha(canonical({'mode': mode}))):
+            return TEST_SEAM_ROOT_SECONDS
+    return 180
+
+
+class PrimaryRootAllocation(NamedTuple):
+    seconds: int
+    binding_sha256: str
+    shell_argv: tuple[str, ...]
+
+
+def primary_root_allocation():
+    """Read the trusted controller inputs afresh, before trace attachment.
+
+    No requested cap or payload switch is accepted. Reconstruct the exact plan,
+    including full SOURCE readiness, and bind the current head/support bytes.
+    """
+    from primary_source_inputs import test_plan, decode
+    from checkpoint_receipt import DEFINITION_FIELDS
+    import re
+    from structured_evidence import source_binding
+    script = Path('/inputs/github-script.sh').read_bytes()
+    workflow = Path('/source/.github/workflows/ci.yml').read_text()
+    source_path = Path('/inputs/source-input.json')
+    source_input = decode(source_path.read_bytes()) if source_path.is_file() else None
+    mode_path = Path('/inputs/test-mode')
+    mode = mode_path.read_text() if mode_path.is_file() else None
+    spec = test_plan(script, workflow, mode) if mode else plan(script, workflow, source_input)
+    supplied = json.loads(Path('/inputs/plan.json').read_bytes())
+    expected = json.loads(Path('/inputs/identity.json').read_bytes())
+    identity = source_binding(Path('/inputs/transport-identity.json').read_bytes())['identity']
+    support = Path(__file__).resolve().parent
+    pins = {str(path.relative_to(support)): sha(path.read_bytes())
+            for path in sorted(support.rglob('*'))
+            if path.is_file() and path.suffix in {'.py', '.json', '.pem', '.c'}}
+    seconds = root_seconds(spec)
+    kind = 'primary-source' + ('-' + mode.removeprefix('TEST-') if mode else '')
+    if (type(expected) is not dict or set(expected) != set(DEFINITION_FIELDS)
+            or any(type(pin) is not str or not re.fullmatch(
+                '[0-9a-f]{40}' if key in {'head_sha', 'source_tree'} else '[0-9a-f]{64}', pin)
+                for key, pin in expected.items())
+            or identity['artifact_name'] != f"v046-source-{kind}-{identity['run_id']}-{identity['run_attempt']}"):
+        raise ValueError('primary_root_allocation_identity')
+    if (canonical(spec) != canonical(supplied)
+            or type(supplied['timeout_seconds']) is not int
+            or supplied['timeout_seconds'] != seconds or seconds not in {600, 7200}
+            or Path('/source/.git/HEAD').read_text() != expected['head_sha'] + '\n'
+            or expected['head_sha'] != identity['head_sha']
+            or expected['workflow_sha256'] != sha(workflow.encode())
+            or expected['guard_definition_sha256'] != sha(json.dumps(pins, sort_keys=True).encode())
+            or identity['support_sha256'] != sha(canonical(pins))
+            or (mode is None and source_input['definition'] != expected)):
+        raise ValueError('primary_root_allocation_refused')
+    public_plan(spec)
+    binding = {'plan': spec, 'expected': expected, 'identity': identity, 'source_input': source_input}
+    return PrimaryRootAllocation(seconds, sha(canonical(binding)), tuple(spec['shell_argv']))
+
+
+def require_primary_root_allocation(value, timeout, child, allowed):
+    if (type(value) is not PrimaryRootAllocation or type(timeout) is not int
+            or timeout != value.seconds or value != primary_root_allocation()
+            or len(allowed) != 1 or allowed[0].get('pid') != child
+            or allowed[0]['path'] != value.shell_argv[0]
+            or allowed[0]['argv'] != list(value.shell_argv)):
+        raise ValueError('primary_root_allocation_refused')

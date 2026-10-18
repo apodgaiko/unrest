@@ -358,7 +358,8 @@ process births and actual parent waits are kernel observations. The primary
 native CPython entry consumes an observer-owned PID/birth/argv/environment/cwd
 profile before the body, including with `-I -S`. Unknown execs retain poison even
 when the caller catches their failure; unregistered process births also fail.
-The focused assignment budget remains 180 seconds. Original source/subprocess
+The six focused CI duties and single-case TEST keep a 180-second root allocation.
+Only the exact four-case TEST seam uses a finite 600-second setup allocation. Original source/subprocess
 deadlines and all existing guard/runtime pins remain unchanged.
 
 Docker's tmpfs defaults made the writable source view non-executable despite the
@@ -485,7 +486,8 @@ required by the unchanged finite Git/custody predicates. JUnit and basetemp are
 setup options; invocation arguments, selection and source cases stay unchanged.
 The full root budget is 7200 seconds, collection is bounded to 300 seconds and
 provenance/guard drain to 60 seconds. Those finite setup bounds are separate from
-the existing focused 180-second capsule and all original per-test deadlines.
+the six focused 180-second CI capsules, single-case TEST, and all original
+per-test deadlines; the exact four-case TEST setup has its separate 600 seconds.
 The collection observer records before/after lists, deselection, original argv,
 root READY, JUnit and guard summary; it does not alter items, order, marks or
 selection. These direct named records enter existing phase custody and issuer.
@@ -763,3 +765,17 @@ than the raw nonce. Its literal runner-owned control file has a closed two-field
 schema,8192-byte bound, regular single-link/nofollow carrier and fresh
 open/after/path identity checks. Oversized current stdout is scanned for
 its one bounded header without allocating a second complete payload copy.
+
+
+Primary root allocations are setup resources, distinct from behavioral deadlines.
+Generic OwnedTrace callers retain the 180-second cap. The trusted primary
+observer reconstructs the exact current plan from the literal script, workflow,
+mode and readiness input, and binds head, support, shell and commands before
+attachment. Its immutable descriptor admits exactly 600 seconds for the closed
+four-case positive/poison TEST tuple, or 7200 seconds for readiness-bound full
+SOURCE. A changed input or raw requested cap refuses before attachment. No
+allocation is reset or extended during execution. SOURCE collection300/drain60,
+receipt4/READY8/endpoint4/parentwait25 and every original test deadline remain
+unchanged. Historical 180-second root timeouts remain failures, without final
+JUnit or complete original-parent waits; setup controls do not prove SOURCE
+acceptance. Full SOURCE readiness still requires package and final closure.

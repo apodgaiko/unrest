@@ -12,7 +12,7 @@ import stat
 from linux_compartment import source_credentials, observer_credentials
 from linux_observation import process_identity
 from linux_trace import OwnedTrace, install_observation_filter
-from primary_policy import environment, plan, sha
+from primary_policy import environment, plan, sha, primary_root_allocation
 from primary_authority import Authority
 from primary_source_inputs import test_plan, decode
 from primary_source_authority import SourceAuthority
@@ -175,8 +175,10 @@ def main():
     trace = None
     def resolve(pid, path, argv, values, cwd):
         return authority.resolve(trace, pid, path, argv, values, cwd)
+    allocation = primary_root_allocation() if spec['timeout_seconds'] > 180 else None
     trace = OwnedTrace(child, allowed, spec['timeout_seconds'], on_tick=tick,
-                       resolve_exec=resolve, seize=True, on_attached=attached, selective=True)
+                       resolve_exec=resolve, seize=True, on_attached=attached, selective=True,
+                       primary_allocation=allocation)
     failure = None
     trace_status = None
     STAGE = 'trace'
