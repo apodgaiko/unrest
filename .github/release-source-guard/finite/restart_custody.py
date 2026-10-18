@@ -26,13 +26,48 @@ class SpawnEvidence:
         self.evidence = evidence
 
 
+def stage(guard, phase):
+    if guard._STATE["class"] == "restart-custodian":
+        guard.append({"kind": "custodian_stage", "phase": phase, "monotonic": time.monotonic()})
+
+
+def prepare_source(guard):
+    """Populate only the existing content-addressed source-code cache before IPC."""
+    stage(guard, "source_preparation_begin")
+    state = guard._STATE
+    source = Path(state["checkout"]) / "src/unrest_harness/run_control.py"
+    try:
+        from unrest_harness.run_control import RunControl
+
+        pin = state["product_pins"]["src/unrest_harness/run_control.py"]
+        if sha(source) != pin:
+            guard.refuse("custody_preparation_source_drift")
+        expected = state["isolated_named"](state["isolated_source_code"](source), "_spawn")
+        if (
+            expected is None
+            or expected != RunControl._spawn.__code__
+            or expected.co_filename != str(source)
+            or RunControl._spawn.__globals__
+            is not sys.modules[RunControl.__module__].__dict__
+            or sha(source) != pin
+        ):
+            guard.refuse("custody_preparation_code_drift")
+    except guard.GuardRefusal:
+        raise
+    except Exception:
+        guard.refuse("custody_preparation_failed")
+    stage(guard, "source_preparation_complete")
+
+
 def source_snapshot(guard, frame, argv, kwargs):
+    stage(guard, "snapshot_begin")
     state = guard._STATE
     source = Path(state["checkout"]) / "src/unrest_harness/run_control.py"
     from unrest_harness.run_control import RunControl, _Request
 
     function = RunControl._spawn
     expected = state["isolated_named"](state["isolated_source_code"](source), "_spawn")
+    stage(guard, "snapshot_code_derived")
     if (
         frame is None
         or frame.f_code is not function.__code__
@@ -48,6 +83,7 @@ def source_snapshot(guard, frame, argv, kwargs):
     call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call) and n.lineno == 1147)
     if ast.unparse(call.func) != "subprocess.Popen":
         guard.refuse("custody_source_AST_drift")
+    stage(guard, "snapshot_AST_derived")
     control, request = frame.f_locals["self"], frame.f_locals["request"]
     if type(control) is not RunControl or type(request) is not _Request:
         guard.refuse("custody_owner_request_type_drift")
@@ -99,6 +135,7 @@ def source_snapshot(guard, frame, argv, kwargs):
     durable = json.loads(request_bytes)
     if durable["run_id"] != request.run_id or durable["generation"] != request.generation:
         guard.refuse("custody_request_generation_drift")
+    stage(guard, "snapshot_complete")
     return {
         "argv": expected_argv,
         "cwd": str(root),
@@ -144,9 +181,12 @@ def install(guard, endpoint):
                         guard.refuse("custody_source_snapshot_error")
                 finally:
                     del frame
+                stage(guard, "original_ready_begin")
                 guard.require_ready(state["token"])
+                stage(guard, "original_admission_begin")
                 # Original admission runs in both original and actual source frames.
                 registration, admitted = guard.admit(vector, kwargs.get("cwd"), kwargs.get("env"))
+                stage(guard, "original_admission_complete")
                 if registration["class"] != "source-run-worker" or admitted != vector:
                     guard.refuse("custody_original_admission_drift")
                 if state["class"] == "restart-custodian":
@@ -197,7 +237,9 @@ def install(guard, endpoint):
             return super().__new__(cls)
 
         def __init__(self, args, *positional, **kwargs):
+            stage(guard, "Popen_begin")
             super().__init__(args, *positional, **kwargs)
+            stage(guard, "Popen_native_READY_complete")
             if state["class"] == "restart-custodian":
                 if len(pending) != 1:
                     guard.refuse("custody_unbound_actual_launch")
@@ -228,6 +270,8 @@ def serve():
     retained = state["custody_retained"]
     pending = state["custody_pending"]
     closing = False
+    stage(guard, "imports_complete")
+    prepare_source(guard)
     close_ipc = sys.modules["custody_ipc"].start()
     try:
         while not closing:
@@ -236,6 +280,7 @@ def serve():
             answer = endpoint.request("custody_poll")
             job = answer.get("job")
             if job:
+                stage(guard, "job_dequeued")
                 snapshot = job["snapshot"]
                 if sha(snapshot["request_path"]) != snapshot["request_sha256"]:
                     guard.refuse("custody_actual_request_bytes_drift")
@@ -251,7 +296,9 @@ def serve():
                 pending[:] = [job]
                 before = len(retained)
                 try:
+                    stage(guard, "spawn_call_begin")
                     RunControl._spawn(control, request)
+                    stage(guard, "spawn_call_complete")
                 finally:
                     pending.clear()
                 if len(retained) != before + 1:

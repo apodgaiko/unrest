@@ -75,7 +75,7 @@ class Supervisor:
         events = self.events()
         for event in events:
             if event['kind'] in {'admitted', 'actual_launch_binding', 'ready', 'source_entry',
-                                 'test_outcome', 'actual_parent_preexit_drain', 'custody_IPC_listener_ready'}:
+                                 'test_outcome', 'actual_parent_preexit_drain', 'custody_IPC_listener_ready', 'custodian_stage'}:
                 marker = tuple(event.get(key) for key in ('owner_pid', 'kind', 'token', 'pid',
                                                           'phase', 'outcome', 'class'))
                 if marker not in self.timed_events:

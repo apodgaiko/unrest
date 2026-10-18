@@ -628,3 +628,19 @@ startup, domain consumption and original-parent numeric waits.
 Closed residual-phase timing also separates fresh namespace execution,
 durable snapshot validation and custody-handler work from compilation and AST
 derivation. These observations do not alter admission, polling or deadlines.
+
+The restart custodian prepares the one pinned `run_control.py` source-code
+and `_spawn` derivation in the existing process-local content-addressed guard
+cache before starting its IPC listener. Preparation verifies current source
+bytes and the imported function's code, filename and module globals; failure
+poisons admission and prevents listener readiness. It creates no request,
+launch plan, child or admission decision and never invokes `_spawn`.
+Each actual job still runs the original snapshot and admission path, including
+fresh source reads/hashes, AST, live frame/code/globals, request generation,
+argv/environment/cwd/owner, READY, ledger and actual-parent wait checks.
+Closed custodian stages identify imports, preparation, snapshot, admission
+and native READY boundaries without recording source or request bodies.
+The 8s READY, 4s receipt/endpoint and 25s wait limits remain unchanged.
+Local controls establish that the first pure source derivation moves before
+listener readiness and remains reused by the existing cache. Hosted timing
+benefit and original composed SOURCE acceptance remain unverified.
