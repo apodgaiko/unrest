@@ -5,7 +5,10 @@ fixture frame, Popen retention, READY response, function return, or wait.
 """
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
+import stat
 import secrets
 from types import SimpleNamespace
 
@@ -45,6 +48,14 @@ class PackageBuildAuthority(SourceAuthority):
         self.supervisor.source_response_output = self.producers.stage_response
         from primary_package_ready import install
         install(self.supervisor, self.producers)
+        objects = []
+        for descriptor in (output_fd, self.supervisor.channel.fileno()):
+            info = os.fstat(descriptor)
+            objects.append({'device': info.st_dev, 'inode': info.st_ino,
+                            'type': stat.S_IFMT(info.st_mode)})
+        with Path('/receipts/HOST-FDS.json').open('x') as stream:
+            stream.write(json.dumps({'nonce': self.manifest['endpoint']['nonce'],
+                                     'objects': objects}, sort_keys=True))
         self.output_fd = output_fd
 
     def resolve(self, trace, pid, path, vector, environment, cwd):
