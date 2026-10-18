@@ -16,7 +16,7 @@ from ci_commands import bind_generated
 from checkpoint_decision import expected_identity
 from primary_environment import build
 from source_controller import source_bindings
-from structured_evidence import capture, execution_identity
+from structured_evidence import EvidenceRefused, capture, execution_identity
 from primary_custody import Binding, Custody, read_regular
 from primary_source_inputs import test_plan, decode
 from structured_evidence import canonical
@@ -209,6 +209,8 @@ def main():
     identity = execution_identity(SUPPORT, kind)
     status = 125
     records = {}
+    capture_failure = None
+    container_state = None
     stage = 'create'
     STAGE = 'capsule'
     try:
@@ -223,10 +225,22 @@ def main():
         if state['Running'] or state['OOMKilled']:
             raise RuntimeError('primary_unsettled')
         status = state['ExitCode']
-    except BaseException:
+    except BaseException as error:
         # Only typed stage data enters public metadata; private exceptions are
         # unnecessary for this closed executor protocol.
         status = 125
+        if stage == 'capture':
+            capture_failure = (str(error) if isinstance(error, EvidenceRefused)
+                               and str(error) in {'transport_bound', 'direct_transport_count',
+                                                  'invalid_json', 'unknown_record', 'missing_record',
+                                                  'record_bound', 'record_encoding'} else 'capture_failed')
+            observed = subprocess.run(
+                ['docker', 'inspect', '--format={{json .State}}', container],
+                capture_output=True, check=False)
+            if observed.returncode == 0:
+                state = json.loads(observed.stdout)
+                container_state = {'running': state['Running'], 'oom_killed': state['OOMKilled'],
+                                   'exit_code': state['ExitCode']}
     finally:
         run(['docker', 'rm', '--force', container], log)
     phase_sha256 = None
@@ -253,6 +267,7 @@ def main():
                 'custody_phase_sha256': phase_sha256,
                 'source_test_identity': test_mode, 'negative_verified': negative_verified,
                 'source_test_proof': test_proof,
+                'capture_failure': capture_failure, 'container_state': container_state,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'
     with tarfile.open(archive, 'w:gz') as stream:

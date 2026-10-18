@@ -600,3 +600,9 @@ original-case JUnit, collection, child READY/domain consumption and original
 parent waits provide that separate bounded proof. Neither TEST nor a finite
 SOURCE applicability seal is the frozen unexcluded source checkpoint, package
 certification or a readiness carrier.
+
+A failed primary capture retains a closed transport-refusal code and the
+container's running/OOM/exit status when available. These fields diagnose
+missing structured evidence without reading private process output. Missing
+envelopes remain failed, and the original transport and container bounds stay
+unchanged.
