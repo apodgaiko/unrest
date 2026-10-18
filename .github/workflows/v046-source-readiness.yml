@@ -78,6 +78,22 @@ jobs:
             ${{ runner.temp }}/primary-help/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
+      - name: Actual generated substituted script refusal
+        run: uv run python -c "raise SystemExit(99)"
+        shell: python3 .github/release-source-guard/primary_negative_shell.py substitution {0}
+      - name: Actual generated identity and workflow drift refusals
+        run: uv run python -c "import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()"
+        shell: python3 .github/release-source-guard/primary_negative_shell.py identity {0}
+      - name: Upload primary script refusal records
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-primary-script-refusals-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-negative-substitution.json
+            ${{ runner.temp }}/primary-negative-identity.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Repository contract
         run: uv run unrest check-repository
         shell: python3 .github/release-source-guard/ci_shell.py {0}
@@ -100,19 +116,6 @@ jobs:
             ${{ runner.temp }}/primary-host-stage.json
             ${{ runner.temp }}/primary-image-stage.json
           if-no-files-found: error
-      - name: Original CI mutation assertions
-        if: always()
-        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/ci-mutations" "$RUNNER_TEMP/source-readiness" ci-mutations
-      - name: Upload encrypted CI mutation evidence
-        if: always()
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: v046-source-ci-mutations-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/ci-mutations/evidence.cms
-            ${{ runner.temp }}/ci-mutations/safe-provenance.json
-          if-no-files-found: error
-          retention-days: 30
       - name: Upload encrypted control evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2
