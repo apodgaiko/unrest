@@ -144,28 +144,13 @@ def test_owned_role_inventory_pipe_requires_exact_source_and_kernel_identity(mon
     elif change == 'uid':
         info.st_uid = 20001
 
-    class ProcPath:
-        def __init__(self, value):
-            self.value = value
-            self.name = '7'
-
-        def __lt__(self, other):
-            return False
-
-        def iterdir(self):
-            return [self, self] if change == 'extra' else [self]
-
-        def stat(self):
-            return info
-
-        def read_text(self):
-            return 'flags:\t' + oct(flags)[2:] + '\n'
-
     instance = object.__new__(authority.SourceAuthority)
     instance.bound = {11: {'registration': registration}}
     instance.pipe_records = []
     instance.supervisor = SimpleNamespace(events=lambda: rows)
-    monkeypatch.setattr(authority, 'Path', ProcPath)
+    row = {'fd': 7, 'device': info.st_dev, 'inode': info.st_ino, 'mode': info.st_mode,
+           'uid': info.st_uid, 'access': flags & os.O_ACCMODE, 'close_on_exec': False}
+    monkeypatch.setattr(instance, 'census', lambda pid: [row, row] if change == 'extra' else [row])
     monkeypatch.setattr(authority, 'identity', lambda pid: {'ppid': 10})
     if change == 'valid':
         assert instance.descriptors(11) == [{'fd': 7, 'device': 2, 'inode': 3,
