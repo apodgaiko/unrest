@@ -136,6 +136,160 @@ def consume(profile):
     return spec
 
 
+def runtime_members(spec, selected, emit=None):
+    """Declare one already validated original UV backend environment at exec."""
+    activation = load('runtime_member_identity', '/guard/finite/operation_activation.py')
+    root = Path(selected['prefix'])
+    python = Path(selected['python_link'])
+    if python != root / 'bin/python' or python.resolve(strict=True) != Path(spec['base']):
+        raise RuntimeError('primary_runtime_declared_python_drift')
+    site = root / 'lib/python3.13/site-packages'
+    rows = {}
+    def refuse(code, name, kind):
+        if emit is not None:
+            emit({'kind': 'primary_runtime_member_refusal', 'stage': code,
+                  'member_sha256': hashlib.sha256(name.encode()).hexdigest(),
+                  'member_type': kind})
+        raise RuntimeError(code)
+    for path in sorted(root.rglob('*')):
+        info = path.lstat()
+        name = path.relative_to(root).as_posix()
+        if info.st_uid != 20000 or (not path.is_symlink() and stat.S_IMODE(info.st_mode) & 0o022):
+            raise RuntimeError('primary_runtime_member_owner_mode')
+        if path.is_symlink():
+            allowed = {root / 'bin/python': spec['base'], root / 'bin/python3': 'python',
+                       root / 'bin/python3.13': 'python', root / 'lib64': 'lib'}
+            if path not in allowed or os.readlink(path) != allowed[path]:
+                refuse('primary_runtime_unbound_link', name, 'symlink')
+            target = path.resolve(strict=True)
+            target_identity = activation.identity(target) if target.is_file() else {
+                'directory': [target.stat().st_dev, target.stat().st_ino, target.stat().st_mode]}
+            rows[name] = {'type': 'symlink', 'target': os.readlink(path),
+                          'identity': [info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+                                       info.st_ctime_ns], 'target_identity': target_identity,
+                          'target_uid': target.stat().st_uid}
+        elif path.is_dir():
+            if not (path in {root / 'bin', root / 'lib', root / 'lib/python3.13'}
+                    or path.is_relative_to(site)):
+                refuse('primary_runtime_unbound_directory', name, 'directory')
+            rows[name] = {'type': 'directory', 'identity': [info.st_dev, info.st_ino,
+                                                          info.st_mode, info.st_uid]}
+        elif path.is_file():
+            if not (path == root / 'pyvenv.cfg' or path.is_relative_to(site)):
+                refuse('primary_runtime_unbound_file', name, 'file')
+            rows[name] = {'type': 'file', 'file': activation.identity(path), 'uid': info.st_uid, 'nlink': info.st_nlink}
+        else:
+            raise RuntimeError('primary_runtime_nonregular_member')
+    info = root.lstat()
+    return {'root': str(root), 'root_identity': [info.st_dev, info.st_ino, info.st_mode, info.st_uid],
+            'members': rows}
+
+
+def original_runtime_outputs(spec):
+    """Read only the current original build's authenticated READY child headers."""
+    operations = load('runtime_output_operations', '/guard/finite/source_operations.py')
+    build = operations.require(spec['output'], 'source-build')
+    rows = events(spec)
+    admissions = [r for r in rows if r['kind'] == 'operation_admission'
+                  and r['token'] == build['token'] and r['owner_pid'] == build['owner_pid']]
+    if len(admissions) != 1:
+        raise RuntimeError('primary_runtime_build_admission_missing')
+    helpers = [r for r in rows if r['kind'] == 'isolated_original_dispatch'
+               and r['parent_pid'] == build['pid']]
+    wanted = {'get_requires_for_build_sdist', 'build_sdist',
+              'get_requires_for_build_wheel', 'build_wheel'}
+    if len(helpers) != 4 or {r['helper'] for r in helpers} != wanted:
+        raise RuntimeError('primary_runtime_original_helpers_missing')
+    outputs = {}
+    for helper in helpers:
+        pid = helper['owner_pid']
+        path = Path('/receipts/native-startup') / (str(pid) + '.json')
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 20001
+                or stat.S_IMODE(info.st_mode) != 0o444 or info.st_nlink != 1):
+            raise RuntimeError('primary_runtime_header_custody')
+        header = json.loads(path.read_bytes())
+        child = protected_json(header['spec'], header['spec_sha256'])
+        parent = child['parent_operation']
+        ready = [r for r in rows if r['kind'] == 'ready' and r['owner_pid'] == pid
+                 and r['token'] == header['token']]
+        if (len(ready) != 1 or ready[0]['manifest_sha256'] != header['manifest_sha256']
+                or header['pid'] != pid or header['ppid'] != build['pid']
+                or parent['pid'] != build['pid'] or parent['token'] != build['token']
+                or parent['owner_pid'] != build['owner_pid']
+                or parent['record_sha256'] != hashed(admissions[0])
+                or child['cache'] != spec['cache'] or child['base_identity'] != spec['base_identity']
+                or header['role'] != 'isolated-uv-helper'):
+            raise RuntimeError('primary_runtime_current_operation_drift')
+        output = child['primary_runtime_output']
+        root = output['root']
+        if (Path(header['orig_argv'][0]) != Path(root) / 'bin/python'
+                or header['orig_argv'][1] != '-c'
+                or hashlib.sha256(json.dumps(header['orig_argv']).encode()).hexdigest() != helper['orig_argv_sha256']
+                or child['output'] != spec['output']):
+            raise RuntimeError('primary_runtime_original_dispatch_drift')
+        # Each helper validates this same generated environment before dispatch.
+        # Keep the earliest inode identities; later admissions cannot replace it.
+        if root not in outputs:
+            outputs[root] = output
+    return outputs
+
+
+def primary_inventory(root, runtime_outputs, observed=None):
+    """Separate dependency inputs from exact observer-declared runtime outputs."""
+    # Inventory each individual dependency-domain member with the original shape.
+    # External targets require an exact prior original-operation declaration.
+    activation = load('primary_cache_read_identity', '/guard/finite/operation_activation.py')
+    result = {}
+    if observed is None:
+        observed = {}
+    for path in sorted(root.rglob('*')):
+        info = path.lstat()
+        name = path.relative_to(root).as_posix()
+        if info.st_uid != 20000:
+            raise RuntimeError('primary_cache_member_owner_drift')
+        if stat.S_ISDIR(info.st_mode):
+            result[name] = {'type': 'directory', 'mode': stat.S_IMODE(info.st_mode)}
+        elif stat.S_ISREG(info.st_mode):
+            read = activation.identity(path)
+            if path.lstat().st_uid != info.st_uid or path.lstat().st_nlink != info.st_nlink:
+                raise RuntimeError('primary_cache_file_custody_race')
+            observed[name] = {'file': read, 'uid': info.st_uid, 'nlink': info.st_nlink}
+            result[name] = {'type': 'file', 'mode': stat.S_IMODE(info.st_mode),
+                            'size': info.st_size, 'sha256': read['sha256']}
+        elif stat.S_ISLNK(info.st_mode):
+            target = path.resolve(strict=True)
+            if not target.is_relative_to(root):
+                matches = [output for directory, output in runtime_outputs.items()
+                           if path.is_relative_to(directory)
+                           and str(path.relative_to(directory)) in output['members']]
+                if len(matches) != 1:
+                    raise RuntimeError('primary_cache_undeclared_external_link')
+                declared = matches[0]['members'][str(path.relative_to(matches[0]['root']))]
+                activation = load('primary_link_identity', '/guard/finite/operation_activation.py')
+                if (declared['type'] != 'symlink' or os.readlink(path) != declared['target']
+                        or [info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+                            info.st_ctime_ns] != declared['identity']
+                        or activation.identity(target) != declared['target_identity']
+                        or target.stat().st_uid != declared['target_uid']
+                        or path.lstat() != info):
+                    raise RuntimeError('primary_cache_declared_link_drift')
+            result[name] = {'type': 'symlink', 'target': os.readlink(path)}
+            if target.is_file():
+                result[name]['resolved_sha256'] = digest(target)
+        else:
+            raise RuntimeError('primary_cache_nonregular_member')
+        if stat.S_ISDIR(info.st_mode):
+            observed[name] = {'directory': [info.st_dev, info.st_ino, info.st_mode, info.st_uid]}
+        elif stat.S_ISLNK(info.st_mode):
+            observed[name] = {'link': [info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+                                       info.st_ctime_ns], 'target': os.readlink(path),
+                              'resolved': str(target)}
+            if path.lstat() != info:
+                raise RuntimeError('primary_cache_link_read_race')
+    return result
+
+
 def primary_cache_tree(spec, emit=None):
     """Validate the primary's whole native seed plus original finite UV additions.
 
@@ -152,23 +306,14 @@ def primary_cache_tree(spec, emit=None):
     if expected != primary['cache_seed_inventory']:
         raise RuntimeError('source_primary_cache_seed_drift')
     root = Path(spec['cache'])
-    def escape(root, path, resolved, info):
-        if emit is None:
-            return
-        name = path.relative_to(root).as_posix()
-        emit({'kind': 'primary_cache_first_escape',
-              'input_role': 'immutable_seed' if name in expected else 'uv_runtime_addition',
-              'member_sha256': hashlib.sha256(name.encode()).hexdigest(),
-              'target_sha256': hashlib.sha256(str(resolved).encode()).hexdigest(),
-              'contained': resolved.is_relative_to(root),
-              'target_is_file': resolved.is_file(), 'target_is_directory': resolved.is_dir(),
-              'link_mode': stat.S_IMODE(info.st_mode), 'link_uid': info.st_uid,
-              'target_uid': resolved.stat().st_uid,
-              'target_matches_runtime': resolved == Path(spec['base']),
-              'target_bytes_match_runtime': resolved.is_file()
-                  and digest(resolved) == spec['base_identity']['sha256'],
-              'declared_seed': name in expected})
-    current = closure.inventory(root, on_escape=escape)
+    runtime_outputs = original_runtime_outputs(spec)
+    observed = {}
+    current = primary_inventory(root, runtime_outputs, observed)
+    for directory, output in runtime_outputs.items():
+        actual_members = {str((root / name).relative_to(directory)) for name in current
+                          if (root / name).is_relative_to(directory) and root / name != Path(directory)}
+        if actual_members != set(output['members']):
+            raise RuntimeError('primary_cache_runtime_membership_drift')
     for name, item in expected.items():
         wanted = dict(item)
         if item['type'] == 'symlink':
@@ -198,10 +343,61 @@ def primary_cache_tree(spec, emit=None):
     fixed = {'.gitignore': b'*', '.lock': b'',
              'CACHEDIR.TAG': b'Signature: 8a477f597d28d172789f06886806bc55',
              'sdists-v9/.git': b'', 'sdists-v9/.gitignore': b''}
+    known_files = set(expected) | set(fixed)
+    known_files.update(name for name, item in current.items()
+                       if item['type'] == 'file' and len(Path(name).parts) == 3
+                       and Path(name).parts[0] == 'interpreter-v4' and Path(name).suffix == '.msgpack')
+    for directory, output in runtime_outputs.items():
+        prefix = Path(directory).relative_to(root)
+        known_files.add(prefix.as_posix())
+        known_files.update((prefix / name).as_posix() for name in output['members'])
+    known_directories = {parent.as_posix() for name in known_files
+                         for parent in Path(name).parents if parent != Path('.')}
     # Re-evaluate every complete file byte and every link on each consumption.
     # Only original UV interpreter records/metadata may extend the sealed seed.
     for name, item in current.items():
-        if name in expected or item['type'] == 'directory':
+        runtime_matches = [output for directory, output in runtime_outputs.items()
+                           if (root / name).is_relative_to(directory)]
+        if runtime_matches:
+            if len(runtime_matches) != 1:
+                raise RuntimeError('primary_cache_runtime_overlap')
+            output = runtime_matches[0]
+            path = root / name
+            relative = path.relative_to(output['root']).as_posix()
+            declared = output['members'].get(relative)
+            if relative != '.' and declared is None:
+                raise RuntimeError('primary_cache_runtime_extra_member')
+            activation = load('primary_runtime_file', '/guard/finite/operation_activation.py')
+            info = path.lstat()
+            if relative == '.':
+                if [info.st_dev, info.st_ino, info.st_mode, info.st_uid] != output['root_identity']:
+                    raise RuntimeError('primary_cache_runtime_root_drift')
+            elif declared['type'] == 'file':
+                if activation.identity(path) != declared['file'] or info.st_uid != declared['uid'] or info.st_nlink != declared['nlink']:
+                    raise RuntimeError('primary_cache_runtime_file_drift')
+            elif declared['type'] == 'directory':
+                if [info.st_dev, info.st_ino, info.st_mode, info.st_uid] != declared['identity']:
+                    raise RuntimeError('primary_cache_runtime_directory_drift')
+            elif declared['type'] == 'symlink':
+                target = path.resolve(strict=True)
+                current_target = activation.identity(target) if target.is_file() else {
+                    'directory': [target.stat().st_dev, target.stat().st_ino, target.stat().st_mode]}
+                if ([info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_ctime_ns] != declared['identity']
+                        or os.readlink(path) != declared['target'] or current_target != declared['target_identity']
+                        or target.stat().st_uid != declared['target_uid']
+                        or path.lstat() != info):
+                    raise RuntimeError('primary_cache_runtime_link_drift')
+            else:
+                raise RuntimeError('primary_cache_runtime_member_type')
+            continue
+        if name in expected:
+            continue
+        if item['type'] == 'directory':
+            if name not in known_directories:
+                if emit is not None:
+                    emit({'kind': 'primary_cache_unbound_member', 'member_type': 'directory',
+                          'member_sha256': hashlib.sha256(name.encode()).hexdigest()})
+                raise RuntimeError('source_primary_cache_unbound_directory')
             continue
         if item['type'] != 'file':
             raise RuntimeError('source_primary_cache_unbound_link')
@@ -213,17 +409,40 @@ def primary_cache_tree(spec, emit=None):
             if path.read_bytes() != fixed[name]:
                 raise RuntimeError('source_cache_metadata_drift')
         elif not permitted:
+            if emit is not None:
+                emit({'kind': 'primary_cache_unbound_member', 'member_type': 'file',
+                      'member_sha256': hashlib.sha256(name.encode()).hexdigest()})
             raise RuntimeError('source_primary_cache_unbound_member')
     rows = []
     activation = load('primary_cache_identity', '/guard/finite/operation_activation.py')
+    final_names = set()
     for path in sorted(root.rglob('*')):
+        name = path.relative_to(root).as_posix()
+        final_names.add(name)
+        if name not in observed:
+            raise RuntimeError('primary_cache_late_extra_member')
+        info = path.lstat()
+        original = observed[name]
+        if info.st_uid != 20000:
+            raise RuntimeError('primary_cache_late_owner_drift')
         if path.is_symlink():
-            rows.append({'path': str(path), 'target': str(path.resolve()), 'inode': path.lstat().st_ino})
+            if original != {'link': [info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+                                      info.st_ctime_ns], 'target': os.readlink(path),
+                            'resolved': str(path.resolve(strict=True))}:
+                raise RuntimeError('primary_cache_late_link_drift')
+            rows.append({'path': str(path), 'target': str(path.resolve()), 'inode': info.st_ino})
         elif path.is_dir():
             info = path.lstat()
+            if original != {'directory': [info.st_dev, info.st_ino, info.st_mode, info.st_uid]}:
+                raise RuntimeError('primary_cache_late_directory_drift')
             rows.append({'path': str(path), 'directory': [info.st_dev, info.st_ino, info.st_mode]})
         else:
             # Use the original inode/ctime/full-byte file identity shape, so
             # build-to-install comparison retains its original failure model.
-            rows.append(activation.identity(path))
+            current_file = activation.identity(path)
+            if original != {'file': current_file, 'uid': info.st_uid, 'nlink': info.st_nlink}:
+                raise RuntimeError('primary_cache_late_file_drift')
+            rows.append(current_file)
+    if final_names != set(observed):
+        raise RuntimeError('primary_cache_late_missing_member')
     return rows

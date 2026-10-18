@@ -823,3 +823,11 @@ escape's declared role, member/target hashes, type/owner/pin facts and one faile
 original snapshot comparison's key differences, numeric/status values and hashes.
 They retain the original dependency-only refusal and assertion operands; neither
 diagnostic grants runtime admission or proves SOURCE acceptance.
+
+PRIMARY backend runtime outputs are declared in the existing protected child spec
+at the original native helper admission, after its unchanged runtime oracle.
+Cache consumption joins only the settled original build, four original helper
+dispatches, their protected headers/spec pins and authenticated READY tokens.
+The dependency inventory keeps its original external-target refusal. Runtime
+links additionally require the exact prior inode, mode, owner, link text and
+full target identity; a caller-provided or refreshed cache inventory is insufficient.

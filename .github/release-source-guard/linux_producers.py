@@ -160,6 +160,8 @@ class NativeProducers:
         if self.producer_check(pid, 'child_parent', identity['ppid'] != parent) or self.producer_check(pid, 'child_uid', identity['uid'] != 20000):
             return False
         token = secrets.token_hex(16)
+        if role == 'isolated-uv-helper' and 'primary_producer' in spec:
+            spec['primary_runtime_output'] = self.interface.runtime_members(spec, selected, self.records.append)
         spec_path = ROOT / ('spec-' + str(pid) + '.json')
         spec_pin = write(spec_path, spec)
         manifest = dict(self.manifest)

@@ -16,6 +16,12 @@ ORIGINAL_RESOLVE = 'ea4f0caa50410102a19484d98bd759be780bdb5254ca684bbc7182528e2e
 
 
 class Inverse(ast.NodeTransformer):
+    def visit_If(self, node):
+        if ast.unparse(node.test) == "role == 'isolated-uv-helper' and 'primary_producer' in spec":
+            assert hashlib.sha256(ast.dump(node, include_attributes=False).encode()).hexdigest() == 'af7fbccd78873c43e8b98fdf8d4ac75a60d1ec6bf6454e3ddf42cc3753310684'
+            return None
+        return self.generic_visit(node)
+
     def visit_Call(self, node):
         self.generic_visit(node)
         if isinstance(node.func, ast.Attribute) and node.func.attr == 'producer_check':
@@ -340,10 +346,10 @@ def test_cache_branch_inverse_rejects_weakening(old, new):
 @pytest.mark.parametrize('change', [
     'none', 'cache_context', 'base_context', 'seed_bytes', 'seed_mode',
     'seed_input_bytes', 'seed_input_mode', 'seed_input_missing', 'seed_input_link',
-    'backend_payload', 'extra_writer', 'extra_link', 'source_minted_inventory',
+    'backend_payload', 'extra_writer', 'extra_link', 'extra_empty_directory', 'source_minted_inventory',
     'interpreter_record', 'bad_interpreter_record',
 ])
-def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change):
+def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change, monkeypatch):
     import shutil
     import zipfile
     closure_spec = importlib.util.spec_from_file_location('cache_closure', ROOT / 'dependency_closure.py')
@@ -379,7 +385,20 @@ def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change)
     def mapped(path):
         return {'/opt/primary-cache': seed, '/work/cache': current}.get(str(path), original_path(path))
     cache_tree = load_function('primary_cache_tree', 'producer_profile.py', {
-        'Path': mapped, 'load': lambda name, path: closure if path.endswith('dependency_closure.py') else activation})
+        'Path': mapped, 'os': __import__('os'), 'hashlib': hashlib, 'load': lambda name, path: closure if path.endswith('dependency_closure.py') else activation,
+        'original_runtime_outputs': lambda spec: {},
+        'primary_inventory': load_function('primary_inventory', 'producer_profile.py', {
+            'stat': __import__('stat'), 'os': __import__('os'), 'load': lambda *args: activation,
+            'digest': lambda path: hashlib.sha256(path.read_bytes()).hexdigest()})})
+    original_lstat = Path.lstat
+    class OwnedInfo:
+        def __init__(self, value):
+            self.value = value
+        def __getattr__(self, key):
+            return 20000 if key == 'st_uid' else getattr(self.value, key)
+        def __eq__(self, other):
+            return self.value == other.value
+    monkeypatch.setattr(Path, 'lstat', lambda path: OwnedInfo(original_lstat(path)))
     if change == 'cache_context':
         spec['cache'] = '/work/foreign'
     elif change == 'base_context':
@@ -401,6 +420,8 @@ def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change)
     elif change == 'backend_payload':
         with zipfile.ZipFile(wheel, 'w') as archive:
             archive.writestr('backend.py', b'foreign selected backend')
+    elif change == 'extra_empty_directory':
+        (current / 'unknown-empty-directory').mkdir()
     elif change == 'extra_writer':
         (current / 'foreign.py').write_bytes(b'unrelated writable cache writer')
     elif change == 'extra_link':
