@@ -105,3 +105,24 @@ def test_incomplete_or_different_execution_cannot_be_reused(mutation):
         artifact['digest'] = 'sha256:' + 'f' * 64
     with pytest.raises(receipt.ReceiptRefused):
         receipt.validate(body, artifact, run, jobs, expected)
+
+
+@pytest.mark.parametrize('mutation', ['unknown_count', 'unknown_source', 'unknown_package',
+                                      'unknown_receipt', 'boolean_deselected', 'boolean_oracle'])
+def test_full_certificate_is_closed_and_numeric_not_boolean(mutation):
+    expected, run, jobs, data, cipher = fixture()
+    if mutation == 'unknown_count':
+        data['source']['counts']['arbitrary'] = 'forbidden'
+    elif mutation == 'unknown_source':
+        data['source']['arbitrary'] = 'forbidden'
+    elif mutation == 'unknown_package':
+        data['package']['arbitrary'] = 'forbidden'
+    elif mutation == 'unknown_receipt':
+        data['arbitrary'] = 'forbidden'
+    elif mutation == 'boolean_deselected':
+        data['source']['deselected'] = False
+    else:
+        data['package']['extracted_oracle']['failures'] = False
+    body, artifact = seal(data, cipher)
+    with pytest.raises(receipt.ReceiptRefused):
+        receipt.validate(body, artifact, run, jobs, expected)

@@ -77,6 +77,9 @@ def validate(archive, artifact, run, jobs, expected):
                 and steps[0]['conclusion'] == 'success', 'required executable duty did not pass: ' + name)
     members = artifact_members(archive, artifact)
     receipt = json.loads(members['safe-provenance.json'])
+    require(set(receipt) == set(DEFINITION_FIELDS) | {'schema', 'execution_kind', 'repository',
+            'workflow', 'run_id', 'run_attempt', 'job_id', 'source_command', 'ciphertext_sha256',
+            'source', 'package'}, 'receipt_fields')
     require(receipt['schema'] == 'unrest.v046.primary-checkpoint.v1'
             and receipt['execution_kind'] == 'executed-primary-full',
             'reused, partial or readiness evidence is not original full execution')
@@ -91,11 +94,15 @@ def validate(archive, artifact, run, jobs, expected):
     require(receipt['ciphertext_sha256'] == sha256(members['evidence.cms']),
             'private evidence ciphertext digest differs')
     source = receipt['source']
+    require(set(source) == {'argv', 'collection_filters', 'item_mutations', 'deselected', 'exit_code',
+                            'counts', 'kernel_poison', 'guard_poison', 'missing_original_parent_waits',
+                            'unknown_execs'}, 'source_fields')
     require(source['argv'] == ['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']
             and source['collection_filters'] == [] and source['item_mutations'] == []
-            and source['deselected'] == 0 and type(source['exit_code']) is int and source['exit_code'] == 0,
+            and type(source['deselected']) is int and source['deselected'] == 0 and type(source['exit_code']) is int and source['exit_code'] == 0,
             'full source execution was filtered, mutated or unsuccessful')
     counts = source['counts']
+    require(set(counts) == {'collected', 'passed', 'failed', 'errors', 'skipped'}, 'source_count_fields')
     require(all(type(counts[key]) is int and counts[key] >= 0
                 for key in ('collected', 'passed', 'failed', 'errors', 'skipped')),
             'source counts are not complete nonnegative integers')
@@ -106,6 +113,11 @@ def validate(archive, artifact, run, jobs, expected):
             and source['missing_original_parent_waits'] == []
             and source['unknown_execs'] == [], 'source guard or wait obligations did not close')
     package = receipt['package']
+    require(set(package) == {'build_exit_code', 'archive_exit_code', 'installed_lifecycle_exit_code',
+                            'extracted_oracle', 'unrelated_cwd', 'full_member_bytes_verified', 'archives'},
+            'package_fields')
+    require(set(package['extracted_oracle']) == {'cases', 'failures', 'errors', 'skipped'}
+            and all(type(value) is int for value in package['extracted_oracle'].values()), 'oracle_count_types')
     require(all(type(package[key]) is int for key in ('build_exit_code', 'archive_exit_code', 'installed_lifecycle_exit_code'))
             and package['build_exit_code'] == package['archive_exit_code']
             == package['installed_lifecycle_exit_code'] == 0,

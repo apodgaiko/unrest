@@ -48,9 +48,21 @@ def main(event, arguments):
                            'line': trace.tb_lineno})
             trace = trace.tb_next
         name = getattr(error, 'name', None)
+        message = str(error)
+        codes = {'native_noexec': 'failed to map segment', 'native_symbol': 'undefined symbol',
+                 'native_library': 'cannot open shared object', 'import_name': 'cannot import name',
+                 'permission': 'Permission denied', 'glibc': 'GLIBC_'}
+        detail = next((key for key, marker in codes.items() if marker in message), 'other')
+        noexec = False
+        location = getattr(error, 'path', None)
+        if isinstance(location, str):
+            try:
+                noexec = bool(os.statvfs(location).f_flag & os.ST_NOEXEC)
+            except OSError:
+                pass
         context['body_failure'] = {'error_code': kind.__name__ if kind.__name__ in known else 'other',
                                    'missing_module': name if name in {'unrest_harness', 'pydantic', 'click', 'fastmcp', 'yaml'} else 'other',
-                                   'frames': frames[-8:]}
+                                   'frames': frames[-8:], 'detail_code': detail, 'error_path_noexec': noexec}
         diagnostic.write_text(json.dumps(context, sort_keys=True))
         original_exception(kind, error, error.__traceback__)
     sys.excepthook = exception

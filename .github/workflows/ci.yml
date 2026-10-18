@@ -2,12 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'codex/release-v046-*']
   pull_request:
 
 concurrency:
   group: v046-source-checkpoint-${{ github.sha }}
   cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   primary:
@@ -17,32 +21,49 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v8.3.2
         with:
           python-version: "3.13"
           enable-cache: true
+      - name: Resolve authentic same-SHA checkpoint
+        id: checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/release-source-guard/checkpoint_decision.py
+      - name: Prepare isolated primary control plane
+        run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
       - name: Install dependencies
         run: uv sync --locked
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Import package
         run: uv run python -c "import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()"
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Supported CLI surfaces
         run: |
           uv run unrest --help
           uv run unrest measure-baseline --help
           uv run unrest-server --help
           uv run python -m unrest_harness --help
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Lint (ruff)
         run: uv run ruff check .
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Type-check (mypy)
         run: uv run mypy src
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: v0.4.6 source suite
         run: env -u CODEX_PATH uv run pytest -q
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Repository contract
         run: uv run unrest check-repository
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Build wheel and source distribution
         run: uv build
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Check distribution archives
         run: uv run python tools/check_distribution.py dist
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Smoke-test installed wheel
         run: |
           uv venv --clear .wheel-venv
@@ -60,6 +81,7 @@ jobs:
           set -e
           test "$status" -ne 0
           test "$output" = "unrest-server: startup configuration rejected"
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Generate and verify v0.4.6 build-local checksums
         run: |
           test -f dist/unrest_harness-0.4.6-py3-none-any.whl
@@ -69,6 +91,7 @@ jobs:
             unrest_harness-0.4.6-py3-none-any.whl \
             unrest_harness-0.4.6.tar.gz > SHA256SUMS
           sha256sum --check --strict SHA256SUMS
+        shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Upload v0.4.6 archives and checksums
         uses: actions/upload-artifact@v4.6.2
         with:
@@ -77,5 +100,14 @@ jobs:
             dist/unrest_harness-0.4.6-py3-none-any.whl
             dist/unrest_harness-0.4.6.tar.gz
             dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+      - name: Upload encrypted primary evidence
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ${{ steps.checkpoint.outputs.evidence-name }}
+          path: |
+            ${{ runner.temp }}/primary-full/evidence.cms
+            ${{ runner.temp }}/primary-full/safe-provenance.json
           if-no-files-found: error
           retention-days: 90

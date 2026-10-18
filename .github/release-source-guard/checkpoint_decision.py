@@ -8,7 +8,8 @@ from pathlib import Path
 import subprocess
 
 from checkpoint_lookup import ActionsReader, lookup
-from checkpoint_receipt import COMMAND, ReceiptRefused
+from checkpoint_receipt import COMMAND, ReceiptRefused, artifact_members, require
+from checkpoint_packages import materialize
 from ci_commands import REGISTRY
 from environment import BASE
 
@@ -56,7 +57,28 @@ def main():
     destination = Path(os.environ['RUNNER_TEMP']) / 'primary-decision.json'
     if destination.exists() or destination.is_symlink():
         raise ReceiptRefused('decision_already_exists')
-    result = decide(ActionsReader(os.environ['GH_TOKEN']), expected_identity(), int(os.environ['GITHUB_RUN_ID']))
+    reader = ActionsReader(os.environ['GH_TOKEN'])
+    current = int(os.environ['GITHUB_RUN_ID'])
+    attempt = int(os.environ['GITHUB_RUN_ATTEMPT'])
+    result = decide(reader, expected_identity(), current)
+    name = f'unrest-v046-primary-{current}-{attempt}'
+    if result['receipt'] is not None:
+        receipt = result['receipt']
+        materialize(reader, receipt, REPOSITORY / 'dist')
+        artifact = reader.api(f"actions/artifacts/{receipt['artifact_id']}")
+        require(artifact['digest'] == receipt['artifact_digest'], 'original_artifact_changed')
+        members = artifact_members(reader.archive(artifact), artifact)
+        evidence = Path(os.environ['RUNNER_TEMP']) / 'primary-full'
+        evidence.mkdir(mode=0o700)
+        (evidence / 'evidence.cms').write_bytes(members['evidence.cms'])
+        marker = {'schema': 'unrest.v046.primary-reuse.v1', 'execution_kind': 'verified-same-commit-reuse',
+                  'run_id': current, 'run_attempt': attempt, 'expected': result['expected'],
+                  'original': receipt, 'ciphertext_sha256': receipt['ciphertext_sha256']}
+        (evidence / 'safe-provenance.json').write_text(json.dumps(marker, sort_keys=True))
+        name = f'unrest-v046-reuse-{current}-{attempt}'
+    if 'GITHUB_OUTPUT' in os.environ:
+        with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+            output.write('evidence-name=' + name + '\n')
     with destination.open('x') as stream:
         json.dump(result, stream, sort_keys=True)
     destination.chmod(0o600)

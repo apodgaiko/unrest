@@ -59,7 +59,7 @@ def require_executable_duties(workflow, names):
             break
         if not primary:
             continue
-        if line.startswith('    if:'):
+        if line.startswith(('    if:', '    continue-on-error:')):
             raise RuntimeError('conditional primary execution refused')
         if line.startswith('      - name: '):
             step = line.removeprefix('      - name: ')

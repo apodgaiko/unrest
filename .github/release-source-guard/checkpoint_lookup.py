@@ -11,7 +11,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from checkpoint_receipt import ReceiptRefused, validate
+from checkpoint_receipt import ReceiptRefused, validate, artifact_members, require, sha256
+from structured_evidence import loads
 
 API = 'https://api.github.com/repos/apodgaiko/unrest/'
 MAX_ARCHIVE = 128 * 1024 * 1024
@@ -82,6 +83,7 @@ def lookup(reader, expected, current_run_id):
         raise ReceiptRefused('same-commit workflow history exceeds the finite lookup bound')
     executed = []
     candidates = []
+    promotions = []
     for run in runs['workflow_runs']:
         if run['id'] == current_run_id:
             continue
@@ -109,13 +111,34 @@ def lookup(reader, expected, current_run_id):
             raise ReceiptRefused('primary artifact set exceeds its finite lookup bound')
         name = f"unrest-v046-primary-{run['id']}-{run['run_attempt']}"
         matches = [artifact for artifact in artifacts['artifacts'] if artifact['name'] == name]
+        if not matches:
+            name = f"unrest-v046-reuse-{run['id']}-{run['run_attempt']}"
+            reused = [artifact for artifact in artifacts['artifacts'] if artifact['name'] == name]
+            require(len(reused) == 1, 'successful primary has no unique full or reuse evidence')
+            item = reused[0]
+            require(item['expired'] is False and item['workflow_run']['id'] == run['id']
+                    and item['workflow_run']['head_sha'] == head, 'reuse artifact identity differs')
+            members = artifact_members(reader.archive(item), item)
+            marker = loads(members['safe-provenance.json'])
+            require(set(marker) == {'schema', 'execution_kind', 'run_id', 'run_attempt', 'expected',
+                                   'original', 'ciphertext_sha256'}
+                    and marker['schema'] == 'unrest.v046.primary-reuse.v1'
+                    and marker['execution_kind'] == 'verified-same-commit-reuse'
+                    and marker['run_id'] == run['id'] and marker['run_attempt'] == run['run_attempt']
+                    and marker['expected'] == expected
+                    and marker['ciphertext_sha256'] == sha256(members['evidence.cms']), 'reuse marker differs')
+            promotions.append(marker)
+            continue
         if len(matches) != 1:
-            raise ReceiptRefused('successful primary run has no unique original evidence artifact')
+            raise ReceiptRefused('successful primary run has ambiguous original evidence artifact')
         artifact = matches[0]
         candidates.append(validate(reader.archive(artifact), artifact, run, jobs['jobs'], expected))
     if len(candidates) > 1:
         raise ReceiptRefused('multiple original full checkpoints exist for this commit')
     if candidates:
+        require(all(marker['original'] == candidates[0]
+                    and marker['ciphertext_sha256'] == candidates[0]['ciphertext_sha256']
+                    for marker in promotions), 'reuse marker original evidence differs')
         return candidates[0]
     if executed:
         raise ReceiptRefused('a source checkpoint ran without complete package certification; do not rerun it')

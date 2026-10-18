@@ -120,3 +120,61 @@ def test_artifact_redirect_cannot_select_foreign_or_credentialed_origin(monkeypa
     with pytest.raises(ReceiptRefused):
         lookup.ActionsReader('controlled').archive({'id': 3})
     assert len(requests) == 1
+
+
+def promotion_reader(mutate=False):
+    import copy
+    original = Reader()
+    verified = lookup.lookup(original, original.expected, 99)
+    promoted_run = {**original.run, 'id': 4}
+    promoted_job = copy.deepcopy(original.jobs[0])
+    promoted_job.update(id=6, run_id=4)
+    marker = {'schema': 'unrest.v046.primary-reuse.v1', 'execution_kind': 'verified-same-commit-reuse',
+              'run_id': 4, 'run_attempt': 1, 'expected': original.expected,
+              'original': copy.deepcopy(verified),
+              'ciphertext_sha256': verified['ciphertext_sha256']}
+    if mutate:
+        marker['original']['original_run_id'] = 999
+    import io
+    import json
+    import zipfile
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, 'w') as archive:
+        archive.writestr('safe-provenance.json', json.dumps(marker))
+        archive.writestr('evidence.cms', original.cipher)
+    promoted_bytes = stream.getvalue()
+    promoted_artifact = {**original.artifact, 'id': 5, 'name': 'unrest-v046-reuse-4-1',
+                         'workflow_run': {'id': 4, 'head_sha': original.expected['head_sha']},
+                         'size_in_bytes': len(promoted_bytes),
+                         'digest': 'sha256:' + lookup.sha256(promoted_bytes)}
+    class Promoted(Reader):
+        def api(self, path):
+            if path.startswith('actions/runs/4/'):
+                if '/jobs?' in path:
+                    return {'total_count': 1, 'jobs': [promoted_job]}
+                return {'total_count': 1, 'artifacts': [promoted_artifact]}
+            return super().api(path)
+        def archive(self, artifact):
+            return promoted_bytes if artifact['id'] == 5 else super().archive(artifact)
+    reader = Promoted()
+    # Keep the exact original instance used by the inherited archive identity
+    # assertion while adding a separate successful promotion.
+    reader.expected, reader.run, reader.jobs = original.expected, original.run, original.jobs
+    reader.artifact, reader.archive_bytes = original.artifact, original.archive_bytes
+    reader.runs = [reader.run, promoted_run]
+    return reader
+
+
+def test_same_sha_promotion_resolves_back_to_original_full_certificate():
+    reader = promotion_reader()
+    result = lookup.lookup(reader, reader.expected, 99)
+    assert result['original_run_id'] == 1 and result['artifact_id'] == 3
+
+
+@pytest.mark.parametrize('mutation', ['changed_reference', 'original_missing'])
+def test_promotion_never_substitutes_for_original_full_certificate(mutation):
+    reader = promotion_reader(mutation == 'changed_reference')
+    if mutation == 'original_missing':
+        reader.runs = reader.runs[1:]
+    with pytest.raises(ReceiptRefused):
+        lookup.lookup(reader, reader.expected, 99)
