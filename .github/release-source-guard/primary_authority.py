@@ -172,6 +172,7 @@ class Authority:
                            source_entry_sha256=digest('/guard/primary_source_entry.py'),
                            source_mode=self.plan['source_mode'], source_budget=self.plan['source_budget'])
         if role == 'source-bootstrap':
+            profile['source_descriptors'] = self.source.descriptors(pid)
             profile['python_environment'] = python_environment(
                 environment, self.source.bound[pid]['registration'], flags)
         path = Path('/receipts/primary-startup') / (str(pid) + '.json')

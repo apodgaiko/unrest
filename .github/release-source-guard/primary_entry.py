@@ -86,11 +86,18 @@ def main(event, arguments):
     descriptors = [int(name) for name in os.listdir('/proc/self/fd')]
     if len(descriptors) > 4096:
         os._exit(86)
+    expected_descriptors = profile.get('source_descriptors', [])
+    actual_descriptors = []
+    import fcntl
     for descriptor in sorted(value for value in descriptors if value >= 3):
         try:
-            os.fstat(descriptor)
+            info = os.fstat(descriptor)
         except OSError:
             continue
+        actual_descriptors.append({'fd': descriptor, 'device': info.st_dev, 'inode': info.st_ino,
+                                   'mode': info.st_mode, 'uid': info.st_uid,
+                                   'access': fcntl.fcntl(descriptor, fcntl.F_GETFL) & os.O_ACCMODE})
+    if actual_descriptors != expected_descriptors:
         os._exit(86)
     if profile.get('source_role') in {'source-root', 'source-bootstrap'}:
         source = Path('/guard/primary_source_entry.py')

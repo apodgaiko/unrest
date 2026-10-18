@@ -146,6 +146,41 @@ class SourceAuthority:
             self.native_context[pid] = {'path': path, 'argv': vector, 'cwd': cwd, 'environment': environment}
         return True
 
+    def descriptors(self, pid):
+        """Only the original owned role's read-only inventory pipe crosses exec."""
+        selected = self.bound[pid]['registration']
+        if selected['class'] not in {'source-owned-role:worker', 'source-owned-role:validator',
+                                     'source-owned-role:terminal-reviewer'}:
+            return []
+        parent = identity(pid)['ppid']
+        rows = [row for row in self.supervisor.events()
+                if row['kind'] == 'concrete_owned_role_registration'
+                and row['owner_pid'] == parent
+                and row['role'] == selected['class'].removeprefix('source-owned-role:')
+                and row['source_binding'] == selected['source_binding']
+                and row['argv_sha256'] == selected['argv_sha256']]
+        # Admission and the callback each re-resolve the same source pipe.
+        if len(rows) != 2 or rows[0] != rows[1]:
+            raise RuntimeError('primary_source_role_pipe_binding')
+        expected = rows[0]
+        descriptors = []
+        for path in sorted(Path('/proc/' + str(pid) + '/fd').iterdir()):
+            fd = int(path.name)
+            if fd < 3:
+                continue
+            info = path.stat()
+            lines = Path('/proc/' + str(pid) + '/fdinfo/' + str(fd)).read_text().splitlines()
+            flags = int(next(line.split()[1] for line in lines if line.startswith('flags:')), 8)
+            if (not stat.S_ISFIFO(info.st_mode) or info.st_uid != 20000
+                    or info.st_dev != expected['pipe_device'] or info.st_ino != expected['pipe_inode']
+                    or flags & os.O_ACCMODE != os.O_RDONLY):
+                raise RuntimeError('primary_source_role_pipe_identity')
+            descriptors.append({'fd': fd, 'device': info.st_dev, 'inode': info.st_ino,
+                                'mode': info.st_mode, 'uid': info.st_uid, 'access': os.O_RDONLY})
+        if len(descriptors) != 1:
+            raise RuntimeError('primary_source_role_pipe_cardinality')
+        return descriptors
+
     def tick(self, trace):
         if self.supervisor is None:
             return
