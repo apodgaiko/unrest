@@ -8,6 +8,7 @@ import inspect
 import json
 import os
 from pathlib import Path, PosixPath
+from pathlib._abc import _ignore_error  # type: ignore[import-not-found]
 import shutil
 import stat
 import sys
@@ -101,16 +102,29 @@ def root_identity(root):
     return {"root": str(path), "device": info.st_dev, "inode": info.st_ino, "mode": info.st_mode}
 
 
+def _path_type(pathname, predicate, *, follow_symlinks=True):
+    # Same pinned CPython error classification as Path.is_file/is_dir/is_symlink.
+    try:
+        return predicate(os.stat(pathname, follow_symlinks=follow_symlinks).st_mode)
+    except OSError as error:
+        if not _ignore_error(error):
+            raise
+        return False
+    except ValueError:
+        return False
+
+
 def tree_identity(root):
     result = root_identity(root)
     files = []
     directories = []
     for path in sorted(Path(root).rglob("*"), key=lambda path: path.parts):
-        if path.is_symlink():
+        pathname = str(path)
+        if _path_type(pathname, stat.S_ISLNK, follow_symlinks=False):
             raise RuntimeError("operation tree contains a symlink")
-        if path.is_file():
+        if _path_type(pathname, stat.S_ISREG):
             files.append(identity(path))
-        elif path.is_dir():
+        elif _path_type(pathname, stat.S_ISDIR):
             directories.append(root_identity(path))
         else:
             raise RuntimeError("operation tree contains a special file")

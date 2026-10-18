@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PosixPath
+from pathlib._abc import _ignore_error
 import stat
 import types
 
@@ -104,9 +105,9 @@ REFERENCE_SHA256 = {'operation_activation.py': '990957b12f36bf1798accb954fde7243
 def load(name, original=False):
     body = REFERENCE[name] if original else (ROOT / 'finite' / name).read_text()
     assert hashlib.sha256(REFERENCE[name].encode()).hexdigest() == REFERENCE_SHA256[name]
-    names = {'identity', 'tree', 'root_identity', 'tree_identity'}
+    names = {'identity', 'tree', 'root_identity', 'tree_identity', '_path_type'}
     nodes = [n for n in ast.parse(body).body if isinstance(n, ast.FunctionDef) and n.name in names]
-    namespace = {'Path': Path, 'PosixPath': PosixPath, 'os': os, 'stat': stat, 'hashlib': hashlib}
+    namespace = {'Path': Path, 'PosixPath': PosixPath, 'os': os, 'stat': stat, 'hashlib': hashlib, '_ignore_error': _ignore_error}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(ROOT / 'finite' / name), 'exec'), namespace)
     return namespace
 
@@ -356,3 +357,18 @@ def test_actual_directory_replacement_during_capture_refuses(tmp_path):
         namespace['root_identity'] = replacing
         observed = outcome(namespace['tree_identity'], root)
         assert observed == ('refusal', 'RuntimeError', 'operation root replaced during capture')
+
+
+@pytest.mark.parametrize('failure', [FileNotFoundError(2, 'missing'), NotADirectoryError(20, 'not-directory'),
+                                    PermissionError(13, 'permission'), OSError(5, 'io'), ValueError('path')])
+def test_type_stat_error_classification_matches_original(tmp_path, monkeypatch, failure):
+    root = fixture(tmp_path / 'tree')
+    a, b = load('source_operations.py', True), load('source_operations.py')
+    actual = os.stat
+    def broken(path, *args, **kwargs):
+        if os.fspath(path) == str(root / 'a/payload'):
+            raise failure
+        return actual(path, *args, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(os, 'stat', broken)
+        assert outcome(a['tree_identity'], root) == outcome(b['tree_identity'], root)

@@ -715,3 +715,15 @@ results contribute one local tuple each to the same short-circuit comparisons.
 The shared tree's type check still makes its own fresh no-follow stat. These
 changes remove object/conversion work without removing any filesystem observation
 or sharing an identity across captures.
+
+The operation-tree type probes reuse one lexical pathname per current entry.
+Each probe still performs its original separate stat, with the same follow-link
+flag and the same pinned CPython ignored-error predicate. File identity capture
+then performs all original independent before/open/read/after/path observations.
+
+The automatic TEST lane runs the fresh-tree differential controls on Linux. A
+successful original four-case positive tuple is followed by the existing
+TEST-poison mode over the identical tuple, with separately named encrypted
+evidence. That mode catches one unknown-command refusal after the original tests
+return and requires the guard poison to remain sticky. Neither TEST proof is a
+release certificate.
