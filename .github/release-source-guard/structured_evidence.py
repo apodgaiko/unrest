@@ -80,7 +80,7 @@ def identity_check(value):
         require(type(value[key]) is str and re.fullmatch('[1-9][0-9]*', value[key]), 'run_identity')
     require(value['artifact_name'] in {
         f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}"
-        for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations', 'primary-install', 'primary-import', 'primary-help', 'primary-repository', 'primary-lint', 'primary-types', 'primary-controls', 'primary-source', 'primary-source-positive', 'primary-source-poison')}, 'artifact_identity')
+        for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations', 'primary-install', 'primary-import', 'primary-help', 'primary-repository', 'primary-lint', 'primary-types', 'primary-controls', 'primary-source', 'primary-source-positive', 'primary-source-poison', 'primary-package-build')}, 'artifact_identity')
     require(type(value['workflow_ref']) is str, 'workflow_identity')
     dependency_prefix = ('apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@'
                          'refs/heads/codex/source-guard-structured-20261018-primary-dependency-')
@@ -108,10 +108,18 @@ def identity_check(value):
         value['workflow_ref'])
     primary_kinds = {'readiness', 'primary-install', 'primary-import', 'primary-help',
                      'primary-repository', 'primary-lint', 'primary-types', 'primary-controls',
-                     'primary-source', 'primary-source-positive', 'primary-source-poison'}
+                     'primary-source', 'primary-source-positive', 'primary-source-poison', 'primary-package-build'}
     primary_artifact = value['artifact_name'] in {
         f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}" for kind in primary_kinds}
-    require(readiness is not None or primary is not None and primary_artifact, 'workflow_identity')
+    package_prefix = ('apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@'
+                      'refs/heads/codex/source-guard-structured-20261018-package-entry-')
+    if value['workflow_ref'].startswith(package_prefix.removesuffix('-')):
+        require(value['workflow_ref'] in {package_prefix + epoch
+                for epoch in ('01', '02', '03', '04')}, 'workflow_identity')
+    package = re.fullmatch(
+        r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-package-entry-0[1-4]',
+        value['workflow_ref'])
+    require(readiness is not None or (primary is not None or package is not None) and primary_artifact, 'workflow_identity')
 
 
 

@@ -48,6 +48,10 @@ def plan(script, workflow, source_input=None):
                 'commands': commands, 'source_checkpoint_ready': False, 'selected_carrier': None,
                 'timeout_seconds': SOURCE_BUDGET['root_seconds'], 'source_mode': 'SOURCE',
                 'source_budget': SOURCE_BUDGET, 'source_input_sha256': sha(canonical(source_input))}
+    from primary_custody import ORDER
+    if duty['name'] in ORDER:
+        from primary_package_inputs import plan as package_plan
+        return package_plan(script, workflow, source_input)
     if duty['name'] not in FOCUSED:
         # Package-domain and final source-carrier closure are separate data
         # obligations. A focused capsule cannot grant their authority.
@@ -159,7 +163,8 @@ def console(name, interpreter='/source/.venv/bin/python'):
 def public_plan(spec):
     """Public evidence carries only closed identities/counts and input hashes."""
     import re
-    if (spec['duty'] not in FOCUSED | {SOURCE, 'TEST-source-positive', 'TEST-source-poison'}
+    from primary_custody import BUILD
+    if (spec['duty'] not in FOCUSED | {SOURCE, 'TEST-source-positive', 'TEST-source-poison', BUILD}
             or spec['timeout_seconds'] != root_seconds(spec)
             or spec['source_checkpoint_ready'] is not False or spec['selected_carrier'] is not None
             or any(not isinstance(spec[key], str) or not re.fullmatch('[0-9a-f]{64}', spec[key])

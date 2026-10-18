@@ -1079,3 +1079,20 @@ records. Archive/CMS/API validation and the strict named consumer remain the
 same. Clean headers or synthetic framing tests do not establish SOURCE
 acceptance; current admitted original four-case and caught-poison proof remain
 required.
+
+
+### PRIMARY package custody
+
+Package capsules accept only the versioned wheel and source distribution from
+an authenticated current-run custody phase. The host exports a separate closed
+read-only mount containing those complete bytes and their pinned descriptor;
+it never mounts its custody key, phase records, or cache into the next capsule.
+Consumers recheck the descriptor, member inventory, regular-file identity and
+complete bytes before creating their owned distribution directory.
+
+A package setup run uses explicit TEST identity and remains ineligible for the
+original full checkpoint issuer. Full producers require the same complete
+source, package and final-readiness input as the unexcluded source checkpoint.
+The original build script runs under finite PRIMARY kernel admission; its
+native UV backend children consume a separate live original-script origin.
+This does not impersonate a pytest fixture or infer READY or parent waits.

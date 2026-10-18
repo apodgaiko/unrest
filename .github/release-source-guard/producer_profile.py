@@ -109,6 +109,41 @@ def consume(profile):
             or spec['base'] != base
             or os.getcwd() != profile['cwd'] or sys.executable != profile['orig_argv'][0]):
         raise RuntimeError('native original UV parent/runtime binding drift')
+    if 'primary_package_origin' in spec:
+        origin = spec['primary_package_origin']
+        value = protected_json(origin['path'], origin['sha256'])
+        plan = json.loads(Path('/inputs/plan.json').read_bytes())
+        script = Path('/inputs/github-script.sh').read_bytes()
+        if (set(origin) != {'path', 'sha256'}
+                or value['schema'] != 'unrest.v046.primary-package-build-origin.v1'
+                or value['plan'] != plan or plan['duty'] != 'Build wheel and source distribution'
+                or plan['commands'] != [['uv', 'build']]
+                or plan['script_sha256'] != hashlib.sha256(script).hexdigest()
+                or script not in {b'uv build', b'uv build\n'}
+                or plan['package_mode'] not in {'TEST', 'FULL'}
+                or (plan['package_mode'] == 'TEST') != Path('/inputs/package-test').is_file()
+                or plan['workflow_sha256'] != digest('/source/.github/workflows/ci.yml')
+                or value['identity'] != identities.identity(parent['pid'])
+                or parent['identity'] != value['identity']
+                or value['parent_identity'] != identities.identity(parent['owner_pid'])
+                or value['identity']['ppid'] != parent['owner_pid']
+                or value['identity']['uid'] != 20000
+                or value['argv'] != ['uv', 'build'] or value['cwd'] != '/source'
+                or spec['profile'] != {'argv': value['argv'], 'cwd': value['cwd'],
+                                       'environment': value['environment']}
+                or parent['record_sha256'] != origin['sha256'] or parent['token'] != value['token']
+                or Path('/proc/' + str(parent['pid']) + '/exe').resolve()
+                != Path('/opt/source-bootstrap/bin/uv') or profile['ppid'] != parent['pid']):
+            raise RuntimeError('primary_package_live_origin')
+        if profile['role'] == 'isolated-uv-query':
+            if sys.orig_argv[1:4] != ['-I', '-B', '-c'] or len(sys.orig_argv) != 5:
+                raise RuntimeError('native original isolated query flags drift')
+            if sys.executable != spec['query_python']:
+                raise RuntimeError('native selected query interpreter drift')
+            query_package(sys.orig_argv[-1], spec)
+        elif sys.orig_argv[1:-1] != ['-c']:
+            raise RuntimeError('native original backend flags drift')
+        return spec
     deadline = time.monotonic() + 4
     while True:
         rows = events(spec)

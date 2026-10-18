@@ -61,6 +61,14 @@ def trace_failure_status(error):
     return {'exception_class': name if name in closed else 'other', 'location_sha256': location}
 
 
+def status_guard_success(result):
+    return (result['root_parent_wait_raw'] == 0 and not result['poison']
+            and not result['primary_denials'] and result['failure_code'] is None
+            and not result['missing_parent_waits'] and not result['native_preinit_refusal']
+            and result['all_commands_dispatched'] and not result.get('guard_poison', True)
+            and not result.get('receipt_ledger_poison'))
+
+
 def main():
     global STAGE
     if os.getpid() != 1 or os.getuid() != 0:
@@ -69,7 +77,13 @@ def main():
     workflow = Path('/source/.github/workflows/ci.yml').read_text()
     source_input = decode(Path('/inputs/source-input.json').read_bytes()) if Path('/inputs/source-input.json').is_file() else None
     test_mode = Path('/inputs/test-mode').read_text() if Path('/inputs/test-mode').is_file() else None
-    spec = test_plan(script, workflow, test_mode) if test_mode else plan(script, workflow, source_input)
+    package_test = Path('/inputs/package-test').is_file()
+    if package_test:
+        from primary_package_inputs import plan as package_plan
+        spec = package_plan(script, workflow, None, test=True)
+    else:
+        spec = test_plan(script, workflow, test_mode) if test_mode else plan(script, workflow, source_input)
+    package_build = spec.get('package_mode') is not None
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
     expected = json.loads(Path('/inputs/identity.json').read_bytes())
@@ -83,7 +97,7 @@ def main():
     dependency_closure.verify_source_view(Path('/environment-closure.json').read_bytes())
     STAGE = 'runtime'
     runtime = primary_entry_build.verify()
-    if spec.get('source_mode'):
+    if spec.get('source_mode') or package_build:
         import native_entry_build
         import profile_gate_build
         import native_metadata
@@ -110,7 +124,7 @@ def main():
             resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
             for name in ('home', 'tmp', 'events', 'owned'):
                 (Path('/work') / name).mkdir(mode=0o700)
-            if spec.get('source_mode'):
+            if spec.get('source_mode') or package_build:
                 producer_setup.source_child_setup(primary=True)
             shutil.copytree('/opt/primary-cache', '/work/cache', symlinks=True)
             # Relocate only native-produced internal archive links.
@@ -142,12 +156,18 @@ def main():
     STAGE = 'authority'
     authority = Authority(spec, child, env)
     source = None
-    if spec.get('source_mode'):
+    if spec.get('source_mode') or package_build:
         initial_path = Path('/inputs/source.json')
         initial = json.loads(initial_path.read_bytes())
         manifest_path, pin, common = producer_setup.prepare(initial, sha(initial_path.read_bytes()))
-        source = SourceAuthority(manifest_path, pin, common, authority.contexts)
+        if package_build:
+            from primary_package_build import PackageBuildAuthority
+            source = PackageBuildAuthority(manifest_path, pin, common, authority.contexts)
+        else:
+            source = SourceAuthority(manifest_path, pin, common, authority.contexts)
         authority.source, authority.output_fd = source, read
+        if package_build:
+            source.initialize(authority, child, read)
     os.set_blocking(read, False)
     output = bytearray()
     def tick(trace):
@@ -225,7 +245,11 @@ def main():
     if source is not None:
         result.update(source.finish())
     records = {'source-output.log': bytes(output)}
-    if source is not None:
+    if package_build and status_guard_success(result):
+        source.require_complete(trace)
+        from primary_outputs import export
+        records['package-output.json'] = export(spec['duty'])
+    if source is not None and not package_build:
         for name in ('collection.json', 'summary.json', 'source.xml', 'source-provenance.json'):
             path = Path('/work') / name
             if path.is_file() and not path.is_symlink() and path.stat().st_size <= 32 * 1024 * 1024:

@@ -25,35 +25,19 @@ jobs:
         with:
           python-version: "3.13"
           enable-cache: false
-      - name: Ordinary waiting checkpoint regression
-        run: env -u CODEX_PATH uv run --locked pytest -q tests/test_waiting_elapsed.py .github/release-source-guard/test_primary_dependency_integration.py
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: TEST primary affected source seams
-        run: env -u CODEX_PATH uv run pytest -q tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[claude] tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex] tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance
-        shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
-      - name: TEST caught SOURCE refusal retains poison
-        id: source-poison
-        run: env -u CODEX_PATH uv run pytest -q tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[claude] tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex] tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance
-        shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-poison {0}
-      - name: Upload encrypted TEST source entry evidence
+      - name: TEST original PRIMARY build producer
+        run: uv build
+        shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
+      - name: Upload encrypted TEST package build evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: v046-primary-source-entry-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v046-primary-package-build-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/primary-source-positive/evidence.cms
-            ${{ runner.temp }}/primary-source-positive/safe-provenance.json
-          if-no-files-found: error
-          retention-days: 30
-      - name: Upload encrypted TEST caught-refusal evidence
-        if: always() && steps.source-poison.outcome != 'skipped'
-        uses: actions/upload-artifact@v4.6.2
-        with:
-          name: v046-primary-source-poison-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/primary-source-poison/evidence.cms
-            ${{ runner.temp }}/primary-source-poison/safe-provenance.json
+            ${{ runner.temp }}/primary-package-build/evidence.cms
+            ${{ runner.temp }}/primary-package-build/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload primary typed startup stage

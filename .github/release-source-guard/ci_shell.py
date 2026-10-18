@@ -32,6 +32,7 @@ KINDS = {'Install dependencies': 'primary-install', 'Import package': 'primary-i
          'Supported CLI surfaces': 'primary-help', 'Repository contract': 'primary-repository',
          'Lint (ruff)': 'primary-lint', 'Type-check (mypy)': 'primary-types',
          'v0.4.6 source suite': 'primary-source',
+         'Build wheel and source distribution': 'primary-package-build',
          'TEST-source-positive': 'primary-source-positive', 'TEST-source-poison': 'primary-source-poison'}
 
 
@@ -84,6 +85,12 @@ SCRIPT_SIZE = None
 def main():
     global STAGE, SCRIPT_PIN, SCRIPT_SIZE
     test_mode = None
+    package_test = len(sys.argv) == 3 and sys.argv[1] == '--package-test'
+    if package_test and (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
+            or os.environ.get('GITHUB_REF') not in {
+                'refs/heads/codex/source-guard-structured-20261018-package-entry-' + epoch
+                for epoch in ('01', '02', '03', '04')}):
+        raise RuntimeError('primary_package_test_workflow_identity')
     if len(sys.argv) == 4 and sys.argv[1] == '--source-test':
         test_mode = sys.argv[2]
         if (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
@@ -117,7 +124,7 @@ def main():
                     'refs/heads/codex/source-guard-structured-20261018-pinned-policy-',
                     'refs/heads/codex/source-guard-structured-20261018-source-seams-')))):
             raise RuntimeError('primary_test_workflow_identity')
-    elif len(sys.argv) != 2:
+    elif len(sys.argv) != 2 and not package_test:
         raise RuntimeError('primary_shell_argv')
     script_path = Path(sys.argv[-1])
     if script_path.is_symlink() or not script_path.is_file() or script_path.stat().st_size > 16384:
@@ -143,11 +150,16 @@ def main():
         if decision['decision'] != 'execute-first-full' or decision['receipt'] is not None:
             raise RuntimeError('primary_decision_kind')
     source_input = None
-    if not test_mode and bound['name'] == 'v0.4.6 source suite':
+    if not test_mode and not package_test and (bound['name'] == 'v0.4.6 source suite'
+            or bound['name'] == 'Build wheel and source distribution'):
         source_input = decode(read_regular(Path(os.environ['RUNNER_TEMP']) / 'primary-source-input.json', 65536, 0o600))
         if source_input['definition'] != expected:
             raise RuntimeError('primary_source_current_definition')
-    spec = test_plan(script, workflow, test_mode) if test_mode else plan(bound['script'], workflow, source_input)
+    if package_test:
+        from primary_package_inputs import plan as package_plan
+        spec = package_plan(bound['script'], workflow, None, test=True)
+    else:
+        spec = test_plan(script, workflow, test_mode) if test_mode else plan(bound['script'], workflow, source_input)
     kind = KINDS[spec['duty']]
     root = Path(os.environ['RUNNER_TEMP']) / kind
     root.mkdir(mode=0o700)
@@ -198,12 +210,14 @@ def main():
     (inputs / 'plan.json').write_text(json.dumps(spec, sort_keys=True))
     (inputs / 'uv.toml').write_bytes(b'')
     (inputs / 'identity.json').write_text(json.dumps(expected, sort_keys=True))
+    if package_test:
+        (inputs / 'package-test').write_bytes(b'TEST')
     if test_mode:
         (inputs / 'test-mode').write_text(test_mode)
     if source_input is not None:
         (inputs / 'source-input.json').write_bytes(canonical(source_input))
         (inputs / 'source-input.json').chmod(0o600)
-    if spec.get('source_mode'):
+    if spec.get('source_mode') or spec.get('package_mode'):
         prepare = ['docker', 'run', '--rm', '--network=none', '--read-only', '--cap-drop=ALL',
                    '--security-opt=no-new-privileges', '--user=20001:20001',
                    '--mount=type=bind,src=' + str(SUPPORT) + ',dst=/guard,readonly',
@@ -285,12 +299,21 @@ def main():
                 negative_verified = test_mode == 'TEST-poison'
             except Exception:
                 status, stage = 125, 'source_test_refused'
+    package_test_proof = None
+    if package_test and status == 0:
+        from primary_package_probe import check as check_package
+        try:
+            package_test_proof = check_package(records)
+        except Exception:
+            status, stage = 125, 'package_test_refused'
     metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,
                 'source_exit_code': status, 'stage': stage, 'primary_plan': public_plan(spec),
                 'head_sha': os.environ['GITHUB_SHA'], 'source_tree': expected['source_tree'], 'image_id': image,
                 'source_pins_sha256': hashlib.sha256(json.dumps(source_pins, sort_keys=True).encode()).hexdigest(),
                 'support': control['support'],
                 'custody_phase_sha256': phase_sha256,
+                'package_test_identity': 'TEST' if package_test else None,
+                'package_test_proof': package_test_proof,
                 'source_test_identity': test_mode, 'negative_verified': negative_verified,
                 'source_test_proof': test_proof,
                 'transport_provenance_sha256': digest(raw / 'transport-provenance.json') if (raw / 'transport-provenance.json').is_file() else None,

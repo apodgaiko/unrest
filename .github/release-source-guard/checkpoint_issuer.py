@@ -227,6 +227,8 @@ def issue(custody, workflow, source_pins, job, ciphertext):
         require(phase['input_pins'] == source_pins and phase['script_sha256'] == bound['script_sha256'],
                 'issuer_frozen_phase_inputs')
         kernels[duty] = kernel_success(records(phase), phase['script_sha256'])
+        require(kernels[duty]['primary_plan'].get('package_mode') != 'TEST',
+                'issuer_package_test_ineligible')
     require(sha(workflow.encode()) == custody.binding['definition']['workflow_sha256'],
             'issuer_workflow_definition')
     source = source_result(records(phases[SOURCE]), kernels[SOURCE])
