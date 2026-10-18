@@ -208,6 +208,9 @@ def main():
             '--entrypoint=/usr/local/bin/python', image, '-B', '/guard/primary_compartment.py']
     STAGE = 'identity'
     identity = execution_identity(SUPPORT, kind)
+    source_invocation = secrets.token_hex(32)
+    (inputs / 'transport-identity.json').write_bytes(canonical({
+        'identity': identity, 'invocation_sha256': source_invocation}))
     status = 125
     records = {}
     capture_failure = None
@@ -220,7 +223,7 @@ def main():
         config = json.loads(subprocess.check_output(['docker', 'inspect', container]))[0]
         validate(config, image, mounts)
         stage = 'capture'
-        _, records = capture(['docker', 'start', '--attach', container], raw, identity, 'primary-executor')
+        _, records = capture(['docker', 'start', '--attach', container], raw, identity, 'primary-executor', source_invocation=source_invocation)
         stage = 'settled'
         state = json.loads(subprocess.check_output(['docker', 'inspect', '--format={{json .State}}', container]))
         if state['Running'] or state['OOMKilled']:
@@ -268,6 +271,7 @@ def main():
                 'custody_phase_sha256': phase_sha256,
                 'source_test_identity': test_mode, 'negative_verified': negative_verified,
                 'source_test_proof': test_proof,
+                'transport_provenance_sha256': digest(raw / 'transport-provenance.json') if (raw / 'transport-provenance.json').is_file() else None,
                 'capture_failure': capture_failure, 'container_state': container_state,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'

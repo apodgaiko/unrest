@@ -1,7 +1,6 @@
 """Execute the actual GitHub script under a separate finite primary authority."""
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
@@ -19,6 +18,7 @@ from primary_source_authority import SourceAuthority
 import producer_setup
 import dependency_closure
 import primary_entry_build
+from structured_evidence import emit_source, loads, identity_check
 
 
 STAGE = 'bootstrap'
@@ -35,8 +35,12 @@ def main():
     spec = test_plan(script, workflow, test_mode) if test_mode else plan(script, workflow, source_input)
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
-    STAGE = 'dependencies'
     expected = json.loads(Path('/inputs/identity.json').read_bytes())
+    transport_identity = loads(Path('/inputs/transport-identity.json').read_bytes())
+    identity_check(transport_identity['identity'])
+    if transport_identity['identity']['head_sha'] != expected['head_sha']:
+        raise RuntimeError('transport_head_identity')
+    STAGE = 'dependencies'
     if (Path('/source/.git/HEAD').read_text() != expected['head_sha'] + '\n'
             or Path('/source/.git').stat().st_uid != 20000):
         raise RuntimeError('primary_git_metadata_identity')
@@ -180,24 +184,24 @@ def main():
                    'source_checkpoint_ready': False, 'selected_carrier': None})
     if source is not None:
         result.update(source.finish())
-    envelope = {'kernel-source.json': base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode(),
-                'source-output.log': base64.b64encode(output).decode()}
+    records = {'source-output.log': bytes(output)}
     if source is not None:
         for name in ('collection.json', 'summary.json', 'source.xml', 'source-provenance.json'):
             path = Path('/work') / name
             if path.is_file() and not path.is_symlink() and path.stat().st_size <= 32 * 1024 * 1024:
-                envelope[name] = base64.b64encode(path.read_bytes()).decode()
+                records[name] = path.read_bytes()
         # A successful pytest return cannot erase a caught guard refusal.
         summary = json.loads(Path('/work/summary.json').read_bytes()) if Path('/work/summary.json').is_file() else None
         if (summary is None or not summary['ready'] or summary['failures']
                 or result['guard_poison'] or result['receipt_ledger_poison']):
             failure = 'source_guard_refused'
         result['failure_code'] = failure
-        envelope['kernel-source.json'] = base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode()
-    print('PRIVATE-EVIDENCE:' + json.dumps(envelope, sort_keys=True), flush=True)
-    return 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
-                 and not authority.denials and not native_failure and not failure
-                 and not children - waits and result['all_commands_dispatched']) else 2
+    status = 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
+                   and not authority.denials and not native_failure and not failure
+                   and not children - waits and result['all_commands_dispatched']) else 2
+    records['kernel-source.json'] = json.dumps(result, sort_keys=True).encode()
+    emit_source(records, result, transport_identity['identity'], transport_identity['invocation_sha256'], status)
+    return status
 
 
 if __name__ == '__main__':
@@ -211,7 +215,8 @@ if __name__ == '__main__':
             trace = trace.tb_next
         record = {'failure_code': 'bootstrap_failure', 'stage': STAGE, 'frame_lines': lines[-8:],
                   'source_checkpoint_ready': False, 'selected_carrier': None}
-        envelope = {'kernel-source.json': base64.b64encode(json.dumps(record, sort_keys=True).encode()).decode()}
-        print('PRIVATE-EVIDENCE:' + json.dumps(envelope, sort_keys=True), flush=True)
+        transport_identity = loads(Path('/inputs/transport-identity.json').read_bytes())
+        emit_source({'kernel-source.json': json.dumps(record, sort_keys=True).encode()}, record,
+                    transport_identity['identity'], transport_identity['invocation_sha256'], 125)
         status = 125
     raise SystemExit(status)

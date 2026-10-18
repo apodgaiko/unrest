@@ -727,3 +727,19 @@ TEST-poison mode over the identical tuple, with separately named encrypted
 evidence. That mode catches one unknown-command refusal after the original tests
 return and requires the guard poison to remain sticky. Neither TEST proof is a
 release certificate.
+
+### Bounded current SOURCE transport provenance
+
+The primary producer emits one `SOURCE-TRANSPORT` header before aggregate
+base64 serialization. Its closed schema binds the exact execution identity,
+support snapshot, and invocation nonce to named record hashes, decoded and
+encoded sizes, top-level logical field sizes/cardinalities, and directly
+available source status and collection/JUnit counts. The header is at most
+8192 bytes and contains no record values, paths, command arguments, environment,
+exception text, or opaque output. The collector accepts it only from the current
+owned invocation, rejects extra/duplicate/malformed/stale headers or stream
+fragments, and preserves the named header before enforcing the unchanged
+64 MiB whole-stdout ceiling. Complete transport also checks each descriptor
+against the original record bytes. A header without the complete structured
+envelope supplies diagnostics only; it never establishes SOURCE acceptance.
+No historical process output or opaque log is a recovery source.

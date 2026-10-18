@@ -27,6 +27,7 @@ jobs:
         run: env -u CODEX_PATH uv run pytest -q tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[claude] tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex] tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: TEST caught SOURCE refusal retains poison
+        id: source-poison
         run: env -u CODEX_PATH uv run pytest -q tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[claude] tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex] tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-poison {0}
       - name: Upload encrypted TEST source entry evidence
@@ -40,7 +41,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload encrypted TEST caught-refusal evidence
-        if: always()
+        if: always() && steps.source-poison.outcome != 'skipped'
         uses: actions/upload-artifact@v4.6.2
         with:
           name: v046-primary-source-poison-${{ github.run_id }}-${{ github.run_attempt }}

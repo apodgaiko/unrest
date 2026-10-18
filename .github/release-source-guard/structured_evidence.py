@@ -26,6 +26,11 @@ CONTROLS = {'control-suite.xml', 'observer.json', 'source-controls.json'} | {
 OPAQUE = {'source-output.log', 'custodian.stderr', 'source-diagnostics.json'}
 SCOPES = {'ci-mutations', 'synthetic-controls', 'inprocess', 'composed', 'backend', 'drain-controls',
           'producer-contract', 'producer-distribution', 'producer-controls', 'primary-executor', 'primary-controls'}
+HEADER = 'transport-provenance.json'
+HEADER_PREFIX = b'SOURCE-TRANSPORT:'
+HEADER_LIMIT = 8192
+HEADER_SCHEMA = 'unrest.v046.source-transport-provenance.v1'
+KERNEL_FIELDS = frozenset('records poison diagnostic_trace unregistered_processes native_diagnostics primary_plan primary_records primary_denials failure_code native_preinit_refusal missing_parent_waits source_preexec_identity runtime_binding_sha256 actual_script_sha256 all_commands_dispatched source_checkpoint_ready selected_carrier guard_poison receipt_ledger_poison source_events receipts diagnostic_schedule event_timings receipt_channel_diagnostics native_source_records source_pipe_records source_observer_poison_sha256 root_parent_wait_raw stage frame_lines'.split())
 IDENTITY = {'repository', 'head_sha', 'run_id', 'run_attempt', 'workflow_ref', 'workflow_sha',
             'artifact_name', 'support_sha256'}
 
@@ -104,17 +109,126 @@ def execution_identity(support, kind):
     return value
 
 
-def capture(argv, raw, identity, scope, **kwargs):
+
+def numeric(value):
+    return type(value) is int and 0 <= value <= (1 << 64) - 1
+
+
+def source_header(records, kernel, identity, invocation, exit_code):
+    """Only current producer-owned bytes supply sizes; no opaque record is parsed."""
+    import xml.etree.ElementTree as ET
+    identity_check(identity)
+    require(set(records) <= SOURCE | OPAQUE and 'kernel-source.json' in records, 'header_records')
+    require(type(kernel) is dict and set(kernel) <= KERNEL_FIELDS, 'header_kernel_fields')
+    descriptors = {name: {'decoded_bytes': len(body), 'encoded_bytes': 4 * ((len(body) + 2) // 3),
+                          'sha256': digest(body)} for name, body in sorted(records.items())}
+    fields = {name: {'bytes': len(json.dumps(value, sort_keys=True).encode()),
+                     'count': len(value) if type(value) in (list, dict) else None}
+              for name, value in sorted(kernel.items())}
+    counts = dict.fromkeys(('collection', 'junit_cases', 'junit_failures', 'junit_errors', 'junit_skips'))
+    if 'collection.json' in records:
+        collection = loads(records['collection.json'])
+        if type(collection) is list:
+            counts['collection'] = len(collection)
+    if 'source.xml' in records and b'<!' not in records['source.xml']:
+        try:
+            cases = list(ET.fromstring(records['source.xml']).iter('testcase'))
+        except ET.ParseError:
+            cases = None
+        if cases is not None:
+            counts.update(junit_cases=len(cases), junit_failures=sum(len(c.findall('failure')) for c in cases),
+                          junit_errors=sum(len(c.findall('error')) for c in cases),
+                          junit_skips=sum(len(c.findall('skipped')) for c in cases))
+    status = {'exit_code': exit_code, 'root_parent_wait_raw': kernel.get('root_parent_wait_raw'),
+              'guard_poison': kernel.get('guard_poison'), 'poison_count': len(kernel.get('poison', [])),
+              'receipt_poison_count': len(kernel.get('receipt_ledger_poison', [])),
+              'failure_code': kernel.get('failure_code')}
+    header = {'schema': HEADER_SCHEMA, 'identity': identity, 'invocation_sha256': invocation,
+              'scope': 'primary-executor', 'records': descriptors, 'kernel_fields': fields,
+              'source_status': status, 'original_counts': counts,
+              'source_checkpoint_ready': False, 'selected_carrier': None}
+    validate_header(header, identity, invocation)
+    body = canonical(header)
+    require(len(HEADER_PREFIX) + len(body) + 1 <= HEADER_LIMIT, 'header_bound')
+    return HEADER_PREFIX + body + b'\n'
+
+
+def validate_header(value, identity, invocation):
+    require(type(value) is dict and set(value) == {'schema', 'identity', 'invocation_sha256',
+            'scope', 'records', 'kernel_fields', 'source_status', 'original_counts',
+            'source_checkpoint_ready', 'selected_carrier'}, 'header_fields')
+    identity_check(value['identity'])
+    require(value['schema'] == HEADER_SCHEMA and value['identity'] == identity
+            and value['scope'] == 'primary-executor' and value['invocation_sha256'] == invocation
+            and type(invocation) is str and re.fullmatch('[0-9a-f]{64}', invocation), 'header_identity')
+    require(value['source_checkpoint_ready'] is False and value['selected_carrier'] is None, 'header_authority')
+    descriptors = value['records']
+    require(type(descriptors) is dict and set(descriptors) <= SOURCE | OPAQUE
+            and 'kernel-source.json' in descriptors, 'header_records')
+    for item in descriptors.values():
+        require(type(item) is dict and set(item) == {'decoded_bytes', 'encoded_bytes', 'sha256'}
+                and numeric(item['decoded_bytes']) and numeric(item['encoded_bytes'])
+                and item['encoded_bytes'] == 4 * ((item['decoded_bytes'] + 2) // 3)
+                and type(item['sha256']) is str and re.fullmatch('[0-9a-f]{64}', item['sha256']), 'header_descriptor')
+    require(type(value['kernel_fields']) is dict and set(value['kernel_fields']) <= KERNEL_FIELDS,
+            'header_kernel_fields')
+    for item in value['kernel_fields'].values():
+        require(type(item) is dict and set(item) == {'bytes', 'count'} and numeric(item['bytes'])
+                and (item['count'] is None or numeric(item['count'])), 'header_cardinality')
+    counts = value['original_counts']
+    require(type(counts) is dict and set(counts) == {'collection', 'junit_cases', 'junit_failures', 'junit_errors', 'junit_skips'}
+            and all(v is None or numeric(v) for v in counts.values()), 'header_counts')
+    status = value['source_status']
+    require(type(status) is dict and set(status) == {'exit_code', 'root_parent_wait_raw', 'guard_poison',
+            'poison_count', 'receipt_poison_count', 'failure_code'}, 'header_status')
+    require(type(status['exit_code']) is int and status['exit_code'] in {0, 2, 125}
+            and (status['root_parent_wait_raw'] is None or numeric(status['root_parent_wait_raw']))
+            and (status['guard_poison'] is None or type(status['guard_poison']) is bool)
+            and numeric(status['poison_count']) and numeric(status['receipt_poison_count'])
+            and status['failure_code'] in {None, 'trace_failure', 'source_guard_refused', 'bootstrap_failure'}, 'header_status')
+
+
+def current_header(current_stdout, identity, invocation):
+    """Inspect one bounded prefix from this invocation only, before the transport cap."""
+    first_end = current_stdout.find(b'\n', 0, HEADER_LIMIT)
+    require(first_end >= 0 and current_stdout.startswith(HEADER_PREFIX), 'header_prefix')
+    first = current_stdout[:first_end + 1]
+    require(current_stdout.count(HEADER_PREFIX) == 1, 'header_count')
+    value = loads(first[len(HEADER_PREFIX):-1])
+    validate_header(value, identity, invocation)
+    # A source stream has exactly these two complete frames and nothing else.
+    tail = current_stdout[first_end + 1:]
+    require(tail.startswith(b'PRIVATE-EVIDENCE:') and tail.endswith(b'\n')
+            and tail.count(b'\n') == 1, 'header_stream')
+    return value, tail
+
+
+def emit_source(records, kernel, identity, invocation, exit_code):
+    import sys
+    sys.stdout.buffer.write(source_header(records, kernel, identity, invocation, exit_code))
+    sys.stdout.buffer.flush()
+    encoded = {name: base64.b64encode(body).decode() for name, body in sorted(records.items())}
+    sys.stdout.buffer.write(b'PRIVATE-EVIDENCE:' + json.dumps(encoded, sort_keys=True).encode() + b'\n')
+    sys.stdout.buffer.flush()
+
+
+def capture(argv, raw, identity, scope, *, source_invocation=None, **kwargs):
     """Run the owned process once; its captured stdout is never printed or reread."""
     with (raw / 'coordinator.log').open('ab') as errors:
         result = subprocess.run(argv, stdout=subprocess.PIPE, stderr=errors, check=False, **kwargs)
+    header = None
+    current = result.stdout
+    if source_invocation is not None:
+        require(scope == 'primary-executor', 'header_scope')
+        header, current = current_header(current, identity, source_invocation)
+        (raw / HEADER).write_bytes(canonical(header))
     require(len(result.stdout) <= LIMIT, 'transport_bound')
     (raw / 'current-process.stdout').write_bytes(result.stdout)
-    records = export(result.stdout, raw, identity, scope)
+    records = export(current, raw, identity, scope, descriptors=header['records'] if header else None)
     return result, records
 
 
-def export(current_stdout, raw, identity, scope):
+def export(current_stdout, raw, identity, scope, *, descriptors=None):
     identity_check(identity)
     require(scope in SCOPES, 'scope')
     lines = [line[len(b'PRIVATE-EVIDENCE:'):] for line in current_stdout.splitlines()
@@ -125,8 +239,10 @@ def export(current_stdout, raw, identity, scope):
     require(type(transport) is dict and set(transport) <= allowed | OPAQUE, 'unknown_record')
     required = CONTROLS - {'control-suite.xml'} if scope == 'synthetic-controls' else {'kernel-source.json'}
     require(required <= set(transport), 'missing_record')
+    if descriptors is not None:
+        require(set(descriptors) == set(transport), 'header_record_binding')
     records = {}
-    descriptors = {}
+    envelope_descriptors = {}
     for name, encoded in sorted(transport.items()):
         require(type(encoded) is str and len(encoded) <= LIMIT, 'record_bound')
         try:
@@ -134,12 +250,16 @@ def export(current_stdout, raw, identity, scope):
         except ValueError:
             raise EvidenceRefused('record_encoding') from None
         require(len(body) <= LIMIT, 'record_bound')
+        if descriptors is not None:
+            item = descriptors[name]
+            require(len(body) == item['decoded_bytes'] and len(encoded) == item['encoded_bytes']
+                    and digest(body) == item['sha256'], 'header_record_binding')
         path = raw / (('structured-' if name in allowed else 'private-') + name)
         path.write_bytes(body)
         if name in allowed:
             records[name] = body
-            descriptors[name] = {'member': path.name, 'sha256': digest(body), 'size': len(body)}
-    envelope = {'schema': SCHEMA, 'scope': scope, 'identity': identity, 'records': descriptors,
+            envelope_descriptors[name] = {'member': path.name, 'sha256': digest(body), 'size': len(body)}
+    envelope = {'schema': SCHEMA, 'scope': scope, 'identity': identity, 'records': envelope_descriptors,
                 'source_checkpoint_ready': False, 'selected_carrier': None}
     (raw / MEMBER).write_bytes(canonical(envelope))
     return records
@@ -157,7 +277,7 @@ def consume(archive, expected, envelope_sha256):
             require(member.isfile() and not member.issparse() and 0 <= member.size <= LIMIT
                     and PurePosixPath(member.name).name == member.name
                     and member.name not in ('.', '..'), 'archive_member')
-        permitted = {MEMBER, 'coordinator.log', 'current-process.stdout', 'prepared.stdout',
+        permitted = {MEMBER, HEADER, 'coordinator.log', 'current-process.stdout', 'prepared.stdout',
                      'container-inspect.json', 'container-state.json', 'source-pins.json',
                      'negative-control-proof.json', 'provenance.json', 'prerequisite-status.json'} | {
                          'structured-' + name for name in SOURCE | CONTROLS} | {
