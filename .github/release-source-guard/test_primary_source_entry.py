@@ -89,3 +89,15 @@ def test_input_binding_is_not_satisfied_by_a_foreign_script_or_workflow():
     for script, workflow_text in ((COMMAND.encode() + b' -x', text), (COMMAND.encode(), text + '\n')):
         with pytest.raises(RuntimeError):
             require_full_input(copy.deepcopy(value), script, workflow_text)
+
+
+def test_source_temp_root_and_env_addition_do_not_broaden_focused_policy():
+    from primary_policy import environment, command_environment
+    root = environment(source=True)
+    assert root['TMPDIR'] == '/work/owned/tmp'
+    assert environment()['TMPDIR'] == '/work/tmp'
+    value = {**root, 'PWD': '/source', 'SHLVL': '1', '_': '/usr/bin/env'}
+    assert command_environment(value, root, source=True)
+    assert not command_environment(value, root)
+    for change in ({'_': '/foreign/env'}, {'OPENAI_API_KEY': 'forbidden'}, {'PYTHONPATH': '/foreign'}):
+        assert not command_environment({**value, **change}, root, source=True)

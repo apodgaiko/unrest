@@ -52,9 +52,10 @@ def plan(script, workflow, source_input=None):
             'timeout_seconds': 180}
 
 
-def environment():
+def environment(*, source=False):
     return {'HOME': '/work/home', 'PATH': '/opt/source-bootstrap/bin:/usr/local/bin:/usr/bin:/bin',
-            'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8', 'TMPDIR': '/work/tmp',
+            'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8',
+            'TMPDIR': '/work/owned/tmp' if source else '/work/tmp',
             'UV_CACHE_DIR': '/work/cache', 'UV_OFFLINE': '1', 'UV_NO_INDEX': '1',
             'UV_FIND_LINKS': '/opt/source-bootstrap/wheelhouse',
             'UV_PYTHON': PYTHON, 'UV_PYTHON_DOWNLOADS': 'never',

@@ -12,7 +12,8 @@ import linux_git
 from linux_supervisor import Supervisor
 from linux_producers import NativeProducers
 from finite.linux_identity import identity
-from primary_policy import PYTHON
+from primary_policy import PYTHON, console
+from producer_setup import write
 
 
 def sha(path):
@@ -32,6 +33,22 @@ class SourceAuthority:
     def start(self, pid, output_fd):
         if self.supervisor is not None:
             raise RuntimeError('primary_source_duplicate_root')
+        # These are the actual UV-produced consoles, after editable setup and
+        # before pytest starts. Consume their exact renderer and interpreter;
+        # source fixtures retain their existing copied-console checks.
+        pins = {}
+        for name in ('unrest', 'unrest-server'):
+            path = Path('/source/.venv/bin') / name
+            if path.read_bytes() != console(name):
+                raise RuntimeError('primary_source_console_renderer')
+            pins[name] = sha(path)
+        self.manifest['copied_console_pins'] = {'unrest': pins['unrest']}
+        self.manifest['console_routes'] = [{
+            'name': 'unrest-server', 'argv': ['--mode', 'orchestrator', '--help'],
+            'path': '/source/.venv/bin/unrest-server', 'python': '/source/.venv/bin/python',
+            'sha256': pins['unrest-server']}]
+        self.path = '/receipts/primary-source.json'
+        self.pin = write(Path(self.path), self.manifest)
         spec = {'manifest': self.path, 'pins': {self.path: self.pin},
                 'endpoint': self.manifest['endpoint']}
         for name in ('custody_host.py', 'drain_host.py'):

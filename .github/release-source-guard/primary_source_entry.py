@@ -66,6 +66,7 @@ def activate(profile, event, arguments):
     # neither hook returns replacement items or adds marks/options/selectors.
     plugin.pytest_collection_modifyitems.__func__.pytest_impl = {'wrapper': True, 'tryfirst': True}
     plugin.pytest_configure.__func__.pytest_impl = {'tryfirst': True}
+    plugin.pytest_runtest_setup.__func__.pytest_impl = {'tryfirst': True}
     assert pytest.console_main is not None
 
 

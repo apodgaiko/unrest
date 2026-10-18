@@ -43,7 +43,7 @@ def main():
     dependency_closure.verify_source_view(Path('/environment-closure.json').read_bytes())
     STAGE = 'runtime'
     runtime = primary_entry_build.verify()
-    env = environment()
+    env = environment(source=bool(spec.get('source_mode')))
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
     start_read, start_write = os.pipe2(os.O_CLOEXEC)
@@ -137,9 +137,13 @@ def main():
         result = {'records': trace.records, 'poison': trace.poison,
                   'root_parent_wait_raw': trace.root_parent_wait}
     os.close(read)
-    waits = {row['child'] for row in result['records']
-             if row['kind'] in {'original_parent_wait4', 'original_parent_waitid'}
-             and (row['kind'] == 'original_parent_wait4' or row['reaps'])}
+    births = {row['child']: row for row in result['records'] if row['kind'] == 'kernel_child'
+              and row['identity']['tgid'] == row['child']}
+    waits = {pid for pid, birth in births.items() if len([
+        row for row in result['records']
+        if row['kind'] in {'original_parent_wait4', 'original_parent_waitid'}
+        and (row['kind'] == 'original_parent_wait4' or row['reaps'])
+        and row['child'] == pid and row['parent_tgid'] == birth['identity']['ppid']]) == 1}
     children = {row['child'] for row in result['records'] if row['kind'] == 'kernel_child'
                 and row['identity']['tgid'] == row['child']}
     native_failure = any(row['kind'] == 'kernel_exit' and row['raw'] == 86 << 8
@@ -176,6 +180,8 @@ def main():
         if (summary is None or not summary['ready'] or summary['failures']
                 or result['guard_poison'] or result['receipt_ledger_poison']):
             failure = 'source_guard_refused'
+        result['failure_code'] = failure
+        envelope['kernel-source.json'] = base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode()
     print('PRIVATE-EVIDENCE:' + json.dumps(envelope, sort_keys=True), flush=True)
     return 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
                  and not authority.denials and not native_failure and not failure
