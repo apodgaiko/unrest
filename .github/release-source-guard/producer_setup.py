@@ -160,6 +160,8 @@ def prepare(manifest, input_pin):
             'entry': activation.identity(base),
             'bootstrap': activation.identity('/guard/primary_entry.py'),
             'consumer': activation.identity('/guard/native_entry.py'),
+            'cache_support': activation.identity('/guard/producer_profile.py'),
+            'cache_seed_inventory': closure.inventory(Path('/opt/primary-cache')),
         }
     common_path = ROOT / 'common.json'
     common_pin = write(common_path, common)

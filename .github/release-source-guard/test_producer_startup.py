@@ -304,3 +304,113 @@ def test_header_integration_inverse_rejects_mutation(before, after):
     assert before in source
     with pytest.raises(AssertionError):
         restore_producer_profile(ast.parse(source.replace(before, after)))
+
+
+PRIMARY_CACHE_BRANCH_AST = '6a80bae6754714e7af88928d900ef9b5bbed452e201d6978a5611eb7fb10fab6'
+
+
+def restore_primary_cache(tree):
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'cache_tree')
+    prefix = ast.Module(body=method.body[:2], type_ignores=[])
+    assert hashlib.sha256(ast.dump(prefix, include_attributes=False).encode()).hexdigest() == PRIMARY_CACHE_BRANCH_AST
+    method.body = method.body[2:]
+    return tree
+
+
+@pytest.mark.parametrize('old,new', [
+    ("primary is not None", 'True'),
+    ("support['path'] != '/guard/producer_profile.py'", 'False'),
+    ("hashlib.sha256(body).hexdigest() != support['sha256']", 'False'),
+    ("self.refuse(str(error))", 'pass'),
+])
+def test_cache_branch_inverse_rejects_weakening(old, new):
+    source = (ROOT / 'finite/source_activation.py').read_text()
+    assert old in source
+    with pytest.raises(AssertionError):
+        restore_primary_cache(ast.parse(source.replace(old, new)))
+
+
+@pytest.mark.parametrize('change', [
+    'none', 'cache_context', 'base_context', 'seed_bytes', 'seed_mode',
+    'seed_input_bytes', 'seed_input_mode', 'seed_input_missing', 'seed_input_link',
+    'backend_payload', 'extra_writer', 'extra_link', 'source_minted_inventory',
+    'interpreter_record', 'bad_interpreter_record',
+])
+def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change):
+    import shutil
+    import zipfile
+    closure_spec = importlib.util.spec_from_file_location('cache_closure', ROOT / 'dependency_closure.py')
+    closure = importlib.util.module_from_spec(closure_spec)
+    closure_spec.loader.exec_module(closure)
+    identity_spec = importlib.util.spec_from_file_location('cache_identity', ROOT / 'finite/operation_activation.py')
+    activation = importlib.util.module_from_spec(identity_spec)
+    identity_spec.loader.exec_module(activation)
+    seed, current = tmp_path / 'seed', tmp_path / 'cache'
+    backend = seed / 'archive-v0/backend'
+    backend.mkdir(parents=True)
+    (backend / 'backend.py').write_bytes(b'original selected backend')
+    other = seed / 'archive-v0/dependency'
+    other.mkdir()
+    (other / 'dependency.py').write_bytes(b'original dependency')
+    for package, target in [('setuptools/84.0.0-py3-none-any', backend),
+                            ('dependency/1.0-py3-none-any', other)]:
+        link = seed / 'wheels-v6/index/exact-publisher' / package
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(target)
+    shutil.copytree(seed, current, symlinks=True)
+    for path in current.rglob('*'):
+        if path.is_symlink():
+            target = path.resolve().relative_to(seed)
+            path.unlink()
+            path.symlink_to(current / target)
+    wheel = tmp_path / 'selected.whl'
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        archive.writestr('backend.py', b'original selected backend')
+    spec = {'primary_producer': {'cache_seed_inventory': closure.inventory(seed)},
+            'cache': '/work/cache', 'base': '/usr/local/bin/python-primary-audit', 'wheel': str(wheel)}
+    original_path = Path
+    def mapped(path):
+        return {'/opt/primary-cache': seed, '/work/cache': current}.get(str(path), original_path(path))
+    cache_tree = load_function('primary_cache_tree', 'producer_profile.py', {
+        'Path': mapped, 'load': lambda name, path: closure if path.endswith('dependency_closure.py') else activation})
+    if change == 'cache_context':
+        spec['cache'] = '/work/foreign'
+    elif change == 'base_context':
+        spec['base'] = '/usr/local/bin/python-source-audit'
+    elif change == 'seed_bytes':
+        (other / 'dependency.py').write_bytes(b'altered readonly origin')
+    elif change == 'seed_mode':
+        (other / 'dependency.py').chmod(0o777)
+    elif change == 'seed_input_bytes':
+        (current / 'archive-v0/dependency/dependency.py').write_bytes(b'foreign')
+    elif change == 'seed_input_mode':
+        (current / 'archive-v0/dependency/dependency.py').chmod(0o777)
+    elif change == 'seed_input_missing':
+        (current / 'archive-v0/dependency/dependency.py').unlink()
+    elif change == 'seed_input_link':
+        link = current / 'wheels-v6/index/exact-publisher/dependency/1.0-py3-none-any'
+        link.unlink()
+        link.symlink_to(current / 'archive-v0/backend')
+    elif change == 'backend_payload':
+        with zipfile.ZipFile(wheel, 'w') as archive:
+            archive.writestr('backend.py', b'foreign selected backend')
+    elif change == 'extra_writer':
+        (current / 'foreign.py').write_bytes(b'unrelated writable cache writer')
+    elif change == 'extra_link':
+        (current / 'foreign').symlink_to(current / 'archive-v0/dependency')
+    elif change == 'source_minted_inventory':
+        (current / 'foreign.py').write_bytes(b'cannot mint observer input')
+        spec['primary_producer']['cache_seed_inventory'] = closure.inventory(current)
+    elif change in {'interpreter_record', 'bad_interpreter_record'}:
+        record = current / 'interpreter-v4/exact/key.msgpack'
+        record.parent.mkdir(parents=True)
+        record.with_suffix('.py' if change == 'bad_interpreter_record' else '.msgpack').write_bytes(b'original finite UV record')
+    if change in {'none', 'interpreter_record'}:
+        rows = cache_tree(spec)
+        assert rows and all(set(row) in ({'path', 'target', 'inode'}, {'path', 'directory'},
+                                        set(activation.identity(current / 'archive-v0/backend/backend.py')))
+                            for row in rows)
+        assert len([row for row in rows if 'target' in row]) == 2
+    else:
+        with pytest.raises(RuntimeError):
+            cache_tree(spec)

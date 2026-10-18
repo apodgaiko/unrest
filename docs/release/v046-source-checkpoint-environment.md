@@ -807,3 +807,13 @@ child birth, image bytes, selected helper and environment. Its dedicated primary
 startup role consumes the original protected native producer header and consumer
 after the complete native FD census; the native query/backend body and all
 original READY, receipt and parent-wait requirements remain in force.
+
+The dedicated PRIMARY cache descriptor retains the full immutable native seed,
+including its additional dependency wheels. Each consumption checks complete
+current seed/cache bytes and link targets, the single selected backend wheel
+against its pinned archive, and the original finite UV metadata additions.
+Unknown writable members refuse; observing a new cache file cannot authorize it.
+The original single-backend cache path remains unchanged for other source modes.
+Build-to-install comparisons retain original device/inode/ctime/file-byte rows.
+Primary editable outputs outside this finite descriptor require their own
+original producer lineage; their mere presence is insufficient.

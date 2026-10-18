@@ -134,3 +134,80 @@ def consume(profile):
     elif sys.orig_argv[1:-1] != ['-c']:
         raise RuntimeError('native original backend flags drift')
     return spec
+
+
+def primary_cache_tree(spec):
+    """Validate the primary's whole native seed plus original finite UV additions.
+
+    Extra dependency wheels have immutable image provenance. A writable member
+    that was not in that seed still needs the original finite cache predicates;
+    observing it here cannot turn it into an authorized input.
+    """
+    primary = spec['primary_producer']
+    if spec['cache'] != '/work/cache' or spec['base'] != '/usr/local/bin/python-primary-audit':
+        raise RuntimeError('source_primary_cache_context_drift')
+    closure = load('primary_cache_closure', '/guard/dependency_closure.py')
+    seed = Path('/opt/primary-cache')
+    expected = closure.inventory(seed)
+    if expected != primary['cache_seed_inventory']:
+        raise RuntimeError('source_primary_cache_seed_drift')
+    root = Path(spec['cache'])
+    current = closure.inventory(root)
+    for name, item in expected.items():
+        wanted = dict(item)
+        if item['type'] == 'symlink':
+            target = (seed / name).resolve(strict=True)
+            if not target.is_relative_to(seed) or not target.is_dir():
+                raise RuntimeError('source_primary_cache_seed_link')
+            wanted['target'] = str(root / target.relative_to(seed))
+        if current.get(name) != wanted:
+            raise RuntimeError('source_primary_cache_input_drift')
+    links = [root / name for name, item in current.items() if item['type'] == 'symlink'
+             and len(Path(name).parts) == 5
+             and Path(name).parts[:2] == ('wheels-v6', 'index')
+             and Path(name).parts[3:] == ('setuptools', '84.0.0-py3-none-any')]
+    if len(links) != 1:
+        raise RuntimeError('source_cache_link_cardinality')
+    link = links[0]
+    target = link.resolve()
+    if target.parent != root / 'archive-v0' or target.is_symlink():
+        raise RuntimeError('source_cache_unknown_link')
+    import zipfile
+    with zipfile.ZipFile(spec['wheel']) as archive:
+        payload = {n: archive.read(n) for n in archive.namelist() if not n.endswith('/')}
+    actual = {p.relative_to(target).as_posix(): p.read_bytes()
+              for p in target.rglob('*') if p.is_file()}
+    if actual != payload:
+        raise RuntimeError('source_cache_selected_wheel_drift')
+    fixed = {'.gitignore': b'*', '.lock': b'',
+             'CACHEDIR.TAG': b'Signature: 8a477f597d28d172789f06886806bc55',
+             'sdists-v9/.git': b'', 'sdists-v9/.gitignore': b''}
+    # Re-evaluate every complete file byte and every link on each consumption.
+    # Only original UV interpreter records/metadata may extend the sealed seed.
+    for name, item in current.items():
+        if name in expected or item['type'] == 'directory':
+            continue
+        if item['type'] != 'file':
+            raise RuntimeError('source_primary_cache_unbound_link')
+        path = root / name
+        parts = Path(name).parts
+        permitted = (len(parts) == 3 and parts[0] == 'interpreter-v4'
+                     and path.suffix == '.msgpack') or name == str(link.relative_to(root)) + '.rev'
+        if name in fixed:
+            if path.read_bytes() != fixed[name]:
+                raise RuntimeError('source_cache_metadata_drift')
+        elif not permitted:
+            raise RuntimeError('source_primary_cache_unbound_member')
+    rows = []
+    activation = load('primary_cache_identity', '/guard/finite/operation_activation.py')
+    for path in sorted(root.rglob('*')):
+        if path.is_symlink():
+            rows.append({'path': str(path), 'target': str(path.resolve()), 'inode': path.lstat().st_ino})
+        elif path.is_dir():
+            info = path.lstat()
+            rows.append({'path': str(path), 'directory': [info.st_dev, info.st_ino, info.st_mode]})
+        else:
+            # Use the original inode/ctime/full-byte file identity shape, so
+            # build-to-install comparison retains its original failure model.
+            rows.append(activation.identity(path))
+    return rows

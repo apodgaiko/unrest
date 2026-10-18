@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from test_root_allocation import restore_primary_allocation
-from test_producer_startup import restore_producer_profile
+from test_producer_startup import restore_producer_profile, restore_primary_cache
 
 ROOT = Path(__file__).parent
 
@@ -83,6 +83,8 @@ def test_only_closed_telemetry_changes_original_executable_trees():
             tree = restore_primary_allocation(tree)
         if name == 'primary_source_authority.py':
             tree = restore_producer_profile(tree)
+        if name == 'finite/source_activation.py':
+            tree = restore_primary_cache(tree)
         tree = StripTelemetry().visit(tree)
         assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() == expected
 

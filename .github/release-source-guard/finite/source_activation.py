@@ -81,6 +81,21 @@ class SourceActivation(IsolatedActivation):
             )
 
     def cache_tree(self):
+        primary = self.spec.get('primary_producer')
+        if primary is not None:
+            support = primary['cache_support']
+            body = Path('/guard/producer_profile.py').read_bytes()
+            import hashlib
+            if (support['path'] != '/guard/producer_profile.py'
+                    or hashlib.sha256(body).hexdigest() != support['sha256']):
+                self.refuse('source_primary_cache_support_drift')
+            namespace = {'__name__': '_primary_cache_profile', '__file__': support['path']}
+            exec(compile(body, support['path'], 'exec', dont_inherit=True), namespace)
+            try:
+                return namespace['primary_cache_tree'](self.spec)
+            except (OSError, RuntimeError) as error:
+                self.refuse(str(error))
+                raise RuntimeError('refusal callback returned') from error
         root = Path(self.spec["cache"])
         rows = []
         links = [p for p in root.rglob("*") if p.is_symlink()]
