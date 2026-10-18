@@ -40,7 +40,7 @@ def test_primary_operation_entry_executes_exact_legacy_base():
                     if isinstance(node, ast.Constant) and isinstance(node.value, str) and len(node.value) == 64)
     assert hashlib.sha256((support / 'finite/source_operations.py').read_bytes()).hexdigest() == expected
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef))
-    assert [node.name for node in cls.body if isinstance(node, ast.FunctionDef)] == ['inputs', 'dependency']
+    assert [node.name for node in cls.body if isinstance(node, ast.FunctionDef)] == ['__init__', 'inputs', 'dependency', 'native_executable']
 
 
 def test_exact_clock_admission_only_relocates_three_equivalent_owners(monkeypatch):
@@ -86,7 +86,7 @@ def test_primary_inputs_require_actual_dependency_even_without_legacy_tree():
     namespace = {'_LegacyOperations': Legacy}
     exec(compile(ast.Module(body=[cls], type_ignores=[]), str(support / 'primary_operations.py'), 'exec'),
          {'hashlib': hashlib, '_BASE': support / 'finite/source_operations.py', 'Path': Path}, namespace)
-    operation = namespace['Operations']()
+    operation = object.__new__(namespace['Operations'])
     operation.spec = {'trees': []}
     operation.refuse = lambda code: (_ for _ in ()).throw(RuntimeError(code))
     with pytest.raises(RuntimeError, match='primary_dependency_support_missing'):

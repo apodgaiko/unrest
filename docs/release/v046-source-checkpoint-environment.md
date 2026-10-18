@@ -997,3 +997,22 @@ A denied kernel exec also contributes only its pathname and exact argument-vecto
 hashes to the bounded failure categories. These hashes identify the original
 attempt without publishing its path or arguments and never grant a launch.
 Successful attempts are excluded from these failure categories.
+
+The protected distribution fixture invokes a literal `uv` build. CPython would
+probe the running PRIMARY environment's bin directory before reaching the pinned
+UV image. PRIMARY binds this one admitted original operation to that exact
+resolved immutable image using Popen's executable selection while retaining its
+original argument vector, environment, cwd, source binding and operation token.
+The observer checks the actual image and original native profile as before.
+Caller-supplied executable overrides remain forbidden. Other operations and
+standalone profiles retain their existing behavior; no absent path is granted
+permission to execute. The query interpreter and its selected symlink route
+remain separate and unchanged.
+
+The PRIMARY operation constructor installs this selection adapter while the
+unchanged finite guard captures its original Popen constructor. Installation
+requires that byte-pinned guard's actual INSTALLING frame; invocation requires
+its exact admitted launch frame, globals, state and constructor cell plus fresh
+READY. The original guard's executable AST, audit boundary and every existing
+negative remain unchanged. The adapter delegates all other admitted calls to
+the same original stdlib constructor with their original options.

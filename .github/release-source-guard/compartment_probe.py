@@ -126,7 +126,7 @@ def source_controls() -> None:
          "--basetemp=/work/pytest", "--junitxml=/work/control-suite.xml", "/guard/test_linux_observation.py",
          "/guard/test_probe_controller.py", "/guard/test_linux_trace.py", "/guard/test_root_allocation.py", "/guard/test_producer_startup.py", "/guard/test_cache_snapshot_diagnostics.py",
          "/guard/test_primary_dependency.py", "/guard/test_primary_dependency_outputs.py",
-         "/guard/test_clock_source_inputs.py", "/guard/test_source_failure_facts.py",
+         "/guard/test_clock_source_inputs.py", "/guard/test_source_failure_facts.py", "/guard/test_primary_native_route.py",
          "/guard/test_dependency_closure.py", "/guard/test_profile_gate.py", "/guard/test_linux_native_custody.py",
          "/guard/test_checkpoint_receipt.py", "/guard/test_checkpoint_lookup.py", "/guard/test_ci_commands.py",
          "/guard/test_native_entry.py", "/guard/test_primary_pipe.py", "/guard/test_linux_supervisor.py", "/guard/test_pinned_policy.py", "/guard/test_source_derivations.py", '/guard/test_startup_phases.py', '/guard/test_fresh_tree.py', '/guard/test_source_transport.py', "/guard/test_linux_sockets.py", "/guard/test_linux_git.py", "/guard/test_linux_receipts.py"],
