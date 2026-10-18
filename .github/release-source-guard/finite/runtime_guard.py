@@ -24,8 +24,18 @@ import uuid
 import weakref
 
 
+diagnostic_seen = set()
+diagnostic_phases = frozenset(['activation_begin', 'activation_end', 'admit_begin', 'admit_cohort_support_end', 'admit_direct_begin', 'admit_direct_end', 'admit_end', 'admit_enter', 'admit_fixed_support_end', 'admit_native_end', 'anchor_begin', 'anchor_end', 'bootstrap_end', 'fresh_support_begin', 'fresh_support_end', 'inner_enter', 'inner_return', 'operation_input_files_end', 'operation_input_trees_end', 'operation_inputs_enter', 'ordinary_direct_begin', 'ordinary_enter', 'ordinary_owner_begin', 'ordinary_reresolve_begin', 'ordinary_reresolve_end', 'original_init_begin', 'original_init_end', 'shared_absent_end', 'shared_enter', 'shared_files_end', 'shared_inputs_end', 'shared_link_end', 'shared_ready_end', 'shared_trees_end'])
+
+
 def _diagnostic_mark(phase):
     """Closed, body-free phase observations; never consumed by admission."""
+    if phase not in diagnostic_phases:
+        raise ValueError('unknown startup diagnostic phase')
+    diagnostic_key = (os.getpid(), phase)
+    if diagnostic_key in diagnostic_seen:
+        return
+    diagnostic_seen.add(diagnostic_key)
     import resource
     usage = resource.getrusage(resource.RUSAGE_SELF)
     frame = sys._getframe(1)

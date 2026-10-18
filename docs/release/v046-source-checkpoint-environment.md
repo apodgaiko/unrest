@@ -702,3 +702,9 @@ identity, result or authorization is reused across calls. The focused differenti
 tests retain the preceding public implementations and compare complete vectors,
 serialization, fresh syscall sequences and post-first-call mutations. Local
 measurements alone do not establish original SOURCE acceptance.
+
+Outer diagnostic phases also retain only their first observation per owned PID
+and closed phase. Repeated launches still execute every admission, identity,
+READY, IPC and original-parent wait check. Only diagnostic emission is bounded;
+its values never supply authority. A transport-bound failure remains a failure
+and supplies no SOURCE acceptance proof.

@@ -176,3 +176,21 @@ def test_inner_diagnostics_are_selective_and_finite(monkeypatch):
     assert len(module.diagnostic_seen) == 3
     with pytest.raises(ValueError):
         module._diagnostic_mark(owner, 'unknown')
+
+
+def test_outer_diagnostic_marks_have_finite_cardinality(tmp_path):
+    spec = importlib.util.spec_from_file_location('bounded_phase_guard', ROOT / 'finite/runtime_guard.py')
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    guard._STATE = {'events': str(tmp_path)}
+    for _ in range(1000):
+        for phase in sorted(guard.diagnostic_phases):
+            guard._diagnostic_mark(phase)
+    rows = [json.loads(line) for path in tmp_path.glob('*.jsonl') for line in path.read_text().splitlines()]
+    assert len(rows) == len(guard.diagnostic_phases)
+    assert {row['phase'] for row in rows} == guard.diagnostic_phases
+    assert len(json.dumps(rows).encode()) < 32768
+    assert all(row['kind'] == 'startup_phase' for row in rows)
+    import pytest
+    with pytest.raises(ValueError, match='unknown startup diagnostic phase'):
+        guard._diagnostic_mark('unknown')
