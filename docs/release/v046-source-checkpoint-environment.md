@@ -672,3 +672,14 @@ parent waits. The finite guard admission predicates and call order remain
 unchanged; a complete stripped-AST comparison pins that distinction. A late
 observer event alone cannot attribute native startup latency. TEST evidence
 remains ineligible as a release certificate.
+
+
+Trace startup diagnostics aggregate numeric counts and timing in fixed-width
+rows per owned PID. They never append per-stop telemetry to original records.
+Original evidence bounds, ordering and security/wait records remain intact.
+The synthetic launcher also exports `prerequisite-status.json`, independently
+bound to the exact run/head/support identity and a provenance member digest.
+Its finite stage/status/exception-class values and code-location hash diagnose
+early refusal without exposing exception messages, stack, argv or environment.
+A status record without a complete structured envelope is prerequisite evidence
+only and cannot establish SOURCE acceptance.

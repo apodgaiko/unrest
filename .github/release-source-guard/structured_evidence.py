@@ -159,7 +159,7 @@ def consume(archive, expected, envelope_sha256):
                     and member.name not in ('.', '..'), 'archive_member')
         permitted = {MEMBER, 'coordinator.log', 'current-process.stdout', 'prepared.stdout',
                      'container-inspect.json', 'container-state.json', 'source-pins.json',
-                     'negative-control-proof.json', 'provenance.json'} | {
+                     'negative-control-proof.json', 'provenance.json', 'prerequisite-status.json'} | {
                          'structured-' + name for name in SOURCE | CONTROLS} | {
                          'private-' + name for name in OPAQUE}
         require(set(names) <= permitted, 'unknown_archive_member')

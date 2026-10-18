@@ -146,7 +146,8 @@ def main():
     except BaseException:
         failure = 'trace_failure'
         result = {'records': trace.records, 'poison': trace.poison,
-                  'root_parent_wait_raw': trace.root_parent_wait}
+                  'root_parent_wait_raw': trace.root_parent_wait,
+                  'diagnostic_trace': trace.diagnostic_trace.export()}
     os.close(read)
     births = {row['child']: row for row in result['records'] if row['kind'] == 'kernel_child'
               and row['identity']['tgid'] == row['child']}

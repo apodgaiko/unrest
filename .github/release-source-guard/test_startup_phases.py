@@ -8,6 +8,11 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 
 class StripTelemetry(ast.NodeTransformer):
+    def visit_ClassDef(self, node):
+        if node.name == 'DiagnosticTrace':
+            return None
+        return self.generic_visit(node)
+
     def visit_FunctionDef(self, node):
         if node.name == '_diagnostic_mark':
             return None
@@ -17,7 +22,9 @@ class StripTelemetry(ast.NodeTransformer):
         if isinstance(node.value, ast.Call):
             function = node.value.func
             if ((isinstance(function, ast.Name) and function.id == '_diagnostic_mark')
-                    or (isinstance(function, ast.Attribute) and function.attr == '_diagnostic_mark')):
+                    or (isinstance(function, ast.Attribute) and function.attr == '_diagnostic_mark')
+                    or (isinstance(function, ast.Attribute) and isinstance(function.value, ast.Attribute)
+                        and function.value.attr == 'diagnostic_trace')):
                 return None
             if (isinstance(function, ast.Attribute) and function.attr == 'append'
                     and node.value.args and isinstance(node.value.args[0], ast.Dict)
@@ -30,7 +37,7 @@ class StripTelemetry(ast.NodeTransformer):
 
     def diagnostic_target(self, node):
         return (isinstance(node, ast.Name) and node.id.startswith('diagnostic_')
-                or isinstance(node, ast.Attribute) and node.attr == 'diagnostic_schedule'
+                or isinstance(node, ast.Attribute) and node.attr in {'diagnostic_schedule', 'diagnostic_trace'}
                 or isinstance(node, ast.Subscript) and self.diagnostic_target(node.value))
 
     def visit_Assign(self, node):
@@ -45,7 +52,7 @@ class StripTelemetry(ast.NodeTransformer):
 
     def visit_Dict(self, node):
         retained = [(k, v) for k, v in zip(node.keys, node.values)
-                    if not (isinstance(k, ast.Constant) and k.value == 'diagnostic_schedule')]
+                    if not (isinstance(k, ast.Constant) and k.value in {'diagnostic_schedule', 'diagnostic_trace'})]
         node.keys, node.values = [k for k, v in retained], [v for k, v in retained]
         return self.generic_visit(node)
 
@@ -81,3 +88,57 @@ def test_phase_record_contains_only_closed_values(tmp_path, monkeypatch):
             assert type(row[key]) is int and row[key] >= 0
         for key in ('function_code_sha256', 'location_sha256'):
             assert len(row[key]) == 64 and int(row[key], 16) >= 0
+
+
+def load_trace():
+    spec = importlib.util.spec_from_file_location('bounded_trace', ROOT / 'linux_trace.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def stressed_trace():
+    module = load_trace()
+    diagnostic = module.DiagnosticTrace()
+    # The compartment admits at most 128 simultaneous tasks. Exercise each
+    # numeric event column repeatedly without storing any per-event rows.
+    for pid in range(1, 129):
+        for event in range(1000):
+            diagnostic.stop(pid, 133, event % 8)
+            diagnostic.resume(pid, 7 if event % 2 else 24)
+    return diagnostic.export()
+
+
+def test_aggregate_size_independent_of_stop_count():
+    value = stressed_trace()
+    assert len(value['rows']) == 128
+    assert len(value['columns']) == 15
+    assert all(len(row) == 15 and row[1:3] == [1000, 1000] for row in value['rows'])
+    assert all(all(type(number) is int and number >= 0 for number in row) for row in value['rows'])
+    assert len(json.dumps(value).encode()) < 32768
+
+
+def test_original_control_records_plus_maximum_diagnostics_stay_bounded():
+    import sys
+    import pytest
+    if sys.platform != 'linux' or not Path('/work').is_dir():
+        pytest.skip('original kernel controls are generated inside the Linux compartment')
+    controls = sorted(Path('/work').glob('trace-control-*.json'))
+    assert len(controls) == 9
+    diagnostic = stressed_trace()
+    for path in controls:
+        original = json.loads(path.read_bytes())
+        before = json.dumps(original['records'])
+        original['diagnostic_trace'] = diagnostic
+        assert len(json.dumps(original, sort_keys=True).encode()) < 131072
+        assert json.dumps(original['records']) == before
+
+
+def test_ast_proof_rejects_original_wait_or_admission_mutation():
+    original = (ROOT / 'linux_trace.py').read_text()
+    for before, after in [('os.waitpid(candidate, os.WNOHANG | 0x40000000)',
+                           'os.waitpid(candidate, os.WNOHANG)'),
+                          ('accepted = len(matches) == 1', 'accepted = True')]:
+        assert before in original
+        tree = StripTelemetry().visit(ast.parse(original.replace(before, after)))
+        assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() != BASELINE_AST_SHA256['linux_trace.py']

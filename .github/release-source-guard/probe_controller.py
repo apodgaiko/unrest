@@ -16,7 +16,7 @@ import tarfile
 import traceback
 import uuid
 
-from structured_evidence import capture, execution_identity
+from structured_evidence import canonical, capture, execution_identity
 
 BASE = "python@sha256:9a4a5ceafb4ddd7468a09ade0049463a7bd1acbefda52adee748544110fd032d"
 SUPPORT = Path(__file__).resolve().parent
@@ -69,6 +69,30 @@ def validate_container(value: dict, public_support: Path) -> None:
         raise RuntimeError("finite synthetic entry point drift")
 
 
+def prerequisite_status(identity, stage, error=None):
+    """Project only a closed exception class and hashed code location."""
+    if stage not in {'build', 'create', 'inspect', 'validate', 'capture', 'state', 'settled'}:
+        raise ValueError('unknown prerequisite stage')
+    exception = None
+    location = None
+    if error is not None:
+        name = type(error).__name__
+        exception = name if name in {'RuntimeError', 'ValueError', 'KeyError', 'TypeError',
+                                    'OSError', 'CalledProcessError', 'EvidenceRefused'} else 'other'
+        frame = error.__traceback__
+        while frame is not None and frame.tb_next is not None:
+            frame = frame.tb_next
+        if frame is not None:
+            location = hashlib.sha256(canonical({
+                'code_sha256': hashlib.sha256(frame.tb_frame.f_code.co_code).hexdigest(),
+                'first_line': frame.tb_frame.f_code.co_firstlineno,
+                'line': frame.tb_lineno})).hexdigest()
+    return {'schema': 'unrest.v046.prerequisite-status.v1', 'identity': identity,
+            'stage': stage, 'status': 'failed' if error is not None else 'settled',
+            'exception_class': exception, 'location_sha256': location,
+            'source_checkpoint_ready': False, 'selected_carrier': None}
+
+
 def main() -> int:
     root = Path(sys.argv[1]).resolve()
     root.mkdir(mode=0o700)
@@ -86,11 +110,14 @@ def main() -> int:
     inputs = {"uv_bootstrap_sha256": environment.UV_SHA256,
               "uv_lock_sha256": sha(REPOSITORY / "uv.lock")}
     image = ""
+    stage = "build"
+    failure = None
     try:
         image = environment.build(root / "build", REPOSITORY, log)
         inputs["image_id"] = image
         exit_code = 0
-    except Exception:
+    except Exception as error:
+        failure = prerequisite_status(direct_identity, stage, error)
         with log.open("a") as output:
             traceback.print_exc(file=output)
         exit_code = 125
@@ -109,14 +136,19 @@ def main() -> int:
             "-B", "/guard/compartment_probe.py",
         ]
         try:
+            stage = "create"
             result = run(argv, log)
             if result.returncode:
                 raise RuntimeError("compartment creation failed")
+            stage = "inspect"
             inspected = subprocess.check_output(["docker", "inspect", container])
             (raw / "container-inspect.json").write_bytes(inspected)
+            stage = "validate"
             validate_container(json.loads(inspected)[0], SUPPORT)
+            stage = "capture"
             result, _ = capture(["docker", "start", "--attach", container], raw, direct_identity, "synthetic-controls")
             # Inspect real exit state; docker start --attach need not return it.
+            stage = "state"
             state = subprocess.check_output([
                 "docker", "inspect", "--format={{json .State}}", container,
             ])
@@ -126,13 +158,17 @@ def main() -> int:
             exit_code = state_value["ExitCode"]
             # Direct records are archived separately from private process output.
             (raw / "container-state.json").write_bytes(state)
-        except Exception:
+        except Exception as error:
+            failure = prerequisite_status(direct_identity, stage, error)
             with log.open("a") as output:
                 traceback.print_exc(file=output)
             exit_code = 125
         finally:
             run(["docker", "rm", "--force", container], log)
+    status = failure or prerequisite_status(direct_identity, 'settled')
+    (raw / 'prerequisite-status.json').write_bytes(canonical(status))
     safe_identity = {
+        'prerequisite_status_sha256': sha(raw / 'prerequisite-status.json'),
         "direct_identity": direct_identity,
         "structured_envelope_sha256": sha(raw / "structured-envelope.json") if (raw / "structured-envelope.json").is_file() else None,
         "repository": os.environ.get("GITHUB_REPOSITORY"),

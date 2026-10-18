@@ -86,3 +86,30 @@ def test_mount_and_entrypoint_drift_refuse():
         mutate(current)
         with pytest.raises(RuntimeError):
             controller.validate_container(current, Path("/public-support"))
+
+
+def test_prerequisite_failure_has_closed_fields_without_exception_body():
+    import json
+    identity = {'run_id': '123', 'head_sha': 'a' * 40, 'support_sha256': 'b' * 64}
+    try:
+        raise RuntimeError('PRIVATE_EXCEPTION_BODY')
+    except RuntimeError as error:
+        value = controller.prerequisite_status(identity, 'validate', error)
+    assert value['identity'] == identity
+    assert value['stage'] == 'validate' and value['status'] == 'failed'
+    assert value['exception_class'] == 'RuntimeError'
+    assert len(value['location_sha256']) == 64
+    assert 'PRIVATE_EXCEPTION_BODY' not in json.dumps(value)
+    assert set(value) == {'schema', 'identity', 'stage', 'status', 'exception_class',
+                          'location_sha256', 'source_checkpoint_ready', 'selected_carrier'}
+    assert controller.prerequisite_status(identity, 'settled')['exception_class'] is None
+    with pytest.raises(ValueError):
+        controller.prerequisite_status(identity, 'arbitrary-stage')
+
+
+def test_unknown_exception_class_does_not_escape_closed_enum():
+    class PrivateExceptionName(Exception):
+        pass
+    value = controller.prerequisite_status({}, 'capture', PrivateExceptionName('private'))
+    assert value['exception_class'] == 'other'
+    assert value['location_sha256'] is None
