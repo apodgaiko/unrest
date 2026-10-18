@@ -816,3 +816,51 @@ def primary_cache_tree(spec, emit=None, operations=None):
     if final_domain != produced_cache['entries']:
         raise RuntimeError('primary_cache_late_producer_output_drift')
     return rows
+
+
+def dependency_diagnostic(site):
+    """Closed current dependency comparison; this result supplies no authority."""
+    site = Path(site)
+    mirror = Path('/opt/primary-deps/lib/python3.13/site-packages')
+    if site != Path('/source/.venv/lib/python3.13/site-packages'):
+        return {'kind': 'primary_dependency_comparison', 'expected_primary_site': False,
+                'requested_root_sha256': hashlib.sha256(str(site).encode()).hexdigest()}
+    def files(root):
+        result = {}
+        for path in sorted(root.rglob('*')):
+            info = path.lstat()
+            if stat.S_ISDIR(info.st_mode):
+                continue
+            name = path.relative_to(root).as_posix()
+            result[name] = {'type': 'file' if stat.S_ISREG(info.st_mode) else 'other',
+                            'mode': stat.S_IMODE(info.st_mode), 'uid': info.st_uid,
+                            'sha256': digest(path) if stat.S_ISREG(info.st_mode) else None}
+        return result
+    actual, seed = files(site), files(mirror)
+    missing, extra = sorted(set(seed) - set(actual)), sorted(set(actual) - set(seed))
+    changed = sorted(n for n in set(actual) & set(seed) if actual[n]['type'] != seed[n]['type']
+                     or actual[n]['sha256'] != seed[n]['sha256'])
+    import zipfile
+    with zipfile.ZipFile('/opt/source-bootstrap/wheelhouse/setuptools-84.0.0-py3-none-any.whl') as archive:
+        backend = {n for n in archive.namelist() if not n.endswith('/')}
+    backend.update('setuptools-84.0.0.dist-info/' + n for n in ('INSTALLER', 'REQUESTED', 'uv_cache.json'))
+    rows = []
+    for name in extra[:16]:
+        row = {'name_sha256': hashlib.sha256(name.encode()).hexdigest(), **actual[name]}
+        if name.startswith('unrest_harness-0.4.6.dist-info/'):
+            leaf = Path(name).name
+            row['class'] = leaf if leaf in {'METADATA', 'WHEEL', 'RECORD', 'entry_points.txt',
+                                          'INSTALLER', 'REQUESTED', 'direct_url.json', 'uv_cache.json'} else 'other'
+        elif name == '__editable__.unrest_harness-0.4.6.pth':
+            row['class'] = 'editable-pth'
+            row['exact_source_path'] = row['type'] == 'file' and (site / name).read_bytes() == b'/source/src\n'
+        else:
+            row['class'] = 'other'
+        rows.append(row)
+    return {'kind': 'primary_dependency_comparison', 'expected_primary_site': True,
+            'actual_files': len(actual), 'mirror_files': len(seed),
+            'missing_count': len(missing), 'extra_count': len(extra), 'changed_count': len(changed),
+            'missing_is_exact_backend': set(missing) == backend,
+            'missing_names_sha256': hashed(missing), 'extra_names_sha256': hashed(extra),
+            'changed_names_sha256': hashed(changed), 'extra': rows,
+            'authority': False}

@@ -891,3 +891,8 @@ symlink inode and resolved image identity, requires one actual query return from
 the original UV parent at the exact effective executable, and maps generated
 console bytes against that executable. Standalone setup retains its original
 single-path input. No query metadata is rewritten.
+
+A dependency-site mismatch may emit one closed current comparison of the exact
+PRIMARY site and immutable dependency mirror. It includes counts and hashes,
+never module contents. The comparison supplies no admission authority and the
+original mismatch still refuses.

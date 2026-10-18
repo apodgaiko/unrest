@@ -1213,6 +1213,15 @@ class Operations:
     def dependency(self, site):
         expected = next((t for t in self.spec["trees"] if t["root"] == str(site)), None)
         if expected is None or tree_identity(site) != expected:
+            if self.spec.get('primary_dependency_diagnostic') is not None:
+                support = self.spec['primary_dependency_diagnostic']
+                body = Path(support['path']).read_bytes()
+                if (support['path'] != '/guard/producer_profile.py'
+                        or hashlib.sha256(body).hexdigest() != support['sha256']):
+                    self.refuse('primary_dependency_diagnostic_support_drift')
+                namespace = {'__file__': support['path'], '__name__': 'dependency_diagnostic'}
+                exec(compile(body, support['path'], 'exec', dont_inherit=True), namespace)
+                self.emit(namespace['dependency_diagnostic'](site))
             self.refuse("source_dependency_site_mismatch")
 
     def profile(self, frame, event, value):

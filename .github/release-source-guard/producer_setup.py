@@ -175,6 +175,9 @@ def prepare(manifest, input_pin):
                                   'link_inode': python.lstat().st_ino,
                                   **({'route_path': str(python)} if primary else {})},
     }
+    if primary:
+        operation_spec['primary_dependency_diagnostic'] = {
+            'path': '/guard/producer_profile.py', 'sha256': digest('/guard/producer_profile.py')}
     operation_path = ROOT / 'operations.json'
     operation_pin = write(operation_path, operation_spec)
     activation_path = ROOT / 'activation.json'

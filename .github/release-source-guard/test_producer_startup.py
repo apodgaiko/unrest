@@ -602,3 +602,78 @@ def test_actual_setup_preserves_route_custody_separately_from_query(tmp_path, pr
     assert actual == {'path': common['query_python'], 'file': file,
                       'link_inode': python.lstat().st_ino,
                       **({'route_path': str(python)} if primary else {})}
+
+
+def restore_dependency_diagnostic(tree):
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'dependency')
+    branch = method.body[-1]
+    assert isinstance(branch, ast.If)
+    addition = branch.body[0]
+    assert hashlib.sha256(ast.dump(addition, include_attributes=False).encode()).hexdigest() == '9f4ff4c900eeb7c704077fec1f2ff6f8145c3ae068a89d86f8796de0e257c1c9'
+    assert isinstance(addition, ast.If)
+    assert ast.unparse(addition.test) == "self.spec.get('primary_dependency_diagnostic') is not None"
+    assert ast.unparse(branch.body[-1]) == "self.refuse('source_dependency_site_mismatch')"
+    assert len(branch.body) == 2
+    branch.body.pop(0)
+    return tree
+
+
+def test_dependency_diagnostic_never_replaces_original_refusal():
+    tree = restore_dependency_diagnostic(ast.parse((ROOT / 'finite/source_operations.py').read_bytes()))
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'dependency')
+    assert ast.unparse(method) == "def dependency(self, site):\n    expected = next((t for t in self.spec['trees'] if t['root'] == str(site)), None)\n    if expected is None or tree_identity(site) != expected:\n        self.refuse('source_dependency_site_mismatch')"
+
+
+def test_foreign_dependency_diagnostic_does_not_scan_or_supply_authority():
+    function = load_function('dependency_diagnostic', 'producer_profile.py',
+                             {'Path': Path, 'hashlib': hashlib})
+    assert function('/foreign') == {
+        'kind': 'primary_dependency_comparison', 'expected_primary_site': False,
+        'requested_root_sha256': hashlib.sha256(b'/foreign').hexdigest()}
+
+
+@pytest.mark.parametrize('before,after', [
+    ("hashlib.sha256(body).hexdigest() != support['sha256']", 'False'),
+    ("support['path'] != '/guard/producer_profile.py'", 'False'),
+    ("self.emit(namespace['dependency_diagnostic'](site))", "self.emit({})")])
+def test_dependency_diagnostic_inverse_rejects_support_drift(before, after):
+    source = (ROOT / 'finite/source_operations.py').read_text()
+    assert before in source
+    with pytest.raises(AssertionError):
+        restore_dependency_diagnostic(ast.parse(source.replace(before, after)))
+
+
+def test_dependency_diagnostic_is_bounded_and_hash_only(tmp_path, monkeypatch):
+    import zipfile
+    actual, mirror = tmp_path / 'actual', tmp_path / 'mirror'
+    actual.mkdir()
+    mirror.mkdir()
+    backend = {'backend.py', *('setuptools-84.0.0.dist-info/' + n
+                             for n in ('INSTALLER', 'REQUESTED', 'uv_cache.json'))}
+    for name in backend:
+        target = mirror / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b'private contents are never emitted')
+    for n in range(20):
+        (actual / f'unknown-{n}').write_bytes(b'private contents are never emitted')
+    wheel = tmp_path / 'backend.whl'
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        archive.writestr('backend.py', b'original backend')
+    original_zip = zipfile.ZipFile
+    monkeypatch.setattr(zipfile, 'ZipFile', lambda path: original_zip(wheel))
+    def mapped(path):
+        if str(path) == '/source/.venv/lib/python3.13/site-packages':
+            return actual
+        if str(path) == '/opt/primary-deps/lib/python3.13/site-packages':
+            return mirror
+        return Path(path)
+    function = load_function('dependency_diagnostic', 'producer_profile.py', {
+        'Path': mapped, 'hashlib': hashlib, 'stat': __import__('stat'),
+        'digest': lambda path: hashlib.sha256(path.read_bytes()).hexdigest(),
+        'hashed': lambda value: hashlib.sha256(__import__('json').dumps(value, sort_keys=True).encode()).hexdigest()})
+    result = function('/source/.venv/lib/python3.13/site-packages')
+    assert result['authority'] is False and result['expected_primary_site'] is True
+    assert result['missing_is_exact_backend'] is True
+    assert result['extra_count'] == 20 and len(result['extra']) == 16
+    assert result['changed_count'] == 0
+    assert b'private contents' not in __import__('json').dumps(result).encode()

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from test_root_allocation import restore_primary_allocation
-from test_producer_startup import restore_producer_profile, restore_primary_cache, restore_bootstrap_cache, restore_query_route
+from test_producer_startup import restore_producer_profile, restore_primary_cache, restore_bootstrap_cache, restore_query_route, restore_dependency_diagnostic
 
 ROOT = Path(__file__).parent
 
@@ -89,7 +89,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
     for name, expected in BASELINE_AST_SHA256.items():
         tree = ast.parse((ROOT / name).read_bytes())
         if name == 'finite/source_operations.py':
-            tree = restore_query_route(tree)
+            tree = restore_dependency_diagnostic(restore_query_route(tree))
         if name == 'linux_supervisor.py':
             tree = restore_response_channel(tree)
         if name == 'linux_trace.py':
