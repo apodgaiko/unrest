@@ -16,6 +16,7 @@ from checkpoint_decision import expected_identity
 from primary_environment import build
 from source_controller import source_bindings
 from structured_evidence import capture, execution_identity
+from primary_custody import Binding, Custody
 
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
@@ -104,6 +105,10 @@ def main():
         raise RuntimeError('primary_same_head_controls')
     if any(digest(SUPPORT / name) != pin for name, pin in control['support'].items()):
         raise RuntimeError('primary_support_drift')
+    custody_root = Path(os.environ['RUNNER_TEMP']) / 'primary-custody'
+    custody = Custody(custody_root, Binding(expected, int(os.environ['GITHUB_RUN_ID']),
+                                          int(os.environ['GITHUB_RUN_ATTEMPT'])),
+                      create=not custody_root.exists())
     STAGE = 'image'
     image = build(root / 'image', control['synthetic_dependencies']['image_id'], SUPPORT, log)
     STAGE = 'snapshot'
@@ -173,11 +178,17 @@ def main():
         status = 125
     finally:
         run(['docker', 'rm', '--force', container], log)
+    phase_sha256 = None
+    if status == 0:
+        phase = custody.record(spec['duty'], spec['script_sha256'], records)
+        from structured_evidence import canonical
+        phase_sha256 = hashlib.sha256(canonical(phase)).hexdigest()
     metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,
                 'source_exit_code': status, 'stage': stage, 'primary_plan': public_plan(spec),
                 'head_sha': os.environ['GITHUB_SHA'], 'source_tree': expected['source_tree'], 'image_id': image,
                 'source_pins_sha256': hashlib.sha256(json.dumps(source_pins, sort_keys=True).encode()).hexdigest(),
                 'support': control['support'],
+                'custody_phase_sha256': phase_sha256,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'
     with tarfile.open(archive, 'w:gz') as stream:

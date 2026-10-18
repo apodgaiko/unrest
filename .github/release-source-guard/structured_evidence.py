@@ -18,7 +18,8 @@ import tarfile
 SCHEMA = 'unrest.v046.direct-private-records.v1'
 MEMBER = 'structured-envelope.json'
 LIMIT = 64 * 1024 * 1024
-SOURCE = {'runner-stage.json', 'kernel-source.json', 'collection.json', 'summary.json', 'source.xml'}
+SOURCE = {'runner-stage.json', 'kernel-source.json', 'collection.json', 'summary.json', 'source.xml',
+          'package-output.json', 'package-proof.json', 'source-provenance.json'}
 CONTROLS = {'control-suite.xml', 'observer.json', 'source-controls.json'} | {
     f'trace-control-{status}-{mode}.json' for status in (0, 29, 31) for mode in (False, True)
 } | {'trace-control-vfork-False.json', 'trace-control-vfork-True.json', 'trace-control-waitid.json'}
