@@ -246,9 +246,14 @@ def main():
         result.update(source.finish())
     records = {'source-output.log': bytes(output)}
     if package_build and status_guard_success(result):
-        source.require_complete(trace)
-        from primary_outputs import export
-        records['package-output.json'] = export(spec['duty'])
+        try:
+            source.require_complete(trace)
+            from primary_outputs import export
+            records['package-output.json'] = export(spec['duty'])
+        except BaseException as error:
+            failure = 'package_output_refused'
+            result['failure_code'] = failure
+            result['trace_failure_status'] = trace_failure_status(error)
     if source is not None and not package_build:
         for name in ('collection.json', 'summary.json', 'source.xml', 'source-provenance.json'):
             path = Path('/work') / name

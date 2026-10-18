@@ -43,7 +43,7 @@ class PackageBuildAuthority(SourceAuthority):
                                       'endpoint': self.manifest['endpoint']}, SimpleNamespace(pid=child))
         self.producers = PackageProducers(self.manifest, self.supervisor, self.common)
         self.supervisor.source_response_output = self.producers.stage_response
-        from primary_ready_snapshot import install
+        from primary_package_ready import install
         install(self.supervisor, self.producers)
         self.output_fd = output_fd
 
