@@ -283,6 +283,47 @@ def save_snapshot(
         )
 
 
+def save_advisory_snapshot(
+    store: ProjectStore,
+    expected: ActiveAttemptSnapshot,
+    projected: ActiveAttemptSnapshot,
+    *,
+    assigned_target_ids: Sequence[str],
+) -> bool:
+    """Commit a poll only if its observed semantic generation is still current.
+
+    The coordinator must not overwrite a checkpoint, resume, stop or terminal
+    transition that was published after its read. Waiting clocks stay private.
+    """
+    if expected.phase not in {"active", "stopping"}:
+        raise SupervisionSnapshotError("advisory update requires a progressing attempt")
+    allowed = expected.model_copy(update={
+        "elapsed_nanoseconds": projected.elapsed_nanoseconds,
+        "checkpoint_requests": projected.checkpoint_requests,
+        "supervision_status": projected.supervision_status,
+    })
+    if allowed != projected or projected.checkpoint_requests > MAX_CHECKPOINT_REQUESTS:
+        raise SupervisionSnapshotError("invalid advisory snapshot update")
+    _validate_monotonic_update(expected, projected, assigned_target_ids)
+    path = snapshot_path(store, expected.project_id, expected.mission_id, expected.attempt_id)
+    with _snapshot_lock(path, root=store.bucket_root(expected.project_id)):
+        current = load_snapshot(store, expected.project_id, expected.mission_id, expected.attempt_id)
+        if current is None:
+            raise SupervisionSnapshotError("advisory snapshot disappeared")
+        _validate_monotonic_update(expected, current, assigned_target_ids)
+        if current != expected:
+            return False
+        if current != projected:
+            atomic_write_json(
+                path,
+                projected.model_dump(mode="json"),
+                trusted_root=store.bucket_root(expected.project_id),
+                inventory=store.inventory,
+                mode=0o600,
+            )
+        return True
+
+
 def finalize_supervision_attempt(
     store: ProjectStore,
     project_id: str,

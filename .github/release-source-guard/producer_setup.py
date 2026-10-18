@@ -156,12 +156,19 @@ def prepare(manifest, input_pin):
                                'inode': stock.lstat().st_ino},
     }
     if primary:
+        import primary_dependency
         common['primary_producer'] = {
             'entry': activation.identity(base),
             'bootstrap': activation.identity('/guard/primary_entry.py'),
             'consumer': activation.identity('/guard/native_entry.py'),
             'cache_support': activation.identity('/guard/producer_profile.py'),
             'cache_seed_inventory': closure.inventory(Path('/opt/primary-cache')),
+            'dependency_support': {
+                'path': '/guard/primary_dependency.py', 'sha256': digest('/guard/primary_dependency.py'),
+                'outputs_sha256': digest('/guard/producer_outputs.py')},
+            'source_custody': {str(path): primary_dependency.key(path.lstat())
+                               for path in [Path('/source/src'),
+                                            *(Path(row['path']) for row in source_files)]},
         }
     common_path = ROOT / 'common.json'
     common_pin = write(common_path, common)

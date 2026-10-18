@@ -128,6 +128,17 @@ coordinator; the tool itself does not seal a mission.
 - Durable `submit_run` admission and synchronous Mission methods converge on
   the same per-project OS mutation lock and the same `ProjectController`;
   run custody is not a second Mission authority.
+- Ordinary supervision's coordinator owns the monotonic advisory policy clock.
+  Its 30-second ticks may advance elapsed time for active or stopping attempts;
+  elapsed time never decreases. A published `waiting_at_checkpoint` row keeps
+  its elapsed time and other semantic fields unchanged until a new semantic
+  checkpoint or bound steering, resume or terminal transition. Policy evaluation continues privately while
+  waiting and issues no additional checkpoint requests. Poll writes compare the
+  entire observed row under the existing snapshot lock; a concurrent semantic
+  publication wins and the poll retries from fresh state on its next tick.
+  Read-only project and attached-run inspection both expose stored rows; neither
+  samples a clock or refreshes a checkpoint. Waiting and lock-contention
+  deadlines, request caps and public wire keys are unchanged.
 - `COMPAT-ENVELOPE-001`: envelope field names and strict typed handoff fields
   are compatibility boundaries.
 

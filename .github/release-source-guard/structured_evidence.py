@@ -80,6 +80,12 @@ def identity_check(value):
         f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}"
         for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations', 'primary-install', 'primary-import', 'primary-help', 'primary-repository', 'primary-lint', 'primary-types', 'primary-controls', 'primary-source', 'primary-source-positive', 'primary-source-poison')}, 'artifact_identity')
     require(type(value['workflow_ref']) is str, 'workflow_identity')
+    dependency_prefix = ('apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@'
+                         'refs/heads/codex/source-guard-structured-20261018-primary-dependency-')
+    if value['workflow_ref'].startswith(dependency_prefix.removesuffix('-')):
+        require(value['workflow_ref'] in {dependency_prefix + epoch
+                                        for epoch in ('01', '02', '03', '04', '05', '06')},
+                'workflow_identity')
     readiness = re.fullmatch(
         r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-[a-z0-9-]+',
         value['workflow_ref'])

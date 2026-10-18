@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 import sys
 
@@ -22,12 +24,40 @@ CASES = {
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
+def admit_clock(manifest):
+    path = Path('/guard/clock_source_inputs.py')
+    before = path.lstat()
+    def key(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
+                info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if (not stat.S_ISREG(before.st_mode) or stat.S_IMODE(before.st_mode) != 0o644
+            or before.st_nlink != 1 or path.resolve(strict=True) != path
+            or not os.statvfs(path).f_flag & os.ST_RDONLY):
+        raise RuntimeError('clock_support_custody')
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        if key(os.fstat(descriptor)) != key(before):
+            raise RuntimeError('clock_support_open_race')
+        with os.fdopen(descriptor, 'rb', closefd=False) as stream:
+            body = stream.read(65537)
+        if (len(body) != before.st_size or len(body) > 65536
+                or key(os.fstat(descriptor)) != key(before) or key(path.lstat()) != key(before)
+                or hashlib.sha256(body).hexdigest() != '4637ca4915c16acfe5caa54c6b34a134c53e1ed76979b3a6971563e98b96a144'):
+            raise RuntimeError('clock_support_byte_drift')
+    finally:
+        os.close(descriptor)
+    namespace = {'__file__': str(path), '__name__': 'clock_source_inputs'}
+    exec(compile(body, str(path), 'exec', dont_inherit=True), namespace)
+    namespace['admit'](manifest, ROOT)
+
+
 def main():
     nonce, selection = sys.argv[1:]
     case = CASES[selection]
     if len(nonce) != 64 or any(c not in '0123456789abcdef' for c in nonce):
         raise RuntimeError('invalid source epoch')
     manifest = json.loads((SUPPORT / 'source-template.json').read_bytes())
+    admit_clock(manifest)
     for name, pin in manifest['product_pins'].items():
         observed = sha(ROOT / name)
         if observed != pin:

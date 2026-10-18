@@ -63,6 +63,7 @@ from .supervision import (
     load_project_active_attempts,
     record_checkpoint_request,
     save_policy_state,
+    save_advisory_snapshot,
 )
 from .envelope import public_attention_items
 from .task_validation import gates_in_order
@@ -332,13 +333,14 @@ class MissionCoordinator:
             projected = snapshot.model_copy(
                 update={
                     "checkpoint_requests": evaluation_state.checkpoint_requests,
-                    "elapsed_nanoseconds": poll_elapsed,
+                    "elapsed_nanoseconds": max(snapshot.elapsed_nanoseconds, poll_elapsed),
                     "supervision_status": projected_status,
                 },
                 deep=True,
             )
-            save_snapshot(
+            if snapshot.phase != "waiting_at_checkpoint" and not save_advisory_snapshot(
                 self.store,
+                snapshot,
                 projected,
                 assigned_target_ids=(
                     list(
@@ -353,7 +355,9 @@ class MissionCoordinator:
                         if task.id == projected.node_id
                     )
                 ),
-            )
+            ):
+                # A semantic publisher won the race; retry from fresh state next tick.
+                continue
             save_policy_state(
                 self.store,
                 self.project_id,

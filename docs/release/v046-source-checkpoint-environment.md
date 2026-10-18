@@ -910,3 +910,61 @@ outputs before sampling caches. Bytecode classification uses the existing exact
 CPython source/code/header verifier, then compares each source hash to the
 immutable mirror. Even verified bytecode is only a diagnostic classification;
 unknown sources and editable outputs gain no admission authority.
+### PRIMARY dependency outputs
+
+Source preparation keeps the original template unchanged. Its only product
+amendment admits the exact four-file waiting-clock repair and verifies the
+original coordinator/supervision AST outside the approved poll/helper change.
+Three passive coordinator anchors retain their original owner, decorators,
+expression, family and route; only their validated current line and exact file
+hash change in the generated manifest. The other 173 anchors remain identical.
+Unknown, mixed or partially applied clock patches fail closed. The original
+unpatched baseline remains a separate exact admitted state.
+
+The original installed-consumer fixture selects PRIMARY's running
+`/source/.venv/lib/python3.13/site-packages`. This is a separate domain from
+the standalone `/opt/deps` input. The standalone operation implementation and
+its complete dependency inventory remain unchanged. PRIMARY selects a dedicated
+operation entry that verifies and executes that exact byte-pinned implementation
+and specializes only dependency consumption. Its observer authority likewise
+inherits the original admission, helper, pipe, READY, wait and poison behavior.
+
+The immutable `/opt/primary-deps` image supplies dependency member bytes.
+Only the separately pinned setuptools wheel and its three UV-generated metadata
+members are omitted. Dependency RECORDs are derived from complete image rows,
+including hashes of their image console scripts. The fixed UV interpreter
+shebang relocation produces the target script hashes; unknown rows, foreign
+paths, malformed manifests and other script renderers refuse admission.
+
+The original editable backend's response is captured at its kernel exit event,
+before the tracer's terminal wait permits the real UV parent to reap the child
+and retire its response. This capture is provisional. The observer must join it
+to the original native profile, process birth, exact helper program and later
+numeric successful UV-parent wait. The original query and complete bootstrap
+cache lineage remain mandatory. No cached return code or disappearance proves
+success. A retained response must still have its original identity and bytes.
+
+The returned editable wheel supplies its complete metadata/PTH payload and
+manifest, with no project source-module payload allowed. Generated INSTALLER,
+REQUESTED, direct_url, uv_build and uv_cache bytes follow the pinned UV0.11.0
+renderer. The source cache key uses the original readonly source-file ctimes
+and Linux `statx` directory creation time (or UV's explicit inode alternative),
+with the original source custody identities retained. It does not accept a
+fresh writable metadata tree as an input oracle.
+
+Each dependency consumption reacquires the observer-pinned declaration, every
+ordinary member and console, directory identity and membership, and every
+source-correspondent CPython3.13 cache. Cache validation retains the existing
+exact interpreter magic, header and recursively compiled-code comparison.
+Unknown members, links, owners, modes, changed identities, foreign source code
+and mutations during acquisition refuse admission. The source checkout PTH is
+an original editable-bootstrap output, not an installed-project import route:
+the original installed consumers run with `-S` and their exact registered
+bootstrap places the isolated installed site before the dependency site.
+Original module, test, cwd and sys.path provenance checks remain required.
+
+The renderer references are UV0.11.0's
+[installer metadata and script implementation](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-install-wheel/src/wheel.rs),
+[RECORD writer](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-install-wheel/src/install.rs),
+[cache key implementation](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-cache-info/src/cache_info.rs),
+and [build settings serialization](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-distribution-types/src/build_info.rs).
