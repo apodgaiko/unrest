@@ -19,7 +19,8 @@ from primary_dependency_authority import DependencySourceAuthority as SourceAuth
 import producer_setup
 import dependency_closure
 import primary_entry_build
-from structured_evidence import emit_source, source_binding, HEADER_LIMIT
+from structured_evidence import source_binding, HEADER_LIMIT
+from source_raw_transport import emit_source
 
 
 STAGE = 'bootstrap'

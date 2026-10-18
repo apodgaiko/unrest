@@ -1046,3 +1046,36 @@ PID/token, current birth and every manifest/guard/registry/runtime pin remain
 mandatory. A present mismatching record, missing current record, ordinary
 registration or different request kind still refuses. No retry loop or receipt
 deadline extension is introduced.
+
+### PRIMARY raw named-record transport
+
+PRIMARY emits `SOURCE-TRANSPORT:` followed by the existing bounded canonical
+provenance header and a newline, then `PRIVATE-EVIDENCE-RAW-V2:`, an unsigned
+8-byte big-endian table length, a canonical JSON table, and consecutive raw
+record bodies in sorted name order. The table schema is
+`unrest.v046.primary-raw-records.v2`; its only fields are `schema`, `identity`,
+`invocation_sha256`, and `records`. Each record has exactly `name`, `size`, and
+`sha256`. The table is at most 8192 bytes, contains at most the finite original
+SOURCE/opaque allowlist, and must contain `kernel-source.json`. Names are unique
+and sorted. The table binds the current repository/head/workflow/run/attempt,
+support digest and fresh invocation, and agrees exactly with the header's
+original decoded lengths and hashes. Header base64 size descriptors retain their
+legacy meaning; they are diagnostic sizes, not v2 wire lengths.
+
+The collector captures the current owned process once. It enforces the complete
+67,108,864-byte stdout bound before parsing the record table or persisting any
+payload, then verifies the canonical table, every length/hash and exact body
+coverage. Truncation, trailing bytes, additional frames, unknown fields/names,
+wrong identity, duplicate or unordered names and malformed v2 refuse without
+legacy fallback. Opaque source output is copied and hashed without inspection.
+Standalone and synthetic v1 framing retain their existing behavior.
+
+Both the exact physical stdout carrier and every separately exported original
+named member remain in the encrypted archive. Each member is still bounded by
+67,108,864 bytes; the existing expanded archive sum remains bounded by
+134,217,728 bytes (`2 * LIMIT`). There is no compression or reference resolution
+in the raw framing and no omission of receipts, security, error, wait or consumer
+records. Archive/CMS/API validation and the strict named consumer remain the
+same. Clean headers or synthetic framing tests do not establish SOURCE
+acceptance; current admitted original four-case and caught-poison proof remain
+required.

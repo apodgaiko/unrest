@@ -16,7 +16,7 @@ from ci_commands import bind_generated
 from checkpoint_decision import expected_identity
 from primary_environment import build
 from source_controller import source_bindings
-from structured_evidence import EvidenceRefused, capture, execution_identity
+from structured_evidence import EvidenceRefused, execution_identity
 from primary_custody import Binding, Custody, read_regular
 from primary_source_inputs import test_plan, decode
 from structured_evidence import canonical
@@ -102,6 +102,9 @@ def main():
                     or os.environ.get('GITHUB_REF') in {
                     'refs/heads/codex/source-guard-structured-20261018-primary-dependency-' + epoch
                     for epoch in ('01', '02', '03', '04', '05', '06')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-raw-record-transport-' + epoch
+                    for epoch in ('01', '02', '03', '04')}
                     or os.environ.get('GITHUB_REF') in {
                     'refs/heads/codex/source-guard-structured-20261018-native-uv-mode-' + epoch
                     for epoch in ('01', '02', '03', '04')}
@@ -241,7 +244,8 @@ def main():
         config = json.loads(subprocess.check_output(['docker', 'inspect', container]))[0]
         validate(config, image, mounts)
         stage = 'capture'
-        _, records = capture(['docker', 'start', '--attach', container], raw, identity, 'primary-executor', source_invocation=source_invocation)
+        from source_raw_transport import capture as capture_raw_source
+        _, records = capture_raw_source(['docker', 'start', '--attach', container], raw, identity, 'primary-executor', source_invocation=source_invocation)
         stage = 'settled'
         state = json.loads(subprocess.check_output(['docker', 'inspect', '--format={{json .State}}', container]))
         if state['Running'] or state['OOMKilled']:
