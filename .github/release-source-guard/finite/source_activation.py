@@ -314,8 +314,13 @@ class SourceActivation(IsolatedActivation):
                 or guard._STATE is not self.state
                 or guard.digest(path) != self.state['guard_sha256']):
             self.refuse('source_python_guard_owner_drift')
-        expected = self.state['isolated_named'](
-            compile(path.read_bytes(), str(path), 'exec', dont_inherit=True), 'initialize_inner')
+        original_code = compile(path.read_bytes(), str(path), 'exec', dont_inherit=True)
+        for name in ('checked_source', 'digest', 'match_arg'):
+            function = getattr(guard, name)
+            if (function.__globals__ is not vars(guard)
+                    or function.__code__ != self.state['isolated_named'](original_code, name)):
+                self.refuse('source_python_guard_callable_drift')
+        expected = self.state['isolated_named'](original_code, 'initialize_inner')
         local = frame.f_locals
         if (frame.f_code != expected or local.get('state') is not self.state
                 or local.get('activation') is not self
@@ -423,7 +428,10 @@ class SourceActivation(IsolatedActivation):
                         continue
                     expected = (code if frame.f_code.co_name == '<module>' else
                                 self.state['isolated_named'](code, frame.f_code.co_name))
-                    if frame.f_code == expected:
+                    plain = (self.state['isolated_named'](
+                        compile(source.read_bytes(), str(source), 'exec', dont_inherit=True),
+                        frame.f_code.co_name) if Path(frame.f_code.co_filename) == source else None)
+                    if frame.f_code in (expected, plain):
                         owned = True
                 if not owned:
                     self.refuse('source_ordinary_owner_code_globals_drift')
@@ -431,7 +439,11 @@ class SourceActivation(IsolatedActivation):
                 frames.clear()
             # Use the original input vector for routes with an exact console
             # translation; compare the resulting vector as well as the binding.
-            actual, vector = guard.admit(launch['args'], cwd, environment)
+            resolver = guard.checked_source(self.state['guard'], self.state['guard_sha256'])
+            support = self.state['direct_support']
+            direct = guard.checked_source(support['path'], support['files'][support['path']])['admit']
+            resolver['_STATE'] = {**self.state, 'direct_admit': direct}
+            actual, vector = resolver['admit'](launch['args'], cwd, environment)
             if actual != registration or vector != argv:
                 self.refuse('source_ordinary_registration_drift')
         self.shared()

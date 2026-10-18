@@ -60,3 +60,16 @@ def python_flags(vector, environment):
     return [int('-I' in flags), int('-S' in flags),
             int('-B' in flags or ('-I' not in flags and bool(environment.get('PYTHONDONTWRITEBYTECODE'))))]
 
+
+def python_environment(environment, registration, flags):
+    """Post-init locale bytes for the existing isolated startup source fixture.
+
+    Exec still consumes the exact original environment. The pinned CPython
+    image coerces its absent C locale before exposing os.environ under -I.
+    """
+    if (registration['class'] == 'isolated-role-startup'
+            and registration['source_binding']['path'] == '/source/tests/test_stdio_startup.py'
+            and flags[0] == 1
+            and not any(key in environment for key in ('LC_CTYPE', 'LC_ALL', 'LANG'))):
+        return {**environment, 'LC_CTYPE': 'C.UTF-8'}
+    return dict(environment)

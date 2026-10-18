@@ -9,8 +9,10 @@ import types
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'finite'))
 from source_activation import SourceActivation, CONSUMERS
+from primary_source_inputs import python_environment
 
 ROOT = Path(__file__).resolve().parent
 
@@ -203,3 +205,19 @@ def test_reference_re_resolves_original_binding(tmp_path, monkeypatch, drift):
     with pytest.raises(Refusal if drift else Consumed):
         h.owner.launch(h.vector, h.tmp, {})
     assert bool(h.poison) is drift
+
+
+def test_native_locale_binding_is_specific_and_preserves_exec_environment():
+    registration = {'class': 'isolated-role-startup',
+                    'source_binding': {'path': '/source/tests/test_stdio_startup.py'}}
+    original = {'HOME': '/work/owned/home', 'PATH': '/bin:/usr/bin'}
+    assert python_environment(original, registration, [1, 0, 0]) == {
+        **original, 'LC_CTYPE': 'C.UTF-8'}
+    assert 'LC_CTYPE' not in original
+    for key in ('LANG', 'LC_CTYPE', 'LC_ALL'):
+        env = {**original, key: 'C'}
+        assert python_environment(env, registration, [1, 0, 0]) == env
+    for other in ({**registration, 'class': 'unknown'},
+                  {**registration, 'source_binding': {'path': '/foreign/copy.py'}}):
+        assert python_environment(original, other, [1, 0, 0]) == original
+    assert python_environment(original, registration, [0, 0, 0]) == original

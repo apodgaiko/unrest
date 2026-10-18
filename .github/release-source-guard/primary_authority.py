@@ -8,7 +8,7 @@ from pathlib import Path
 from primary_policy import PYTHON, UV, backend_request, command_environment, console
 from producer_inputs import SOURCE_UV_ELF_SHA256
 from producer_profile import query_package
-from primary_source_inputs import python_flags
+from primary_source_inputs import python_flags, python_environment
 from finite.linux_identity import identity
 
 
@@ -171,6 +171,9 @@ class Authority:
                            manifest_sha256=self.source.pin,
                            source_entry_sha256=digest('/guard/primary_source_entry.py'),
                            source_mode=self.plan['source_mode'], source_budget=self.plan['source_budget'])
+        if role == 'source-bootstrap':
+            profile['python_environment'] = python_environment(
+                environment, self.source.bound[pid]['registration'], flags)
         path = Path('/receipts/primary-startup') / (str(pid) + '.json')
         if path.exists():
             return self.refuse('duplicate_profile')

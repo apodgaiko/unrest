@@ -26,7 +26,7 @@ def main(event, arguments):
         'pid': profile['pid'] == os.getpid(), 'parent': profile['parent'] == os.getppid(),
         'birth': profile['start_ticks'] == int(raw[raw.rfind(')') + 2:].split()[19]),
         'boot': profile['boot_id'] == Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-        'environment': profile['environment'] == dict(os.environ),
+        'environment': profile.get('python_environment', profile['environment']) == dict(os.environ),
         'cwd': profile['cwd'] == os.getcwd(), 'argv': profile['orig_argv'] == sys.orig_argv,
         'event': profile['event'] == event,
         'flags': profile['flags'] == [sys.flags.isolated, sys.flags.no_site, sys.flags.dont_write_bytecode],
@@ -41,7 +41,7 @@ def main(event, arguments):
     if (profile['pid'] != os.getpid() or profile['parent'] != os.getppid()
             or profile['start_ticks'] != int(raw[raw.rfind(')') + 2:].split()[19])
             or profile['boot_id'] != Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-            or profile['environment'] != dict(os.environ) or profile['cwd'] != os.getcwd()
+            or profile.get('python_environment', profile['environment']) != dict(os.environ) or profile['cwd'] != os.getcwd()
             or profile['orig_argv'] != sys.orig_argv or profile['event'] != event
             or profile['flags'] != [sys.flags.isolated, sys.flags.no_site, sys.flags.dont_write_bytecode]
             or len(arguments) != 1

@@ -515,6 +515,13 @@ source-expression/code/module-globals binding. The HTTP port token already
 consumed by admission is never recreated. Direct routes are limited to existing
 finite resolver outputs and the exact pinned cohort SITES; their original
 resolver must independently reproduce both registration and transformed vector.
+The existing isolated startup fixture has a minimal environment. In the pinned
+CPython image, isolated initialization adds exactly `LC_CTYPE=C.UTF-8` when its
+locale keys are absent. The native profile binds that post-init environment
+separately for this exact source registration; the kernel exec comparison still
+consumes the original environment. Other registrations and explicit locale keys
+retain exact environment equality.
+
 All paths retain shared startup checks, READY, native pre-init, caught-refusal
 poison, kernel tracking and genuine original-parent waits. This composition does
 not grant authority to arbitrary class strings or arbitrary Python commands.
