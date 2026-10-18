@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import urllib.request
 import zipfile
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 SETUPTOOLS_URL = (
     'https://files.pythonhosted.org/packages/95/9c/'
@@ -27,9 +27,15 @@ class EmbeddedBinding(TypedDict):
     url: str
     sha256: str
     size: int
+    source_sha256: NotRequired[str]
+    source_size: NotRequired[int]
+    line_endings: NotRequired[str]
 
 
 UV_EMBEDDED: dict[str, EmbeddedBinding] = {'python/get_interpreter_info.py': {'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-python/python/get_interpreter_info.py', 'sha256': '945f3c1d58672269fa3d18db78dbb8e338163af5cb6c4862df197cf456ac5e15', 'size': 27533}, 'python/__init__.py': {'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-python/python/__init__.py', 'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 'size': 0}, 'python/packaging/__init__.py': {'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-python/python/packaging/__init__.py', 'sha256': 'ca14c7118e8aea7e2c6ce8ebe8d3ca0c29fbc7f14f93ba7a7c1713b08642ef04', 'size': 501}, 'python/packaging/_elffile.py': {'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-python/python/packaging/_elffile.py', 'sha256': '00f42dc324664fd8a577a61246550d9253705e1a72787531bd5914b7635f0771', 'size': 3230}, 'python/packaging/_manylinux.py': {'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-python/python/packaging/_manylinux.py', 'sha256': '8b9a979a7c3a31e3f6127ac6f502bfc293ae36e5f1dae94abbd00dfd028012c2', 'size': 9533}, 'python/packaging/_musllinux.py': {'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-python/python/packaging/_musllinux.py', 'sha256': '14f5466e6abeb2ad1318e2440f38bc5e38f7bfc7b9ca1354ed15c20ce7cc0be1', 'size': 2664}, '_virtualenv.py': {'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/_virtualenv.py', 'sha256': '6cf30c56faf2a55228914dbbd17f8088ed371ebb08f5e7fa6fd931f913fcaf1d', 'size': 4342}}
+
+
+UV_EMBEDDED.update({'virtualenv/activator/activate': {'sha256': 'da9ed3e695c978104fa91f1e676798cad56b090a0647335da7f5181edc397f39', 'size': 4125, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/activate'}, 'virtualenv/activator/activate.bat': {'sha256': 'a9a6ac456644c7c0e9ea9efb8c194862e91f818082864d8d9c5b58a7f1968bf9', 'size': 2685, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/activate.bat', 'source_sha256': 'e9937030235de6b76b8a35b3ba4a9a2cd9b3adcf8f9f0e3ca418dc9642554331', 'source_size': 2614, 'line_endings': 'crlf'}, 'virtualenv/activator/activate.csh': {'sha256': 'bbf691bc12f84a2980df2ff775ac788debabbc1ec79574491d2cf9242d9ad8eb', 'size': 2655, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/activate.csh'}, 'virtualenv/activator/activate.fish': {'sha256': '741ef7288c294ce3cb9ed9d35312e69fda5b0f13b0abd96b848257576ccc2d20', 'size': 4227, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/activate.fish'}, 'virtualenv/activator/activate.nu': {'sha256': 'a896f1b884db50c76a1b26888fb1a852d0d2a430fa89d5a7c70dd03de2adb7f3', 'size': 3795, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/activate.nu'}, 'virtualenv/activator/activate.ps1': {'sha256': 'eadbf353b750c99954f797f1d466b60c2718bf9acb9792301a5cc35bb2c03a90', 'size': 2826, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/activate.ps1'}, 'virtualenv/activator/activate_this.py': {'sha256': 'd9ba890a15afe4fc1edabc0d1fd90bd2af2a440ce597e306f5f331691875385b', 'size': 2411, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/activate_this.py'}, 'virtualenv/activator/deactivate.bat': {'sha256': '13ea86073a9ee43a66e3549312599dd47ff315758b4ca5a0406faf041fb82300', 'size': 1730, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/deactivate.bat', 'source_sha256': '9b205eb1eba00fbbfd6ddd30f6e03f64f415b8b29da9f97b1823fb44de919fb3', 'source_size': 1691, 'line_endings': 'crlf'}, 'virtualenv/activator/pydoc.bat': {'sha256': '2a8eb66d1bc7b73adcd3c6f59e2383e0a7fe9412609c1f9d1870e35035ee6fee', 'size': 1217, 'url': 'https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/activator/pydoc.bat', 'source_sha256': '9bd6480f163aa4be93473876dc155c4b710a0bae1e915fd56470bbf5b57c342a', 'source_size': 1195, 'line_endings': 'crlf'}})
 
 
 def prepare(root: Path) -> Path:
@@ -63,7 +69,12 @@ def prepare(root: Path) -> Path:
         raise RuntimeError('source UV is not the pinned Linux ELF member')
     for name, binding in UV_EMBEDDED.items():
         with urllib.request.urlopen(binding['url'], timeout=30) as response:
-            body = response.read(binding['size'] + 1)
+            body = response.read(binding.get('source_size', binding['size']) + 1)
+        if (len(body) != binding.get('source_size', binding['size'])
+                or hashlib.sha256(body).hexdigest() != binding.get('source_sha256', binding['sha256'])):
+            raise RuntimeError('UV embedded public source bytes drift')
+        if binding.get('line_endings') == 'crlf':
+            body = body.replace(b'\n', b'\r\n')
         if (len(body) != binding['size'] or hashlib.sha256(body).hexdigest() != binding['sha256']
                 or (body and body not in binary)):
             raise RuntimeError('UV embedded source differs from its public pinned member')

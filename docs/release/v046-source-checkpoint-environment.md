@@ -831,3 +831,12 @@ dispatches, their protected headers/spec pins and authenticated READY tokens.
 The dependency inventory keeps its original external-target refusal. Runtime
 links additionally require the exact prior inode, mode, owner, link text and
 full target identity; a caller-provided or refreshed cache inventory is insufficient.
+
+The runtime metadata renderer uses UV0.11.0's public virtualenv generator and
+nine publisher-pinned activation templates. All effective template bytes must
+also occur in the already pinned Linux UV ELF; the three batch templates use
+its exact CRLF representation. Fixed metadata, substitutions, link roles and
+configuration remain finite and byte-checked. These files confer no process
+or provider admission authority.
+
+The public renderer reference is [UV0.11.0 virtualenv creation](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-virtualenv/src/virtualenv.rs).

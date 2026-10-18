@@ -322,7 +322,7 @@ def restore_primary_cache(tree):
     for node in ast.walk(method):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Subscript)
                 and ast.unparse(node.func) == "namespace['primary_cache_tree']"):
-            assert ast.unparse(node) == "namespace['primary_cache_tree'](self.spec, self.emit)"
+            assert ast.unparse(node) == "namespace['primary_cache_tree'](self.spec, self.emit, self.state['operations'])"
             node.args = node.args[:1]
     prefix = ast.Module(body=method.body[:2], type_ignores=[])
     assert hashlib.sha256(ast.dump(prefix, include_attributes=False).encode()).hexdigest() == PRIMARY_CACHE_BRANCH_AST
@@ -386,7 +386,7 @@ def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change,
         return {'/opt/primary-cache': seed, '/work/cache': current}.get(str(path), original_path(path))
     cache_tree = load_function('primary_cache_tree', 'producer_profile.py', {
         'Path': mapped, 'os': __import__('os'), 'hashlib': hashlib, 'load': lambda name, path: closure if path.endswith('dependency_closure.py') else activation,
-        'original_runtime_outputs': lambda spec: {},
+        'original_runtime_outputs': lambda spec, operations: {},
         'primary_inventory': load_function('primary_inventory', 'producer_profile.py', {
             'stat': __import__('stat'), 'os': __import__('os'), 'load': lambda *args: activation,
             'digest': lambda path: hashlib.sha256(path.read_bytes()).hexdigest()})})

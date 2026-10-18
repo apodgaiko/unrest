@@ -136,6 +136,31 @@ def consume(profile):
     return spec
 
 
+def runtime_metadata(spec, root):
+    """Render only the pinned UV0.11.0 Linux, nonrelocatable CPython outputs."""
+    directory = str(root)
+    if any(character in directory for character in ("'", "\\", "\n", "\r")):
+        raise RuntimeError('primary_runtime_unrenderable_directory')
+    result = {'.gitignore': b'*',
+              'CACHEDIR.TAG': b'Signature: 8a477f597d28d172789f06886806bc55'}
+    upstream = Path(spec['virtualenv_source']).parent
+    for name, binding in public_inputs.UV_EMBEDDED.items():
+        if not name.startswith('virtualenv/activator/'):
+            continue
+        path = upstream / name
+        body = path.read_bytes()
+        if path.is_symlink() or len(body) != binding['size'] or hashlib.sha256(body).hexdigest() != binding['sha256']:
+            raise RuntimeError('primary_runtime_activator_input_drift')
+        substitutions = {'{{ VIRTUAL_ENV_DIR }}': "'" + directory + "'" if path.name == 'activate.nu' else directory,
+                         '{{ BIN_NAME }}': 'bin', '{{ VIRTUAL_PROMPT }}': '',
+                         '{{ PATH_SEP }}': ':', '{{ RELATIVE_SITE_PACKAGES }}': '../lib/python3.13/site-packages'}
+        text = body.decode()
+        for before, after in substitutions.items():
+            text = text.replace(before, after)
+        result['bin/' + path.name] = text.encode()
+    return result
+
+
 def runtime_members(spec, selected, emit=None):
     """Declare one already validated original UV backend environment at exec."""
     activation = load('runtime_member_identity', '/guard/finite/operation_activation.py')
@@ -144,12 +169,15 @@ def runtime_members(spec, selected, emit=None):
     if python != root / 'bin/python' or python.resolve(strict=True) != Path(spec['base']):
         raise RuntimeError('primary_runtime_declared_python_drift')
     site = root / 'lib/python3.13/site-packages'
+    metadata = runtime_metadata(spec, root)
     rows = {}
     def refuse(code, name, kind):
         if emit is not None:
             emit({'kind': 'primary_runtime_member_refusal', 'stage': code,
                   'member_sha256': hashlib.sha256(name.encode()).hexdigest(),
-                  'member_type': kind})
+                  'member_type': kind,
+                  'actual_sha256': digest(root / name) if kind == 'file' else None,
+                  'size': (root / name).lstat().st_size})
         raise RuntimeError(code)
     for path in sorted(root.rglob('*')):
         info = path.lstat()
@@ -162,8 +190,18 @@ def runtime_members(spec, selected, emit=None):
             if path not in allowed or os.readlink(path) != allowed[path]:
                 refuse('primary_runtime_unbound_link', name, 'symlink')
             target = path.resolve(strict=True)
+            expected_target = root / 'lib' if name == 'lib64' else Path(spec['base'])
+            if target != expected_target:
+                refuse('primary_runtime_link_target_drift', name, 'symlink')
             target_identity = activation.identity(target) if target.is_file() else {
                 'directory': [target.stat().st_dev, target.stat().st_ino, target.stat().st_mode]}
+            if name != 'lib64' and (target_identity != spec['base_identity'] or target.stat().st_uid != 0):
+                refuse('primary_runtime_link_image_drift', name, 'symlink')
+            after = path.lstat()
+            if ([info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_ctime_ns]
+                    != [after.st_dev, after.st_ino, after.st_mode, after.st_uid, after.st_ctime_ns]
+                    or os.readlink(path) != allowed[path]):
+                refuse('primary_runtime_link_read_race', name, 'symlink')
             rows[name] = {'type': 'symlink', 'target': os.readlink(path),
                           'identity': [info.st_dev, info.st_ino, info.st_mode, info.st_uid,
                                        info.st_ctime_ns], 'target_identity': target_identity,
@@ -175,19 +213,23 @@ def runtime_members(spec, selected, emit=None):
             rows[name] = {'type': 'directory', 'identity': [info.st_dev, info.st_ino,
                                                           info.st_mode, info.st_uid]}
         elif path.is_file():
-            if not (path == root / 'pyvenv.cfg' or path.is_relative_to(site)):
+            if name in metadata:
+                if path.read_bytes() != metadata[name]:
+                    refuse('primary_runtime_metadata_bytes', name, 'file')
+            elif not (path == root / 'pyvenv.cfg' or path.is_relative_to(site)):
                 refuse('primary_runtime_unbound_file', name, 'file')
             rows[name] = {'type': 'file', 'file': activation.identity(path), 'uid': info.st_uid, 'nlink': info.st_nlink}
         else:
             raise RuntimeError('primary_runtime_nonregular_member')
+    if not set(metadata) <= set(rows):
+        raise RuntimeError('primary_runtime_metadata_missing')
     info = root.lstat()
     return {'root': str(root), 'root_identity': [info.st_dev, info.st_ino, info.st_mode, info.st_uid],
             'members': rows}
 
 
-def original_runtime_outputs(spec):
+def original_runtime_outputs(spec, operations):
     """Read only the current original build's authenticated READY child headers."""
-    operations = load('runtime_output_operations', '/guard/finite/source_operations.py')
     build = operations.require(spec['output'], 'source-build')
     rows = events(spec)
     admissions = [r for r in rows if r['kind'] == 'operation_admission'
@@ -290,7 +332,7 @@ def primary_inventory(root, runtime_outputs, observed=None):
     return result
 
 
-def primary_cache_tree(spec, emit=None):
+def primary_cache_tree(spec, emit=None, operations=None):
     """Validate the primary's whole native seed plus original finite UV additions.
 
     Extra dependency wheels have immutable image provenance. A writable member
@@ -306,7 +348,7 @@ def primary_cache_tree(spec, emit=None):
     if expected != primary['cache_seed_inventory']:
         raise RuntimeError('source_primary_cache_seed_drift')
     root = Path(spec['cache'])
-    runtime_outputs = original_runtime_outputs(spec)
+    runtime_outputs = original_runtime_outputs(spec, operations)
     observed = {}
     current = primary_inventory(root, runtime_outputs, observed)
     for directory, output in runtime_outputs.items():

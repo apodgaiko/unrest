@@ -150,9 +150,25 @@ def runtime_fixture(tmp_path, monkeypatch):
     namespace = {'Path': Path, 'os': os, 'stat': stat, 'hashlib': hashlib,
                  'load': lambda *args: activation,
                  'digest': lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+    namespace['runtime_metadata'] = load_function('runtime_metadata', 'producer_profile.py', {
+        'Path': Path, 'hashlib': hashlib, 'public_inputs': SimpleNamespace(UV_EMBEDDED={})})
     declare = load_function('runtime_members', 'producer_profile.py', namespace)
     inventory = load_function('primary_inventory', 'producer_profile.py', namespace)
-    spec = {'base': str(base)}
+    spec = {'base': str(base), 'virtualenv_source': str(tmp_path / '_virtualenv.py')}
+    metadata = {'.gitignore': b'*', 'CACHEDIR.TAG': b'Signature: 8a477f597d28d172789f06886806bc55'}
+    for name, body in metadata.items():
+        (root / name).write_bytes(body)
+    spec['base_identity'] = activation.identity(base)
+    original_stat = Path.stat
+    class BaseInfo:
+        def __init__(self, value):
+            self.value = value
+        def __getattr__(self, key):
+            return 0 if key == 'st_uid' else getattr(self.value, key)
+    def owned_base_stat(path, *args, **kwargs):
+        info = original_stat(path, *args, **kwargs)
+        return BaseInfo(info) if path == base else info
+    monkeypatch.setattr(Path, 'stat', owned_base_stat)
     selected = {'prefix': str(root), 'python_link': str(root / 'bin/python')}
     output = declare(spec, selected)
     return root, base, spec, selected, output, declare, inventory
@@ -214,18 +230,42 @@ def test_original_runtime_declaration_rejects_unknown_member(runtime_fixture, na
 @pytest.mark.parametrize('change', ['none', 'missing_helper', 'duplicate_helper', 'missing_ready',
                                     'duplicate_ready', 'stale_parent', 'stale_build',
                                     'wrong_owner', 'wrong_mode', 'wrong_spec_pin',
-                                    'foreign_cache', 'foreign_image', 'foreign_argv', 'foreign_output'])
+                                    'foreign_cache', 'foreign_image', 'foreign_argv', 'foreign_output', 'source_output_drift'])
 def test_runtime_consumption_requires_current_original_operation(tmp_path, monkeypatch, change):
     import os
     import stat
     from test_producer_startup import load_function
     headers = tmp_path / 'headers'
     headers.mkdir()
-    build = {'pid': 10, 'owner_pid': 20, 'token': 'current-build'}
+    operations_spec = importlib.util.spec_from_file_location('actual_source_operations', ROOT / 'finite/source_operations.py')
+    operations_module = importlib.util.module_from_spec(operations_spec)
+    operation_tree = ast.parse((ROOT / 'finite/source_operations.py').read_bytes())
+    original_class = ast.dump(next(n for n in operation_tree.body
+                                  if isinstance(n, ast.ClassDef) and n.name == 'Operations'),
+                              include_attributes=False)
+    # Import-time source registrations need the compartment's /source mount.
+    # They do not participate in require; retain the entire actual owner class
+    # and its real filesystem identity checks, without running that startup scan.
+    for node in operation_tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'REGISTRATIONS' for t in node.targets):
+            node.value = ast.List(elts=[], ctx=ast.Load())
+    assert ast.dump(next(n for n in operation_tree.body
+                         if isinstance(n, ast.ClassDef) and n.name == 'Operations'),
+                    include_attributes=False) == original_class
+    exec(compile(ast.fix_missing_locations(operation_tree), str(ROOT / 'finite/source_operations.py'), 'exec'),
+         operations_module.__dict__)
+    output = tmp_path / 'build-output'
+    output.mkdir()
+    build = {'pid': 10, 'owner_pid': 20, 'token': 'current-build', 'settled': True,
+             'output_identity': {'tree': operations_module.tree_identity(output)}}
+    def refuse(code):
+        raise RuntimeError(code)
+    owner = operations_module.Operations({'operation_spec': {}}, lambda row: None, refuse, lambda token: None)
+    owner.settled[(str(output), 'source-build')] = build
     admission = {'kind': 'operation_admission', 'owner_pid': 20, 'token': build['token']}
     def hashed(value):
         return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    spec = {'output': '/known-output', 'cache': '/work/cache', 'base_identity': {'sha256': 'image'}}
+    spec = {'output': str(output), 'cache': '/work/cache', 'base_identity': {'sha256': 'image'}}
     rows = [admission]
     children = {}
     names = ['get_requires_for_build_sdist', 'build_sdist', 'get_requires_for_build_wheel', 'build_wheel']
@@ -284,15 +324,76 @@ def test_runtime_consumption_requires_current_original_operation(tmp_path, monke
         if pin != expected:
             raise RuntimeError('controlled protected spec pin drift')
         return value
-    def require(output, operation):
-        assert output == spec['output'] and operation == 'source-build'
-        return build
+    if change == 'source_output_drift':
+        (output / 'foreign').write_bytes(b'unknown output')
     function = load_function('original_runtime_outputs', 'producer_profile.py', {
         'Path': mapped, 'os': os, 'stat': stat, 'hashlib': hashlib, 'json': json,
-        'load': lambda *args: SimpleNamespace(require=require), 'events': lambda spec: rows,
+        'events': lambda spec: rows,
         'hashed': hashed, 'protected_json': protected})
     if change == 'none':
-        assert set(function(spec)) == {'/work/cache/builds-v0/runtime'}
+        assert set(function(spec, owner)) == {'/work/cache/builds-v0/runtime'}
     else:
         with pytest.raises(RuntimeError):
-            function(spec)
+            function(spec, owner)
+
+
+@pytest.mark.parametrize('change', ['none', 'bytes', 'symlink', 'unrenderable'])
+def test_uv_template_rendering_is_byte_pinned(tmp_path, change):
+    from test_producer_startup import load_function
+    upstream = tmp_path / 'upstream'
+    template = upstream / 'virtualenv/activator/activate.nu'
+    template.parent.mkdir(parents=True)
+    body = b'{{ VIRTUAL_ENV_DIR }};{{ BIN_NAME }};{{ VIRTUAL_PROMPT }};{{ PATH_SEP }};{{ RELATIVE_SITE_PACKAGES }}\r\n'
+    template.write_bytes(body)
+    binding = {'size': len(body), 'sha256': hashlib.sha256(body).hexdigest()}
+    root = tmp_path / ('invalid\nroot' if change == 'unrenderable' else 'declared-runtime')
+    if change == 'bytes':
+        template.write_bytes(body + b'foreign')
+    elif change == 'symlink':
+        original = tmp_path / 'outside-template'
+        original.write_bytes(body)
+        template.unlink()
+        template.symlink_to(original)
+    function = load_function('runtime_metadata', 'producer_profile.py', {
+        'Path': Path, 'hashlib': hashlib,
+        'public_inputs': SimpleNamespace(UV_EMBEDDED={'virtualenv/activator/activate.nu': binding})})
+    if change == 'none':
+        result = function({'virtualenv_source': str(upstream / '_virtualenv.py')}, root)
+        assert result == {'.gitignore': b'*',
+                          'CACHEDIR.TAG': b'Signature: 8a477f597d28d172789f06886806bc55',
+                          'bin/activate.nu': ("'" + str(root) + "';bin;;:;../lib/python3.13/site-packages\r\n").encode()}
+    else:
+        with pytest.raises(RuntimeError):
+            function({'virtualenv_source': str(upstream / '_virtualenv.py')}, root)
+
+
+@pytest.mark.parametrize('change', ['bytes', 'missing'])
+def test_runtime_metadata_requires_exact_original_files(runtime_fixture, change):
+    root, base, spec, selected, output, declare, inventory = runtime_fixture
+    path = root / '.gitignore'
+    if change == 'bytes':
+        path.write_bytes(b'foreign')
+    else:
+        path.unlink()
+    with pytest.raises(RuntimeError):
+        declare(spec, selected)
+
+
+def test_runtime_declaration_refuses_symlink_swap_during_read(runtime_fixture, monkeypatch):
+    import os
+    root, base, spec, selected, output, declare, inventory = runtime_fixture
+    foreign = base.with_name('foreign-interpreter')
+    foreign.write_bytes(base.read_bytes())
+    original = os.readlink
+    calls = [0]
+    def swap(path, *args, **kwargs):
+        result = original(path, *args, **kwargs)
+        if Path(path) == root / 'bin/python':
+            calls[0] += 1
+            if calls[0] == 2:
+                (root / 'bin/python').unlink()
+                (root / 'bin/python').symlink_to(foreign)
+        return result
+    monkeypatch.setattr(os, 'readlink', swap)
+    with pytest.raises(RuntimeError):
+        declare(spec, selected)
