@@ -135,7 +135,7 @@ class Operations(_LegacyOperations):
         def custody(info):
             return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
                     info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        if (not stat.S_ISREG(before.st_mode) or stat.S_IMODE(before.st_mode) != 0o755
+        if (not stat.S_ISREG(before.st_mode) or stat.S_IMODE(before.st_mode) != 0o555
                 or before.st_uid != 0 or before.st_gid != 0 or before.st_nlink != 1
                 or not os.statvfs(selected).f_flag & os.ST_RDONLY
                 or image != self.spec['uv'] or custody(before) != custody(after)):

@@ -102,6 +102,9 @@ def main():
                     or os.environ.get('GITHUB_REF') in {
                     'refs/heads/codex/source-guard-structured-20261018-primary-dependency-' + epoch
                     for epoch in ('01', '02', '03', '04', '05', '06')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-native-uv-mode-' + epoch
+                    for epoch in ('01', '02', '03', '04')}
                     or os.environ.get('GITHUB_REF', '').startswith((
                     'refs/heads/codex/source-guard-structured-20261018-source-entry-',
                     'refs/heads/codex/source-guard-structured-20261018-source-composition-',

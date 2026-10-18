@@ -21,7 +21,7 @@ def route(tmp_path):
     native = tmp_path / 'pinned-bin/uv'
     native.parent.mkdir()
     native.write_bytes(b'synthetic immutable UV image')
-    native.chmod(0o755)
+    native.chmod(0o555)
     first = tmp_path / 'venv-bin'
     first.mkdir()
     flags = {'readonly': True, 'uid': 0}
@@ -83,7 +83,7 @@ def route(tmp_path):
 
 @pytest.mark.parametrize('change', ['none', 'token', 'role', 'binding', 'source_hash', 'source_bytes', 'owner',
                                      'argv', 'environment', 'cwd', 'missing_dependency', 'missing_profile',
-                                     'missing_backend', 'missing_image', 'foreign_PATH_image', 'image_bytes', 'writable', 'image_uid', 'hardlink', 'symlink'])
+                                     'missing_backend', 'missing_image', 'foreign_PATH_image', 'image_bytes', 'writable', 'image_uid', 'wrong_mode', 'hardlink', 'symlink'])
 def test_only_original_immutable_uv_operation_selects_an_executable(route, change):
     f = route
     cwd = '/source'
@@ -120,9 +120,13 @@ def test_only_original_immutable_uv_operation_selects_an_executable(route, chang
     elif change == 'missing_image':
         f.native.unlink()
     elif change == 'image_bytes':
+        f.native.chmod(0o755)
         f.native.write_bytes(b'foreign image')
+        f.native.chmod(0o555)
     elif change == 'writable':
         f.flags['readonly'] = False
+    elif change == 'wrong_mode':
+        f.native.chmod(0o755)
     elif change == 'image_uid':
         f.flags['uid'] = 1
     elif change == 'hardlink':

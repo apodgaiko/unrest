@@ -1022,3 +1022,9 @@ real tool lookup. Writable synthetic files model only metadata mutation cases;
 their filesystem execution properties do not stand in for the immutable image.
 The CPython argument-vector differential keeps the original explicit cwd and
 intercepts before fork, so it launches no synthetic program.
+
+The selected immutable UV image must have exactly mode `0555`, matching the
+producer that writes it. Mode `0755` is refused alongside writable mounts,
+foreign ownership, links and byte or identity drift. The native-UV mode proof
+family reserves only epochs `01` through `04` at both the controller entry and
+structured evidence identity gates; malformed and out-of-range refs refuse.

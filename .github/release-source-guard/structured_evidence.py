@@ -88,6 +88,12 @@ def identity_check(value):
         require(value['workflow_ref'] in {dependency_prefix + epoch
                                         for epoch in ('01', '02', '03', '04', '05', '06')},
                 'workflow_identity')
+    native_uv_prefix = ('apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@'
+                        'refs/heads/codex/source-guard-structured-20261018-native-uv-mode-')
+    if value['workflow_ref'].startswith(native_uv_prefix.removesuffix('-')):
+        require(value['workflow_ref'] in {native_uv_prefix + epoch
+                                        for epoch in ('01', '02', '03', '04')},
+                'workflow_identity')
     readiness = re.fullmatch(
         r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-[a-z0-9-]+',
         value['workflow_ref'])
