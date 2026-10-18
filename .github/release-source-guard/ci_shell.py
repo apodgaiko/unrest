@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import secrets
 
 from primary_policy import plan, public_plan
 from ci_commands import bind_generated
@@ -17,6 +18,8 @@ from primary_environment import build
 from source_controller import source_bindings
 from structured_evidence import capture, execution_identity
 from primary_custody import Binding, Custody
+from primary_source_inputs import test_plan, decode
+from structured_evidence import canonical
 
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
@@ -27,7 +30,9 @@ TMPFS = {'/work': 'rw,nosuid,nodev,size=512m,uid=20000,gid=20000,mode=0711',
          '/receipts': 'rw,nosuid,nodev,noexec,size=32m,uid=20001,gid=20001,mode=0755'}
 KINDS = {'Install dependencies': 'primary-install', 'Import package': 'primary-import',
          'Supported CLI surfaces': 'primary-help', 'Repository contract': 'primary-repository',
-         'Lint (ruff)': 'primary-lint', 'Type-check (mypy)': 'primary-types'}
+         'Lint (ruff)': 'primary-lint', 'Type-check (mypy)': 'primary-types',
+         'v0.4.6 source suite': 'primary-source',
+         'TEST-source-positive': 'primary-source-positive', 'TEST-source-poison': 'primary-source-poison'}
 
 
 def digest(path):
@@ -37,6 +42,16 @@ def digest(path):
 def run(argv, log):
     with log.open('ab') as stream:
         return subprocess.run(argv, stdout=stream, stderr=subprocess.STDOUT, check=False)
+
+
+def retain_phase(custody, spec, records, source_pins):
+    """A custody refusal must still reach the private-evidence encryption path."""
+    from structured_evidence import canonical
+    try:
+        phase = custody.record(spec['duty'], spec['script_sha256'], records, input_pins=source_pins)
+    except Exception:
+        return 125, None
+    return 0, hashlib.sha256(canonical(phase)).hexdigest()
 
 
 def validate(config, image, mounts):
@@ -68,9 +83,15 @@ SCRIPT_SIZE = None
 
 def main():
     global STAGE, SCRIPT_PIN, SCRIPT_SIZE
-    if len(sys.argv) != 2:
+    test_mode = None
+    if len(sys.argv) == 4 and sys.argv[1] == '--source-test':
+        test_mode = sys.argv[2]
+        if (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
+                or not os.environ.get('GITHUB_REF', '').startswith('refs/heads/codex/source-guard-structured-20261018-source-entry-')):
+            raise RuntimeError('primary_test_workflow_identity')
+    elif len(sys.argv) != 2:
         raise RuntimeError('primary_shell_argv')
-    script_path = Path(sys.argv[1])
+    script_path = Path(sys.argv[-1])
     if script_path.is_symlink() or not script_path.is_file() or script_path.stat().st_size > 16384:
         raise RuntimeError('primary_script_carrier')
     script = script_path.read_bytes()
@@ -78,7 +99,7 @@ def main():
     STAGE = 'binding'
     expected = expected_identity()
     workflow = (REPOSITORY / '.github/workflows/ci.yml').read_text()
-    bound = bind_generated(script, workflow)
+    bound = None if test_mode else bind_generated(script, workflow)
     decision_path = Path(os.environ['RUNNER_TEMP']) / 'primary-decision.json'
     if os.environ.get('GITHUB_WORKFLOW') == 'CI':
         if decision_path.is_symlink():
@@ -93,7 +114,12 @@ def main():
             return 0
         if decision['decision'] != 'execute-first-full' or decision['receipt'] is not None:
             raise RuntimeError('primary_decision_kind')
-    spec = plan(bound['script'], workflow)
+    source_input = None
+    if not test_mode and bound['name'] == 'v0.4.6 source suite':
+        source_input = decode((Path(os.environ['RUNNER_TEMP']) / 'primary-source-input.json').read_bytes())
+        if source_input['definition'] != expected:
+            raise RuntimeError('primary_source_current_definition')
+    spec = test_plan(script, workflow, test_mode) if test_mode else plan(bound['script'], workflow, source_input)
     kind = KINDS[spec['duty']]
     root = Path(os.environ['RUNNER_TEMP']) / kind
     root.mkdir(mode=0o700)
@@ -144,6 +170,24 @@ def main():
     (inputs / 'plan.json').write_text(json.dumps(spec, sort_keys=True))
     (inputs / 'uv.toml').write_bytes(b'')
     (inputs / 'identity.json').write_text(json.dumps(expected, sort_keys=True))
+    if test_mode:
+        (inputs / 'test-mode').write_text(test_mode)
+    if source_input is not None:
+        (inputs / 'source-input.json').write_bytes(canonical(source_input))
+    if spec.get('source_mode'):
+        prepare = ['docker', 'run', '--rm', '--network=none', '--read-only', '--cap-drop=ALL',
+                   '--security-opt=no-new-privileges', '--user=20001:20001',
+                   '--mount=type=bind,src=' + str(SUPPORT) + ',dst=/guard,readonly',
+                   '--mount=type=bind,src=' + str(source) + ',dst=/source,readonly',
+                   '--entrypoint=/usr/local/bin/python', image, '-B',
+                   '/guard/primary_source_setup.py', secrets.token_hex(32)]
+        with log.open('ab') as errors:
+            prepared = subprocess.run(prepare, stdout=subprocess.PIPE, stderr=errors, check=False)
+        if prepared.returncode:
+            raise RuntimeError('primary_source_prepare')
+        value = json.loads(prepared.stdout)
+        (inputs / 'source.json').write_bytes(canonical(value['manifest']))
+        (inputs / 'registry.py').write_text(value['registry'])
     mounts = {'/guard': str(SUPPORT), '/inputs': str(inputs),
               **source_bindings(source, 'producer-primary')}
     container = 'primary-script-' + spec['script_sha256'][:24]
@@ -179,16 +223,24 @@ def main():
     finally:
         run(['docker', 'rm', '--force', container], log)
     phase_sha256 = None
-    if status == 0:
-        phase = custody.record(spec['duty'], spec['script_sha256'], records, input_pins=source_pins)
-        from structured_evidence import canonical
-        phase_sha256 = hashlib.sha256(canonical(phase)).hexdigest()
+    if status == 0 and not test_mode:
+        status, phase_sha256 = retain_phase(custody, spec, records, source_pins)
+        if status:
+            stage = 'custody_refused'
+    negative_verified = False
+    if test_mode == 'TEST-poison':
+        kernel = json.loads(records.get('kernel-source.json', b'{}'))
+        negative_verified = (status == 2 and kernel.get('guard_poison') is True
+                             and kernel.get('missing_parent_waits') == []
+                             and kernel.get('unregistered_processes') == []
+                             and any(row['kind'] == 'forbidden' for row in kernel.get('source_events', [])))
     metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,
                 'source_exit_code': status, 'stage': stage, 'primary_plan': public_plan(spec),
                 'head_sha': os.environ['GITHUB_SHA'], 'source_tree': expected['source_tree'], 'image_id': image,
                 'source_pins_sha256': hashlib.sha256(json.dumps(source_pins, sort_keys=True).encode()).hexdigest(),
                 'support': control['support'],
                 'custody_phase_sha256': phase_sha256,
+                'source_test_identity': test_mode, 'negative_verified': negative_verified,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'
     with tarfile.open(archive, 'w:gz') as stream:
@@ -204,7 +256,7 @@ def main():
     (root / 'safe-provenance.json').write_text(json.dumps(metadata, sort_keys=True))
     shutil.rmtree(raw)
     archive.unlink()
-    return status
+    return 0 if negative_verified else status
 
 
 if __name__ == '__main__':

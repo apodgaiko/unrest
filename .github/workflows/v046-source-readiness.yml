@@ -23,22 +23,22 @@ jobs:
           persist-credentials: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Lint (ruff)
-        run: uv run ruff check .
-        shell: python3 .github/release-source-guard/ci_shell.py {0}
-      - name: Type-check (mypy)
-        run: uv run mypy src
-        shell: python3 .github/release-source-guard/ci_shell.py {0}
-      - name: Upload encrypted primary static-check evidence
+      - name: TEST primary source positive
+        run: env -u CODEX_PATH uv run pytest -q tests/test_server.py::test_completion_refusal_survives_server_restart[valid-repair-work]
+        shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
+      - name: TEST primary source caught refusal
+        run: env -u CODEX_PATH uv run pytest -q tests/test_server.py::test_completion_refusal_survives_server_restart[valid-repair-work]
+        shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-poison {0}
+      - name: Upload encrypted TEST source entry evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: v046-primary-static-${{ github.run_id }}-${{ github.run_attempt }}
+          name: v046-primary-source-entry-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/primary-lint/evidence.cms
-            ${{ runner.temp }}/primary-lint/safe-provenance.json
-            ${{ runner.temp }}/primary-types/evidence.cms
-            ${{ runner.temp }}/primary-types/safe-provenance.json
+            ${{ runner.temp }}/primary-source-positive/evidence.cms
+            ${{ runner.temp }}/primary-source-positive/safe-provenance.json
+            ${{ runner.temp }}/primary-source-poison/evidence.cms
+            ${{ runner.temp }}/primary-source-poison/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
       - name: Original CI mutation checks

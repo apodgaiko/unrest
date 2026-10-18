@@ -1,0 +1,91 @@
+"""SOURCE entry policy boundaries; hosted probes exercise the actual bridge."""
+import copy
+import json
+from pathlib import Path
+import sys
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent))
+from ci_commands import REGISTRY
+from checkpoint_receipt import COMMAND, DEFINITION_FIELDS
+from primary_policy import SOURCE, SOURCE_BUDGET, TEST_CASE, plan, public_plan, sha
+from primary_source_inputs import test_plan as make_test_plan
+from primary_source_inputs import require_full_input
+from primary_source_inputs import python_flags
+from test_ci_commands import workflow
+
+
+def inputs():
+    registry = json.loads(REGISTRY.read_bytes())
+    text = workflow(registry)
+    definition = {name: 'a' * (40 if name in {'head_sha', 'source_tree'} else 64)
+                  for name in DEFINITION_FIELDS}
+    definition.update(workflow_sha256=sha(text.encode()), source_command_sha256=sha(COMMAND.encode()))
+    return text, {'schema': 'unrest.v046.primary-source-input.v1', 'definition': definition,
+                  'source_carrier_sha256': 'b' * 64, 'selected_carrier': 'b' * 64,
+                  'package_closure_sha256': 'c' * 64, 'final_closure_sha256': 'd' * 64,
+                  'source_checkpoint_ready': True}
+
+
+def test_source_command_stays_literal_and_has_separate_finite_budgets():
+    text, value = inputs()
+    result = plan(COMMAND.encode(), text, value)
+    assert result['duty'] == SOURCE
+    assert result['commands'] == [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']]
+    assert result['timeout_seconds'] == SOURCE_BUDGET['root_seconds'] > 180
+    assert result['source_budget'] == {'root_seconds': 7200, 'collection_seconds': 300, 'drain_seconds': 60}
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    assert public_plan(result)['command_count'] == 1
+
+
+@pytest.mark.parametrize('field', ['source_carrier_sha256', 'package_closure_sha256',
+                                   'final_closure_sha256', 'selected_carrier', 'definition'])
+def test_partial_readiness_never_activates_whole_source(field):
+    text, value = inputs()
+    value.pop(field)
+    with pytest.raises(RuntimeError):
+        plan(COMMAND.encode(), text, value)
+
+
+def test_no_readiness_or_filtered_full_script_can_activate_source():
+    text, value = inputs()
+    with pytest.raises(RuntimeError):
+        plan(COMMAND.encode(), text)
+    with pytest.raises(RuntimeError):
+        plan((COMMAND + ' tests/test_server.py').encode(), text, value)
+    for change in ({'source_checkpoint_ready': False}, {'selected_carrier': None},
+                   {'definition': {**value['definition'], 'workflow_sha256': '0' * 64}}):
+        with pytest.raises(RuntimeError):
+            require_full_input({**value, **change}, COMMAND.encode(), text)
+
+
+def test_test_identity_never_becomes_original_source_duty():
+    text, value = inputs()
+    script = (COMMAND + ' ' + TEST_CASE).encode()
+    for mode in ('TEST-positive', 'TEST-poison'):
+        result = make_test_plan(script, text, mode)
+        assert result['duty'] != SOURCE and result['source_mode'] == mode
+        assert result['source_checkpoint_ready'] is False and result['timeout_seconds'] == 180
+        public_plan(result)
+        with pytest.raises(RuntimeError):
+            plan(script, text, value)
+    with pytest.raises(RuntimeError):
+        make_test_plan(COMMAND.encode(), text, 'TEST-positive')
+    with pytest.raises(RuntimeError):
+        make_test_plan(script, text, 'SOURCE')
+
+
+def test_source_bootstrap_profiles_preserve_isolated_and_no_site_flags():
+    assert python_flags(['/python', '-I', '-S', '-c', 'body'], {}) == [1, 1, 0]
+    assert python_flags(['/python', '-B', '-c', 'body'], {}) == [0, 0, 1]
+    assert python_flags(['/python', '-c', 'body'], {'PYTHONDONTWRITEBYTECODE': '1'}) == [0, 0, 1]
+    with pytest.raises(RuntimeError):
+        python_flags(['/python', '-X', '-c', 'body'], {})
+
+
+def test_input_binding_is_not_satisfied_by_a_foreign_script_or_workflow():
+    text, value = inputs()
+    for script, workflow_text in ((COMMAND.encode() + b' -x', text), (COMMAND.encode(), text + '\n')):
+        with pytest.raises(RuntimeError):
+            require_full_input(copy.deepcopy(value), script, workflow_text)

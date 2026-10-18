@@ -14,6 +14,9 @@ from linux_observation import process_identity
 from linux_trace import OwnedTrace, install_observation_filter
 from primary_policy import environment, plan, sha
 from primary_authority import Authority
+from primary_source_inputs import test_plan, decode
+from primary_source_authority import SourceAuthority
+import producer_setup
 import dependency_closure
 import primary_entry_build
 
@@ -27,7 +30,9 @@ def main():
         raise RuntimeError('primary_bootstrap_identity')
     script = Path('/inputs/github-script.sh').read_bytes()
     workflow = Path('/source/.github/workflows/ci.yml').read_text()
-    spec = plan(script, workflow)
+    source_input = decode(Path('/inputs/source-input.json').read_bytes()) if Path('/inputs/source-input.json').is_file() else None
+    test_mode = Path('/inputs/test-mode').read_text() if Path('/inputs/test-mode').is_file() else None
+    spec = test_plan(script, workflow, test_mode) if test_mode else plan(script, workflow, source_input)
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
     STAGE = 'dependencies'
@@ -52,8 +57,10 @@ def main():
             os.close(start_write)
             source_credentials()
             resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
-            for name in ('home', 'tmp'):
+            for name in ('home', 'tmp', 'events', 'owned'):
                 (Path('/work') / name).mkdir(mode=0o700)
+            if spec.get('source_mode'):
+                producer_setup.source_child_setup()
             shutil.copytree('/opt/primary-cache', '/work/cache', symlinks=True)
             # Relocate only native-produced internal archive links.
             for path in sorted(Path('/work/cache').rglob('*')):
@@ -83,9 +90,18 @@ def main():
     os.close(ready_read)
     STAGE = 'authority'
     authority = Authority(spec, child, env)
+    source = None
+    if spec.get('source_mode'):
+        initial_path = Path('/inputs/source.json')
+        initial = json.loads(initial_path.read_bytes())
+        manifest_path, pin, common = producer_setup.prepare(initial, sha(initial_path.read_bytes()))
+        source = SourceAuthority(manifest_path, pin, common, authority.contexts)
+        authority.source, authority.output_fd = source, read
     os.set_blocking(read, False)
     output = bytearray()
     def tick(trace):
+        if source is not None:
+            source.tick(trace)
         while True:
             try:
                 part = os.read(read, 65536)
@@ -146,8 +162,20 @@ def main():
                    'actual_script_sha256': hashlib.sha256(script).hexdigest(),
                    'all_commands_dispatched': authority.next_command == len(spec['commands']),
                    'source_checkpoint_ready': False, 'selected_carrier': None})
+    if source is not None:
+        result.update(source.finish())
     envelope = {'kernel-source.json': base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode(),
                 'source-output.log': base64.b64encode(output).decode()}
+    if source is not None:
+        for name in ('collection.json', 'summary.json', 'source.xml', 'source-provenance.json'):
+            path = Path('/work') / name
+            if path.is_file() and not path.is_symlink() and path.stat().st_size <= 32 * 1024 * 1024:
+                envelope[name] = base64.b64encode(path.read_bytes()).decode()
+        # A successful pytest return cannot erase a caught guard refusal.
+        summary = json.loads(Path('/work/summary.json').read_bytes()) if Path('/work/summary.json').is_file() else None
+        if (summary is None or not summary['ready'] or summary['failures']
+                or result['guard_poison'] or result['receipt_ledger_poison']):
+            failure = 'source_guard_refused'
     print('PRIVATE-EVIDENCE:' + json.dumps(envelope, sort_keys=True), flush=True)
     return 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
                  and not authority.denials and not native_failure and not failure

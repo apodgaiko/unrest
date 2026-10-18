@@ -454,3 +454,41 @@ at `b7779dec07635061d93a588919e32ccf0b6fd230`. Direct encrypted kernel records
 show five genuine parent waits per duty, root zero, no missing waits or poison,
 and no native pre-init refusal. This result retains that head's support/input
 identity; later issuer/export changes are separate implementation changes.
+
+
+### Primary SOURCE entry bridge
+
+The primary native entry now has a distinct SOURCE activation path. Its root
+still comes from the byte-bound generated Bash script and exact ENV/UV dispatch.
+Only the real pytest console can activate the existing fixture guard. Descendants
+must match its current source/caller/argv/environment/cwd registration and actual
+launch record; neither primary root authority nor fixture admission replaces the
+other. The observer retains endpoint READY, kernel births, poison and original
+parent waits. Native producer setup/activation remains the existing implementation.
+No native provider selection is redirected.
+
+Full mode retains exactly `env -u CODEX_PATH uv run pytest -q`. It accepts only
+`primary-source-input.json` in the host runner temporary directory, with schema
+`unrest.v046.primary-source-input.v1`, the complete current `definition` used by
+phase custody, `source_carrier_sha256`, `package_closure_sha256`,
+`final_closure_sha256`, `source_checkpoint_ready=true`, and `selected_carrier`
+equal to the source carrier digest. These are downstream closure inputs; this
+implementation does not create or assert them. Missing or foreign inputs refuse
+before execution. The source input is mounted read-only; MAC keys and CI control
+metadata remain host-only. Public output still reports readiness false and no
+selected carrier until downstream closure and certification.
+
+The full root budget is 7200 seconds, collection is bounded to 300 seconds and
+provenance/guard drain to 60 seconds. Those finite setup bounds are separate from
+the existing focused 180-second capsule and all original per-test deadlines.
+The collection observer records before/after lists, deselection, original argv,
+root READY, JUnit and guard summary; it does not alter items, order, marks or
+selection. These direct named records enter existing phase custody and issuer.
+
+Readiness probes use explicit TEST-positive/TEST-poison identities and a separate
+literal focused script. They exercise the same ENV/UV/native/fixture/observer
+bridge and cannot enter original phase custody or issue a certificate. A TEST
+profile cannot activate the unfiltered SOURCE duty. The poison probe catches an
+unknown launch after the unchanged representative test, then requires a failing
+capsule with retained global poison and actual parent waits. No full source run,
+freeze, package build or release certification is authorized by these probes.

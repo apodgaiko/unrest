@@ -139,3 +139,9 @@ Primary phase custody and the original-certificate reducer/exporter now have
 focused implementation checks. The original lint and mypy duties also have
 isolated hosted execution evidence. Full source/package execution remains
 incomplete; no original full certificate or release certification is claimed.
+
+
+Primary SOURCE entry integration is documented in
+[v046-source-checkpoint-environment.md](v046-source-checkpoint-environment.md).
+Its bounded TEST probes do not constitute the frozen unexcluded source checkpoint;
+source carrier, package and final closure remain required.

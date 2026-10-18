@@ -130,3 +130,16 @@ def test_only_original_build_can_introduce_archive_bytes(tmp_path, drift):
         changed['SHA256SUMS'] = b'foreign'
     with pytest.raises(RuntimeError):
         custody.record(ARCHIVE, 'b' * 64, records(ARCHIVE, changed))
+
+
+def test_custody_refusal_returns_to_evidence_encryption_without_disclosing_exception(tmp_path):
+    from ci_shell import retain_phase
+    custody = Custody(tmp_path / 'custody', binding(), create=True)
+    data = records('Import package')
+    spec = {'duty': 'Import package', 'script_sha256': 'b' * 64}
+    status, digest = retain_phase(custody, spec, data, {})
+    assert status == 0 and len(digest) == 64
+    # Duplicate issuance is refused; the caller must retain and encrypt its
+    # current capture rather than throw away the failure evidence.
+    status, digest = retain_phase(custody, spec, data, {})
+    assert status == 125 and digest is None

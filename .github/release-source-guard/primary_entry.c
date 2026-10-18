@@ -45,7 +45,8 @@ static int source_audit(const char *event, PyObject *args, void *unused) {
         }
         Py_DECREF(result);
         Py_DECREF(module);
-        if (PySys_GetObject("_unrest_finite_source_audit") == NULL) _exit(86);
+        if (PySys_GetObject("_unrest_finite_source_audit") == NULL &&
+            PySys_GetObject("_unrest_primary_source_bootstrap_consumed") == NULL) _exit(86);
         entered = 1;
         entering = 0;
     }

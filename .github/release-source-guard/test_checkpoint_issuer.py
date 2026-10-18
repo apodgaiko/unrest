@@ -1,6 +1,7 @@
 """Controlled issuer tests only; their synthetic records never certify CI."""
 import base64
 import copy
+import gzip
 import io
 import json
 from pathlib import Path
@@ -25,11 +26,12 @@ def archives():
     with zipfile.ZipFile(wheel, 'w') as target:
         target.writestr('unrest_harness/__init__.py', b'# synthetic package\n')
     sdist = io.BytesIO()
-    with tarfile.open(fileobj=sdist, mode='w:gz') as target:
-        row = tarfile.TarInfo('unrest_harness-0.4.6/src/unrest_harness/__init__.py')
-        data = b'# synthetic package\n'
-        row.size = len(data)
-        target.addfile(row, io.BytesIO(data))
+    with gzip.GzipFile(fileobj=sdist, mode='wb', mtime=0) as compressed:
+        with tarfile.open(fileobj=compressed, mode='w') as target:
+            row = tarfile.TarInfo('unrest_harness-0.4.6/src/unrest_harness/__init__.py')
+            data = b'# synthetic package\n'
+            row.size = len(data)
+            target.addfile(row, io.BytesIO(data))
     return {WHEEL: wheel.getvalue(), SDIST: sdist.getvalue()}
 
 

@@ -76,6 +76,18 @@ def main(event, arguments):
         except OSError:
             continue
         os._exit(86)
+    if profile.get('source_role') in {'source-root', 'source-bootstrap'}:
+        source = Path('/guard/primary_source_entry.py')
+        data = source.read_bytes()
+        if hashlib.sha256(data).hexdigest() != profile['source_entry_sha256']:
+            os._exit(86)
+        import types
+        module = types.ModuleType('primary_source_entry')
+        module.__file__ = str(source)
+        sys.modules[module.__name__] = module
+        exec(compile(data, str(source), 'exec', dont_inherit=True), module.__dict__)
+        module.activate(profile, event, arguments)
+        return
     denied = {'subprocess.Popen', 'os.exec', 'os.posix_spawn', 'os.system', 'os.fork',
               'os.forkpty', 'socket.connect', 'socket.bind', 'ctypes.dlopen'}
     console_code = None

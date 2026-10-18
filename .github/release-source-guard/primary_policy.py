@@ -14,14 +14,30 @@ SHELL = '/bin/bash'
 SHELL_FLAGS = ['--noprofile', '--norc', '-e', '-o', 'pipefail']
 UV = '/opt/source-bootstrap/bin/uv'
 PYTHON = '/usr/local/bin/python-primary-audit'
+SOURCE = 'v0.4.6 source suite'
+# Independent of focused capsules and every original test's own deadline.
+SOURCE_BUDGET = {'root_seconds': 7200, 'collection_seconds': 300, 'drain_seconds': 60}
+TEST_CASE = 'tests/test_server.py::test_completion_refusal_survives_server_restart[valid-repair-work]'
 
 
 def sha(body):
     return hashlib.sha256(body).hexdigest()
 
 
-def plan(script, workflow):
+def plan(script, workflow, source_input=None):
     duty = bind_generated(script, workflow)
+    if duty['name'] == SOURCE:
+        from primary_source_inputs import require_full_input
+        require_full_input(source_input, script, workflow)
+        commands = [shlex.split(line) for line in script.decode().splitlines()]
+        if commands != [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']]:
+            raise RuntimeError('primary_source_literal_drift')
+        return {'schema': 'unrest.v046.primary-script-plan.v1', 'duty': SOURCE,
+                'script_sha256': duty['script_sha256'], 'workflow_sha256': sha(workflow.encode()),
+                'shell_argv': [SHELL, *SHELL_FLAGS, '/inputs/github-script.sh'],
+                'commands': commands, 'source_checkpoint_ready': False, 'selected_carrier': None,
+                'timeout_seconds': SOURCE_BUDGET['root_seconds'], 'source_mode': 'SOURCE',
+                'source_budget': SOURCE_BUDGET, 'source_input_sha256': sha(canonical(source_input))}
     if duty['name'] not in FOCUSED:
         # Package-domain and final source-carrier closure are separate data
         # obligations. A focused capsule cannot grant their authority.
@@ -116,7 +132,7 @@ def canonical(value):
 def console(name, interpreter='/source/.venv/bin/python'):
     entries = {'unrest': ('unrest_harness.cli', 'cli'),
                'unrest-server': ('unrest_harness.server', 'main'),
-               'mypy': ('mypy.__main__', 'console_entry')}
+               'mypy': ('mypy.__main__', 'console_entry'), 'pytest': ('pytest', 'console_main')}
     module, function = entries[name]
     return ('#!' + interpreter + '\n# -*- coding: utf-8 -*-\n'
             'import sys\nfrom ' + module + ' import ' + function + '\n'
@@ -131,12 +147,13 @@ def console(name, interpreter='/source/.venv/bin/python'):
 def public_plan(spec):
     """Public evidence carries only closed identities/counts and input hashes."""
     import re
-    if (spec['duty'] not in FOCUSED or spec['timeout_seconds'] != 180
+    if (spec['duty'] not in FOCUSED | {SOURCE, 'TEST-source-positive', 'TEST-source-poison'}
+            or spec['timeout_seconds'] != (SOURCE_BUDGET['root_seconds'] if spec.get('source_mode') == 'SOURCE' else 180)
             or spec['source_checkpoint_ready'] is not False or spec['selected_carrier'] is not None
             or any(not isinstance(spec[key], str) or not re.fullmatch('[0-9a-f]{64}', spec[key])
                    for key in ('script_sha256', 'workflow_sha256'))):
         raise RuntimeError('primary_public_plan_refused')
     return {'schema': 'unrest.v046.primary-script-identity.v1', 'duty': spec['duty'],
             'script_sha256': spec['script_sha256'], 'workflow_sha256': spec['workflow_sha256'],
-            'command_count': len(spec['commands']), 'timeout_seconds': 180,
+            'command_count': len(spec['commands']), 'timeout_seconds': spec['timeout_seconds'],
             'source_checkpoint_ready': False, 'selected_carrier': None}
