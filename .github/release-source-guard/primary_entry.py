@@ -32,11 +32,11 @@ def main(event, arguments):
             or hashlib.sha256(str(arguments[0]).encode()).hexdigest() != profile['body_sha256']):
         os._exit(86)
     diagnostic = Path('/work') / ('primary-native-state-' + str(os.getpid()) + '.json')
-    context = {'schema': 'primary-native-state-v1', 'pid': os.getpid(),
+    context = {'schema': 'primary-native-state-v2', 'pid': os.getpid(),
                'source_path_present': '/source/src' in sys.path,
                'venv_site_present': '/source/.venv/lib/python3.13/site-packages' in sys.path,
                'prefix_is_venv': sys.prefix == '/source/.venv',
-               'body_failure': None}
+               'body_failure': None, 'git_status': None, 'git_error_code': None}
     diagnostic.write_text(json.dumps(context, sort_keys=True))
     original_exception = sys.excepthook
     def exception(kind, error, trace):
@@ -121,6 +121,21 @@ def main(event, arguments):
                     return
         if name in denied:
             os._exit(86)
+    previous_profile = sys.getprofile()
+    def observe(frame, kind, value):
+        if previous_profile is not None:
+            previous_profile(frame, kind, value)
+        if (profile['repository'] and kind == 'return'
+                and frame.f_code.co_name == 'find_repository_root'
+                and frame.f_code.co_filename == '/source/src/unrest_harness/repository_contract.py'):
+            process = frame.f_locals.get('process')
+            if process is not None and type(process.returncode) is int:
+                context['git_status'] = process.returncode
+                context['git_error_code'] = ('git_ownership' if 'dubious ownership' in process.stderr
+                                             else 'other' if process.returncode else None)
+                diagnostic.write_text(json.dumps(context, sort_keys=True))
+    if profile['repository']:
+        sys.setprofile(observe)
     sys.addaudithook(audit)
     sys._unrest_finite_source_audit = True
 

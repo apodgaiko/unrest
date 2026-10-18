@@ -318,3 +318,86 @@ Source runner failures use atomic typed stage records with error enums and
 hashed frame locations; incomplete pytest execution retains a null exit record.
 Missing/empty records refuse verification. They never trigger a private-log
 fallback. Failed prior readiness trials remain failed and separately preserved.
+
+
+The original seventeen CI mutation cases passed in
+[run 39079570669](https://github.com/apodgaiko/unrest/actions/runs/39079570669)
+at `278142e4b5f60565accfdf0ac1a4bd699c5cbb00`, with 51 genuine kernel-observed
+original-parent waits, root wait zero and no poison. Its source-free controls
+passed all 113 cases, also verified from direct encrypted JUnit/kernel records.
+Only the declared `unrest` SOURCE console is materialized as read-only script
+data at `/opt/deps/bin/unrest`. Its current project declaration, exact script
+bytes, selected interpreter and original copied-repository caller remain bound;
+the complete dependency base must still match its original digest. The extra
+console is admitted only for the explicit CI mutation profile. This is source
+fixture setup, not installation or package certification.
+
+At the preceding run, primary custom-shell execution and actual same-SHA
+full-checkpoint receipt reuse were still unimplemented. The original primary run blocks remain executable,
+with both job-name and Type-check mutation anchors intact. Readiness does not
+supply a selected carrier, a primary receipt, a frozen checkpoint or authority
+to skip any downstream stage.
+
+
+## Primary script control plane
+
+The primary workflow routes each original executable duty through `ci_shell.py`.
+The custom shell binds the actual GitHub-generated file and runs those same bytes
+with Bash inside the isolated source capsule. Plain YAML scalars omit a trailing
+newline; literal `|` blocks retain it. Logical command registration and generated
+wire-byte registration are separate checks. Substitution, unknown job identity,
+duplicate or decorative shells, conditional duties, merged controls and changed
+working directories refuse before source execution. Original run blocks, the
+unexcluded source command, job-name anchor and Type-check anchor remain intact.
+
+Primary shell/UV authority is separate from fixture/caller-bound UV admission.
+The controller copies the exact committed public snapshot, checks checkout/head
+and support identities, and supplies no runner credential, host control socket,
+private home or external network. The source UID, capabilities, no-new-privileges,
+process births and actual parent waits are kernel observations. The primary
+native CPython entry consumes an observer-owned PID/birth/argv/environment/cwd
+profile before the body, including with `-I -S`. Unknown execs retain poison even
+when the caller catches their failure; unregistered process births also fail.
+The focused assignment budget remains 180 seconds. Original source/subprocess
+deadlines and all existing guard/runtime pins remain unchanged.
+
+Docker's tmpfs defaults made the writable source view non-executable despite the
+absence of an explicit `noexec` option in its requested string. This prevented a
+real Pydantic extension import after successful dependency installation. The
+finite source mount explicitly requests `exec`; extension imports from the
+installed environment must match bytes in the pinned public dependency image.
+Unknown native launches and ctypes loading remain refused. Original public
+source files stay separate read-only binds. Generated Git discovery metadata
+uses the real source UID on a read-only bind; Git ownership checks are preserved
+without global configuration overrides. A source-free private-path control
+uses a real owned host canary outside every payload mount.
+
+Private plans, actual argv, output and exception bodies remain encrypted.
+Public phase metadata uses closed duty/stage/error enums, counts and hashes.
+Typed native failure records preserve import class, bounded hashed frame
+locations and mount diagnostics without a log-opening fallback. Early trial
+metadata contained the already-public declared command vectors; later exports
+use the closed hash-only projection. Original failed artifacts are retained.
+
+`checkpoint_decision.py` resolves only eligible original successful primary
+runs through the Actions read API. The full-certificate parser closes commit,
+tree, workflow, guard, runtime, command and lock identities; complete unexcluded
+source counts/waits/poison; package archive bytes; extracted fifteen-case proof;
+and the unrelated-cwd installed lifecycle. Readiness and focused evidence use a
+separate always-false channel and cannot become full certificates. Reuse markers
+must resolve back to that authenticated original full certificate, including
+its exact run/job/artifact and ciphertext digest. A marker alone never qualifies.
+Package replay downloads only the original versioned archive artifact, verifies
+its server ZIP digest and every wheel/sdist/checksum byte, and never extracts or
+executes it. Same-SHA workflows serialize without cancellation; failed or partial
+source execution cannot silently rerun at the same SHA.
+
+The release-ref trigger is wired, but current readiness scratch refs cannot
+activate primary full execution. Focused capsule execution and receipt controls
+are implementation evidence. Full source/package capsule integration and an
+original complete certificate remain incomplete: non-focused duties refuse
+closed, and no original full certificate or actual same-SHA reuse is claimed.
+Source checkpoint readiness remains false and selected carrier remains null.
+The existing downstream source carrier/package/final closure, single frozen
+Python3.13 source checkpoint, certification, independent checks, desktop/exact-head
+CI, publication and protected local update remain required.

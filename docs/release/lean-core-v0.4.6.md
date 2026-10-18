@@ -127,3 +127,10 @@ consumption excludes private logs. Same-SHA CI runs serialize without cancelling
 in-progress work. The isolated primary command executor and successful full
 source/package receipt reuse remain incomplete; readiness artifacts cannot
 authorize either. See `v046-source-checkpoint-environment.md`.
+
+
+Primary CI binds generated scripts through the isolated control plane and checks
+same-SHA reuse against original full certificates and exact package bytes.
+Focused readiness remains false; full source/package integration and the first
+complete certificate remain pending. See
+[v0.4.6 source checkpoint environment](v046-source-checkpoint-environment.md).

@@ -146,8 +146,10 @@ def verify(root, run, artifact, members, key, support):
             return projection
         diagnostics = []
         for row in kernel.get('native_diagnostics', []):
-            require(set(row) == {'schema', 'pid', 'source_path_present', 'venv_site_present', 'prefix_is_venv', 'body_failure'}
-                    and row['schema'] == 'primary-native-state-v1', 'primary_diagnostic_schema')
+            require((row['schema'] == 'primary-native-state-v1' and set(row) == {'schema', 'pid', 'source_path_present', 'venv_site_present', 'prefix_is_venv', 'body_failure'})
+                    or (row['schema'] == 'primary-native-state-v2' and set(row) == {'schema', 'pid', 'source_path_present', 'venv_site_present', 'prefix_is_venv', 'body_failure', 'git_status', 'git_error_code'}), 'primary_diagnostic_schema')
+            require(row.get('git_status') is None or type(row['git_status']) is int, 'primary_git_status')
+            require(row.get('git_error_code') in {None, 'git_ownership', 'other'}, 'primary_git_error')
             require(all(type(row[key]) is bool for key in ('source_path_present', 'venv_site_present', 'prefix_is_venv')), 'primary_diagnostic_flags')
             failure = row['body_failure']
             if failure is not None:
@@ -162,7 +164,7 @@ def verify(root, run, artifact, members, key, support):
                                 for frame in failure['frames']), 'primary_diagnostic_frames')
                 require(failure['error_code'] in {'ModuleNotFoundError', 'ImportError', 'PermissionError', 'FileNotFoundError', 'RuntimeError', 'AssertionError', 'ValueError', 'TypeError', 'AttributeError', 'other'}
                         and failure['missing_module'] in {'unrest_harness', 'pydantic', 'click', 'fastmcp', 'yaml', 'other'}, 'primary_diagnostic_error')
-            diagnostics.append({'source_path_present': row['source_path_present'], 'venv_site_present': row['venv_site_present'], 'prefix_is_venv': row['prefix_is_venv'], 'error_code': failure['error_code'] if failure else None, 'missing_module': failure['missing_module'] if failure else None, 'frame_lines': [frame['line'] for frame in failure['frames']] if failure else [], 'detail_code': failure.get('detail_code') if failure else None, 'error_path_noexec': failure.get('error_path_noexec') if failure else None})
+            diagnostics.append({'source_path_present': row['source_path_present'], 'venv_site_present': row['venv_site_present'], 'prefix_is_venv': row['prefix_is_venv'], 'error_code': failure['error_code'] if failure else None, 'missing_module': failure['missing_module'] if failure else None, 'frame_lines': [frame['line'] for frame in failure['frames']] if failure else [], 'detail_code': failure.get('detail_code') if failure else None, 'error_path_noexec': failure.get('error_path_noexec') if failure else None, 'git_status': row.get('git_status'), 'git_error_code': row.get('git_error_code')})
         projection['native_diagnostics'] = diagnostics
         denials = kernel['primary_denials']
         require(set(denials) <= {'environment_or_cwd', 'unknown_descendant', 'uv_parent_identity',

@@ -111,3 +111,28 @@ jobs:
             ${{ runner.temp }}/primary-full/safe-provenance.json
           if-no-files-found: error
           retention-days: 90
+      - name: Preserve encrypted primary phase evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: unrest-v046-primary-phases-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-install/evidence.cms
+            ${{ runner.temp }}/primary-install/safe-provenance.json
+            ${{ runner.temp }}/primary-import/evidence.cms
+            ${{ runner.temp }}/primary-import/safe-provenance.json
+            ${{ runner.temp }}/primary-help/evidence.cms
+            ${{ runner.temp }}/primary-help/safe-provenance.json
+            ${{ runner.temp }}/primary-repository/evidence.cms
+            ${{ runner.temp }}/primary-repository/safe-provenance.json
+            ${{ runner.temp }}/primary-lint/evidence.cms
+            ${{ runner.temp }}/primary-lint/safe-provenance.json
+            ${{ runner.temp }}/primary-types/evidence.cms
+            ${{ runner.temp }}/primary-types/safe-provenance.json
+            ${{ runner.temp }}/primary-full/evidence.cms
+            ${{ runner.temp }}/primary-full/safe-provenance.json
+            ${{ runner.temp }}/primary-host-stage.json
+            ${{ runner.temp }}/primary-image-stage.json
+            ${{ runner.temp }}/primary-decision-status.json
+          if-no-files-found: error
+          retention-days: 90

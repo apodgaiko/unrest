@@ -109,6 +109,7 @@ def bind_generated(script, workflow):
     primary = False
     name = None
     matches = []
+    shells = {name: [] for name in registry}
     for line in workflow.splitlines():
         if line == '  primary:':
             primary = True
@@ -116,11 +117,16 @@ def bind_generated(script, workflow):
             break
         if primary and line.startswith('      - name: '):
             name = line.removeprefix('      - name: ')
+        if primary and name in registry and line.startswith('        shell: '):
+            shells[name].append(line.removeprefix('        shell: '))
         if primary and name in registry and line.startswith('        run: '):
             value = line.removeprefix('        run: ')
             expected = registry[name] if value == '|' else registry[name].removesuffix('\n')
             if script == expected.encode():
                 matches.append(name)
+    expected_shell = 'python3 .github/release-source-guard/ci_shell.py {0}'
+    if any(value != [expected_shell] for value in shells.values()):
+        raise RuntimeError('primary_custom_shell_drift')
     if len(matches) != 1:
         raise RuntimeError('unregistered generated primary script')
     return {'name': matches[0], 'script': script, 'script_sha256': hashlib.sha256(script).hexdigest(),

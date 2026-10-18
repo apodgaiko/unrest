@@ -105,3 +105,13 @@ def test_generated_script_cannot_be_bound_to_a_different_primary_job():
     actual = workflow(registry).replace('primary source and package gate (py3.13)', 'foreign job')
     with pytest.raises(RuntimeError, match='identity'):
         commands.bind_generated(registry['Import package'].removesuffix('\n').encode(), actual)
+
+
+def test_decorative_or_duplicate_custom_shell_cannot_skip_an_original_duty():
+    registry = json.loads(commands.REGISTRY.read_bytes())
+    original = workflow(registry)
+    marker = '        shell: python3 .github/release-source-guard/ci_shell.py {0}\n'
+    for drift in (original.replace(marker, '        shell: echo {0}\n', 1),
+                  original.replace(marker, marker + marker, 1), original.replace(marker, '', 1)):
+        with pytest.raises(RuntimeError, match='shell'):
+            commands.bind_generated(registry['Import package'].removesuffix('\n').encode(), drift)

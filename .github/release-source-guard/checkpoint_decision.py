@@ -92,4 +92,7 @@ if __name__ == '__main__':
     except BaseException:
         print(json.dumps({'decision': 'refused'}))
         status = 125
+    diagnostic = {'schema': 'unrest.v046.primary-decision-status.v1', 'exit_code': status,
+                  'decision': 'resolved' if status == 0 else 'refused'}
+    (Path(os.environ['RUNNER_TEMP']) / 'primary-decision-status.json').write_text(json.dumps(diagnostic, sort_keys=True))
     raise SystemExit(status)

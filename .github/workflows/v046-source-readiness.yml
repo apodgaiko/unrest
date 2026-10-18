@@ -100,6 +100,19 @@ jobs:
             ${{ runner.temp }}/primary-host-stage.json
             ${{ runner.temp }}/primary-image-stage.json
           if-no-files-found: error
+      - name: Original CI mutation assertions
+        if: always()
+        run: python3 .github/release-source-guard/source_controller.py "$RUNNER_TEMP/ci-mutations" "$RUNNER_TEMP/source-readiness" ci-mutations
+      - name: Upload encrypted CI mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-source-ci-mutations-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ci-mutations/evidence.cms
+            ${{ runner.temp }}/ci-mutations/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload encrypted control evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2

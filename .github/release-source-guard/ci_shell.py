@@ -75,6 +75,7 @@ def main():
     script = script_path.read_bytes()
     SCRIPT_PIN, SCRIPT_SIZE = hashlib.sha256(script).hexdigest(), len(script)
     STAGE = 'binding'
+    expected = expected_identity()
     workflow = (REPOSITORY / '.github/workflows/ci.yml').read_text()
     bound = bind_generated(script, workflow)
     decision_path = Path(os.environ['RUNNER_TEMP']) / 'primary-decision.json'
@@ -83,7 +84,7 @@ def main():
             raise RuntimeError('primary_decision_carrier')
         decision = json.loads(decision_path.read_bytes())
         if (decision['schema'] != 'unrest.v046.primary-decision.v1'
-                or decision['expected'] != expected_identity()):
+                or decision['expected'] != expected):
             raise RuntimeError('primary_decision_identity')
         if decision['decision'] == 'reuse-authentic-full':
             if not decision['receipt'] or decision['receipt']['head_sha'] != os.environ['GITHUB_SHA']:
@@ -128,11 +129,16 @@ def main():
     (git_root / 'refs').mkdir()
     (git_root / 'HEAD').write_text(os.environ['GITHUB_SHA'] + '\n')
     (git_root / 'config').write_text('[core]\nrepositoryformatversion = 0\nbare = false\n')
+    # The readonly bind must have the real source UID, rather than bypassing
+    # Git's repository-ownership safety check with configuration overrides.
+    if run(['sudo', '-n', 'chown', '--no-dereference', '-R', '20000:20000', str(git_root)], log).returncode:
+        raise RuntimeError('primary_git_metadata_owner')
     inputs = root / 'inputs'
     inputs.mkdir()
     (inputs / 'github-script.sh').write_bytes(script)
     (inputs / 'plan.json').write_text(json.dumps(spec, sort_keys=True))
     (inputs / 'uv.toml').write_bytes(b'')
+    (inputs / 'identity.json').write_text(json.dumps(expected, sort_keys=True))
     mounts = {'/guard': str(SUPPORT), '/inputs': str(inputs),
               **source_bindings(source, 'producer-primary')}
     container = 'primary-script-' + spec['script_sha256'][:24]
@@ -169,7 +175,7 @@ def main():
         run(['docker', 'rm', '--force', container], log)
     metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,
                 'source_exit_code': status, 'stage': stage, 'primary_plan': public_plan(spec),
-                'head_sha': os.environ['GITHUB_SHA'], 'image_id': image,
+                'head_sha': os.environ['GITHUB_SHA'], 'source_tree': expected['source_tree'], 'image_id': image,
                 'source_pins_sha256': hashlib.sha256(json.dumps(source_pins, sort_keys=True).encode()).hexdigest(),
                 'support': control['support'],
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}

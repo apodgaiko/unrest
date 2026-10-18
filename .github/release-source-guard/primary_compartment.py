@@ -31,6 +31,10 @@ def main():
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
     STAGE = 'dependencies'
+    expected = json.loads(Path('/inputs/identity.json').read_bytes())
+    if (Path('/source/.git/HEAD').read_text() != expected['head_sha'] + '\n'
+            or Path('/source/.git').stat().st_uid != 20000):
+        raise RuntimeError('primary_git_metadata_identity')
     dependency_closure.verify_source_view(Path('/environment-closure.json').read_bytes())
     STAGE = 'runtime'
     runtime = primary_entry_build.verify()
