@@ -644,3 +644,21 @@ The 8s READY, 4s receipt/endpoint and 25s wait limits remain unchanged.
 Local controls establish that the first pure source derivation moves before
 listener readiness and remains reused by the existing cache. Hosted timing
 benefit and original composed SOURCE acceptance remain unverified.
+
+### Repeated finite resolver compilation
+
+Ordinary restart startup traverses the same finite direct-route support during
+original admission, guarded admission and callback re-resolution. The direct
+resolver keeps only compiled support code on that guard state. Every use still
+opens the current carrier with `O_NOFOLLOW`, reads and hashes all bytes, and
+compares device, inode, owner, group, mode, link count, size and change times
+before/open/after/path. A populated entry refuses replacement or metadata drift
+even when bytes match. Only an exact currently pinned direct-support file can
+supply code; each execution retains its original fresh namespace and compiler
+flags. No admission result, environment, frame, READY, registration or wait is
+cached. The existing outer checks and all route predicates still execute.
+
+Focused controls test post-population drift and fresh globals/live inputs.
+Compilation reuse alone does not establish a deadline result. The unchanged
+four-case SOURCE execution, native READY, receipts and actual numeric parent
+waits must prove acceptance; synthetic success remains a separate result.

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import stat
 import sys
+import time
 from typing import Any
 
 _binding_path = Path(__file__).with_name("source_bindings.py")
@@ -26,6 +27,56 @@ B = DATA["bindings"]
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def support_code(path, state):
+    """Cache compilation only; every admission reads exact current carriers."""
+    path = Path(path)
+    pin = state['direct_support']['files'][str(path)]
+    metrics = state.setdefault('direct_support_pure_metrics', {
+        'reads': 0, 'compiles': 0, 'read_wall': 0.0, 'read_cpu': 0.0,
+        'compile_wall': 0.0, 'compile_cpu': 0.0})
+    started, cpu = time.monotonic(), time.process_time()
+    def key(info):
+        return (info.st_dev, info.st_ino, info.st_uid, info.st_gid,
+                info.st_mode, info.st_nlink, info.st_size,
+                info.st_mtime_ns, info.st_ctime_ns)
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        raise RuntimeError('direct_support_nonregular_carrier')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        opened = os.fstat(fd)
+        with os.fdopen(fd, 'rb', closefd=False) as stream:
+            body = stream.read()
+        after = os.fstat(fd)
+    finally:
+        os.close(fd)
+    if (key(before) != key(opened) or key(before) != key(after)
+            or key(before) != key(path.lstat())
+            or hashlib.sha256(body).hexdigest() != pin):
+        raise RuntimeError('direct_support_current_carrier_drift')
+    # The resolver is executed again in a fresh namespace by source activation.
+    # Keep pure comparison inputs/code on the same guard state so that those
+    # repeated executions can reuse compilation without retaining their globals.
+    cache = state.setdefault('direct_support_compiled', {})
+    metrics['reads'] += 1
+    metrics['read_wall'] += time.monotonic() - started
+    metrics['read_cpu'] += time.process_time() - cpu
+    binding = (key(before), pin, body, sys.flags.optimize,
+               sys._getframe().f_code.co_flags)
+    previous = cache.get(str(path))
+    if previous is not None:
+        if previous[0] != binding:
+            raise RuntimeError('direct_support_cached_carrier_drift')
+        return previous[1]
+    started, cpu = time.monotonic(), time.process_time()
+    code = compile(body, str(path), 'exec')
+    metrics['compiles'] += 1
+    metrics['compile_wall'] += time.monotonic() - started
+    metrics['compile_cpu'] += time.process_time() - cpu
+    cache[str(path)] = (binding, code)
+    return code
 
 
 def frame_for(binding):
@@ -77,64 +128,64 @@ def admit(argv, cwd, env, state, append, refuse):
     global _ACTIVE_STATE
     carrier = Path(__file__).with_name("crash_route.py")
     namespace = {"__file__": str(carrier)}
-    exec(compile(carrier.read_bytes(), str(carrier), "exec"), namespace)
+    exec(support_code(carrier, state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
     _ACTIVE_STATE = state
     cleanup = Path(__file__).with_name("cleanup_routes.py")
     namespace = {}
-    exec(compile(cleanup.read_bytes(), str(cleanup), "exec"), namespace)
+    exec(support_code(cleanup, state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
     timeout = Path(__file__).with_name("timeout_route.py")
     if str(timeout) in state["direct_support"]["files"]:
         namespace = {"__file__": str(timeout)}
-        exec(compile(timeout.read_bytes(), str(timeout), "exec"), namespace)
+        exec(support_code(timeout, state), namespace)
         selected = namespace["admit"](argv, cwd, env, state, append, refuse)
         if selected is not None:
             return selected
     isolated = Path(__file__).with_name("isolated_refusal.py")
     namespace = {}
-    exec(compile(isolated.read_bytes(), str(isolated), "exec"), namespace)
+    exec(support_code(isolated, state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
     literal = Path(__file__).with_name("literal_source_routes.py")
     namespace = {}
-    exec(compile(literal.read_bytes(), str(literal), "exec"), namespace)
+    exec(support_code(literal, state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
     carrier = Path(__file__).with_name("role_routes.py")
     namespace = {}
-    exec(compile(carrier.read_bytes(), str(carrier), "exec"), namespace)
+    exec(support_code(carrier, state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
     configured = Path(__file__).with_name("configured_backend.py")
     if str(configured) in state["direct_support"]["files"]:
         namespace = {}
-        exec(compile(configured.read_bytes(), str(configured), "exec"), namespace)
+        exec(support_code(configured, state), namespace)
         selected = namespace["admit"](argv, cwd, env, state, append, refuse)
         if selected is not None:
             return selected
     benchmark = Path(__file__).with_name("benchmark_route.py")
     namespace = {}
-    exec(compile(benchmark.read_bytes(), str(benchmark), "exec"), namespace)
+    exec(support_code(benchmark, state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
     ordinary = Path(__file__).with_name("ordinary_routes.py")
     namespace = {}
-    exec(compile(ordinary.read_bytes(), str(ordinary), "exec"), namespace)
+    exec(support_code(ordinary, state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
     storage = Path(__file__).with_name("storage_route.py")
     namespace = {}
-    exec(compile(storage.read_bytes(), str(storage), "exec"), namespace)
+    exec(support_code(storage, state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected

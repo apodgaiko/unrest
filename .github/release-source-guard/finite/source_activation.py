@@ -534,7 +534,9 @@ class SourceActivation(IsolatedActivation):
         self.shared()
         self.emit({'kind': 'source_ordinary_startup_consumption', 'class': name,
                    'source_binding': registration['source_binding'],
-                   'launch_token': launch['launch_token'], 'shared_startup_seal': True})
+                   'launch_token': launch['launch_token'], 'shared_startup_seal': True,
+                   'pure_support_compilation': dict(
+                       self.state.get('direct_support_pure_metrics', {}))})
 
     def before_python(self, argv, cwd, environment, registration=None):
         if registration is not None:
