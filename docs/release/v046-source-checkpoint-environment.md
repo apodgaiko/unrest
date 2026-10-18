@@ -562,3 +562,19 @@ iterator and proves the iterator descriptor closed; unknown descriptor errors
 and extra proc-directory aliases refuse with the sticky native exit. TEST
 custody records are diagnostic evidence only. They do not select a source
 carrier, close package/final inputs or waive any release gate.
+
+Receipt-channel diagnostics are closed structured records within the authenticated
+`kernel-source.json` member. They record a finite request-kind enum (unknown
+kinds are hashed), frame lengths, received/authenticated/output-pending state,
+original monotonic acceptance and finish times, registered peer birth, pending
+reason, and observer/event/kernel progress counts. They exclude request bodies,
+credentials, command vectors, environments and endpoint paths. A diagnostic
+record proves only its observed transport state; it cannot authorize an effect.
+
+The diagnostic record retains the original four-second acceptance clock without
+resetting it. Pending transactions retain the complete policy handler, and
+other clients continue to receive nonblocking service. Partial frames and
+partial writes retain their original state and deadline. Unknown peers cannot
+have an effect while registration is unresolved. Expiry or disconnect retains
+poison. Diagnostics do not establish successful original SOURCE composition;
+that still requires actual child READY and complete original-parent waits.
