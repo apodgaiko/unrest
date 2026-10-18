@@ -46,6 +46,13 @@ ORDINARY_DIRECT = frozenset({
 })
 
 
+def _diagnostic_mark(phase):
+    guard = sys.modules.get('runtime_guard')
+    mark = getattr(guard, '_diagnostic_mark', None)
+    if mark is not None:
+        mark(phase)
+
+
 class SourceActivation(IsolatedActivation):
     def __init__(self, *args):
         super().__init__(*args)
@@ -122,16 +129,21 @@ class SourceActivation(IsolatedActivation):
         return rows
 
     def shared(self):
+        _diagnostic_mark("shared_enter")
         self.ready(self.state["token"])
+        _diagnostic_mark("shared_ready_end")
         for item in self.spec["shared_files"]:
             if identity(item["path"]) != item:
                 self.refuse("source_shared_startup_file_drift")
+        _diagnostic_mark("shared_files_end")
         for path, expected in self.spec["shared_trees"].items():
             if tree(path) != expected:
                 self.refuse("source_shared_startup_membership_drift")
+        _diagnostic_mark("shared_trees_end")
         for path in self.spec["shared_absent"]:
             if Path(path).exists() or Path(path).is_symlink():
                 self.refuse("source_shared_unknown_startup")
+        _diagnostic_mark("shared_absent_end")
         link = self.spec["shared_python_link"]
         path = Path(link["path"])
         if (
@@ -140,7 +152,9 @@ class SourceActivation(IsolatedActivation):
             or path.lstat().st_ino != link["inode"]
         ):
             self.refuse("source_shared_interpreter_link_drift")
+        _diagnostic_mark("shared_link_end")
         self.state["operations"].inputs()
+        _diagnostic_mark("shared_inputs_end")
 
     def __call__(self, record):
         current = inspect.currentframe()

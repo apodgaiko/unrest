@@ -392,6 +392,13 @@ def owned_wait(state, handle):
     }
 
 
+def _diagnostic_mark(phase):
+    guard = sys.modules.get('runtime_guard')
+    mark = getattr(guard, '_diagnostic_mark', None)
+    if mark is not None:
+        mark(phase)
+
+
 class Operations:
     """Callbacks are called by the checked guard, never by producer callers."""
 
@@ -406,15 +413,18 @@ class Operations:
         self.spec = state["operation_spec"]
 
     def inputs(self):
+        _diagnostic_mark("operation_inputs_enter")
         observed = []
         for expected in self.spec["files"]:
             current = identity(expected["path"])
             if current != expected:
                 self.refuse("source_operation_input_drift")
             observed.append(current)
+        _diagnostic_mark("operation_input_files_end")
         for tree in self.spec["trees"]:
             if tree_identity(tree["root"]) != tree:
                 self.refuse("source_operation_dependency_site_drift")
+        _diagnostic_mark("operation_input_trees_end")
         return {"files_sha256": hashed(observed), "trees_sha256": hashed(self.spec["trees"])}
 
     def activation(self, record):

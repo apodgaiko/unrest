@@ -683,3 +683,8 @@ Its finite stage/status/exception-class values and code-location hash diagnose
 early refusal without exposing exception messages, stack, argv or environment.
 A status record without a complete structured envelope is prerequisite evidence
 only and cannot establish SOURCE acceptance.
+
+The shared-startup subphases distinguish fresh READY, shared-file and tree
+validation, absence/link checks, operation-file/tree validation and final static
+serialization. These closed timestamps localize CPU work without bypassing or
+reusing any startup decision or input observation.
