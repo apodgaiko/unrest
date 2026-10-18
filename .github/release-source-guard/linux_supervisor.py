@@ -72,6 +72,8 @@ class Supervisor:
         return rows
 
     def refresh(self):
+        diagnostic_refresh_wall = time.monotonic_ns()
+        diagnostic_refresh_cpu = time.process_time_ns()
         events = self.events()
         for event in events:
             if event['kind'] in {'admitted', 'actual_launch_binding', 'ready', 'source_entry',
@@ -116,6 +118,8 @@ class Supervisor:
                 self.registered[event["pid"]] = {"identity": current, "token": event["token"]}
             except RuntimeError:
                 self.poison("registered_child_identity_unavailable")
+        self.diagnostic_schedule["refresh_wall_ns"] += time.monotonic_ns() - diagnostic_refresh_wall
+        self.diagnostic_schedule["refresh_cpu_ns"] += time.process_time_ns() - diagnostic_refresh_cpu
         return events
 
     def authenticate(self, request, events):
@@ -431,6 +435,9 @@ class Supervisor:
         self.channel.setblocking(False)
         self.clients = {}
         self.channel_diagnostics = []
+        self.diagnostic_schedule = {"refresh_wall_ns": 0, "refresh_cpu_ns": 0,
+                                    "tick_wall_ns": 0, "tick_cpu_ns": 0,
+                                    "last_tick_ns": 0, "max_tick_gap_ns": 0}
         self.tick_count = 0
         self.event_count = 0
         self.trace_progress = {}
@@ -463,9 +470,16 @@ class Supervisor:
                 'event_count': self.event_count, 'trace_progress': dict(self.trace_progress),
                 'policy_attempts': state.get('policy_attempts', 0),
                 'policy_seconds': state.get('policy_seconds', 0),
-                'pure_phases': dict(getattr(self, 'pure_phases', {}))}
+                'pure_phases': dict(getattr(self, 'pure_phases', {})),
+                'diagnostic_schedule': dict(getattr(self, 'diagnostic_schedule', {}))}
 
     def tick(self):
+        diagnostic_tick_wall = time.monotonic_ns()
+        diagnostic_tick_cpu = time.process_time_ns()
+        self.diagnostic_schedule["max_tick_gap_ns"] = max(
+            self.diagnostic_schedule["max_tick_gap_ns"],
+            diagnostic_tick_wall - (self.diagnostic_schedule["last_tick_ns"] or diagnostic_tick_wall))
+        self.diagnostic_schedule["last_tick_ns"] = diagnostic_tick_wall
         self.tick_count += 1
         events = self.refresh()
         self.event_count = len(events)
@@ -583,6 +597,9 @@ class Supervisor:
                 self.poison(type(error).__name__ + ":" + str(error))
                 stream.close()
                 del self.clients[stream]
+
+        self.diagnostic_schedule["tick_wall_ns"] += time.monotonic_ns() - diagnostic_tick_wall
+        self.diagnostic_schedule["tick_cpu_ns"] += time.process_time_ns() - diagnostic_tick_cpu
 
     def close(self):
         for stream, state in self.clients.items():

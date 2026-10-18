@@ -314,6 +314,7 @@ class SourceAuthority:
         return {'guard_poison': self.supervisor.poisoned,
                 'receipt_ledger_poison': self.supervisor.ledger.poison,
                 'source_events': self.supervisor.events(), 'receipts': self.supervisor.receipts,
+                'diagnostic_schedule': dict(self.supervisor.diagnostic_schedule),
                 'event_timings': self.supervisor.event_timings,
                 'receipt_channel_diagnostics': self.supervisor.channel_diagnostics,
                 'native_source_records': self.producers.records,

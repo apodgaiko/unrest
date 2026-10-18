@@ -662,3 +662,13 @@ Focused controls test post-population drift and fresh globals/live inputs.
 Compilation reuse alone does not establish a deadline result. The unchanged
 four-case SOURCE execution, native READY, receipts and actual numeric parent
 waits must prove acceptance; synthetic success remains a separate result.
+
+
+Startup diagnosis records closed phase names, monotonic/process/thread CPU
+nanoseconds, numeric resource counters and code/location hashes. Observer tick
+and refresh totals and harvested trace-stop/resume timestamps are diagnostic
+only. They do not replace kernel exec, authenticated READY, receipts or original
+parent waits. The finite guard admission predicates and call order remain
+unchanged; a complete stripped-AST comparison pins that distinction. A late
+observer event alone cannot attribute native startup latency. TEST evidence
+remains ineligible as a release certificate.

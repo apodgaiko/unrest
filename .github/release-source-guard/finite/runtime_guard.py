@@ -24,6 +24,30 @@ import uuid
 import weakref
 
 
+def _diagnostic_mark(phase):
+    """Closed, body-free phase observations; never consumed by admission."""
+    import resource
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    frame = sys._getframe(1)
+    event = {
+        "kind": "startup_phase", "phase": phase,
+        "monotonic_ns": time.monotonic_ns(),
+        "process_cpu_ns": time.process_time_ns(),
+        "thread_cpu_ns": time.thread_time_ns(),
+        "thread_id": threading.get_ident(),
+        "function_code_sha256": hashlib.sha256(frame.f_code.co_code).hexdigest(),
+        "location_sha256": hashlib.sha256(
+            (frame.f_code.co_filename + ":" + frame.f_code.co_qualname).encode()
+        ).hexdigest(),
+        "voluntary_switches": usage.ru_nvcsw,
+        "involuntary_switches": usage.ru_nivcsw,
+        "minor_faults": usage.ru_minflt, "major_faults": usage.ru_majflt,
+        "block_inputs": usage.ru_inblock, "block_outputs": usage.ru_oublock,
+    }
+    del frame
+    append(event)
+
+
 def inherited_environment():
     # execve inherits libc's environment, which native dependencies can change
     # without updating os.environ. Bind those actual bytes rather than a cache.
@@ -266,6 +290,7 @@ def match_arg(actual, expected):
 
 
 def admit(argv, cwd, environment=None):
+    _diagnostic_mark("admit_enter")
     state = _STATE
     runtime = state["runtime"]
     if (
@@ -293,6 +318,7 @@ def admit(argv, cwd, environment=None):
         )
         if selected is not None:
             return selected
+    _diagnostic_mark("admit_fixed_support_end")
     for name in (
         "desktop_route.py",
         "cohort4_routes.py",
@@ -324,6 +350,7 @@ def admit(argv, cwd, environment=None):
             refuse("cohort_source_binding_error")
         if selected is not None:
             return selected
+    _diagnostic_mark("admit_cohort_support_end")
     copied_support = state["direct_support"]["files"].get(
         str(Path(state["guard"]).with_name("copied_cli.py"))
     )
@@ -367,6 +394,7 @@ def admit(argv, cwd, environment=None):
         ](argv, cwd, environment, state, append, refuse)
         if native is not None:
             return native, argv
+    _diagnostic_mark("admit_native_end")
     operations = state.get("operations")
     if operations is not None:
         try:
@@ -377,6 +405,7 @@ def admit(argv, cwd, environment=None):
             refuse("source_operation_binding_error")
         if operation is not None:
             return operation, argv
+    _diagnostic_mark("admit_direct_begin")
     try:
         direct = (
             state["direct_admit"](argv, cwd, environment, state, append, refuse) if python else None
@@ -385,6 +414,7 @@ def admit(argv, cwd, environment=None):
         raise
     except (OSError, RuntimeError, KeyError, ValueError, TypeError):
         refuse("direct_source_binding_error")
+    _diagnostic_mark("admit_direct_end")
     if direct is not None:
         return direct, argv
     for registration in state["commands"]:
@@ -1134,6 +1164,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
     )
 
     def initialize_inner(handle, args, *positional, **kwargs):
+        _diagnostic_mark("inner_enter")
         state["isolated_composition"].before_popen(args, positional, kwargs)
         if positional or kwargs.get("shell") or kwargs.get("executable"):
             refuse("unsupported_popen_options")
@@ -1143,11 +1174,15 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
             or digest(state["registry"]["path"]) != state["registry"]["sha256"]
         ):
             refuse("support_drift_before_launch")
+        _diagnostic_mark("fresh_support_begin")
         for path, value in state["direct_support"]["files"].items():
             if digest(path) != value:
                 refuse("finite_direct_support_drift")
+        _diagnostic_mark("fresh_support_end")
         require_ready(state["token"])
+        _diagnostic_mark("admit_begin")
         registration, argv = admit(args, kwargs.get("cwd"), kwargs.get("env"))
+        _diagnostic_mark("admit_end")
         launch_token = uuid.uuid4().hex
         crash_path = Path(state["guard"]).with_name("crash_disposition.py")
         crash_support = (
@@ -1159,6 +1194,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
             crash_support["before_launch"](
                 state, registration, argv, kwargs, launch_token, append, refuse
             )
+        _diagnostic_mark("anchor_begin")
         anchor_support = state["direct_support"]["files"].get(
             str(Path(state["guard"]).with_name("anchor_probe.py"))
         )
@@ -1176,6 +1212,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                     "anchors": anchors,
                 }
             )
+        _diagnostic_mark("anchor_end")
         child_argv = argv
         if registration["class"] == "isolated-scratch-wheel" or (
             registration["class"] == "source-build"
@@ -1196,6 +1233,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                     "restoration": "required before unchanged helper body",
                 }
             )
+        _diagnostic_mark("activation_begin")
         if registration["python"]:
             if state.get("operation_activation") is not None:
                 activation = state["operation_activation"]
@@ -1203,6 +1241,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                     activation.before_python(argv, kwargs.get("cwd"), kwargs.get("env"), registration)
                 else:
                     activation.before_python(argv, kwargs.get("cwd"), kwargs.get("env"))
+            _diagnostic_mark("activation_end")
             flags = []
             i = 1
             while argv[i] in ("-I", "-S", "-B", "-u"):
@@ -1266,6 +1305,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                 "source_binding": registration["source_binding"],
             }
         )
+        _diagnostic_mark("bootstrap_end")
         native_support = None
         native_query = None
         if not registration["python"]:
@@ -1274,11 +1314,13 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                 native_path, state["direct_support"]["files"][str(native_path)]
             )
             native_query = native_support["prepare"](state["native_sysctl_offsets"])
+        _diagnostic_mark("original_init_begin")
         _LOCAL.launch = child_argv
         try:
             original_init(handle, child_argv, **kwargs)
         finally:
             _LOCAL.launch = None
+        _diagnostic_mark("original_init_end")
         native = {}
         if not registration["python"]:
             try:
@@ -1519,6 +1561,8 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                     "stop_path": argv[-1],
                 }
             )
+
+        _diagnostic_mark("inner_return")
 
     def killpg(pgid, sig):
         frame = inspect.currentframe().f_back

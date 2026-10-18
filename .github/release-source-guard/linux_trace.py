@@ -331,6 +331,10 @@ class OwnedTrace:
                     continue
                 if not os.WIFSTOPPED(raw):
                     raise RuntimeError("unknown ptrace wait disposition")
+                self.records.append({"kind": "diagnostic_stop", "pid": pid,
+                                     "monotonic_ns": time.monotonic_ns(),
+                                     "process_cpu_ns": time.process_time_ns(),
+                                     "stop": os.WSTOPSIG(raw), "event": raw >> 16})
                 stop = os.WSTOPSIG(raw)
                 event = raw >> 16
                 deliver = 0
@@ -370,6 +374,10 @@ class OwnedTrace:
                 else:
                     deliver = stop
                 request = 24 if not self.selective or pid in self.pending else 7
+                self.records.append({"kind": "diagnostic_resume", "pid": pid,
+                                     "monotonic_ns": time.monotonic_ns(),
+                                     "process_cpu_ns": time.process_time_ns(),
+                                     "request": request})
                 ptrace(request, pid, data=ctypes.c_void_p(deliver))
         finally:
             for pid in sorted(self.active):

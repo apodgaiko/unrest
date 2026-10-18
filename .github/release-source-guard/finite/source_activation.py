@@ -430,6 +430,7 @@ class SourceActivation(IsolatedActivation):
 
     def ordinary_python(self, guard, launch, argv, cwd, environment, registration):
         """Re-resolve an existing ordinary source registration, never a producer."""
+        guard._diagnostic_mark("ordinary_enter")
         name = registration['class']
         registry = self.state['registry']
         original = guard.checked_source(registry['path'], registry['sha256'])['COMMANDS']
@@ -464,6 +465,7 @@ class SourceActivation(IsolatedActivation):
             if binding['matches'](registration, argv, cwd, environment, self.state) is None:
                 self.refuse('source_ordinary_caller_drift')
         else:
+            guard._diagnostic_mark("ordinary_direct_begin")
             names = set(ORDINARY_DIRECT)
             path = Path(self.state['guard']).with_name('source_bindings.py')
             data = guard.checked_source(path, self.state['direct_support']['files'][str(path)])['DATA']
@@ -483,6 +485,7 @@ class SourceActivation(IsolatedActivation):
                              for relative, lines in sites.items() for line in lines)
             if name not in names:
                 self.refuse('source_unknown_python_registration')
+            guard._diagnostic_mark("ordinary_owner_begin")
             path = Path(self.state['guard']).with_name('fallback_binding.py')
             frames = guard.checked_source(
                 path, self.state['direct_support']['files'][str(path)])['active_frames']()
@@ -524,11 +527,13 @@ class SourceActivation(IsolatedActivation):
                 frames.clear()
             # Use the original input vector for routes with an exact console
             # translation; compare the resulting vector as well as the binding.
+            guard._diagnostic_mark("ordinary_reresolve_begin")
             resolver = guard.checked_source(self.state['guard'], self.state['guard_sha256'])
             support = self.state['direct_support']
             direct = guard.checked_source(support['path'], support['files'][support['path']])['admit']
             resolver['_STATE'] = {**self.state, 'direct_admit': direct}
             actual, vector = resolver['admit'](launch['args'], cwd, environment)
+            guard._diagnostic_mark("ordinary_reresolve_end")
             if actual != registration or vector != argv:
                 self.refuse('source_ordinary_registration_drift')
         self.shared()
