@@ -167,3 +167,72 @@ def test_trace_failure_status_is_closed_and_excludes_message_and_source(capsys):
     with pytest.raises(evidence.EvidenceRefused, match='header_trace_status'):
         evidence.validate_header(header, identity(), INVOCATION)
     assert capsys.readouterr() == ('', '')
+
+
+def test_new_control_binding_is_closed_and_bounded():
+    valid = {'identity': identity(), 'invocation_sha256': INVOCATION}
+    body = evidence.canonical(valid)
+    assert evidence.source_binding(body) == valid
+    for malformed in (body + b' ' * evidence.HEADER_LIMIT,
+                      evidence.canonical({**valid, 'extra': CANARY}),
+                      evidence.canonical({**valid, 'invocation_sha256': CANARY}),
+                      body.replace(b'"identity":', b'"identity":{},"identity":', 1)):
+        with pytest.raises(evidence.EvidenceRefused):
+            evidence.source_binding(malformed)
+
+
+def test_literal_binding_reader_refuses_symlink_hardlink_and_oversize(tmp_path):
+    import ast
+    import os
+    import stat
+    import types
+    tree = ast.parse(Path(__file__).with_name('primary_compartment.py').read_bytes())
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'read_transport_binding')
+    target = tmp_path / 'binding'
+    def actual_open(path, flags):
+        assert path == '/inputs/transport-identity.json'
+        return os.open(target, flags)
+    def actual_lstat(path):
+        assert path == '/inputs/transport-identity.json'
+        return os.lstat(target)
+    scoped = types.SimpleNamespace(open=actual_open, lstat=actual_lstat, fstat=os.fstat, read=os.read,
+        close=os.close, O_RDONLY=os.O_RDONLY, O_NOFOLLOW=os.O_NOFOLLOW, O_CLOEXEC=os.O_CLOEXEC)
+    namespace = {'os': scoped, 'stat': stat, 'source_binding': evidence.source_binding,
+                 'HEADER_LIMIT': evidence.HEADER_LIMIT}
+    exec(compile(ast.Module(body=[fn], type_ignores=[]), 'actual_current_literal_binding', 'exec'), namespace)
+    body = evidence.canonical({'identity': identity(), 'invocation_sha256': INVOCATION})
+    target.write_bytes(body)
+    assert namespace['read_transport_binding']()['invocation_sha256'] == INVOCATION
+    link = tmp_path / 'hardlink'
+    os.link(target, link)
+    with pytest.raises(RuntimeError, match='transport_binding_carrier'):
+        namespace['read_transport_binding']()
+    link.unlink()
+    target.write_bytes(b' ' * (evidence.HEADER_LIMIT + 1))
+    with pytest.raises(RuntimeError, match='transport_binding_carrier'):
+        namespace['read_transport_binding']()
+    target.unlink()
+    target.symlink_to(tmp_path / 'missing')
+    with pytest.raises(OSError):
+        namespace['read_transport_binding']()
+
+
+def test_oversize_header_validation_does_not_copy_its_payload(monkeypatch):
+    # Small synthetic boundary; exact real64MiB boundary is separately exercised.
+    body = stream()
+    monkeypatch.setattr(evidence, 'LIMIT', len(body) - 1)
+    header, tail = evidence.current_header(body, identity(), INVOCATION)
+    assert tail == b'' and header['invocation_sha256'] == INVOCATION
+
+
+def test_transmitted_invocation_identity_is_a_digest_of_fresh_nonce():
+    import ast
+    import hashlib
+    import types
+    tree = ast.parse(Path(__file__).with_name('ci_shell.py').read_bytes())
+    assignment = next(n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                      and any(isinstance(t, ast.Name) and t.id == 'source_invocation' for t in n.targets))
+    namespace = {'hashlib': hashlib, 'secrets': types.SimpleNamespace(token_bytes=lambda count: b'x' * count)}
+    exec(compile(ast.Module(body=[assignment], type_ignores=[]), 'actual_invocation_derivation', 'exec'), namespace)
+    assert namespace['source_invocation'] == hashlib.sha256(b'x' * 32).hexdigest()
+    assert namespace['source_invocation'] != (b'x' * 32).hex()

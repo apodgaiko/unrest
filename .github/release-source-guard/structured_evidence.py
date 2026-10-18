@@ -110,6 +110,16 @@ def execution_identity(support, kind):
 
 
 
+def source_binding(body):
+    require(type(body) is bytes and len(body) <= HEADER_LIMIT, 'binding_bound')
+    value = loads(body)
+    require(type(value) is dict and set(value) == {'identity', 'invocation_sha256'}, 'binding_fields')
+    identity_check(value['identity'])
+    require(type(value['invocation_sha256']) is str
+            and re.fullmatch('[0-9a-f]{64}', value['invocation_sha256']), 'binding_invocation')
+    return value
+
+
 def numeric(value):
     return type(value) is int and 0 <= value <= (1 << 64) - 1
 
@@ -211,10 +221,11 @@ def current_header(current_stdout, identity, invocation):
     value = loads(first[len(HEADER_PREFIX):-1])
     validate_header(value, identity, invocation)
     # A source stream has exactly these two complete frames and nothing else.
-    tail = current_stdout[first_end + 1:]
-    require(tail.startswith(b'PRIVATE-EVIDENCE:') and tail.endswith(b'\n')
-            and tail.count(b'\n') == 1, 'header_stream')
-    return value, tail
+    start = first_end + 1
+    require(current_stdout.startswith(b'PRIVATE-EVIDENCE:', start) and current_stdout.endswith(b'\n')
+            and current_stdout.count(b'\n', start) == 1, 'header_stream')
+    # No second whole-payload allocation is needed for a stream already over cap.
+    return value, current_stdout[start:] if len(current_stdout) <= LIMIT else b''
 
 
 def emit_source(records, kernel, identity, invocation, exit_code):

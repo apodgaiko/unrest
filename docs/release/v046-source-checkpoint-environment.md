@@ -757,3 +757,9 @@ A trace refusal also retains a closed exception class and SHA256 of its code
 location, independently of the final source-failure classification. It contains
 no exception message, source text or traceback. This preserves the distinction
 between a complete transport and a successful original SOURCE execution.
+
+The transmitted invocation identity is SHA256 of fresh random bytes, rather
+than the raw nonce. Its literal runner-owned control file has a closed two-field
+schema,8192-byte bound, regular single-link/nofollow carrier and fresh
+open/after/path identity checks. Oversized current stdout is scanned for
+its one bounded header without allocating a second complete payload copy.

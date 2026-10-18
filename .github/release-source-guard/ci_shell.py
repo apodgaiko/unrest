@@ -208,7 +208,7 @@ def main():
             '--entrypoint=/usr/local/bin/python', image, '-B', '/guard/primary_compartment.py']
     STAGE = 'identity'
     identity = execution_identity(SUPPORT, kind)
-    source_invocation = secrets.token_hex(32)
+    source_invocation = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     (inputs / 'transport-identity.json').write_bytes(canonical({
         'identity': identity, 'invocation_sha256': source_invocation}))
     status = 125

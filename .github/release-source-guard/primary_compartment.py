@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import resource
 import shutil
+import stat
 
 from linux_compartment import source_credentials, observer_credentials
 from linux_observation import process_identity
@@ -18,10 +19,31 @@ from primary_source_authority import SourceAuthority
 import producer_setup
 import dependency_closure
 import primary_entry_build
-from structured_evidence import emit_source, loads, identity_check
+from structured_evidence import emit_source, source_binding, HEADER_LIMIT
 
 
 STAGE = 'bootstrap'
+
+
+def read_transport_binding():
+    # This literal runner-owned input is not a caller-selected filesystem route.
+    path = '/inputs/transport-identity.json'
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > HEADER_LIMIT:
+            raise RuntimeError('transport_binding_carrier')
+        body = os.read(descriptor, HEADER_LIMIT + 1)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    def identity(info):
+        return tuple(getattr(info, key) for key in (
+            'st_dev', 'st_ino', 'st_uid', 'st_gid', 'st_mode', 'st_nlink',
+            'st_size', 'st_mtime_ns', 'st_ctime_ns'))
+    if identity(before) != identity(after) or identity(after) != identity(os.lstat(path)) or len(body) != before.st_size:
+        raise RuntimeError('transport_binding_carrier')
+    return source_binding(body)
 
 
 def trace_failure_status(error):
@@ -50,8 +72,7 @@ def main():
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
     expected = json.loads(Path('/inputs/identity.json').read_bytes())
-    transport_identity = loads(Path('/inputs/transport-identity.json').read_bytes())
-    identity_check(transport_identity['identity'])
+    transport_identity = read_transport_binding()
     if transport_identity['identity']['head_sha'] != expected['head_sha']:
         raise RuntimeError('transport_head_identity')
     STAGE = 'dependencies'
@@ -231,7 +252,7 @@ if __name__ == '__main__':
             trace = trace.tb_next
         record = {'failure_code': 'bootstrap_failure', 'stage': STAGE, 'frame_lines': lines[-8:],
                   'source_checkpoint_ready': False, 'selected_carrier': None}
-        transport_identity = loads(Path('/inputs/transport-identity.json').read_bytes())
+        transport_identity = read_transport_binding()
         emit_source({'kernel-source.json': json.dumps(record, sort_keys=True).encode()}, record,
                     transport_identity['identity'], transport_identity['invocation_sha256'], 125)
         status = 125
