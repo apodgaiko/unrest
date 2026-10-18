@@ -394,9 +394,9 @@ source execution cannot silently rerun at the same SHA.
 
 The release-ref trigger is wired, but current readiness scratch refs cannot
 activate primary full execution. Focused capsule execution and receipt controls
-are implementation evidence. Full source/package capsule integration remains
-incomplete: non-focused duties refuse closed, and no original full certificate
-or actual same-SHA reuse is claimed.
+are implementation evidence. The primary SOURCE bridge is implemented behind complete downstream readiness
+input. Package capsule integration remains incomplete and refuses closed. No
+original full certificate or actual same-SHA reuse is claimed.
 Source checkpoint readiness remains false and selected carrier remains null.
 The existing downstream source carrier/package/final closure, single frozen
 Python3.13 source checkpoint, certification, independent checks, desktop/exact-head
@@ -442,11 +442,11 @@ existing authenticated GitHub run/job/artifact consumer remains the external
 eligibility boundary.
 
 The reducer/exporter and negative controls have controlled synthetic proofs;
-these are not an original source checkpoint or release certificate. The current
-full source and package producers still lack the primary execution/activation
-integration needed to supply these records. The new custody and issuer
-interfaces do not resolve that missing implementation. Full activation stays
-closed, `source_checkpoint_ready=false`, and `selected_carrier=null`.
+these are not an original source checkpoint or release certificate. Actual full source execution awaits complete downstream readiness input; the
+primary package producers still lack execution/activation integration. The
+custody and issuer interfaces alone do not supply those records. Full activation
+stays closed pending those inputs, `source_checkpoint_ready=false`, and
+`selected_carrier=null`.
 
 The original lint and mypy duties passed through actual isolated primary
 execution in [run 39086693592](https://github.com/apodgaiko/unrest/actions/runs/39086693592)
@@ -474,10 +474,14 @@ phase custody, `source_carrier_sha256`, `package_closure_sha256`,
 `final_closure_sha256`, `source_checkpoint_ready=true`, and `selected_carrier`
 equal to the source carrier digest. These are downstream closure inputs; this
 implementation does not create or assert them. Missing or foreign inputs refuse
-before execution. The source input is mounted read-only; MAC keys and CI control
-metadata remain host-only. Public output still reports readiness false and no
+before execution. The source input is mounted read-only with mode 0600, unreadable by the
+source UID; MAC keys and CI credentials remain host-only. Public output still reports readiness false and no
 selected carrier until downstream closure and certification.
 
+SOURCE sets its temporary environment below the existing owned-root boundary
+and configures pytest basetemp to the existing `owned_root/pytest` subtree, as
+required by the unchanged finite Git/custody predicates. JUnit and basetemp are
+setup options; invocation arguments, selection and source cases stay unchanged.
 The full root budget is 7200 seconds, collection is bounded to 300 seconds and
 provenance/guard drain to 60 seconds. Those finite setup bounds are separate from
 the existing focused 180-second capsule and all original per-test deadlines.

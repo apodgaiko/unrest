@@ -91,6 +91,12 @@ class Observer:
         if config.option.xmlpath is not None:
             self.guard.refuse('primary_source_foreign_junit')
         config.option.xmlpath = '/work/source.xml'
+        if config.option.basetemp is not None:
+            self.guard.refuse('primary_source_foreign_basetemp')
+        # The original finite Git/custody predicates require this exact owned
+        # pytest subtree, as in the existing focused source runner. This is a
+        # filesystem setup option, not an item/mark/selection transformation.
+        config.option.basetemp = self.manifest['owned_root'] + '/pytest'
         self.collection_timer = threading.Timer(
             self.profile['source_budget']['collection_seconds'], lambda: os._exit(87))
         self.collection_timer.daemon = True

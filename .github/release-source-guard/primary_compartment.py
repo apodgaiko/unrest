@@ -43,6 +43,17 @@ def main():
     dependency_closure.verify_source_view(Path('/environment-closure.json').read_bytes())
     STAGE = 'runtime'
     runtime = primary_entry_build.verify()
+    if spec.get('source_mode'):
+        import native_entry_build
+        import profile_gate_build
+        import native_metadata
+        import producer_inputs
+        from linux_observation import require_linux_abi
+        runtime = {'primary': runtime, 'source_abi': require_linux_abi(),
+                   'source_native': native_entry_build.verify(),
+                   'source_profile_gate': profile_gate_build.verify(),
+                   'source_metadata': native_metadata.verify(),
+                   'source_producer_inputs': producer_inputs.verify()}
     env = environment(source=bool(spec.get('source_mode')))
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
