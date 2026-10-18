@@ -384,6 +384,13 @@ class Supervisor:
         self.event_count = 0
         self.trace_progress = {}
 
+    def pending_progress(self):
+        # Wake pending transactions on their actual dependencies, not on each
+        # ptrace poll. Every wake re-enters the complete authenticated handler.
+        jobs = getattr(self, 'custody', {}).get('jobs', {})
+        return (self.event_count, tuple(sorted(self.trace_progress.items())),
+                tuple(sorted((key, job['phase']) for key, job in jobs.items())))
+
     def channel_snapshot(self, state, outcome):
         request = state['request'] or {}
         kind = request.get('kind')
@@ -396,7 +403,7 @@ class Supervisor:
         now = time.monotonic()
         return {'kind': kind if isinstance(kind, str) and kind in known else 'unknown',
                 'unknown_kind_sha256': (hashlib.sha256(json.dumps(kind, sort_keys=True).encode()).hexdigest()
-                                        if kind is not None and kind not in known else None),
+                                        if kind is not None and (not isinstance(kind, str) or kind not in known) else None),
                 'frame_bytes': len(state['buffer']),
                 'declared_size': (struct.unpack('!I', state['buffer'][:4])[0]
                                   if len(state['buffer']) >= 4 else None),
@@ -409,7 +416,9 @@ class Supervisor:
                 'registered_peer_birth': saved['identity'] if saved else None,
                 'pending_reason': state['pending_reason'], 'outcome': outcome,
                 'tick_count': self.tick_count, 'accepted_tick': state['accepted_tick'],
-                'event_count': self.event_count, 'trace_progress': dict(self.trace_progress)}
+                'event_count': self.event_count, 'trace_progress': dict(self.trace_progress),
+                'policy_attempts': state.get('policy_attempts', 0),
+                'policy_seconds': state.get('policy_seconds', 0)}
 
     def tick(self):
         self.tick_count += 1
@@ -424,6 +433,9 @@ class Supervisor:
             self.clients[stream] = {
                 "pending_reason": "frame",
                 "accepted_tick": self.tick_count,
+                "policy_attempts": 0,
+                "policy_seconds": 0,
+                "pending_progress": None,
                 "buffer": bytearray(),
                 "started": time.monotonic(),
                 "request": None,
@@ -479,10 +491,15 @@ class Supervisor:
                     state["authenticated"] = True
                     state["pending_reason"] = "policy"
                 if state["output"] is None:
+                    if state['pending_progress'] == self.pending_progress():
+                        continue
+                    policy_started = time.monotonic()
+                    state['policy_attempts'] += 1
                     try:
                         answer = self.handle(request, events)
                         result = {"ok": True, "request": request, **answer}
                     except AwaitOwnedPeer as error:
+                        state["pending_progress"] = self.pending_progress()
                         state["pending_reason"] = (str(error) if str(error) in {
                             "actual_parent_wait_record_still_pending", "finite_custody_pending"}
                             else "owned_peer")
@@ -498,6 +515,8 @@ class Supervisor:
                     except (RuntimeError, KeyError, StopIteration) as error:
                         self.poison(str(error))
                         result = {"ok": False, "request": request, "reason": str(error)}
+                    finally:
+                        state['policy_seconds'] += time.monotonic() - policy_started
                     result['observer_timing'] = {'accepted_monotonic': state['started'],
                                                  'finished_monotonic': time.monotonic()}
                     result["kernel_peer"] = state["peer"]
