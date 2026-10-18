@@ -18,7 +18,11 @@ import dependency_closure
 import primary_entry_build
 
 
+STAGE = 'bootstrap'
+
+
 def main():
+    global STAGE
     if os.getpid() != 1 or os.getuid() != 0:
         raise RuntimeError('primary_bootstrap_identity')
     script = Path('/inputs/github-script.sh').read_bytes()
@@ -26,12 +30,15 @@ def main():
     spec = plan(script, workflow)
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
+    STAGE = 'dependencies'
     dependency_closure.verify_source_view(Path('/environment-closure.json').read_bytes())
+    STAGE = 'runtime'
     runtime = primary_entry_build.verify()
     env = environment()
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
     start_read, start_write = os.pipe2(os.O_CLOEXEC)
+    STAGE = 'source_setup'
     child = os.fork()
     if child == 0:
         try:
@@ -70,6 +77,7 @@ def main():
         os.waitpid(child, 0)
         raise RuntimeError('primary_child_fence')
     os.close(ready_read)
+    STAGE = 'authority'
     authority = Authority(spec, child, env)
     os.set_blocking(read, False)
     output = bytearray()
@@ -100,6 +108,7 @@ def main():
     trace = OwnedTrace(child, allowed, spec['timeout_seconds'], on_tick=tick,
                        resolve_exec=resolve, seize=True, on_attached=attached, selective=True)
     failure = None
+    STAGE = 'trace'
     try:
         result = trace.run()
         tick(trace)
@@ -133,4 +142,17 @@ def main():
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        status = main()
+    except BaseException as error:
+        trace = error.__traceback__
+        lines = []
+        while trace is not None:
+            lines.append(trace.tb_lineno)
+            trace = trace.tb_next
+        record = {'failure_code': 'bootstrap_failure', 'stage': STAGE, 'frame_lines': lines[-8:],
+                  'source_checkpoint_ready': False, 'selected_carrier': None}
+        envelope = {'kernel-source.json': base64.b64encode(json.dumps(record, sort_keys=True).encode()).decode()}
+        print('PRIVATE-EVIDENCE:' + json.dumps(envelope, sort_keys=True), flush=True)
+        status = 125
+    raise SystemExit(status)

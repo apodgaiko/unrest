@@ -8,11 +8,13 @@ import json
 def build(root, base, support, log):
     if not base.startswith('sha256:') or len(base) != 71:
         raise RuntimeError('primary_base_image_identity')
+    base_tag = 'primary-base:' + base.removeprefix('sha256:')
+    subprocess.run(['docker', 'tag', base, base_tag], check=True, stdout=subprocess.DEVNULL)
     root.mkdir()
     for name in ('primary_entry.c', 'primary_entry.py', 'primary_entry_build.py'):
         (root / name).write_bytes((support / name).read_bytes())
     (root / 'Dockerfile').write_text(
-        'FROM ' + base + '\n'
+        'FROM ' + base_tag + '\n'
         'COPY primary_entry.c primary_entry.py /opt/source-guard/\n'
         'COPY primary_entry_build.py /bootstrap/primary_entry_build.py\n'
         'RUN python -I /bootstrap/primary_entry_build.py && rm -rf /bootstrap\n'
@@ -36,6 +38,8 @@ def build(root, base, support, log):
         'compile_error': b'error:',
         'uv_lock_refused': b'--locked',
         'compile_started': b'gcc',
+        'base_image_refused': b'pull access denied',
+        'base_metadata': b'failed to resolve source metadata',
         'network_resolution': b'failed to resolve',
     }
     (root.parent.parent / 'primary-image-stage.json').write_text(json.dumps({

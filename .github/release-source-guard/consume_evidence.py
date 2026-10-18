@@ -104,6 +104,41 @@ def verify(root, run, artifact, members, key, support):
         projection.update(error_code='source_runner_refused', runner_stage=stage['stage'],
                           runner_error=stage['error_code'], frames=stage['frames'])
         return projection
+    if scope == 'primary-executor':
+        kernel = loads(records['kernel-source.json'])
+        if kernel.get('failure_code') == 'bootstrap_failure':
+            require(kernel['stage'] in {'bootstrap', 'dependencies', 'runtime', 'source_setup',
+                                        'authority', 'trace'}, 'primary_stage')
+            require(all(type(line) is int and 0 < line < 10000 for line in kernel['frame_lines']),
+                    'primary_stage_lines')
+            projection.update(error_code='primary_bootstrap_failed', primary_stage=kernel['stage'],
+                              frame_lines=kernel['frame_lines'])
+            return projection
+        denials = kernel['primary_denials']
+        require(set(denials) <= {'environment_or_cwd', 'unknown_descendant', 'uv_parent_identity',
+                                'query_renderer', 'unknown_body', 'original_body_argv',
+                                'original_body_shape', 'duplicate_profile'}, 'primary_denial_enum')
+        waits = [row for row in kernel['records'] if row['kind'] == 'original_parent_wait4']
+        births = [row for row in kernel['records'] if row['kind'] == 'kernel_child'
+                  and row['identity']['tgid'] == row['child']]
+        missing = sum(len([wait for wait in waits if wait['child'] == row['child']
+                           and wait['parent_tgid'] == row['identity']['ppid']]) != 1 for row in births)
+        projection.update(primary_verified=False, root_raw=kernel['root_parent_wait_raw'],
+                          parent_waits=len(births) - missing, missing_parent_waits=missing,
+                          kernel_poison_count=len(kernel['poison']), denial_codes=sorted(set(denials)),
+                          native_preinit_refusal=kernel['native_preinit_refusal'],
+                          native_preinit_profiles=sum(row['kind'] == 'primary_native_preinit'
+                                                      for row in kernel['primary_records']),
+                          actual_script_sha256=kernel['actual_script_sha256'])
+        if (metadata['source_exit_code'] != 0 or kernel['root_parent_wait_raw'] != 0
+                or kernel['poison'] or denials or missing or kernel['native_preinit_refusal']
+                or kernel['failure_code'] is not None or not kernel['all_commands_dispatched']):
+            projection['error_code'] = 'primary_execution_failed'
+        else:
+            require(kernel['actual_script_sha256'] == metadata['primary_plan']['script_sha256'],
+                    'primary_actual_script')
+            projection['primary_verified'] = True
+        return projection
     if scope == 'producer-controls':
         require(type(metadata['source_exit_code']) is int, 'source_status_type')
         try:
