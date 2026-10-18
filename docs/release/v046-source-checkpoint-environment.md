@@ -904,3 +904,9 @@ native profile gate still selects and forwards the original events; no global
 Python profiling wrapper, RPC replacement, metadata normalization or deadline
 change is introduced. A current field difference does not classify an older
 failure without its own causal evidence.
+
+Dependency diagnostics classify all extra/changed files and show non-cache
+outputs before sampling caches. Bytecode classification uses the existing exact
+CPython source/code/header verifier, then compares each source hash to the
+immutable mirror. Even verified bytecode is only a diagnostic classification;
+unknown sources and editable outputs gain no admission authority.

@@ -669,6 +669,7 @@ def test_dependency_diagnostic_is_bounded_and_hash_only(tmp_path, monkeypatch):
         return Path(path)
     function = load_function('dependency_diagnostic', 'producer_profile.py', {
         'Path': mapped, 'hashlib': hashlib, 'stat': __import__('stat'),
+        'load': lambda *args: SimpleNamespace(verify_caches=lambda root: []),
         'digest': lambda path: hashlib.sha256(path.read_bytes()).hexdigest(),
         'hashed': lambda value: hashlib.sha256(__import__('json').dumps(value, sort_keys=True).encode()).hexdigest()})
     result = function('/source/.venv/lib/python3.13/site-packages')
@@ -677,3 +678,40 @@ def test_dependency_diagnostic_is_bounded_and_hash_only(tmp_path, monkeypatch):
     assert result['extra_count'] == 20 and len(result['extra']) == 16
     assert result['changed_count'] == 0
     assert b'private contents' not in __import__('json').dumps(result).encode()
+
+
+def test_dependency_cache_classification_preserves_pinned_source_names(tmp_path, monkeypatch):
+    import zipfile
+    import stat
+    actual, mirror = tmp_path / 'actual', tmp_path / 'mirror'
+    actual.mkdir()
+    mirror.mkdir()
+    (actual / 'module.py').write_bytes(b'original source')
+    (mirror / 'module.py').write_bytes(b'original source')
+    name = '__pycache__/module.cpython-313.pyc'
+    (actual / '__pycache__').mkdir()
+    (actual / name).write_bytes(b'controlled cache inspection')
+    wheel = tmp_path / 'backend.whl'
+    with zipfile.ZipFile(wheel, 'w') as archive:
+        archive.writestr('backend.py', b'original backend')
+    original_zip = zipfile.ZipFile
+    monkeypatch.setattr(zipfile, 'ZipFile', lambda path: original_zip(wheel))
+    def mapped(path):
+        return {
+            '/source/.venv/lib/python3.13/site-packages': actual,
+            '/opt/primary-deps/lib/python3.13/site-packages': mirror}.get(str(path), Path(path))
+    source_hash = hashlib.sha256(b'original source').hexdigest()
+    checked = [{'cache': {'path': str(actual / name)},
+                'source': {'path': str(actual / 'module.py'), 'sha256': source_hash}}]
+    function = load_function('dependency_diagnostic', 'producer_profile.py', {
+        'Path': mapped, 'hashlib': hashlib, 'stat': stat,
+        'digest': lambda path: hashlib.sha256(path.read_bytes()).hexdigest(),
+        'hashed': lambda value: hashlib.sha256(__import__('json').dumps(value, sort_keys=True).encode()).hexdigest(),
+        'load': lambda *args: SimpleNamespace(verify_caches=lambda root: checked)})
+    result = function('/source/.venv/lib/python3.13/site-packages')
+    assert result['extra_classes'] == {'exact-mirror-source-bytecode': 1}
+    assert result['verified_cache_count'] == 1 and result['authority'] is False
+    checked[0]['source']['sha256'] = 'foreign'
+    result = function('/source/.venv/lib/python3.13/site-packages')
+    assert result['extra_classes'] == {'bytecode-source-not-in-mirror': 1}
+    assert result['authority'] is False

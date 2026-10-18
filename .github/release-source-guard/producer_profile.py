@@ -844,23 +844,54 @@ def dependency_diagnostic(site):
     with zipfile.ZipFile('/opt/source-bootstrap/wheelhouse/setuptools-84.0.0-py3-none-any.whl') as archive:
         backend = {n for n in archive.namelist() if not n.endswith('/')}
     backend.update('setuptools-84.0.0.dist-info/' + n for n in ('INSTALLER', 'REQUESTED', 'uv_cache.json'))
-    rows = []
-    for name in extra[:16]:
-        row = {'name_sha256': hashlib.sha256(name.encode()).hexdigest(), **actual[name]}
+    activation = load('dependency_cache_diagnostic', '/guard/finite/operation_activation.py')
+    checked = []
+    cache_error = None
+    try:
+        checked = activation.verify_caches(site)
+    except Exception as error:
+        cache_error = hashlib.sha256(str(error).encode()).hexdigest()
+    checked_names = {str(Path(item['cache']['path']).relative_to(site)): item for item in checked}
+    def classification(name):
+        if name.endswith('.pyc'):
+            item = checked_names.get(name)
+            if item is None:
+                return 'unverified-bytecode'
+            source_name = str(Path(item['source']['path']).relative_to(site))
+            if source_name not in seed or item['source']['sha256'] != seed[source_name]['sha256']:
+                return 'bytecode-source-not-in-mirror'
+            return 'exact-mirror-source-bytecode'
         if name.startswith('unrest_harness-0.4.6.dist-info/'):
             leaf = Path(name).name
-            row['class'] = leaf if leaf in {'METADATA', 'WHEEL', 'RECORD', 'entry_points.txt',
-                                          'INSTALLER', 'REQUESTED', 'direct_url.json', 'uv_cache.json'} else 'other'
-        elif name == '__editable__.unrest_harness-0.4.6.pth':
-            row['class'] = 'editable-pth'
+            return leaf if leaf in {'METADATA', 'WHEEL', 'RECORD', 'entry_points.txt',
+                                   'INSTALLER', 'REQUESTED', 'direct_url.json', 'uv_cache.json'} else 'other'
+        if name == '__editable__.unrest_harness-0.4.6.pth':
+            return 'editable-pth'
+        return 'other'
+    extra_classes = {}
+    changed_classes = {}
+    for names, counts in ((extra, extra_classes), (changed, changed_classes)):
+        for name in names:
+            label = classification(name)
+            counts[label] = counts.get(label, 0) + 1
+    # Non-cache outputs must not disappear behind a large sorted cache prefix.
+    sample = sorted(extra, key=lambda name: (name.endswith('.pyc'), name))[:16]
+    rows = []
+    for name in sample:
+        row = {'name_sha256': hashlib.sha256(name.encode()).hexdigest(), **actual[name]}
+        if name == '__editable__.unrest_harness-0.4.6.pth':
             row['exact_source_path'] = row['type'] == 'file' and (site / name).read_bytes() == b'/source/src\n'
-        else:
-            row['class'] = 'other'
+        row['class'] = classification(name)
         rows.append(row)
+    changed_rows = [{'name_sha256': hashlib.sha256(name.encode()).hexdigest(),
+                     'class': classification(name), 'actual': actual[name], 'mirror': seed[name]}
+                    for name in changed[:16]]
     return {'kind': 'primary_dependency_comparison', 'expected_primary_site': True,
             'actual_files': len(actual), 'mirror_files': len(seed),
             'missing_count': len(missing), 'extra_count': len(extra), 'changed_count': len(changed),
             'missing_is_exact_backend': set(missing) == backend,
             'missing_names_sha256': hashed(missing), 'extra_names_sha256': hashed(extra),
             'changed_names_sha256': hashed(changed), 'extra': rows,
-            'authority': False}
+            'extra_classes': extra_classes, 'changed_classes': changed_classes,
+            'changed': changed_rows, 'verified_cache_count': len(checked),
+            'cache_error_sha256': cache_error, 'authority': False}
