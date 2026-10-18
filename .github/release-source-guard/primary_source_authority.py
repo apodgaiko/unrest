@@ -6,10 +6,15 @@ import json
 import os
 from pathlib import Path
 import stat
+import signal
+import time
+
+import linux_trace
 from types import SimpleNamespace
 
 import linux_git
 from linux_supervisor import Supervisor
+from linux_observation import process_identity
 from linux_producers import NativeProducers
 from finite.linux_identity import identity
 from primary_policy import PYTHON, console
@@ -29,6 +34,7 @@ class SourceAuthority:
         self.producers = None
         self.consumed, self.maintenance = set(), set()
         self.bound, self.native_context = {}, {}
+        self.pipe_records = []
 
     def start(self, pid, output_fd):
         if self.supervisor is not None:
@@ -146,12 +152,11 @@ class SourceAuthority:
             self.native_context[pid] = {'path': path, 'argv': vector, 'cwd': cwd, 'environment': environment}
         return True
 
-    def descriptors(self, pid):
-        """Only the original owned role's read-only inventory pipe crosses exec."""
+    def pipe_binding(self, pid):
         selected = self.bound[pid]['registration']
         if selected['class'] not in {'source-owned-role:worker', 'source-owned-role:validator',
                                      'source-owned-role:terminal-reviewer'}:
-            return []
+            return None
         parent = identity(pid)['ppid']
         rows = [row for row in self.supervisor.events()
                 if row['kind'] == 'concrete_owned_role_registration'
@@ -159,32 +164,145 @@ class SourceAuthority:
                 and row['role'] == selected['class'].removeprefix('source-owned-role:')
                 and row['source_binding'] == selected['source_binding']
                 and row['argv_sha256'] == selected['argv_sha256']]
-        # Admission and the callback each re-resolve the same source pipe.
+        # Admission and the callback independently resolve the original pipe.
         if len(rows) != 2 or rows[0] != rows[1]:
             raise RuntimeError('primary_source_role_pipe_binding')
-        expected = rows[0]
-        descriptors = []
-        for path in sorted(Path('/proc/' + str(pid) + '/fd').iterdir()):
+        return rows[0]
+
+    @staticmethod
+    def census(pid):
+        root = Path('/proc/' + str(pid))
+        paths = sorted((root / 'fd').iterdir(), key=lambda path: int(path.name))
+        if len(paths) > 128:
+            raise RuntimeError('primary_source_role_pipe_bound')
+        observed = []
+        for path in paths:
             fd = int(path.name)
             if fd < 3:
                 continue
             info = path.stat()
-            lines = Path('/proc/' + str(pid) + '/fdinfo/' + str(fd)).read_text().splitlines()
+            lines = (root / 'fdinfo' / str(fd)).read_text().splitlines()
             flags = int(next(line.split()[1] for line in lines if line.startswith('flags:')), 8)
-            if (not stat.S_ISFIFO(info.st_mode) or info.st_uid != 20000
-                    or info.st_dev != expected['pipe_device'] or info.st_ino != expected['pipe_inode']
-                    or flags & os.O_ACCMODE != os.O_RDONLY):
-                raise RuntimeError('primary_source_role_pipe_identity')
-            descriptors.append({'fd': fd, 'device': info.st_dev, 'inode': info.st_ino,
-                                'mode': info.st_mode, 'uid': info.st_uid, 'access': os.O_RDONLY})
-        if len(descriptors) != 1:
+            observed.append({'fd': fd, 'device': info.st_dev, 'inode': info.st_ino,
+                             'mode': info.st_mode, 'uid': info.st_uid,
+                             'access': flags & os.O_ACCMODE,
+                             'close_on_exec': bool(flags & os.O_CLOEXEC)})
+        return observed
+
+    @staticmethod
+    def safe_census(rows):
+        return [{**{key: value for key, value in row.items() if key != 'mode'},
+                 'type': stat.S_IFMT(row['mode'])} for row in rows]
+
+    @staticmethod
+    def inventory_pipe(observed, expected):
+        matching = [row for row in observed
+                    if stat.S_ISFIFO(row['mode']) and row['uid'] == 20000
+                    and row['device'] == expected['pipe_device']
+                    and row['inode'] == expected['pipe_inode']
+                    and row['access'] == os.O_RDONLY]
+        if len(matching) != 1:
+            raise RuntimeError('primary_source_role_pipe_identity')
+        return matching[0]
+
+    def descriptors(self, pid):
+        """Strict original pre-exec contract, also used for negative controls."""
+        expected = self.pipe_binding(pid)
+        if expected is None:
+            return []
+        observed = self.census(pid)
+        pipe = self.inventory_pipe(observed, expected)
+        if len(observed) != 1:
             raise RuntimeError('primary_source_role_pipe_cardinality')
-        return descriptors
+        return [{key: value for key, value in pipe.items() if key != 'close_on_exec'}]
+
+    def exec_descriptors(self, trace, pid, vector, environment, cwd):
+        """Prove custody at successful exec, before the image's first instruction.
+
+        No flag authorizes omission. Every pre-exec object is observed; every
+        additional descriptor must actually be absent at PTRACE_EVENT_EXEC.
+        The original tracer retains the syscall return and all parent waits.
+        """
+        try:
+            expected = self.pipe_binding(pid)
+            if expected is None:
+                return []
+            before = identity(pid)
+            owner = identity(before['ppid'])
+            credentials = process_identity(pid)
+            if (self.supervisor.registered.get(owner['pid'], {}).get('identity') != owner
+                    or credentials['uids'] != [20000] * 4
+                    or any(credentials['capabilities'].values()) or credentials['no_new_privs'] != 1):
+                raise RuntimeError('primary_source_role_pipe_owner_binding')
+            if (trace.pending.get(pid, {}).get('syscall') != 59
+                    or any(before[key] != trace.identities[pid][key]
+                           for key in ('pid', 'ppid', 'start_ticks', 'boot_id'))):
+                raise RuntimeError('primary_source_role_pipe_trace_binding')
+            pre = self.census(pid)
+            self.pipe_records.append({'kind': 'source_pipe_preexec_census', 'pid': pid,
+                                      'identity': before, 'descriptors': self.safe_census(pre)})
+            pipe = self.inventory_pipe(pre, expected)
+            # Only the already-admitted exec syscall can run. A successful exec
+            # stop precedes the dynamic loader, native entry, and Python startup.
+            linux_trace.ptrace(24, pid)
+            deadline = time.monotonic() + min(5, trace.timeout)
+            while True:
+                waited, raw = os.waitpid(pid, os.WNOHANG | 0x40000000)
+                if waited:
+                    break
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('primary_source_role_pipe_exec_deadline')
+                time.sleep(.0001)
+            if os.WIFEXITED(raw) or os.WIFSIGNALED(raw):
+                trace.active.discard(pid)
+                trace.records.append({'kind': 'failure_cleanup_tracer_wait', 'pid': pid,
+                                      'raw': raw, 'normalized': os.waitstatus_to_exitcode(raw),
+                                      'root_original_parent': pid == trace.child})
+            if (waited != pid or not os.WIFSTOPPED(raw)
+                    or os.WSTOPSIG(raw) != signal.SIGTRAP or raw >> 16 != 4):
+                raise RuntimeError('primary_source_role_pipe_exec_stop')
+            trace.records.append({'kind': 'kernel_exec', 'pid': pid})
+            after = identity(pid)
+            post = self.census(pid)
+            self.pipe_records.append({'kind': 'source_pipe_postexec_census', 'pid': pid,
+                                      'identity': after, 'descriptors': self.safe_census(post)})
+            root = Path('/proc/' + str(pid))
+            actual_argv = (root / 'cmdline').read_bytes().split(b'\0')
+            actual_environment = (root / 'environ').read_bytes().split(b'\0')
+            after_credentials = process_identity(pid)
+            if (after != before or identity(owner['pid']) != owner
+                    or after_credentials['uids'] != credentials['uids']
+                    or after_credentials['capabilities'] != credentials['capabilities']
+                    or after_credentials['no_new_privs'] != 1 or actual_argv != [os.fsencode(value) for value in vector] + [b'']
+                    or sorted(actual_environment) != sorted([
+                        os.fsencode(key + '=' + value) for key, value in environment.items()] + [b''])
+                    or os.readlink(root / 'cwd') != cwd
+                    or sha(root / 'exe') != self.manifest['runtime']['sha256']):
+                raise RuntimeError('primary_source_role_pipe_exec_identity')
+            if self.pipe_binding(pid) != expected:
+                raise RuntimeError('primary_source_role_pipe_registration_drift')
+            survivor = self.inventory_pipe(post, expected)
+            if post != [survivor] or survivor != pipe:
+                raise RuntimeError('primary_source_role_pipe_postexec_inventory')
+            self.pipe_records.append({
+                'kind': 'source_pipe_exec_custody', 'pid': pid, 'identity': after, 'owner_identity': owner,
+                'registration_sha256': hashlib.sha256(json.dumps(expected, sort_keys=True).encode()).hexdigest(),
+                'exec_argv_sha256': hashlib.sha256(json.dumps(vector).encode()).hexdigest(),
+                'closed_fds': [row['fd'] for row in pre if row != pipe],
+                'surviving_fd': pipe['fd']})
+            return [{key: value for key, value in survivor.items() if key != 'close_on_exec'}]
+        except BaseException:
+            trace.poison.append('primary_source_role_pipe_custody')
+            self.supervisor.poison('primary_source_role_pipe_custody')
+            raise
 
     def tick(self, trace):
         if self.supervisor is None:
             return
         self.producers.tick(trace)
+        self.supervisor.trace_progress = {'records': len(trace.records),
+                                          'active': len(trace.active),
+                                          'pending': len(trace.pending)}
         self.supervisor.tick()
         if trace.poison and not self.supervisor.poisoned:
             self.supervisor.poison('kernel_exec_poison')
@@ -197,4 +315,9 @@ class SourceAuthority:
                 'receipt_ledger_poison': self.supervisor.ledger.poison,
                 'source_events': self.supervisor.events(), 'receipts': self.supervisor.receipts,
                 'event_timings': self.supervisor.event_timings,
-                'native_source_records': self.producers.records}
+                'receipt_channel_diagnostics': self.supervisor.channel_diagnostics,
+                'native_source_records': self.producers.records,
+                'source_pipe_records': self.pipe_records,
+                'source_observer_poison_sha256': (hashlib.sha256(json.loads(
+                    (self.supervisor.control / 'POISON.json').read_bytes())['reason'].encode()).hexdigest()
+                    if (self.supervisor.control / 'POISON.json').is_file() else None)}

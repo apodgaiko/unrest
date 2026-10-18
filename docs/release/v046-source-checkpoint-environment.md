@@ -539,3 +539,26 @@ partial tuples refuse. The reducer requires actual ordinary composed-adapter,
 four reference-integrity classes and producer consumer startup consumption,
 with unchanged native custody, READY and actual original-parent waits. These
 fixture builds are setup evidence only; TEST remains certificate-ineligible.
+
+
+Ordinary source-owned worker, validator and terminal-reviewer inventory pipes
+require two equal concrete role registrations from the authenticated source
+owner. The observer binds the owner's birth and the child's PID, parent, birth,
+boot, exact exec argv/environment/cwd and pinned native image. Its pre-exec
+census includes every nonstdio descriptor and retains the exact FIFO, UID20000,
+device/inode and read-only inventory identity. Descriptor flags grant no
+exemption. The observer advances only the admitted exec syscall to a successful
+`PTRACE_EVENT_EXEC` stop, before the image's first instruction, and performs a
+second complete census. Only the same single inventory descriptor may remain;
+every additional pre-exec descriptor must have actually closed. Missing pipes,
+extra survivors, changed registrations, failed execs or identity drift poison
+custody and prevent native/body release. The tracer retains its syscall-return
+and original-parent wait observations.
+
+The observer creates the read-only native startup profile after that proof.
+Native pre-body entry independently compares every descriptor with this exact
+profile. Its directory census accounts for its single live proc-directory
+iterator and proves the iterator descriptor closed; unknown descriptor errors
+and extra proc-directory aliases refuse with the sticky native exit. TEST
+custody records are diagnostic evidence only. They do not select a source
+carrier, close package/final inputs or waive any release gate.

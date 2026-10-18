@@ -119,3 +119,44 @@ def test_affected_seams_are_one_closed_original_parameter_tuple():
             make_test_plan((COMMAND + ' ' + ' '.join(selection)).encode(), text, 'TEST-positive')
     with pytest.raises(RuntimeError):
         plan(script, text, value)
+
+
+@pytest.mark.parametrize('change', ['valid', 'unknown', 'stale', 'extra', 'write', 'uid'])
+def test_owned_role_inventory_pipe_requires_exact_source_and_kernel_identity(monkeypatch, change):
+    from types import SimpleNamespace
+    import os
+    import stat
+    import primary_source_authority as authority
+    binding = {'path': '/source/src/unrest_harness/acp_runner.py', 'sha256': 'a' * 64}
+    registration = {'class': 'source-owned-role:worker', 'source_binding': binding,
+                    'argv_sha256': 'b' * 64}
+    event = {'kind': 'concrete_owned_role_registration', 'owner_pid': 10, 'role': 'worker',
+             'source_binding': binding, 'argv_sha256': 'b' * 64, 'pipe_device': 2, 'pipe_inode': 3}
+    rows = [dict(event), dict(event)]
+    flags = os.O_RDONLY
+    info = SimpleNamespace(st_mode=stat.S_IFIFO | 0o600, st_uid=20000, st_dev=2, st_ino=3)
+    if change == 'unknown':
+        registration['class'] = 'other'
+    elif change == 'stale':
+        rows[0]['pipe_inode'] = 4
+    elif change == 'write':
+        flags = os.O_WRONLY
+    elif change == 'uid':
+        info.st_uid = 20001
+
+    instance = object.__new__(authority.SourceAuthority)
+    instance.bound = {11: {'registration': registration}}
+    instance.pipe_records = []
+    instance.supervisor = SimpleNamespace(events=lambda: rows)
+    row = {'fd': 7, 'device': info.st_dev, 'inode': info.st_ino, 'mode': info.st_mode,
+           'uid': info.st_uid, 'access': flags & os.O_ACCMODE, 'close_on_exec': False}
+    monkeypatch.setattr(instance, 'census', lambda pid: [row, row] if change == 'extra' else [row])
+    monkeypatch.setattr(authority, 'identity', lambda pid: {'ppid': 10})
+    if change == 'valid':
+        assert instance.descriptors(11) == [{'fd': 7, 'device': 2, 'inode': 3,
+                                              'mode': info.st_mode, 'uid': 20000, 'access': os.O_RDONLY}]
+    elif change == 'unknown':
+        assert instance.descriptors(11) == []
+    else:
+        with pytest.raises(RuntimeError, match='primary_source_role_pipe_'):
+            instance.descriptors(11)
