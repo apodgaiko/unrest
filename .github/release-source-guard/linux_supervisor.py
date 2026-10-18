@@ -219,6 +219,11 @@ class Supervisor:
             raise RuntimeError("global_poison_retained")
         self.authenticate(request, events)
         kind = request["kind"]
+        if kind == 'source_response_output':
+            callback = getattr(self, 'source_response_output', None)
+            if callback is None:
+                raise RuntimeError('source_response_observer_missing')
+            return callback(request)
         if kind.startswith("drain_"):
             events = self.refresh()
             path = ROOT / "drain_host.py"
@@ -451,7 +456,7 @@ class Supervisor:
         kind = request.get('kind')
         known = {'ready', 'poison', 'plan', 'listen', 'connect', 'connected',
                  'socketpair', 'payload', 'custody_owner', 'custody_peer',
-                 'custody_submit', 'custody_close', 'custody_poll', 'custody_spawned',
+                 'custody_submit', 'custody_close', 'custody_poll', 'custody_spawned', 'source_response_output',
                  'custody_signal', 'custody_cancel', 'drain_inventory', 'drain_child',
                  'drain_complete'}
         saved = self.registered.get(state.get('peer_pid'))

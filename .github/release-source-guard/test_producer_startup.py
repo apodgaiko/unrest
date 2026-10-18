@@ -380,7 +380,7 @@ def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change,
     with zipfile.ZipFile(wheel, 'w') as archive:
         archive.writestr('backend.py', b'original selected backend')
     spec = {'primary_producer': {'cache_seed_inventory': closure.inventory(seed)},
-            'cache': '/work/cache', 'base': '/usr/local/bin/python-primary-audit', 'wheel': str(wheel)}
+            'cache': '/work/cache', 'base': '/usr/local/bin/python-primary-audit', 'wheel': str(wheel), 'output': str(tmp_path / 'built')}
     original_path = Path
     def mapped(path):
         return {'/opt/primary-cache': seed, '/work/cache': current}.get(str(path), original_path(path))
@@ -388,7 +388,7 @@ def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change,
         'Path': mapped, 'os': __import__('os'), 'hashlib': hashlib, 'load': lambda name, path: closure if path.endswith('dependency_closure.py') else activation,
         'original_runtime_outputs': lambda spec, operations: {},
         'primary_inventory': load_function('primary_inventory', 'producer_profile.py', {
-            'stat': __import__('stat'), 'os': __import__('os'), 'load': lambda *args: activation,
+            'stat': __import__('stat'), 'os': __import__('os'), 'hashlib': hashlib, 'load': lambda *args: activation,
             'digest': lambda path: hashlib.sha256(path.read_bytes()).hexdigest()})})
     original_lstat = Path.lstat
     class OwnedInfo:
@@ -399,6 +399,15 @@ def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change,
         def __eq__(self, other):
             return self.value == other.value
     monkeypatch.setattr(Path, 'lstat', lambda path: OwnedInfo(original_lstat(path)))
+    cache_domain = load_function('cache_view', 'producer_profile.py', {
+        'Path': mapped, 'hashlib': hashlib, 'stat': __import__('stat'), 'os': __import__('os'),
+        'load': lambda *args: activation, 'digest': lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()})
+    # Its declaration is made before the mutation, never refreshed from a caller.
+    declared_entries, _ = cache_domain(spec, set())
+    build = {'pid': 10, 'owner_pid': 20, 'token': 'fixture-build'}
+    owner = SimpleNamespace(require=lambda *args: build)
+    cache_tree.__globals__.update(cache_view=cache_domain,
+        read_cache_operation=lambda *args: {'entries': declared_entries, 'external_links': []})
     if change == 'cache_context':
         spec['cache'] = '/work/foreign'
     elif change == 'base_context':
@@ -433,12 +442,29 @@ def test_primary_cache_exact_seed_backend_and_finite_additions(tmp_path, change,
         record = current / 'interpreter-v4/exact/key.msgpack'
         record.parent.mkdir(parents=True)
         record.with_suffix('.py' if change == 'bad_interpreter_record' else '.msgpack').write_bytes(b'original finite UV record')
-    if change in {'none', 'interpreter_record'}:
-        rows = cache_tree(spec)
+    if change == 'none':
+        rows = cache_tree(spec, operations=owner)
         assert rows and all(set(row) in ({'path', 'target', 'inode'}, {'path', 'directory'},
                                         set(activation.identity(current / 'archive-v0/backend/backend.py')))
                             for row in rows)
         assert len([row for row in rows if 'target' in row]) == 2
     else:
         with pytest.raises(RuntimeError):
-            cache_tree(spec)
+            cache_tree(spec, operations=owner)
+
+
+def restore_bootstrap_cache(tree):
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'SourceAuthority')
+    method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'prepare_bootstrap_cache')
+    assert hashlib.sha256(ast.dump(method, include_attributes=False).encode()).hexdigest() == '9e96eee713b87960819fb188368e0346b29e4156da2007be3eb0832e87693859'
+    cls.body.remove(method)
+    start = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'start')
+    assert [arg.arg for arg in start.args.kwonlyargs] == ['trace', 'primary']
+    assert all(isinstance(node, ast.Constant) and node.value is None for node in start.args.kw_defaults)
+    start.args.kwonlyargs, start.args.kw_defaults = [], []
+    assert ast.unparse(start.body[1]) == 'self.prepare_bootstrap_cache(pid, trace, primary)'
+    start.body.pop(1)
+    assignments = [node for node in start.body if ast.unparse(node) == 'self.supervisor.source_response_output = self.producers.stage_response']
+    assert len(assignments) == 1
+    start.body.remove(assignments[0])
+    return tree

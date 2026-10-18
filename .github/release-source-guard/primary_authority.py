@@ -131,7 +131,7 @@ class Authority:
                 if self.source is None:
                     return self.refuse('source_authority_missing')
                 role = 'source-root'
-                self.source.start(pid, self.output_fd)
+                self.source.start(pid, self.output_fd, trace=trace, primary=self)
         elif len(vector) == 5 and vector[1:4] == ['-I', '-B', '-c']:
             try:
                 query_package(vector[4], {'cache': '/work/cache'})

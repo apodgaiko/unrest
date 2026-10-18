@@ -121,6 +121,15 @@ def activate(profile, command):
     def profile_body(frame, event, value):
         if previous is not None:
             previous(frame, event, value)
+        if (role == 'isolated-uv-helper' and spec.get('primary_producer') is not None
+                and event == 'return' and frame.f_code == expected_body):
+            try:
+                guard.require_ready(profile['token'])
+                endpoint.check()
+                endpoint.request('source_response_output')
+            except BaseException as error:
+                refuse(error)
+            return
         if frame.f_code.co_filename != str(source) or frame.f_code.co_name != helper:
             return
         try:

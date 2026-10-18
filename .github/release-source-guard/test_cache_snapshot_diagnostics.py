@@ -150,6 +150,9 @@ def runtime_fixture(tmp_path, monkeypatch):
     namespace = {'Path': Path, 'os': os, 'stat': stat, 'hashlib': hashlib,
                  'load': lambda *args: activation,
                  'digest': lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+    namespace['check_response_binding'] = load_function('check_response_binding', 'producer_profile.py', {
+        'hashlib': hashlib, 'hashed': lambda value: hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',', ':')).encode()).hexdigest()})
+    namespace['response_member'] = load_function('response_member', 'producer_profile.py', namespace)
     namespace['runtime_metadata'] = load_function('runtime_metadata', 'producer_profile.py', {
         'Path': Path, 'hashlib': hashlib, 'public_inputs': SimpleNamespace(UV_EMBEDDED={})})
     declare = load_function('runtime_members', 'producer_profile.py', namespace)
@@ -243,6 +246,8 @@ def test_runtime_consumption_requires_current_original_operation(tmp_path, monke
     from test_producer_startup import load_function
     headers = tmp_path / 'headers'
     headers.mkdir()
+    runtime = tmp_path / 'declared-runtime'
+    runtime.mkdir()
     operations_spec = importlib.util.spec_from_file_location('actual_source_operations', ROOT / 'finite/source_operations.py')
     operations_module = importlib.util.module_from_spec(operations_spec)
     operation_tree = ast.parse((ROOT / 'finite/source_operations.py').read_bytes())
@@ -277,10 +282,10 @@ def test_runtime_consumption_requires_current_original_operation(tmp_path, monke
     names = ['get_requires_for_build_sdist', 'build_sdist', 'get_requires_for_build_wheel', 'build_wheel']
     for index, helper in enumerate(names):
         pid = 100 + index
-        argv = ['/work/cache/builds-v0/runtime/bin/python', '-c', 'exact original helper']
+        argv = [str(runtime / 'bin/python'), '-c', 'exact original helper']
         child = {'parent_operation': dict(build, record_sha256=hashed(admission)),
                  'cache': spec['cache'], 'base_identity': spec['base_identity'], 'output': spec['output'],
-                 'primary_runtime_output': {'root': '/work/cache/builds-v0/runtime', 'root_identity': [1, 2, 0o40700, 20000], 'members': {}}}
+                 'primary_runtime_output': {'root': str(runtime), 'root_identity': [1, 2, 0o40700, 20000], 'members': {}}}
         header = {'pid': pid, 'ppid': 10, 'start_ticks': pid * 100, 'boot_id': 'current-boot', 'token': 'child-' + str(pid), 'role': 'isolated-uv-helper',
                   'spec': 'spec-' + str(pid), 'spec_sha256': 'pin-' + str(pid),
                   'manifest_sha256': 'manifest-' + str(pid), 'orig_argv': argv}
@@ -339,9 +344,10 @@ def test_runtime_consumption_requires_current_original_operation(tmp_path, monke
         'read_response': lambda pid: {'profile_sha256': hashlib.sha256((headers / (str(pid) + '.json')).read_bytes()).hexdigest(),
             'child_start_ticks': pid * 100, 'child_boot_sha256': hashlib.sha256(b'current-boot').hexdigest(), 'pid': pid,
             'helper': names[pid - 100], 'member': names[pid - 100] + '.txt'},
-        'response_member': lambda *args: {'type': 'file'}, 'load': lambda *args: None})
+        'response_member': lambda *args: {'type': 'file'}, 'load': lambda *args: None,
+        'check_response_binding': lambda *args: None})
     if change == 'none':
-        assert set(function(spec, owner)) == {'/work/cache/builds-v0/runtime'}
+        assert set(function(spec, owner)) == {str(runtime)}
     else:
         with pytest.raises(RuntimeError):
             function(spec, owner)
@@ -453,7 +459,9 @@ def test_response_consumption_requires_prior_wait_and_exact_current_file(runtime
     elif change == 'owner':
         receipt['uid'] = 20001
     function = load_function('response_member', 'producer_profile.py', {'hashlib': hashlib,
-        'hashed': lambda value: hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',', ':')).encode()).hexdigest()})
+        'hashed': lambda value: hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',', ':')).encode()).hexdigest(),
+        'check_response_binding': load_function('check_response_binding', 'producer_profile.py', {
+            'hashlib': hashlib, 'hashed': lambda value: hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',', ':')).encode()).hexdigest()})})
     if change == 'none':
         result = function(receipt, spec, root, identity_module)
         assert result['file'] == file and result['uid'] == 20000
@@ -477,7 +485,7 @@ def test_new_response_observer_preserves_original_exit_poison():
     function = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'tick')
     class Strip(ast.NodeTransformer):
         def visit_Expr(self, node):
-            if ast.unparse(node) == 'self.completed_response(event, trace)':
+            if ast.unparse(node) in {'self.completed_response(event, trace)', 'self.completed_cache(event, trace)'}:
                 return None
             return self.generic_visit(node)
     restored = Strip().visit(function)
@@ -510,6 +518,12 @@ def test_original_response_capture_uses_original_renderer_and_real_file(runtime_
     wait = {'raw': 0, 'parent_tgid': 10}
     rows = [{'kind': 'isolated_actual_backend_call', 'owner_pid': 11, 'parent_pid': 10, 'helper': helper},
             {'kind': 'ready', 'owner_pid': 11, 'token': 'child', 'manifest_sha256': 'b' * 64}]
+    file = identity_module.identity(request)
+    produced = {'kind': 'isolated_original_response_output', 'owner_pid': 11, 'parent_pid': 10,
+                 'helper': helper, 'profile_sha256': child['profile_sha256'],
+                 'member_sha256': hashlib.sha256(str(request).encode()).hexdigest(),
+                 'file_identity': file['identity'], 'sha256': hashlib.sha256(b'[]').hexdigest(),
+                 'uid': 20000, 'nlink': 1}
     if change == 'wait':
         wait['raw'] = 256
     elif change == 'parent':
@@ -528,10 +542,168 @@ def test_original_response_capture_uses_original_renderer_and_real_file(runtime_
                  'load': lambda name, path: identity_module if path.endswith('operation_activation.py') else SimpleNamespace(helper_class=renderer)}
     function = load_function('response_receipt', 'producer_profile.py', namespace)
     if change == 'none':
-        receipt = function(spec, header, child, wait)
+        receipt = function(spec, header, child, wait, produced)
         assert receipt['sha256'] == hashlib.sha256(b'[]').hexdigest()
         assert receipt['parent_wait_raw'] == 0 and receipt['uid'] == 20000
         assert not any('current-operation' in str(value) for value in receipt.values())
     else:
         with pytest.raises(RuntimeError):
-            function(spec, header, child, wait)
+            function(spec, header, child, wait, produced)
+
+
+@pytest.mark.parametrize('change', ['none', 'extra_fields', 'foreign_pid', 'token', 'birth', 'parent', 'duplicate', 'role', 'profile', 'primary'])
+def test_live_response_observer_cannot_be_minted(tmp_path, monkeypatch, change):
+    from test_producer_startup import module as producers
+    value = object.__new__(producers.NativeProducers)
+    profile = tmp_path / '11.json'
+    profile.write_text(json.dumps({'spec': 'sealed', 'spec_sha256': 'pinned'}))
+    child = {'pid': 11, 'parent': 10, 'role': 'isolated-uv-helper', 'helper': 'build_sdist',
+             'identity': {'pid': 11, 'start_ticks': 110}, 'token': 'child-token',
+             'profile_sha256': hashlib.sha256(profile.read_bytes()).hexdigest()}
+    parent = {'pid': 10, 'start_ticks': 100}
+    value.common, value.children = {'primary_producer': {}}, {11: child}
+    # A real PRIMARY descriptor is nonempty; ordinary absence cannot select it.
+    value.common['primary_producer'] = {'entry': 'pinned'}
+    value.response_staged, value.records = {}, []
+    value.kernel = SimpleNamespace(identity=lambda pid: child['identity'] if pid == 11 else parent)
+    value.interface = SimpleNamespace(
+        protected_json=lambda *args: {'parent_operation': {'identity': parent}},
+        original_response_output=lambda *args, **kwargs: {'profile_sha256': child['profile_sha256'],
+            'member_sha256': 'a' * 64, 'sha256': 'b' * 64})
+    monkeypatch.setattr(producers, 'Path', lambda path: tmp_path if str(path) == '/receipts/native-startup' else Path(path))
+    request = dict(id='request', kind='source_response_output', nonce='nonce', pid=11,
+                   token='child-token', identity=child['identity'])
+    if change == 'extra_fields':
+        request['inventory'] = {'attacker': 'claimed output'}
+    elif change == 'foreign_pid':
+        request['pid'] = 12
+    elif change == 'token':
+        request['token'] = 'stale'
+    elif change == 'birth':
+        value.kernel = SimpleNamespace(identity=lambda pid: {'pid': 11, 'start_ticks': 111})
+    elif change == 'parent':
+        value.interface.protected_json = lambda *args: {'parent_operation': {'identity': {'pid': 10, 'start_ticks': 101}}}
+    elif change == 'duplicate':
+        value.response_staged[11] = {}
+    elif change == 'role':
+        child['role'] = 'isolated-uv-query'
+    elif change == 'profile':
+        child['profile_sha256'] = '0' * 64
+    elif change == 'primary':
+        value.common = {}
+    if change == 'none':
+        assert value.stage_response(request)['source_response_observed'] is True
+        assert value.records[0]['live_kernel_peer'] is True and 11 in value.response_staged
+        with pytest.raises(RuntimeError):
+            value.stage_response(request)
+    else:
+        with pytest.raises(RuntimeError):
+            value.stage_response(request)
+        assert value.records == []
+
+
+def test_untrusted_response_journal_is_not_output_authority(runtime_fixture):
+    # No producer-written journal record can replace the observer's staged object.
+    tree = ast.parse((ROOT / 'producer_profile.py').read_text())
+    function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'response_receipt')
+    conditions = [ast.unparse(n.test) for n in ast.walk(function) if isinstance(n, ast.If)]
+    assert any(condition.startswith('produced is None or ') for condition in conditions)
+    assert not any(isinstance(n, ast.Constant) and n.value == 'isolated_original_response_output' for n in ast.walk(function))
+
+
+def test_live_return_hook_inverse_retains_original_native_program():
+    tree = ast.parse((ROOT / 'finite/native_producer.py').read_text())
+    profile = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'profile_body')
+    branch = profile.body[1]
+    assert hashlib.sha256(ast.dump(branch, include_attributes=False).encode()).hexdigest() == '6393b13c5d5e992f40ac5c4560c9b2790a8cec51541261c4267771f59701c91b'
+    profile.body.pop(1)
+    assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() == '4d59cdc83b63cdffb205f2524640286d217a6fc6183fe4b0b77691a1c70b854b'
+
+
+@pytest.mark.parametrize('change', ['none', 'poison', 'denial', 'foreign_parent', 'parent_birth',
+    'missing_query', 'duplicate_query', 'wait', 'missing_wait', 'stale_child', 'stale_profile',
+    'wrong_mode', 'wrong_owner', 'wrong_helper', 'foreign_writer'])
+def test_bootstrap_cache_requires_original_live_operation(tmp_path, monkeypatch, change):
+    import stat
+    from test_producer_startup import load_function
+    profiles = tmp_path / 'profiles'
+    profiles.mkdir()
+    parent = {'pid': 10, 'start_ticks': 100}
+    contexts = {10: {'role': 'uv', 'command': ['uv', 'run', 'pytest'], 'identity': parent}}
+    records, waits = [], []
+    headers = {}
+    for pid, role, helper in [(11, 'query', 'query'), (12, 'editable_backend', 'get_requires_for_build_editable'),
+                              (13, 'editable_backend', 'build_editable')]:
+        child = {'pid': pid, 'ppid': 10, 'start_ticks': pid * 10, 'boot_id': 'current'}
+        contexts[pid] = {'role': role, 'identity': child}
+        header = dict(pid=pid, parent=10, start_ticks=pid * 10, boot_id='current',
+                      orig_argv=[str(tmp_path / 'cache/runtime/bin/python'), '-c', helper])
+        headers[pid] = header
+        body = json.dumps(header).encode()
+        (profiles / (str(pid) + '.json')).write_bytes(body)
+        records.append(dict(kind='primary_native_preinit', pid=pid, parent=10, role=role,
+                            identity=child, profile_sha256=hashlib.sha256(body).hexdigest()))
+        waits.append(dict(kind='original_parent_wait4', child=pid, parent_tgid=10, raw=0))
+    primary = SimpleNamespace(root=1, contexts=contexts, records=records, denials=[])
+    trace = SimpleNamespace(poison=False, records=waits, active={1, 10, 20}, identities={
+        1: {'tgid': 1}, 10: {'tgid': 10}, 20: {'tgid': 20, 'ppid': 10}})
+    uid, mode = 20001, stat.S_IFREG | 0o444
+    if change == 'poison':
+        trace.poison = True
+    elif change == 'denial':
+        primary.denials.append('refused')
+    elif change == 'foreign_parent':
+        contexts[10]['role'] = 'foreign'
+    elif change == 'parent_birth':
+        contexts[10]['identity'] = {'pid': 10, 'start_ticks': 101}
+    elif change == 'missing_query':
+        contexts.pop(11)
+    elif change == 'duplicate_query':
+        contexts[14] = contexts[11]
+    elif change == 'wait':
+        waits[0]['raw'] = 256
+    elif change == 'missing_wait':
+        waits.pop()
+    elif change == 'stale_child':
+        contexts[11]['identity'] = {**contexts[11]['identity'], 'start_ticks': 111}
+    elif change == 'stale_profile':
+        (profiles / '11.json').write_bytes(b'{}')
+    elif change == 'wrong_mode':
+        mode = stat.S_IFREG | 0o644
+    elif change == 'wrong_owner':
+        uid = 20000
+    elif change == 'wrong_helper':
+        headers[12]['orig_argv'][-1] = 'foreign'
+        body = json.dumps(headers[12]).encode()
+        (profiles / '12.json').write_bytes(body)
+        records[1]['profile_sha256'] = hashlib.sha256(body).hexdigest()
+    elif change == 'foreign_writer':
+        trace.active.add(30)
+        trace.identities[30] = {'tgid': 30}
+    real_lstat = Path.lstat
+    monkeypatch.setattr(Path, 'lstat', lambda path: SimpleNamespace(st_mode=mode, st_uid=uid, st_nlink=1)
+                        if path.parent == profiles else real_lstat(path))
+    function = load_function('bootstrap_cache', 'producer_profile.py', {
+        'Path': lambda path: profiles if str(path) == '/receipts/primary-startup' else Path(path),
+        'stat': stat, 'hashlib': hashlib, 'json': json,
+        'identities': SimpleNamespace(identity=lambda pid: parent),
+        'load': lambda *args: SimpleNamespace(backend_request=lambda value: value),
+        'hashed': lambda value: hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest(),
+        'cache_view': lambda *args: ({'sealed': {'type': 'file', 'sha256': 'pinned'}}, {})})
+    if change == 'none':
+        result = function({'cache': str(tmp_path / 'cache')}, trace, 20, primary)
+        assert len(result['producers']) == 3 and len(result['external_links']) == 3
+        assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    else:
+        with pytest.raises(RuntimeError):
+            function({'cache': str(tmp_path / 'cache')}, trace, 20, primary)
+
+
+def test_bootstrap_cache_join_preserves_original_primary_admission():
+    tree = ast.parse((ROOT / 'primary_authority.py').read_text())
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and ast.unparse(n.func) == 'self.source.start']
+    assert len(calls) == 1
+    call = calls[0]
+    assert [ast.unparse(n) for n in call.keywords] == ['trace=trace', 'primary=self']
+    call.keywords = []
+    assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() == '779b322196c778dae817d5987556e0a9d9befc0faad7ae17540a65d9d4399f1c'

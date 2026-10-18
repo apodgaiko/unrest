@@ -847,3 +847,20 @@ matching kernel parent/child births and actual numeric parent wait0. It seals an
 immutable observer-owned receipt containing file identity and hashes. Later
 helpers and the final cache consumer require that receipt; a matching filename
 or freshly observed writable file does not supply original-operation authority.
+
+
+PRIMARY cache lineage starts at the existing pre-pytest exec fence. Its observer
+requires the original UV parent, the exact query and two editable backend children,
+their protected profiles, current births and numeric successful parent waits.
+It seals every produced member's full bytes, type, mode, owner, inode and link
+target. Each later original build/install UV operation must start from that seal;
+its completed output is reconciled only with authenticated helper/query outputs
+and the exact source/archive payloads. Unknown writers or members refuse.
+
+Transient helper responses are observed through the existing authenticated peer
+channel at the exact original command's return, before UV may retire the temporary
+runtime. The observer reads the file itself; the request supplies no inventory or
+output claims. It finalizes a receipt only after the original parent's numeric
+successful wait. A producer-written journal is not receipt authority. Retired
+responses retain birth/operation/file bindings; surviving responses must retain
+their complete identity and bytes. All original deadlines remain unchanged.

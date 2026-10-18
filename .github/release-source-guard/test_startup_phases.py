@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from test_root_allocation import restore_primary_allocation
-from test_producer_startup import restore_producer_profile, restore_primary_cache
+from test_producer_startup import restore_producer_profile, restore_primary_cache, restore_bootstrap_cache
 
 ROOT = Path(__file__).parent
 
@@ -73,16 +73,32 @@ class StripTelemetry(ast.NodeTransformer):
         node.keys, node.values = [k for k, v in retained], [v for k, v in retained]
         return self.generic_visit(node)
 
+def restore_response_channel(tree):
+    handle = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'handle')
+    nodes = [n for n in handle.body if isinstance(n, ast.If) and ast.unparse(n.test) == "kind == 'source_response_output'"]
+    assert len(nodes) == 1
+    assert ast.unparse(nodes[0]) == "if kind == 'source_response_output':\n    callback = getattr(self, 'source_response_output', None)\n    if callback is None:\n        raise RuntimeError('source_response_observer_missing')\n    return callback(request)"
+    handle.body.remove(nodes[0])
+    snapshot = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'channel_snapshot')
+    known = next(n for n in snapshot.body if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == 'known').value
+    removed = [n for n in known.elts if isinstance(n, ast.Constant) and n.value == 'source_response_output']
+    assert len(removed) == 1
+    known.elts.remove(removed[0])
+    return tree
+
+
 BASELINE_AST_SHA256 = {'finite/source_operations.py': 'a5d9f2958f8aa4dd57922407f3112d6917544cc87b22942febe254172bd50209', 'finite/runtime_guard.py': '3b26232fb8c8d033a984e5c0ba0fa1760600cb7b846af728b2fbbeb39ccd6fa4', 'finite/source_activation.py': 'fd49c0f30096da8163142b0f8f884d56a80dbf9f5b38b757f22486ec1f5efab7', 'linux_supervisor.py': '2fb9fb8012c9161fe64ad70dca851abdd65a2e86dca48701d3f5b2d2fabef99f', 'linux_trace.py': '344558174ec335476ac8f76fa0afdf4ee667a497825150e4388fdb8ca95f5b9c', 'primary_source_authority.py': 'b36a24d13b548d143379dacd844680f089a41e5f2666c9a9944eeb29607a1540'}
 
 
 def test_only_closed_telemetry_changes_original_executable_trees():
     for name, expected in BASELINE_AST_SHA256.items():
         tree = ast.parse((ROOT / name).read_bytes())
+        if name == 'linux_supervisor.py':
+            tree = restore_response_channel(tree)
         if name == 'linux_trace.py':
             tree = restore_primary_allocation(tree)
         if name == 'primary_source_authority.py':
-            tree = restore_producer_profile(tree)
+            tree = restore_bootstrap_cache(restore_producer_profile(tree))
         if name == 'finite/source_activation.py':
             tree = restore_primary_cache(tree)
         tree = StripTelemetry().visit(tree)

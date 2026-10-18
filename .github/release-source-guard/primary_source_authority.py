@@ -36,9 +36,24 @@ class SourceAuthority:
         self.bound, self.native_context = {}, {}
         self.pipe_records = []
 
-    def start(self, pid, output_fd):
+    def prepare_bootstrap_cache(self, pid, trace, primary):
+        if trace is None or primary is None or primary.source is not self or primary.contexts is not self.contexts:
+            raise RuntimeError('primary_cache_bootstrap_owner')
+        import producer_profile
+        declaration = producer_profile.bootstrap_cache(self.common, trace, pid, primary)
+        path = Path('/receipts/producers/primary-bootstrap-cache.json')
+        pin = write(path, declaration)
+        self.common = {**self.common, 'primary_producer': {
+            **self.common['primary_producer'], 'bootstrap_cache': {'path': str(path), 'sha256': pin}}}
+        common_path = Path('/receipts/producers/primary-common.json')
+        common_pin = write(common_path, self.common)
+        self.manifest['isolated_support'].update(spec_path=str(common_path), spec_sha256=common_pin)
+        self.manifest['native_producer_support'].update(path=str(common_path), sha256=common_pin)
+
+    def start(self, pid, output_fd, *, trace=None, primary=None):
         if self.supervisor is not None:
             raise RuntimeError('primary_source_duplicate_root')
+        self.prepare_bootstrap_cache(pid, trace, primary)
         # These are the actual UV-produced consoles, after editable setup and
         # before pytest starts. Consume their exact renderer and interpreter;
         # source fixtures retain their existing copied-console checks.
@@ -62,6 +77,7 @@ class SourceAuthority:
             spec['pins'][path] = sha(path)
         self.supervisor = Supervisor(spec, SimpleNamespace(pid=pid))
         self.producers = NativeProducers(self.manifest, self.supervisor, self.common)
+        self.supervisor.source_response_output = self.producers.stage_response
         objects = []
         for descriptor in (output_fd, self.supervisor.channel.fileno()):
             info = os.fstat(descriptor)
