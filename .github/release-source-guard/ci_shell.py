@@ -17,7 +17,7 @@ from checkpoint_decision import expected_identity
 from primary_environment import build
 from source_controller import source_bindings
 from structured_evidence import capture, execution_identity
-from primary_custody import Binding, Custody
+from primary_custody import Binding, Custody, read_regular
 from primary_source_inputs import test_plan, decode
 from structured_evidence import canonical
 
@@ -116,7 +116,7 @@ def main():
             raise RuntimeError('primary_decision_kind')
     source_input = None
     if not test_mode and bound['name'] == 'v0.4.6 source suite':
-        source_input = decode((Path(os.environ['RUNNER_TEMP']) / 'primary-source-input.json').read_bytes())
+        source_input = decode(read_regular(Path(os.environ['RUNNER_TEMP']) / 'primary-source-input.json', 65536, 0o600))
         if source_input['definition'] != expected:
             raise RuntimeError('primary_source_current_definition')
     spec = test_plan(script, workflow, test_mode) if test_mode else plan(bound['script'], workflow, source_input)
@@ -174,6 +174,7 @@ def main():
         (inputs / 'test-mode').write_text(test_mode)
     if source_input is not None:
         (inputs / 'source-input.json').write_bytes(canonical(source_input))
+        (inputs / 'source-input.json').chmod(0o600)
     if spec.get('source_mode'):
         prepare = ['docker', 'run', '--rm', '--network=none', '--read-only', '--cap-drop=ALL',
                    '--security-opt=no-new-privileges', '--user=20001:20001',

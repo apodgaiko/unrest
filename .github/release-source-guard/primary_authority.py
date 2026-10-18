@@ -43,7 +43,7 @@ class Authority:
                 return accepted or self.refuse('source_descendant')
         previous = self.contexts.get(pid)
         owner = self.contexts.get(parent)
-        if cwd != '/source' or not command_environment(environment, self.environment):
+        if cwd != '/source' or not command_environment(environment, self.environment, source=self.source is not None):
             # Build-isolated UV interpreter paths are an exact native cache root.
             return self.refuse('environment_or_cwd')
         if (self.source is not None and path in ['/usr/bin/env', '/bin/env']

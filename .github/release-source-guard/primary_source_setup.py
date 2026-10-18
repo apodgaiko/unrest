@@ -41,6 +41,7 @@ def main():
     # Source applicability remains pinned to the original template. The complete
     # current snapshot is a separate custody input, never a rebased baseline.
     manifest['source_selection'] = 'primary-source'
+    manifest['source_case'] = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
     manifest['scope'] = 'primary source entry'
     print(json.dumps({'manifest': manifest, 'registry': text}, sort_keys=True))
 

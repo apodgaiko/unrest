@@ -62,7 +62,7 @@ def environment():
             'SOURCE_DATE_EPOCH': '1700000000', 'GITHUB_WORKSPACE': '/source'}
 
 
-def command_environment(value, root):
+def command_environment(value, root, *, source=False):
     """Only Bash and pinned UV's documented finite additions are admissible."""
     actual = dict(value)
     virtual = actual.pop('VIRTUAL_ENV', None)
@@ -75,7 +75,8 @@ def command_environment(value, root):
     if recursion not in (None, '1'):
         return False
     for key, allowed in {'PWD': {'/source'}, 'OLDPWD': {'/source'}, 'SHLVL': {'0', '1'},
-                         '_': {SHELL, UV}, 'UV': {UV}, 'VIRTUAL_ENV': {'/source/.venv'},
+                         '_': {SHELL, UV} | ({'/usr/bin/env', '/bin/env'} if source else set()),
+                         'UV': {UV}, 'VIRTUAL_ENV': {'/source/.venv'},
                          'PYTHONIOENCODING': {'utf-8:backslashreplace'}}.items():
         if key in actual and actual.pop(key) not in allowed:
             return False
