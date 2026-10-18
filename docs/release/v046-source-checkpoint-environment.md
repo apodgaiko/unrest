@@ -980,3 +980,15 @@ successful consumption or skip byte checks based on timestamps. Cache validation
 also retains the original compiler/header check and rejects code that matches
 only a transient mutable-source observation. Receipt and operation deadlines
 remain unchanged.
+
+When a current SOURCE stream exceeds the unchanged transport limit, its admitted
+bounded provenance header also carries count histograms and SHA256 values for
+closed failure categories. Categories cover kernel/receipt poison, PRIMARY
+denials, forbidden receipt reasons, dependency/runtime-member refusals and
+JUnit error/failure case identities. JUnit message bodies are not read.
+Each category retains its total, distinct count, complete histogram digest and
+at most two sorted code digests. Runtime/cache member names are represented
+only by their existing SHA256 values, and the final native predicate is a
+digest of its fixed stage and Boolean result. No messages or record bodies enter this
+header. These facts are diagnostic only; the original named kernel, collection,
+JUnit and consumer proofs remain mandatory, and a header cannot certify SOURCE.

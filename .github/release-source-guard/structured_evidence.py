@@ -15,6 +15,8 @@ import re
 import subprocess
 import tarfile
 
+from source_failure_facts import build as failure_facts, validate as validate_failure_facts
+
 SCHEMA = 'unrest.v046.direct-private-records.v1'
 MEMBER = 'structured-envelope.json'
 LIMIT = 64 * 1024 * 1024
@@ -146,6 +148,7 @@ def source_header(records, kernel, identity, invocation, exit_code):
         collection = loads(records['collection.json'])
         if type(collection) is list:
             counts['collection'] = len(collection)
+    cases = []
     if 'source.xml' in records and b'<!' not in records['source.xml']:
         try:
             cases = list(ET.fromstring(records['source.xml']).iter('testcase'))
@@ -167,7 +170,7 @@ def source_header(records, kernel, identity, invocation, exit_code):
               'failure_code': kernel.get('failure_code'), 'trace_failure_status': kernel.get('trace_failure_status')}
     header = {'schema': HEADER_SCHEMA, 'identity': identity, 'invocation_sha256': invocation,
               'scope': 'primary-executor', 'records': descriptors, 'kernel_fields': fields,
-              'source_status': status, 'original_counts': counts,
+              'source_status': status, 'original_counts': counts, 'failure_facts': failure_facts(kernel, cases or ()),
               'source_checkpoint_ready': False, 'selected_carrier': None}
     validate_header(header, identity, invocation)
     body = canonical(header)
@@ -177,13 +180,14 @@ def source_header(records, kernel, identity, invocation, exit_code):
 
 def validate_header(value, identity, invocation):
     require(type(value) is dict and set(value) == {'schema', 'identity', 'invocation_sha256',
-            'scope', 'records', 'kernel_fields', 'source_status', 'original_counts',
+            'scope', 'records', 'kernel_fields', 'source_status', 'original_counts', 'failure_facts',
             'source_checkpoint_ready', 'selected_carrier'}, 'header_fields')
     identity_check(value['identity'])
     require(value['schema'] == HEADER_SCHEMA and value['identity'] == identity
             and value['scope'] == 'primary-executor' and value['invocation_sha256'] == invocation
             and type(invocation) is str and re.fullmatch('[0-9a-f]{64}', invocation), 'header_identity')
     require(value['source_checkpoint_ready'] is False and value['selected_carrier'] is None, 'header_authority')
+    require(validate_failure_facts(value['failure_facts']), 'header_failure_facts')
     descriptors = value['records']
     require(type(descriptors) is dict and set(descriptors) <= SOURCE | OPAQUE
             and 'kernel-source.json' in descriptors, 'header_records')
