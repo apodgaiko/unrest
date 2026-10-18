@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import types
@@ -87,7 +88,8 @@ def setup(tmp_path, monkeypatch):
     guard.require_ready = lambda *a: None
     guard.append = events.append
     manifest = tmp_path / 'manifest.json'
-    manifest.write_text('{}')
+    manifest.write_text(json.dumps({k: state[k] for k in (
+        'owned_root', 'checkout', 'registry', 'direct_support', 'product_pins', 'runtime')}))
     code = named(compile(Path(state['guard']).read_bytes(), state['guard'], 'exec',
                          dont_inherit=True), 'initialize_inner')
     cells = {'command_class': 'pytest-root', 'manifest': str(manifest),
@@ -156,6 +158,19 @@ def test_duplicate_launch_token_refuses(tmp_path, monkeypatch):
     with pytest.raises(Refusal, match='duplicate_consumption'):
         h.owner.launch(h.vector, h.tmp, {})
     assert h.poison == ['source_python_duplicate_consumption']
+
+
+@pytest.mark.parametrize('keyword', ['env', 'cwd'])
+def test_callback_rechecks_environment_and_directory_from_source(tmp_path, monkeypatch, keyword):
+    h = setup(tmp_path, monkeypatch)
+    inner = h.owner.subprocess.Popen.__init__
+    def changed(handle, args, **kwargs):
+        kwargs[keyword] = {'FINITE': 'changed'} if keyword == 'env' else tmp_path / 'different'
+        return inner(handle, args, **kwargs)
+    monkeypatch.setattr(h.owner.subprocess.Popen, '__init__', changed)
+    with pytest.raises(Refusal, match='source_ordinary_caller_drift'):
+        h.owner.launch(h.vector, tmp_path, {'FINITE': 'original'})
+    assert h.poison
 
 
 @pytest.mark.parametrize('kind', sorted(CONSUMERS))

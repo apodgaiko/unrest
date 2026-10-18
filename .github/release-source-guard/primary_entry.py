@@ -22,6 +22,22 @@ def main(event, arguments):
         os.close(descriptor)
     profile = json.loads(body)
     raw = Path('/proc/self/stat').read_text()
+    checks = {
+        'pid': profile['pid'] == os.getpid(), 'parent': profile['parent'] == os.getppid(),
+        'birth': profile['start_ticks'] == int(raw[raw.rfind(')') + 2:].split()[19]),
+        'boot': profile['boot_id'] == Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+        'environment': profile['environment'] == dict(os.environ),
+        'cwd': profile['cwd'] == os.getcwd(), 'argv': profile['orig_argv'] == sys.orig_argv,
+        'event': profile['event'] == event,
+        'flags': profile['flags'] == [sys.flags.isolated, sys.flags.no_site, sys.flags.dont_write_bytecode],
+        'body': len(arguments) == 1 and hashlib.sha256(str(arguments[0]).encode()).hexdigest() == profile['body_sha256'],
+    }
+    if not all(checks.values()):
+        Path('/work/primary-native-state-' + str(os.getpid()) + '.json').write_text(json.dumps({
+            'schema': 'primary-native-binding-refusal-v1', 'pid': os.getpid(), 'checks': checks,
+            'exact_locale_coercion': (dict(os.environ) == {**profile['environment'], 'LC_CTYPE': 'C.UTF-8'}
+                                      and 'LC_CTYPE' not in profile['environment']),
+        }, sort_keys=True))
     if (profile['pid'] != os.getpid() or profile['parent'] != os.getppid()
             or profile['start_ticks'] != int(raw[raw.rfind(')') + 2:].split()[19])
             or profile['boot_id'] != Path('/proc/sys/kernel/random/boot_id').read_text().strip()

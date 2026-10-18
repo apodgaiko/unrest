@@ -3,6 +3,7 @@
 from __future__ import annotations
 import inspect
 import ast
+import json
 import os
 from pathlib import Path
 import sys
@@ -328,6 +329,14 @@ class SourceActivation(IsolatedActivation):
                 or any(c not in '0123456789abcdef' for c in token)
                 or token in self.python_consumed):
             self.refuse('source_python_duplicate_consumption')
+        if guard.digest(local['manifest']) != local['pin']:
+            self.refuse('source_python_manifest_drift')
+        sealed = json.loads(Path(local['manifest']).read_bytes())
+        if (any(self.state[key] != sealed[key] for key in (
+                'owned_root', 'checkout', 'registry', 'direct_support', 'product_pins'))
+                or any(self.state['runtime'][key] != sealed['runtime'][key]
+                       for key in ('realpath', 'sha256'))):
+            self.refuse('source_python_root_runtime_drift')
         self.ready(self.state['token'])
         self.python_consumed.add(token)
         return guard, local
@@ -387,6 +396,39 @@ class SourceActivation(IsolatedActivation):
                              for relative, lines in sites.items() for line in lines)
             if name not in names:
                 self.refuse('source_unknown_python_registration')
+            path = Path(self.state['guard']).with_name('fallback_binding.py')
+            frames = guard.checked_source(
+                path, self.state['direct_support']['files'][str(path)])['active_frames']()
+            try:
+                bound = registration['source_binding']
+                source = Path(bound['path'])
+                if not source.is_absolute():
+                    source = Path(self.state['checkout']) / source
+                owned = False
+                for frame in frames:
+                    payload = self.state.get('registered_payload')
+                    if (payload is not None and payload['mode'] == 'inline'
+                            and frame.f_globals is self.state.get('payload_globals')
+                            and payload['source_binding']['path'] == str(source)
+                            and payload['source_binding']['sha256'] == bound['sha256']):
+                        code = self.state['payload_code']
+                    elif Path(frame.f_code.co_filename) == source:
+                        module = sys.modules.get(frame.f_globals.get('__name__'))
+                        if module is None or vars(module) is not frame.f_globals:
+                            continue
+                        if guard.digest(source) != bound['sha256']:
+                            self.refuse('source_ordinary_owner_source_drift')
+                        code = self.state['isolated_source_code'](source)
+                    else:
+                        continue
+                    expected = (code if frame.f_code.co_name == '<module>' else
+                                self.state['isolated_named'](code, frame.f_code.co_name))
+                    if frame.f_code == expected:
+                        owned = True
+                if not owned:
+                    self.refuse('source_ordinary_owner_code_globals_drift')
+            finally:
+                frames.clear()
             # Use the original input vector for routes with an exact console
             # translation; compare the resulting vector as well as the binding.
             actual, vector = guard.admit(launch['args'], cwd, environment)
