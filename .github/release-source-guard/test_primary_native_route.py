@@ -178,7 +178,6 @@ def test_route_constructor_cannot_be_installed_by_a_source_caller(route, monkeyp
     state = {'phase': 'INSTALLING', 'guard': str(ROOT / 'finite/runtime_guard.py')}
     guard = ModuleType('synthetic_guard')
     guard._STATE = state
-    guard._REAL_GETFRAME = sys._getframe
     guard.install = lambda: None
     if change == 'missing_guard':
         monkeypatch.delitem(sys.modules, 'runtime_guard', raising=False)
@@ -204,7 +203,6 @@ def test_captured_constructor_requires_the_admitted_guard_frame_and_preserves_ar
     constructor = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == '__init__')
     wrapper = next(node for node in constructor.body if isinstance(node, ast.FunctionDef) and node.name == 'native_init')
     guard = ModuleType('synthetic_guard')
-    guard._REAL_GETFRAME = sys._getframe
     exec("def invoke(handle, argv, registration, cwd, env, callback, override=None):\n"
          "    original_init = callback\n"
          "    child_argv = argv\n"
@@ -217,7 +215,7 @@ def test_captured_constructor_requires_the_admitted_guard_frame_and_preserves_ar
         raise OSError('synthetic_stop_before_fork')
     monkeypatch.setattr(subprocess, '_fork_exec', stopped)
     namespace = {'guard': guard, 'initialize': guard.invoke.__code__, 'state': state, 'self': route.operation,
-                 'require_ready': ready.append, 'original_init': subprocess.Popen.__init__}
+                 'require_ready': ready.append, 'original_init': subprocess.Popen.__init__, 'sys': sys}
     exec(compile(ast.Module(body=[wrapper], type_ignores=[]), '<production-constructor-adapter>', 'exec'), namespace)
     callback = namespace['native_init']
     if change == 'direct':

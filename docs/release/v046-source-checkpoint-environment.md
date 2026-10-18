@@ -1028,3 +1028,7 @@ producer that writes it. Mode `0755` is refused alongside writable mounts,
 foreign ownership, links and byte or identity drift. The native-UV mode proof
 family reserves only epochs `01` through `04` at both the controller entry and
 structured evidence identity gates; malformed and out-of-range refs refuse.
+
+Adapter frame acquisition uses the same `sys._getframe` runtime primitive as
+the pinned guard. The guard exports no private saved-frame helper; installation
+and invocation still compare the actual code, globals, state and constructor cell.

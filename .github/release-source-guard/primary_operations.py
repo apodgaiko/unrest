@@ -40,7 +40,7 @@ class Operations(_LegacyOperations):
         compiled = compile(guard_body, state['guard'], 'exec', dont_inherit=True)
         expected = next(code for code in compiled.co_consts
                         if isinstance(code, types.CodeType) and code.co_name == 'install')
-        caller = guard._REAL_GETFRAME(1)
+        caller = sys._getframe(1)
         if (caller.f_code is not guard.install.__code__ or caller.f_globals is not guard.__dict__
                 or code_identity(caller.f_code) != code_identity(expected)):
             self.refuse('primary_native_route_install_caller')
@@ -52,7 +52,7 @@ class Operations(_LegacyOperations):
                 or original_init.__code__.co_filename != subprocess.__file__):
             self.refuse('primary_native_route_original_constructor')
         def native_init(handle, args, *positional, **kwargs):
-            frame = guard._REAL_GETFRAME(1)
+            frame = sys._getframe(1)
             if (frame.f_code is not initialize or frame.f_globals is not guard.__dict__
                     or frame.f_locals.get('original_init') is not native_init
                     or guard._STATE is not state or state.get('operations') is not self
