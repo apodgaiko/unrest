@@ -394,8 +394,9 @@ source execution cannot silently rerun at the same SHA.
 
 The release-ref trigger is wired, but current readiness scratch refs cannot
 activate primary full execution. Focused capsule execution and receipt controls
-are implementation evidence. The primary SOURCE bridge is implemented behind complete downstream readiness
-input. Package capsule integration remains incomplete and refuses closed. No
+are implementation evidence. The primary SOURCE root bridge is implemented behind complete downstream
+readiness input. Ordinary-Python/producer activation composition remains blocked
+as described below. Package capsule integration remains incomplete and refuses closed. No
 original full certificate or actual same-SHA reuse is claimed.
 Source checkpoint readiness remains false and selected carrier remains null.
 The existing downstream source carrier/package/final closure, single frozen
@@ -496,3 +497,29 @@ profile cannot activate the unfiltered SOURCE duty. The poison probe catches an
 unknown launch after the unchanged representative test, then requires a failing
 capsule with retained global poison and actual parent waits. No full source run,
 freeze, package build or release certification is authorized by these probes.
+
+
+The initial isolated-Python primary probe failed after ordinary finite admission:
+the globally installed producer callback required an unrelated `self.direct`
+tuple. Its failed evidence is retained. SOURCE activation now composes the two
+domains explicitly. Producer consumers still require and consume their exact
+producer profile; the four reference-integrity routes still re-resolve their
+original reference binding. Every registered callback consumes a unique token
+from the actual byte-bound guard launch frame, with the original state, argv,
+registration, environment and cwd. Reusing that token or invoking the callback
+outside that frame refuses.
+
+Ordinary fallback entries must be the actual current registry object and match
+the byte-pinned registry, runtime, source, vector, owned root and original
+source-expression/code/module-globals binding. The HTTP port token already
+consumed by admission is never recreated. Direct routes are limited to existing
+finite resolver outputs and the exact pinned cohort SITES; their original
+resolver must independently reproduce both registration and transformed vector.
+All paths retain shared startup checks, READY, native pre-init, caught-refusal
+poison, kernel tracking and genuine original-parent waits. This composition does
+not grant authority to arbitrary class strings or arbitrary Python commands.
+
+Only bounded TEST proofs are eligible at this stage. Complete source-carrier,
+package and final input closure remain downstream; readiness remains false and
+the selected carrier remains null. One full frozen unexcluded Python3.13 source
+checkpoint and all remaining release checks are still required.

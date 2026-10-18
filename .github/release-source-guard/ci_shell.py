@@ -87,7 +87,9 @@ def main():
     if len(sys.argv) == 4 and sys.argv[1] == '--source-test':
         test_mode = sys.argv[2]
         if (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
-                or not os.environ.get('GITHUB_REF', '').startswith('refs/heads/codex/source-guard-structured-20261018-source-entry-')):
+                or not os.environ.get('GITHUB_REF', '').startswith((
+                    'refs/heads/codex/source-guard-structured-20261018-source-entry-',
+                    'refs/heads/codex/source-guard-structured-20261018-source-composition-'))):
             raise RuntimeError('primary_test_workflow_identity')
     elif len(sys.argv) != 2:
         raise RuntimeError('primary_shell_argv')

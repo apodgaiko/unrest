@@ -8,10 +8,10 @@ import types
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT / 'finite'))
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'finite'))
 from source_activation import SourceActivation, CONSUMERS
 
+ROOT = Path(__file__).resolve().parent
 
 def named(code, name):
     for value in code.co_consts:
@@ -165,3 +165,26 @@ def test_producer_consumers_keep_exact_direct_profile(tmp_path, monkeypatch, kin
     h.guard.admit = lambda args, cwd, env: (h.registration, list(args))
     with pytest.raises(Refusal, match='source_direct_profile_drift'):
         h.owner.launch(h.vector, h.tmp, {})
+
+
+def test_exact_producer_consumption_clears_only_its_direct_token(tmp_path, monkeypatch):
+    h = setup(tmp_path, monkeypatch)
+    h.registration = {'class': 'source-checker', 'python': True, 'source_binding': {}}
+    h.guard.admit = lambda args, cwd, env: (h.registration, list(args))
+    h.activation.direct = (h.vector, str(h.tmp), {})
+    with pytest.raises(Consumed):
+        h.owner.launch(h.vector, h.tmp, {})
+    assert h.activation.direct is None and not h.poison
+
+
+@pytest.mark.parametrize('drift', [False, True])
+def test_reference_re_resolves_original_binding(tmp_path, monkeypatch, drift):
+    h = setup(tmp_path, monkeypatch)
+    h.registration = {'class': 'reference-integrity:test_passes', 'python': True,
+                      'source_binding': {'original': True}}
+    h.guard.admit = lambda args, cwd, env: (h.registration, list(args))
+    h.state['direct_admit'] = lambda *a: ({**h.registration, 'source_binding': {}}
+                                         if drift else dict(h.registration))
+    with pytest.raises(Refusal if drift else Consumed):
+        h.owner.launch(h.vector, h.tmp, {})
+    assert bool(h.poison) is drift

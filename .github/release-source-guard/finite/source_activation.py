@@ -425,6 +425,9 @@ class SourceActivation(IsolatedActivation):
             self.refuse("source_direct_profile_drift")
         self.shared()
         self.direct = None
+        self.emit({'kind': 'source_producer_python_startup_consumption',
+                   'class': registration['class'] if registration is not None else None,
+                   'shared_startup_seal': True})
 
 
 def create(state, emit, refuse, ready):
