@@ -28,6 +28,37 @@ sha: Any = globals()['sha']
 code_identity: Any = globals()['code_identity']
 
 
+def original_guard_install(guard, state, guard_body, refuse):
+    """Resolve only the byte-pinned endpoint wrapper's original guard function."""
+    endpoint = sys.modules.get('endpoint')
+    wrapper = guard.install
+    path = Path(state['guard']).with_name('endpoint.py')
+    binding = state.get('endpoint')
+    if (endpoint is None or type(wrapper) is not types.FunctionType
+            or wrapper.__globals__ is not endpoint.__dict__ or type(binding) is not dict):
+        refuse('primary_native_route_endpoint_boundary')
+    body = path.read_bytes()
+    if hashlib.sha256(body).hexdigest() != binding.get('sha256'):
+        refuse('primary_native_route_endpoint_drift')
+    compiled = compile(body, str(path), 'exec', dont_inherit=True)
+    attach = next(code for code in compiled.co_consts
+                  if isinstance(code, types.CodeType) and code.co_name == 'attach')
+    expected_wrapper = next(code for code in attach.co_consts
+                            if isinstance(code, types.CodeType) and code.co_name == 'install')
+    if code_identity(wrapper.__code__) != code_identity(expected_wrapper):
+        refuse('primary_native_route_endpoint_code')
+    cells = dict(zip(wrapper.__code__.co_freevars, wrapper.__closure__ or ()))
+    original = cells['original_install'].cell_contents
+    compiled = compile(guard_body, state['guard'], 'exec', dont_inherit=True)
+    expected = next(code for code in compiled.co_consts
+                    if isinstance(code, types.CodeType) and code.co_name == 'install')
+    if (cells['guard'].cell_contents is not guard or type(original) is not types.FunctionType
+            or original.__globals__ is not guard.__dict__
+            or code_identity(original.__code__) != code_identity(expected)):
+        refuse('primary_native_route_original_install')
+    return original
+
+
 class Operations(_LegacyOperations):
     def __init__(self, state, emit, refuse, require_ready):
         super().__init__(state, emit, refuse, require_ready)
@@ -37,15 +68,13 @@ class Operations(_LegacyOperations):
         guard_body = Path(state['guard']).read_bytes()
         if hashlib.sha256(guard_body).hexdigest() != '475f460e197fa896a7a8ef59ca48f986445e7749ba7efd09137d9cc480f5686e':
             self.refuse('primary_native_route_guard_drift')
-        compiled = compile(guard_body, state['guard'], 'exec', dont_inherit=True)
-        expected = next(code for code in compiled.co_consts
-                        if isinstance(code, types.CodeType) and code.co_name == 'install')
+        original_install = original_guard_install(guard, state, guard_body, self.refuse)
         caller = sys._getframe(1)
-        if (caller.f_code is not guard.install.__code__ or caller.f_globals is not guard.__dict__
-                or code_identity(caller.f_code) != code_identity(expected)):
+        if (caller.f_code is not original_install.__code__ or caller.f_globals is not guard.__dict__
+                or caller.f_locals.get('state') is not state):
             self.refuse('primary_native_route_install_caller')
         del caller
-        initialize = next(code for code in guard.install.__code__.co_consts
+        initialize = next(code for code in original_install.__code__.co_consts
                           if isinstance(code, types.CodeType) and code.co_name == 'initialize_inner')
         original_init = subprocess.Popen.__init__
         if (getattr(original_init, '__globals__', None) is not subprocess.__dict__

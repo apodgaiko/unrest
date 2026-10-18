@@ -190,6 +190,7 @@ def test_route_constructor_cannot_be_installed_by_a_source_caller(route, monkeyp
     elif change == 'guard_drift':
         state['guard'] = str(route.source)
     namespace['sys'], namespace['types'], namespace['subprocess'] = sys, __import__('types'), subprocess
+    namespace['original_guard_install'] = lambda guard, state, body, refuse: guard.install
     before = subprocess.Popen.__init__
     with pytest.raises(RuntimeError, match='primary_native_route_'):
         namespace['Operations'](state, route.emitted.append, route.operation.refuse, lambda token: None)

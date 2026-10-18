@@ -1032,3 +1032,9 @@ structured evidence identity gates; malformed and out-of-range refs refuse.
 Adapter frame acquisition uses the same `sys._getframe` runtime primitive as
 the pinned guard. The guard exports no private saved-frame helper; installation
 and invocation still compare the actual code, globals, state and constructor cell.
+
+The exported guard installer is the existing endpoint wrapper. PRIMARY resolves
+only that exact pinned wrapper, with its endpoint globals and guard closure,
+and checks the original installer function against the pinned guard code and
+globals. The actual constructor caller must be that original function and carry
+the same local state; its nested launch constructor remains bound by identity.
