@@ -317,6 +317,7 @@ class SourceAuthority:
                 'diagnostic_schedule': dict(self.supervisor.diagnostic_schedule),
                 'event_timings': self.supervisor.event_timings,
                 'receipt_channel_diagnostics': self.supervisor.channel_diagnostics,
+                'receipt_channel_diagnostic_summary': self.supervisor.diagnostic_summary(),
                 'native_source_records': self.producers.records,
                 'source_pipe_records': self.pipe_records,
                 'source_observer_poison_sha256': (hashlib.sha256(json.loads(

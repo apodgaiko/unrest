@@ -139,3 +139,53 @@ def test_incomplete_frame_disconnect_retains_poison_without_effect(transport):
     assert supervisor.poisoned and not effects and not supervisor.clients
     assert supervisor.channel_diagnostics[-1]['pending_reason'] == 'frame'
 
+
+
+def test_completed_diagnostic_redundancy_is_bounded_without_changing_receipts(monkeypatch):
+    import hashlib
+    import ast
+    # Invoke the exact predecessor producer, not a mirrored projection oracle.
+    reference = Path(__file__).with_name('test_channel_snapshot_reference.py').read_text()
+    namespace = {'struct': struct, 'hashlib': hashlib, 'json': json, 'time': host.time}
+    exec(compile(reference, 'direct_original_channel_snapshot', 'exec'), namespace)
+    reference_fn = next(n for n in ast.parse(reference).body if isinstance(n, ast.FunctionDef))
+    current_fn = next(n for n in ast.walk(ast.parse(Path(host.__file__).read_text()))
+                      if isinstance(n, ast.FunctionDef) and n.name == 'channel_snapshot')
+    assert ast.dump(reference_fn, include_attributes=False) == ast.dump(current_fn, include_attributes=False)
+    supervisor = host.Supervisor.__new__(host.Supervisor)
+    supervisor.registered = {}
+    supervisor.tick_count, supervisor.event_count = 0, 0
+    supervisor.trace_progress = {'records': 10, 'active': 2, 'pending': 1}
+    supervisor.receipts = [{'request': {'id': i}, 'ok': True} for i in range(10000)]
+    before = json.dumps(supervisor.receipts, sort_keys=True).encode()
+    supervisor.channel_diagnostics = []
+    supervisor.channel_diagnostic_hash = hashlib.sha256()
+    supervisor.channel_diagnostic_summary = {'records': 0, 'successful_completions': 0,
+        'aggregated_successful_completions': 0, 'sample_ordinals': [], 'last_successful_completion': None}
+    monkeypatch.setattr(host.time, 'monotonic', lambda: 10.0)
+    state = {'request': {'kind': 'custody_poll'}, 'buffer': bytearray(struct.pack('!I', 10)),
+             'authenticated': True, 'output': b'', 'started': 9.0, 'accepted_tick': 1,
+             'pending_reason': 'output', 'diagnostic_success': True}
+    sequence_hash = hashlib.sha256()
+    original_rows = []
+    for i in range(10003):
+        supervisor.tick_count = i
+        # Refused, closed and a completed error response must all be retained.
+        outcome = 'refused' if i == 129 else 'closed' if i == 130 else 'complete'
+        state['diagnostic_success'] = i != 131
+        row = namespace['channel_snapshot'](supervisor, state, outcome)
+        original_rows.append(row)
+        encoded = json.dumps(row, sort_keys=True).encode()
+        sequence_hash.update(len(encoded).to_bytes(8, 'big'))
+        sequence_hash.update(encoded)
+        supervisor.record_channel_diagnostic(state, outcome)
+    summary = supervisor.diagnostic_summary()
+    assert summary['records'] == 10003 and summary['successful_completions'] == 10000
+    assert summary['aggregated_successful_completions'] == 9872
+    assert summary['sequence_sha256'] == sequence_hash.hexdigest()
+    assert supervisor.channel_diagnostics == [original_rows[i] for i in summary['sample_ordinals']]
+    assert len(supervisor.channel_diagnostics) == 131
+    assert all(i in summary['sample_ordinals'] for i in (129, 130, 131))
+    assert summary['last_successful_completion'] == {'ordinal': 10002, 'snapshot': original_rows[-1]}
+    assert json.dumps(supervisor.receipts, sort_keys=True).encode() == before
+    assert len(json.dumps({'samples': supervisor.channel_diagnostics, 'summary': summary})) < 131072

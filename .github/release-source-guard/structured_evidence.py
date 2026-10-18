@@ -30,7 +30,7 @@ HEADER = 'transport-provenance.json'
 HEADER_PREFIX = b'SOURCE-TRANSPORT:'
 HEADER_LIMIT = 8192
 HEADER_SCHEMA = 'unrest.v046.source-transport-provenance.v1'
-KERNEL_FIELDS = frozenset('records poison diagnostic_trace unregistered_processes native_diagnostics primary_plan primary_records primary_denials failure_code native_preinit_refusal missing_parent_waits source_preexec_identity runtime_binding_sha256 actual_script_sha256 all_commands_dispatched source_checkpoint_ready selected_carrier guard_poison receipt_ledger_poison source_events receipts diagnostic_schedule event_timings receipt_channel_diagnostics native_source_records source_pipe_records source_observer_poison_sha256 root_parent_wait_raw stage frame_lines'.split())
+KERNEL_FIELDS = frozenset('records poison diagnostic_trace unregistered_processes native_diagnostics primary_plan primary_records primary_denials failure_code native_preinit_refusal missing_parent_waits source_preexec_identity runtime_binding_sha256 actual_script_sha256 all_commands_dispatched source_checkpoint_ready selected_carrier guard_poison receipt_ledger_poison source_events receipts diagnostic_schedule event_timings receipt_channel_diagnostics receipt_channel_diagnostic_summary native_source_records source_pipe_records source_observer_poison_sha256 root_parent_wait_raw stage frame_lines'.split())
 IDENTITY = {'repository', 'head_sha', 'run_id', 'run_attempt', 'workflow_ref', 'workflow_sha',
             'artifact_name', 'support_sha256'}
 
@@ -125,7 +125,7 @@ def source_header(records, kernel, identity, invocation, exit_code):
     fields = {name: {'bytes': len(json.dumps(value, sort_keys=True).encode()),
                      'count': len(value) if type(value) in (list, dict) else None}
               for name, value in sorted(kernel.items())}
-    counts = dict.fromkeys(('collection', 'junit_cases', 'junit_failures', 'junit_errors', 'junit_skips'))
+    counts = dict.fromkeys(('collection', 'junit_cases', 'junit_failures', 'junit_errors', 'junit_skips', 'receipt_ok', 'receipt_not_ok', 'channel_complete', 'channel_refused', 'channel_closed'))
     if 'collection.json' in records:
         collection = loads(records['collection.json'])
         if type(collection) is list:
@@ -139,6 +139,12 @@ def source_header(records, kernel, identity, invocation, exit_code):
             counts.update(junit_cases=len(cases), junit_failures=sum(len(c.findall('failure')) for c in cases),
                           junit_errors=sum(len(c.findall('error')) for c in cases),
                           junit_skips=sum(len(c.findall('skipped')) for c in cases))
+    if 'receipts' in kernel:
+        counts['receipt_ok'] = sum(row.get('ok') is True for row in kernel['receipts'])
+        counts['receipt_not_ok'] = len(kernel['receipts']) - counts['receipt_ok']
+    if 'receipt_channel_diagnostics' in kernel:
+        for outcome in ('complete', 'refused', 'closed'):
+            counts['channel_' + outcome] = sum(row.get('outcome') == outcome for row in kernel['receipt_channel_diagnostics'])
     status = {'exit_code': exit_code, 'root_parent_wait_raw': kernel.get('root_parent_wait_raw'),
               'guard_poison': kernel.get('guard_poison'), 'poison_count': len(kernel.get('poison', [])),
               'receipt_poison_count': len(kernel.get('receipt_ledger_poison', [])),
@@ -176,7 +182,7 @@ def validate_header(value, identity, invocation):
         require(type(item) is dict and set(item) == {'bytes', 'count'} and numeric(item['bytes'])
                 and (item['count'] is None or numeric(item['count'])), 'header_cardinality')
     counts = value['original_counts']
-    require(type(counts) is dict and set(counts) == {'collection', 'junit_cases', 'junit_failures', 'junit_errors', 'junit_skips'}
+    require(type(counts) is dict and set(counts) == {'collection', 'junit_cases', 'junit_failures', 'junit_errors', 'junit_skips', 'receipt_ok', 'receipt_not_ok', 'channel_complete', 'channel_refused', 'channel_closed'}
             and all(v is None or numeric(v) for v in counts.values()), 'header_counts')
     status = value['source_status']
     require(type(status) is dict and set(status) == {'exit_code', 'root_parent_wait_raw', 'guard_poison',

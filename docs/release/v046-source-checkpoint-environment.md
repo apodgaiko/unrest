@@ -743,3 +743,12 @@ fragments, and preserves the named header before enforcing the unchanged
 against the original record bytes. A header without the complete structured
 envelope supplies diagnostics only; it never establishes SOURCE acceptance.
 No historical process output or opaque log is a recovery source.
+
+Successful receipt-channel timing snapshots retain the first 128 completions
+and the last completion, plus total/aggregated counts, retained ordinals and
+a SHA256 over every original length-framed snapshot in original order. All
+refused/closed channels and completed error replies retain their complete
+snapshots. This bounds diagnostic repetition only: every original authenticated
+receipt, policy answer, peer/birth identity, actual parent wait, failure and
+poison record remains in the original semantic arrays. Sampling supplies no
+authority and changes no admission, READY, deadline, request or response bound.

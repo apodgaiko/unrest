@@ -14,13 +14,22 @@ class StripTelemetry(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def visit_FunctionDef(self, node):
-        if node.name == '_diagnostic_mark':
+        if node.name in {'_diagnostic_mark', 'record_channel_diagnostic', 'diagnostic_summary'}:
             return None
         return self.generic_visit(node)
 
     def visit_Expr(self, node):
         if isinstance(node.value, ast.Call):
             function = node.value.func
+            if (isinstance(function, ast.Attribute) and function.attr == 'record_channel_diagnostic'
+                    and isinstance(function.value, ast.Name) and function.value.id == 'self'):
+                return ast.Expr(value=ast.Call(
+                    func=ast.Attribute(value=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()),
+                                                          attr='channel_diagnostics', ctx=ast.Load()),
+                                       attr='append', ctx=ast.Load()),
+                    args=[ast.Call(func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()),
+                                                     attr='channel_snapshot', ctx=ast.Load()),
+                                   args=node.value.args, keywords=[])], keywords=[]))
             if ((isinstance(function, ast.Name) and function.id == '_diagnostic_mark')
                     or (isinstance(function, ast.Attribute) and function.attr == '_diagnostic_mark')
                     or (isinstance(function, ast.Attribute) and isinstance(function.value, ast.Attribute)
@@ -37,10 +46,15 @@ class StripTelemetry(ast.NodeTransformer):
 
     def diagnostic_target(self, node):
         return (isinstance(node, ast.Name) and node.id.startswith('diagnostic_')
-                or isinstance(node, ast.Attribute) and node.attr in {'diagnostic_schedule', 'diagnostic_trace', 'diagnostic_inputs'}
+                or isinstance(node, ast.Attribute) and node.attr in {'diagnostic_schedule', 'diagnostic_trace', 'diagnostic_inputs', 'channel_diagnostic_hash', 'channel_diagnostic_summary'}
                 or isinstance(node, ast.Subscript) and self.diagnostic_target(node.value))
 
     def visit_Assign(self, node):
+        if (len(node.targets) == 1 and isinstance(node.targets[0], ast.Subscript)
+                and isinstance(node.targets[0].value, ast.Name) and node.targets[0].value.id == 'state'
+                and isinstance(node.targets[0].slice, ast.Constant)
+                and node.targets[0].slice.value == 'diagnostic_success'):
+            return None
         if all(self.diagnostic_target(target) for target in node.targets):
             return None
         return self.generic_visit(node)
@@ -52,7 +66,7 @@ class StripTelemetry(ast.NodeTransformer):
 
     def visit_Dict(self, node):
         retained = [(k, v) for k, v in zip(node.keys, node.values)
-                    if not (isinstance(k, ast.Constant) and k.value in {'diagnostic_schedule', 'diagnostic_trace'})]
+                    if not (isinstance(k, ast.Constant) and k.value in {'diagnostic_schedule', 'diagnostic_trace', 'receipt_channel_diagnostic_summary'})]
         node.keys, node.values = [k for k, v in retained], [v for k, v in retained]
         return self.generic_visit(node)
 
@@ -194,3 +208,13 @@ def test_outer_diagnostic_marks_have_finite_cardinality(tmp_path):
     import pytest
     with pytest.raises(ValueError, match='unknown startup diagnostic phase'):
         guard._diagnostic_mark('unknown')
+
+
+def test_bounded_channel_telemetry_cannot_hide_receipt_or_deadline_mutation():
+    original = (ROOT / 'linux_supervisor.py').read_text()
+    for before, after in [('self.receipts.append(result)', 'self.receipts.append({})'),
+                          ('self.ledger.admit(stream, request)', '{}'),
+                          ('len(encoded) > 16384', 'len(encoded) > 32768')]:
+        assert before in original
+        tree = StripTelemetry().visit(ast.parse(original.replace(before, after)))
+        assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() != BASELINE_AST_SHA256['linux_supervisor.py']

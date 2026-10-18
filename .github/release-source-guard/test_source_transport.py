@@ -49,7 +49,7 @@ def test_actual_producer_and_collector_match_original_serialization(tmp_path, ca
     assert actual == {k: v for k, v in records.items() if k in evidence.SOURCE}
     header = evidence.loads((tmp_path / evidence.HEADER).read_bytes())
     assert CANARY not in json.dumps(header)
-    assert header['original_counts'] == dict(collection=4, junit_cases=2, junit_failures=1, junit_errors=0, junit_skips=0)
+    assert header['original_counts'] == dict(collection=4, junit_cases=2, junit_failures=1, junit_errors=0, junit_skips=0, receipt_ok=None, receipt_not_ok=None, channel_complete=None, channel_refused=None, channel_closed=None)
     assert header['kernel_fields']['records']['count'] == 1
     assert header['source_status']['exit_code'] == 2
     # The original logical bytes and old aggregate frame are the independent oracle.

@@ -435,6 +435,10 @@ class Supervisor:
         self.channel.setblocking(False)
         self.clients = {}
         self.channel_diagnostics = []
+        self.channel_diagnostic_hash = hashlib.sha256()
+        self.channel_diagnostic_summary = {'records': 0, 'successful_completions': 0,
+                                           'aggregated_successful_completions': 0,
+                                           'sample_ordinals': [], 'last_successful_completion': None}
         self.diagnostic_schedule = {"refresh_wall_ns": 0, "refresh_cpu_ns": 0,
                                     "tick_wall_ns": 0, "tick_cpu_ns": 0,
                                     "last_tick_ns": 0, "max_tick_gap_ns": 0}
@@ -472,6 +476,31 @@ class Supervisor:
                 'policy_seconds': state.get('policy_seconds', 0),
                 'pure_phases': dict(getattr(self, 'pure_phases', {})),
                 'diagnostic_schedule': dict(getattr(self, 'diagnostic_schedule', {}))}
+
+    def record_channel_diagnostic(self, state, outcome):
+        # ReceiptLedger admission, policy answers and self.receipts remain full.
+        # Only the redundant successful-send timing snapshots are sampled.
+        row = self.channel_snapshot(state, outcome)
+        summary = self.channel_diagnostic_summary
+        ordinal = summary['records']
+        encoded = json.dumps(row, sort_keys=True).encode()
+        self.channel_diagnostic_hash.update(len(encoded).to_bytes(8, 'big'))
+        self.channel_diagnostic_hash.update(encoded)
+        summary['records'] += 1
+        successful = outcome == 'complete' and state.get('diagnostic_success') is True
+        if successful:
+            summary['successful_completions'] += 1
+            summary['last_successful_completion'] = {'ordinal': ordinal, 'snapshot': row}
+        if successful and summary['successful_completions'] > 128:
+            summary['aggregated_successful_completions'] += 1
+        else:
+            self.channel_diagnostics.append(row)
+            summary['sample_ordinals'].append(ordinal)
+
+    def diagnostic_summary(self):
+        return {**self.channel_diagnostic_summary,
+                'sequence_sha256': self.channel_diagnostic_hash.hexdigest(),
+                'successful_completion_sample_limit': 128}
 
     def tick(self):
         diagnostic_tick_wall = time.monotonic_ns()
@@ -580,6 +609,8 @@ class Supervisor:
                         raise RuntimeError("bounded_receipt_response_exceeded")
                     state["output"] = struct.pack("!I", len(encoded)) + encoded
                     self.receipts.append(result)
+                    state['diagnostic_success'] = (result.get('ok') is True
+                                                   and not result.get('pending_owned_listener', False))
                     state["pending_reason"] = "output"
                 try:
                     count = stream.send(state["output"])
@@ -589,11 +620,11 @@ class Supervisor:
                     raise RuntimeError("receipt_channel_write_failed")
                 state["output"] = state["output"][count:]
                 if not state["output"]:
-                    self.channel_diagnostics.append(self.channel_snapshot(state, "complete"))
+                    self.record_channel_diagnostic(state, "complete")
                     stream.close()
                     del self.clients[stream]
             except (OSError, RuntimeError, ValueError, KeyError) as error:
-                self.channel_diagnostics.append(self.channel_snapshot(state, "refused"))
+                self.record_channel_diagnostic(state, "refused")
                 self.poison(type(error).__name__ + ":" + str(error))
                 stream.close()
                 del self.clients[stream]
@@ -603,7 +634,7 @@ class Supervisor:
 
     def close(self):
         for stream, state in self.clients.items():
-            self.channel_diagnostics.append(self.channel_snapshot(state, "closed"))
+            self.record_channel_diagnostic(state, "closed")
             stream.close()
         self.clients.clear()
         self.channel.close()
