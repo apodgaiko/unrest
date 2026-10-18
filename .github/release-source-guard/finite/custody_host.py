@@ -28,6 +28,7 @@ FIELDS = {
 
 
 def check_snapshot(host, snapshot):
+    durable_started = time.monotonic()
     manifest = host.manifest
     if set(snapshot) != FIELDS:
         raise RuntimeError("custody_snapshot_schema_refused")
@@ -66,6 +67,7 @@ def check_snapshot(host, snapshot):
         durable[k] != run[k] for k in run
     ):
         raise RuntimeError("custody_stale_request_refused")
+    host.pure_phases['snapshot_durable_seconds'] += time.monotonic() - durable_started
     source = Path(manifest["checkout"]) / "src/unrest_harness/run_control.py"
     pin = manifest["product_pins"]["src/unrest_harness/run_control.py"]
     started = time.monotonic()

@@ -81,36 +81,6 @@ SCRIPT_PIN = None
 SCRIPT_SIZE = None
 
 
-def capture_counts(container, root, log):
-    target = root / 'primary-source-counts.json'
-    if run(['docker', 'cp', container + ':/receipts/primary-source-counts.json', str(target)], log).returncode:
-        return None
-    value = json.loads(read_regular(target, 16384, mode=0o600))
-    if (type(value) is not dict or set(value) != {'schema', 'counts', 'hashes'}
-            or value['schema'] != 'primary-source-closed-counts-v1'
-            or type(value['counts']) is not dict or type(value['hashes']) is not dict
-            or any(type(v) not in (int, float) or not 0 <= v < 10 ** 12
-                   for v in value['counts'].values())
-            or any(type(v) is not str or len(v) != 64
-                   or any(c not in '0123456789abcdef' for c in v) for v in value['hashes'].values())):
-        raise RuntimeError('primary_closed_counts_schema')
-    # Keys are finite, too; a source-selected key must never enter public metadata.
-    expected_counts = {name + suffix for name in (
-        'records', 'primary_records', 'source_events', 'receipts', 'event_timings',
-        'receipt_channel_diagnostics', 'source_pipe_records', 'missing_parent_waits', 'poison')
-        for suffix in ('_count', '_bytes')} | {
-        'guard_poison', 'native_preinit_refusal', 'support_reads', 'support_compiles',
-        'source_reads', 'source_derivations', 'support_read_seconds', 'support_compile_seconds',
-        'source_read_seconds', 'source_derivation_seconds', 'refused_channels', 'max_channel_seconds'}
-    expected_hashes = {'records', 'primary_records', 'source_events', 'receipts', 'event_timings',
-                       'receipt_channel_diagnostics', 'source_pipe_records', 'missing_parent_waits', 'poison'}
-    if (set(value['counts']) != expected_counts
-            or not expected_hashes <= set(value['hashes'])
-            or set(value['hashes']) - expected_hashes - {'source_observer_poison_sha256'}):
-        raise RuntimeError('primary_closed_counts_keys')
-    return value
-
-
 def main():
     global STAGE, SCRIPT_PIN, SCRIPT_SIZE
     test_mode = None
@@ -242,8 +212,6 @@ def main():
     records = {}
     capture_failure = None
     container_state = None
-    closed_source_counts = None
-    closed_counts_error = None
     stage = 'create'
     STAGE = 'capsule'
     try:
@@ -275,13 +243,7 @@ def main():
                 container_state = {'running': state['Running'], 'oom_killed': state['OOMKilled'],
                                    'exit_code': state['ExitCode']}
     finally:
-        try:
-            if spec.get('source_mode'):
-                closed_source_counts = capture_counts(container, root, log)
-        except (OSError, RuntimeError, ValueError):
-            closed_counts_error = 'closed_counts_unavailable'
-        finally:
-            run(['docker', 'rm', '--force', container], log)
+        run(['docker', 'rm', '--force', container], log)
     phase_sha256 = None
     if status == 0 and not test_mode:
         status, phase_sha256 = retain_phase(custody, spec, records, source_pins)
@@ -307,7 +269,6 @@ def main():
                 'source_test_identity': test_mode, 'negative_verified': negative_verified,
                 'source_test_proof': test_proof,
                 'capture_failure': capture_failure, 'container_state': container_state,
-                'closed_source_counts': closed_source_counts, 'closed_counts_error': closed_counts_error,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'
     with tarfile.open(archive, 'w:gz') as stream:
