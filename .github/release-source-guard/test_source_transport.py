@@ -140,3 +140,30 @@ def test_header_bound_and_truncated_frame_refuse(tmp_path):
         with pytest.raises(evidence.EvidenceRefused):
             capture(body, tmp_path)
         assert not (tmp_path / evidence.MEMBER).exists()
+
+
+def test_trace_failure_status_is_closed_and_excludes_message_and_source(capsys):
+    import ast
+    import hashlib
+    tree = ast.parse(Path(__file__).with_name('primary_compartment.py').read_bytes())
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'trace_failure_status')
+    namespace = {'hashlib': hashlib, 'json': json}
+    exec(compile(ast.Module(body=[fn], type_ignores=[]), 'actual_current_trace_projection', 'exec'), namespace)
+    try:
+        raise TimeoutError(CANARY)
+    except TimeoutError as error:
+        status = namespace['trace_failure_status'](error)
+    assert set(status) == {'exception_class', 'location_sha256'}
+    assert status['exception_class'] == 'TimeoutError' and len(status['location_sha256']) == 64
+    assert CANARY not in json.dumps(status)
+    class PrivateExceptionName(Exception):
+        pass
+    assert namespace['trace_failure_status'](PrivateExceptionName(CANARY)) == {
+        'exception_class': 'other', 'location_sha256': None}
+    header, _ = evidence.current_header(stream(), identity(), INVOCATION)
+    header['source_status']['trace_failure_status'] = status
+    evidence.validate_header(header, identity(), INVOCATION)
+    header['source_status']['trace_failure_status']['exception_class'] = CANARY
+    with pytest.raises(evidence.EvidenceRefused, match='header_trace_status'):
+        evidence.validate_header(header, identity(), INVOCATION)
+    assert capsys.readouterr() == ('', '')

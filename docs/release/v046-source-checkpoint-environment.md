@@ -752,3 +752,8 @@ snapshots. This bounds diagnostic repetition only: every original authenticated
 receipt, policy answer, peer/birth identity, actual parent wait, failure and
 poison record remains in the original semantic arrays. Sampling supplies no
 authority and changes no admission, READY, deadline, request or response bound.
+
+A trace refusal also retains a closed exception class and SHA256 of its code
+location, independently of the final source-failure classification. It contains
+no exception message, source text or traceback. This preserves the distinction
+between a complete transport and a successful original SOURCE execution.

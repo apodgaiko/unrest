@@ -30,7 +30,7 @@ HEADER = 'transport-provenance.json'
 HEADER_PREFIX = b'SOURCE-TRANSPORT:'
 HEADER_LIMIT = 8192
 HEADER_SCHEMA = 'unrest.v046.source-transport-provenance.v1'
-KERNEL_FIELDS = frozenset('records poison diagnostic_trace unregistered_processes native_diagnostics primary_plan primary_records primary_denials failure_code native_preinit_refusal missing_parent_waits source_preexec_identity runtime_binding_sha256 actual_script_sha256 all_commands_dispatched source_checkpoint_ready selected_carrier guard_poison receipt_ledger_poison source_events receipts diagnostic_schedule event_timings receipt_channel_diagnostics receipt_channel_diagnostic_summary native_source_records source_pipe_records source_observer_poison_sha256 root_parent_wait_raw stage frame_lines'.split())
+KERNEL_FIELDS = frozenset('records poison diagnostic_trace trace_failure_status unregistered_processes native_diagnostics primary_plan primary_records primary_denials failure_code native_preinit_refusal missing_parent_waits source_preexec_identity runtime_binding_sha256 actual_script_sha256 all_commands_dispatched source_checkpoint_ready selected_carrier guard_poison receipt_ledger_poison source_events receipts diagnostic_schedule event_timings receipt_channel_diagnostics receipt_channel_diagnostic_summary native_source_records source_pipe_records source_observer_poison_sha256 root_parent_wait_raw stage frame_lines'.split())
 IDENTITY = {'repository', 'head_sha', 'run_id', 'run_attempt', 'workflow_ref', 'workflow_sha',
             'artifact_name', 'support_sha256'}
 
@@ -148,7 +148,7 @@ def source_header(records, kernel, identity, invocation, exit_code):
     status = {'exit_code': exit_code, 'root_parent_wait_raw': kernel.get('root_parent_wait_raw'),
               'guard_poison': kernel.get('guard_poison'), 'poison_count': len(kernel.get('poison', [])),
               'receipt_poison_count': len(kernel.get('receipt_ledger_poison', [])),
-              'failure_code': kernel.get('failure_code')}
+              'failure_code': kernel.get('failure_code'), 'trace_failure_status': kernel.get('trace_failure_status')}
     header = {'schema': HEADER_SCHEMA, 'identity': identity, 'invocation_sha256': invocation,
               'scope': 'primary-executor', 'records': descriptors, 'kernel_fields': fields,
               'source_status': status, 'original_counts': counts,
@@ -186,12 +186,20 @@ def validate_header(value, identity, invocation):
             and all(v is None or numeric(v) for v in counts.values()), 'header_counts')
     status = value['source_status']
     require(type(status) is dict and set(status) == {'exit_code', 'root_parent_wait_raw', 'guard_poison',
-            'poison_count', 'receipt_poison_count', 'failure_code'}, 'header_status')
+            'poison_count', 'receipt_poison_count', 'failure_code', 'trace_failure_status'}, 'header_status')
     require(type(status['exit_code']) is int and status['exit_code'] in {0, 2, 125}
             and (status['root_parent_wait_raw'] is None or numeric(status['root_parent_wait_raw']))
             and (status['guard_poison'] is None or type(status['guard_poison']) is bool)
             and numeric(status['poison_count']) and numeric(status['receipt_poison_count'])
             and status['failure_code'] in {None, 'trace_failure', 'source_guard_refused', 'bootstrap_failure'}, 'header_status')
+
+    trace = status['trace_failure_status']
+    if trace is not None:
+        require(type(trace) is dict and set(trace) == {'exception_class', 'location_sha256'}
+                and trace['exception_class'] in {'TimeoutError', 'RuntimeError', 'OSError', 'ProcessLookupError',
+                    'ValueError', 'KeyError', 'TypeError', 'EvidenceRefused', 'other'}
+                and (trace['location_sha256'] is None or type(trace['location_sha256']) is str
+                     and re.fullmatch('[0-9a-f]{64}', trace['location_sha256'])), 'header_trace_status')
 
 
 def current_header(current_stdout, identity, invocation):

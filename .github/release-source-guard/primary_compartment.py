@@ -24,6 +24,20 @@ from structured_evidence import emit_source, loads, identity_check
 STAGE = 'bootstrap'
 
 
+def trace_failure_status(error):
+    name = type(error).__name__
+    closed = {'TimeoutError', 'RuntimeError', 'OSError', 'ProcessLookupError',
+              'ValueError', 'KeyError', 'TypeError', 'EvidenceRefused'}
+    frame = error.__traceback__
+    while frame is not None and frame.tb_next is not None:
+        frame = frame.tb_next
+    location = None if frame is None else hashlib.sha256(json.dumps({
+        'code_sha256': hashlib.sha256(frame.tb_frame.f_code.co_code).hexdigest(),
+        'first_line': frame.tb_frame.f_code.co_firstlineno, 'line': frame.tb_lineno},
+        sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    return {'exception_class': name if name in closed else 'other', 'location_sha256': location}
+
+
 def main():
     global STAGE
     if os.getpid() != 1 or os.getuid() != 0:
@@ -143,12 +157,14 @@ def main():
     trace = OwnedTrace(child, allowed, spec['timeout_seconds'], on_tick=tick,
                        resolve_exec=resolve, seize=True, on_attached=attached, selective=True)
     failure = None
+    trace_status = None
     STAGE = 'trace'
     try:
         result = trace.run()
         tick(trace)
-    except BaseException:
+    except BaseException as error:
         failure = 'trace_failure'
+        trace_status = trace_failure_status(error)
         result = {'records': trace.records, 'poison': trace.poison,
                   'root_parent_wait_raw': trace.root_parent_wait,
                   'diagnostic_trace': trace.diagnostic_trace.export()}
@@ -173,7 +189,7 @@ def main():
     unregistered = children - set(authority.contexts)
     if unregistered:
         result['poison'].append('unregistered_process_birth')
-    result.update({'unregistered_processes': sorted(unregistered), 'native_diagnostics': diagnostics, 'primary_plan': spec, 'primary_records': authority.records,
+    result.update({'trace_failure_status': trace_status, 'unregistered_processes': sorted(unregistered), 'native_diagnostics': diagnostics, 'primary_plan': spec, 'primary_records': authority.records,
                    'primary_denials': authority.denials, 'failure_code': failure,
                    'native_preinit_refusal': native_failure,
                    'missing_parent_waits': sorted(children - waits),
