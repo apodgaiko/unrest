@@ -29,6 +29,7 @@ class SourceAuthority:
         self.producers = None
         self.consumed, self.maintenance = set(), set()
         self.bound, self.native_context = {}, {}
+        self.pipe_records = []
 
     def start(self, pid, output_fd):
         if self.supervisor is not None:
@@ -163,6 +164,20 @@ class SourceAuthority:
         if len(rows) != 2 or rows[0] != rows[1]:
             raise RuntimeError('primary_source_role_pipe_binding')
         expected = rows[0]
+        census = []
+        for path in sorted(Path('/proc/' + str(pid) + '/fd').iterdir()):
+            fd = int(path.name)
+            if fd < 3:
+                continue
+            info = path.stat()
+            lines = Path('/proc/' + str(pid) + '/fdinfo/' + str(fd)).read_text().splitlines()
+            flags = int(next(line.split()[1] for line in lines if line.startswith('flags:')), 8)
+            census.append({'fd': fd, 'device': info.st_dev, 'inode': info.st_ino,
+                           'type': stat.S_IFMT(info.st_mode), 'uid': info.st_uid,
+                           'access': flags & os.O_ACCMODE,
+                           'close_on_exec': bool(flags & os.O_CLOEXEC)})
+        self.pipe_records.append({'kind': 'source_pipe_preexec_census', 'pid': pid,
+                                  'descriptors': census})
         descriptors = []
         for path in sorted(Path('/proc/' + str(pid) + '/fd').iterdir()):
             fd = int(path.name)
@@ -197,4 +212,5 @@ class SourceAuthority:
                 'receipt_ledger_poison': self.supervisor.ledger.poison,
                 'source_events': self.supervisor.events(), 'receipts': self.supervisor.receipts,
                 'event_timings': self.supervisor.event_timings,
-                'native_source_records': self.producers.records}
+                'native_source_records': self.producers.records,
+                'source_pipe_records': self.pipe_records}

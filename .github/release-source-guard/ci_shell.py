@@ -90,6 +90,7 @@ def main():
                 or not os.environ.get('GITHUB_REF', '').startswith((
                     'refs/heads/codex/source-guard-structured-20261018-source-entry-',
                     'refs/heads/codex/source-guard-structured-20261018-source-composition-',
+                    'refs/heads/codex/source-guard-structured-20261018-exact-pipe-',
                     'refs/heads/codex/source-guard-structured-20261018-source-seams-'))):
             raise RuntimeError('primary_test_workflow_identity')
     elif len(sys.argv) != 2:
