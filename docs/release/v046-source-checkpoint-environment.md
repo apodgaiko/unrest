@@ -606,3 +606,22 @@ container's running/OOM/exit status when available. These fields diagnose
 missing structured evidence without reading private process output. Missing
 envelopes remain failed, and the original transport and container bounds stay
 unchanged.
+
+The observer reuses only the compiled `finite/custody_host.py` code object and
+its exact `run_control.py:1147` call-AST digest. These are two finite,
+observer-local derivations; no policy decision, snapshot, request, READY,
+peer, wait or operation result is cached. Every custody operation still
+executes in a fresh namespace. Compilation retains the original filename,
+inherited annotations future flag and interpreter optimization setting.
+Every use first opens the exact resolved source without following a symlink,
+reads and hashes its actual bytes against the manifest pin, and checks the
+regular single-link carrier before/after reading and against its path.
+After population, any byte, filename, pin or carrier identity change refuses
+before reuse. The source digest is checked before AST parsing, which can only
+make drift refuse earlier. All dynamic checks remain per-request/per-poll.
+Closed receipt diagnostics report read/compile/derivation counts and phase
+seconds; they contain no source or request bodies. The bounded pinned-policy
+TEST branch uses the existing four-case tuple and unchanged receipt/endpoint
+4s, custodian READY8s and wait25s limits. These controls and TEST execution
+remain certificate-ineligible; SOURCE applicability requires actual native
+startup, domain consumption and original-parent numeric waits.

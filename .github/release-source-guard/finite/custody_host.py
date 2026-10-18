@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import time
 
 COMMON = {"id", "kind", "nonce", "pid", "token", "identity"}
 FIELDS = {
@@ -66,17 +67,48 @@ def check_snapshot(host, snapshot):
     ):
         raise RuntimeError("custody_stale_request_refused")
     source = Path(manifest["checkout"]) / "src/unrest_harness/run_control.py"
-    source_bytes = source.read_bytes()
-    call = next(
-        n for n in ast.walk(ast.parse(source_bytes)) if isinstance(n, ast.Call) and n.lineno == 1147
-    )
-    if (
-        hashlib.sha256(source_bytes).hexdigest() != snapshot["source_sha256"]
-        or snapshot["source_sha256"]
-        != manifest["product_pins"]["src/unrest_harness/run_control.py"]
-        or snapshot["AST_sha256"]
-        != hashlib.sha256(ast.dump(call, include_attributes=False).encode()).hexdigest()
-    ):
+    pin = manifest["product_pins"]["src/unrest_harness/run_control.py"]
+    started = time.monotonic()
+    phases = host.pure_phases
+    phases['source_reads'] += 1
+    if source.resolve() != source:
+        raise RuntimeError("custody_source_path_refused")
+    descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        before = os.fstat(descriptor)
+        with os.fdopen(descriptor, 'rb', closefd=False) as stream:
+            source_bytes = stream.read()
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    def identity(info):
+        return tuple(getattr(info, key) for key in (
+            'st_dev', 'st_ino', 'st_uid', 'st_gid', 'st_mode', 'st_nlink',
+            'st_size', 'st_mtime_ns', 'st_ctime_ns'))
+    carrier = identity(before)
+    if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+            or carrier != identity(after) or carrier != identity(source.lstat())
+            or len(source_bytes) != before.st_size
+            or hashlib.sha256(source_bytes).hexdigest() != pin
+            or snapshot["source_sha256"] != pin):
+        raise RuntimeError("custody_source_pin_refused")
+    phases['source_read_seconds'] += time.monotonic() - started
+    # A single observer-local descriptor, derived only after current-byte admission.
+    key = (str(source), pin, carrier, '<unknown>', 'exec', 1147, 'custody-call-AST-v1')
+    saved = getattr(host, '_custody_ast_descriptor', None)
+    if saved is not None and saved[0] != key:
+        raise RuntimeError("custody_source_identity_refused")
+    if saved is None:
+        started = time.monotonic()
+        call = next(
+            n for n in ast.walk(ast.parse(source_bytes))
+            if isinstance(n, ast.Call) and n.lineno == 1147
+        )
+        digest = hashlib.sha256(ast.dump(call, include_attributes=False).encode()).hexdigest()
+        host._custody_ast_descriptor = (key, digest)
+        phases['source_derivations'] += 1
+        phases['source_derivation_seconds'] += time.monotonic() - started
+    if snapshot["AST_sha256"] != host._custody_ast_descriptor[1]:
         raise RuntimeError("custody_source_pin_refused")
     argv = snapshot["argv"]
     if (

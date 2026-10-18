@@ -22,7 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.mark.parametrize('change', [None, 'binding', 'literal', 'trace', 'cwd', 'source-pin',
                                    'plan-vector', 'plan-env', 'plan-type', 'globals', 'code',
-                                   'stream', 'limit', 'missing-frame', 'module-function'])
+                                   'stream', 'limit', 'missing-frame', 'module-function',
+                                   'missing-file', 'missing-plan-environment'])
 def test_literal_producer_and_real_product_launcher_are_both_required(tmp_path, monkeypatch, change):
     h = setup(tmp_path, monkeypatch)
     producer = ROOT / 'tests/test_server.py'
@@ -76,11 +77,10 @@ def test_literal_producer_and_real_product_launcher_are_both_required(tmp_path, 
             env = dict(env)
         elif change == 'stream':
             kwargs['stdin'] = subprocess.DEVNULL
-        elif change == 'limit':
-            owner = next(f for f in frames if f.f_code.co_name == 'spawn_launch')
-            # Fast locals are immutable through f_locals on 3.13; perturb the
-            # observed asyncio frame via a real wrapper call below instead.
-            assert owner.f_locals['limit'] == 65536
+        elif change == 'missing-file':
+            script.unlink()
+        elif change == 'missing-plan-environment':
+            object.__delattr__(plan, 'environment')
         elif change == 'missing-frame':
             frames = [f for f in frames if f.f_code.co_name != 'spawn_launch']
         try:

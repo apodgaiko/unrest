@@ -349,81 +349,84 @@ class SourceActivation(IsolatedActivation):
 
     def composed_adapter_owner(self, guard, launch, argv, cwd, environment, registration, frames):
         """Join the original literal producer to its separate checked launcher."""
-        support = self.state['direct_support']['files']
-        bindings = Path(self.state['guard']).with_name('source_bindings.py')
-        data = guard.checked_source(bindings, support[str(bindings)])['DATA']
-        root = Path(self.state['checkout'])
-        producer = root / 'tests/test_server.py'
-        bound = {'path': str(producer), 'sha256': data['bindings']['projection']['sha256'],
-                 'line': 3302}
-        if (registration['source_binding'] != bound
-                or guard.digest(producer) != bound['sha256']):
-            self.refuse('source_layered_producer_drift')
-        syntax = ast.parse(producer.read_bytes())
-        owners = [node for node in syntax.body if isinstance(node, ast.FunctionDef)
-                  and node.name == '_write_composed_acp_adapter' and node.lineno == 3298]
-        literals = [node.args[0].value for owner in owners for node in ast.walk(owner)
-                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                    and isinstance(node.func.value, ast.Name) and node.func.value.id == 'adapter'
-                    and node.func.attr == 'write_text' and node.lineno == bound['line']
-                    and len(node.args) == 1
-                    and isinstance(node.args[0], ast.Constant)]
-        if len(literals) != 1 or not isinstance(literals[0], str):
-            self.refuse('source_layered_literal_drift')
-        script = Path(argv[1]) if len(argv) == 3 else None
-        if (script is None or script.name != '.hermetic-acp-adapter.py'
-                or not script.is_absolute() or script.is_symlink()
-                or not script.resolve().is_relative_to(Path(self.state['owned_root']))
-                or identity(script)['sha256'] != data['adapter_sha256']
-                or script.read_bytes() != literals[0].encode()
-                or argv[2] != str(script.parent / '.hermetic-acp-trace.jsonl')
-                or str(Path(cwd or os.getcwd()).resolve()) != str(script.parent.resolve())):
-            self.refuse('source_layered_generated_profile_drift')
-        source = root / 'src/unrest_harness/acp_runner.py'
-        pin = self.state['product_pins'].get('src/unrest_harness/acp_runner.py')
-        module = sys.modules.get('unrest_harness.acp_runner')
-        if pin is None or guard.digest(source) != pin or module is None:
-            self.refuse('source_layered_launcher_source_drift')
-        code = compile(source.read_bytes(), str(source), 'exec', dont_inherit=True)
-        named = self.state['isolated_named']
-        function = getattr(module, 'spawn_launch', None)
-        plan_type = getattr(module, 'LaunchPlan', None)
-        if (function is None or function.__globals__ is not vars(module)
-                or function.__code__ != named(code, 'spawn_launch')
-                or not isinstance(plan_type, type) or plan_type.__module__ != module.__name__
-                or plan_type.__post_init__.__globals__ is not vars(module)
-                or plan_type.__post_init__.__code__ != named(named(code, 'LaunchPlan'), '__post_init__')):
-            self.refuse('source_layered_launcher_code_globals_drift')
-        owners = {id(frame): frame for frame in frames
-                  if frame.f_code is function.__code__ and frame.f_globals is vars(module)}
-        if len(owners) != 1:
-            self.refuse('source_layered_launcher_frame_missing')
-        frame = next(iter(owners.values()))
-        local = frame.f_locals
-        plan = local.get('plan')
-        if (frame.f_lineno != 409 or type(plan) is not plan_type
-                or type(plan.argv) is not tuple or type(plan.environment) is not types.MappingProxyType
-                or list(plan.argv) != argv or plan.cwd != cwd
-                or plan.environment is not environment or plan.path != environment.get('PATH')
-                or any(launch['kwargs'].get(key) != local.get(key)
-                       for key in ('stdin', 'stdout', 'stderr'))):
-            self.refuse('source_layered_checked_plan_drift')
-        # asyncio consumes limit before Popen. Bind its live original call to
-        # the same plan and streams rather than pretending limit is a Popen kwarg.
-        import asyncio.subprocess
-        create = asyncio.subprocess.create_subprocess_exec
-        calls = {id(f): f for f in frames if f.f_code is create.__code__
-                 and f.f_globals is vars(asyncio.subprocess)}
-        if len(calls) != 1:
-            self.refuse('source_layered_async_call_missing')
-        call = next(iter(calls.values())).f_locals
-        if [call.get('program'), *call.get('args', ())] != argv:
-            self.refuse('source_layered_async_vector_drift')
-        if (call.get('limit') != local.get('limit')
-                or any(call.get(key) != local.get(key) for key in ('stdin', 'stdout', 'stderr'))
-                or call.get('kwds', {}).get('cwd') != cwd
-                or call.get('kwds', {}).get('env') is not environment):
-            self.refuse('source_layered_async_arguments_drift')
+        try:
+            support = self.state['direct_support']['files']
+            bindings = Path(self.state['guard']).with_name('source_bindings.py')
+            data = guard.checked_source(bindings, support[str(bindings)])['DATA']
+            root = Path(self.state['checkout'])
+            producer = root / 'tests/test_server.py'
+            bound = {'path': str(producer), 'sha256': data['bindings']['projection']['sha256'],
+                     'line': 3302}
+            if (registration['source_binding'] != bound
+                    or guard.digest(producer) != bound['sha256']):
+                self.refuse('source_layered_producer_drift')
+            syntax = ast.parse(producer.read_bytes())
+            owners = [node for node in syntax.body if isinstance(node, ast.FunctionDef)
+                      and node.name == '_write_composed_acp_adapter' and node.lineno == 3298]
+            literals = [node.args[0].value for owner in owners for node in ast.walk(owner)
+                        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name) and node.func.value.id == 'adapter'
+                        and node.func.attr == 'write_text' and node.lineno == bound['line']
+                        and len(node.args) == 1
+                        and isinstance(node.args[0], ast.Constant)]
+            if len(literals) != 1 or not isinstance(literals[0], str):
+                self.refuse('source_layered_literal_drift')
+            script = Path(argv[1]) if len(argv) == 3 else None
+            if (script is None or script.name != '.hermetic-acp-adapter.py'
+                    or not script.is_absolute() or script.is_symlink()
+                    or not script.resolve().is_relative_to(Path(self.state['owned_root']))
+                    or identity(script)['sha256'] != data['adapter_sha256']
+                    or script.read_bytes() != literals[0].encode()
+                    or argv[2] != str(script.parent / '.hermetic-acp-trace.jsonl')
+                    or str(Path(cwd or os.getcwd()).resolve()) != str(script.parent.resolve())):
+                self.refuse('source_layered_generated_profile_drift')
+            source = root / 'src/unrest_harness/acp_runner.py'
+            pin = self.state['product_pins'].get('src/unrest_harness/acp_runner.py')
+            module = sys.modules.get('unrest_harness.acp_runner')
+            if pin is None or guard.digest(source) != pin or module is None:
+                self.refuse('source_layered_launcher_source_drift')
+            code = compile(source.read_bytes(), str(source), 'exec', dont_inherit=True)
+            named = self.state['isolated_named']
+            function = getattr(module, 'spawn_launch', None)
+            plan_type = getattr(module, 'LaunchPlan', None)
+            if (function is None or function.__globals__ is not vars(module)
+                    or function.__code__ != named(code, 'spawn_launch')
+                    or not isinstance(plan_type, type) or plan_type.__module__ != module.__name__
+                    or plan_type.__post_init__.__globals__ is not vars(module)
+                    or plan_type.__post_init__.__code__ != named(named(code, 'LaunchPlan'), '__post_init__')):
+                self.refuse('source_layered_launcher_code_globals_drift')
+            owners = {id(frame): frame for frame in frames
+                      if frame.f_code is function.__code__ and frame.f_globals is vars(module)}
+            if len(owners) != 1:
+                self.refuse('source_layered_launcher_frame_missing')
+            frame = next(iter(owners.values()))
+            local = frame.f_locals
+            plan = local.get('plan')
+            if (frame.f_lineno != 409 or type(plan) is not plan_type
+                    or type(plan.argv) is not tuple or type(plan.environment) is not types.MappingProxyType
+                    or list(plan.argv) != argv or plan.cwd != cwd
+                    or plan.environment is not environment or plan.path != environment.get('PATH')
+                    or any(launch['kwargs'].get(key) != local.get(key)
+                           for key in ('stdin', 'stdout', 'stderr'))):
+                self.refuse('source_layered_checked_plan_drift')
+            # asyncio consumes limit before Popen. Bind its live original call to
+            # the same plan and streams rather than pretending limit is a Popen kwarg.
+            import asyncio.subprocess
+            create = asyncio.subprocess.create_subprocess_exec
+            calls = {id(f): f for f in frames if f.f_code is create.__code__
+                     and f.f_globals is vars(asyncio.subprocess)}
+            if len(calls) != 1:
+                self.refuse('source_layered_async_call_missing')
+            call = next(iter(calls.values())).f_locals
+            if [call.get('program'), *call.get('args', ())] != argv:
+                self.refuse('source_layered_async_vector_drift')
+            if (call.get('limit') != local.get('limit')
+                    or any(call.get(key) != local.get(key) for key in ('stdin', 'stdout', 'stderr'))
+                    or call.get('kwds', {}).get('cwd') != cwd
+                    or call.get('kwds', {}).get('env') is not environment):
+                self.refuse('source_layered_async_arguments_drift')
+        except (OSError, ValueError, TypeError, AttributeError, KeyError):
+            self.refuse('source_layered_provenance_unreadable')
 
     def ordinary_python(self, guard, launch, argv, cwd, environment, registration):
         """Re-resolve an existing ordinary source registration, never a producer."""

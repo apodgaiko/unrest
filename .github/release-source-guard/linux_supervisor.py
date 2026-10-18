@@ -1,6 +1,7 @@
 """Linux transport/kernel adapter for the existing finite source policy."""
 
 from __future__ import annotations
+import __future__
 import hashlib
 import importlib.util
 import json
@@ -8,6 +9,7 @@ import os
 from pathlib import Path
 import socket
 import struct
+import stat
 import time
 import types
 
@@ -152,6 +154,53 @@ class Supervisor:
             raise RuntimeError("stale_or_reused_ownership")
         return kernel.sockets(pid)
 
+    def custody_support(self):
+        # Only the code object survives. Each request receives fresh policy globals.
+        path = ROOT / "custody_host.py"
+        started = time.monotonic()
+        if not hasattr(self, 'pure_phases'):
+            self.pure_phases = {key: 0 for key in (
+                'support_reads', 'support_compiles', 'source_reads', 'source_derivations',
+                'support_read_seconds', 'support_compile_seconds',
+                'source_read_seconds', 'source_derivation_seconds')}
+        phases = self.pure_phases
+        phases['support_reads'] += 1
+        if path.resolve() != path:
+            raise RuntimeError('custody_host_path_refused')
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            before = os.fstat(descriptor)
+            with os.fdopen(descriptor, 'rb', closefd=False) as stream:
+                body = stream.read()
+            after = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        def identity(info):
+            return tuple(getattr(info, key) for key in (
+                'st_dev', 'st_ino', 'st_uid', 'st_gid', 'st_mode', 'st_nlink',
+                'st_size', 'st_mtime_ns', 'st_ctime_ns'))
+        carrier = identity(before)
+        pin = self.spec['pins'][str(path)]
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                or carrier != identity(after) or carrier != identity(path.lstat())
+                or len(body) != before.st_size or hashlib.sha256(body).hexdigest() != pin):
+            raise RuntimeError('custody_host_pin_refused')
+        phases['support_read_seconds'] += time.monotonic() - started
+        flags = __future__.annotations.compiler_flag
+        key = (str(path), pin, carrier, 'exec', flags, -1, 'custody-code-v1')
+        saved = getattr(self, '_custody_code', None)
+        if saved is not None and saved[0] != key:
+            raise RuntimeError('custody_host_identity_refused')
+        if saved is None:
+            started = time.monotonic()
+            code = compile(body, str(path), 'exec', flags=flags, dont_inherit=True, optimize=-1)
+            self._custody_code = (key, code)
+            phases['support_compiles'] += 1
+            phases['support_compile_seconds'] += time.monotonic() - started
+        support = {}
+        exec(self._custody_code[1], support)
+        return support
+
     def handle(self, request, events):
         if self.poisoned and request.get("kind") not in (
             "custody_close",
@@ -175,11 +224,7 @@ class Supervisor:
                 raise AwaitOwnedPeer("actual_parent_wait_record_still_pending")
             return answer
         if kind.startswith("custody_"):
-            support = {}
-            path = ROOT / "custody_host.py"
-            if sha(path) != self.spec["pins"][str(path)]:
-                raise RuntimeError("custody_host_pin_refused")
-            exec(compile(path.read_bytes(), str(path), "exec"), support)
+            support = self.custody_support()
             try:
                 answer = support["handle"](self, request, events)
             except (OSError, ValueError, TypeError, AttributeError) as error:
@@ -411,7 +456,8 @@ class Supervisor:
                 'tick_count': self.tick_count, 'accepted_tick': state['accepted_tick'],
                 'event_count': self.event_count, 'trace_progress': dict(self.trace_progress),
                 'policy_attempts': state.get('policy_attempts', 0),
-                'policy_seconds': state.get('policy_seconds', 0)}
+                'policy_seconds': state.get('policy_seconds', 0),
+                'pure_phases': dict(getattr(self, 'pure_phases', {}))}
 
     def tick(self):
         self.tick_count += 1
