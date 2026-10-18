@@ -7,7 +7,7 @@ import re
 GROUPS = ('primary_denials', 'kernel_poison', 'receipt_poison', 'forbidden_reasons',
           'receipt_reasons', 'dependency_refusals', 'runtime_member_stages',
           'junit_error_cases', 'junit_failed_cases', 'last_native_predicate',
-          'runtime_member_names', 'cache_member_names')
+          'runtime_member_names', 'cache_member_names', 'denied_exec_paths', 'denied_exec_vectors')
 MAX_CODES = 2
 
 
@@ -47,11 +47,16 @@ def build(kernel, cases=()):
                                       if row.get('kind') == 'primary_runtime_member_refusal']
     groups['cache_member_names'] = [row.get('member_sha256') for row in native
                                     if row.get('kind') in {'primary_cache_output_unbound', 'primary_cache_unbound_member'}]
+    denied = [row for row in kernel.get('records', [])
+              if type(row) is dict and row.get('kind') == 'exec_attempt' and row.get('accepted') is False]
+    groups['denied_exec_paths'] = [row.get('path') for row in denied]
+    groups['denied_exec_vectors'] = [digest(json.dumps(row['argv']).encode()) for row in denied
+                                     if type(row.get('argv')) is list]
     for category, outcome in (('junit_error_cases', 'error'), ('junit_failed_cases', 'failure')):
         groups[category] = [case.attrib.get('classname', '') + '\0' + case.attrib.get('name', '')
                             for case in cases if case.findall(outcome)]
     return {name: histogram(groups[name], name in {'dependency_refusals', 'runtime_member_names',
-                                                  'cache_member_names'}) for name in GROUPS}
+                                                  'cache_member_names', 'denied_exec_vectors'}) for name in GROUPS}
 
 
 def validate(value):

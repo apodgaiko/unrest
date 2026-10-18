@@ -20,7 +20,7 @@ def test_current_failure_codes_are_only_bounded_hashes_and_counts():
     assert private not in json.dumps(value)
     assert value['primary_denials']['total'] == 2
     assert value['primary_denials']['codes'] == [{'sha256': facts.digest(private.encode()), 'count': 2}]
-    assert all(row['total'] == 1 for name, row in value.items() if name not in {'primary_denials', 'junit_error_cases', 'junit_failed_cases', 'last_native_predicate', 'cache_member_names'})
+    assert all(row['total'] == 1 for name, row in value.items() if name not in {'primary_denials', 'junit_error_cases', 'junit_failed_cases', 'last_native_predicate', 'cache_member_names', 'denied_exec_paths', 'denied_exec_vectors'})
     body = evidence.source_header({'kernel-source.json': evidence.canonical(kernel)}, kernel,
                                   identity(), INVOCATION, 2)
     assert len(body) < evidence.HEADER_LIMIT
@@ -40,7 +40,7 @@ def test_many_codes_keep_complete_digest_without_expanding_the_header():
     assert changed['primary_denials']['complete_sha256'] != row['complete_sha256']
     for name in facts.GROUPS:
         value[name] = copy.deepcopy(row)
-    assert len(evidence.canonical(value)) < 4500
+    assert len(evidence.canonical(value)) < 4800
     assert facts.validate(value)
 
 
@@ -78,3 +78,21 @@ def test_junit_categories_hash_case_identity_without_reading_message_bodies():
     assert row['total'] == 1 and row['codes'][0]['sha256'] == facts.digest(b'public_case\0original')
     assert value['junit_failed_cases']['total'] == 0
     assert 'PRIVATE_BODY' not in json.dumps(value) and 'public_case' not in json.dumps(value)
+
+
+def test_denied_exec_identity_hashes_do_not_admit_or_publish_payloads():
+    path = '/SYNTHETIC_PRIVATE_CANARY/executable'
+    vector = ['uv', 'build', '--out-dir', '/SYNTHETIC_PRIVATE_CANARY/output']
+    value = facts.build({'records': [{'kind': 'exec_attempt', 'accepted': False,
+                                      'path': path, 'argv': vector},
+                                     {'kind': 'exec_attempt', 'accepted': True,
+                                      'path': path, 'argv': vector}]})
+    assert value['denied_exec_paths']['total'] == value['denied_exec_vectors']['total'] == 1
+    assert value['denied_exec_paths']['codes'][0]['sha256'] == facts.digest(path.encode())
+    assert value['denied_exec_vectors']['codes'][0]['sha256'] == facts.digest(json.dumps(vector).encode())
+    assert 'SYNTHETIC_PRIVATE_CANARY' not in json.dumps(value)
+    assert facts.validate(value)
+
+
+def test_nonmapping_trace_payload_does_not_break_original_transport_negative():
+    assert facts.build({'records': ['SYNTHETIC_PRIVATE_CANARY']})['denied_exec_paths']['total'] == 0

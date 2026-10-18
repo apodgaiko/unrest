@@ -992,3 +992,8 @@ only by their existing SHA256 values, and the final native predicate is a
 digest of its fixed stage and Boolean result. No messages or record bodies enter this
 header. These facts are diagnostic only; the original named kernel, collection,
 JUnit and consumer proofs remain mandatory, and a header cannot certify SOURCE.
+
+A denied kernel exec also contributes only its pathname and exact argument-vector
+hashes to the bounded failure categories. These hashes identify the original
+attempt without publishing its path or arguments and never grant a launch.
+Successful attempts are excluded from these failure categories.
