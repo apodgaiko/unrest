@@ -135,7 +135,7 @@ def prepare(manifest, input_pin):
         'project': '/source', 'events': manifest['events'], 'cache': str(cache),
         'base': str(base), 'base_identity': activation.identity(base),
         'wheel': str(WHEEL), 'virtualenv_source': '/opt/source-bootstrap/upstream/_virtualenv.py',
-        'query_python': str(python), 'full_build': True, 'original_source_coverage': True,
+        'query_python': str(base if primary else python), 'full_build': True, 'original_source_coverage': True,
         'source_files': source_files, 'backend_distribution': backend,
         'uv': activation.identity('/opt/source-bootstrap/bin/uv'),
         'files': [activation.identity(path) for path in sorted([
@@ -171,8 +171,9 @@ def prepare(manifest, input_pin):
         'backend_distribution': backend,
         'mapping_support': {'path': '/guard/finite/installed_outputs.py',
                             'sha256': digest('/guard/finite/installed_outputs.py')},
-        'installed_interpreter': {'path': str(python), 'file': operations.identity(base),
-                                  'link_inode': python.lstat().st_ino},
+        'installed_interpreter': {'path': common['query_python'], 'file': operations.identity(base),
+                                  'link_inode': python.lstat().st_ino,
+                                  **({'route_path': str(python)} if primary else {})},
     }
     operation_path = ROOT / 'operations.json'
     operation_pin = write(operation_path, operation_spec)

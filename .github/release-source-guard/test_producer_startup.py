@@ -468,3 +468,137 @@ def restore_bootstrap_cache(tree):
     assert len(assignments) == 1
     start.body.remove(assignments[0])
     return tree
+
+
+@pytest.mark.parametrize('primary', [False, True])
+def test_primary_query_input_uses_exact_original_uv_interpreter(primary):
+    # PRIMARY's pinned original UV_PYTHON is its audit image. The standalone
+    # producer explicitly selects its private alias and retains that exact path.
+    tree = ast.parse((ROOT / 'producer_setup.py').read_bytes())
+    common = next(n.value for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                  and any(isinstance(t, ast.Name) and t.id == 'common' for t in n.targets))
+    value = next(v for k, v in zip(common.keys, common.values)
+                 if isinstance(k, ast.Constant) and k.value == 'query_python')
+    base = Path('/usr/local/bin/python-primary-audit' if primary
+                else '/usr/local/bin/python-source-audit')
+    selected = Path('/receipts/producers/selected/bin/python')
+    actual = eval(compile(ast.Expression(value), 'actual_query_input', 'eval'),
+                  {'str': str, 'base': base, 'python': selected, 'primary': primary})
+    assert actual == str(base if primary else selected)
+    from primary_policy import environment
+    if primary:
+        assert actual == environment()['UV_PYTHON']
+    else:
+        assert actual != str(base)
+
+
+def restore_query_route(tree):
+    returned = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'returned')
+    routes = [n for n in ast.walk(returned) if isinstance(n, ast.Assign)
+              and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+              and n.targets[0].id == 'route']
+    assert len(routes) == 1
+    assert ast.unparse(routes[0]) == "route = Path(selected.get('route_path', selected['path']))"
+    routes[0].value = ast.parse("Path(selected['path'])", mode='eval').body
+    return tree
+
+
+@pytest.mark.parametrize('before,after', [
+    ("selected.get(\"route_path\", selected[\"path\"])", "selected[\"path\"]"),
+    ("selected.get(\"route_path\", selected[\"path\"])", "selected.get(\"foreign\", selected[\"path\"])")])
+def test_query_route_normalization_is_exact(before, after):
+    source = (ROOT / 'finite/source_operations.py').read_text()
+    assert before in source
+    with pytest.raises(AssertionError):
+        restore_query_route(ast.parse(source.replace(before, after)))
+
+
+@pytest.mark.parametrize('change', ['none', 'query', 'duplicate_query', 'route_inode',
+                                    'route_target', 'route_removed', 'nonzero_wait'])
+def test_actual_install_settlement_binds_route_and_effective_query(tmp_path, monkeypatch, change):
+    spec = importlib.util.spec_from_file_location('query_route_operations', ROOT / 'finite/source_operations.py')
+    operations = importlib.util.module_from_spec(spec)
+    tree = ast.parse((ROOT / 'finite/source_operations.py').read_bytes())
+    original_class = ast.dump(next(n for n in tree.body
+                                  if isinstance(n, ast.ClassDef) and n.name == 'Operations'),
+                              include_attributes=False)
+    # Import registrations require the separate /source mount. Retain the whole
+    # actual operation class and filesystem checks for this settlement control.
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'REGISTRATIONS' for t in node.targets):
+            node.value = ast.List(elts=[], ctx=ast.Load())
+    assert ast.dump(next(n for n in tree.body
+                         if isinstance(n, ast.ClassDef) and n.name == 'Operations'),
+                    include_attributes=False) == original_class
+    exec(compile(ast.fix_missing_locations(tree), str(ROOT / 'finite/source_operations.py'), 'exec'),
+         operations.__dict__)
+    base, foreign, route, output = (tmp_path / name for name in ('base', 'foreign', 'route', 'output'))
+    base.write_bytes(b'pinned primary image')
+    foreign.write_bytes(b'foreign image')
+    route.symlink_to(base)
+    output.mkdir()
+    selected = {'path': str(base), 'route_path': str(route),
+                'file': operations.identity(base), 'link_inode': route.lstat().st_ino}
+    if change == 'route_inode':
+        selected['link_inode'] += 1
+    elif change == 'route_target':
+        route.unlink()
+        route.symlink_to(foreign)
+    elif change == 'route_removed':
+        route.unlink()
+    handle = SimpleNamespace(pid=77)
+    frame = SimpleNamespace(f_locals={'completed': SimpleNamespace(returncode=0)})
+    rows = [{'kind': 'query_actual_main_return', 'parent_pid': 77,
+             'info': {'sys_executable': str(foreign if change == 'query' else base)}}]
+    if change == 'duplicate_query':
+        rows += rows
+    events = []
+    def refuse(code):
+        raise RuntimeError(code)
+    state = {'operation_spec': {'mapping_support': {}, 'installed_interpreter': selected},
+             'handles': [handle], 'token': 'root'}
+    value = operations.Operations(state, events.append, refuse, lambda token: None)
+    value.inputs = lambda: {}
+    value.rows = lambda: rows
+    value.waits[77] = 1 if change == 'nonzero_wait' else 0
+    record = {'operation': 'source-install', 'output': str(output),
+              'launch_token': 'launch', 'argv_sha256': 'argv', 'inputs': {},
+              'preimage': operations.tree_identity(output), 'wheel': {}}
+    value.pending['token'] = {'frame': frame, 'handle': handle, 'record': record}
+    monkeypatch.setattr(operations, 'owned_wait', lambda state, h: {
+        'launch_token': 'launch', 'argv_sha256': 'argv', 'numeric_returncode': 0})
+    def mapping(wheel, tree, support, executable):
+        assert executable == str(base)
+        return {'complete_generated_file_mapping': True}
+    monkeypatch.setattr(operations, 'installed_mapping', mapping)
+    if change in {'none', 'nonzero_wait'}:
+        value.returned(frame, 'original return')
+        assert bool(value.settled) is (change == 'none')
+        if change == 'none':
+            assert value.settled[(str(output), 'source-install')]['actual_wait_returncode'] == 0
+        else:
+            assert events[-1]['kind'] == 'operation_failed'
+    else:
+        with pytest.raises((RuntimeError, FileNotFoundError)):
+            value.returned(frame, 'original return')
+        assert value.settled == {}
+
+
+@pytest.mark.parametrize('primary', [False, True])
+def test_actual_setup_preserves_route_custody_separately_from_query(tmp_path, primary):
+    base, python = tmp_path / 'base', tmp_path / 'python'
+    base.write_bytes(b'original pinned interpreter')
+    python.symlink_to(base)
+    tree = ast.parse((ROOT / 'producer_setup.py').read_bytes())
+    operation_spec = next(n.value for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                          and any(isinstance(t, ast.Name) and t.id == 'operation_spec' for t in n.targets))
+    selected = next(v for k, v in zip(operation_spec.keys, operation_spec.values)
+                    if isinstance(k, ast.Constant) and k.value == 'installed_interpreter')
+    common = {'query_python': str(base if primary else python)}
+    file = {'path': str(base), 'sha256': hashlib.sha256(base.read_bytes()).hexdigest()}
+    actual = eval(compile(ast.Expression(selected), 'actual_selected_install_input', 'eval'),
+                  {'common': common, 'operations': SimpleNamespace(identity=lambda path: file),
+                   'base': base, 'python': python, 'primary': primary, 'str': str})
+    assert actual == {'path': common['query_python'], 'file': file,
+                      'link_inode': python.lstat().st_ino,
+                      **({'route_path': str(python)} if primary else {})}

@@ -878,3 +878,16 @@ This preserves every original record and value while avoiding whitespace
 overhead at the fixed transport bound. Header hashes and lengths bind the actual
 compact bytes. The original aggregate and per-record caps still refuse oversized
 streams; an authenticated header without the full envelope proves no acceptance.
+
+PRIMARY install-query setup binds the exact interpreter selected by its original
+`UV_PYTHON` environment: the pinned primary audit image. The standalone producer
+continues to bind its separately selected private interpreter alias. This is a
+role-specific setup input; native admission and consumption still compare the
+exact executable path, image bytes, operation, environment and kernel identity.
+
+The protected install input distinguishes the readonly selected interpreter route
+from its effective query executable. Settlement still checks the route's exact
+symlink inode and resolved image identity, requires one actual query return from
+the original UV parent at the exact effective executable, and maps generated
+console bytes against that executable. Standalone setup retains its original
+single-path input. No query metadata is rewritten.

@@ -699,7 +699,7 @@ class Operations:
                 selected = self.spec.get("installed_interpreter")
                 if support is None or selected is None:
                     self.refuse("source_install_mapping_or_interpreter_selection_unobserved")
-                route = Path(selected["path"])
+                route = Path(selected.get("route_path", selected["path"]))
                 if (
                     identity(route.resolve()) != selected["file"]
                     or not route.is_symlink()
