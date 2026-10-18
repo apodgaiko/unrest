@@ -8,6 +8,7 @@ import io
 import os
 import json
 import py_compile
+import stat
 from pathlib import Path
 import sys
 import zipfile
@@ -244,9 +245,14 @@ def consumer_site(tmp_path, monkeypatch):
     source.chmod(0o644)
     receipts = tmp_path / 'receipts'
     receipts.mkdir()
+    image = tmp_path / 'image'
+    image.mkdir()
+    (image / 'data.py').write_bytes(b'VALUE = 1\n')
     original_read = dependency.read
     def fixture_read(path, uid, gid=None):
-        assert uid == (20001 if Path(path).is_relative_to(receipts) else 20000)
+        expected_uid = 0 if Path(path).is_relative_to(image) else (
+            20001 if Path(path).is_relative_to(receipts) else 20000)
+        assert uid == expected_uid
         info = Path(path).lstat()
         body, row = original_read(path, info.st_uid, info.st_gid)
         row['identity'][3:5] = [uid, uid]
@@ -260,9 +266,28 @@ def consumer_site(tmp_path, monkeypatch):
             raise RuntimeError('fixture_directory_membership')
         return actual
     monkeypatch.setattr(dependency, 'SITE', site)
+    monkeypatch.setattr(dependency, 'IMAGE', image)
     monkeypatch.setattr(dependency, 'RECEIPTS', receipts)
     monkeypatch.setattr(dependency, 'read', fixture_read)
     monkeypatch.setattr(dependency, 'directory_view', directories)
+    def metadata():
+        files, dirs = {}, {}
+        for path in [site, *site.rglob('*')]:
+            info = path.lstat()
+            name = path.relative_to(site).as_posix()
+            if stat.S_ISDIR(info.st_mode):
+                dirs[name] = {'identity': dependency.key(info)[:5], 'links': info.st_nlink}
+            elif stat.S_ISREG(info.st_mode):
+                row = dependency.key(info)
+                row[3:5] = [20000, 20000]
+                files[name] = row
+            else:
+                raise RuntimeError('fixture_special_member')
+        return files, dirs
+    monkeypatch.setattr(dependency, 'site_metadata', metadata)
+    actual_statvfs = dependency.os.statvfs
+    monkeypatch.setattr(dependency.os, 'statvfs', lambda path: SimpleNamespace(f_flag=os.ST_RDONLY)
+                        if Path(path).is_relative_to(image) else actual_statvfs(path))
     source_calls = []
     monkeypatch.setattr(dependency, 'verify_source_inputs', lambda *args: source_calls.append(args))
     actual_path = Path
@@ -316,7 +341,7 @@ def consumer_site(tmp_path, monkeypatch):
     support = publish()
     return SimpleNamespace(site=site, source=source, receipt=receipt, value=value,
                            support=support, publish=publish, source_calls=source_calls,
-                           read=fixture_read, directories=directories)
+                           read=fixture_read, directories=directories, image=image, metadata=metadata)
 
 
 def test_consumer_reacquires_complete_file_bytes(consumer_site):
@@ -464,22 +489,22 @@ def test_consumer_requires_exact_current_source_cache(consumer_site, change):
             dependency.verify(fixture.site, fixture.support)
 
 
-@pytest.mark.parametrize('phase', ['between_scan_and_cache_verification', 'late_read', 'late_membership'])
+@pytest.mark.parametrize('phase', ['before_full_read', 'after_full_read', 'late_membership'])
 def test_consumer_refuses_mutation_before_consumption(consumer_site, monkeypatch, phase):
     fixture = consumer_site
     original = fixture.read
     calls = 0
     def racing(path, uid, gid=None):
         nonlocal calls
-        result = original(path, uid, gid)
         if Path(path) == fixture.source:
             calls += 1
-            if phase == 'between_scan_and_cache_verification' and calls == 1:
+            if phase == 'before_full_read' and calls == 1:
                 fixture.source.write_bytes(b'VALUE = 2\n')
-            elif phase == 'late_read' and calls == 2:
+        result = original(path, uid, gid)
+        if Path(path) == fixture.source:
+            if phase == 'after_full_read' and calls == 1:
                 fixture.source.write_bytes(b'VALUE = 2\n')
-                return original(path, uid, gid)
-            elif phase == 'late_membership' and calls == 2:
+            elif phase == 'late_membership' and calls == 1:
                 (fixture.site / 'late.txt').write_bytes(b'late')
         return result
     monkeypatch.setattr(dependency, 'read', racing)
@@ -490,6 +515,55 @@ def test_consumer_refuses_mutation_before_consumption(consumer_site, monkeypatch
 def test_declaration_duplicate_fields_refused():
     with pytest.raises(RuntimeError, match='duplicate_field'):
         dependency.decode(b'{"schema":"first","schema":"second"}')
+
+
+def test_mutable_source_observation_cannot_authorize_foreign_cache(consumer_site, monkeypatch):
+    import marshal
+    fixture = consumer_site
+    cache = Path(py_compile.compile(str(fixture.source), doraise=True))
+    payload = cache.read_bytes()
+    foreign = compile(b'VALUE = 2\n', str(fixture.source), 'exec', dont_inherit=True)
+    cache.write_bytes(payload[:16] + marshal.dumps(foreign))
+    cache.chmod(0o644)
+    original = Path.read_bytes
+    def transient_source(path):
+        return b'VALUE = 2\n' if path == fixture.source else original(path)
+    monkeypatch.setattr(Path, 'read_bytes', transient_source)
+    with pytest.raises(RuntimeError, match='cache_immutable_code'):
+        dependency.verify(fixture.site, fixture.support)
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='requires the actual closed source UID/GID20000')
+@pytest.mark.parametrize('change', ['none', 'extra_empty_directory', 'link', 'wrong_mode', 'late_member'])
+def test_actual_site_census_matches_original_directory_and_file_predicates(tmp_path, monkeypatch, change):
+    assert os.getuid() == os.getgid() == 20000
+    site = tmp_path / 'site'
+    site.mkdir(mode=0o755)
+    (site / 'package').mkdir(mode=0o755)
+    source = site / 'package/module.py'
+    source.write_bytes(b'VALUE = 1\n')
+    source.chmod(0o644)
+    monkeypatch.setattr(dependency, 'SITE', site)
+    if change == 'link':
+        (site / 'alias').symlink_to(source)
+    elif change == 'wrong_mode':
+        (site / 'package').chmod(0o777)
+    if change in {'link', 'wrong_mode'}:
+        with pytest.raises(RuntimeError):
+            dependency.site_metadata()
+        return
+    first, dirs = dependency.site_metadata()
+    assert set(first) == {'package/module.py'}
+    assert first['package/module.py'] == dependency.read(source, 20000)[1]['identity']
+    assert dirs == dependency.directory_view(first)
+    if change == 'extra_empty_directory':
+        (site / 'unknown').mkdir(mode=0o755)
+        with pytest.raises(RuntimeError):
+            dependency.directory_view(first)
+    elif change == 'late_member':
+        (site / 'late.txt').write_bytes(b'unknown')
+        final, _ = dependency.site_metadata()
+        assert set(final) != set(first)
 
 
 @pytest.fixture

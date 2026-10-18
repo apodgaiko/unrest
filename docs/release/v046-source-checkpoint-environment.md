@@ -968,3 +968,15 @@ The renderer references are UV0.11.0's
 [RECORD writer](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-install-wheel/src/install.rs),
 [cache key implementation](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-cache-info/src/cache_info.rs),
 and [build settings serialization](https://raw.githubusercontent.com/astral-sh/uv/0.11.0/crates/uv-distribution-types/src/build_info.rs).
+
+PRIMARY profiles retain the common interpreter inventory and replace the unused
+standalone dependency tree with mandatory consumption of the actual PRIMARY
+site. An absent declaration or support pin refuses even when the legacy tree
+list is empty; standalone profiles retain their original complete inventory.
+The consumer performs a no-follow identity and membership census, validates
+caches against immutable image source bytes, then reads every ordinary file in
+full before its final membership and identity census. It does not reuse a prior
+successful consumption or skip byte checks based on timestamps. Cache validation
+also retains the original compiler/header check and rejects code that matches
+only a transient mutable-source observation. Receipt and operation deadlines
+remain unchanged.

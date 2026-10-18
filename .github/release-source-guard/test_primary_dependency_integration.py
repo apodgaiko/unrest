@@ -70,3 +70,48 @@ def test_exact_clock_admission_only_relocates_three_equivalent_owners(monkeypatc
         assert manifest[key] == original[key]
     assert {name for name in manifest['product_pins'] if manifest['product_pins'][name]
             != original['product_pins'].get(name)} == set(clock_source_inputs.POST)
+
+
+def test_primary_inputs_require_actual_dependency_even_without_legacy_tree():
+    import pytest
+    support = ROOT / '.github/release-source-guard'
+    body = (support / 'primary_operations.py').read_text()
+    # Execute the production subclass with its exact legacy entry already checked above.
+    cls = next(node for node in ast.parse(body).body if isinstance(node, ast.ClassDef))
+    calls = []
+    class Legacy:
+        def inputs(self):
+            calls.append('legacy')
+            return 'validated-source'
+    namespace = {'_LegacyOperations': Legacy}
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), str(support / 'primary_operations.py'), 'exec'),
+         {'hashlib': hashlib, '_BASE': support / 'finite/source_operations.py', 'Path': Path}, namespace)
+    operation = namespace['Operations']()
+    operation.spec = {'trees': []}
+    operation.refuse = lambda code: (_ for _ in ()).throw(RuntimeError(code))
+    with pytest.raises(RuntimeError, match='primary_dependency_support_missing'):
+        operation.inputs()
+    assert calls == ['legacy']
+    operation.dependency = lambda site: calls.append(site)
+    assert operation.inputs() == 'validated-source'
+    assert calls == ['legacy', 'legacy', '/source/.venv/lib/python3.13/site-packages']
+
+
+def test_dependency_domains_preserve_standalone_inventory():
+    tree = ast.parse((ROOT / '.github/release-source-guard/producer_setup.py').read_bytes())
+    fields = {key.value: value for node in ast.walk(tree) if isinstance(node, ast.Dict)
+              for key, value in zip(node.keys, node.values)
+              if isinstance(key, ast.Constant) and key.value in {'shared_trees', 'trees'}}
+    env = {'Path': Path, 'dependency_site': Path('/opt/deps/lib/python3.13/site-packages'),
+           'activation': type('Activation', (), {'tree': staticmethod(str)}),
+           'operations': type('Operations', (), {'tree_identity': staticmethod(str)})}
+    observed = {}
+    for primary in (False, True):
+        env['primary'] = primary
+        observed[primary] = {key: eval(compile(ast.Expression(value), '<setup-domain>', 'eval'), env)
+                             for key, value in fields.items()}
+    assert set(observed[False]['shared_trees']) == {
+        '/opt/deps/lib/python3.13/site-packages', '/usr/local/lib/python3.13'}
+    assert observed[False]['trees'] == ['/opt/deps/lib/python3.13/site-packages']
+    assert set(observed[True]['shared_trees']) == {'/usr/local/lib/python3.13'}
+    assert observed[True]['trees'] == []

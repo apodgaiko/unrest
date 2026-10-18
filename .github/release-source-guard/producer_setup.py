@@ -148,7 +148,8 @@ def prepare(manifest, input_pin):
             Path('/opt/deps/pyvenv.cfg'), stock.resolve(), base,
             Path('/usr/local/lib/libpython3.13.so.1.0'), config)],
         'shared_trees': {str(path): activation.tree(path)
-                         for path in (dependency_site, Path('/usr/local/lib/python3.13'))},
+                         for path in ((Path('/usr/local/lib/python3.13'),) if primary else
+                                      (dependency_site, Path('/usr/local/lib/python3.13')))},
         'shared_absent': ['/opt/deps/bin/pyvenv.cfg', '/opt/deps/lib/python313.zip',
                           '/usr/local/bin/pyvenv.cfg', '/usr/local/pyvenv.cfg',
                           str(selected / 'bin/pyvenv.cfg')],
@@ -173,7 +174,7 @@ def prepare(manifest, input_pin):
     common_path = ROOT / 'common.json'
     common_pin = write(common_path, common)
     operation_spec = {
-        'files': source_files, 'trees': [operations.tree_identity(dependency_site)],
+        'files': source_files, 'trees': [] if primary else [operations.tree_identity(dependency_site)],
         'uv': operations.identity('/opt/source-bootstrap/bin/uv'),
         'backend_distribution': backend,
         'mapping_support': {'path': '/guard/finite/installed_outputs.py',

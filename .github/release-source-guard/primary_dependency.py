@@ -47,23 +47,25 @@ def key(info):
 
 
 def read(path, uid, gid=None):
-    path = Path(path)
-    before = path.lstat()
+    pathname = os.fspath(path)
+    if type(pathname) is not str:
+        raise RuntimeError('primary_dependency_path_type')
+    before = os.stat(pathname, follow_symlinks=False)
     if (not stat.S_ISREG(before.st_mode) or before.st_uid != uid
             or before.st_gid != (uid if gid is None else gid) or not 0 <= before.st_size <= LIMIT):
         raise RuntimeError('primary_dependency_file_custody')
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    descriptor = os.open(pathname, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         if key(os.fstat(descriptor)) != key(before):
             raise RuntimeError('primary_dependency_open_race')
         with os.fdopen(descriptor, 'rb', closefd=False) as stream:
             body = stream.read(LIMIT + 1)
         if (len(body) != before.st_size or key(os.fstat(descriptor)) != key(before)
-                or key(path.lstat()) != key(before)):
+                or key(os.stat(pathname, follow_symlinks=False)) != key(before)):
             raise RuntimeError('primary_dependency_read_race')
     finally:
         os.close(descriptor)
-    return body, {'path': str(path), 'identity': key(before), 'sha256': sha(body)}
+    return body, {'path': pathname, 'identity': key(before), 'sha256': sha(body)}
 
 
 def wheel_payload(body):
@@ -499,6 +501,101 @@ def directory_view(names):
     return observed
 
 
+def site_metadata():
+    """Fresh no-follow census; no file byte is authorized by these stat rows."""
+    if SITE.resolve(strict=True) != SITE:
+        raise RuntimeError('primary_dependency_directory_route')
+    root = str(SITE)
+    pending = [root]
+    files, directories = {}, {}
+    while pending:
+        path = pending.pop()
+        info = os.stat(path, follow_symlinks=False)
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != 20000 or info.st_gid != 20000
+                or stat.S_IMODE(info.st_mode) != 0o755):
+            raise RuntimeError('primary_dependency_directory')
+        with os.scandir(path) as stream:
+            children = sorted(entry.name for entry in stream)
+        child_directories = 0
+        for child in children:
+            name = path + '/' + child
+            child_info = os.stat(name, follow_symlinks=False)
+            if child_info.st_uid != 20000 or child_info.st_gid != 20000:
+                raise RuntimeError('primary_dependency_member_owner')
+            if stat.S_ISDIR(child_info.st_mode):
+                child_directories += 1
+                pending.append(name)
+            elif stat.S_ISREG(child_info.st_mode):
+                files[name[len(root) + 1:]] = key(child_info)
+            else:
+                raise RuntimeError('primary_dependency_special_member')
+        if info.st_nlink != 2 + child_directories or key(os.stat(path, follow_symlinks=False)) != key(info):
+            raise RuntimeError('primary_dependency_directory_links_or_race')
+        relative = '.' if path == root else path[len(root) + 1:]
+        directories[relative] = {'identity': key(info)[:5], 'links': info.st_nlink}
+    return files, directories
+
+
+def cache_sources(names, ordinary):
+    result = {}
+    for name in names:
+        if not name.endswith('.pyc'):
+            continue
+        path = Path(name)
+        parts = path.name.split('.')
+        if (path.parent.name != '__pycache__' or len(parts) not in (3, 4)
+                or parts[1] != 'cpython-313' or parts[-1] != 'pyc'
+                or len(parts) == 4 and parts[2] not in {'opt-1', 'opt-2'}):
+            raise RuntimeError('primary_dependency_cache_domain')
+        source = (path.parent.parent / (parts[0] + '.py')).as_posix()
+        if source not in ordinary:
+            raise RuntimeError('primary_dependency_cache_source')
+        result[name] = (source, 0 if len(parts) == 3 else int(parts[2][-1]))
+    if set(names) - set(result) != set(ordinary):
+        raise RuntimeError('primary_dependency_current_membership')
+    return result
+
+
+def immutable_cache(namespace, name, source_name, optimize, expected_source):
+    """Retain the legacy verifier, then bind code to immutable image source.
+
+    A transient mutable-site source observation cannot mint expected code.
+    Compilation is comparison only and never dispatches the resulting object.
+    """
+    import importlib.util
+    import marshal
+    image = IMAGE / source_name
+    if image.resolve(strict=True) != image or not os.statvfs(image).f_flag & os.ST_RDONLY:
+        raise RuntimeError('primary_dependency_cache_image_route')
+    source, image_file = read(image, 0)
+    if image_file['sha256'] != expected_source['sha256']:
+        raise RuntimeError('primary_dependency_cache_image_source')
+    payload, current = read(SITE / name, 20000)
+    if (stat.S_IMODE(current['identity'][2]) != 0o644 or current['identity'][5] != 1
+            or payload[:4] != importlib.util.MAGIC_NUMBER):
+        raise RuntimeError('primary_dependency_cache_custody')
+    flags = int.from_bytes(payload[4:8], 'little')
+    info = os.stat(str(SITE / source_name), follow_symlinks=False)
+    expected = expected_source['identity']
+    # UID/GID/link custody is checked by the census and final full-byte read.
+    if any(key(info)[index] != expected[index] for index in (0, 1, 2, 6, 7, 8)):
+        raise RuntimeError('primary_dependency_cache_source_identity')
+    if flags == 0:
+        if (int.from_bytes(payload[8:12], 'little') != int(info.st_mtime) & 0xFFFFFFFF
+                or int.from_bytes(payload[12:16], 'little') != len(source) & 0xFFFFFFFF):
+            raise RuntimeError('primary_dependency_cache_immutable_header')
+    elif flags in (1, 3):
+        if payload[8:16] != importlib.util.source_hash(source):
+            raise RuntimeError('primary_dependency_cache_immutable_header')
+    else:
+        raise RuntimeError('primary_dependency_cache_immutable_flags')
+    code = marshal.loads(payload[16:])
+    compiled = compile(source, str(SITE / source_name), 'exec', dont_inherit=True, optimize=optimize)
+    if namespace['code_identity'](code) != namespace['code_identity'](compiled):
+        raise RuntimeError('primary_dependency_cache_immutable_code')
+    return current
+
+
 def verify(site, support):
     """Consume only the observer-pinned PRIMARY domain; no path-prefix fallback."""
     if (Path(site) != SITE or set(support) != {'path', 'sha256', 'activation_sha256'}
@@ -526,27 +623,41 @@ def verify(site, support):
         raise RuntimeError('primary_dependency_cache_verifier')
     namespace = {'__file__': str(source), '__name__': 'primary_dependency_activation'}
     exec(compile(source_body, str(source), 'exec', dont_inherit=True), namespace)
-    first = {}
-    for path in sorted(SITE.rglob('*')):
-        if path.is_dir() and not path.is_symlink():
-            continue
-        _, observed = read(path, 20000)
-        first[path.relative_to(SITE).as_posix()] = observed
+    first, directories = site_metadata()
+    source_map = cache_sources(first, value['files'])
+    wanted_directories = {'.'}
+    for name in first:
+        parent = name.rpartition('/')[0]
+        while parent:
+            wanted_directories.add(parent)
+            parent = parent.rpartition('/')[0]
+    if set(directories) != wanted_directories:
+        raise RuntimeError('primary_dependency_directory_membership')
+    if any(name not in directories or directories[name]['identity'] != row['identity']
+           for name, row in value['directories'].items()):
+        raise RuntimeError('primary_dependency_current_directory_drift')
     caches = namespace['verify_caches'](SITE)
-    cache_names = set()
-    for cache in caches:
-        name = Path(cache['cache']['path']).relative_to(SITE).as_posix()
-        source_name = Path(cache['source']['path']).relative_to(SITE).as_posix()
-        if (source_name not in value['files']
+    checked = {Path(row['cache']['path']).relative_to(SITE).as_posix(): row for row in caches}
+    if len(checked) != len(caches) or set(checked) != set(source_map):
+        raise RuntimeError('primary_dependency_cache_membership')
+    current_caches = {}
+    for name in sorted(checked):
+        cache = checked[name]
+        source_name, optimize = source_map[name]
+        if (cache['source']['path'] != str(SITE / source_name)
                 or cache['source']['sha256'] != value['files'][source_name]['sha256']
-                or name not in first or cache['cache']['sha256'] != first[name]['sha256']):
+                or cache['optimize'] != optimize):
             raise RuntimeError('primary_dependency_current_cache_source')
-        if stat.S_IMODE(first[name]['identity'][2]) != 0o644 or first[name]['identity'][5] != 1:
-            raise RuntimeError('primary_dependency_current_cache_custody')
-        cache_names.add(name)
-    ordinary = {name: row for name, row in first.items() if name not in cache_names}
-    if ordinary != value['files']:
-        raise RuntimeError('primary_dependency_current_file_drift')
+        current = immutable_cache(namespace, name, source_name, optimize, value['files'][source_name])
+        if current['identity'] != first[name]:
+            raise RuntimeError('primary_dependency_current_cache_drift')
+        current_caches[name] = current
+    # Stat rows never replace a byte check: every ordinary file is fully read
+    # here, after discovery/cache comparison and immediately before consumption.
+    for name in sorted(value['files']):
+        _, current = read(str(SITE) + '/' + name, 20000)
+        if current != value['files'][name] or current['identity'] != first[name]:
+            raise RuntimeError('primary_dependency_current_file_drift')
     for name, expected in value['scripts'].items():
         parts = Path(name).parts
         path = SITE / name
@@ -556,17 +667,11 @@ def verify(site, support):
                 or expected['path'] != str(path) or path.resolve(strict=True) != canonical
                 or read(path, 20000)[1] != expected or path.resolve(strict=True) != canonical):
             raise RuntimeError('primary_dependency_current_script_drift')
-    directories = directory_view(set(ordinary) | cache_names)
-    if any(name not in directories or directories[name]['identity'] != row['identity']
-           for name, row in value['directories'].items()):
-        raise RuntimeError('primary_dependency_current_directory_drift')
-    for name, observed in first.items():
-        if read(SITE / name, 20000)[1] != observed:
-            raise RuntimeError('primary_dependency_late_file_drift')
-    if directory_view(set(first)) != directories:
-        raise RuntimeError('primary_dependency_late_directory_drift')
-    if {path.relative_to(SITE).as_posix() for path in SITE.rglob('*')
-            if not path.is_dir() or path.is_symlink()} != set(first):
-        raise RuntimeError('primary_dependency_late_membership_drift')
-    return {'kind': 'primary_dependency_consumption', 'files': len(ordinary),
+    for name, expected in current_caches.items():
+        if read(str(SITE) + '/' + name, 20000)[1] != expected:
+            raise RuntimeError('primary_dependency_late_cache_drift')
+    final, final_directories = site_metadata()
+    if final != first or final_directories != directories:
+        raise RuntimeError('primary_dependency_late_census_drift')
+    return {'kind': 'primary_dependency_consumption', 'files': len(value['files']),
             'source_bound_caches': len(caches), 'declaration_sha256': support['sha256']}
