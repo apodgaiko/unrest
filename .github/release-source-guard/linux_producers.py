@@ -51,6 +51,7 @@ class NativeProducers:
         self.uv = {}
         self.children = {}
         self.records = []
+        self.producer_diagnostic_keys = set()
         self.poisoned_exits = set()
 
     def admit_uv(self, pid, path, vector, environment, cwd, parent, registration, selected):
@@ -93,15 +94,23 @@ class NativeProducers:
                              'cwd': cwd, 'image_sha256': self.public.SOURCE_UV_ELF_SHA256})
         return True
 
+    def producer_check(self, pid, stage, value):
+        key = (pid, stage)
+        if key not in self.producer_diagnostic_keys and len(self.producer_diagnostic_keys) < 128:
+            self.producer_diagnostic_keys.add(key)
+            self.records.append({'kind': 'native_producer_predicate', 'pid': pid,
+                                 'stage': stage, 'value': value})
+        return value
+
     def resolve_child(self, pid, parent, path, vector, environment, cwd):
         context = self.uv.get(parent)
         if context is None:
             return None
-        if pid in self.children:
+        if self.producer_check(pid, 'duplicate_child', pid in self.children):
             return False
-        if (self.kernel.identity(parent) != context['identity'] or len(context['children']) >= 8
-                or path != vector[0] or Path(path).resolve() != Path(self.common['base'])
-                or digest(path) != self.common['base_identity']['sha256']):
+        if (self.producer_check(pid, 'parent_identity', self.kernel.identity(parent) != context['identity']) or self.producer_check(pid, 'child_limit', len(context['children']) >= 8)
+                or self.producer_check(pid, 'argv_path', path != vector[0]) or self.producer_check(pid, 'realpath', Path(path).resolve() != Path(self.common['base']))
+                or self.producer_check(pid, 'image_bytes', digest(path) != self.common['base_identity']['sha256'])):
             return False
         spec = dict(self.common)
         profile = context['profile']
@@ -113,34 +122,42 @@ class NativeProducers:
                          'record_sha256')}})
         base_environment = {**profile['environment'], 'UV': '/opt/source-bootstrap/bin/uv'}
         if vector[1:4] == ['-I', '-B', '-c'] and len(vector) == 5:
-            if (path != self.common['query_python'] or cwd != profile['cwd']
-                    or environment != base_environment):
+            if (self.producer_check(pid, 'query_path', path != self.common['query_python']) or self.producer_check(pid, 'query_cwd', cwd != profile['cwd'])
+                    or self.producer_check(pid, 'query_environment', environment != base_environment)):
                 return False
+            self.producer_check(pid, 'query_renderer_enter', True)
             package = self.interface.query_package(vector[-1], spec)
+            self.producer_check(pid, 'query_renderer_return', True)
             key = ('query', package['path'])
-            if any(item['role'] == 'isolated-uv-query' for item in context['children']):
+            if self.producer_check(pid, 'duplicate_query', any(item['role'] == 'isolated-uv-query' for item in context['children'])):
                 return False
             role, helper, flags = 'isolated-uv-query', 'main', [1, 0, 1]
         elif len(vector) == 3 and vector[1] == '-c' and context['operation'] == 'source-build':
+            self.producer_check(pid, 'helper_renderer_enter', True)
             helper = self.renderer.helper_class(vector[-1], spec)
+            self.producer_check(pid, 'helper_renderer_return', True)
+            self.producer_check(pid, 'selected_runtime_enter', True)
             selected = self.inputs.runtime(spec, vector[0])
+            self.producer_check(pid, 'selected_runtime_return', True)
             expected_environment = {
                 **base_environment, 'PATH': selected['prefix'] + '/bin:' + profile['environment']['PATH'],
                 'VIRTUAL_ENV': selected['prefix'], 'PYTHONIOENCODING': 'utf-8:backslashreplace'}
-            if environment != expected_environment:
+            if self.producer_check(pid, 'backend_environment', environment != expected_environment):
                 return False
             if cwd != spec['project']:
+                self.producer_check(pid, 'extracted_source_enter', True)
                 self.inputs.extracted_source(spec, Path(cwd), self.supervisor.events(), parent)
+                self.producer_check(pid, 'extracted_source_return', True)
             key = ('backend', selected['prefix'], helper)
             role = 'isolated-uv-helper'
             flags = [0, 0, int(bool(environment.get('PYTHONDONTWRITEBYTECODE')))]
         else:
             return False
-        if key in context['seen_requests']:
+        if self.producer_check(pid, 'duplicate_request', key in context['seen_requests']):
             return False
         context['seen_requests'].add(key)
         identity = self.kernel.identity(pid)
-        if identity['ppid'] != parent or identity['uid'] != 20000:
+        if self.producer_check(pid, 'child_parent', identity['ppid'] != parent) or self.producer_check(pid, 'child_uid', identity['uid'] != 20000):
             return False
         token = secrets.token_hex(16)
         spec_path = ROOT / ('spec-' + str(pid) + '.json')

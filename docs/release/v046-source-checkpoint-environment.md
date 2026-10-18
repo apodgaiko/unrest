@@ -785,3 +785,16 @@ checks the allocated constructor against a separate exact AST pin, then restores
 only the original constructor and removes its sole added math import before
 comparing that original digest. Wait, admission and execution-loop mutation
 negatives remain effective; constructor changes also fail their separate pin.
+
+
+### Native producer refusal diagnosis
+
+The observer's native producer records include a bounded closed predicate trace
+(`native_producer_predicate`: numeric PID, fixed stage and boolean only). Each
+PID/stage is retained once, with at most 128 entries across the run. Predicates
+are evaluated in their original short-circuit order; diagnostics do not retry
+identity reads or suppress exceptions. Renderer/runtime entry and return markers
+distinguish a refusal from an exception without exporting exception text, argv,
+environment or paths. The diagnostic inverse must reproduce the original
+resolver AST, and admission mutation controls must reject changed predicates.
+These records diagnose setup; they do not establish SOURCE acceptance.

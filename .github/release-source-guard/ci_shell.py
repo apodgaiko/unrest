@@ -90,6 +90,9 @@ def main():
                 or not (os.environ.get('GITHUB_REF') in {
                     'refs/heads/codex/source-guard-structured-20261018-root-allocation-' + epoch
                     for epoch in ('01', '02', '03')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-producer-startup-' + epoch
+                    for epoch in ('01', '02', '03')}
                     or os.environ.get('GITHUB_REF', '').startswith((
                     'refs/heads/codex/source-guard-structured-20261018-source-entry-',
                     'refs/heads/codex/source-guard-structured-20261018-source-composition-',
