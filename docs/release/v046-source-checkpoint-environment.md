@@ -693,3 +693,12 @@ Inner startup sampling is selective: operation input phases emit only while the
 shared-startup caller invokes them, and each closed inner/shared phase emits at
 most once per process. Repeated ordinary policy/input verification keeps running
 in full and does not grow the phase transport.
+
+Fresh filesystem capture retains each independent enumeration and every original
+no-follow open, before/open/after/path stat, byte hash and final tree comparison.
+Identity capture converts its Path once before passing the same pathname to the
+OS; POSIX tree ordering materializes component tuples once per entry. No tree,
+identity, result or authorization is reused across calls. The focused differential
+tests retain the preceding public implementations and compare complete vectors,
+serialization, fresh syscall sequences and post-first-call mutations. Local
+measurements alone do not establish original SOURCE acceptance.

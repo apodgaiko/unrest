@@ -61,10 +61,11 @@ def hashed(value):
 
 def identity(path):
     path = Path(path)
-    before = path.lstat()
+    pathname = str(path)
+    before = os.stat(pathname, follow_symlinks=False)
     if not stat.S_ISREG(before.st_mode):
         raise RuntimeError("operation input is not a regular file")
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(pathname, os.O_RDONLY | os.O_NOFOLLOW)
     try:
         opened = os.fstat(fd)
         if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
@@ -78,10 +79,10 @@ def identity(path):
     def key(s):
         return (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns, s.st_mode)
 
-    if key(before) != key(after) or key(after) != key(path.lstat()):
+    if key(before) != key(after) or key(after) != key(os.stat(pathname, follow_symlinks=False)):
         raise RuntimeError("operation input changed during capture")
     return {
-        "path": str(path),
+        "path": pathname,
         "device": before.st_dev,
         "inode": before.st_ino,
         "size": before.st_size,
@@ -104,7 +105,7 @@ def tree_identity(root):
     result = root_identity(root)
     files = []
     directories = []
-    for path in sorted(Path(root).rglob("*")):
+    for path in sorted(Path(root).rglob("*"), key=lambda path: path.parts):
         if path.is_symlink():
             raise RuntimeError("operation tree contains a symlink")
         if path.is_file():
