@@ -44,6 +44,36 @@ def write(path, value):
     temporary.replace(path)
 
 
+def closed_counts(result):
+    # Independent bounded diagnostics survive a refused oversized transport.
+    arrays = ('records', 'primary_records', 'source_events', 'receipts',
+              'event_timings', 'receipt_channel_diagnostics', 'source_pipe_records',
+              'missing_parent_waits', 'poison')
+    counts = {}
+    hashes = {}
+    for name in arrays:
+        rows = result.get(name, [])
+        body = json.dumps(rows, sort_keys=True).encode()
+        counts[name + '_count'] = len(rows)
+        counts[name + '_bytes'] = len(body)
+        hashes[name] = hashlib.sha256(body).hexdigest()
+    counts['guard_poison'] = int(bool(result.get('guard_poison')))
+    counts['native_preinit_refusal'] = int(bool(result.get('native_preinit_refusal')))
+    for key in ('support_reads', 'support_compiles', 'source_reads', 'source_derivations',
+                'support_read_seconds', 'support_compile_seconds',
+                'source_read_seconds', 'source_derivation_seconds'):
+        counts[key] = max((row.get('pure_phases', {}).get(key, 0)
+                          for row in result.get('receipt_channel_diagnostics', [])), default=0)
+    for key in ('source_observer_poison_sha256',):
+        if result.get(key) is not None:
+            hashes[key] = result[key]
+    # Request/body data is never copied into this independent record.
+    channels = result.get('receipt_channel_diagnostics', [])
+    counts['refused_channels'] = sum(row['outcome'] != 'complete' for row in channels)
+    counts['max_channel_seconds'] = max((row['elapsed'] for row in channels), default=0)
+    return {'schema': 'primary-source-closed-counts-v1', 'counts': counts, 'hashes': hashes}
+
+
 class AwaitOwnedPeer(RuntimeError):
     pass
 

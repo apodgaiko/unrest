@@ -161,3 +161,28 @@ def test_cached_descriptor_does_not_cache_role_or_ready_outcomes(policy):
             supervisor.custody_support()['handle'](supervisor, request, [])
     assert supervisor.pure_phases['support_compiles'] == 1
     assert supervisor.pure_phases['support_reads'] == 3
+
+
+def test_closed_count_sidecar_contains_no_request_material(tmp_path, monkeypatch):
+    import ci_shell
+    from types import SimpleNamespace
+    result = {'records': [{'kind': 'secret', 'argv': ['private']}],
+              'source_events': [{'nonce': 'private'}],
+              'receipt_channel_diagnostics': [{'outcome': 'complete', 'elapsed': .2,
+                                               'request': {'token': 'private'},
+                                               'pure_phases': {'support_compiles': 1}}]}
+    value = host.closed_counts(result)
+    assert 'private' not in json.dumps(value) and 'secret' not in json.dumps(value)
+    assert value['counts']['support_compiles'] == 1
+    assert value['counts']['records_count'] == 1
+    def copied(argv, log):
+        assert argv[:3] == ['docker', 'cp', 'owned:/receipts/primary-source-counts.json']
+        path = Path(argv[-1])
+        path.write_text(json.dumps(value))
+        path.chmod(0o600)
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(ci_shell, 'run', copied)
+    assert ci_shell.capture_counts('owned', tmp_path, tmp_path/'unused') == value
+    value['counts']['private'] = 1
+    with pytest.raises(RuntimeError, match='primary_closed_counts_keys'):
+        ci_shell.capture_counts('owned', tmp_path, tmp_path/'unused')

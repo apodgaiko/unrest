@@ -19,6 +19,7 @@ from primary_source_authority import SourceAuthority
 import producer_setup
 import dependency_closure
 import primary_entry_build
+from linux_supervisor import closed_counts
 
 
 STAGE = 'bootstrap'
@@ -193,6 +194,11 @@ def main():
             failure = 'source_guard_refused'
         result['failure_code'] = failure
         envelope['kernel-source.json'] = base64.b64encode(json.dumps(result, sort_keys=True).encode()).decode()
+    if source is not None:
+        path = Path('/receipts/primary-source-counts.json')
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, 'w') as stream:
+            json.dump(closed_counts(result), stream, sort_keys=True)
     print('PRIVATE-EVIDENCE:' + json.dumps(envelope, sort_keys=True), flush=True)
     return 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
                  and not authority.denials and not native_failure and not failure

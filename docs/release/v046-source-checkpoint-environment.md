@@ -625,3 +625,11 @@ TEST branch uses the existing four-case tuple and unchanged receipt/endpoint
 4s, custodian READY8s and wait25s limits. These controls and TEST execution
 remain certificate-ineligible; SOURCE applicability requires actual native
 startup, domain consumption and original-parent numeric waits.
+If the unchanged private transport refuses an oversized capture, an independent
+observer-owned 0600 record contains only fixed-key component byte/count totals,
+phase counters/timings and SHA256 digests. The executor copies that exact record
+before removing the stopped container and validates both its finite keys and
+scalar types before attaching it to safe provenance. Missing or invalid counts
+are recorded as unavailable; they cannot authorize a phase, replace original
+structured proof, change an exit status, or raise the transport bound. Original
+captured output remains encrypted and is not inspected to recover diagnostics.
