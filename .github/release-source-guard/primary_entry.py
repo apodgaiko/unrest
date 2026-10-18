@@ -74,9 +74,22 @@ def main(event, arguments):
             continue
         os._exit(86)
     denied = {'subprocess.Popen', 'os.exec', 'os.posix_spawn', 'os.system', 'os.fork',
-              'os.forkpty', 'socket.connect', 'socket.bind'}
+              'os.forkpty', 'socket.connect', 'socket.bind', 'ctypes.dlopen'}
     used_git = [False]
     def audit(name, args):
+        if name == 'import' and len(args) > 1 and isinstance(args[1], str) and args[1].endswith('.so'):
+            library = Path(args[1])
+            site = Path('/source/.venv/lib/python3.13/site-packages')
+            standard = Path('/usr/local/lib/python3.13/lib-dynload')
+            if library.resolve().is_relative_to(standard):
+                pass
+            elif library.resolve().is_relative_to(site):
+                mirror = Path('/opt/primary-deps/lib/python3.13/site-packages') / library.relative_to(site)
+                if (not mirror.is_file() or hashlib.sha256(library.read_bytes()).digest()
+                        != hashlib.sha256(mirror.read_bytes()).digest()):
+                    os._exit(86)
+            else:
+                os._exit(86)
         if name == 'subprocess.Popen' and profile['repository'] and not used_git[0]:
             executable, argv, cwd, environment = args
             frame = sys._getframe(1)

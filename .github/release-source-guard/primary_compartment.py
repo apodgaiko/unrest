@@ -130,7 +130,10 @@ def main():
             path = Path('/work') / ('primary-native-state-' + str(row['pid']) + '.json')
             if path.is_file() and not path.is_symlink() and path.stat().st_size <= 8192:
                 diagnostics.append(json.loads(path.read_bytes()))
-    result.update({'native_diagnostics': diagnostics, 'primary_plan': spec, 'primary_records': authority.records,
+    unregistered = children - set(authority.contexts)
+    if unregistered:
+        result['poison'].append('unregistered_process_birth')
+    result.update({'unregistered_processes': sorted(unregistered), 'native_diagnostics': diagnostics, 'primary_plan': spec, 'primary_records': authority.records,
                    'primary_denials': authority.denials, 'failure_code': failure,
                    'native_preinit_refusal': native_failure,
                    'missing_parent_waits': sorted(children - waits),

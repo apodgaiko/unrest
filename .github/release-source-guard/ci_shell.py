@@ -21,7 +21,7 @@ SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
 TMPFS = {'/work': 'rw,nosuid,nodev,size=512m,uid=20000,gid=20000,mode=0711',
          '/tmp': 'rw,nosuid,nodev,noexec,size=64m,mode=1777',
-         '/source': 'rw,nosuid,nodev,size=256m,uid=20000,gid=20000,mode=0755',
+         '/source': 'rw,exec,nosuid,nodev,size=256m,uid=20000,gid=20000,mode=0755',
          '/source/src/unrest_harness.egg-info': 'rw,nosuid,nodev,noexec,size=8m,uid=20000,gid=20000,mode=0700',
          '/receipts': 'rw,nosuid,nodev,noexec,size=32m,uid=20001,gid=20001,mode=0755'}
 KINDS = {'Install dependencies': 'primary-install', 'Import package': 'primary-import',
