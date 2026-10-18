@@ -5,6 +5,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+from test_root_allocation import restore_primary_allocation
+
 ROOT = Path(__file__).parent
 
 class StripTelemetry(ast.NodeTransformer):
@@ -75,7 +77,10 @@ BASELINE_AST_SHA256 = {'finite/source_operations.py': 'a5d9f2958f8aa4dd57922407f
 
 def test_only_closed_telemetry_changes_original_executable_trees():
     for name, expected in BASELINE_AST_SHA256.items():
-        tree = StripTelemetry().visit(ast.parse((ROOT / name).read_bytes()))
+        tree = ast.parse((ROOT / name).read_bytes())
+        if name == 'linux_trace.py':
+            tree = restore_primary_allocation(tree)
+        tree = StripTelemetry().visit(tree)
         assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() == expected
 
 
@@ -154,7 +159,7 @@ def test_ast_proof_rejects_original_wait_or_admission_mutation():
                            'os.waitpid(candidate, os.WNOHANG)'),
                           ('accepted = len(matches) == 1', 'accepted = True')]:
         assert before in original
-        tree = StripTelemetry().visit(ast.parse(original.replace(before, after)))
+        tree = StripTelemetry().visit(restore_primary_allocation(ast.parse(original.replace(before, after))))
         assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() != BASELINE_AST_SHA256['linux_trace.py']
 
 

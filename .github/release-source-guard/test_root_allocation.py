@@ -256,3 +256,42 @@ def test_new_controller_refs_are_exact(suffix):
     refused = eval(compile(ast.Expression(gate.test), 'actual_controller_ref_gate', 'eval'),
                    {'os': SimpleNamespace(environ=environment)})
     assert refused is (suffix not in {'01', '02', '03'})
+
+
+# The historical whole-engine oracle keeps its original hash. Normalize only
+# the separately pinned, explicitly allocated constructor plus its math import.
+LEGACY_CONSTRUCTOR = 'def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float,\n                 on_tick: Any = None, resolve_exec: Any = None,\n                 seize: bool = False, on_attached: Any = None, selective: bool = False):\n        if sys.platform != "linux" or os.uname().machine != "x86_64":\n            raise RuntimeError("unsupported trace ABI")\n        if child <= 0 or timeout <= 0 or timeout > 180:\n            raise ValueError("bounded owned trace required")\n        if Path(f"/proc/{child}/status").read_text().split("PPid:", 1)[1].split()[0] != str(\n            os.getpid()\n        ):\n            raise RuntimeError("trace root is not a direct child")\n        self.child = child\n        self.allowed = allowed\n        self.timeout = timeout\n        self.on_tick = on_tick\n        self.resolve_exec = resolve_exec\n        self.selective = selective\n        self.seize = seize\n        self.on_attached = on_attached\n        self.root_parent_wait: int | None = None\n        self.records: list[dict[str, Any]] = []\n        self.diagnostic_trace = DiagnosticTrace()\n        self.poison: list[str] = []\n        self.active = {child}\n        self.pending: dict[int, dict[str, Any]] = {}\n        self.denied: set[int] = set()\n        self.newborn: set[int] = set()\n        self.identities: dict[int, dict[str, Any]] = {}'
+ALLOCATED_CONSTRUCTOR_AST = '4c731bd5f91fbb41af9e3c77800e60d1db0ad78525acba399c3900d43400a69e'
+
+
+def restore_primary_allocation(tree):
+    import ast
+    import hashlib
+    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'OwnedTrace')
+    constructor = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == '__init__')
+    assert hashlib.sha256(ast.dump(constructor, include_attributes=False).encode()).hexdigest() == ALLOCATED_CONSTRUCTOR_AST
+    original = ast.parse(LEGACY_CONSTRUCTOR).body[0]
+    cls.body[cls.body.index(constructor)] = original
+    imports = [node for node in tree.body if isinstance(node, ast.Import)
+               and len(node.names) == 1 and node.names[0].name == 'math' and node.names[0].asname is None]
+    assert len(imports) == 1
+    tree.body.remove(imports[0])
+    return tree
+
+
+def test_legacy_normalization_cannot_hide_constructor_or_execution_changes():
+    import ast
+    import hashlib
+    import test_startup_phases as baseline
+    source = Path(__file__).with_name('linux_trace.py').read_text()
+    original = baseline.StripTelemetry().visit(restore_primary_allocation(ast.parse(source)))
+    assert hashlib.sha256(ast.dump(original, include_attributes=False).encode()).hexdigest() == baseline.BASELINE_AST_SHA256['linux_trace.py']
+    for before, after in [('timeout > 180', 'timeout > 181'),
+                          ('primary_allocation is None', 'primary_allocation is not None')]:
+        assert before in source
+        with pytest.raises(AssertionError):
+            restore_primary_allocation(ast.parse(source.replace(before, after)))
+    changed = source.replace('raise TimeoutError("owned trace deadline exceeded")', 'pass')
+    assert changed != source
+    tree = baseline.StripTelemetry().visit(restore_primary_allocation(ast.parse(changed)))
+    assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() != baseline.BASELINE_AST_SHA256['linux_trace.py']

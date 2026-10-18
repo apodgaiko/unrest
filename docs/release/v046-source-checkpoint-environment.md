@@ -779,3 +779,9 @@ receipt4/READY8/endpoint4/parentwait25 and every original test deadline remain
 unchanged. Historical 180-second root timeouts remain failures, without final
 JUnit or complete original-parent waits; setup controls do not prove SOURCE
 acceptance. Full SOURCE readiness still requires package and final closure.
+
+The original whole-engine AST digest remains the historical oracle. Its test
+checks the allocated constructor against a separate exact AST pin, then restores
+only the original constructor and removes its sole added math import before
+comparing that original digest. Wait, admission and execution-loop mutation
+negatives remain effective; constructor changes also fail their separate pin.
