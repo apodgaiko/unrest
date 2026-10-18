@@ -1016,3 +1016,9 @@ its exact admitted launch frame, globals, state and constructor cell plus fresh
 READY. The original guard's executable AST, audit boundary and every existing
 negative remain unchanged. The adapter delegates all other admitted calls to
 the same original stdlib constructor with their original options.
+
+The Linux selection positive uses the actual pinned immutable UV executable and
+real tool lookup. Writable synthetic files model only metadata mutation cases;
+their filesystem execution properties do not stand in for the immutable image.
+The CPython argument-vector differential keeps the original explicit cwd and
+intercepts before fork, so it launches no synthetic program.

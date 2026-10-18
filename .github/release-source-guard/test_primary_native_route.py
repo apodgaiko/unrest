@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 from pathlib import Path, PosixPath
-import shutil
 from types import ModuleType, SimpleNamespace
 import subprocess
 import sys
@@ -36,8 +35,16 @@ def route(tmp_path):
         'open', 'close', 'fstat', 'fdopen', 'getpid', 'O_RDONLY', 'O_NOFOLLOW', 'ST_RDONLY')})
     proxy.stat = info
     proxy.statvfs = lambda path: SimpleNamespace(f_flag=os.ST_RDONLY if flags['readonly'] else 0)
+    # Model only image-selection properties for writable metadata fixtures.
+    # The Linux positive below uses the real immutable UV image and real which.
+    def fixture_which(command, path):
+        if command != 'uv':
+            return None
+        return next((str(candidate) for directory in path.split(os.pathsep)
+                     if (candidate := Path(directory) / command).is_file()
+                     and candidate.stat().st_mode & 0o111), None)
     namespace = {'Path': Path, 'PosixPath': PosixPath, 'hashlib': hashlib, 'json': json,
-                 'os': proxy, 'shutil': shutil, 'stat': __import__('stat'),
+                 'os': proxy, 'shutil': SimpleNamespace(which=fixture_which), 'stat': __import__('stat'),
                  '_UV_NATIVE': str(native), '_CHECKER_SOURCE': str(source),
                  'sha': lambda body: hashlib.sha256(body).hexdigest()}
     namespace['hashed'] = lambda value: namespace['sha'](json.dumps(value, sort_keys=True, separators=(',', ':')).encode())
@@ -76,7 +83,7 @@ def route(tmp_path):
 
 @pytest.mark.parametrize('change', ['none', 'token', 'role', 'binding', 'source_hash', 'source_bytes', 'owner',
                                      'argv', 'environment', 'cwd', 'missing_dependency', 'missing_profile',
-                                     'missing_backend', 'foreign_PATH_image', 'image_bytes', 'writable', 'image_uid', 'hardlink', 'symlink'])
+                                     'missing_backend', 'missing_image', 'foreign_PATH_image', 'image_bytes', 'writable', 'image_uid', 'hardlink', 'symlink'])
 def test_only_original_immutable_uv_operation_selects_an_executable(route, change):
     f = route
     cwd = '/source'
@@ -110,6 +117,8 @@ def test_only_original_immutable_uv_operation_selects_an_executable(route, chang
         other = f.first / 'uv'
         other.write_bytes(b'foreign image')
         other.chmod(0o755)
+    elif change == 'missing_image':
+        f.native.unlink()
     elif change == 'image_bytes':
         f.native.write_bytes(b'foreign image')
     elif change == 'writable':
@@ -147,10 +156,10 @@ def test_actual_cpython_uses_one_selected_image_without_changing_arguments(route
         raise OSError('synthetic_stop_before_fork')
     monkeypatch.setattr(subprocess, '_fork_exec', stop)
     with pytest.raises(OSError, match='synthetic_stop_before_fork'):
-        subprocess.Popen(route.argv, env=route.environment)
+        subprocess.Popen(route.argv, env=route.environment, cwd=route.source.parent)
     selected = route.operation.native_executable(route.registration, route.argv, '/source', route.environment)
     with pytest.raises(OSError, match='synthetic_stop_before_fork'):
-        subprocess.Popen(route.argv, env=route.environment, executable=selected)
+        subprocess.Popen(route.argv, env=route.environment, cwd=route.source.parent, executable=selected)
     assert captured[0][0] == captured[1][0] == route.argv
     assert captured[0][1][0] == os.fsencode(route.first / 'uv')
     assert captured[1][1] == [os.fsencode(route.native)]
