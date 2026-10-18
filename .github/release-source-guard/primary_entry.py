@@ -128,6 +128,27 @@ def main(event, arguments):
     actual_descriptors = descriptor_inventory()
     if actual_descriptors != expected_descriptors:
         os._exit(86)
+    if profile.get('source_role') == 'source-producer-child':
+        image = profile['producer_image']
+        consumer = profile['producer_consumer']
+        header = Path('/receipts/native-startup') / (str(os.getpid()) + '.json')
+        source = Path('/guard/native_entry.py')
+        data = source.read_bytes()
+        if (image['path'] != '/usr/local/bin/python-primary-audit'
+                or Path(sys.executable).resolve() != Path(image['path'])
+                or hashlib.sha256(Path('/proc/self/exe').read_bytes()).hexdigest() != image['sha256']
+                or consumer['path'] != str(source)
+                or hashlib.sha256(data).hexdigest() != consumer['sha256']
+                or header.is_symlink()
+                or hashlib.sha256(header.read_bytes()).hexdigest() != profile['native_profile_sha256']):
+            os._exit(86)
+        import types
+        module = types.ModuleType('native_entry')
+        module.__file__ = str(source)
+        module.ENTRY_EVENT, module.ENTRY_ARGUMENTS = event, arguments
+        sys.modules[module.__name__] = module
+        exec(compile(data, str(source), 'exec', dont_inherit=True), module.__dict__)
+        return
     if profile.get('source_role') in {'source-root', 'source-bootstrap'}:
         source = Path('/guard/primary_source_entry.py')
         data = source.read_bytes()

@@ -80,6 +80,7 @@ class SourceAuthority:
         if native is not None:
             if native:
                 self.contexts[pid] = {'role': 'source-producer-child', 'identity': identity(pid)}
+                self.producer_profile(pid, parent, vector, environment, cwd)
             return native
         if parent in self.native_context:
             if parent in self.maintenance:
@@ -151,6 +152,32 @@ class SourceAuthority:
         if vector[0] == 'git':
             self.native_context[pid] = {'path': path, 'argv': vector, 'cwd': cwd, 'environment': environment}
         return True
+
+    def producer_profile(self, pid, parent, vector, environment, cwd):
+        item = self.producers.children[pid]
+        actual = identity(pid)
+        if (actual != item['identity'] or actual['ppid'] != parent
+                or self.common['primary_producer']['entry'] != self.common['base_identity']
+                or self.common['base'] != PYTHON):
+            raise RuntimeError('primary_producer_profile_identity')
+        native_path = Path('/receipts/native-startup') / (str(pid) + '.json')
+        if sha(native_path) != item['profile_sha256']:
+            raise RuntimeError('primary_producer_native_header_drift')
+        native = json.loads(native_path.read_bytes())
+        if (native['orig_argv'] != vector or native['environment'] != environment
+                or native['cwd'] != cwd or native['role'] != item['role']):
+            raise RuntimeError('primary_producer_native_profile_drift')
+        profile = {
+            'pid': pid, 'parent': parent, 'start_ticks': actual['start_ticks'],
+            'boot_id': actual['boot_id'], 'orig_argv': vector, 'environment': environment,
+            'cwd': cwd, 'event': 'cpython.run_command', 'flags': native['flags'],
+            'body_sha256': native['command_sha256'], 'repository': False,
+            'source_role': 'source-producer-child',
+            'native_profile_sha256': item['profile_sha256'],
+            'producer_consumer': self.common['primary_producer']['consumer'],
+            'producer_image': self.common['base_identity'],
+        }
+        write(Path('/receipts/primary-startup') / (str(pid) + '.json'), profile)
 
     def pipe_binding(self, pid):
         selected = self.bound[pid]['registration']

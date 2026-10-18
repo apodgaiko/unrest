@@ -798,3 +798,12 @@ distinguish a refusal from an exception without exporting exception text, argv,
 environment or paths. The diagnostic inverse must reproduce the original
 resolver AST, and admission mutation controls must reject changed predicates.
 These records diagnose setup; they do not establish SOURCE acceptance.
+
+PRIMARY producer setup uses one observer-pinned context: the existing primary
+CPython entry, the primary native-produced cache, and the original fixture's
+UV operation descriptor. It does not add an interpreter/cache alternative to
+child admission. The source profile binds the exact original parent and current
+child birth, image bytes, selected helper and environment. Its dedicated primary
+startup role consumes the original protected native producer header and consumer
+after the complete native FD census; the native query/backend body and all
+original READY, receipt and parent-wait requirements remain in force.

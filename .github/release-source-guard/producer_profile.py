@@ -91,11 +91,22 @@ def query_package(script, spec):
 def consume(profile):
     spec = protected_json(profile['spec'], profile['spec_sha256'])
     parent = spec['parent_operation']
+    primary = spec.get('primary_producer')
+    base = '/usr/local/bin/python-primary-audit' if primary is not None else '/usr/local/bin/python-source-audit'
+    if primary is not None:
+        if (primary['entry'] != spec['base_identity']
+                or primary['entry']['path'] != base
+                or spec['cache'] != '/work/cache'
+                or primary['bootstrap']['path'] != '/guard/primary_entry.py'
+                or primary['consumer']['path'] != '/guard/native_entry.py'
+                or any(digest(primary[key]['path']) != primary[key]['sha256']
+                       for key in ('entry', 'bootstrap', 'consumer'))):
+            raise RuntimeError('primary producer setup consumption drift')
     if (parent['pid'] != os.getppid() or parent['identity'] != identities.identity(os.getppid())
             or parent['operation'] not in ('source-build', 'source-install')
             or digest('/opt/source-bootstrap/bin/uv') != public_inputs.SOURCE_UV_ELF_SHA256
             or digest(spec['base']) != spec['base_identity']['sha256']
-            or spec['base'] != '/usr/local/bin/python-source-audit'
+            or spec['base'] != base
             or os.getcwd() != profile['cwd'] or sys.executable != profile['orig_argv'][0]):
         raise RuntimeError('native original UV parent/runtime binding drift')
     deadline = time.monotonic() + 4

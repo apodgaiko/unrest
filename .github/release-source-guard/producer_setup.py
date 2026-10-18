@@ -37,7 +37,7 @@ def write(path, value):
     return hashlib.sha256(body).hexdigest()
 
 
-def source_child_setup():
+def source_child_setup(*, primary=False):
     if os.getuid() != 20000 or CACHE.exists():
         raise RuntimeError('fresh unprivileged producer setup required')
     (Path('/work/owned') / 'tmp').mkdir(mode=0o700)
@@ -56,6 +56,8 @@ def source_child_setup():
     Path('/work/producer-setup-controls.json').write_text(json.dumps({
         'candidate_write_errno': source_denial, 'artifact_directory_create_remove': True,
         'source_uid': os.getuid(), 'source_checkpoint_ready': False}, sort_keys=True))
+    if primary:
+        return
     seed = Path('/opt/source-bootstrap/cache')
     CACHE.mkdir(mode=0o700)
     # Preserve native-produced file bytes. Only the finite cache-root prefix of
@@ -91,7 +93,9 @@ def prepare(manifest, input_pin):
     site = selected / 'lib/python3.13/site-packages'
     site.mkdir(parents=True, mode=0o755)
     python = selected / 'bin/python'
-    python.symlink_to(BASE)
+    primary = manifest['source_selection'] == 'primary-source'
+    base = Path('/usr/local/bin/python-primary-audit') if primary else BASE
+    python.symlink_to(base)
     config = selected / 'pyvenv.cfg'
     config.write_text('home = /usr/local/bin\nimplementation = CPython\n'
                       'version_info = 3.13.12\ninclude-system-site-packages = false\n')
@@ -99,18 +103,22 @@ def prepare(manifest, input_pin):
     uv_config = ROOT / 'uv.toml'
     uv_config.write_bytes(b'')
     uv_config.chmod(0o444)
+    cache = Path('/work/cache') if primary else CACHE
+    if primary and (manifest['runtime']['realpath'] != str(base)
+                    or manifest['runtime']['sha256'] != digest(base)):
+        raise RuntimeError('primary producer runtime setup drift')
     operations = load('source_operations_setup', '/guard/finite/source_operations.py')
     activation = load('operation_activation_setup', '/guard/finite/operation_activation.py')
     closure = load('dependency_closure_setup', '/guard/dependency_closure.py')
-    seed = Path('/opt/source-bootstrap/cache')
+    seed = Path('/opt/primary-cache') if primary else Path('/opt/source-bootstrap/cache')
     expected_cache = closure.inventory(seed)
-    actual_cache = closure.inventory(CACHE)
+    actual_cache = closure.inventory(cache)
     for name, value in expected_cache.items():
         if value['type'] == 'symlink':
             target = (seed / name).resolve(strict=True)
             if not target.is_relative_to(seed) or not target.is_dir():
                 raise RuntimeError('native seed link does not name an internal archive')
-            value['target'] = str(CACHE / target.relative_to(seed))
+            value['target'] = str(cache / target.relative_to(seed))
     if actual_cache != expected_cache:
         raise RuntimeError('source cache differs from its finite native-produced seed')
     source_files = [operations.identity(Path('/source') / name)
@@ -124,20 +132,20 @@ def prepare(manifest, input_pin):
     stock = Path('/opt/deps/bin/python')
     common = {
         'native_preinit': True, 'guarded': True, 'root': str(ROOT),
-        'project': '/source', 'events': manifest['events'], 'cache': str(CACHE),
-        'base': str(BASE), 'base_identity': activation.identity(BASE),
+        'project': '/source', 'events': manifest['events'], 'cache': str(cache),
+        'base': str(base), 'base_identity': activation.identity(base),
         'wheel': str(WHEEL), 'virtualenv_source': '/opt/source-bootstrap/upstream/_virtualenv.py',
         'query_python': str(python), 'full_build': True, 'original_source_coverage': True,
         'source_files': source_files, 'backend_distribution': backend,
         'uv': activation.identity('/opt/source-bootstrap/bin/uv'),
         'files': [activation.identity(path) for path in sorted([
-            BASE, WHEEL, config, uv_config, Path('/opt/source-bootstrap/bin/uv'),
+            base, WHEEL, config, uv_config, Path('/opt/source-bootstrap/bin/uv'),
             Path('/guard/finite/source_activation.py'), Path('/guard/finite/isolated_inputs.py'),
             Path('/guard/finite/isolated_activation.py')])],
         'trees': {str(path): activation.tree(path)
                   for path in (site, Path('/opt/source-bootstrap/upstream'))},
         'shared_files': [activation.identity(path) for path in (
-            Path('/opt/deps/pyvenv.cfg'), stock.resolve(), BASE,
+            Path('/opt/deps/pyvenv.cfg'), stock.resolve(), base,
             Path('/usr/local/lib/libpython3.13.so.1.0'), config)],
         'shared_trees': {str(path): activation.tree(path)
                          for path in (dependency_site, Path('/usr/local/lib/python3.13'))},
@@ -147,6 +155,12 @@ def prepare(manifest, input_pin):
         'shared_python_link': {'path': str(stock), 'target': str(stock.resolve()),
                                'inode': stock.lstat().st_ino},
     }
+    if primary:
+        common['primary_producer'] = {
+            'entry': activation.identity(base),
+            'bootstrap': activation.identity('/guard/primary_entry.py'),
+            'consumer': activation.identity('/guard/native_entry.py'),
+        }
     common_path = ROOT / 'common.json'
     common_pin = write(common_path, common)
     operation_spec = {
@@ -155,7 +169,7 @@ def prepare(manifest, input_pin):
         'backend_distribution': backend,
         'mapping_support': {'path': '/guard/finite/installed_outputs.py',
                             'sha256': digest('/guard/finite/installed_outputs.py')},
-        'installed_interpreter': {'path': str(python), 'file': operations.identity(BASE),
+        'installed_interpreter': {'path': str(python), 'file': operations.identity(base),
                                   'link_inode': python.lstat().st_ino},
     }
     operation_path = ROOT / 'operations.json'
