@@ -104,6 +104,30 @@ def verify(root, run, artifact, members, key, support):
         projection.update(error_code='source_runner_refused', runner_stage=stage['stage'],
                           runner_error=stage['error_code'], frames=stage['frames'])
         return projection
+    if scope == 'primary-controls':
+        kernel = loads(records['kernel-source.json'])
+        require(kernel['schema'] == 'unrest.v046.primary-controls.v1', 'primary_controls_schema')
+        controls = kernel['controls']
+        expected = {'isolated_no_site': 0, 'private_path': 0, 'native_unknown_caught': 86,
+                    'native_network': 86, 'foreign_fd': 86, 'kernel_unknown_caught': 0}
+        require(len(controls) == len(expected) and {row['control_id'] for row in controls} == set(expected),
+                'primary_controls_cases')
+        import os as operating_system
+        results = {}
+        for row in controls:
+            require(type(row['root_parent_wait_raw']) is int, 'primary_control_actual_wait')
+            identity = row['source_identity']
+            valid = (operating_system.waitstatus_to_exitcode(row['root_parent_wait_raw']) == expected[row['control_id']]
+                     and identity['uids'] == [20000] * 4 and not any(identity['capabilities'].values())
+                     and identity['no_new_privs'] == 1 and row['control_verified'] is True)
+            require(row['poison'] == (['unknown_or_drifted_exec']
+                    if row['control_id'] == 'kernel_unknown_caught' else []), 'primary_control_poison')
+            results[row['control_id']] = valid
+        projection.update(primary_controls_verified=all(results.values()) and metadata['source_exit_code'] == 0,
+                          controls=results, actual_root_parent_waits=len(controls))
+        if not projection['primary_controls_verified']:
+            projection['error_code'] = 'primary_controls_failed'
+        return projection
     if scope == 'primary-executor':
         kernel = loads(records['kernel-source.json'])
         if kernel.get('failure_code') == 'bootstrap_failure':
@@ -114,6 +138,17 @@ def verify(root, run, artifact, members, key, support):
             projection.update(error_code='primary_bootstrap_failed', primary_stage=kernel['stage'],
                               frame_lines=kernel['frame_lines'])
             return projection
+        diagnostics = []
+        for row in kernel.get('native_diagnostics', []):
+            require(set(row) == {'schema', 'pid', 'source_path_present', 'venv_site_present', 'prefix_is_venv', 'body_failure'}
+                    and row['schema'] == 'primary-native-state-v1', 'primary_diagnostic_schema')
+            require(all(type(row[key]) is bool for key in ('source_path_present', 'venv_site_present', 'prefix_is_venv')), 'primary_diagnostic_flags')
+            failure = row['body_failure']
+            if failure is not None:
+                require(failure['error_code'] in {'ModuleNotFoundError', 'ImportError', 'PermissionError', 'FileNotFoundError', 'RuntimeError', 'AssertionError', 'ValueError', 'TypeError', 'AttributeError', 'other'}
+                        and failure['missing_module'] in {'unrest_harness', 'pydantic', 'click', 'fastmcp', 'yaml', 'other'}, 'primary_diagnostic_error')
+            diagnostics.append({'source_path_present': row['source_path_present'], 'venv_site_present': row['venv_site_present'], 'prefix_is_venv': row['prefix_is_venv'], 'error_code': failure['error_code'] if failure else None, 'missing_module': failure['missing_module'] if failure else None, 'frame_lines': [frame['line'] for frame in failure['frames']] if failure else []})
+        projection['native_diagnostics'] = diagnostics
         denials = kernel['primary_denials']
         require(set(denials) <= {'environment_or_cwd', 'unknown_descendant', 'uv_parent_identity',
                                 'query_renderer', 'unknown_body', 'original_body_argv',

@@ -36,6 +36,18 @@ jobs:
             ${{ runner.temp }}/primary-install/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
+      - name: Primary source-free boundaries
+        run: python3 .github/release-source-guard/primary_control_controller.py "$RUNNER_TEMP/primary-controls" "$RUNNER_TEMP/primary-install/safe-provenance.json"
+      - name: Upload encrypted primary-controls evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-source-primary-controls-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-controls/evidence.cms
+            ${{ runner.temp }}/primary-controls/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Import package
         run: uv run python -c "import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()"
         shell: python3 .github/release-source-guard/ci_shell.py {0}

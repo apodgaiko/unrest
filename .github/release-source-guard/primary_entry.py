@@ -31,6 +31,29 @@ def main(event, arguments):
             or len(arguments) != 1
             or hashlib.sha256(str(arguments[0]).encode()).hexdigest() != profile['body_sha256']):
         os._exit(86)
+    diagnostic = Path('/work') / ('primary-native-state-' + str(os.getpid()) + '.json')
+    context = {'schema': 'primary-native-state-v1', 'pid': os.getpid(),
+               'source_path_present': '/source/src' in sys.path,
+               'venv_site_present': '/source/.venv/lib/python3.13/site-packages' in sys.path,
+               'prefix_is_venv': sys.prefix == '/source/.venv',
+               'body_failure': None}
+    diagnostic.write_text(json.dumps(context, sort_keys=True))
+    original_exception = sys.excepthook
+    def exception(kind, error, trace):
+        known = {'ModuleNotFoundError', 'ImportError', 'PermissionError', 'FileNotFoundError',
+                 'RuntimeError', 'AssertionError', 'ValueError', 'TypeError', 'AttributeError'}
+        frames = []
+        while trace is not None:
+            frames.append({'file_sha256': hashlib.sha256(trace.tb_frame.f_code.co_filename.encode()).hexdigest(),
+                           'line': trace.tb_lineno})
+            trace = trace.tb_next
+        name = getattr(error, 'name', None)
+        context['body_failure'] = {'error_code': kind.__name__ if kind.__name__ in known else 'other',
+                                   'missing_module': name if name in {'unrest_harness', 'pydantic', 'click', 'fastmcp', 'yaml'} else 'other',
+                                   'frames': frames[-8:]}
+        diagnostic.write_text(json.dumps(context, sort_keys=True))
+        original_exception(kind, error, error.__traceback__)
+    sys.excepthook = exception
     # Source cannot inherit a credential, controller socket or unrelated file.
     for descriptor in range(3, 128):
         try:

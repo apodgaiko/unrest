@@ -24,7 +24,7 @@ CONTROLS = {'control-suite.xml', 'observer.json', 'source-controls.json'} | {
 } | {'trace-control-vfork-False.json', 'trace-control-vfork-True.json', 'trace-control-waitid.json'}
 OPAQUE = {'source-output.log', 'custodian.stderr', 'source-diagnostics.json'}
 SCOPES = {'ci-mutations', 'synthetic-controls', 'inprocess', 'composed', 'backend', 'drain-controls',
-          'producer-contract', 'producer-distribution', 'producer-controls', 'primary-executor'}
+          'producer-contract', 'producer-distribution', 'producer-controls', 'primary-executor', 'primary-controls'}
 IDENTITY = {'repository', 'head_sha', 'run_id', 'run_attempt', 'workflow_ref', 'workflow_sha',
             'artifact_name', 'support_sha256'}
 
@@ -72,7 +72,7 @@ def identity_check(value):
         require(type(value[key]) is str and re.fullmatch('[1-9][0-9]*', value[key]), 'run_identity')
     require(value['artifact_name'] in {
         f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}"
-        for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations', 'primary-install', 'primary-import', 'primary-help', 'primary-repository', 'primary-lint', 'primary-types')}, 'artifact_identity')
+        for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations', 'primary-install', 'primary-import', 'primary-help', 'primary-repository', 'primary-lint', 'primary-types', 'primary-controls')}, 'artifact_identity')
     require(type(value['workflow_ref']) is str and re.fullmatch(
         r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-[a-z0-9-]+',
         value['workflow_ref']), 'workflow_identity')

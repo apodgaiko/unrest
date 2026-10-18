@@ -124,7 +124,13 @@ def main():
                 and row['identity']['tgid'] == row['child']}
     native_failure = any(row['kind'] == 'kernel_exit' and row['raw'] == 86 << 8
                          for row in result['records'])
-    result.update({'primary_plan': spec, 'primary_records': authority.records,
+    diagnostics = []
+    for row in authority.records:
+        if row['kind'] == 'primary_native_preinit':
+            path = Path('/work') / ('primary-native-state-' + str(row['pid']) + '.json')
+            if path.is_file() and not path.is_symlink() and path.stat().st_size <= 8192:
+                diagnostics.append(json.loads(path.read_bytes()))
+    result.update({'native_diagnostics': diagnostics, 'primary_plan': spec, 'primary_records': authority.records,
                    'primary_denials': authority.denials, 'failure_code': failure,
                    'native_preinit_refusal': native_failure,
                    'missing_parent_waits': sorted(children - waits),
