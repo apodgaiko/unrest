@@ -707,3 +707,36 @@ def test_bootstrap_cache_join_preserves_original_primary_admission():
     assert [ast.unparse(n) for n in call.keywords] == ['trace=trace', 'primary=self']
     call.keywords = []
     assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() == '779b322196c778dae817d5987556e0a9d9befc0faad7ae17540a65d9d4399f1c'
+
+
+@pytest.mark.parametrize('suffix', ['01', '02', '03', '04', '05', '06',
+                                    '00', '07', '1', '01-extra', '', 'foreign'])
+@pytest.mark.parametrize('workflow', ['v0.4.6 source guard readiness', 'CI', 'foreign'])
+def test_source_return_controller_gate_is_exact(suffix, workflow):
+    from types import SimpleNamespace
+    tree = ast.parse((ROOT / 'ci_shell.py').read_bytes())
+    gate = next(node for node in ast.walk(tree) if isinstance(node, ast.If)
+                and isinstance(node.body[0], ast.Raise)
+                and any(isinstance(child, ast.Constant)
+                        and child.value == 'primary_test_workflow_identity'
+                        for child in ast.walk(node.body[0])))
+    environment = {'GITHUB_WORKFLOW': workflow,
+                   'GITHUB_REF': 'refs/heads/codex/source-guard-structured-20261018-source-return-' + suffix}
+    refused = eval(compile(ast.Expression(gate.test), 'actual_controller_ref_gate', 'eval'),
+                   {'os': SimpleNamespace(environ=environment)})
+    assert refused is not (workflow == 'v0.4.6 source guard readiness'
+                           and suffix in {'01', '02', '03', '04', '05', '06'})
+
+
+def test_source_return_diagnostic_controls_are_wired_before_source():
+    tree = ast.parse((ROOT / 'compartment_probe.py').read_bytes())
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Attribute) and node.func.attr == 'run'
+             and node.args and isinstance(node.args[0], ast.List)
+             and any(isinstance(item, ast.Constant) and item.value == 'pytest'
+                     for item in node.args[0].elts)]
+    assert len(calls) == 1
+    arguments = [item.value for item in calls[0].args[0].elts if isinstance(item, ast.Constant)]
+    for name in ('test_linux_supervisor.py', 'test_cache_snapshot_diagnostics.py',
+                 'test_startup_phases.py', 'test_producer_startup.py'):
+        assert arguments.count('/guard/' + name) == 1

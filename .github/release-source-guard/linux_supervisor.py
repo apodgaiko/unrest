@@ -456,7 +456,7 @@ class Supervisor:
         kind = request.get('kind')
         known = {'ready', 'poison', 'plan', 'listen', 'connect', 'connected',
                  'socketpair', 'payload', 'custody_owner', 'custody_peer',
-                 'custody_submit', 'custody_close', 'custody_poll', 'custody_spawned', 'source_response_output',
+                 'custody_submit', 'custody_close', 'custody_poll', 'custody_spawned',
                  'custody_signal', 'custody_cancel', 'drain_inventory', 'drain_child',
                  'drain_complete'}
         saved = self.registered.get(state.get('peer_pid'))

@@ -79,11 +79,6 @@ def restore_response_channel(tree):
     assert len(nodes) == 1
     assert ast.unparse(nodes[0]) == "if kind == 'source_response_output':\n    callback = getattr(self, 'source_response_output', None)\n    if callback is None:\n        raise RuntimeError('source_response_observer_missing')\n    return callback(request)"
     handle.body.remove(nodes[0])
-    snapshot = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'channel_snapshot')
-    known = next(n for n in snapshot.body if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == 'known').value
-    removed = [n for n in known.elts if isinstance(n, ast.Constant) and n.value == 'source_response_output']
-    assert len(removed) == 1
-    known.elts.remove(removed[0])
     return tree
 
 

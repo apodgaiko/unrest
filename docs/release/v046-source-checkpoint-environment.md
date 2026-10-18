@@ -864,3 +864,11 @@ output claims. It finalizes a receipt only after the original parent's numeric
 successful wait. A producer-written journal is not receipt authority. Retired
 responses retain birth/operation/file bindings; surviving responses must retain
 their complete identity and bytes. All original deadlines remain unchanged.
+
+The bounded SOURCE return/cache integration uses exact `source-return-01` through
+`source-return-06` readiness refs at the host controller gate. Other suffixes and
+workflow identities refuse before startup. The console entry consumes the
+already-bound profile rather than independently admitting Git refs. Its Linux
+control prerequisite includes the original channel-snapshot AST test and the
+cache, producer and startup diagnostic controls. Authenticated response handling
+does not add a diagnostic classification to the original channel snapshot.
