@@ -392,10 +392,17 @@ def owned_wait(state, handle):
     }
 
 
-def _diagnostic_mark(phase):
+diagnostic_seen = set()
+
+
+def _diagnostic_mark(owner, phase):
+    if phase not in {'operation_inputs_enter', 'operation_input_files_end', 'operation_input_trees_end'}:
+        raise ValueError('unknown operation diagnostic phase')
     guard = sys.modules.get('runtime_guard')
     mark = getattr(guard, '_diagnostic_mark', None)
-    if mark is not None:
+    key = (os.getpid(), phase)
+    if getattr(owner, 'diagnostic_inputs', False) and mark is not None and key not in diagnostic_seen:
+        diagnostic_seen.add(key)
         mark(phase)
 
 
@@ -413,18 +420,18 @@ class Operations:
         self.spec = state["operation_spec"]
 
     def inputs(self):
-        _diagnostic_mark("operation_inputs_enter")
+        _diagnostic_mark(self, "operation_inputs_enter")
         observed = []
         for expected in self.spec["files"]:
             current = identity(expected["path"])
             if current != expected:
                 self.refuse("source_operation_input_drift")
             observed.append(current)
-        _diagnostic_mark("operation_input_files_end")
+        _diagnostic_mark(self, "operation_input_files_end")
         for tree in self.spec["trees"]:
             if tree_identity(tree["root"]) != tree:
                 self.refuse("source_operation_dependency_site_drift")
-        _diagnostic_mark("operation_input_trees_end")
+        _diagnostic_mark(self, "operation_input_trees_end")
         return {"files_sha256": hashed(observed), "trees_sha256": hashed(self.spec["trees"])}
 
     def activation(self, record):

@@ -46,10 +46,18 @@ ORDINARY_DIRECT = frozenset({
 })
 
 
+diagnostic_seen = set()
+
+
 def _diagnostic_mark(phase):
+    if phase not in {'shared_enter', 'shared_ready_end', 'shared_files_end',
+                     'shared_trees_end', 'shared_absent_end', 'shared_link_end', 'shared_inputs_end'}:
+        raise ValueError('unknown shared diagnostic phase')
     guard = sys.modules.get('runtime_guard')
     mark = getattr(guard, '_diagnostic_mark', None)
-    if mark is not None:
+    key = (os.getpid(), phase)
+    if mark is not None and key not in diagnostic_seen:
+        diagnostic_seen.add(key)
         mark(phase)
 
 
@@ -153,7 +161,9 @@ class SourceActivation(IsolatedActivation):
         ):
             self.refuse("source_shared_interpreter_link_drift")
         _diagnostic_mark("shared_link_end")
+        self.state["operations"].diagnostic_inputs = True
         self.state["operations"].inputs()
+        self.state["operations"].diagnostic_inputs = False
         _diagnostic_mark("shared_inputs_end")
 
     def __call__(self, record):

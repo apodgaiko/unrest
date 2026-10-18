@@ -37,7 +37,7 @@ class StripTelemetry(ast.NodeTransformer):
 
     def diagnostic_target(self, node):
         return (isinstance(node, ast.Name) and node.id.startswith('diagnostic_')
-                or isinstance(node, ast.Attribute) and node.attr in {'diagnostic_schedule', 'diagnostic_trace'}
+                or isinstance(node, ast.Attribute) and node.attr in {'diagnostic_schedule', 'diagnostic_trace', 'diagnostic_inputs'}
                 or isinstance(node, ast.Subscript) and self.diagnostic_target(node.value))
 
     def visit_Assign(self, node):
@@ -142,3 +142,37 @@ def test_ast_proof_rejects_original_wait_or_admission_mutation():
         assert before in original
         tree = StripTelemetry().visit(ast.parse(original.replace(before, after)))
         assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() != BASELINE_AST_SHA256['linux_trace.py']
+
+
+def test_inner_diagnostics_are_selective_and_finite(monkeypatch):
+    import sys
+    import types
+    import pytest
+    rows = []
+    monkeypatch.setitem(sys.modules, 'runtime_guard', types.SimpleNamespace(_diagnostic_mark=rows.append))
+    import os
+    # The synthetic compartment deliberately has no /source registration tree.
+    # Execute only the actual diagnostic helper, never the original registrations.
+    tree = ast.parse((ROOT / 'finite/source_operations.py').read_bytes())
+    nodes = [node for node in tree.body if (isinstance(node, ast.FunctionDef)
+             and node.name == '_diagnostic_mark') or (isinstance(node, ast.Assign)
+             and any(isinstance(target, ast.Name) and target.id == 'diagnostic_seen'
+                     for target in node.targets))]
+    assert len(nodes) == 2
+    namespace = {'os': os, 'sys': sys}
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), '<closed-diagnostic-helper>', 'exec'), namespace)
+    module = types.SimpleNamespace(**namespace)
+    owner = types.SimpleNamespace(diagnostic_inputs=False)
+    phases = ('operation_inputs_enter', 'operation_input_files_end', 'operation_input_trees_end')
+    for _ in range(1000):
+        for phase in phases:
+            module._diagnostic_mark(owner, phase)
+    assert rows == []
+    owner.diagnostic_inputs = True
+    for _ in range(1000):
+        for phase in phases:
+            module._diagnostic_mark(owner, phase)
+    assert rows == list(phases)
+    assert len(module.diagnostic_seen) == 3
+    with pytest.raises(ValueError):
+        module._diagnostic_mark(owner, 'unknown')

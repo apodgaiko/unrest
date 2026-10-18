@@ -688,3 +688,8 @@ The shared-startup subphases distinguish fresh READY, shared-file and tree
 validation, absence/link checks, operation-file/tree validation and final static
 serialization. These closed timestamps localize CPU work without bypassing or
 reusing any startup decision or input observation.
+
+Inner startup sampling is selective: operation input phases emit only while the
+shared-startup caller invokes them, and each closed inner/shared phase emits at
+most once per process. Repeated ordinary policy/input verification keeps running
+in full and does not grow the phase transport.
