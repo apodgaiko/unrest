@@ -9,6 +9,47 @@ import stat
 import sys
 
 
+def descriptor_inventory():
+    actual_descriptors = []
+    import fcntl
+    # scandir keeps its own directory descriptor alive during the full census.
+    # Account for exactly that proc-directory object, then prove its closure.
+    directory_info = os.stat('/proc/self/fd')
+    enumeration = []
+    with os.scandir('/proc/self/fd') as directory:
+        for entry in directory:
+            descriptor = int(entry.name)
+            if descriptor < 3:
+                continue
+            if len(actual_descriptors) + len(enumeration) >= 4096:
+                os._exit(86)
+            try:
+                info = os.fstat(descriptor)
+                access = fcntl.fcntl(descriptor, fcntl.F_GETFL) & os.O_ACCMODE
+                flags = fcntl.fcntl(descriptor, fcntl.F_GETFD)
+            except OSError:
+                os._exit(86)
+            if (info.st_dev == directory_info.st_dev and info.st_ino == directory_info.st_ino
+                    and info.st_mode == directory_info.st_mode and info.st_uid == os.getuid()
+                    and access == os.O_RDONLY and flags == fcntl.FD_CLOEXEC):
+                enumeration.append(descriptor)
+            else:
+                actual_descriptors.append({'fd': descriptor, 'device': info.st_dev, 'inode': info.st_ino,
+                                           'mode': info.st_mode, 'uid': info.st_uid, 'access': access})
+    if len(enumeration) != 1:
+        os._exit(86)
+    try:
+        os.fstat(enumeration[0])
+    except OSError as error:
+        import errno
+        if error.errno != errno.EBADF:
+            os._exit(86)
+    else:
+        os._exit(86)
+    actual_descriptors.sort(key=lambda row: row['fd'])
+    return actual_descriptors
+
+
 def main(event, arguments):
     path = Path('/receipts/primary-startup') / (str(os.getpid()) + '.json')
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
@@ -83,20 +124,8 @@ def main(event, arguments):
         original_exception(kind, error, error.__traceback__)
     sys.excepthook = exception
     # Source cannot inherit a credential, controller socket or unrelated file.
-    descriptors = [int(name) for name in os.listdir('/proc/self/fd')]
-    if len(descriptors) > 4096:
-        os._exit(86)
     expected_descriptors = profile.get('source_descriptors', [])
-    actual_descriptors = []
-    import fcntl
-    for descriptor in sorted(value for value in descriptors if value >= 3):
-        try:
-            info = os.fstat(descriptor)
-        except OSError:
-            continue
-        actual_descriptors.append({'fd': descriptor, 'device': info.st_dev, 'inode': info.st_ino,
-                                   'mode': info.st_mode, 'uid': info.st_uid,
-                                   'access': fcntl.fcntl(descriptor, fcntl.F_GETFL) & os.O_ACCMODE})
+    actual_descriptors = descriptor_inventory()
     if actual_descriptors != expected_descriptors:
         os._exit(86)
     if profile.get('source_role') in {'source-root', 'source-bootstrap'}:

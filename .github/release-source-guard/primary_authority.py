@@ -38,7 +38,7 @@ class Authority:
                 if accepted == 'source-bootstrap':
                     self.profile(pid, parent, vector, environment, cwd, 'cpython.run_command',
                                  vector[-1] + '\n', python_flags(vector, environment),
-                                 'source-bootstrap')
+                                 'source-bootstrap', trace=trace)
                     return True
                 return accepted or self.refuse('source_descendant')
         previous = self.contexts.get(pid)
@@ -157,7 +157,7 @@ class Authority:
         return self.profile(pid, parent, vector, environment, cwd, event, body, flags, role,
                             repository=context['command'] == ['uv', 'run', 'unrest', 'check-repository'])
 
-    def profile(self, pid, parent, vector, environment, cwd, event, body, flags, role, repository=False):
+    def profile(self, pid, parent, vector, environment, cwd, event, body, flags, role, repository=False, trace=None):
         actual = identity(pid)
         profile = {'pid': pid, 'parent': parent, 'start_ticks': actual['start_ticks'],
                    'boot_id': actual['boot_id'], 'orig_argv': vector, 'environment': environment,
@@ -172,7 +172,7 @@ class Authority:
                            source_entry_sha256=digest('/guard/primary_source_entry.py'),
                            source_mode=self.plan['source_mode'], source_budget=self.plan['source_budget'])
         if role == 'source-bootstrap':
-            profile['source_descriptors'] = self.source.descriptors(pid)
+            profile['source_descriptors'] = self.source.exec_descriptors(trace, pid, vector, environment, cwd)
             profile['python_environment'] = python_environment(
                 environment, self.source.bound[pid]['registration'], flags)
         path = Path('/receipts/primary-startup') / (str(pid) + '.json')

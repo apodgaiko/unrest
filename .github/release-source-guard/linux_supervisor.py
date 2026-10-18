@@ -379,9 +379,44 @@ class Supervisor:
         self.channel.listen(128)
         self.channel.setblocking(False)
         self.clients = {}
+        self.channel_diagnostics = []
+        self.tick_count = 0
+        self.event_count = 0
+        self.trace_progress = {}
+
+    def channel_snapshot(self, state, outcome):
+        request = state['request'] if type(state['request']) is dict else {}
+        kind = request.get('kind')
+        known = {'ready', 'poison', 'plan', 'listen', 'connect', 'connected',
+                 'socketpair', 'payload', 'custody_owner', 'custody_peer',
+                 'custody_submit', 'custody_close', 'custody_poll', 'custody_spawned',
+                 'custody_signal', 'custody_cancel', 'drain_inventory', 'drain_child',
+                 'drain_complete'}
+        saved = self.registered.get(state.get('peer_pid'))
+        now = time.monotonic()
+        return {'kind': kind if isinstance(kind, str) and kind in known else 'unknown',
+                'unknown_kind_sha256': (hashlib.sha256(json.dumps(kind, sort_keys=True).encode()).hexdigest()
+                                        if kind is not None and (not isinstance(kind, str) or kind not in known) else None),
+                'frame_bytes': len(state['buffer']),
+                'declared_size': (struct.unpack('!I', state['buffer'][:4])[0]
+                                  if len(state['buffer']) >= 4 else None),
+                'received': state['request'] is not None,
+                'authenticated': state['authenticated'],
+                'output_pending': state['output'] is not None and bool(state['output']),
+                'accepted_monotonic': state['started'], 'finished_monotonic': now,
+                'elapsed': now - state['started'],
+                'peer_pid': state.get('peer_pid'), 'peer_uid': state.get('peer_uid'),
+                'registered_peer_birth': saved['identity'] if saved else None,
+                'pending_reason': state['pending_reason'], 'outcome': outcome,
+                'tick_count': self.tick_count, 'accepted_tick': state['accepted_tick'],
+                'event_count': self.event_count, 'trace_progress': dict(self.trace_progress),
+                'policy_attempts': state.get('policy_attempts', 0),
+                'policy_seconds': state.get('policy_seconds', 0)}
 
     def tick(self):
+        self.tick_count += 1
         events = self.refresh()
+        self.event_count = len(events)
         while len(self.clients) < 128:
             try:
                 stream, _ = self.channel.accept()
@@ -389,6 +424,10 @@ class Supervisor:
                 break
             stream.setblocking(False)
             self.clients[stream] = {
+                "pending_reason": "frame",
+                "accepted_tick": self.tick_count,
+                "policy_attempts": 0,
+                "policy_seconds": 0,
                 "buffer": bytearray(),
                 "started": time.monotonic(),
                 "request": None,
@@ -431,20 +470,28 @@ class Supervisor:
                     pid, uid, _ = struct.unpack(
                         "3i", stream.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
                     )
+                    state["peer_pid"], state["peer_uid"] = pid, uid
                     if uid != self.root["uid"] or request.get("pid") != pid:
                         raise RuntimeError("kernel_receipt_peer_refused")
                     registered = self.registered.get(pid)
                     if registered is None:
+                        state["pending_reason"] = "peer_registration"
                         continue  # No effect while the parent's registration settles.
                     if pid not in self.ledger.registered:
                         self.ledger.register(pid, registered["token"])
                     state["peer"] = self.ledger.admit(stream, request)
                     state["authenticated"] = True
+                    state["pending_reason"] = "policy"
                 if state["output"] is None:
+                    policy_started = time.monotonic()
+                    state['policy_attempts'] += 1
                     try:
                         answer = self.handle(request, events)
                         result = {"ok": True, "request": request, **answer}
-                    except AwaitOwnedPeer:
+                    except AwaitOwnedPeer as error:
+                        state["pending_reason"] = (str(error) if str(error) in {
+                            "actual_parent_wait_record_still_pending", "finite_custody_pending"}
+                            else "owned_peer")
                         continue
                     except PendingOwnedListener as error:
                         result = {
@@ -457,6 +504,8 @@ class Supervisor:
                     except (RuntimeError, KeyError, StopIteration) as error:
                         self.poison(str(error))
                         result = {"ok": False, "request": request, "reason": str(error)}
+                    finally:
+                        state['policy_seconds'] += time.monotonic() - policy_started
                     result['observer_timing'] = {'accepted_monotonic': state['started'],
                                                  'finished_monotonic': time.monotonic()}
                     result["kernel_peer"] = state["peer"]
@@ -465,6 +514,7 @@ class Supervisor:
                         raise RuntimeError("bounded_receipt_response_exceeded")
                     state["output"] = struct.pack("!I", len(encoded)) + encoded
                     self.receipts.append(result)
+                    state["pending_reason"] = "output"
                 try:
                     count = stream.send(state["output"])
                 except BlockingIOError:
@@ -473,15 +523,18 @@ class Supervisor:
                     raise RuntimeError("receipt_channel_write_failed")
                 state["output"] = state["output"][count:]
                 if not state["output"]:
+                    self.channel_diagnostics.append(self.channel_snapshot(state, "complete"))
                     stream.close()
                     del self.clients[stream]
             except (OSError, RuntimeError, ValueError, KeyError) as error:
+                self.channel_diagnostics.append(self.channel_snapshot(state, "refused"))
                 self.poison(type(error).__name__ + ":" + str(error))
                 stream.close()
                 del self.clients[stream]
 
     def close(self):
-        for stream in self.clients:
+        for stream, state in self.clients.items():
+            self.channel_diagnostics.append(self.channel_snapshot(state, "closed"))
             stream.close()
         self.clients.clear()
         self.channel.close()

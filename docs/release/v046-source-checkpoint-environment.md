@@ -539,3 +539,64 @@ partial tuples refuse. The reducer requires actual ordinary composed-adapter,
 four reference-integrity classes and producer consumer startup consumption,
 with unchanged native custody, READY and actual original-parent waits. These
 fixture builds are setup evidence only; TEST remains certificate-ineligible.
+
+
+Ordinary source-owned worker, validator and terminal-reviewer inventory pipes
+require two equal concrete role registrations from the authenticated source
+owner. The observer binds the owner's birth and the child's PID, parent, birth,
+boot, exact exec argv/environment/cwd and pinned native image. Its pre-exec
+census includes every nonstdio descriptor and retains the exact FIFO, UID20000,
+device/inode and read-only inventory identity. Descriptor flags grant no
+exemption. The observer advances only the admitted exec syscall to a successful
+`PTRACE_EVENT_EXEC` stop, before the image's first instruction, and performs a
+second complete census. Only the same single inventory descriptor may remain;
+every additional pre-exec descriptor must have actually closed. Missing pipes,
+extra survivors, changed registrations, failed execs or identity drift poison
+custody and prevent native/body release. The tracer retains its syscall-return
+and original-parent wait observations.
+
+The observer creates the read-only native startup profile after that proof.
+Native pre-body entry independently compares every descriptor with this exact
+profile. Its directory census accounts for its single live proc-directory
+iterator and proves the iterator descriptor closed; unknown descriptor errors
+and extra proc-directory aliases refuse with the sticky native exit. TEST
+custody records are diagnostic evidence only. They do not select a source
+carrier, close package/final inputs or waive any release gate.
+
+Receipt-channel diagnostics are closed structured records within the authenticated
+`kernel-source.json` member. They record a finite request-kind enum (unknown
+kinds are hashed), frame lengths, received/authenticated/output-pending state,
+original monotonic acceptance and finish times, registered peer birth, pending
+reason, and observer/event/kernel progress counts. They exclude request bodies,
+credentials, command vectors, environments and endpoint paths. A diagnostic
+record proves only its observed transport state; it cannot authorize an effect.
+
+The diagnostic record retains the original four-second acceptance clock without
+resetting it. Pending transactions retain the complete policy handler, and
+other clients continue to receive nonblocking service. Partial frames and
+partial writes retain their original state and deadline. Unknown peers cannot
+have an effect while registration is unresolved. Expiry or disconnect retains
+poison. Diagnostics do not establish successful original SOURCE composition;
+that still requires actual child READY and complete original-parent waits.
+
+The `source-composed-adapter` callback composes two distinct finite bindings.
+Its unchanged resolver metadata names the original literal producer at
+`tests/test_server.py:3302`; that fixture need not be on the descendant's live
+stack. The callback authenticates the pinned producer AST, exact literal and
+regular owned generated adapter bytes, trace and cwd, then independently
+requires the pinned `acp_runner.spawn_launch` function, live frame, module
+globals and exact callsite. The original `LaunchPlan` type/code and immutable
+argv/environment must match the observed launch, including asyncio's live
+streams and limit. Original guard-frame/token consumption, unchanged resolver
+re-resolution with the complete translated vector, duplicate refusal and
+shared READY checks still apply. This is one enumerated literal/launcher join;
+it grants no generic generated-script or Python trust and rewrites no source
+binding. Unknown or mismatched provenance retains sticky poison.
+
+The `codex/source-guard-structured-20261018-layered-source-*` nonrelease TEST
+family uses the existing closed four-case affected-seam tuple. Local coroutine
+controls stop before OS launch; they are not actual SOURCE acceptance. Hosted
+original-case JUnit, collection, child READY/domain consumption and original
+parent waits provide that separate bounded proof. Neither TEST nor a finite
+SOURCE applicability seal is the frozen unexcluded source checkpoint, package
+certification or a readiness carrier.
