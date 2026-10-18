@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 import inspect
+import ast
 import os
 from pathlib import Path
+import sys
 from isolated_activation import IsolatedActivation
 from operation_activation import identity, hashed, tree
 import zipfile
@@ -19,12 +21,35 @@ CONSUMERS = frozenset(
     }
 )
 
+# These are existing resolver outputs, not executable or class-prefix grants.
+# Each still needs its original resolver and the live guard consumption frame.
+ORDINARY_DIRECT = frozenset({
+    "canonical-backend", "source-cleanup-adapter", "source-crash-controller",
+    "source-session-child", "source-session-helper:timeout",
+    "source-isolated-precaptured-refusal", "source-seeded-environment-helper",
+    "source-owned-role:worker", "source-owned-role:validator",
+    "source-owned-role:terminal-reviewer",
+    "source-benchmark-five-run", "source-foreign-journal-owner",
+    "source-storage-fresh-reader", "source-recovery-cli", "source-recovery-role",
+    "source-run-worker", "source-composed-adapter", "source-speed-nested-exact",
+    "source-project-projection", "source-checker-empty-archive-control",
+    "source-completion-helper:test_consumed_marker_survives_recovery_interruption",
+    "source-completion-helper:test_process_dies_during_first_setup",
+    "source-completion-helper:test_real_roles_first_use",
+    "source-cohort2:ownership-stdio", "source-cohort2:mock-agent",
+    "source-cohort3:mock-agent", "source-cohort4:desktop-stdio",
+    "source-copied-repository-cli", "source-registered-workspace-cli",
+    "source-approval-mcp", "source-approval-adapter", "source-approval-relay",
+    "source-approval-python-backend",
+})
+
 
 class SourceActivation(IsolatedActivation):
     def __init__(self, *args):
         super().__init__(*args)
         self.direct = None
         self.cache_after_build = None
+        self.python_consumed = set()
 
     def produced(self, record):
         if record["operation"] == "source-build":
@@ -278,7 +303,103 @@ class SourceActivation(IsolatedActivation):
         )
         return {"class": "source-generated-console", "python": False, "source_binding": caller}
 
+    def python_launch(self, argv, cwd, environment, registration):
+        """Consume this callback only from the current, byte-bound guard frame."""
+        guard = sys.modules.get('runtime_guard')
+        current = inspect.currentframe()
+        frame = current.f_back.f_back if current is not None and current.f_back else None
+        path = Path(self.state['guard'])
+        if (guard is None or frame is None or frame.f_globals is not vars(guard)
+                or guard._STATE is not self.state
+                or guard.digest(path) != self.state['guard_sha256']):
+            self.refuse('source_python_guard_owner_drift')
+        expected = self.state['isolated_named'](
+            compile(path.read_bytes(), str(path), 'exec', dont_inherit=True), 'initialize_inner')
+        local = frame.f_locals
+        if (frame.f_code != expected or local.get('state') is not self.state
+                or local.get('activation') is not self
+                or local.get('registration') is not registration
+                or local.get('argv') is not argv
+                or cwd != local['kwargs'].get('cwd')
+                or environment != local['kwargs'].get('env')):
+            self.refuse('source_python_not_current_launch')
+        token = local.get('launch_token')
+        if (not isinstance(token, str) or len(token) != 32
+                or any(c not in '0123456789abcdef' for c in token)
+                or token in self.python_consumed):
+            self.refuse('source_python_duplicate_consumption')
+        self.ready(self.state['token'])
+        self.python_consumed.add(token)
+        return guard, local
+
+    def ordinary_python(self, guard, launch, argv, cwd, environment, registration):
+        """Re-resolve an existing ordinary source registration, never a producer."""
+        name = registration['class']
+        registry = self.state['registry']
+        original = guard.checked_source(registry['path'], registry['sha256'])['COMMANDS']
+        members = [r for r in self.state['commands'] if r is registration]
+        if members:
+            if not registration.get('python') or registration not in original:
+                self.refuse('source_ordinary_registry_drift')
+            runtime = self.state['runtime']
+            directory = Path(cwd or os.getcwd()).resolve()
+            source = Path(registration['source_binding']['path'])
+            if not source.is_absolute():
+                source = Path(self.state['checkout']) / source
+            if (argv[0] not in runtime['paths']
+                    or str(Path(argv[0]).resolve()) != runtime['realpath']
+                    or guard.digest(argv[0]) != runtime['sha256']
+                    or len(argv[1:]) != len(registration['argv'])
+                    or not all(guard.match_arg(a, b) for a, b in zip(
+                        argv[1:], registration['argv'], strict=True))
+                    or not (directory.is_relative_to(Path(self.state['owned_root']))
+                            or registration['checkout_cwd']
+                            and directory == Path(self.state['checkout']))
+                    or guard.digest(source) != registration['source_binding']['sha256']
+                    or any(guard.digest(p) != pin for p, pin in registration.get('files', {}).items())
+                    or 'script_sha256' in registration
+                    and guard.digest(argv[1]) != registration['script_sha256']):
+                self.refuse('source_ordinary_profile_drift')
+            # HTTP admission already consumed its thread/frame port token. Do
+            # not recreate it or rerun that destructive selector. Re-evaluate
+            # the original source expression/code/globals against this vector.
+            path = Path(self.state['guard']).with_name('fallback_binding.py')
+            binding = guard.checked_source(path, self.state['direct_support']['files'][str(path)])
+            if binding['matches'](registration, argv, cwd, environment, self.state) is None:
+                self.refuse('source_ordinary_caller_drift')
+        else:
+            names = set(ORDINARY_DIRECT)
+            path = Path(self.state['guard']).with_name('source_bindings.py')
+            data = guard.checked_source(path, self.state['direct_support']['files'][str(path)])['DATA']
+            names.update('reference:' + row['module'] for row in data['selections'])
+            for cohort in (2, 3, 4):
+                filename = 'cohort_routes.py' if cohort == 2 else f'cohort{cohort}_routes.py'
+                path = Path(self.state['guard']).with_name(filename)
+                pin = self.state['direct_support']['files'].get(str(path))
+                if pin is None:
+                    continue
+                if guard.digest(path) != pin:
+                    self.refuse('source_ordinary_resolver_drift')
+                sites = next(ast.literal_eval(n.value) for n in ast.parse(path.read_bytes()).body
+                             if isinstance(n, ast.Assign)
+                             and any(isinstance(t, ast.Name) and t.id == 'SITES' for t in n.targets))
+                names.update(f'source-cohort{cohort}:{relative}:{line}'
+                             for relative, lines in sites.items() for line in lines)
+            if name not in names:
+                self.refuse('source_unknown_python_registration')
+            # Use the original input vector for routes with an exact console
+            # translation; compare the resulting vector as well as the binding.
+            actual, vector = guard.admit(launch['args'], cwd, environment)
+            if actual != registration or vector != argv:
+                self.refuse('source_ordinary_registration_drift')
+        self.shared()
+        self.emit({'kind': 'source_ordinary_startup_consumption', 'class': name,
+                   'source_binding': registration['source_binding'],
+                   'launch_token': launch['launch_token'], 'shared_startup_seal': True})
+
     def before_python(self, argv, cwd, environment, registration=None):
+        if registration is not None:
+            guard, launch = self.python_launch(argv, cwd, environment, registration)
         reference_classes = frozenset({"reference-integrity:test_skips", "reference-integrity:test_passes",
                                        "reference-integrity:test_fails", "reference-integrity:test_waits"})
         if registration is not None and registration['class'] in reference_classes:
@@ -290,6 +411,10 @@ class SourceActivation(IsolatedActivation):
             self.shared()
             self.emit({"kind": "source_reference_startup_consumption", "class": registration['class'],
                        "source_binding": registration['source_binding'], "shared_startup_seal": True})
+            return
+
+        if registration is not None and registration['class'] not in CONSUMERS:
+            self.ordinary_python(guard, launch, argv, cwd, environment, registration)
             return
 
         if self.direct != (
