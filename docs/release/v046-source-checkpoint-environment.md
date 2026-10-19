@@ -1295,3 +1295,64 @@ async event-loop setup fails. Reclaiming an object does not close descriptors
 stored as integers. Resource-pressure evidence must retain the original
 failure; neither higher limits nor successful guard cleanup establishes closure
 of independently owned product resources.
+
+### Session acquisition and tracker ownership
+
+The bounded session ownership repair preserves the original synchronous fixture
+factories and native/controlled selection predicates. Broker directory acquisition,
+ledger acquisition and the initial durable append now roll back acquired handles.
+An unstarted owner has synchronous deterministic finalization; a started owner must
+finish async teardown on its original test runner before handles are released.
+See `docs/architecture/experimental-lease.md` for the ownership contract.
+
+Finite Linux controls at `f7509b5123ff81becb50d2dacb4e8ce5a1007242`
+(run `39215959785`) exercised the four acquisition failures and 48 alternating
+calls to the exact original factories after poisoned loop setup. Each returned
+to three descriptors; all five controls authenticated READY and recorded actual
+numeric original-parent waits. These are bounded ownership proofs, not a full
+source checkpoint or native adapter acceptance.
+
+The separately observed multiprocessing tracker route remains closed. A finite
+Linux Queue/Process control at `0886f8d0b7c7156c61f69af956c2ee92aaf42cf9`
+(run `39217513061`) recorded the joined process's genuine parent wait, but no
+parent wait for the tracker. The tracker was still live at pre-finalization;
+both processes later exited normally. A stdlib destructor, `Queue.close()`,
+`Process.join()`, PID absence or a tracer terminal wait does not establish a
+tracker parent wait. No tracker registration or missing-wait exception follows
+from this diagnostic. Current release readiness remains false and the repository
+carrier remains PREPAREONLY until every finite route meets the existing wait
+requirements. Original historical source and package proofs retain their original
+bytes and execution attribution.
+
+
+### Original-parent multiprocessing ownership
+
+The spawn owners in `test_attention`, `test_project_lock`,
+`test_patch_transaction`, `test_supervision`, `test_supervision_finalization`,
+`test_supervision_transactions`, `test_terminal_review_report_ordering`,
+`test_supervision_nested` and `test_supervision_paths` use explicit
+`tests.multiprocess_lifetime.SpawnResources` scopes. The helper retains the
+original spawn context and returns original Queue, Process, Pipe, Event and
+Value objects. Original test assertions, commands, child targets, joins,
+parameters and decorators remain in their original order.
+
+A scope refuses a preexisting tracker. Its original parent starts the standard
+tracker, binds the stdlib implementation and retains a non-inheritable duplicate
+of that exact FIFO generation. Teardown verifies parent, case, tracker instance,
+PID and descriptor/device/inode/mode. It refuses an unjoined child instead of
+joining, killing or adopting it. Joined process handles and pipe endpoints close;
+Queue feeders close and join. Each acquired semaphore uses its own original
+object-bound CPython Finalize callback, including unlink and unregister. No
+unrelated finalizer is consumed. The custody descriptor closes before the bound
+CPython tracker stop closes its writer and waits in the actual original parent.
+A nonzero tracker status or teardown failure fails the scope. Original test
+exceptions and cancellation propagate; a simultaneous cleanup failure retains
+both exceptions.
+
+A clean local exit is insufficient release evidence. Linux certification must
+observe both the joined child's and tracker's real original-parent waits before
+the actual summary. Historical missing tracker waits remain missing. The new
+ownership controls prove cleanup, borrowed-tracker refusal, descriptor-generation
+refusal, case drift, live-child refusal, causal-error preservation, original child
+statuses and unrelated-finalizer preservation. Finite source admission and
+frozen-candidate certification require separate current-byte proof.

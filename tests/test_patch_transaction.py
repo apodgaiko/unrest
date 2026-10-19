@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.multiprocess_lifetime import SpawnResources
+
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController, ToolError
 from unrest_harness.dispatcher import MockDispatcher, MockTerminalReviewer
@@ -949,101 +951,102 @@ def test_edge_257_is_refused_before_any_decision_mutation(tmp_path: Path) -> Non
 def test_two_mutators_and_two_inspectors_are_process_linearizable(
     tmp_path: Path,
 ) -> None:
-    root = tmp_path / "project"
-    _private_mkdir(root)
-    _private_mkdir(root / ".unrest-runtime")
-    for kind in INSTALL_ORDER:
-        path = root / PATHS[kind]
-        _private_mkdir(path.parent)
-        path.write_text(f"generation:g0:{kind}\n", encoding="utf-8")
+    with SpawnResources() as ownership:
+        root = tmp_path / "project"
+        _private_mkdir(root)
+        _private_mkdir(root / ".unrest-runtime")
+        for kind in INSTALL_ORDER:
+            path = root / PATHS[kind]
+            _private_mkdir(path.parent)
+            path.write_text(f"generation:g0:{kind}\n", encoding="utf-8")
 
-    context = multiprocessing.get_context("spawn")
-    active = context.Value("i", 0)
-    overlap = context.Value("i", 0)
-    events = context.Queue()
-    controls = [
-        (context.Event(), context.Event(), context.Event(), context.Event())
-        for _ in range(2)
-    ]
-    mutators = [
-        context.Process(
-            target=_mutator_process,
-            args=(
-                str(root),
-                action,
-                *controls[index],
-                active,
-                overlap,
-                events,
-            ),
-        )
-        for index, action in enumerate(("A", "B"))
-    ]
-    mutators[0].start()
-    assert controls[0][2].wait(10)
-    mutators[1].start()
-    assert controls[1][0].wait(10)
-    assert not controls[1][1].wait(0.05)
-    controls[0][3].set()
-    assert controls[1][2].wait(10)
+        context = ownership.context(multiprocessing.get_context("spawn"))
+        active = context.Value("i", 0)
+        overlap = context.Value("i", 0)
+        events = context.Queue()
+        controls = [
+            (context.Event(), context.Event(), context.Event(), context.Event())
+            for _ in range(2)
+        ]
+        mutators = [
+            context.Process(
+                target=_mutator_process,
+                args=(
+                    str(root),
+                    action,
+                    *controls[index],
+                    active,
+                    overlap,
+                    events,
+                ),
+            )
+            for index, action in enumerate(("A", "B"))
+        ]
+        mutators[0].start()
+        assert controls[0][2].wait(10)
+        mutators[1].start()
+        assert controls[1][0].wait(10)
+        assert not controls[1][1].wait(0.05)
+        controls[0][3].set()
+        assert controls[1][2].wait(10)
 
-    inspector_results = context.Queue()
-    inspector_starts = [context.Event(), context.Event()]
-    inspectors = [
-        context.Process(
-            target=_inspector_process,
-            args=(str(root), inspector_starts[index], inspector_results),
-        )
-        for index in range(2)
-    ]
-    for index, inspector in enumerate(inspectors):
-        inspector.start()
-        assert inspector_starts[index].wait(10)
-    controls[1][3].set()
-    for process in (*mutators, *inspectors):
-        process.join(10)
-        assert process.exitcode == 0
+        inspector_results = context.Queue()
+        inspector_starts = [context.Event(), context.Event()]
+        inspectors = [
+            context.Process(
+                target=_inspector_process,
+                args=(str(root), inspector_starts[index], inspector_results),
+            )
+            for index in range(2)
+        ]
+        for index, inspector in enumerate(inspectors):
+            inspector.start()
+            assert inspector_starts[index].wait(10)
+        controls[1][3].set()
+        for process in (*mutators, *inspectors):
+            process.join(10)
+            assert process.exitcode == 0
 
-    recorded: list[tuple[object, ...]] = []
-    while True:
-        try:
-            recorded.append(events.get_nowait())
-        except queue.Empty:
-            break
-    acquired = [row[0] for row in recorded if row[1] == "acquire"]
-    outcomes = [row for row in recorded if row[1] == "outcome"]
-    observations = [inspector_results.get(timeout=2) for _ in inspectors]
-    assert acquired == ["A", "B"]
-    assert [(row[3], row[4]) for row in outcomes] == [
-        ("g0", "g0>A"),
-        ("g0>A", "g0>A>B"),
-    ]
-    assert overlap.value == 0
-    assert len({row[2] for row in recorded}) == 2
-    assert len({pid for pid, _ in observations}) == 2
-    assert {generation for _, generation in observations} == {"g0>A>B"}
-    assert _process_generation(root) == "g0>A>B"
-    recover_patch_transactions(root)
-    recover_patch_transactions(root)
-    assert _process_generation(root) == "g0>A>B"
-    snapshot = {
-        kind: hashlib.sha256((root / PATHS[kind]).read_bytes()).hexdigest()
-        for kind in INSTALL_ORDER
-    }
-    print(
-        "WLEG_PROCESS_EVIDENCE="
-        + json.dumps(
-            {
-                "events": recorded,
-                "final_generation": "g0>A>B",
-                "final_snapshot": snapshot,
-                "inspectors": observations,
-                "overlap": overlap.value,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
+        recorded: list[tuple[object, ...]] = []
+        while True:
+            try:
+                recorded.append(events.get_nowait())
+            except queue.Empty:
+                break
+        acquired = [row[0] for row in recorded if row[1] == "acquire"]
+        outcomes = [row for row in recorded if row[1] == "outcome"]
+        observations = [inspector_results.get(timeout=2) for _ in inspectors]
+        assert acquired == ["A", "B"]
+        assert [(row[3], row[4]) for row in outcomes] == [
+            ("g0", "g0>A"),
+            ("g0>A", "g0>A>B"),
+        ]
+        assert overlap.value == 0
+        assert len({row[2] for row in recorded}) == 2
+        assert len({pid for pid, _ in observations}) == 2
+        assert {generation for _, generation in observations} == {"g0>A>B"}
+        assert _process_generation(root) == "g0>A>B"
+        recover_patch_transactions(root)
+        recover_patch_transactions(root)
+        assert _process_generation(root) == "g0>A>B"
+        snapshot = {
+            kind: hashlib.sha256((root / PATHS[kind]).read_bytes()).hexdigest()
+            for kind in INSTALL_ORDER
+        }
+        print(
+            "WLEG_PROCESS_EVIDENCE="
+            + json.dumps(
+                {
+                    "events": recorded,
+                    "final_generation": "g0>A>B",
+                    "final_snapshot": snapshot,
+                    "inspectors": observations,
+                    "overlap": overlap.value,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
         )
-    )
 
 
 @pytest.mark.parametrize("timing", ["stable", "late", "supported"])
@@ -1275,29 +1278,30 @@ def _interrupt_rename_probe(root: str) -> None:
 
 
 def test_interrupted_probe_coexists_with_committed_recovery(tmp_path: Path) -> None:
-    targets = _targets(tmp_path)
-    _seed(tmp_path, targets)
-    prior = PatchTransaction(tmp_path, "mission-001", "older-committed", targets)
-    prior.prepare()
-    prior.commit()
-    process = multiprocessing.get_context("spawn").Process(
-        target=_interrupt_rename_probe, args=(str(tmp_path),),
-    )
-    process.start()
-    process.join(10)
-    if process.is_alive():
-        process.kill()
-        process.join()
-    assert process.exitcode == 73
-    residue, = _probe_files(tmp_path)
-    inventory = (residue.lstat(), _condition(residue))
-    assert _generation(tmp_path, targets) == "pre"
-    assert (prior.transaction_dir / "COMMIT").exists()
-    recover_patch_transactions(tmp_path)
-    assert _generation(tmp_path, targets) == "post"
-    recover_patch_transactions(tmp_path)
-    assert inventory == (residue.lstat(), _condition(residue))
-    assert not prior.transaction_dir.exists()
+    with SpawnResources() as ownership:
+        targets = _targets(tmp_path)
+        _seed(tmp_path, targets)
+        prior = PatchTransaction(tmp_path, "mission-001", "older-committed", targets)
+        prior.prepare()
+        prior.commit()
+        process = ownership.context(multiprocessing.get_context("spawn")).Process(
+            target=_interrupt_rename_probe, args=(str(tmp_path),),
+        )
+        process.start()
+        process.join(10)
+        if process.is_alive():
+            process.kill()
+            process.join()
+        assert process.exitcode == 73
+        residue, = _probe_files(tmp_path)
+        inventory = (residue.lstat(), _condition(residue))
+        assert _generation(tmp_path, targets) == "pre"
+        assert (prior.transaction_dir / "COMMIT").exists()
+        recover_patch_transactions(tmp_path)
+        assert _generation(tmp_path, targets) == "post"
+        recover_patch_transactions(tmp_path)
+        assert inventory == (residue.lstat(), _condition(residue))
+        assert not prior.transaction_dir.exists()
 
 
 def test_probe_directory_replacement_is_not_cleaned_or_followed(

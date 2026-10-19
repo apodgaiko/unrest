@@ -11,6 +11,8 @@ import time
 
 import pytest
 
+from tests.multiprocess_lifetime import SpawnResources
+
 from unrest_harness import supervision as s
 from unrest_harness.coordinator import MissionCoordinator
 from unrest_harness.dispatcher import MockDispatcher
@@ -74,108 +76,109 @@ def _prepare(tmp_path, role):
 @pytest.mark.parametrize('ordering', ['publication_first', 'finalization_first'])
 @pytest.mark.parametrize('success', [True, False])
 def test_process_orderings_preserve_carrier_and_terminal_fence(tmp_path, role, ordering, success):
-    store, controller, binding = _prepare(tmp_path, role)
-    owned = {}
-    contended = threading.Event()
-    released = threading.Event()
+    with SpawnResources() as ownership:
+        store, controller, binding = _prepare(tmp_path, role)
+        owned = {}
+        contended = threading.Event()
+        released = threading.Event()
 
-    def effect(attempt):
-        zero = s.load_snapshot(store, binding.project_id, binding.mission_id, attempt)
-        checkpoint = zero.model_copy(update={'checkpoint_sequence': 1,
-            'phase': 'waiting_at_checkpoint', 'supervision_status': 'waiting'})
-        ctx = multiprocessing.get_context('spawn')
-        pipe, child = ctx.Pipe()
-        proc = ctx.Process(target=_publisher, args=(str(store.config.harness_home),
-            checkpoint.model_dump(), ordering, child))
-        proc.start()
-        child.close()
-        owned.update(proc=proc, pipe=pipe, snapshot=checkpoint)
-        assert pipe.poll(10)
-        assert pipe.recv() == ('snapshot_owned' if ordering == 'publication_first' else 'admission_read')
-        lock = s.snapshot_path(store, binding.project_id, binding.mission_id, attempt).with_suffix('.lock')
-        owned.update(lock=lock, inode=lock.stat().st_ino)
-        if ordering == 'publication_first':
-            fd = os.open(lock, os.O_RDWR)
-            try:
-                with pytest.raises(BlockingIOError):
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            finally:
-                os.close(fd)
-        if role == 'terminal_reviewer':
-            if not success:
-                raise RuntimeError('controlled reviewer crash')
-            return TerminalReviewHandoff(done=True, report='controlled review')
-        if role == 'validator':
-            return ValidateHandoff(node_id='validate-1', done=success, report='controlled validation',
-                passed=success, items=[{'item_id': t, 'passed': success} for t in STEERING_TARGETS])
-        return WorkHandoff(node_id='work-1', done=success, report='controlled work')
+        def effect(attempt):
+            zero = s.load_snapshot(store, binding.project_id, binding.mission_id, attempt)
+            checkpoint = zero.model_copy(update={'checkpoint_sequence': 1,
+                'phase': 'waiting_at_checkpoint', 'supervision_status': 'waiting'})
+            ctx = ownership.context(multiprocessing.get_context('spawn'))
+            pipe, child = ctx.Pipe()
+            proc = ctx.Process(target=_publisher, args=(str(store.config.harness_home),
+                checkpoint.model_dump(), ordering, child))
+            proc.start()
+            child.close()
+            owned.update(proc=proc, pipe=pipe, snapshot=checkpoint)
+            assert pipe.poll(10)
+            assert pipe.recv() == ('snapshot_owned' if ordering == 'publication_first' else 'admission_read')
+            lock = s.snapshot_path(store, binding.project_id, binding.mission_id, attempt).with_suffix('.lock')
+            owned.update(lock=lock, inode=lock.stat().st_ino)
+            if ordering == 'publication_first':
+                fd = os.open(lock, os.O_RDWR)
+                try:
+                    with pytest.raises(BlockingIOError):
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                finally:
+                    os.close(fd)
+            if role == 'terminal_reviewer':
+                if not success:
+                    raise RuntimeError('controlled reviewer crash')
+                return TerminalReviewHandoff(done=True, report='controlled review')
+            if role == 'validator':
+                return ValidateHandoff(node_id='validate-1', done=success, report='controlled validation',
+                    passed=success, items=[{'item_id': t, 'passed': success} for t in STEERING_TARGETS])
+            return WorkHandoff(node_id='work-1', done=success, report='controlled work')
 
-    class Reviewer:
-        def review(self, project_id, mission_id, attempt):
-            return effect(attempt)
+        class Reviewer:
+            def review(self, project_id, mission_id, attempt):
+                return effect(attempt)
 
-    coordinator = MissionCoordinator(store, binding.project_id,
-        MockDispatcher(lambda request: effect(request.spawn_ts)), Reviewer())
+        coordinator = MissionCoordinator(store, binding.project_id,
+            MockDispatcher(lambda request: effect(request.spawn_ts)), Reviewer())
 
-    def trace(frame, event, arg):
-        if (event == 'exception' and frame.f_code is s._supervision_transaction.__wrapped__.__code__
-                and arg[0] is BlockingIOError):
-            contended.set()
-        return trace
+        def trace(frame, event, arg):
+            if (event == 'exception' and frame.f_code is s._supervision_transaction.__wrapped__.__code__
+                    and arg[0] is BlockingIOError):
+                contended.set()
+            return trace
 
-    # Independent controller releases the owner only after real flock contention.
-    def release():
-        if contended.wait(10) and 'pipe' in owned:
-            owned['pipe'].send('release')
-            released.set()
+        # Independent controller releases the owner only after real flock contention.
+        def release():
+            if contended.wait(10) and 'pipe' in owned:
+                owned['pipe'].send('release')
+                released.set()
 
-    thread = threading.Thread(target=release) if ordering == 'publication_first' else None
-    try:
-        if thread:
-            thread.start()
-        sys.settrace(trace)
-        with project_access_guard(store, binding.project_id):
-            result = (coordinator.close_mission(binding.mission_id)
-                if role == 'terminal_reviewer' else coordinator.step())
-        sys.settrace(None)
-        if thread:
-            thread.join(12)
-            assert not thread.is_alive() and released.is_set() and contended.is_set()
-        else:
-            owned['pipe'].send('release')
-        assert owned['pipe'].poll(10)
-        response = owned['pipe'].recv()
-        assert response == (('accepted', 1) if ordering == 'publication_first' else ('refused', None))
-        owned['proc'].join(10)
-        assert owned['proc'].exitcode == 0
-        assert owned['lock'].stat().st_ino == owned['inode']
-        snapshot = owned['snapshot']
-        fresh = ProjectStore(store.config)
-        terminal = s.load_snapshot(fresh, binding.project_id, binding.mission_id, snapshot.attempt_id)
-        assert terminal.phase == terminal.supervision_status == 'terminal'
-        assert terminal.checkpoint_sequence == (1 if ordering == 'publication_first' else 0)
-        assert s.load_project_active_attempts(fresh, binding.project_id, binding.mission_id,
-            fresh.load_task_list(binding.project_id, binding.mission_id)) == []
-        assert coordinator._unique_attempt_id(binding.mission_id, snapshot.attempt_id) == snapshot.attempt_id + '-0001'
-        before = s.snapshot_path(fresh, binding.project_id, binding.mission_id, snapshot.attempt_id).read_bytes()
-        with pytest.raises(s.SupervisionSnapshotError):
-            s.save_snapshot(fresh, snapshot, assigned_target_ids=STEERING_TARGETS)
-        assert s.snapshot_path(fresh, binding.project_id, binding.mission_id, snapshot.attempt_id).read_bytes() == before
-        if role == 'terminal_reviewer':
-            assert result.detail == ('done' if success else 'terminal_review_crash')
-        else:
-            assert fresh.load_task_state(binding.project_id, binding.mission_id).status_of(binding.node_id) == ('cleared' if success else 'failed')
-    finally:
-        sys.settrace(None)
-        contended.set()
-        if thread:
-            thread.join(12)
-        if 'proc' in owned:
-            if owned['proc'].is_alive():
-                owned['proc'].kill()
+        thread = threading.Thread(target=release) if ordering == 'publication_first' else None
+        try:
+            if thread:
+                thread.start()
+            sys.settrace(trace)
+            with project_access_guard(store, binding.project_id):
+                result = (coordinator.close_mission(binding.mission_id)
+                    if role == 'terminal_reviewer' else coordinator.step())
+            sys.settrace(None)
+            if thread:
+                thread.join(12)
+                assert not thread.is_alive() and released.is_set() and contended.is_set()
+            else:
+                owned['pipe'].send('release')
+            assert owned['pipe'].poll(10)
+            response = owned['pipe'].recv()
+            assert response == (('accepted', 1) if ordering == 'publication_first' else ('refused', None))
             owned['proc'].join(10)
-            assert not owned['proc'].is_alive()
-            owned['pipe'].close()
+            assert owned['proc'].exitcode == 0
+            assert owned['lock'].stat().st_ino == owned['inode']
+            snapshot = owned['snapshot']
+            fresh = ProjectStore(store.config)
+            terminal = s.load_snapshot(fresh, binding.project_id, binding.mission_id, snapshot.attempt_id)
+            assert terminal.phase == terminal.supervision_status == 'terminal'
+            assert terminal.checkpoint_sequence == (1 if ordering == 'publication_first' else 0)
+            assert s.load_project_active_attempts(fresh, binding.project_id, binding.mission_id,
+                fresh.load_task_list(binding.project_id, binding.mission_id)) == []
+            assert coordinator._unique_attempt_id(binding.mission_id, snapshot.attempt_id) == snapshot.attempt_id + '-0001'
+            before = s.snapshot_path(fresh, binding.project_id, binding.mission_id, snapshot.attempt_id).read_bytes()
+            with pytest.raises(s.SupervisionSnapshotError):
+                s.save_snapshot(fresh, snapshot, assigned_target_ids=STEERING_TARGETS)
+            assert s.snapshot_path(fresh, binding.project_id, binding.mission_id, snapshot.attempt_id).read_bytes() == before
+            if role == 'terminal_reviewer':
+                assert result.detail == ('done' if success else 'terminal_review_crash')
+            else:
+                assert fresh.load_task_state(binding.project_id, binding.mission_id).status_of(binding.node_id) == ('cleared' if success else 'failed')
+        finally:
+            sys.settrace(None)
+            contended.set()
+            if thread:
+                thread.join(12)
+            if 'proc' in owned:
+                if owned['proc'].is_alive():
+                    owned['proc'].kill()
+                owned['proc'].join(10)
+                assert not owned['proc'].is_alive()
+                owned['pipe'].close()
 
 
 @pytest.mark.parametrize('role', ['worker', 'validator', 'terminal_reviewer'])
@@ -233,35 +236,36 @@ def _hold_snapshot(home, payload, pipe):
 
 
 def test_finalization_real_snapshot_contention_is_bounded(tmp_path):
-    store, _, snap, binding = _prepare_role_checkpoint(tmp_path, 'worker')
-    ctx = multiprocessing.get_context('spawn')
-    pipe, child = ctx.Pipe()
-    proc = ctx.Process(target=_hold_snapshot, args=(str(store.config.harness_home), snap.model_dump(), child))
-    proc.start()
-    child.close()
-    try:
-        assert pipe.poll(10) and pipe.recv() == 'owned'
-        start = time.monotonic()
-        with pytest.raises(s.SupervisionSteeringError) as error:
-            s.finalize_supervision_attempt(store, binding.project_id, binding.mission_id,
-                binding.attempt_id, assigned_target_ids=STEERING_TARGETS)
-        elapsed = time.monotonic() - start
-        assert error.value.code == 'project_busy'
-        assert 4.9 <= elapsed < 7
-        assert proc.is_alive()
-        with s._supervision_transaction(store, binding.project_id, binding.mission_id):
-            pass
-        assert s.load_snapshot(store, binding.project_id, binding.mission_id, binding.attempt_id) == snap
-        pipe.send('release')
-        proc.join(10)
-        assert proc.exitcode == 0
-        assert s.finalize_supervision_attempt(store, binding.project_id, binding.mission_id,
-            binding.attempt_id, assigned_target_ids=STEERING_TARGETS) == (snap, False)
-    finally:
-        if proc.is_alive():
-            proc.kill()
-        proc.join(10)
-        pipe.close()
+    with SpawnResources() as ownership:
+        store, _, snap, binding = _prepare_role_checkpoint(tmp_path, 'worker')
+        ctx = ownership.context(multiprocessing.get_context('spawn'))
+        pipe, child = ctx.Pipe()
+        proc = ctx.Process(target=_hold_snapshot, args=(str(store.config.harness_home), snap.model_dump(), child))
+        proc.start()
+        child.close()
+        try:
+            assert pipe.poll(10) and pipe.recv() == 'owned'
+            start = time.monotonic()
+            with pytest.raises(s.SupervisionSteeringError) as error:
+                s.finalize_supervision_attempt(store, binding.project_id, binding.mission_id,
+                    binding.attempt_id, assigned_target_ids=STEERING_TARGETS)
+            elapsed = time.monotonic() - start
+            assert error.value.code == 'project_busy'
+            assert 4.9 <= elapsed < 7
+            assert proc.is_alive()
+            with s._supervision_transaction(store, binding.project_id, binding.mission_id):
+                pass
+            assert s.load_snapshot(store, binding.project_id, binding.mission_id, binding.attempt_id) == snap
+            pipe.send('release')
+            proc.join(10)
+            assert proc.exitcode == 0
+            assert s.finalize_supervision_attempt(store, binding.project_id, binding.mission_id,
+                binding.attempt_id, assigned_target_ids=STEERING_TARGETS) == (snap, False)
+        finally:
+            if proc.is_alive():
+                proc.kill()
+            proc.join(10)
+            pipe.close()
 
 
 @pytest.mark.parametrize('role', ['worker', 'validator', 'terminal_reviewer'])

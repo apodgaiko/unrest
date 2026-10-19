@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.multiprocess_lifetime import SpawnResources
+
 from unrest_harness import supervision as s
 from tests.test_supervision import STEERING_TARGETS, _prepare_role_checkpoint, _request
 from tests import test_supervision_nested as nested_tests
@@ -162,38 +164,39 @@ def _first_save(store, snapshot, gate, connection):
 
 
 def test_competing_first_use_and_restart_share_carrier(tmp_path):
-    store, _, snapshot, _ = _prepare_role_checkpoint(tmp_path, "validator")
-    snapshot = snapshot.model_copy(update={"attempt_id": "fresh", "mission_id": "fresh-mission"})
-    ctx = multiprocessing.get_context("spawn")
-    gate = ctx.Event()
-    children = []
-    try:
-        for _ in range(2):
-            parent, child = ctx.Pipe()
-            proc = ctx.Process(target=_first_save, args=(store, snapshot, gate, child))
-            proc.start()
-            child.close()
-            children.append((proc, parent))
-        gate.set()
-        identities = []
-        for proc, parent in children:
-            assert parent.poll(10)
-            identities.append(parent.recv())
-            proc.join(5)
-            assert proc.exitcode == 0
-        assert identities[0] == identities[1]
-        s.save_snapshot(store, snapshot, assigned_target_ids=STEERING_TARGETS)
-        lock = s.snapshot_path(store, snapshot.project_id, snapshot.mission_id, snapshot.attempt_id).with_suffix(".lock")
-        assert (lock.stat().st_dev, lock.stat().st_ino) == identities[0]
-        assert stat.S_IMODE(lock.stat().st_mode) == 0o600
-    finally:
-        for proc, parent in children:
-            if proc.is_alive():
-                proc.kill()
-            proc.join(5)
-            assert not proc.is_alive()
-            parent.close()
-            proc.close()
+    with SpawnResources() as ownership:
+        store, _, snapshot, _ = _prepare_role_checkpoint(tmp_path, "validator")
+        snapshot = snapshot.model_copy(update={"attempt_id": "fresh", "mission_id": "fresh-mission"})
+        ctx = ownership.context(multiprocessing.get_context("spawn"))
+        gate = ctx.Event()
+        children = []
+        try:
+            for _ in range(2):
+                parent, child = ctx.Pipe()
+                proc = ctx.Process(target=_first_save, args=(store, snapshot, gate, child))
+                proc.start()
+                child.close()
+                children.append((proc, parent))
+            gate.set()
+            identities = []
+            for proc, parent in children:
+                assert parent.poll(10)
+                identities.append(parent.recv())
+                proc.join(5)
+                assert proc.exitcode == 0
+            assert identities[0] == identities[1]
+            s.save_snapshot(store, snapshot, assigned_target_ids=STEERING_TARGETS)
+            lock = s.snapshot_path(store, snapshot.project_id, snapshot.mission_id, snapshot.attempt_id).with_suffix(".lock")
+            assert (lock.stat().st_dev, lock.stat().st_ino) == identities[0]
+            assert stat.S_IMODE(lock.stat().st_mode) == 0o600
+        finally:
+            for proc, parent in children:
+                if proc.is_alive():
+                    proc.kill()
+                proc.join(5)
+                assert not proc.is_alive()
+                parent.close()
+                proc.close()
 
 
 @pytest.mark.parametrize("nested", [False, True])

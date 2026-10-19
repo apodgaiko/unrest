@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.multiprocess_lifetime import SpawnResources
+
 from unrest_harness import supervision as s
 from unrest_harness.models import SteeringBinding
 from unrest_harness.project_lock import project_access_guard
@@ -97,30 +99,31 @@ def _child(home, binding_payload, operation, cut, connection):
 
 @pytest.fixture
 def child_owner():
-    owned = []
+    with SpawnResources() as ownership:
+        owned = []
 
-    def start(store, binding, operation, cut=None):
-        _body(store)
-        context = multiprocessing.get_context("spawn")
-        parent, child = context.Pipe()
-        process = context.Process(target=_child, args=(
-            str(store.config.harness_home), binding.model_dump(), operation, cut, child,
-        ))
-        process.start()
-        child.close()
-        owned.append((process, parent))
-        assert parent.poll(10)
-        assert parent.recv() == ("ready" if operation == "race" else cut or "owned")
-        return process, parent
+        def start(store, binding, operation, cut=None):
+            _body(store)
+            context = ownership.context(multiprocessing.get_context("spawn"))
+            parent, child = context.Pipe()
+            process = context.Process(target=_child, args=(
+                str(store.config.harness_home), binding.model_dump(), operation, cut, child,
+            ))
+            process.start()
+            child.close()
+            owned.append((process, parent))
+            assert parent.poll(10)
+            assert parent.recv() == ("ready" if operation == "race" else cut or "owned")
+            return process, parent
 
-    yield start
-    for process, connection in owned:
-        if process.is_alive():
-            process.kill()
-        process.join(5)
-        assert not process.is_alive() and process.exitcode is not None
-        connection.close()
-        process.close()
+        yield start
+        for process, connection in owned:
+            if process.is_alive():
+                process.kill()
+            process.join(5)
+            assert not process.is_alive() and process.exitcode is not None
+            connection.close()
+            process.close()
 
 
 def _carrier(store, binding):

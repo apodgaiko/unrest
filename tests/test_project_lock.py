@@ -18,6 +18,8 @@ from typing import Any
 
 import pytest
 
+from tests.multiprocess_lifetime import SpawnResources
+
 from unrest_harness.config import HarnessConfig
 from unrest_harness.controller import ProjectController, ToolError
 from unrest_harness.dispatcher import MockDispatcher, MockTerminalReviewer
@@ -268,95 +270,96 @@ def test_genuine_legacy_inspect_locks_without_creating_lock_file(
 def test_legacy_lock_survives_nine_target_project_record_replacement(
     tmp_path: Path,
 ) -> None:
-    context = multiprocessing.get_context("spawn")
-    harness_home = tmp_path / "home"
-    root = harness_home / "projects" / "legacy"
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    for relative_path in LEGACY_TRANSACTION_PATHS.values():
-        path = root / relative_path
-        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        path.write_text(f"original:{relative_path}\n", encoding="utf-8")
-    project_path = root / LEGACY_TRANSACTION_PATHS["project_record"]
-    project_path.write_text(
-        json.dumps(
+    with SpawnResources() as ownership:
+        context = ownership.context(multiprocessing.get_context("spawn"))
+        harness_home = tmp_path / "home"
+        root = harness_home / "projects" / "legacy"
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        for relative_path in LEGACY_TRANSACTION_PATHS.values():
+            path = root / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            path.write_text(f"original:{relative_path}\n", encoding="utf-8")
+        project_path = root / LEGACY_TRANSACTION_PATHS["project_record"]
+        project_path.write_text(
+            json.dumps(
+                {
+                    "id": "legacy",
+                    "workspace_dir": str(workspace),
+                    "created_at": "2026-08-10T00:00:00Z",
+                    "current_mission_id": "mission-001",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        inventory_before = tuple(
+            path.relative_to(root).as_posix()
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+        )
+        assert ".unrest-runtime/mutation.lock" not in inventory_before
+
+        release = context.Event()
+        holder_output = context.Queue()
+        holder = context.Process(
+            target=_legacy_replacement_holder,
+            args=(str(harness_home), "legacy", release, holder_output),
+        )
+        holder.start()
+        holder_observation = holder_output.get(timeout=10)
+        assert holder_observation["old_inode"] != holder_observation["new_inode"]
+
+        blocked_output = context.Queue()
+        blocked = context.Process(
+            target=_legacy_lock_contender,
+            args=(str(harness_home), "legacy", blocked_output),
+        )
+        blocked.start()
+        blocked_observation = blocked_output.get(timeout=2)
+        blocked.join(10)
+        assert blocked.exitcode == 0
+        assert blocked_observation["acquired"] is False
+
+        release.set()
+        holder.join(10)
+        assert holder.exitcode == 0
+
+        acquired_output = context.Queue()
+        acquired = context.Process(
+            target=_legacy_lock_contender,
+            args=(str(harness_home), "legacy", acquired_output),
+        )
+        acquired.start()
+        acquired_observation = acquired_output.get(timeout=2)
+        acquired.join(10)
+        assert acquired.exitcode == 0
+        assert acquired_observation["acquired"] is True
+        assert len(
             {
-                "id": "legacy",
-                "workspace_dir": str(workspace),
-                "created_at": "2026-08-10T00:00:00Z",
-                "current_mission_id": "mission-001",
+                holder_observation["pid"],
+                blocked_observation["pid"],
+                acquired_observation["pid"],
             }
+        ) == 3
+        assert tuple(
+            path.relative_to(root).as_posix()
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+        ) == inventory_before
+        print(
+            "WLEG_LEGACY_REPLACEMENT_LOCK_EVIDENCE="
+            + json.dumps(
+                {
+                    "acquired_after_release": acquired_observation,
+                    "blocked_while_held": blocked_observation,
+                    "holder": holder_observation,
+                    "inventory_unchanged": True,
+                    "mutation_lock_absent": True,
+                },
+                sort_keys=True,
+            )
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    inventory_before = tuple(
-        path.relative_to(root).as_posix()
-        for path in sorted(root.rglob("*"))
-        if path.is_file()
-    )
-    assert ".unrest-runtime/mutation.lock" not in inventory_before
-
-    release = context.Event()
-    holder_output = context.Queue()
-    holder = context.Process(
-        target=_legacy_replacement_holder,
-        args=(str(harness_home), "legacy", release, holder_output),
-    )
-    holder.start()
-    holder_observation = holder_output.get(timeout=10)
-    assert holder_observation["old_inode"] != holder_observation["new_inode"]
-
-    blocked_output = context.Queue()
-    blocked = context.Process(
-        target=_legacy_lock_contender,
-        args=(str(harness_home), "legacy", blocked_output),
-    )
-    blocked.start()
-    blocked_observation = blocked_output.get(timeout=2)
-    blocked.join(10)
-    assert blocked.exitcode == 0
-    assert blocked_observation["acquired"] is False
-
-    release.set()
-    holder.join(10)
-    assert holder.exitcode == 0
-
-    acquired_output = context.Queue()
-    acquired = context.Process(
-        target=_legacy_lock_contender,
-        args=(str(harness_home), "legacy", acquired_output),
-    )
-    acquired.start()
-    acquired_observation = acquired_output.get(timeout=2)
-    acquired.join(10)
-    assert acquired.exitcode == 0
-    assert acquired_observation["acquired"] is True
-    assert len(
-        {
-            holder_observation["pid"],
-            blocked_observation["pid"],
-            acquired_observation["pid"],
-        }
-    ) == 3
-    assert tuple(
-        path.relative_to(root).as_posix()
-        for path in sorted(root.rglob("*"))
-        if path.is_file()
-    ) == inventory_before
-    print(
-        "WLEG_LEGACY_REPLACEMENT_LOCK_EVIDENCE="
-        + json.dumps(
-            {
-                "acquired_after_release": acquired_observation,
-                "blocked_while_held": blocked_observation,
-                "holder": holder_observation,
-                "inventory_unchanged": True,
-                "mutation_lock_absent": True,
-            },
-            sort_keys=True,
-        )
-    )
 
 
 def _arguments(method: str, project_id: str, *, sensitive: bool = False) -> dict[str, Any]:
@@ -606,91 +609,93 @@ async def _wait_for_reference_clear(reference: Any) -> None:
 def test_spawned_public_mutations_are_exclusive_and_project_scoped(
     tmp_path: Path,
 ) -> None:
-    ctx = multiprocessing.get_context("spawn")
-    harness_home = tmp_path / "home"
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    config = _config(harness_home)
-    _seed_project(config, workspace, "project-a")
-    _seed_project(config, workspace, "project-b")
-    store = ProjectStore(config)
-    state_path = store.unrest_runtime_dir("project-a") / "state.json"
-    before_state = state_path.read_bytes()
-    before_attempts = sorted(store.bucket_root("project-a").glob("**/attempts/*"))
+    with SpawnResources() as ownership:
+        ctx = ownership.context(multiprocessing.get_context("spawn"))
+        harness_home = tmp_path / "home"
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        config = _config(harness_home)
+        _seed_project(config, workspace, "project-a")
+        _seed_project(config, workspace, "project-b")
+        store = ProjectStore(config)
+        state_path = store.unrest_runtime_dir("project-a") / "state.json"
+        before_state = state_path.read_bytes()
+        before_attempts = sorted(store.bucket_root("project-a").glob("**/attempts/*"))
 
-    entered = ctx.Event()
-    release = ctx.Event()
-    holder = ctx.Process(
-        target=_holder_process,
-        args=(str(harness_home), "project-a", "advance_project", entered, release),
-    )
-    holder.start()
-    assert entered.wait(2), "holder did not acquire the project lock"
+        entered = ctx.Event()
+        release = ctx.Event()
+        holder = ctx.Process(
+            target=_holder_process,
+            args=(str(harness_home), "project-a", "advance_project", entered, release),
+        )
+        holder.start()
+        assert entered.wait(2), "holder did not acquire the project lock"
 
-    output = ctx.Queue()
-    competitor = ctx.Process(
-        target=_competitor_process,
-        args=(str(harness_home), "project-a", "project-b", output),
-    )
-    competitor.start()
-    observation = output.get(timeout=1)
-    competitor.join(5)
-    assert competitor.exitcode == 0
+        output = ctx.Queue()
+        competitor = ctx.Process(
+            target=_competitor_process,
+            args=(str(harness_home), "project-a", "project-b", output),
+        )
+        competitor.start()
+        observation = output.get(timeout=1)
+        competitor.join(5)
+        assert competitor.exitcode == 0
 
-    for method in MUTATIONS:
-        assert observation["results"][method]["payload"]["error"] == "controller_entered"
-        assert observation["results"][method]["elapsed"] < 1.0
-    assert observation["results"]["different_project"]["error"] == "controller_entered"
-    assert observation["controller_entries"] == [
-        ("submit_plan", "project-a"),
-        ("advance_project", "project-a"),
-        ("end_mission", "project-a"),
-        ("decide_attention", "project-a"),
-        ("abort_project", "project-a"),
-        ("abort_project", "project-b"),
-    ]
-    assert observation["dispatch_count"] == 0
-    assert SENTINEL not in json.dumps(observation, sort_keys=True)
-    assert state_path.read_bytes() == before_state
-    assert sorted(store.bucket_root("project-a").glob("**/attempts/*")) == before_attempts
+        for method in MUTATIONS:
+            assert observation["results"][method]["payload"]["error"] == "controller_entered"
+            assert observation["results"][method]["elapsed"] < 1.0
+        assert observation["results"]["different_project"]["error"] == "controller_entered"
+        assert observation["controller_entries"] == [
+            ("submit_plan", "project-a"),
+            ("advance_project", "project-a"),
+            ("end_mission", "project-a"),
+            ("decide_attention", "project-a"),
+            ("abort_project", "project-a"),
+            ("abort_project", "project-b"),
+        ]
+        assert observation["dispatch_count"] == 0
+        assert SENTINEL not in json.dumps(observation, sort_keys=True)
+        assert state_path.read_bytes() == before_state
+        assert sorted(store.bucket_root("project-a").glob("**/attempts/*")) == before_attempts
 
-    release.set()
-    holder.join(3)
-    assert holder.exitcode == 0
+        release.set()
+        holder.join(3)
+        assert holder.exitcode == 0
 
 
 @pytest.mark.skipif(os.name == "nt", reason="native abrupt-death lane runs on POSIX")
 def test_os_releases_lock_after_abrupt_holder_death(tmp_path: Path) -> None:
-    ctx = multiprocessing.get_context("spawn")
-    harness_home = tmp_path / "home"
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    _seed_project(_config(harness_home), workspace, "project-a")
+    with SpawnResources() as ownership:
+        ctx = ownership.context(multiprocessing.get_context("spawn"))
+        harness_home = tmp_path / "home"
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        _seed_project(_config(harness_home), workspace, "project-a")
 
-    entered = ctx.Event()
-    never_release = ctx.Event()
-    holder = ctx.Process(
-        target=_holder_process,
-        args=(str(harness_home), "project-a", "advance_project", entered, never_release),
-    )
-    holder.start()
-    assert entered.wait(2)
-    holder.terminate()
-    holder.join(3)
-    assert holder.exitcode is not None and holder.exitcode != 0
+        entered = ctx.Event()
+        never_release = ctx.Event()
+        holder = ctx.Process(
+            target=_holder_process,
+            args=(str(harness_home), "project-a", "advance_project", entered, never_release),
+        )
+        holder.start()
+        assert entered.wait(2)
+        holder.terminate()
+        holder.join(3)
+        assert holder.exitcode is not None and holder.exitcode != 0
 
-    output = ctx.Queue()
-    successor = ctx.Process(
-        target=_single_call_process,
-        args=(str(harness_home), "project-a", "advance_project", output),
-    )
-    successor.start()
-    observation = output.get(timeout=1)
-    successor.join(3)
-    assert successor.exitcode == 0
-    assert observation["payload"]["error"] == "controller_entered"
-    assert observation["controller_entries"] == [("advance_project", "project-a")]
-    assert observation["dispatch_count"] == 0
+        output = ctx.Queue()
+        successor = ctx.Process(
+            target=_single_call_process,
+            args=(str(harness_home), "project-a", "advance_project", output),
+        )
+        successor.start()
+        observation = output.get(timeout=1)
+        successor.join(3)
+        assert successor.exitcode == 0
+        assert observation["payload"]["error"] == "controller_entered"
+        assert observation["controller_entries"] == [("advance_project", "project-a")]
+        assert observation["dispatch_count"] == 0
 
 
 @pytest.mark.asyncio

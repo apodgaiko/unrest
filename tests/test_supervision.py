@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 import pytest
+
+from tests.multiprocess_lifetime import SpawnResources
 from pydantic import ValidationError
 
 from unrest_harness.config import HarnessConfig
@@ -921,31 +923,32 @@ def test_independent_child_process_adapter_observes_bound_action(
     tmp_path: Path,
     role: Literal["worker", "validator", "terminal_reviewer"],
 ) -> None:
-    store, controller, _, binding = _prepare_role_checkpoint(tmp_path, role)
-    context = multiprocessing.get_context("spawn")
-    ready = context.Queue()
-    result = context.Queue()
-    process = context.Process(
-        target=_process_wait_for_steering,
-        args=(
-            str(store.config.harness_home),
-            binding.model_dump(mode="json"),
-            ready,
-            result,
-        ),
-    )
-    process.start()
-    try:
-        child_pid = ready.get(timeout=5)
-        assert child_pid != os.getpid()
-        controller.steer_attempt(_request(binding, "continue"))
-        assert result.get(timeout=5) == ("continue", None, "continued")
-        process.join(timeout=5)
-        assert process.exitcode == 0
-    finally:
-        if process.is_alive():
-            process.terminate()
+    with SpawnResources() as ownership:
+        store, controller, _, binding = _prepare_role_checkpoint(tmp_path, role)
+        context = ownership.context(multiprocessing.get_context("spawn"))
+        ready = context.Queue()
+        result = context.Queue()
+        process = context.Process(
+            target=_process_wait_for_steering,
+            args=(
+                str(store.config.harness_home),
+                binding.model_dump(mode="json"),
+                ready,
+                result,
+            ),
+        )
+        process.start()
+        try:
+            child_pid = ready.get(timeout=5)
+            assert child_pid != os.getpid()
+            controller.steer_attempt(_request(binding, "continue"))
+            assert result.get(timeout=5) == ("continue", None, "continued")
             process.join(timeout=5)
+            assert process.exitcode == 0
+        finally:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
 
 
 def test_nudge_utf8_cap_second_nudge_and_private_modes(tmp_path: Path) -> None:

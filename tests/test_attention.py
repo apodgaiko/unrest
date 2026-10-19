@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+from tests.multiprocess_lifetime import SpawnResources
 from pydantic import ValidationError
 
 from unrest_harness import attention as attention_factory
@@ -403,26 +405,27 @@ def test_controller_next_action_matrix_is_read_only(
 def test_whole_envelope_bytes_match_in_independent_process_after_restart(
     tmp_path: Path,
 ) -> None:
-    controller, project_id = _controller(tmp_path)
-    items = _internal_items()
-    controller.store.save_attention(project_id, items)
-    controller.store.save_state(
-        project_id, AttentionNeeded(items=public_attention_items(items))
-    )
-    expected = controller.inspect_project(project_id).model_dump_json()
-    context = multiprocessing.get_context("spawn")
-    output = context.Queue()
-    process = context.Process(
-        target=_inspect_in_process,
-        args=(str(controller.config.harness_home), project_id, output),
-    )
+    with SpawnResources() as ownership:
+        controller, project_id = _controller(tmp_path)
+        items = _internal_items()
+        controller.store.save_attention(project_id, items)
+        controller.store.save_state(
+            project_id, AttentionNeeded(items=public_attention_items(items))
+        )
+        expected = controller.inspect_project(project_id).model_dump_json()
+        context = ownership.context(multiprocessing.get_context("spawn"))
+        output = context.Queue()
+        process = context.Process(
+            target=_inspect_in_process,
+            args=(str(controller.config.harness_home), project_id, output),
+        )
 
-    process.start()
-    child_pid, observed = output.get(timeout=2)
-    process.join(10)
-    assert process.exitcode == 0
-    assert child_pid != multiprocessing.current_process().pid
-    assert observed == expected
+        process.start()
+        child_pid, observed = output.get(timeout=2)
+        process.join(10)
+        assert process.exitcode == 0
+        assert child_pid != multiprocessing.current_process().pid
+        assert observed == expected
 
 
 def test_legacy_missing_additive_ids_projects_explicit_null_without_rewrite(

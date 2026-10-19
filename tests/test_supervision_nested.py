@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.multiprocess_lifetime import SpawnResources
+
 from unrest_harness import supervision as s
 from tests.test_supervision import STEERING_TARGETS, _prepare_role_checkpoint, _request
 
@@ -24,26 +26,27 @@ def _hold_snapshot(path, connection):
 
 @pytest.fixture
 def snapshot_owner():
-    children = []
+    with SpawnResources() as ownership:
+        children = []
 
-    def start(path):
-        context = multiprocessing.get_context("spawn")
-        parent, child = context.Pipe()
-        process = context.Process(target=_hold_snapshot, args=(str(path), child))
-        process.start()
-        child.close()
-        children.append((process, parent))
-        assert parent.poll(5) and parent.recv() == "owned"
-        return process, parent
+        def start(path):
+            context = ownership.context(multiprocessing.get_context("spawn"))
+            parent, child = context.Pipe()
+            process = context.Process(target=_hold_snapshot, args=(str(path), child))
+            process.start()
+            child.close()
+            children.append((process, parent))
+            assert parent.poll(5) and parent.recv() == "owned"
+            return process, parent
 
-    yield start
-    for process, connection in children:
-        if process.is_alive():
-            process.kill()
-        process.join(5)
-        assert not process.is_alive()
-        connection.close()
-        process.close()
+        yield start
+        for process, connection in children:
+            if process.is_alive():
+                process.kill()
+            process.join(5)
+            assert not process.is_alive()
+            connection.close()
+            process.close()
 
 
 def _released(store, binding):
