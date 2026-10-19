@@ -131,6 +131,8 @@ jobs:
             ${{ runner.temp }}/primary-lint/safe-provenance.json
             ${{ runner.temp }}/primary-types/evidence.cms
             ${{ runner.temp }}/primary-types/safe-provenance.json
+            ${{ runner.temp }}/primary-source/evidence.cms
+            ${{ runner.temp }}/primary-source/safe-provenance.json
             ${{ runner.temp }}/primary-full/evidence.cms
             ${{ runner.temp }}/primary-full/safe-provenance.json
             ${{ runner.temp }}/primary-host-stage.json

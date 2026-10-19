@@ -1247,3 +1247,22 @@ Completion requires exactly one zero terminal wait with the same kernel birth;
 cleanup waits, inferred values, process leaders and unrelated ptrace errors never
 qualify. The generic SOURCE tracer, process-parent wait floor, deadlines, flags
 and all-process census remain unchanged.
+
+### Retain the original SOURCE failure evidence
+
+The custom CI shell writes the SOURCE phase to `primary-source`, separately
+from the success-only `primary-full` issuer output. The always-running phase
+upload must include `primary-source/evidence.cms` and
+`primary-source/safe-provenance.json`, together with the closed
+`primary-host-stage.json` status. This applies when SOURCE succeeds or fails,
+including failure before repository, package, or issuer steps can run. Retain
+the original ciphertext and its provenance; never upload raw output, keys, or
+private reports. Later issuance does not replace the original phase capture.
+
+A failed full run is ineligible for checkpoint reuse or a passing certificate.
+An executor exit alone does not identify a test, guard, transport, or wait
+failure. Authenticate the run/head, original server artifact and CMS records
+before inspecting the named private collection, JUnit, summary, provenance,
+guard, and original-parent wait evidence. Missing records remain missing;
+prerequisite execution cannot reconstruct them. A completed runner cannot
+recover evidence omitted from its upload.
