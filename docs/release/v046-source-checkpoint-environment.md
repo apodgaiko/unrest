@@ -1202,3 +1202,10 @@ The image-only public wheel preparer runs with explicit `-I -B`. Isolated mode
 ignores `PYTHONDONTWRITEBYTECODE`; omitting `-B` lets support imports mutate the
 already sealed dependency closure. The original complete dependency inventory
 continues to reject every added cache file.
+
+The original installed consumer passes `--python .wheel-venv/bin/python` to UV.
+Its interpreter query retains that exact relative spelling. Package admission
+resolves only that declared interpreter against the observed `/source` cwd,
+checks the current UV parent, renderer, environment and pinned interpreter bytes,
+and preserves the original argv in the startup profile. Foreign paths and
+contexts continue to refuse; the generic SOURCE authority stays unchanged.

@@ -7,7 +7,8 @@ from pathlib import Path
 
 from primary_authority import Authority, digest
 from primary_custody import INSTALLED, CHECKSUM, WHEEL, SDIST
-from primary_policy import PYTHON, UV, console
+from primary_policy import PYTHON, UV, console, command_environment
+from producer_profile import query_package
 from producer_inputs import SOURCE_UV_ELF_SHA256
 from finite.linux_identity import identity
 
@@ -126,6 +127,24 @@ class PackageShellAuthority(Authority):
         if (context is None or context['role'] != 'uv' or len(vector) != 5
                 or vector[1:4] != ['-I', '-B', '-c']):
             return self.refuse('package_shell_unknown_exec')
+        if path == vector[0] == '.wheel-venv/bin/python':
+            # UV preserves the original --python spelling in this interpreter
+            # query. Resolve that one relative input against its observed cwd;
+            # retain the actual argv unchanged in the consumed startup profile.
+            selected = Path('/source/.wheel-venv/bin/python')
+            if (cwd != '/source' or context['command'] != self.operations[1]
+                    or context['python_calls'] >= 16
+                    or identity(parent) != context['identity']
+                    or selected.resolve() != Path(PYTHON) or digest(selected) != digest(PYTHON)
+                    or not command_environment(environment, self.environment, source=True)):
+                return self.refuse('package_shell_relative_query_binding')
+            try:
+                query_package(vector[4], {'cache': '/work/cache'})
+            except Exception:
+                return self.refuse('package_shell_relative_query_renderer')
+            context['python_calls'] += 1
+            return self.profile(pid, parent, vector, environment, cwd, 'cpython.run_command',
+                                vector[4] + '\n', [1, 0, 1], 'query')
         return super().resolve(trace, pid, path, vector, environment, cwd)
 
     def python(self, pid, parent, path, vector, environment, cwd, *, lifecycle=False, trace=None):

@@ -118,3 +118,50 @@ def test_installed_public_metadata_contains_hashes_instead_of_private_fixture_id
     result = probe.check_installed(data)
     assert 'private-fixture-' not in json.dumps(result)
     assert result['original_return_sha256'] == hashlib.sha256(canonical(proof)).hexdigest()
+
+
+@pytest.mark.parametrize('change', ['exact', 'foreign-path', 'foreign-cwd', 'foreign-parent',
+                                  'foreign-image', 'foreign-program', 'foreign-environment'])
+def test_relative_installed_uv_query_retains_actual_argv(monkeypatch, change):
+    module = shell()
+    module.PYTHON = '/usr/local/bin/python-primary-audit'
+    module.digest = lambda path: 'a' * 64
+    module.command_environment = lambda actual, initial, source: actual == initial
+    module.query_package = lambda body, common: None if body == 'exact-query' else (_ for _ in ()).throw(ValueError())
+    module.identity = lambda pid: {'pid': pid, 'ppid': 7}
+    class Image:
+        def resolve(self):
+            return Path('/foreign' if change == 'foreign-image' else module.PYTHON)
+    module.Path = lambda name: Image() if name == '/source/.wheel-venv/bin/python' else Path(name)
+    owner = module.PackageShellAuthority.__new__(module.PackageShellAuthority)
+    owner.operations = module.operations(INSTALLED)
+    owner.operation_index = 2
+    owner.pending_env = None
+    birth = {'pid': 12, 'ppid': 7}
+    owner.contexts = {12: {'role': 'uv', 'command': owner.operations[1], 'python_calls': 0, 'identity': birth}}
+    owner.environment, owner.denials = {'PATH': '/fixed'}, []
+    observed = []
+    owner.profile = lambda *args, **kwargs: observed.append(args) or True
+    trace = SimpleNamespace(identities={15: {'ppid': 12}})
+    vector = ['.wheel-venv/bin/python', '-I', '-B', '-c', 'exact-query']
+    cwd, environment = '/source', owner.environment
+    if change == 'foreign-path':
+        vector[0] = 'foreign/bin/python'
+    elif change == 'foreign-cwd':
+        cwd = '/foreign'
+    elif change == 'foreign-parent':
+        owner.contexts[12]['identity'] = {'pid': 99}
+    elif change == 'foreign-program':
+        vector[-1] = 'foreign-query'
+    elif change == 'foreign-environment':
+        environment = {'PATH': '/foreign'}
+    if change == 'foreign-path':
+        with pytest.raises(AssertionError, match='unknown execution|unknown execution reached|unknown'):
+            owner.resolve(trace, 15, vector[0], vector, environment, cwd)
+    else:
+        assert owner.resolve(trace, 15, vector[0], vector, environment, cwd) is (change == 'exact')
+    if change == 'exact':
+        assert observed[0][2] is vector
+        assert observed[0][2][0] == '.wheel-venv/bin/python'
+    else:
+        assert not observed
