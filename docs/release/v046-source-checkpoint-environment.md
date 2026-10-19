@@ -1386,3 +1386,9 @@ CI also retains the readiness capsule's encrypted evidence and safe provenance i
 the existing always-upload phase artifact, including when control-plane preparation
 fails before any source testcase. Missing historical preparation bytes stay missing;
 retaining a later failure never establishes an earlier failure's cause.
+
+The later readiness control suite enforces the original runtime guard bytes and
+executable AST. Multiprocessing admission must attach through the existing endpoint
+extension and authority specialization while preserving those original files. A
+changed extension needs fresh finite Linux custody proof before full execution;
+local structural checks and earlier hook placement do not establish that proof.

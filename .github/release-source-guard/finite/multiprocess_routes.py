@@ -676,3 +676,4 @@ def install(state, append, refuse, ready, bootstrap, inherited_environment):
         return pid
 
     util.spawnv_passfds = spawnv
+    return spawnv

@@ -1682,12 +1682,6 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
     os.killpg = killpg
     os.waitpid = waitpid
     os._exit = abrupt
-    multiprocess_path = Path(state['guard']).with_name('multiprocess_routes.py')
-    if str(multiprocess_path) in state['direct_support']['files']:
-        multiprocess_support = checked_source(
-            multiprocess_path, state['direct_support']['files'][str(multiprocess_path)])
-        multiprocess_support['install'](
-            state, append, refuse, require_ready, bootstrap, inherited_environment)
     atexit.register(lambda: append({"kind": "finished", "token": token}))
     record = {
         "kind": "ready",

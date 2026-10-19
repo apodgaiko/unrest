@@ -3,12 +3,14 @@ name: v0.4.6 owned multiprocessing controls
 on:
   push:
     branches:
-      - 'codex/source-guard-owned-multiprocess-20261019-01'
-      - 'codex/source-guard-owned-multiprocess-20261019-02'
-      - 'codex/source-guard-owned-multiprocess-20261019-03'
-      - 'codex/source-guard-owned-multiprocess-20261019-04'
-      - 'codex/source-guard-owned-multiprocess-20261019-05'
-      - 'codex/source-guard-owned-multiprocess-20261019-06'
+      - 'codex/source-guard-mp-extension-20261019-01'
+      - 'codex/source-guard-mp-extension-20261019-02'
+      - 'codex/source-guard-mp-extension-20261019-03'
+      - 'codex/source-guard-mp-extension-20261019-04'
+      - 'codex/source-guard-mp-extension-20261019-05'
+      - 'codex/source-guard-mp-extension-20261019-06'
+      - 'codex/source-guard-mp-extension-20261019-07'
+      - 'codex/source-guard-mp-extension-20261019-08'
 
 permissions:
   contents: read

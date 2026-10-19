@@ -324,6 +324,18 @@ def attach(guard):
     def install(*args, **kwargs):
         STATE["ready"] = False
         original_install(*args, **kwargs)
+        multiprocess_path = Path(guard._STATE['guard']).with_name('multiprocess_routes.py')
+        if str(multiprocess_path) in guard._STATE['direct_support']['files']:
+            if '_owned_multiprocess_hook' not in guard._STATE:
+                support = guard.checked_source(multiprocess_path,
+                    guard._STATE['direct_support']['files'][str(multiprocess_path)])
+                guard._STATE['_owned_multiprocess_hook'] = support['install'](
+                    guard._STATE, guard.append, guard.refuse, guard.require_ready,
+                    guard.bootstrap, guard.inherited_environment)
+            else:
+                from multiprocessing import util
+                if util.spawnv_passfds is not guard._STATE['_owned_multiprocess_hook']:
+                    guard.refuse('multiprocess_installed_hook_drift')
         guard.append({"kind": "descriptor_closure", **STATE["descriptor_closure"]})
         STATE["token"] = guard._STATE["token"]
         answer = request("ready")

@@ -15,7 +15,7 @@ from linux_trace import OwnedTrace, install_observation_filter
 from primary_policy import environment, plan, sha, primary_root_allocation
 from primary_authority import Authority
 from primary_source_inputs import test_plan, decode
-from primary_dependency_authority import DependencySourceAuthority as SourceAuthority
+from owned_multiprocess_authority import DependencySourceAuthority as SourceAuthority
 import producer_setup
 import dependency_closure
 import primary_entry_build

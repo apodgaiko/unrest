@@ -266,15 +266,6 @@ class SourceAuthority:
         additional descriptor must actually be absent at PTRACE_EVENT_EXEC.
         The original tracer retains the syscall return and all parent waits.
         """
-        if self.bound.get(pid, {}).get('registration', {}).get('class') in {
-                'source-multiprocess-tracker', 'source-multiprocess-spawn'}:
-            from multiprocess_custody import exec_custody
-            try:
-                return exec_custody(self, trace, pid, vector, environment, cwd)
-            except BaseException:
-                trace.poison.append('primary_source_multiprocess_custody')
-                self.supervisor.poison('primary_source_multiprocess_custody')
-                raise
         try:
             expected = self.pipe_binding(pid)
             if expected is None:

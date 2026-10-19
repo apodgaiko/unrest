@@ -218,7 +218,7 @@ def run(root, scenario):
         )
     )
     sys.path.insert(0, str(SUPPORT))
-    from primary_source_authority import SourceAuthority
+    from owned_multiprocess_authority import SourceAuthority
 
     custody = SourceAuthority(path, sha(path), {}, {})
     custody.supervisor = supervisor
