@@ -52,3 +52,11 @@ exception code and hashed code location. A failed source-input subprocess suppli
 a bounded named child error record before its parent refuses. Exception bodies,
 paths and raw child stderr never enter public status metadata; an unrecognized
 exception retains the code `unknown`. These diagnostics do not grant admission.
+
+The CI host control plane disables implicit Python bytecode generation before
+its first import. Host composition controls import the same finite support later
+mounted read-only into source capsules; generating a host cache would make that
+capsule correctly refuse `source_only_support_cache_poison`. This preparation
+setting prevents that contamination. Existing cache files still refuse; no cache
+is deleted or admitted, and source interpreter flags and payload environment
+bindings retain their original checks.

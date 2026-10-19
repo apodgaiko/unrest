@@ -13,6 +13,9 @@ permissions:
   contents: read
   actions: read
 
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
 jobs:
   primary:
     name: primary source and package gate (py3.13)

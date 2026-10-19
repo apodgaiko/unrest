@@ -62,3 +62,27 @@ def test_closed_diagnostic_never_serializes_exception_body(error, code):
     assert len(value['location_sha256']) == 64
     assert b'private/' not in json.dumps(value).encode()
     assert value['errno'] == (13 if isinstance(error, PermissionError) else None)
+
+
+@pytest.mark.parametrize('prevent_bytecode', [False, True])
+def test_host_control_import_cannot_poison_readonly_source_support(tmp_path, prevent_bytecode):
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+    assert '\nenv:\n  PYTHONDONTWRITEBYTECODE: "1"\n' in workflow
+    support = tmp_path / 'support'
+    shutil.copytree(SUPPORT, support, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+    environment = {key: value for key, value in os.environ.items()
+                   if key not in {'PYTHONDONTWRITEBYTECODE', 'PYTHONPYCACHEPREFIX'}}
+    if prevent_bytecode:
+        environment['PYTHONDONTWRITEBYTECODE'] = '1'
+    result = subprocess.run(
+        [sys.executable, '-c', 'import sys; sys.path.insert(0, sys.argv[1]); '
+         'import primary_dependency_authority', str(support)],
+        env=environment, capture_output=True, check=False, timeout=30)
+    assert result.returncode == 0, result.stderr
+    caches = list((support / 'finite/__pycache__').glob('linux_identity.*.pyc'))
+    assert bool(caches) is not prevent_bytecode
