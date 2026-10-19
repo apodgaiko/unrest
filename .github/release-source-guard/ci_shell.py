@@ -448,13 +448,6 @@ def main():
 
 
 def retained_main():
-    try:
-        return _retained_main()
-    finally:
-        source_root.release()
-
-
-def _retained_main():
     """The acquiring host retains preparation failures before returning.
 
     ACTIVE_ROOT is assigned only after exclusive directory acquisition. A
@@ -481,6 +474,8 @@ def _retained_main():
         if not (root / 'evidence.cms').is_file():
             raise RuntimeError('primary_encryption_failed')
         return 125
+    finally:
+        source_root.release()
 
 
 if __name__ == '__main__':
