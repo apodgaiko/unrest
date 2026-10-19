@@ -20,7 +20,12 @@ def main():
     # Both existing producer operations and the original fixture registrations
     # remain enabled in a whole-source process. No new executable registration.
     result = subprocess.run([sys.executable, '-I', '/guard/prepare_source.py', nonce,
-                             'producer-contract'], capture_output=True, check=True)
+                             'producer-contract'], capture_output=True, check=False)
+    if result.returncode:
+        # Child facts are private stdout for the acquiring host, never public
+        # metadata. Preserve them before replacing the subprocess exception.
+        sys.stdout.buffer.write(result.stderr)
+        raise SystemExit(125)
     prepared = json.loads(result.stdout)
     manifest = prepared['manifest']
     registry = ast.literal_eval(ast.parse(prepared['registry']).body[1].value)

@@ -53,6 +53,25 @@ def admit_clock(manifest):
     CLOCK_READER = namespace['read']
 
 
+def admit_ownership_document(manifest):
+    # The acquisition repair changed this canonical document with its two
+    # owners. Retain the old oracle; admit only that exact reviewed composition.
+    name = 'docs/architecture/experimental-lease.md'
+    if manifest['product_pins'].get(name) != '39850b53b447a0dd6b9be5e37ec7cfea4deabc0571a929ee8f6a91acd8484d14':
+        raise RuntimeError('ownership_document_preimage')
+    pin = '43a6baeaf6e971be1ce879c81626f206df68ad709add71eea2471bfd8ac5462f'
+    if hashlib.sha256(CLOCK_READER(ROOT, name)).hexdigest() != pin:
+        raise RuntimeError('ownership_document_postimage')
+    for owner, expected in {
+        'src/unrest_harness/experimental_lease.py': 'b5989f7e1f151400ba6bba01d2e7984430657bc2b072cfb193deb86739f8cecb',
+        'src/unrest_harness/experimental_session.py': '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2',
+    }.items():
+        if (manifest['product_pins'].get(owner) != expected
+                or hashlib.sha256(CLOCK_READER(ROOT, owner)).hexdigest() != expected):
+            raise RuntimeError('ownership_document_engine')
+    manifest['product_pins'][name] = pin
+
+
 def main():
     nonce, selection = sys.argv[1:]
     case = CASES[selection]
@@ -66,6 +85,7 @@ def main():
     release = {'__name__': 'release_source_inputs'}
     exec(compile(release_body, '/guard/release_source_inputs.py', 'exec', dont_inherit=True), release)
     release['admit'](manifest, ROOT, CLOCK_READER)
+    admit_ownership_document(manifest)
     for name, pin in manifest['product_pins'].items():
         observed = sha(ROOT / name)
         if observed != pin:
@@ -136,4 +156,10 @@ def main():
     print(json.dumps({'manifest': manifest, 'registry': registry_text}, sort_keys=True))
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except BaseException as error:
+        from runpy import run_path
+        failure = run_path('/guard/preparation_diagnostics.py')['failure']
+        print(json.dumps(failure(error), sort_keys=True), file=sys.stderr)
+        raise SystemExit(125) from None

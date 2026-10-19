@@ -41,3 +41,14 @@ A supplementary preflight result is not release certification. The frozen source
 command remains `env -u CODEX_PATH uv run pytest -q`, unexcluded on Python 3.13.
 No new native/provider campaign, missing-wait exception, generic Python admission,
 cap increase or private plaintext upload follows from this workflow.
+
+Source preparation admits the exact acquisition-ownership document together with
+its pinned broker/session owners before scanning the original baseline. An
+unrelated document or engine change still refuses. The historical snapshot-stage
+failure has no exception attribution and remains UNKNOWN.
+
+The acquiring host encrypts a named preparation-status record with a closed
+exception code and hashed code location. A failed source-input subprocess supplies
+a bounded named child error record before its parent refuses. Exception bodies,
+paths and raw child stderr never enter public status metadata; an unrecognized
+exception retains the code `unknown`. These diagnostics do not grant admission.

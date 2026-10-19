@@ -171,6 +171,7 @@ jobs:
         run: >
           uv run --locked pytest -q
           .github/release-source-guard/test_guard_integration.py
+          .github/release-source-guard/test_preparation_boundary.py
           .github/release-source-guard/test_owned_multiprocess_authority.py
           .github/release-source-guard/test_phase_retention.py
           .github/release-source-guard/test_full_bootstrap.py

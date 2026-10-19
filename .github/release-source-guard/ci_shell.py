@@ -80,10 +80,11 @@ STAGE = 'startup'
 SCRIPT_PIN = None
 SCRIPT_SIZE = None
 ACTIVE_ROOT = None
+CHILD_PREPARATION_FAILURE = None
 
 
 def prepare_capsule(spec, script, expected, source_input, test_mode, package_test):
-    global STAGE, ACTIVE_ROOT
+    global STAGE, ACTIVE_ROOT, CHILD_PREPARATION_FAILURE
     kind = KINDS[spec['duty']]
     root = Path(os.environ['RUNNER_TEMP']) / kind
     root.mkdir(mode=0o700)
@@ -146,6 +147,7 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
         (inputs / 'source-input.json').write_bytes(canonical(source_input))
         (inputs / 'source-input.json').chmod(0o600)
     if spec.get('source_mode') or spec.get('package_mode'):
+        STAGE = 'source-input-preparation'
         prepare = ['docker', 'run', '--rm', '--network=none', '--read-only', '--cap-drop=ALL',
                    '--security-opt=no-new-privileges', '--user=20001:20001',
                    '--mount=type=bind,src=' + str(SUPPORT) + ',dst=/guard,readonly',
@@ -155,6 +157,10 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
         with log.open('ab') as errors:
             prepared = subprocess.run(prepare, stdout=subprocess.PIPE, stderr=errors, check=False)
         if prepared.returncode:
+            # Retain the named bounded child record before the parent refuses.
+            if len(prepared.stdout) <= 8192:
+                (raw / 'source-preparation-error.json').write_bytes(prepared.stdout)
+                CHILD_PREPARATION_FAILURE = hashlib.sha256(prepared.stdout).hexdigest()
             raise RuntimeError('primary_source_prepare')
         value = json.loads(prepared.stdout)
         (inputs / 'source.json').write_bytes(canonical(value['manifest']))
@@ -422,7 +428,7 @@ def retained_main():
     """
     try:
         return main()
-    except BaseException:
+    except BaseException as error:
         root = ACTIVE_ROOT
         if root is None:
             raise
@@ -433,7 +439,10 @@ def retained_main():
                   'stage': STAGE, 'exit_code': 125, 'script_sha256': SCRIPT_PIN,
                   'script_size': SCRIPT_SIZE, 'source_checkpoint_ready': False,
                   'selected_carrier': None}
-        (raw / 'preparation-status.json').write_bytes(canonical(record))
+        from preparation_diagnostics import failure
+        private = {**record, 'failure': failure(error),
+                   'child_failure_sha256': CHILD_PREPARATION_FAILURE}
+        (raw / 'preparation-status.json').write_bytes(canonical(private))
         archive = root / 'raw.tar.gz'
         with tarfile.open(archive, 'x:gz') as stream:
             for path in sorted(raw.iterdir()):
