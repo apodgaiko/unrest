@@ -63,6 +63,11 @@ def local_session(tmp_path, transport):
     return SyntheticSession(tmp_path / 'owner', candidate, ('a',), adapter=NATIVE,
                             fixture=BACKEND, policy=policy, transport=transport)
 
+@pytest.fixture(autouse=True)
+def _owned_session_lifetime(request):
+    from tests.session_lifetime import own_session_fixture
+    own_session_fixture(request, 'local_session')
+
 
 @pytest.mark.parametrize('attack', ['noncontrolled', 'package', 'fixture', 'interpreter', 'forged'])
 def test_selection_refuses_before_root(local_session, tmp_path, transport, attack):

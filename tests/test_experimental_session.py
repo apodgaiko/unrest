@@ -31,6 +31,11 @@ def session(tmp_path, request):
                             fixture=FIXTURE, policy=policy,
                             transport=None if native else controlled_transport())
 
+@pytest.fixture(autouse=True)
+def _owned_session_lifetime(request):
+    from tests.session_lifetime import own_session_fixture
+    own_session_fixture(request, 'session')
+
 
 async def test_installed_adapter_two_prompts_and_http_completion(session):
     await session.start()

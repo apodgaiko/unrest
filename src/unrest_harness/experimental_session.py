@@ -266,8 +266,6 @@ class _SessionOwner:
         self.launcher.write_bytes(('#!' + sys.executable + '\n').encode() + relay)
         self.launcher.chmod(0o500)
         self.launcher_digest = hashlib.sha256(self.launcher.read_bytes()).hexdigest()
-        self.broker = TurnBroker(candidate, root / 'completions')
-        self.ledger = ledger if ledger is not None else PilotLedger(root / 'journal.jsonl')
         self.roles: dict[str, _Role] = {}
         self.backends: dict[str, _Backend] = {}
         self._lock = asyncio.Lock()
@@ -285,6 +283,13 @@ class _SessionOwner:
         self.quarantined = False
         self._closing = False
         self._fault = asyncio.Event()
+        self._unstarted_closed = False
+        self.broker = TurnBroker(candidate, root / 'completions')
+        try:
+            self.ledger = ledger if ledger is not None else PilotLedger(root / 'journal.jsonl')
+        except BaseException:
+            self.broker.close()
+            raise
 
     def _revoke(self, *, quarantine: bool) -> None:
         # Synchronous: authority is gone before cancellation or process teardown.
@@ -812,6 +817,32 @@ class _SessionOwner:
     def _launch_finished(self, task: asyncio.Task[Any]) -> None:
         if not task.cancelled():
             task.exception()  # Observe late failures; retain the task and its ownership.
+
+    def close_unstarted(self) -> None:
+        """Release constructor resources without an event loop, before start only.
+
+        A started owner must finish its async close and genuine child waits first.
+        Borrowed campaign ledgers remain entirely with their controller.
+        """
+        if self._unstarted_closed or self._close_task is not None and self._close_task.done():
+            return
+        if (self._close_task is not None or self._server_task is not None
+                or self._listener is not None or self._launches or self.roles or self.backends):
+            raise LeaseRefused('session_requires_async_close')
+        self._unstarted_closed = True
+        try:
+            if not self.stopped:
+                self.stopped = True
+                self._closing = True
+                self._record_stop('stop')
+                if self._owns_ledger:
+                    self.ledger.stop()
+        finally:
+            try:
+                self.broker.close()
+            finally:
+                if self._owns_ledger:
+                    self.ledger.close()
 
     async def close(self) -> None:
         try:

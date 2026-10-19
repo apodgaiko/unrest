@@ -609,3 +609,29 @@ and actual owned wait/exit proof; no blanket Python exemption is valid. Full-sui
 archive/extracted persistence, installed lifecycle, desktop and downstream release
 requirements remain unchanged. Strong OS isolation, unknown descendants and
 transient mutation detection retain their existing unverified limits.
+
+
+## Resource acquisition and session lifetime
+
+TurnBroker owns both directory descriptors. Its constructor releases every
+acquired descriptor if directory creation or either open fails. PilotLedger owns
+its exclusive journal descriptor and releases it when the initial durable append
+fails, preserving `journal_unavailable` and the journal bytes already written.
+Neither constructor removes existing records or restores authority after failure.
+Repeated close calls release each descriptor at most once.
+
+A session acquires its broker and then its ledger. A ledger acquisition failure
+rolls back the broker before propagating the original failure. A supplied campaign
+ledger is borrowed: session acquisition and unstarted finalization neither close
+nor halt it. `close_unstarted()` releases only constructor-owned resources without
+requiring an event loop. Once startup has acquired asynchronous resources, callers
+must await `close()`; its existing cancellation, child registration and numeric
+wait obligations precede descriptor release. A completed async close may be
+followed by repeated synchronous finalization safely.
+
+The controlled session fixtures retain their synchronous factory return values
+and explicit transport selection. A synchronous pytest finalizer protects the
+pre-body and event-loop-setup failure paths; the same pytest finalizer
+uses the original test runner to await close for started owners before the
+runner is released. Runner setup precedes session acquisition for async tests. Direct
+factory callers remain responsible for explicit finalization.

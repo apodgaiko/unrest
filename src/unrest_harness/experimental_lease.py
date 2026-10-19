@@ -88,7 +88,6 @@ class PilotLedger:
         self._clock = clock
         self._started = clock()
         self._lock = threading.RLock()
-        self._fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         self._episode: str | None = None
         self._episode_started = 0.0
         self._counts: dict[str, int] = {}
@@ -100,9 +99,14 @@ class PilotLedger:
         self._identities: set[tuple[str, int]] = set()
         self._leases: set[str] = set()
         self._sessions: set[str] = set()
-        self._append("campaign", {"provider": provider, "started": self._started,
-                                  "capacity": self.capacity, "turn_limit": 24,
-                                  "aggregate_seconds": 5400})
+        self._fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            self._append("campaign", {"provider": provider, "started": self._started,
+                                      "capacity": self.capacity, "turn_limit": 24,
+                                      "aggregate_seconds": 5400})
+        except BaseException:
+            self.close()
+            raise
 
     def claim_session(self) -> str:
         with self._lock:
@@ -327,8 +331,8 @@ class PilotLedger:
         with self._lock:
             self._halted = True
             if self._fd >= 0:
-                os.close(self._fd)
-                self._fd = -1
+                fd, self._fd = self._fd, -1
+                os.close(fd)
 
 
 class TurnBroker:
@@ -342,22 +346,24 @@ class TurnBroker:
     def __init__(self, root: Path, records: Path):
         self._lock = threading.RLock()
         self._root = root
-        self._root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         self._records = records
-        try:
-            records.mkdir(mode=0o700)  # Refuse restart instead of restoring capabilities.
-        except BaseException:
-            os.close(self._root_fd)
-            raise
-        self._record_fd = os.open(records, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        self._root_fd = -1
+        self._record_fd = -1
+        self._closed = False
         self._active: tuple[str, TurnIdentity, float] | None = None
         self._seen: set[tuple[str, int]] = set()
         self._generations: dict[str, TurnIdentity] = {}
         self._revoked: set[str] = set()
-        self._closed = False
         self._completions: dict[TurnIdentity, Completion] = {}
         self.quarantined = False
         self._expected: dict[str, str] | None = None
+        try:
+            self._root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            records.mkdir(mode=0o700)  # Existing records never restore capabilities.
+            self._record_fd = os.open(records, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except BaseException:
+            self.close()
+            raise
 
     @staticmethod
     def _manifest_digest(manifest: dict[str, str]) -> str:
@@ -581,9 +587,15 @@ class TurnBroker:
         with self._lock:
             self.park()
             if not self._closed:
-                os.close(self._root_fd)
-                os.close(self._record_fd)
                 self._closed = True
+                root_fd, self._root_fd = self._root_fd, -1
+                record_fd, self._record_fd = self._record_fd, -1
+                try:
+                    if record_fd >= 0:
+                        os.close(record_fd)
+                finally:
+                    if root_fd >= 0:
+                        os.close(root_fd)
 
 
 def correction_allowed(completion: Completion, expected: TurnIdentity) -> bool:
