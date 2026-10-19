@@ -149,8 +149,9 @@ def main(event, arguments):
         sys.modules[module.__name__] = module
         exec(compile(data, str(source), 'exec', dont_inherit=True), module.__dict__)
         return
-    if profile.get('source_role') in {'source-root', 'source-bootstrap', 'package-root'}:
-        source = Path('/guard/primary_package_entry.py' if profile['source_role'] == 'package-root'
+    if profile.get('source_role') in {'source-root', 'source-bootstrap', 'package-root', 'package-installed-root'}:
+        source = Path('/guard/primary_package_installed_entry.py' if profile['source_role'] == 'package-installed-root'
+                      else '/guard/primary_package_entry.py' if profile['source_role'] == 'package-root'
                       else '/guard/primary_source_entry.py')
         data = source.read_bytes()
         if hashlib.sha256(data).hexdigest() != profile['source_entry_sha256']:
@@ -186,6 +187,16 @@ def main(event, arguments):
             elif library.resolve().is_relative_to(site):
                 mirror = Path('/opt/primary-deps/lib/python3.13/site-packages') / library.relative_to(site)
                 if (not mirror.is_file() or hashlib.sha256(library.read_bytes()).digest()
+                        != hashlib.sha256(mirror.read_bytes()).digest()):
+                    os._exit(86)
+            elif (profile.get('installed_package_sha256') is not None
+                  and library.resolve() == library
+                  and library.is_relative_to('/source/.wheel-venv/lib/python3.13/site-packages')):
+                mirror = Path('/opt/primary-deps/lib/python3.13/site-packages') / library.relative_to(
+                    '/source/.wheel-venv/lib/python3.13/site-packages')
+                info = library.lstat()
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != 20000 or info.st_nlink != 1
+                        or not mirror.is_file() or hashlib.sha256(library.read_bytes()).digest()
                         != hashlib.sha256(mirror.read_bytes()).digest()):
                     os._exit(86)
             else:

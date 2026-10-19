@@ -182,7 +182,10 @@ def main():
                                           int(os.environ['GITHUB_RUN_ATTEMPT'])),
                       create=not custody_root.exists())
     STAGE = 'image'
-    image = build(root / 'image', control['synthetic_dependencies']['image_id'], SUPPORT, log)
+    if spec['duty'] == INSTALLED:
+        image = build(root / 'image', control['synthetic_dependencies']['image_id'], SUPPORT, log, package_wheels=True)
+    else:
+        image = build(root / 'image', control['synthetic_dependencies']['image_id'], SUPPORT, log)
     STAGE = 'snapshot'
     source = root / 'source'
     source.mkdir()
@@ -314,10 +317,14 @@ def main():
                 status, stage = 125, 'source_test_refused'
     package_test_proof = None
     if package_test and status == 0:
-        from primary_package_probe import check as check_build, check_archive
-        check_package = check_archive if spec['duty'] == ARCHIVE else check_build
+        from primary_package_probe import check as check_build, check_archive, check_installed, check_checksum
+        check_package = {ARCHIVE: check_archive, INSTALLED: check_installed, CHECKSUM: check_checksum}.get(spec['duty'], check_build)
         try:
             package_test_proof = check_package(records)
+            if spec['duty'] == CHECKSUM:
+                from checkpoint_issuer import package_result
+                package_test_proof['original_issuer_package_chain'] = package_result(
+                    {duty: custody.phase(duty) for duty in ORDER}, source_pins)
         except Exception:
             status, stage = 125, 'package_test_refused'
     metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,

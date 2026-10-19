@@ -85,6 +85,8 @@ def main():
         spec = test_plan(script, workflow, test_mode) if test_mode else plan(script, workflow, source_input)
     package_build = spec.get('package_mode') is not None
     package_archive = package_build and spec['duty'] == 'Check distribution archives'
+    package_installed = package_build and spec['duty'] == 'Smoke-test installed wheel'
+    package_checksum = package_build and spec['duty'] == 'Generate and verify v0.4.6 build-local checksums'
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
     expected = json.loads(Path('/inputs/identity.json').read_bytes())
@@ -109,7 +111,9 @@ def main():
                    'source_profile_gate': profile_gate_build.verify(),
                    'source_metadata': native_metadata.verify(),
                    'source_producer_inputs': producer_inputs.verify()}
-    env = environment(source=bool(spec.get('source_mode')) or package_archive)
+    env = environment(source=bool(spec.get('source_mode')) or package_archive or package_installed)
+    if package_installed:
+        env = {**env, 'UV_FIND_LINKS': '/opt/primary-installed-wheels'}
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
     start_read, start_write = os.pipe2(os.O_CLOEXEC)
@@ -162,7 +166,10 @@ def main():
         raise RuntimeError('primary_child_fence')
     os.close(ready_read)
     STAGE = 'authority'
-    if package_archive:
+    if package_installed or package_checksum:
+        from primary_package_shell import PackageShellAuthority
+        authority = PackageShellAuthority(spec, child, env)
+    elif package_archive:
         from primary_package_authority import PackageArchivePrimaryAuthority
         authority = PackageArchivePrimaryAuthority(spec, child, env)
     else:
@@ -179,11 +186,14 @@ def main():
         authority.records.append({'kind': 'primary_package_input_consumption', 'pid': child,
                                   'identity': process_identity(child), **consumption})
     source = None
-    if spec.get('source_mode') or package_build:
+    if spec.get('source_mode') or package_build and not package_checksum:
         initial_path = Path('/inputs/source.json')
         initial = json.loads(initial_path.read_bytes())
         manifest_path, pin, common = producer_setup.prepare(initial, sha(initial_path.read_bytes()))
-        if package_archive:
+        if package_installed:
+            from primary_package_installed import InstalledSession
+            source = InstalledSession(manifest_path, pin, common, authority.contexts)
+        elif package_archive:
             from primary_package_archive import PackageArchiveAuthority
             source = PackageArchiveAuthority(manifest_path, pin, common, authority.contexts)
         elif package_build:
@@ -192,7 +202,7 @@ def main():
         else:
             source = SourceAuthority(manifest_path, pin, common, authority.contexts)
         authority.source, authority.output_fd = source, read
-        if package_build and not package_archive:
+        if package_build and spec['duty'] == 'Build wheel and source distribution':
             source.initialize(authority, child, read)
     os.set_blocking(read, False)
     output = bytearray()
@@ -270,19 +280,26 @@ def main():
                    'source_checkpoint_ready': False, 'selected_carrier': None})
     if source is not None:
         result.update(source.finish())
+    if package_checksum:
+        result.update(guard_poison=bool(result['poison'] or authority.denials), receipt_ledger_poison=[])
     records = {'source-output.log': bytes(output)}
     if package_build and spec['duty'] == 'Build wheel and source distribution' and getattr(source.producers, 'package_cache_refusal', None) is not None:
         records['package-proof.json'] = json.dumps(source.producers.package_cache_refusal, sort_keys=True, separators=(',', ':')).encode()
     if package_build and status_guard_success(result):
         try:
-            source.require_complete(trace)
+            if package_checksum:
+                authority.require_complete(trace)
+            else:
+                source.require_complete(trace)
+            if package_installed:
+                authority.require_complete(trace)
             from primary_outputs import export
             if spec['duty'] == 'Build wheel and source distribution':
                 from primary_package_exports import export as export_build
                 records['package-output.json'] = export_build(source, trace, result)
             else:
                 records['package-output.json'] = export(spec['duty'])
-            if package_archive:
+            if package_archive or package_installed:
                 records['package-proof.json'] = json.dumps(source.package_proof, sort_keys=True, separators=(',', ':')).encode()
         except BaseException as error:
             failure = 'package_output_refused'

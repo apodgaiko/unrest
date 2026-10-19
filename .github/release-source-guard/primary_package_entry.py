@@ -37,7 +37,10 @@ def activate(profile, event, arguments):
     sys._finite_source_bootstrap_gate = {'active': True}
     guard = load('runtime_guard', manifest['guard'], manifest['guard_sha256'])
     endpoint.attach(guard)
-    guard.install(path, profile['manifest_sha256'])
+    if manifest['source_case'] not in {'PRIMARY-package-TEST', 'PRIMARY-package-FULL'}:
+        os._exit(86)
+    guard.install(path, profile['manifest_sha256'], command_class='source-checker',
+                  case=manifest['source_case'])
     guard.require_ready('root')
 
     def finish():

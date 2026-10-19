@@ -33,6 +33,54 @@ jobs:
       - name: TEST original PRIMARY archive consumer
         run: uv run python tools/check_distribution.py dist
         shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
+      - name: TEST original PRIMARY installed consumer
+        run: |
+          uv venv --clear .wheel-venv
+          uv pip install --python .wheel-venv/bin/python dist/*.whl
+          cd "$(mktemp -d)"
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest" measure-baseline --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness --help
+          "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -c "from unrest_harness.config import HarnessConfig; assert HarnessConfig.discover().capability_policy.schema_version == 1"
+          env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CODEX_API_KEY -u GLM_API_KEY -u OPENAI_API_KEY -u ZAI_API_KEY "$GITHUB_WORKSPACE/.wheel-venv/bin/python" -m unrest_harness.installed_wheel_check
+          set +e
+          output="$(UNREST_CAPABILITY_PROFILE=unsupported "$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server" --mode orchestrator 2>&1)"
+          status=$?
+          set -e
+          test "$status" -ne 0
+          test "$output" = "unrest-server: startup configuration rejected"
+        shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
+      - name: Upload encrypted TEST package installed evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-primary-package-installed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-package-installed/evidence.cms
+            ${{ runner.temp }}/primary-package-installed/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: TEST original PRIMARY checksum consumer
+        run: |
+          test -f dist/unrest_harness-0.4.6-py3-none-any.whl
+          test -f dist/unrest_harness-0.4.6.tar.gz
+          cd dist
+          sha256sum \
+            unrest_harness-0.4.6-py3-none-any.whl \
+            unrest_harness-0.4.6.tar.gz > SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+        shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
+      - name: Upload encrypted TEST package checksum evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-primary-package-checksum-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-package-checksum/evidence.cms
+            ${{ runner.temp }}/primary-package-checksum/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload encrypted TEST package archive evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2

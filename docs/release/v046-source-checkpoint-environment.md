@@ -1156,3 +1156,22 @@ Only the versioned wheel and sdist enter custody. The metadata remains in the
 producer root and its identity/hash remains in evidence. Unexpected members,
 links, owners, modes or metadata bytes refuse; the generic strict exporter is
 unchanged.
+
+Package archive entry passes its current bound case and `source-checker` class
+into the unchanged finite guard. A missing case previously reached a cohort
+selector's string predicate as `None`; the package adapter must supply its own
+closed case rather than changing that selector or borrowing a pytest case.
+
+The installed and checksum TEST paths execute literal copies of the original
+PRIMARY scripts. Their native authority admits only each current script's finite
+ordered operations, current kernel owners, exact images and environments.
+Installed Python/console bodies additionally consume the complete current wheel
+package bytes. Native extension imports must match the immutable dependency
+mirror. A hash/size-verified public wheelhouse from the frozen lock is prepared
+in the installed image; payload execution stays offline and has no index.
+The original installed lifecycle returns through an authenticated observer; a
+separate owned fixture verifies corrupt-state refusal and restoration. The
+original unsupported-profile shell assertion remains intact. Checksums consume
+the same archives, and the original issuer's package reducer consumes all four
+current custody phases. These TEST records remain ineligible for a release
+certificate. Full producers still require final readiness and frozen inputs.

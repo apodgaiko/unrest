@@ -74,3 +74,47 @@ def check_archive(records):
             'input_descriptor_sha256': imports[0]['descriptor_sha256'],
             'original_return_sha256': sha(canonical(proof)), 'eligible_certificate': False,
             'source_checkpoint_ready': False, 'selected_carrier': None}
+
+
+def check_installed(records):
+    from checkpoint_issuer import observed_return
+    from primary_custody import INSTALLED
+    import base64
+    kernel = loads(records['kernel-source.json'])
+    if kernel['primary_plan'].get('package_mode') != 'TEST' or kernel['primary_plan']['duty'] != INSTALLED:
+        raise RuntimeError('primary_package_installed_test_identity')
+    kernel_success(records, kernel['actual_script_sha256'])
+    proof = loads(records['package-proof.json'])
+    observed_return({'records': {name: base64.b64encode(body).decode() for name, body in records.items()}}, proof)
+    corruption = [row for row in kernel['native_source_records']
+                  if row['kind'] == 'primary_package_installed_corruption']
+    if (kernel['guard_poison'] or kernel['receipt_ledger_poison'] or len(corruption) != 1
+            or not corruption[0]['corrupt_state_refused'] or not corruption[0]['original_bytes_restored']):
+        raise RuntimeError('primary_package_installed_corruption')
+    effects = proof['result']
+    if (type(effects) is not dict or set(effects) != {'attempts', 'mission_id', 'project_id',
+            'restart_resume', 'state', 'terminal_reviews'}
+            or type(effects['attempts']) is not int or effects['attempts'] != 2
+            or type(effects['terminal_reviews']) is not int or effects['terminal_reviews'] != 1
+            or effects['restart_resume'] is not True or effects['state'] != 'done'
+            or any(type(effects[key]) is not str or not effects[key] for key in ('mission_id', 'project_id'))):
+        raise RuntimeError('primary_package_installed_original_effects')
+    decode_outputs(records['package-output.json'], INSTALLED)
+    from primary_custody import canonical
+    return {'schema': 'unrest.v046.primary-installed-test-proof.v1', 'mode': 'TEST',
+            'original_return_sha256': sha(canonical(proof)), 'corruption_refused': True, 'eligible_certificate': False,
+            'source_checkpoint_ready': False, 'selected_carrier': None}
+
+
+def check_checksum(records):
+    from primary_custody import CHECKSUM
+    kernel = loads(records['kernel-source.json'])
+    if kernel['primary_plan'].get('package_mode') != 'TEST' or kernel['primary_plan']['duty'] != CHECKSUM:
+        raise RuntimeError('primary_package_checksum_test_identity')
+    kernel_success(records, kernel['actual_script_sha256'])
+    if kernel['guard_poison'] or kernel['receipt_ledger_poison']:
+        raise RuntimeError('primary_package_checksum_poison')
+    output = decode_outputs(records['package-output.json'], CHECKSUM)
+    return {'schema': 'unrest.v046.primary-checksum-test-proof.v1', 'mode': 'TEST',
+            'checksum_sha256': sha(output['SHA256SUMS']), 'eligible_certificate': False,
+            'source_checkpoint_ready': False, 'selected_carrier': None}

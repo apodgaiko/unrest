@@ -5,7 +5,7 @@ import subprocess
 import json
 
 
-def build(root, base, support, log):
+def build(root, base, support, log, *, package_wheels=False):
     if not base.startswith('sha256:') or len(base) != 71:
         raise RuntimeError('primary_base_image_identity')
     base_tag = 'primary-base:' + base.removeprefix('sha256:')
@@ -13,6 +13,11 @@ def build(root, base, support, log):
     root.mkdir()
     for name in ('primary_entry.c', 'primary_entry.py', 'primary_entry_build.py'):
         (root / name).write_bytes((support / name).read_bytes())
+    package_input = ''
+    if package_wheels:
+        (root / 'primary_package_wheels.py').write_bytes((support / 'primary_package_wheels.py').read_bytes())
+        package_input = ('COPY primary_package_wheels.py /bootstrap/primary_package_wheels.py\n'
+                         'RUN /opt/deps/bin/python -I /bootstrap/primary_package_wheels.py && rm -rf /bootstrap\n')
     (root / 'Dockerfile').write_text(
         'FROM ' + base_tag + '\n'
         'COPY primary_entry.c primary_entry.py /opt/source-guard/\n'
@@ -26,7 +31,7 @@ def build(root, base, support, log):
         '--python /opt/primary-deps/bin/python --no-index '
         '--find-links /opt/source-bootstrap/wheelhouse setuptools==84.0.0 '
         '&& rm -rf /opt/primary-cache/interpreter-v4\n'
-        'WORKDIR /\n')
+        + package_input + 'WORKDIR /\n')
     result = subprocess.run(['docker', 'build', '--tag', 'primary-script-environment', str(root)],
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
     with log.open('ab') as output:
