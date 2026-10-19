@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
+import os
+import stat
 from pathlib import Path
 import subprocess
 import urllib.request
@@ -17,7 +20,32 @@ UV_URL = (
 UV_SHA256 = "6507bbbcd788553ec4ad5a96fa19364dc0f58b023e31d79868773559a83ec181"
 
 
-def build(root: Path, repository: Path, log: Path) -> str:
+def copy_control_workflow(root: Path, repository: Path, expected: str | None,
+                          support: str | None) -> None:
+    """Copy the declared public data file without accepting aliases or stale bytes."""
+    import re
+    if any(not isinstance(pin, str) or re.fullmatch('[0-9a-f]{64}', pin) is None
+           for pin in (expected, support)):
+        raise RuntimeError('control_input_identity')
+    path = repository / '.github/workflows/v046-source-readiness.yml'
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > 131072:
+            raise RuntimeError('control_input_carrier')
+        body = os.read(fd, 131073)
+        if (os.fstat(fd) != before or path.lstat() != before
+                or hashlib.sha256(body).hexdigest() != expected):
+            raise RuntimeError('control_input_bytes')
+    finally:
+        os.close(fd)
+    (root / 'source-readiness-workflow.yml').write_bytes(body)
+    (root / 'control-input.json').write_text(json.dumps({
+        'readiness_workflow_sha256': expected, 'support_sha256': support}, sort_keys=True))
+
+
+def build(root: Path, repository: Path, log: Path, *, control_workflow: bool = False,
+          control_workflow_sha256: str | None = None, control_support_sha256: str | None = None) -> str:
     """Build only from public pinned bootstrap and exact project lock metadata."""
     root.mkdir()
     wheel = root / UV_URL.rsplit("/", 1)[1]
@@ -42,6 +70,11 @@ def build(root: Path, repository: Path, log: Path) -> str:
     producer = importlib.util.module_from_spec(producer_spec)
     producer_spec.loader.exec_module(producer)
     producer.prepare(root / 'producer-inputs')
+    workflow_input = ""
+    if control_workflow:
+        copy_control_workflow(root, repository, control_workflow_sha256, control_support_sha256)
+        workflow_input = ('COPY source-readiness-workflow.yml control-input.json /metadata/\n'
+                          'RUN chmod 0444 /metadata/source-readiness-workflow.yml /metadata/control-input.json\n')
     (root / "Dockerfile").write_text(
         "FROM " + BASE + "\n"
         "COPY " + wheel.name + " /bootstrap/\n"
@@ -75,7 +108,7 @@ def build(root: Path, repository: Path, log: Path) -> str:
         "RUN chmod 0444 /native/bin/node "
         "&& chmod 0555 /native/lib/node_modules/@agentclientprotocol/codex-acp/dist/index.js "
         "&& ln -s ../lib/node_modules/@agentclientprotocol/codex-acp/dist/index.js /native/bin/codex-acp\n"
-        "WORKDIR /\n"
+        + workflow_input + "WORKDIR /\n"
     )
     image = "source-locked-environment:" + uuid.uuid4().hex
     with log.open("ab") as output:

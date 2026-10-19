@@ -108,12 +108,20 @@ def main() -> int:
     if environment.BASE != BASE:
         raise RuntimeError("environment base identity drift")
     inputs = {"uv_bootstrap_sha256": environment.UV_SHA256,
-              "uv_lock_sha256": sha(REPOSITORY / "uv.lock")}
+              "uv_lock_sha256": sha(REPOSITORY / "uv.lock"),
+              'readiness_workflow_sha256': sha(REPOSITORY / '.github/workflows/v046-source-readiness.yml')}
+    public_workflow = subprocess.check_output([
+        'git', '-C', str(REPOSITORY), 'show',
+        direct_identity['head_sha'] + ':.github/workflows/v046-source-readiness.yml'])
+    if hashlib.sha256(public_workflow).hexdigest() != inputs['readiness_workflow_sha256']:
+        raise RuntimeError('control_workflow_public_head_mismatch')
     image = ""
     stage = "build"
     failure = None
     try:
-        image = environment.build(root / "build", REPOSITORY, log)
+        image = environment.build(root / "build", REPOSITORY, log, control_workflow=True,
+                                  control_workflow_sha256=inputs['readiness_workflow_sha256'],
+                                  control_support_sha256=direct_identity['support_sha256'])
         inputs["image_id"] = image
         exit_code = 0
     except Exception as error:

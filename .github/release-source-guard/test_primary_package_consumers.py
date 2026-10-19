@@ -37,7 +37,9 @@ def shell():
 @pytest.mark.parametrize('duty', [INSTALLED, CHECKSUM])
 def test_workflow_runs_literal_original_package_script(duty):
     registry = json.loads((ROOT / 'ci_commands.json').read_text())
-    workflow = yaml.safe_load((ROOT.parent / 'workflows/v046-source-readiness.yml').read_text())
+    workflow_path = (ROOT.parent / 'metadata/source-readiness-workflow.yml' if ROOT.name == 'guard'
+                     else ROOT.parent / 'workflows/v046-source-readiness.yml')
+    workflow = yaml.safe_load(workflow_path.read_text())
     steps = workflow['jobs']['compartment-controls']['steps']
     matches = [row for row in steps if row.get('run') == registry[duty]]
     assert len(matches) == 1

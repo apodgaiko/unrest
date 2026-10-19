@@ -113,3 +113,70 @@ def test_unknown_exception_class_does_not_escape_closed_enum():
     value = controller.prerequisite_status({}, 'capture', PrivateExceptionName('private'))
     assert value['exception_class'] == 'other'
     assert value['location_sha256'] is None
+
+
+@pytest.mark.parametrize('change', ['exact', 'missing', 'foreign', 'symlink', 'hardlink', 'unbound'])
+def test_control_workflow_data_custody(tmp_path, change):
+    import hashlib
+    import json
+    import environment
+    source = tmp_path / 'repository/.github/workflows/v046-source-readiness.yml'
+    source.parent.mkdir(parents=True)
+    public = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
+    if not public.exists():
+        public = Path('/metadata/source-readiness-workflow.yml')
+    body = public.read_bytes()
+    source.write_bytes(body)
+    pin = hashlib.sha256(body).hexdigest()
+    target = tmp_path / 'output'
+    target.mkdir()
+    if change == 'missing':
+        source.unlink()
+    elif change == 'foreign':
+        source.write_bytes(body + b'foreign')
+    elif change == 'symlink':
+        source.rename(source.with_suffix('.original'))
+        source.symlink_to(source.with_suffix('.original'))
+    elif change == 'hardlink':
+        source.with_suffix('.alias').hardlink_to(source)
+    elif change == 'unbound':
+        pin = None
+    if change != 'exact':
+        with pytest.raises((OSError, RuntimeError)):
+            environment.copy_control_workflow(target, tmp_path / 'repository', pin, 'a' * 64)
+        assert not list(target.iterdir())
+    else:
+        environment.copy_control_workflow(target, tmp_path / 'repository', pin, 'a' * 64)
+        assert (target / source.name.replace('v046-source-readiness', 'source-readiness-workflow')).read_bytes() == body
+        assert json.loads((target / 'control-input.json').read_bytes()) == {
+            'readiness_workflow_sha256': pin, 'support_sha256': 'a' * 64}
+
+
+@pytest.mark.parametrize('change', ['exact', 'missing', 'foreign-workflow', 'foreign-support', 'extra-field'])
+def test_control_image_namespace_binding(tmp_path, change):
+    import json
+    from compartment_probe import verify_control_input
+    from structured_evidence import canonical, digest
+    support = tmp_path / 'guard'
+    support.mkdir()
+    (support / 'definition.py').write_bytes(b'declared support')
+    metadata = tmp_path / 'metadata'
+    metadata.mkdir()
+    workflow = metadata / 'source-readiness-workflow.yml'
+    workflow.write_bytes(b'original public workflow')
+    value = {'readiness_workflow_sha256': digest(workflow.read_bytes()),
+             'support_sha256': digest(canonical({'definition.py': digest(b'declared support')}))}
+    if change == 'foreign-workflow':
+        workflow.write_bytes(b'foreign')
+    elif change == 'foreign-support':
+        (support / 'definition.py').write_bytes(b'foreign')
+    elif change == 'extra-field':
+        value['foreign'] = 'unbound'
+    elif change == 'missing':
+        workflow.unlink()
+    (metadata / 'control-input.json').write_text(json.dumps(value))
+    if change == 'exact':
+        assert verify_control_input(metadata, support) == value
+    else:
+        with pytest.raises((OSError, RuntimeError)):
+            verify_control_input(metadata, support)

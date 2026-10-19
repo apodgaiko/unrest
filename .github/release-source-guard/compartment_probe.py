@@ -135,6 +135,21 @@ def source_controls() -> None:
     raise SystemExit(result.returncode)
 
 
+def verify_control_input(metadata: Path, support: Path) -> dict:
+    from structured_evidence import canonical, digest
+    control_input = json.loads((metadata / 'control-input.json').read_bytes())
+    support_pins = {str(path.relative_to(support)): digest(path.read_bytes())
+                    for path in sorted(support.rglob('*'))
+                    if path.is_file() and path.suffix in {'.py', '.json', '.pem', '.c'}}
+    if (set(control_input) != {'readiness_workflow_sha256', 'support_sha256'}
+            or control_input['support_sha256'] != digest(canonical(support_pins))
+            or control_input['readiness_workflow_sha256'] != digest(
+                (metadata / 'source-readiness-workflow.yml').read_bytes())):
+        raise RuntimeError('control_image_input_mismatch')
+    return control_input
+
+
+
 def observer() -> None:
     assert os.getuid() == 0
     no_new_privileges()
@@ -174,6 +189,8 @@ def observer() -> None:
     finally:
         os.close(copied)
 
+
+    abi['control_input'] = verify_control_input(Path('/metadata'), Path('/guard'))
 
     read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)

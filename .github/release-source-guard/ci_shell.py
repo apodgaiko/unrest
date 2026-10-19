@@ -95,6 +95,8 @@ def main():
                 'refs/heads/codex/source-guard-structured-20261018-package-entry-cache-record-' + epoch
                 for epoch in ('01', '02')} | {
                 'refs/heads/codex/source-guard-structured-20261018-package-entry-cache-lineage-' + epoch
+                for epoch in ('01', '02', '03', '04', '05', '06')} | {
+                'refs/heads/codex/source-guard-structured-20261018-package-entry-control-input-' + epoch
                 for epoch in ('01', '02', '03', '04', '05', '06')}):
         raise RuntimeError('primary_package_test_workflow_identity')
     if len(sys.argv) == 4 and sys.argv[1] == '--source-test':

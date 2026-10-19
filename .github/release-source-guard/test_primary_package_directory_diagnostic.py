@@ -134,3 +134,41 @@ def test_exact_original_refusal_frame_projection(monkeypatch):
                                     SimpleNamespace(records=[]))
     assert result['directories'][0]['path'] == 'root/empty'
     assert result['authority_granted'] is False
+
+
+@pytest.mark.parametrize('epoch', ['01', '02', '03', '04', '05', '06'])
+def test_control_input_finite_family(epoch):
+    identity_check(execution('control-input-' + epoch))
+
+
+@pytest.mark.parametrize('epoch', ['00', '07', '1', '001', '01-extra', '../01', '', '06/main'])
+def test_control_input_evidence_refuses_malformed(epoch):
+    with pytest.raises(EvidenceRefused):
+        identity_check(execution('control-input-' + epoch))
+
+
+@pytest.mark.parametrize(('ref', 'workflow'), [
+    ('00', 'v0.4.6 source guard readiness'), ('07', 'v0.4.6 source guard readiness'),
+    ('1', 'v0.4.6 source guard readiness'), ('01-extra', 'v0.4.6 source guard readiness'),
+    ('01', 'other workflow'), ('06/main', 'v0.4.6 source guard readiness'),
+])
+def test_control_input_controller_refuses_before_effect(monkeypatch, ref, workflow):
+    import ci_shell
+    monkeypatch.setattr(ci_shell.sys, 'argv', ['ci_shell.py', '--package-test', '/absent-script'])
+    monkeypatch.setenv('GITHUB_WORKFLOW', workflow)
+    monkeypatch.setenv('GITHUB_REF', 'refs/heads/codex/source-guard-structured-20261018-package-entry-control-input-' + ref)
+    with pytest.raises(RuntimeError, match='primary_package_test_workflow_identity'):
+        ci_shell.main()
+
+
+@pytest.mark.parametrize('change', ['wrong-workflow', 'lookalike', 'wrong-repository'])
+def test_control_input_context(change):
+    value = execution('control-input-01')
+    if change == 'wrong-workflow':
+        value['workflow_ref'] = value['workflow_ref'].replace('v046-source-readiness.yml', 'ci.yml')
+    elif change == 'lookalike':
+        value['workflow_ref'] += '-lookalike'
+    else:
+        value['repository'] = 'foreign/unrest'
+    with pytest.raises(EvidenceRefused):
+        identity_check(value)

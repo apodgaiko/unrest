@@ -1175,3 +1175,19 @@ original unsupported-profile shell assertion remains intact. Checksums consume
 the same archives, and the original issuer's package reducer consumes all four
 current custody phases. These TEST records remain ineligible for a release
 certificate. Full producers still require final readiness and frozen inputs.
+
+The source-free control capsule mounts only `/guard`. Tests that compare the
+actual readiness workflow require an explicit public metadata input in the
+control image; repository-relative parent paths are unavailable there. Control
+preparation copies that exact workflow to `/metadata/source-readiness-workflow.yml`
+and records its hash. The single read-only `/guard` mount and all original
+container predicates stay unchanged. This metadata is a test input, with no
+source package or executable admission authority.
+
+Control preparation binds the copied public workflow to the declared public head
+and its complete SHA256, using a regular single-link no-follow input. The image
+records only workflow and support hashes; the observer checks both against its
+read-only image data and current guard definition before starting controls.
+Missing, foreign, aliased, or unbound data refuses admission. Package TEST refs
+for this correction are the finite `package-entry-control-input-01` through `-06`
+family; malformed refs and foreign workflow contexts refuse before execution.
