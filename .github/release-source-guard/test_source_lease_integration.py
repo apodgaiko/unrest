@@ -302,3 +302,47 @@ def test_exact_existing_controlled_fixture_mapping_stays_bound(kind, path, diges
     for key, value in [('path', '/foreign'), ('line', 2), ('sha256', '0' * 64)]:
         other = {**registration, 'source_binding': {**registration['source_binding'], key: value}}
         assert python_environment({}, other, [0, 0, 0]) == {}
+
+
+def test_extension_keeps_original_callback_for_nonlease(tmp_path, monkeypatch):
+    from test_source_activation_composition import setup, Consumed
+    h = setup(tmp_path, monkeypatch)
+    profile_file = tmp_path / 'profile.json'
+    profile_file.write_text('{}')
+    h.state['isolated_support'] = {'spec_path': str(profile_file), 'spec_sha256': pin(profile_file)}
+    extension = load('integration_activation_control', SUPPORT / 'finite/source_integration_activation.py', monkeypatch)
+    current = extension.create(h.state, h.activation.emit, h.activation.refuse, h.activation.ready)
+    current.shared = lambda: None
+    h.state['operation_activation'] = current
+    with pytest.raises(Consumed):
+        h.owner.launch(h.vector, h.tmp, {'FINITE': 'original'})
+    assert len(current.python_consumed) == 1 and not h.poison
+
+
+def test_new_probe_reducer_requires_refused_child_and_all_lease_modes():
+    from primary_source_probe import check_integration_probes
+    events = [{'kind': 'guard_refused_acquisition_proof', 'child_pid': 42, 'before_fds': 7,
+               'after_fds': 7, 'original_exception_preserved': True},
+              {'kind': 'multiprocess_refused_acquisition_wait', 'pid': 42, 'raw_status': 9,
+               'numeric_returncode': -9, 'owner_pid': 20, 'original_exception_preserved': True},
+              {'kind': 'raw_actual_parent_waitpid', 'pid': 42, 'raw_status': 9},
+              {'kind': 'guard_shared_binding_probe', 'path_count': 42},
+              {'kind': 'exact_current_binding_registration'}, {'kind': 'exact_current_binding_registration'}]
+    for child, mode in enumerate(('cleanup', 'spawn', 'registration'), 50):
+        events += [{'kind': 'guard_lease_factory_proof', 'child_pid': child, 'mode': mode,
+                    'child_returncode': -15, 'before_fds': 7, 'after_fds': 7, 'closed': True,
+                    'quarantine': mode == 'cleanup'},
+                   {'kind': 'source_lease_startup_consumption', 'factory': {'mode': mode},
+                    'environment': {}, 'launch_token': mode},
+                   {'kind': 'registered', 'pid': child, 'token': mode, 'class': 'source-lease-owned-child'}]
+    kernel = {'records': [{'kind': 'kernel_child', 'child': 42, 'identity': {'tgid': 42, 'ppid': 20}}]}
+    assert check_integration_probes({'events': events}, kernel) == 42
+    for index, event in enumerate(events):
+        changed = events[:index] + events[index + 1:]
+        with pytest.raises(RuntimeError):
+            check_integration_probes({'events': changed}, kernel)
+        if 'after_fds' in event:
+            changed = copy.deepcopy(events)
+            changed[index]['after_fds'] += 1
+            with pytest.raises(RuntimeError):
+                check_integration_probes({'events': changed}, kernel)

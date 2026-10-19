@@ -140,7 +140,8 @@ def prepare(manifest, input_pin):
         'uv': activation.identity('/opt/source-bootstrap/bin/uv'),
         'files': [activation.identity(path) for path in sorted([
             base, WHEEL, config, uv_config, Path('/opt/source-bootstrap/bin/uv'),
-            Path('/guard/finite/source_activation.py'), Path('/guard/finite/isolated_inputs.py'),
+            Path('/guard/finite/source_activation.py'), Path('/guard/finite/source_integration_activation.py'),
+            Path('/guard/finite/isolated_inputs.py'),
             Path('/guard/finite/isolated_activation.py')])],
         'trees': {str(path): activation.tree(path)
                   for path in (site, Path('/opt/source-bootstrap/upstream'))},
@@ -203,8 +204,8 @@ def prepare(manifest, input_pin):
                              'inputs_path': '/guard/finite/isolated_inputs.py',
                              'inputs_sha256': digest('/guard/finite/isolated_inputs.py'),
                              'spec_path': str(common_path), 'spec_sha256': common_pin},
-        'source_activation_support': {'path': '/guard/finite/source_activation.py',
-                                      'sha256': digest('/guard/finite/source_activation.py')},
+        'source_activation_support': {'path': '/guard/finite/source_integration_activation.py',
+                                      'sha256': digest('/guard/finite/source_integration_activation.py')},
         'native_producer_support': {'path': str(common_path), 'sha256': common_pin,
                                     'profile_support_sha256': digest('/guard/producer_profile.py')},
     })

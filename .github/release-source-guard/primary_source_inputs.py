@@ -70,6 +70,8 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     image coerces its absent C locale before exposing os.environ. Exec and
     post-init environments remain independently exact; this grants no launch.
     """
+    if registration['class'] == 'source-lease-owned-child' and lease_context is None:
+        lease_context = lease_profile_context(environment, registration, flags)
     controlled = {
         'canonical-backend': ('/source/tests/fixtures/experimental_session_app_server.py',
                               'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53'),
@@ -150,3 +152,38 @@ def exact_lease_environment(environment, registration, flags, context):
             and '..' not in directory.parts
             and manifest['product_pins']['tests/test_experimental_lease.py'] == factory['owner_source_sha256']
             and manifest['product_pins']['src/unrest_harness/experimental_confinement.py'] == binding['sha256'])
+
+
+def lease_profile_context(environment, registration, flags):
+    """Read only the unchanged original profile producer's live bound frame."""
+    import inspect
+    from pathlib import Path
+    import sys
+    import types
+    frame = inspect.currentframe()
+    try:
+        caller = frame.f_back.f_back if frame is not None and frame.f_back else None
+        module = sys.modules.get('primary_authority')
+        source = Path('/guard/primary_authority.py')
+        if (caller is None or module is None or caller.f_globals is not vars(module)
+                or caller.f_code is not module.Authority.profile.__code__
+                or caller.f_code.co_filename != str(source)
+                or sha(source.read_bytes()) != '8660867109287601279c2014157ce3cd704d9e0afb96334a188447a892c87f4c'):
+            return None
+        original = compile(source.read_bytes(), str(source), 'exec', dont_inherit=True)
+        cls = next(value for value in original.co_consts
+                   if isinstance(value, types.CodeType) and value.co_name == 'Authority')
+        expected = next(value for value in cls.co_consts
+                        if isinstance(value, types.CodeType) and value.co_name == 'profile')
+        local = caller.f_locals
+        owner = local.get('self')
+        if (caller.f_code != expected or type(owner) is not module.Authority
+                or local.get('role') != 'source-bootstrap'
+                or local.get('environment') is not environment or local.get('flags') is not flags
+                or owner.source.bound[local['pid']]['registration'] is not registration):
+            return None
+        return {'selected': owner.source.bound[local['pid']],
+                'events': owner.source.supervisor.events(), 'manifest': owner.source.manifest,
+                'vector': local['vector'], 'cwd': local['cwd'], 'parent': local['parent']}
+    finally:
+        del frame

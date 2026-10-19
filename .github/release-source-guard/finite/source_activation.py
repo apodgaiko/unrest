@@ -27,7 +27,6 @@ CONSUMERS = frozenset(
 # Each still needs its original resolver and the live guard consumption frame.
 ORDINARY_DIRECT = frozenset({
     "canonical-backend", "source-cleanup-adapter", "source-crash-controller",
-    "source-lease-owned-child",
     "source-session-child", "source-session-helper:timeout",
     "source-isolated-precaptured-refusal", "source-seeded-environment-helper",
     "source-owned-role:worker", "source-owned-role:validator",
@@ -68,14 +67,6 @@ class SourceActivation(IsolatedActivation):
         self.direct = None
         self.cache_after_build = None
         self.python_consumed = set()
-        self.owned_environment = None
-        state = self.state
-        if (state.get('source_selection') == 'primary-source'
-                and state.get('class') == 'pytest-root' and state.get('token') == 'root'):
-            path = Path(state['guard']).with_name('source_environment.py')
-            guard = sys.modules['runtime_guard']
-            namespace = guard.checked_source(path, state['direct_support']['files'][str(path)])
-            self.owned_environment = namespace['capture'](state)
 
     def produced(self, record):
         if record["operation"] == "source-build":
@@ -585,12 +576,6 @@ class SourceActivation(IsolatedActivation):
             if actual != registration or vector != argv:
                 self.refuse('source_ordinary_registration_drift')
         self.shared()
-        if name == 'source-lease-owned-child':
-            self.emit({'kind': 'source_lease_startup_consumption',
-                       'launch_token': launch['launch_token'],
-                       'source_binding': registration['source_binding'],
-                       'factory': registration['lease_factory'], 'argv': list(argv),
-                       'cwd': str(cwd), 'environment': dict(environment)})
         self.emit({'kind': 'source_ordinary_startup_consumption', 'class': name,
                    'source_binding': registration['source_binding'],
                    'launch_token': launch['launch_token'], 'shared_startup_seal': True,

@@ -64,7 +64,10 @@ def check(records, mode, *, require_faults=False):
     if tuple(collection) == PREFLIGHT_CASES:
         trackers = [row for row in summary['events'] if row['kind'] == 'registered'
                     and row.get('class') == 'source-multiprocess-tracker']
-        if len(trackers) != (5 if require_faults else 1):
+        refused = check_integration_probes(summary, kernel) if require_faults else None
+        settled_trackers = [row for row in trackers if row['pid'] != refused]
+        if len(settled_trackers) != (5 if require_faults else 1) or (
+                require_faults and len(trackers) != 6):
             raise RuntimeError('preflight_actual_tracker_missing')
         pid = trackers[0]['pid']
         ready = [row for row in kernel['receipts']
@@ -84,7 +87,7 @@ def check(records, mode, *, require_faults=False):
                         and row['owner_pid'] == child['pid']]
             if len(complete) != 1 or complete[0]['nonce'] != receipt['request']['nonce']:
                 raise RuntimeError('preflight_authenticated_ready_nonce')
-        for tracker in trackers:
+        for tracker in settled_trackers:
             pid = tracker['pid']
             if not any(row['kind'] == 'raw_actual_parent_waitpid' and row['pid'] == pid
                        and type(row['raw_status']) is int and row['raw_status'] == 0
@@ -122,3 +125,49 @@ def check(records, mode, *, require_faults=False):
             'original_cases': len(cases), 'native_source_bootstraps': len(starts),
             'actual_parent_waits': len(births), 'poison_retained': negative,
             'eligible_certificate': False}
+
+
+def check_integration_probes(summary, kernel):
+    """New own-identity probes supplement all five original successful trackers."""
+    events = summary['events']
+    refused = [row for row in events if row['kind'] == 'guard_refused_acquisition_proof']
+    rollbacks = [row for row in events if row['kind'] == 'multiprocess_refused_acquisition_wait']
+    if len(refused) != 1 or len(rollbacks) != 1:
+        raise RuntimeError('preflight_refused_acquisition_missing')
+    proof, rollback = refused[0], rollbacks[0]
+    pid = proof['child_pid']
+    if (rollback['pid'] != pid or rollback['raw_status'] != 9
+            or rollback['numeric_returncode'] != -9
+            or proof['before_fds'] != proof['after_fds']
+            or proof['original_exception_preserved'] is not True
+            or rollback['original_exception_preserved'] is not True):
+        raise RuntimeError('preflight_refused_acquisition_binding')
+    waits = [row for row in events if row['kind'] == 'raw_actual_parent_waitpid' and row['pid'] == pid]
+    births = [row for row in kernel['records'] if row['kind'] == 'kernel_child'
+              and row['child'] == pid and row['identity']['tgid'] == pid]
+    if (len(waits) != 1 or waits[0]['raw_status'] != 9 or len(births) != 1
+            or births[0]['identity']['ppid'] != rollback['owner_pid']):
+        raise RuntimeError('preflight_refused_acquisition_actual_wait')
+    leases = [row for row in events if row['kind'] == 'guard_lease_factory_proof']
+    if len(leases) != 3 or {row['mode'] for row in leases} != {'cleanup', 'spawn', 'registration'}:
+        raise RuntimeError('preflight_lease_factory_missing')
+    for lease in leases:
+        child = lease['child_pid']
+        if (lease['child_returncode'] != -15 or lease['before_fds'] != lease['after_fds']
+                or lease['closed'] is not True or lease['quarantine'] is not (lease['mode'] == 'cleanup')):
+            raise RuntimeError('preflight_lease_factory_binding')
+        consumption = [row for row in events if row['kind'] == 'source_lease_startup_consumption'
+                       and row['factory']['mode'] == lease['mode']]
+        if len(consumption) != 1 or consumption[0]['environment'] != {}:
+            raise RuntimeError('preflight_lease_consumption_missing')
+        consumed = consumption[0]
+        registered = [row for row in events if row['kind'] == 'registered'
+                      and row['pid'] == child and row['token'] == consumed['launch_token']
+                      and row['class'] == 'source-lease-owned-child']
+        if len(registered) != 1:
+            raise RuntimeError('preflight_lease_consumption_binding')
+    shared = [row for row in events if row['kind'] == 'guard_shared_binding_probe']
+    routes = [row for row in events if row['kind'] == 'exact_current_binding_registration']
+    if len(shared) != 1 or shared[0]['path_count'] < 2 or len(routes) != 2:
+        raise RuntimeError('preflight_shared_route_missing')
+    return pid

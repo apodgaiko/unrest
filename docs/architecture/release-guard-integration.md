@@ -135,3 +135,14 @@ consumption. Only that join with flags `[0, 0, 0]` maps the empty environment to
 `LC_CTYPE=C.UTF-8`. An explicit locale variable, another environment key, mutated
 binding or a class name alone gets no locale mapping. Existing exact controlled
 fixture mappings retain their own original identities.
+
+Source integration uses a separately byte-bound activation factory around the
+unchanged SOURCE activation tree. It acquires the owned environment at root
+startup and re-resolves only the lease factory under the inherited original
+callback/token checks. The locale mapper reads the unchanged profile producer's
+exact live code/globals/instance frame; unrelated callers cannot synthesize that
+production context. All original primary-authority and activation AST protection
+controls remain unchanged. The supplementary reducer distinguishes the five
+successful original trackers from one explicitly injected post-READY rollback;
+that sixth child requires its own numeric original-parent SIGKILL wait, preserved
+exception and restored descriptor census.
