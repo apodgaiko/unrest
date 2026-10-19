@@ -61,6 +61,17 @@ def matches(registration, argv, cwd, environment, state):
         ):
             sources[candidate] = None
     frames = active_frames()
+    if registration['class'] == 'reference-descendant:ordinary-mock-acp':
+        path = Path(state['guard']).with_name('ordinary_mock_binding.py')
+        try:
+            if hashlib.sha256(path.read_bytes()).hexdigest() != state['direct_support']['files'][str(path)]:
+                return None
+            namespace = {}
+            exec(compile(path.read_bytes(), str(path), 'exec'), namespace)
+            if not namespace['matches'](argv, cwd, environment, state, frames):
+                return None
+        except (OSError, KeyError, AttributeError, TypeError, ValueError):
+            return None
     diagnostics = []
     try:
         for frame in frames:

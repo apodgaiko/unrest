@@ -67,6 +67,7 @@ def child(manifest_path, case):
     from unittest.mock import patch
     from unrest_harness.experimental_lease import LeaseRefused
     from unrest_harness.experimental_session import ControlledTransport
+    sys.path.insert(0, str(REPOSITORY))
     from tests.test_controlled_python_acp import local_session
     from tests.test_experimental_session import session
     transport = ControlledTransport(REPOSITORY / 'tests/fixtures/controlled_python_acp.py',

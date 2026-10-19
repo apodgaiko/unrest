@@ -835,7 +835,7 @@ class _SessionOwner:
                 self.stopped = True
                 self._closing = True
                 self._record_stop('stop')
-                if self._owns_ledger:
+                if self._owns_ledger and self.ledger._fd >= 0:
                     self.ledger.stop()
         finally:
             try:

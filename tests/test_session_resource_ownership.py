@@ -208,3 +208,11 @@ def test_failed_runner_setup_never_acquires_owner(monkeypatch):
         own_session_fixture(Request(), 'local_session')
     assert caught.value is failure
     assert calls == ['_function_scoped_runner']
+
+
+def test_legacy_explicit_descriptor_close_then_fixture_finalization(local_session):
+    local_session.ledger.close()
+    local_session.broker.close()
+    local_session.close_unstarted()
+    local_session.close_unstarted()
+    assert local_session.stopped

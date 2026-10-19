@@ -1396,7 +1396,15 @@ COMMANDS = [
         "files": {
             "/source/tests/mock_acp_agent.py": "8141170328ff5fc28acf10dfd70bbf22f4062cceb1b2de8b8ea11ab0c17a48b6"
         },
-        "caller_bindings": [],
+        "caller_bindings": [
+            {
+                "expression_ast_sha256": "d3f5edd9d6d7053ae9d64ffc10739ce9704c16f06ba6290baf302e5e58993f45",
+                "line": 409,
+                "path": "src/unrest_harness/acp_runner.py",
+                "route": "asyncio.create_subprocess_exec",
+                "source_sha256": "5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f",
+            }
+        ],
     },
     {
         "class": "reference-descendant:repository-cli:--help",
