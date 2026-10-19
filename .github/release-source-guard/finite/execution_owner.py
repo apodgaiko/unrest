@@ -129,3 +129,50 @@ def current(state, refuse):
         return resolve(state, refuse, frames)
     finally:
         frames.clear()
+
+
+COHORT2_SERVER_CASES = frozenset(
+(   'tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart[worker]',
+    'tests/test_completion_ownership.py::test_role_interrupted_publication[validate-after]',
+    'tests/test_completion_ownership.py::test_role_interrupted_publication[validate-before]',
+    'tests/test_completion_ownership.py::test_role_interrupted_publication[work-after]',
+    'tests/test_completion_ownership.py::test_role_interrupted_publication[work-before]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[both-invalid-validate-targets2]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[both-invalid-work-targets0]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[both-invalid-work-targets1]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[exhausted-validate-targets2]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[exhausted-work-targets0]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[exhausted-work-targets1]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[invalid-validate-targets2]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[invalid-work-targets0]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[invalid-work-targets1]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[valid-validate-targets2]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[valid-work-targets0]',
+    'tests/test_completion_ownership.py::test_role_process_ownership[valid-work-targets1]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[distinct-validate-targets2]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[distinct-work-targets0]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[distinct-work-targets1]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[invalid-invalid-validate-targets2]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[invalid-invalid-work-targets0]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[invalid-invalid-work-targets1]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[valid-invalid-validate-targets2]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[valid-invalid-work-targets0]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[valid-invalid-work-targets1]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[valid-valid-validate-targets2]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[valid-valid-work-targets0]',
+    'tests/test_completion_setup.py::test_real_roles_first_use[valid-valid-work-targets1]')
+)
+
+
+def shared_family(state, case, relative, line, refuse):
+    """Dispatch a shared physical site by exact finite owner, never grant it."""
+    if (relative, line) == ('src/unrest_harness/server.py', 266):
+        choices = [cohort for cohort, cases in (
+            (2, COHORT2_SERVER_CASES), (3, state['cohort3_full_cases'])) if case in cases]
+    elif (relative, line) == ('tools/release_binding.py', 36):
+        choices = [cohort for cohort in (3, 4) if case in state[f'cohort{cohort}_full_cases']]
+    else:
+        raise RuntimeError('execution_owner_not_shared_site')
+    if len(choices) > 1:
+        refuse('execution_owner_shared_dispatch_ambiguous')
+    return choices[0] if choices else None

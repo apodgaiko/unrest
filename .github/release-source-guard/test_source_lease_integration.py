@@ -42,6 +42,24 @@ def named(code, name):
     return None
 
 
+def shared_dispatch_setup(state, monkeypatch):
+    state['guard'] = str(SUPPORT / 'finite/runtime_guard.py')
+    state['direct_support'] = {'files': {str(p): pin(p) for p in (SUPPORT / 'finite').glob('*.py')}}
+    original = json.loads((SUPPORT / 'finite/source-template.json').read_bytes())
+    for cohort in (3, 4):
+        state.setdefault(f'cohort{cohort}_full_cases', original[f'cohort{cohort}_full_cases'])
+    def checked(path, expected):
+        assert pin(Path(path)) == expected
+        namespace = {'__file__': str(path)}
+        exec(compile(Path(path).read_bytes(), str(path), 'exec', dont_inherit=True), namespace)
+        return namespace
+    guard = sys.modules.get('runtime_guard')
+    if guard is None:
+        guard = types.SimpleNamespace()
+        monkeypatch.setitem(sys.modules, 'runtime_guard', guard)
+    monkeypatch.setattr(guard, 'checked_source', checked, raising=False)
+
+
 def profile(mode='cleanup', controlled=False):
     binding = {'path': '/source/src/unrest_harness/experimental_confinement.py',
                'line': 69, 'sha256': pin(ROOT / 'src/unrest_harness/experimental_confinement.py')}
@@ -201,6 +219,7 @@ def test_shared_original_helper_declines_only_other_owner(monkeypatch, cohort):
     release_binding = load('release_binding_control', ROOT / 'tools/release_binding.py', monkeypatch)
     route = load('cohort_control', SUPPORT / f'finite/cohort{cohort}_routes.py', monkeypatch)
     state = {'checkout': str(ROOT), 'case': 'other-owner', f'cohort{cohort}_full_cases': []}
+    shared_dispatch_setup(state, monkeypatch)
     observations = []
     def intercept(argv, **kwargs):
         observations.append(route.select(list(argv), kwargs['cwd'], None, state,
@@ -262,6 +281,7 @@ def test_shared_route_order_uses_real_helper_and_own_probe_identity(monkeypatch,
              'isolated_source_code': lambda path: compile(path.read_bytes(), str(path), 'exec', dont_inherit=True)}
     events, consumed = [], []
     monkeypatch.setitem(sys.modules, 'runtime_guard', types.SimpleNamespace(_STATE=state, append=events.append, digest=lambda p: pin(Path(p))))
+    shared_dispatch_setup(state, monkeypatch)
     monkeypatch.chdir(ROOT)
     def refuse(reason):
         raise RuntimeError(reason)

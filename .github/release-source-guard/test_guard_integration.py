@@ -31,6 +31,7 @@ from test_execution_owner import (  # noqa: F401
     test_real_own_identity_requires_complete_nested_context,
     test_original_nested_inventory_joins_immutable_source_AST_only,
     test_nested_reduction_requires_both_actual_child_joins,
+    test_shared_physical_sites_use_exact_original_owner_sets,
 )
 
 import release_source_inputs

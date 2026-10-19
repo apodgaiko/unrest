@@ -85,20 +85,16 @@ def select(
         if frame is None:
             return None
         case = state.get("case", "")
-        if state.get("class", "").startswith("reference:"):
-            resolver_path = Path(state["guard"]).with_name("execution_owner.py")
-            case = sys.modules["runtime_guard"].checked_source(
-                resolver_path, state["direct_support"]["files"][str(resolver_path)]
-            )["current"](state, refuse)
-        if (
-            relative == "src/unrest_harness/server.py"
-            and case.split("[")[0] not in state["cohort4_cases"]
-        ):
-            return None
-        # This shared helper has multiple original owners. A selector that does
-        # not own this exact case must leave it to the later closed resolver.
-        # This is dispatch only; no vector is admitted by declining this route.
-        if (relative == "tools/release_binding.py" and frame.f_lineno in (36, 57)
+        resolver_path = Path(state["guard"]).with_name("execution_owner.py")
+        resolver = sys.modules["runtime_guard"].checked_source(
+            resolver_path, state["direct_support"]["files"][str(resolver_path)])
+        case = resolver["current"](state, refuse)
+        if (relative, frame.f_lineno) in {
+            ("src/unrest_harness/server.py", 266), ("tools/release_binding.py", 36)
+        }:
+            if resolver["shared_family"](state, case, relative, frame.f_lineno, refuse) != 4:
+                return None
+        if (relative == "tools/release_binding.py" and frame.f_lineno == 57
                 and case not in state["cohort4_full_cases"]):
             return None
         source = Path(state["checkout"]) / relative

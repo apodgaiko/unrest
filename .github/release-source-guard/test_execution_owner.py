@@ -196,3 +196,31 @@ def test_nested_reduction_requires_both_actual_child_joins(mutation):
     else:
         with pytest.raises(RuntimeError):
             check_execution_owner_probes({'events': events}, kernel)
+
+
+@pytest.mark.parametrize('mutation', [None, 'unknown', 'prefix', 'ambiguous'])
+def test_shared_physical_sites_use_exact_original_owner_sets(monkeypatch, mutation):
+    resolver = load('shared_owner_control', SUPPORT / 'finite/execution_owner.py', monkeypatch)
+    template = __import__('json').loads((SUPPORT / 'finite/source-template.json').read_bytes())
+    state = {f'cohort{c}_full_cases': list(template[f'cohort{c}_full_cases']) for c in (3, 4)}
+    def refuse(reason):
+        raise RuntimeError(reason)
+    assert len(resolver.COHORT2_SERVER_CASES) == 29
+    for case in sorted(resolver.COHORT2_SERVER_CASES):
+        selected = case
+        if mutation == 'unknown':
+            selected = 'unknown'
+        elif mutation == 'prefix':
+            selected = case + '-foreign'
+        elif mutation == 'ambiguous':
+            state['cohort3_full_cases'] = [case]
+        if mutation == 'ambiguous':
+            with pytest.raises(RuntimeError, match='shared_dispatch_ambiguous'):
+                resolver.shared_family(state, selected, 'src/unrest_harness/server.py', 266, refuse)
+        else:
+            assert resolver.shared_family(state, selected, 'src/unrest_harness/server.py', 266, refuse) == (
+                2 if mutation is None else None)
+    if mutation is None:
+        for cohort in (3, 4):
+            for case in state[f'cohort{cohort}_full_cases']:
+                assert resolver.shared_family(state, case, 'tools/release_binding.py', 36, refuse) == cohort
