@@ -18,6 +18,12 @@ import uuid
 # original stdlib caller, exact target and current live descriptor custody.
 CASES = frozenset(
     [
+        ".github/release-source-guard/multiprocess_guard_methods.py::test_owned_exit17_keeps_raw_status",
+        ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[arguments]",
+        ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[caller]",
+        ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[case]",
+        ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[descriptor]",
+        ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[globals]",
         "tests/test_attention.py::test_whole_envelope_bytes_match_in_independent_process_after_restart",
         "tests/test_multiprocess_resource_ownership.py::test_altered_stdlib_stop_is_refused_before_launch",
         "tests/test_multiprocess_resource_ownership.py::test_case_drift_refuses_without_releasing_owned_resources",
@@ -135,6 +141,24 @@ TARGETS = {
 
 
 CASE_TARGETS = {
+    ".github/release-source-guard/multiprocess_guard_methods.py::test_owned_exit17_keeps_raw_status": (
+        ("tests.test_multiprocess_resource_ownership", "_exit_with_status"),
+    ),
+    ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[arguments]": (
+        ("tests.test_multiprocess_resource_ownership", "_publish"),
+    ),
+    ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[caller]": (
+        ("tests.test_multiprocess_resource_ownership", "_publish"),
+    ),
+    ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[case]": (
+        ("tests.test_multiprocess_resource_ownership", "_publish"),
+    ),
+    ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[descriptor]": (
+        ("tests.test_multiprocess_resource_ownership", "_publish"),
+    ),
+    ".github/release-source-guard/multiprocess_guard_methods.py::test_refusal_is_sticky[globals]": (
+        ("tests.test_multiprocess_resource_ownership", "_publish"),
+    ),
     "tests/test_attention.py::test_whole_envelope_bytes_match_in_independent_process_after_restart": (
         ("tests.test_attention", "_inspect_in_process"),
     ),

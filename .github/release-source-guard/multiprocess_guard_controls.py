@@ -16,6 +16,8 @@ from types import SimpleNamespace
 
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
+SCENARIOS = ("positive", "exit17", "globals", "arguments", "case", "descriptor", "caller")
+METHODS = ".github/release-source-guard/multiprocess_guard_methods.py"
 
 
 def sha(path):
@@ -30,7 +32,7 @@ def load(name, path):
     return module
 
 
-def child(path):
+def child(path, scenario):
     manifest = json.loads(Path(path).read_bytes())
     resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
     endpoint = load("endpoint", SUPPORT / "finite/endpoint.py")
@@ -41,6 +43,22 @@ def child(path):
     guard.require_ready("root")
     sys.path.insert(0, str(REPOSITORY))
     import pytest
+    import gc
+
+    selections = (
+        [
+            "tests/test_multiprocess_resource_ownership.py",
+            "tests/test_session_resource_ownership.py",
+        ]
+        if scenario == "positive"
+        else [
+            METHODS + "::test_owned_exit17_keeps_raw_status"
+            if scenario == "exit17"
+            else METHODS + "::test_refusal_is_sticky[" + scenario + "]"
+        ]
+    )
+    expected_count = 31 if scenario == "positive" else 1
+    expected_poison = scenario not in ("positive", "exit17")
 
     class Plugin:
         def pytest_runtest_setup(self, item):
@@ -48,7 +66,7 @@ def child(path):
 
         def pytest_collection_finish(self, session):
             names = [item.nodeid for item in session.items]
-            assert len(names) == 31
+            assert len(names) == expected_count
             (Path(manifest["owned_root"]) / "collection.json").write_text(json.dumps(names))
 
         def pytest_runtest_logreport(self, report):
@@ -69,20 +87,22 @@ def child(path):
                 "no:cacheprovider",
                 "--basetemp=" + manifest["owned_root"] + "/pytest",
                 "--junitxml=" + manifest["owned_root"] + "/ownership.xml",
-                "tests/test_multiprocess_resource_ownership.py",
-                "tests/test_session_resource_ownership.py",
+                *selections,
             ],
             plugins=[Plugin()],
         )
     )
+    gc.collect()
     summary = guard.observe_summary(path)
     summary.update(original_pytest_exit_code=status, original_source_cases_executed=False)
     (Path(manifest["owned_root"]) / "summary.json").write_text(json.dumps(summary, sort_keys=True))
-    assert summary["ready"] and not endpoint.STATE["poison"]
+    assert summary["ready"] is (not expected_poison)
+    assert endpoint.STATE["poison"] is expected_poison
+    assert not any(row["kind"] == "missing_wait" for row in summary["failures"])
     return status
 
 
-def run(root):
+def run(root, scenario):
     assert sys.platform == "linux" and os.getuid() == 20000
     assert os.statvfs(REPOSITORY).f_flag & os.ST_RDONLY
     assert os.statvfs(sys.base_prefix).f_flag & os.ST_RDONLY
@@ -141,6 +161,7 @@ def run(root):
             "source_sha256": sha(SUPPORT / "profile_gate.c"),
         },
     }
+    manifest["product_pins"][METHODS] = sha(REPOSITORY / METHODS)
     manifest["endpoint"] = {
         "responses": str(control),
         "nonce": os.urandom(32).hex(),
@@ -153,6 +174,14 @@ def run(root):
     path.write_text(json.dumps(manifest, sort_keys=True))
     host = load("control_linux_supervisor", SUPPORT / "linux_supervisor.py")
     trace_module = load("linux_trace", SUPPORT / "linux_trace.py")
+    vector = [sys.executable, "-B", str(Path(__file__).resolve()), "--child", str(path), scenario]
+    environment = {
+        "HOME": str(root / "home"),
+        "PATH": "/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "LC_ALL": "C.UTF-8",
+        "LANG": "C.UTF-8",
+    }
     start_read, start_write = os.pipe()
     pid = os.fork()
     if pid == 0:
@@ -169,17 +198,7 @@ def run(root):
             if os.read(start_read, 1) != b"1":
                 os._exit(126)
             os.close(start_read)
-            os.execve(
-                sys.executable,
-                [sys.executable, "-B", str(Path(__file__).resolve()), "--child", str(path)],
-                {
-                    "HOME": str(root / "home"),
-                    "PATH": "/usr/bin:/bin",
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                    "LC_ALL": "C.UTF-8",
-                    "LANG": "C.UTF-8",
-                },
-            )
+            os.execve(sys.executable, vector, environment)
         finally:
             os._exit(127)
     os.close(start_read)
@@ -198,14 +217,6 @@ def run(root):
             }
         )
     )
-    vector = [sys.executable, "-B", str(Path(__file__).resolve()), "--child", str(path)]
-    environment = {
-        "HOME": str(root / "home"),
-        "PATH": "/usr/bin:/bin",
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "LC_ALL": "C.UTF-8",
-        "LANG": "C.UTF-8",
-    }
     sys.path.insert(0, str(SUPPORT))
     from primary_source_authority import SourceAuthority
 
@@ -304,7 +315,24 @@ def run(root):
             on_attached=attached,
             selective=True,
         )
-        proof = trace.run()
+        try:
+            proof = trace.run()
+        except BaseException as error:
+            (root / "kernel-failure.json").write_text(
+                json.dumps(
+                    {
+                        "records": trace.records,
+                        "poison": trace.poison,
+                        "root_parent_wait_raw": trace.root_parent_wait,
+                        "error_type": type(error).__name__,
+                    },
+                    sort_keys=True,
+                )
+            )
+            (root / "receipts-failure.json").write_text(
+                json.dumps(supervisor.receipts, sort_keys=True)
+            )
+            raise
         supervisor.tick()
         (root / "exec-custody.json").write_text(json.dumps(custody.pipe_records, sort_keys=True))
         (root / "kernel.json").write_text(json.dumps(proof, sort_keys=True))
@@ -314,6 +342,8 @@ def run(root):
             "root_wait_raw": proof["root_parent_wait_raw"],
             "kernel_poison": proof["poison"],
             "supervisor_poison": supervisor.poisoned,
+            "expected_sticky_poison": scenario not in ("positive", "exit17"),
+            "scenario": scenario,
             "accepted": len(accepted),
             "new_methods_only": True,
             "source_read_only": True,
@@ -326,7 +356,9 @@ def run(root):
         (root / "proof.json").write_text(json.dumps(result, sort_keys=True))
         print(json.dumps(result, sort_keys=True))
         assert (
-            proof["root_parent_wait_raw"] == 0 and not proof["poison"] and not supervisor.poisoned
+            proof["root_parent_wait_raw"] == 0
+            and not proof["poison"]
+            and supervisor.poisoned is (scenario not in ("positive", "exit17"))
         )
         waits = [row for row in proof["records"] if row["kind"] == "original_parent_wait4"]
         assert len(accepted) > 0
@@ -346,10 +378,13 @@ def sha_bytes(body):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3:
-        assert sys.argv[1] == "--child"
-        raise SystemExit(child(sys.argv[2]))
+    if len(sys.argv) == 4:
+        assert sys.argv[1] == "--child" and sys.argv[3] in SCENARIOS
+        raise SystemExit(child(sys.argv[2], sys.argv[3]))
     if len(sys.argv) == 2:
-        run(Path(sys.argv[1]))
+        root = Path(sys.argv[1])
+        root.mkdir(mode=0o700)
+        for scenario in SCENARIOS:
+            run(root / scenario, scenario)
     else:
         raise SystemExit(2)
