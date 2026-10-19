@@ -166,3 +166,40 @@ generations under the production root. It requires their uid/gid20000 custody,
 rejects the exact parent/aliased TMPDIR mutations without launching anything,
 and restores the original environment before further guard methods run. The
 consumer binds that proof to the current environment-support bytes.
+
+
+## Nested execution ownership
+
+Outer `case` remains the custody identity in every registration, READY receipt,
+parent wait, and child bootstrap. The closed `execution_owner.py` extension
+resolves a separate execution owner for an authenticated reference pytest child.
+It joins the bootstrap token/class/outer identity, original reference source and
+binding, the exact ordered node selection and original argv, the owned JUnit
+path, the current selected marker, immutable owner code and module globals, and
+a live original owner or its lexical nested caller. The marker alone has no
+authority. Cohort routes and production plan selectors use that same resolution;
+startup consumption repeats it through the separately pinned activation extension.
+The protected original activation and runtime guard remain unchanged.
+
+The finite shared physical sites are `server.py:266` (cohorts 2 and 3) and
+`release_binding.py:36` (cohorts 3 and 4). A resolver declines a known shared
+site owned by another exact selection; selected source/code/vector drift still
+refuses. The complete original nested inventory is mapped statically to its
+source owners; original source-case acceptance remains the later unexcluded
+REL002 checkpoint.
+
+Lease barrier admission derives the sole captured `popen(*args, **kwargs)` AST
+call under the immutable original `paused_spawn` owner. Line 532 is an injected
+raise; the actual original call is line 533. The guard verifies the exact live
+callsite, immutable code, module globals, captured Popen identity, barrier,
+arguments, cwd, empty environment and launch flags. The supplementary own-identity
+`_lease_popen` counterpart traverses the same verifier. AST/unit controls prove
+that binding and its negatives; they do not prove execution of the original test.
+
+Supplementary nested-owner probes execute only their own finite guard-method
+identities through the production inherited guard and startup consumption. Their
+reduction requires equal descriptor censuses, authentic READY, genuine numeric
+original-parent waits and no residue. They do not replace original source tests,
+parameters, assertions, or any failed checkpoint evidence. Changed owner
+composition invalidates affected old production proof until fresh bounded Linux
+producer/consumer evidence and independent guard acceptance exist.

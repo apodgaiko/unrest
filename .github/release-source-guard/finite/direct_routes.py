@@ -126,6 +126,12 @@ def result(name, binding, argv, directory, environment, append, **extra):
 
 def admit(argv, cwd, env, state, append, refuse):
     global _ACTIVE_STATE
+    owner_probe = Path(__file__).with_name('owner_probe.py')
+    namespace = {'__file__': str(owner_probe)}
+    exec(support_code(owner_probe, state), namespace)
+    selected = namespace['admit'](argv, cwd, env, state, append, refuse)
+    if selected is not None:
+        return selected
     lease = Path(__file__).with_name("lease_routes.py")
     if str(lease) in state["direct_support"]["files"]:
         namespace = {"__file__": str(lease)}

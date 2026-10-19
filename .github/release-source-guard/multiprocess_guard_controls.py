@@ -162,6 +162,8 @@ def run(root, scenario):
         },
     }
     manifest["product_pins"][METHODS] = sha(REPOSITORY / METHODS)
+    nested = ".github/release-source-guard/nested_owner_methods.py"
+    manifest["product_pins"][nested] = sha(REPOSITORY / nested)
     manifest["endpoint"] = {
         "responses": str(control),
         "nonce": os.urandom(32).hex(),

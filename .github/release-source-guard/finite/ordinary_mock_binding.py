@@ -16,6 +16,15 @@ OWNER = CASE.split("::")[1]
 def matches(argv, cwd, environment, state, frames):
     if state.get("case") not in (CASE, OUTER):
         return False
+    if state.get("case") == OUTER:
+        if state.get('registered_payload') is None:
+            return False
+        guard = sys.modules['runtime_guard']
+        path = Path(state['guard']).with_name('execution_owner.py')
+        selected = guard.checked_source(path, state['direct_support']['files'][str(path)])['resolve'](
+            state, guard.refuse, frames)
+        if selected != CASE:
+            return False
     root = Path(state["checkout"])
     product = root / "src/unrest_harness/acp_runner.py"
     source = root / "tests/test_acp_runner.py"

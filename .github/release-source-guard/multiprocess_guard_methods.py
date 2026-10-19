@@ -35,6 +35,7 @@ def test_owned_exit17_keeps_raw_status():
     _acquisition_faults()
     _source_environment_probe()
     _binding_inventory()
+    _nested_owner_probe()
     _lease_factories()
     _refused_acquisition()
 
@@ -150,6 +151,30 @@ def _acquisition_faults():
                       'original_exception_preserved': True})
 
 
+def _nested_owner_probe():
+    import subprocess
+    from pathlib import Path
+    guard = sys.modules['runtime_guard']
+    directory = Path(guard._STATE['owned_root']) / 'execution-owner-probe'
+    directory.mkdir()
+    before = len(os.listdir('/proc/self/fd'))
+    completed = subprocess.run(
+        [sys.executable, '-m', 'pytest', '-q', '-ra', '-p', 'no:cacheprovider',
+         '--junitxml=' + str(directory / 'pytest.xml'),
+         '.github/release-source-guard/nested_owner_methods.py::test_nested_owner'],
+        cwd=Path(guard._STATE['checkout']), check=True)
+    assert completed.returncode == 0
+    assert before == len(os.listdir('/proc/self/fd'))
+    guard.append({'kind': 'guard_nested_execution_owner_proof', 'returncode': completed.returncode,
+                  'before_fds': before, 'after_fds': len(os.listdir('/proc/self/fd')),
+                  'custody_case': guard._STATE['case']})
+
+
+def _lease_popen(popen, mode, *args, **kwargs):
+    """Own-identity counterpart of the immutable original captured Popen call."""
+    return popen(*args, **kwargs)
+
+
 def _lease_launch(owner, mode, directory):
     # These are the two immutable original source literals. This helper has its
     # own guard-method identity and never impersonates an original test owner.
@@ -189,7 +214,7 @@ def _lease_factories():
         original = subprocess.Popen
         children = []
         def paused_spawn(*args, **kwargs):
-            child = original(*args, **kwargs)
+            child = _lease_popen(original, mode, *args, **kwargs)
             children.append(child)
             # Core READY precedes endpoint setup. This supplementary probe
             # observes both before deliberately terminating its cleanup child.

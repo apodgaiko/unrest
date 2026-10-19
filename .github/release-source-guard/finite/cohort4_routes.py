@@ -84,16 +84,22 @@ def select(
             frame = frame.f_back
         if frame is None:
             return None
+        case = state.get("case", "")
+        if state.get("class", "").startswith("reference:"):
+            resolver_path = Path(state["guard"]).with_name("execution_owner.py")
+            case = sys.modules["runtime_guard"].checked_source(
+                resolver_path, state["direct_support"]["files"][str(resolver_path)]
+            )["current"](state, refuse)
         if (
             relative == "src/unrest_harness/server.py"
-            and state.get("case", "").split("[")[0] not in state["cohort4_cases"]
+            and case.split("[")[0] not in state["cohort4_cases"]
         ):
             return None
         # This shared helper has multiple original owners. A selector that does
         # not own this exact case must leave it to the later closed resolver.
         # This is dispatch only; no vector is admitted by declining this route.
         if (relative == "tools/release_binding.py" and frame.f_lineno in (36, 57)
-                and state.get("case", "") not in state["cohort4_full_cases"]):
+                and case not in state["cohort4_full_cases"]):
             return None
         source = Path(state["checkout"]) / relative
         pin = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -151,7 +157,6 @@ def select(
                     )
                 },
             )
-        case = state.get("case", "")
         selected = case.split("[")[0]
         if selected not in state["cohort4_cases"] or case not in state["cohort4_full_cases"]:
             refuse("cohort3_selected_owner_drift")
@@ -282,7 +287,7 @@ def select(
             if (
                 frame.f_locals.get("mode") not in modes
                 or frame.f_locals["body"] != modes[frame.f_locals["mode"]]
-                or state["case"]
+                or case
                 != relative
                 + "::test_readiness_attributes_local_child_and_drains["
                 + frame.f_locals["mode"]

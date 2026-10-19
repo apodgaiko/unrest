@@ -21,6 +21,34 @@ CASES = {SOURCE + '::' + ORIGINAL: ('ignore', 218),
             for mode in ('spawn', 'registration')}}
 
 
+def popen_callsite(source, owner_name, wrapper_name, captured_name):
+    """Read the sole captured Popen call under the immutable lexical owner."""
+    tree = ast.parse(source.read_bytes())
+    owner = next(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 and n.name == owner_name)
+    wrapper = (owner if wrapper_name is None else
+               next(n for n in ast.walk(owner) if isinstance(n, ast.FunctionDef)
+                    and n.name == wrapper_name))
+    calls = [n for n in ast.walk(wrapper) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name) and n.func.id == captured_name]
+    if len(calls) != 1 or ast.unparse(calls[0]) != captured_name + '(*args, **kwargs)':
+        raise RuntimeError('lease_captured_popen_AST_drift')
+    return calls[0].lineno
+
+
+def verify_popen_caller(caller, code, namespace, line, mode, parameter,
+                        captured_name, popen, argv, cwd, env, refuse):
+    expected = {'cwd': cwd, 'env': env, 'stdin': -1, 'stdout': -1, 'stderr': -1,
+                'close_fds': True, 'start_new_session': True}
+    local = caller.f_locals
+    if (caller.f_code != code or caller.f_globals is not namespace
+            or caller.f_lineno != line or local.get(parameter) != mode
+            or local.get(captured_name) is not popen
+            or local.get('args') != (argv,) or local.get('kwargs') != expected
+            or local['kwargs'].get('env') is not env):
+        refuse('lease_original_caller_drift')
+
+
 def admit(argv, cwd, env, state, append, refuse, *, legacy=False):
     case = state.get('case')
     controlled = case == METHOD_CASE
@@ -81,6 +109,15 @@ def admit(argv, cwd, env, state, append, refuse, *, legacy=False):
             if (caller.f_locals.get('owner') is not factory.f_locals.get('self')
                     or caller.f_locals.get('directory') != cwd):
                 refuse('lease_method_owner_drift')
+            wrapper_code = state['isolated_named'](
+                state['isolated_source_code'](method_source), '_lease_popen')
+            wrappers = [f for f in stack if f.f_code == wrapper_code
+                        and f.f_code.co_filename == str(method_source)]
+            if len(wrappers) != 1:
+                refuse('lease_method_popen_caller_missing')
+            verify_popen_caller(wrappers[0], wrapper_code, vars(methods),
+                popen_callsite(method_source, '_lease_popen', None, 'popen'),
+                mode, 'mode', 'popen', state['lease_popen'], argv, cwd, env, refuse)
         else:
             mode, line = CASES[case]
             owner_name = ORIGINAL if mode == 'ignore' else CLEANUP if mode == 'cleanup' else BARRIER
@@ -93,8 +130,11 @@ def admit(argv, cwd, env, state, append, refuse, *, legacy=False):
                 matched = [f for f in callers if f.f_code is owner.__code__ and f.f_lineno == line]
             else:
                 expected = state['isolated_named'](owner_code, 'paused_spawn')
-                matched = [f for f in callers if f.f_code == expected and f.f_lineno == 532
-                           and f.f_locals.get('barrier') == mode]
+                matched = [f for f in callers if f.f_code == expected]
+                if len(matched) == 1:
+                    verify_popen_caller(matched[0], expected, vars(tests),
+                        popen_callsite(source, owner_name, 'paused_spawn', 'popen'),
+                        mode, 'barrier', 'popen', state['lease_popen'], argv, cwd, env, refuse)
             if len(matched) != 1 or matched[0].f_globals is not vars(tests):
                 refuse('lease_original_caller_drift')
         tree = ast.parse(source.read_bytes())

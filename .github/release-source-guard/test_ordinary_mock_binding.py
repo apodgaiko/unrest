@@ -157,4 +157,4 @@ def test_exact_original_chain_required(tmp_path, monkeypatch, change):
     elif change == "runner":
         frames[1].f_locals["self"] = object()
     monkeypatch.chdir(ROOT)
-    assert METHOD.matches(vector, cwd, env, state, frames) is (change in (None, "outer"))
+    assert METHOD.matches(vector, cwd, env, state, frames) is (change is None)

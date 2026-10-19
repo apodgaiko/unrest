@@ -125,16 +125,22 @@ def select(
             frame = frame.f_back
         if frame is None:
             return None
+        case = state.get("case", "")
+        if state.get("class", "").startswith("reference:"):
+            resolver_path = Path(state["guard"]).with_name("execution_owner.py")
+            case = sys.modules["runtime_guard"].checked_source(
+                resolver_path, state["direct_support"]["files"][str(resolver_path)]
+            )["current"](state, refuse)
         if (
             relative == "src/unrest_harness/server.py"
-            and state.get("case", "").split("[")[0] not in state["cohort3_cases"]
+            and case.split("[")[0] not in state["cohort3_cases"]
         ):
             return None
         # This shared helper has multiple original owners. A selector that does
         # not own this exact case must leave it to the later closed resolver.
         # This is dispatch only; no vector is admitted by declining this route.
         if (relative == "tools/release_binding.py" and frame.f_lineno == 36
-                and state.get("case", "") not in state["cohort3_full_cases"]):
+                and case not in state["cohort3_full_cases"]):
             return None
         source = Path(state["checkout"]) / relative
         pin = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -188,24 +194,6 @@ def select(
                     )
                 },
             )
-        case = state.get("case", "")
-        # The reference child retains its outer case for custody. Only this
-        # named original nested owner uses its exact pytest call marker; its
-        # sealed payload must independently select that same node.
-        reference_case = 'tests/contracts/test_lean_evidence_crosswalk.py::test_crosswalk_is_complete_and_every_mapped_node_passes'
-        nested = 'tests/test_repository_contract.py::test_current_repository_passes_deterministically_without_writes'
-        payload = state.get('registered_payload', {})
-        if (case == reference_case and relative == 'tests/test_repository_contract.py'
-                and frame.f_code.co_name == nested.split('::')[1]
-                and state.get('class') == 'reference:tests/contracts/test_lean_evidence_crosswalk.py'
-                and payload.get('class') == state['class'] and payload.get('mode') == 'module'
-                and payload.get('target') == 'pytest'
-                and payload.get('source_binding', {}).get('path') == str(
-                    Path(state['checkout']) / 'tests/contracts/conftest.py')
-                and payload['source_binding'].get('sha256') == state['product_pins']['tests/contracts/conftest.py']
-                and nested in payload.get('sys_argv', [])
-                and os.environ.get('PYTEST_CURRENT_TEST') == nested + ' (call)'):
-            case = nested
         selected = case.split("[")[0]
         if selected not in state["cohort3_cases"] or case not in state["cohort3_full_cases"]:
             refuse("cohort3_selected_owner_drift")
@@ -319,7 +307,7 @@ def select(
             if (
                 frame.f_locals.get("mode") not in modes
                 or frame.f_locals["body"] != modes[frame.f_locals["mode"]]
-                or state["case"]
+                or case
                 != relative
                 + "::test_readiness_attributes_local_child_and_drains["
                 + frame.f_locals["mode"]

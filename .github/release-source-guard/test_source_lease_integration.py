@@ -172,7 +172,10 @@ def test_real_controlled_factory_frames_recheck_identity(tmp_path, monkeypatch, 
         return result
     monkeypatch.setattr(methods, 'subprocess', None, raising=False)
     import subprocess
-    monkeypatch.setattr(subprocess, 'Popen', intercept)
+    state['lease_popen'] = intercept
+    def captured(*args, **kwargs):
+        return methods._lease_popen(intercept, mode, *args, **kwargs)
+    monkeypatch.setattr(subprocess, 'Popen', captured)
     owner_type = type('Impersonator', (OwnedProcesses,), {}) if mutation == 'owner' else OwnedProcesses
     owner = owner_type(types.SimpleNamespace())
     call = methods._lease_launch
@@ -380,49 +383,61 @@ def test_original_registry_case_is_never_replaced_by_extension_admission(monkeyp
     assert routes.admit([], None, {}, state, pytest.fail, pytest.fail) is None
 
 
-@pytest.mark.parametrize('mutation', [None, 'outer', 'relative', 'owner', 'class', 'payload-class',
-                                     'mode', 'target', 'binding-path', 'binding-pin', 'selection', 'marker'])
-def test_nested_reference_dispatch_requires_all_original_context(monkeypatch, mutation):
-    """Exercise the exact predicate, never execute or impersonate its source owner."""
+def test_original_captured_popen_callsite_is_not_injected_raise(monkeypatch):
+    """Read-only AST proof: no original test/module is executed by this control."""
     import ast
-    import os
-    tree = ast.parse((SUPPORT / 'finite/cohort3_routes.py').read_bytes())
-    condition = next(node.test for node in ast.walk(tree) if isinstance(node, ast.If)
-                     and ast.unparse(node.test).startswith('case == reference_case and'))
-    outer = 'tests/contracts/test_lean_evidence_crosswalk.py::test_crosswalk_is_complete_and_every_mapped_node_passes'
-    nested = 'tests/test_repository_contract.py::test_current_repository_passes_deterministically_without_writes'
-    kind = 'reference:tests/contracts/test_lean_evidence_crosswalk.py'
-    payload = {'class': kind, 'mode': 'module', 'target': 'pytest',
-               'source_binding': {'path': str(ROOT / 'tests/contracts/conftest.py'), 'sha256': 'pin'},
-               'sys_argv': ['-m', 'pytest', '-q', nested]}
-    state = {'checkout': str(ROOT), 'class': kind, 'product_pins': {'tests/contracts/conftest.py': 'pin'}}
-    values = {'case': outer, 'reference_case': outer, 'nested': nested,
-              'relative': 'tests/test_repository_contract.py',
-              'frame': types.SimpleNamespace(f_code=types.SimpleNamespace(co_name=nested.split('::')[1])),
-              'state': state, 'payload': payload, 'Path': Path, 'os': os}
-    marker = nested + ' (call)'
-    if mutation == 'outer':
-        values['case'] = 'other'
-    elif mutation == 'relative':
-        values['relative'] = 'tests/other.py'
-    elif mutation == 'owner':
-        values['frame'].f_code.co_name = 'other'
-    elif mutation == 'class':
-        state['class'] = 'other'
-    elif mutation == 'payload-class':
-        payload['class'] = 'other'
-    elif mutation == 'mode':
-        payload['mode'] = 'inline'
-    elif mutation == 'target':
-        payload['target'] = 'other'
-    elif mutation == 'binding-path':
-        payload['source_binding']['path'] = '/foreign'
-    elif mutation == 'binding-pin':
-        payload['source_binding']['sha256'] = 'changed'
-    elif mutation == 'selection':
-        payload['sys_argv'] = []
-    elif mutation == 'marker':
-        marker = outer + ' (call)'
-    monkeypatch.setenv('PYTEST_CURRENT_TEST', marker)
-    predicate = compile(ast.Expression(condition), '<exact-current-nested-predicate>', 'eval')
-    assert eval(predicate, values) is (mutation is None)
+    route = load('lease_AST_control', SUPPORT / 'finite/lease_routes.py', monkeypatch)
+    source = ROOT / route.SOURCE
+    line = route.popen_callsite(source, route.BARRIER, 'paused_spawn', 'popen')
+    assert line == 533 and line != 532
+    tree = ast.parse(source.read_bytes())
+    assert any(isinstance(n, ast.Raise) and n.lineno == 532 for n in ast.walk(tree))
+    assert any(isinstance(n, ast.Call) and n.lineno == line
+               and ast.unparse(n) == 'popen(*args, **kwargs)' for n in ast.walk(tree))
+
+
+@pytest.mark.parametrize('mutation', [None, 'line', 'code', 'globals', 'parameter',
+                                     'captured', 'args', 'cwd', 'env', 'flags'])
+def test_same_captured_popen_boundary_checks_live_own_frame(monkeypatch, mutation):
+    import inspect
+    route = load('lease_live_boundary', SUPPORT / 'finite/lease_routes.py', monkeypatch)
+    methods = load('lease_live_methods', SUPPORT / 'multiprocess_guard_methods.py', monkeypatch)
+    vector, cwd, env = ['exact'], Path('/owned/child'), {}
+    expected = {'cwd': cwd, 'env': env, 'stdin': -1, 'stdout': -1, 'stderr': -1,
+                'close_fds': True, 'start_new_session': True}
+    def refuse(reason):
+        raise RuntimeError(reason)
+    def intercepted(*args, **kwargs):
+        frame = inspect.currentframe().f_back
+        code = methods._lease_popen.__code__
+        namespace = vars(methods)
+        line = route.popen_callsite(SUPPORT / 'multiprocess_guard_methods.py', '_lease_popen', None, 'popen')
+        parameter, captured = 'spawn', intercepted
+        if mutation == 'line':
+            line -= 1
+        elif mutation == 'code':
+            code = code.replace(co_name='foreign')
+        elif mutation == 'globals':
+            namespace = dict(namespace)
+        elif mutation == 'parameter':
+            parameter = 'registration'
+        elif mutation == 'captured':
+            captured = object()
+        route.verify_popen_caller(frame, code, namespace, line, parameter, 'mode',
+                                 'popen', captured, vector, cwd, env, refuse)
+        return 'checked'
+    supplied = dict(expected)
+    arguments = [vector]
+    if mutation == 'args':
+        arguments = [['foreign']]
+    elif mutation == 'cwd':
+        supplied['cwd'] = Path('/foreign')
+    elif mutation == 'env':
+        supplied['env'] = {'OTHER': 'x'}
+    elif mutation == 'flags':
+        supplied['start_new_session'] = False
+    if mutation is None:
+        assert methods._lease_popen(intercepted, 'spawn', *arguments, **supplied) == 'checked'
+    else:
+        with pytest.raises(RuntimeError, match='lease_original_caller_drift'):
+            methods._lease_popen(intercepted, 'spawn', *arguments, **supplied)

@@ -23,7 +23,14 @@ from test_source_lease_integration import (  # noqa: F401
     test_new_probe_reducer_requires_refused_child_and_all_lease_modes,
     test_legacy_registry_literal_keeps_its_original_source_anchor,
     test_original_registry_case_is_never_replaced_by_extension_admission,
-    test_nested_reference_dispatch_requires_all_original_context,
+    test_original_captured_popen_callsite_is_not_injected_raise,
+    test_same_captured_popen_boundary_checks_live_own_frame,
+)
+
+from test_execution_owner import (  # noqa: F401
+    test_real_own_identity_requires_complete_nested_context,
+    test_original_nested_inventory_joins_immutable_source_AST_only,
+    test_nested_reduction_requires_both_actual_child_joins,
 )
 
 import release_source_inputs

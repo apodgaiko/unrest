@@ -65,6 +65,11 @@ def select(
     source = Path(state["checkout"]) / "tests/test_acp_runner.py"
     prefix = "tests/test_acp_runner.py::"
     case = state.get("case", "")
+    if state.get("class", "").startswith("reference:"):
+        resolver_path = Path(state["guard"]).with_name("execution_owner.py")
+        case = sys.modules["runtime_guard"].checked_source(
+            resolver_path, state["direct_support"]["files"][str(resolver_path)]
+        )["current"](state, refuse)
     if not case.startswith(prefix) or case[len(prefix) :].split("[")[0] not in OWNERS:
         return None
     frames = active_frames()

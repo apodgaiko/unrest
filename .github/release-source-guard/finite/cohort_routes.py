@@ -63,7 +63,13 @@ def select(
             frame = frame.f_back
         if frame is None:
             return None
-        if relative == "src/unrest_harness/server.py" and not state.get("case", "").startswith(
+        case = state.get("case", "")
+        if state.get("class", "").startswith("reference:"):
+            resolver_path = Path(state["guard"]).with_name("execution_owner.py")
+            case = sys.modules["runtime_guard"].checked_source(
+                resolver_path, state["direct_support"]["files"][str(resolver_path)]
+            )["current"](state, refuse)
+        if relative == "src/unrest_harness/server.py" and not case.startswith(
             (
                 "tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart[worker]",
                 "tests/test_completion_ownership.py::test_role_process_ownership[",
@@ -115,7 +121,7 @@ def select(
         if relative.startswith("tests/"):
             case_owner = top.replace(".", "::")
             case_prefix = relative + "::" + case_owner
-            if state.get("case") != case_prefix and not state.get("case", "").startswith(
+            if case != case_prefix and not case.startswith(
                 case_prefix + "["
             ):
                 refuse("cohort_selected_owner_drift")
@@ -159,7 +165,7 @@ def select(
             if (
                 frame.f_locals.get("mode") not in modes
                 or frame.f_locals["body"] != modes[frame.f_locals["mode"]]
-                or state["case"]
+                or case
                 != relative
                 + "::test_readiness_attributes_local_child_and_drains["
                 + frame.f_locals["mode"]

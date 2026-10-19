@@ -64,6 +64,8 @@ def check(records, mode, *, require_faults=False):
     if tuple(collection) == PREFLIGHT_CASES:
         trackers = [row for row in summary['events'] if row['kind'] == 'registered'
                     and row.get('class') == 'source-multiprocess-tracker']
+        if require_faults:
+            check_execution_owner_probes(summary, kernel)
         refused = check_integration_probes(summary, kernel) if require_faults else None
         settled_trackers = [row for row in trackers if row['pid'] != refused]
         if len(settled_trackers) != (5 if require_faults else 1) or (
@@ -199,3 +201,33 @@ def check_integration_probes(summary, kernel):
                    or row['owner'] != PREFLIGHT_CASES[1] for row in routes)):
         raise RuntimeError('preflight_shared_route_missing')
     return pid
+
+
+def check_execution_owner_probes(summary, kernel):
+    """Require fresh own-identity nested composition, separately from REL002."""
+    events = summary['events']
+    outer = '.github/release-source-guard/multiprocess_guard_methods.py::test_owned_exit17_keeps_raw_status'
+    inner = '.github/release-source-guard/nested_owner_methods.py::test_nested_owner'
+    for kind in ('guard_nested_execution_owner_proof', 'guard_nested_execution_owner_leaf'):
+        rows = [row for row in events if row['kind'] == kind]
+        if (len(rows) != 1 or rows[0]['returncode'] != 0
+                or rows[0]['before_fds'] != rows[0]['after_fds']
+                or rows[0]['custody_case'] != outer):
+            raise RuntimeError('preflight_nested_owner_proof_missing')
+    consumed = [row for row in events if row['kind'] == 'source_execution_owner_startup_consumption']
+    if (len(consumed) != 2 or any(row['custody_case'] != outer for row in consumed)
+            or {row['execution_owner'] for row in consumed} != {outer, inner}):
+        raise RuntimeError('preflight_nested_owner_consumption_missing')
+    children = [row for row in events if row['kind'] == 'registered'
+                and row.get('class') in {'source-execution-owner-probe', 'source-execution-owner-leaf'}]
+    if (len(children) != 2 or {row['token'] for row in children}
+            != {row['launch_token'] for row in consumed}):
+        raise RuntimeError('preflight_nested_owner_children_missing')
+    # The enclosing reducer additionally checks every kernel birth's genuine
+    # original-parent numeric wait and every Python child's authenticated READY.
+    for child in children:
+        birth = [row for row in kernel['records'] if row['kind'] == 'kernel_child'
+                 and row['child'] == child['pid'] and row['identity']['tgid'] == child['pid']]
+        if len(birth) != 1:
+            raise RuntimeError('preflight_nested_owner_birth_missing')
+    return True

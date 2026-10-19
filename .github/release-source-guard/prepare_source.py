@@ -106,6 +106,8 @@ def main():
             }):
                 raise RuntimeError('original source baseline drift: ' + name)
             manifest['product_pins'][name] = observed
+    manifest['product_pins']['.github/release-source-guard/nested_owner_methods.py'] = sha(
+        ROOT / '.github/release-source-guard/nested_owner_methods.py')
     registry = ast.literal_eval(ast.parse((SUPPORT / 'registry.py').read_text()).body[1].value)
     for entry in registry:
         if not entry['python']:
