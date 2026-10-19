@@ -19,7 +19,8 @@ import time
 
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
-CASES = ('journal', 'positive-loops', 'poisoned-loops', 'caller-owned-selector', 'pair-receipt-refusal')
+CASES = ('journal', 'positive-loops', 'poisoned-loops', 'caller-owned-selector', 'pair-receipt-refusal',
+         'poisoned-owner-fixtures', 'finalized-owner-fixtures')
 
 
 def sha(path):
@@ -83,6 +84,62 @@ def child(manifest_path, case):
         else:
             raise AssertionError('non-stream pair receipt unexpectedly returned')
         assert census() == before
+    elif case in {'poisoned-owner-fixtures', 'finalized-owner-fixtures'}:
+        # Exercise the public constructors used by local_session; no original
+        # test/fixture function or ACP/backend body executes.
+        import gc
+        import weakref
+        from unrest_harness.capability_policy import SAFE_PROFILE, load_capability_policy, resolve_role_capability
+        from unrest_harness.experimental_session import ControlledTransport, SyntheticSession
+        from unrest_harness.providers import PROVIDERS
+        fixtures = REPOSITORY / 'tests/fixtures'
+        transport = ControlledTransport(fixtures / 'controlled_python_acp.py', Path(sys.executable))
+        try:
+            endpoint.request('poison', reason='descriptor_lifetime_control')
+        except endpoint.EndpointRefusal:
+            pass
+        assert endpoint.STATE['poison']
+        for index in range(48):
+            owner = None
+            try:
+                workspace = Path(manifest['owned_root']) / ('fixture-' + str(index))
+                workspace.mkdir()
+                candidate = workspace / 'candidate'
+                candidate.mkdir()
+                (candidate / 'a').write_text('synthetic\n')
+                policy = resolve_role_capability(PROVIDERS['codex'], role='worker',
+                    policy=load_capability_policy(REPOSITORY / 'src/unrest_harness/bundled'),
+                    profile=SAFE_PROFILE, workspace=candidate, project_record=workspace)
+                owner = SyntheticSession(workspace / 'owner', candidate, ('a',),
+                    adapter=Path('/missing-codex-acp'), fixture=fixtures / 'experimental_session_app_server.py',
+                    policy=policy, transport=transport)
+                handles = [owner.broker._root_fd, owner.broker._record_fd, owner.ledger._fd]
+                owner_ref = weakref.ref(owner)
+                previous = census()
+                try:
+                    asyncio.new_event_loop()
+                except endpoint.EndpointRefusal as error:
+                    # Record the same fixture-return/loop-setup failure shape.
+                    # Do not retain a traceback that could itself own the session.
+                    error_name = type(error).__name__
+                else:
+                    raise AssertionError('poisoned constructor unexpectedly returned')
+                if case == 'finalized-owner-fixtures':
+                    owner.ledger.close()
+                    owner.broker.close()
+                del owner
+                gc.collect()
+                assert owner_ref() is None
+                current = census()
+                records.append({'ordinal': index, 'exception': error_name, 'errno': None,
+                                'before': previous, 'after': current, 'owner_reclaimed': True,
+                                'product_handles': handles})
+                if case == 'finalized-owner-fixtures':
+                    assert current == before
+            except OSError as error:
+                records.append({'ordinal': index, 'exception': type(error).__name__,
+                                'errno': error.errno, 'before': census(), 'after': census()})
+                break
     elif case in {'poisoned-loops', 'caller-owned-selector'}:
         # Explicit diagnostic poison. No forbidden command or socket payload.
         try:
@@ -133,7 +190,7 @@ def child(manifest_path, case):
     sys.stdout.write(json.dumps(result, sort_keys=True) + '\n')
     sys.stdout.flush()
     # The parent retains both status and original stdout, including at EMFILE.
-    return 0
+    return 3 if case == 'poisoned-owner-fixtures' else 0
 
 
 def run(root):
@@ -222,7 +279,7 @@ def run(root):
         'source_cases_executed': False, 'compiler_sha256': sha(compiler),
         'module_sha256': sha(module), 'source_sha256': sha(SUPPORT / 'profile_gate.c'),
         'proofs': proofs}, sort_keys=True))
-    assert all(p['status'] == 0 for p in proofs)
+    assert all(p['status'] == (3 if p['case'] == 'poisoned-owner-fixtures' else 0) for p in proofs)
 
 
 if __name__ == '__main__':
