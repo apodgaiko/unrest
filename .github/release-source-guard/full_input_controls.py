@@ -114,3 +114,71 @@ if __name__ == '__main__':
         print(canonical({'schema': 'unrest.v046.full-host-controls.v1', 'status': 'refused',
                          'source_testcase_executed': False, 'eligible_certificate': False}).decode())
         raise SystemExit(125) from None
+
+# Current supplementary matrix uses the same producer and custom shell as CI.
+PREFLIGHT_HOST_CASES = ('input-replaced', 'input-mode', 'input-owner', 'input-hardlink',
+                        'input-symlink', 'root-mode', 'root-replaced', 'cross-run',
+                        'cross-head', 'nonce', 'deadline', 'clock', 'missing')
+
+
+def preflight_mutation(case, root):
+    target = root / 'primary-source-input.json'
+    custody = root / 'primary-input-custody'
+    if case == 'input-replaced':
+        replacement = root / 'replacement'
+        exclusive(replacement, target.read_bytes())
+        replacement.replace(target)
+    elif case == 'input-mode':
+        target.chmod(0o644)
+    elif case == 'input-owner':
+        subprocess.run(['sudo', '-n', 'chown', '--no-dereference', '20000:20000', str(target)],
+                       check=True)
+    elif case == 'input-hardlink':
+        os.link(target, root / 'alias')
+    elif case == 'input-symlink':
+        target.rename(root / 'original')
+        target.symlink_to(root / 'original')
+    elif case == 'root-mode':
+        custody.chmod(0o755)
+    elif case == 'root-replaced':
+        custody.rename(root / 'old')
+        shutil.copytree(root / 'old', custody)
+    elif case == 'missing':
+        target.unlink()
+    elif case in {'cross-run', 'cross-head', 'nonce', 'deadline', 'clock'}:
+        path = custody / 'receipt.json'
+        signed = loads(read_regular(path, 16384, 0o600))
+        receipt = signed['receipt']
+        if case in {'cross-run', 'cross-head'}:
+            field = 'run_id' if case == 'cross-run' else 'head_sha'
+            receipt['identity'][field] = ('999999999999999' if case == 'cross-run' else '0' * 40)
+        elif case == 'nonce':
+            receipt['nonce'] = '0' * 64
+        else:
+            shift = 7201 if case == 'deadline' else -60
+            for field in ('wall_ns', 'monotonic_ns'):
+                receipt['clock'][field] -= shift * 10**9
+        # The clock and identity controls deliberately retain valid host MACs;
+        # nonce mutation independently proves the original MAC protects it.
+        if case != 'nonce':
+            key = read_regular(custody / 'key', 32, 0o600)
+            signed['mac'] = hmac.digest(key, canonical(receipt), 'sha256').hex()
+        path.write_bytes(canonical(signed))
+    else:
+        raise RuntimeError('unknown physical host control')
+
+
+def preflight_snapshot(root):
+    """Bounded public metadata only; never key, MAC, input or source bodies."""
+    from primary_custody import file_identity
+    result = {}
+    for name, path in (('input', root / 'primary-source-input.json'),
+                       ('custody', root / 'primary-input-custody')):
+        result[name] = list(file_identity(path.lstat())) if path.exists() or path.is_symlink() else None
+    path = root / 'primary-input-custody/receipt.json'
+    signed = loads(read_regular(path, 16384, 0o600))
+    receipt = signed['receipt']
+    import hashlib
+    result['receipt'] = {'identity': receipt['identity'], 'clock': receipt['clock'],
+                         'nonce_sha256': hashlib.sha256(receipt['nonce'].encode()).hexdigest()}
+    return result

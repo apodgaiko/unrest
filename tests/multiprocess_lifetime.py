@@ -82,19 +82,38 @@ class SpawnResources:
                 (self.cleanup, synchronize), (util.Finalize.__call__, util),
             ):
                 _source_bound(function, module)
-            tracker.ensure_running()
-            self.fd, self.pid = tracker._fd, tracker._pid
-            if self.fd is None or self.pid is None:
-                raise RuntimeError('tracker has no original-parent ownership')
-            info = os.fstat(self.fd)
-            if not stat.S_ISFIFO(info.st_mode) or os.get_inheritable(self.fd):
-                raise RuntimeError('tracker descriptor is not a private pipe')
-            self.identity = (info.st_dev, info.st_ino, info.st_mode)
-            # Retain this pipe generation, so a reused descriptor number can
-            # never acquire authority over a later, unrelated pipe.
-            self.custody = os.dup(self.fd)
-            os.set_inheritable(self.custody, False)
+            try:
+                tracker.ensure_running()
+                self.fd, self.pid = tracker._fd, tracker._pid
+                self._acquired_pipe()
+                # Retain this pipe generation against descriptor-number reuse.
+                self.custody = os.dup(self.fd)
+                os.set_inheritable(self.custody, False)
+            except BaseException as error:
+                try:
+                    # ensure_running may fail after publishing its owned child.
+                    self.fd, self.pid = tracker._fd, tracker._pid
+                    if self.fd is not None or self.pid is not None:
+                        self._acquired_pipe()
+                        self._close(acquiring=True)
+                    else:
+                        self.closed = True
+                except BaseException as cleanup_error:
+                    raise BaseExceptionGroup('multiprocessing acquisition and rollback failed',
+                                             [error, cleanup_error]) from None
+                raise
         return _OwnedContext(self, context)
+
+    def _acquired_pipe(self) -> None:
+        if self.fd is None or self.pid is None:
+            raise RuntimeError('tracker has no original-parent ownership')
+        info = os.fstat(self.fd)
+        if not stat.S_ISFIFO(info.st_mode) or os.get_inheritable(self.fd):
+            raise RuntimeError('tracker descriptor is not a private pipe')
+        identity = (info.st_dev, info.st_ino, info.st_mode)
+        if self.identity is not None and self.identity != identity:
+            raise RuntimeError('multiprocessing pipe generation changed')
+        self.identity = identity
 
     def _semaphore(self, semaphore: Any) -> None:
         name = semaphore._semlock.name
@@ -112,6 +131,9 @@ class SpawnResources:
             self.finalizers.append(matches[0])
 
     def close(self) -> None:
+        self._close()
+
+    def _close(self, *, acquiring: bool = False) -> None:
         if self.closed:
             return
         if os.getpid() != self.parent or _case() != self.case:
@@ -123,9 +145,11 @@ class SpawnResources:
                 or self.tracker._fd != self.fd or self.tracker._pid != self.pid
                 or self.tracker._stop.__func__ is not self.stop.__func__):
             raise RuntimeError('multiprocessing tracker ownership changed')
-        if self.fd is None or self.custody is None:
+        if self.fd is None or (self.custody is None and not acquiring):
             raise RuntimeError('multiprocessing pipe custody is missing')
         for descriptor in (self.fd, self.custody):
+            if descriptor is None:
+                continue
             info = os.fstat(descriptor)
             if (info.st_dev, info.st_ino, info.st_mode) != self.identity:
                 raise RuntimeError('multiprocessing pipe generation changed')
@@ -153,8 +177,9 @@ class SpawnResources:
         self.processes.clear()
         self.queues.clear()
         self.connections.clear()
-        os.close(self.custody)
-        self.custody = None
+        if self.custody is not None:
+            os.close(self.custody)
+            self.custody = None
         # Closing the last owned writer lets the tracker finish naturally.
         # CPython performs waitpid here, in the original parent, before pytest
         # can produce a summary or the finite guard can finalize.

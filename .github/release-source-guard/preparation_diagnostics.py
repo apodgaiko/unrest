@@ -14,7 +14,12 @@ CODES = frozenset({
     'release_identity_support_drift', 'release_identity_membership',
     'release_identity_preimage', 'release_identity_postimage',
     'ownership_document_preimage', 'ownership_document_postimage',
-    'ownership_document_engine',
+    'ownership_document_engine', 'full_private_root', 'full_runner_root',
+    'full_host_binding', 'full_host_deadline', 'full_host_mac',
+    'full_host_receipt_fields', 'full_semantic_candidate_drift',
+    'full_input_write', 'custody_file', 'custody_file_changed',
+    'full_host_acquisition_changed', 'preflight_input_binding',
+    'full_private_root_replaced',
 })
 CLASSES = frozenset({'RuntimeError', 'EvidenceRefused', 'OSError', 'PermissionError',
                      'FileNotFoundError', 'KeyError', 'ValueError', 'TypeError',

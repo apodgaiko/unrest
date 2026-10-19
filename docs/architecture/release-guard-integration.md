@@ -73,3 +73,22 @@ Durable guard READY events identify their process with `owner_pid`; endpoint
 requests and process registrations use `pid`. The supplementary reducer joins
 those distinct schema fields to the same authenticated child. A missing or wrong
 durable owner cannot be replaced by a similarly named legacy `pid` field.
+
+An admitted phase acquires an exclusive, owner/mode/type/identity checked private
+evidence directory before reading physical candidate inputs. The producer owns
+`primary-preparation`; the custom shell owns its catalog duty. An untrusted
+context or command cannot acquire these roots. Input custody failure therefore
+retains a closed encrypted preparation outcome without admitting source evidence.
+The supplementary host matrix mutates current physical inputs and authenticated
+host envelopes through the actual producer/consumer and custom shell, before any
+payload launch. Its uploaded refusals must reduce alongside all eight original
+supplementary scenarios.
+
+Tracker acquisition rolls back its original pipe and actual tracker child if
+post-launch descriptor inspection, duplication or inheritance setup fails. The
+synchronous rollback verifies the same original pipe generation before using the
+original CPython stop/wait implementation, including when duplication never
+returned custody. Cleanup failures preserve the acquisition exception together
+with the cleanup error. Current supplementary canaries inject all four boundaries,
+check descriptor census, and bind each tracker to authenticated READY and a
+numeric kernel-observed original-parent wait; no modeled wait is evidence.

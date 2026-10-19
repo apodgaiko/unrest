@@ -72,6 +72,16 @@ def admit_ownership_document(manifest):
     manifest['product_pins'][name] = pin
 
 
+def admit_tracker_acquisition(manifest):
+    name = 'tests/multiprocess_lifetime.py'
+    if manifest['product_pins'].get(name) != 'e992a1dd5575250cea540ccb52c42f54dca28ec87cf2843e13c11237d9a291d3':
+        raise RuntimeError('tracker_acquisition_preimage')
+    pin = 'ec9139b91f766ec4fb05f7c2ade84801a6f99de1475ffa15c676bf00becb5b54'
+    if hashlib.sha256(CLOCK_READER(ROOT, name)).hexdigest() != pin:
+        raise RuntimeError('tracker_acquisition_postimage')
+    manifest['product_pins'][name] = pin
+
+
 def main():
     nonce, selection = sys.argv[1:]
     case = CASES[selection]
@@ -86,6 +96,7 @@ def main():
     exec(compile(release_body, '/guard/release_source_inputs.py', 'exec', dont_inherit=True), release)
     release['admit'](manifest, ROOT, CLOCK_READER)
     admit_ownership_document(manifest)
+    admit_tracker_acquisition(manifest)
     for name, pin in manifest['product_pins'].items():
         observed = sha(ROOT / name)
         if observed != pin:

@@ -55,6 +55,7 @@ def test_original_missing_source_paths_are_detected():
 @pytest.mark.parametrize('outcome', ['success', 'source_failure', 'create_failure', 'capture_failure',
                                     'custody_failure'])
 def test_real_shell_encrypts_original_source_paths_even_before_issuer(tmp_path, monkeypatch, outcome):
+    monkeypatch.setattr(ci_shell, 'ACTIVE_ROOT', None)
     expected = {'source_tree': 'a' * 40}
     monkeypatch.setenv('RUNNER_TEMP', str(tmp_path))
     monkeypatch.setenv('GITHUB_WORKFLOW', 'CI')
@@ -76,10 +77,8 @@ def test_real_shell_encrypts_original_source_paths_even_before_issuer(tmp_path, 
     cleanup = []
 
     def prepare(spec, *args):
-        root = tmp_path / ci_shell.KINDS[spec['duty']]
-        root.mkdir(mode=0o700)
+        root = ci_shell.acquire_retention(ci_shell.KINDS[spec['duty']])
         raw = root / 'raw'
-        raw.mkdir(mode=0o700)
         (raw / 'source-output.txt').write_bytes(marker)
         return dict(root=root, raw=raw, log=raw / 'coordinator.log', control={'support': {}},
                     custody=None, image='controlled-image', source_pins={}, container='controlled',

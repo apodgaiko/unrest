@@ -85,10 +85,10 @@ def test_preflight_context_is_finite_and_does_not_admit_historical_methods(monke
 def test_acquired_preparation_failure_is_encrypted_without_adopting_stale_root(tmp_path, monkeypatch):
     import ci_shell
     from structured_evidence import canonical
-    root = tmp_path / 'primary-import'
-    root.mkdir(mode=0o700)
+    from preparation_retention import acquire
+    root = acquire(tmp_path, 'primary-import')
     raw = root / 'raw'
-    raw.mkdir(mode=0o700)
+    monkeypatch.setattr('preparation_retention.execution_identity', lambda *args: {'head_sha': 'a' * 40})
     marker = b'private preparation diagnostic'
     (raw / 'coordinator.log').write_bytes(marker)
     monkeypatch.setattr(ci_shell, 'ACTIVE_ROOT', root)

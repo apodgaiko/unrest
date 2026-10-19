@@ -32,20 +32,23 @@ def main():
                 'eligible_certificate': False, 'source_checkpoint_ready': False}
     rows = []
 
-    def execute(name, runner, flag, command, expected):
+    def execute(name, runner, flag, command, expected, physical=None):
         script = runner / (name + '-script.sh')
         script.write_bytes(command)
         arguments = [sys.executable, '-B', str(SUPPORT / 'ci_shell.py'), flag]
+        if flag == '--producer':
+            arguments = [sys.executable, '-B', str(SUPPORT / 'full_bootstrap.py'), 'PREFLIGHT']
         if flag == '--preflight':
             arguments.append('TEST-poison' if name == 'poison' else 'TEST-positive')
-        arguments.append(str(script))
+        if flag != '--producer':
+            arguments.append(str(script))
         with (runner / (name + '-private.log')).open('xb') as output:
             result = subprocess.run(arguments, env={**os.environ, 'RUNNER_TEMP': str(runner)},
                                     stdout=output, stderr=subprocess.STDOUT, check=False)
         rows.append({'scenario': name, 'exit_code': result.returncode, 'expected_exit_code': expected,
-                     'script_sha256': sha(command), 'members': {}})
+                     'script_sha256': sha(command), 'members': {}, 'physical': physical})
         # Every available encrypted pair is selected by the execution catalog.
-        roots = (['primary-source-poison' if name == 'poison' else 'primary-source-positive']
+        roots = (['primary-preparation'] if flag == '--producer' else ['primary-source-poison' if name == 'poison' else 'primary-source-positive']
                  if flag == '--preflight' else [phase.output for phase in catalog().values()
                      if command in {phase.command.encode(), phase.command.rstrip('\n').encode()}])
         for root_name in roots:
@@ -73,6 +76,19 @@ def main():
         finally:
             os.environ['RUNNER_TEMP'] = saved
         return root
+
+    from full_input_controls import PREFLIGHT_HOST_CASES, preflight_mutation, preflight_snapshot
+    for case in PREFLIGHT_HOST_CASES:
+        physical = runner('host-' + case)
+        before = preflight_snapshot(physical)
+        preflight_mutation(case, physical)
+        after = preflight_snapshot(physical)
+        execute('host-' + case, physical, '--preflight', SCRIPT, 125,
+                {'case': case, 'before': before, 'after': after})
+    producer = temporary / 'preflight-producer-acquisition'
+    producer.mkdir(mode=0o700)
+    (producer / 'primary-input-custody').mkdir(mode=0o755)
+    execute('producer-acquisition', producer, '--producer', __import__('full_bootstrap').SCRIPT, 125)
 
     # Each failure has a distinct physical envelope and evidence directory.
     early = runner('early')

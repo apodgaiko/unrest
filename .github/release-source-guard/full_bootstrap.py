@@ -130,6 +130,21 @@ def clock():
 
 def produce(operation):
     identity = context(operation)
+    from preparation_retention import acquire, retain, release
+    retained = acquire(Path(os.environ['RUNNER_TEMP']), 'primary-preparation')
+    try:
+        result = produce_admitted(operation, identity)
+    except BaseException as error:
+        retain(retained, {'schema': 'unrest.v046.primary-preparation-failure.v1',
+                          'stage': 'binding', 'exit_code': 125,
+                          'script_sha256': sha(SCRIPT), 'script_size': len(SCRIPT),
+                          'source_checkpoint_ready': False, 'selected_carrier': None}, error)
+        raise
+    release(retained)
+    return result
+
+
+def produce_admitted(operation, identity):
     require(subprocess.run(['git', 'diff', '--quiet', 'HEAD', '--'], cwd=REPOSITORY,
                            check=False).returncode == 0, 'full_checkout_drift')
     definition = expected_identity()

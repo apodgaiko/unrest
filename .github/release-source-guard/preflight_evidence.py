@@ -108,6 +108,9 @@ def verify(root, run_id, artifact_id, head, key, support):
     require(index['candidate_sha256'] == candidate_scope(support.parent.parent), 'preflight_candidate_scope')
     expected = {'early': 125, 'positive': 0, 'poison': 0, 'late': 125,
                 **{catalog()[name].output: 0 for name in ORDER}}
+    from full_input_controls import PREFLIGHT_HOST_CASES
+    expected.update({'host-' + case: 125 for case in PREFLIGHT_HOST_CASES})
+    expected['producer-acquisition'] = 125
     scenarios = index['scenarios']
     require(len(scenarios) == len(expected)
             and {row['scenario'] for row in scenarios} == set(expected), 'preflight_scenarios')
@@ -117,10 +120,27 @@ def verify(root, run_id, artifact_id, head, key, support):
     require(prerequisite['support'] == support_pins
             and direct['support_sha256'] == sha(canonical(support_pins)), 'preflight_controls_support')
     projections = []
+    seen_refusals = set()
     for row in scenarios:
         name = row['scenario']
         require(row['exit_code'] == row['expected_exit_code'] == expected[name]
                 and len(row['members']) == 2, 'preflight_scenario_exit')
+        from preflight_policy import SCRIPT as preflight_script
+        from full_bootstrap import SCRIPT as source_script
+        if name == 'producer-acquisition':
+            output, command = 'primary-preparation', source_script
+        elif name in {'positive', 'poison'} or name.startswith('host-'):
+            output = 'primary-source-poison' if name == 'poison' else 'primary-source-positive'
+            command = preflight_script
+        else:
+            phase = catalog()['Import package'] if name in {'early', 'late'} else next(
+                phase for phase in catalog().values() if phase.output == name)
+            output = phase.output
+            command = (phase.command.encode() if '\n' in phase.command.rstrip('\n')
+                       else phase.command.rstrip('\n').encode())
+        require(row['script_sha256'] == sha(command) and set(row['members']) == {
+            name + '/' + output + '/' + member for member in ('safe-provenance.json', 'evidence.cms')},
+            'preflight_scenario_binding')
         files = {member: payload['preflight-retained/' + member] for member in row['members']}
         require(all(sha(files[member]) == pin for member, pin in row['members'].items()), 'preflight_member_digest')
         metadata = loads(next(value for member, value in files.items() if member.endswith('safe-provenance.json')))
@@ -137,12 +157,41 @@ def verify(root, run_id, artifact_id, head, key, support):
                                     stdout=subprocess.DEVNULL, stderr=errors, check=False)
         require(result.returncode == 0 and plain.stat().st_size <= LIMIT
                 and sha(plain.read_bytes()) == metadata['plaintext_archive_sha256'], 'preflight_plaintext')
-        if name == 'early':
+        if name == 'early' or name.startswith('host-') or name == 'producer-acquisition':
             records = members(plain.read_bytes())
             failure = loads(records['preparation-status.json'])
             require(failure['exit_code'] == 125 and failure['stage'] == 'binding'
                     and failure['script_sha256'] == row['script_sha256'], 'preflight_early_refusal')
-            projections.append({'scenario': name, 'retained_expected_refusal': True})
+            require(failure['host_identity']['head_sha'] == head
+                    and failure['host_identity']['run_id'] == str(run_id)
+                    and failure['host_identity']['run_attempt'] == str(run['run_attempt'])
+                    and failure['host_identity']['support_sha256'] == sha(canonical(support_pins))
+                    and set(records) == {'preparation-status.json'}
+                    and failure['source_checkpoint_ready'] is False
+                    and failure['selected_carrier'] is None, 'preflight_host_refusal_binding')
+            require(not any(member.startswith(('source', 'kernel')) for member in records),
+                    'preflight_host_payload_launched')
+            pin = metadata['ciphertext_sha256']
+            require(pin not in seen_refusals, 'preflight_reused_refusal')
+            seen_refusals.add(pin)
+            if name.startswith('host-'):
+                physical = row['physical']
+                require(physical['case'] == name.removeprefix('host-')
+                        and physical['before'] != physical['after'], 'preflight_physical_control')
+            codes = {'host-root-mode': 'full_private_root', 'host-root-replaced': 'full_host_binding',
+                     'host-input-replaced': 'full_host_binding', 'host-input-mode': 'custody_file',
+                     'host-input-owner': 'custody_file', 'host-input-hardlink': 'custody_file',
+                     'host-cross-run': 'full_host_binding', 'host-cross-head': 'full_host_binding',
+                     'host-nonce': 'full_host_mac', 'host-deadline': 'full_host_deadline',
+                     'host-clock': 'full_host_deadline', 'early': 'primary_same_head_controls'}
+            if name in codes:
+                require(failure['failure']['code'] == codes[name], 'preflight_wrong_refusal')
+            elif name in {'host-input-symlink', 'host-missing', 'producer-acquisition'}:
+                require(failure['failure']['errno'] == {
+                    'host-input-symlink': 40, 'host-missing': 2, 'producer-acquisition': 17}[name],
+                    'preflight_wrong_acquisition_failure')
+            projections.append({'scenario': name, 'retained_expected_refusal': True,
+                                'diagnostic': failure['failure']})
             continue
         identity = metadata['direct_identity']
         require(metadata['support'] == support_pins and identity['head_sha'] == head
@@ -154,7 +203,7 @@ def verify(root, run_id, artifact_id, head, key, support):
         scope, records = consume(plain.read_bytes(), identity, metadata['structured_envelope_sha256'])
         require(scope == 'primary-executor', 'preflight_phase_scope')
         if name in {'positive', 'poison'}:
-            proof = check_source(records, 'TEST-poison' if name == 'poison' else 'TEST-positive')
+            proof = check_source(records, 'TEST-poison' if name == 'poison' else 'TEST-positive', require_faults=True)
         elif name == 'late':
             from primary_custody import kernel_success
             kernel_success(records, row['script_sha256'])

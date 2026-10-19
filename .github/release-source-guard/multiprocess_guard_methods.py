@@ -32,6 +32,8 @@ def test_owned_exit17_keeps_raw_status():
         for row in rows
     )
 
+    _acquisition_faults()
+
 
 @pytest.mark.parametrize("kind", ["globals", "arguments", "case", "descriptor", "caller"])
 def test_refusal_is_sticky(kind):
@@ -100,3 +102,45 @@ def test_refusal_is_sticky(kind):
         for row in summary["failures"]
     )
     assert not any(row["kind"] == "missing_wait" for row in summary["failures"])
+
+
+def _acquisition_faults():
+    """Real tracker launches; fail only this owner's post-launch acquisition."""
+    from unittest.mock import patch
+    import errno
+    import inspect
+
+    guard = sys.modules['runtime_guard']
+    for operation in ('dup', 'fstat', 'get_inheritable', 'set_inheritable'):
+        census = len(os.listdir('/proc/self/fd'))
+        owner = SpawnResources()
+        original = getattr(os, operation)
+        error = OSError(errno.EMFILE, 'injected owned acquisition failure')
+        injected = False
+
+        def fail_once(*args, **kwargs):
+            nonlocal injected
+            frame = inspect.currentframe().f_back
+            wanted = (owner.custody if operation == 'set_inheritable' else owner.tracker._fd)
+            if (not injected and wanted is not None and args[0] == wanted
+                    and frame.f_code.co_filename == SpawnResources.context.__code__.co_filename
+                    and frame.f_code.co_name in {'context', '_acquired_pipe'}):
+                injected = True
+                raise error
+            return original(*args, **kwargs)
+
+        with patch.object(os, operation, fail_once):
+            with pytest.raises(OSError) as caught:
+                with owner:
+                    owner.context(multiprocessing.get_context('spawn'))
+        assert injected and caught.value is error
+        assert owner.closed and owner.tracker._pid is None and owner.tracker._fd is None
+        assert owner.tracker._exitcode == 0
+        with pytest.raises(ChildProcessError):
+            os.waitpid(owner.pid, os.WNOHANG)
+        assert len(os.listdir('/proc/self/fd')) == census
+        guard.append({'kind': 'owned_acquisition_fault', 'operation': operation,
+                      'tracker_pid': owner.pid, 'parent': owner.parent,
+                      'pipe_identity': list(owner.identity), 'errno': error.errno,
+                      'before_fds': census, 'after_fds': len(os.listdir('/proc/self/fd')),
+                      'original_exception_preserved': True})

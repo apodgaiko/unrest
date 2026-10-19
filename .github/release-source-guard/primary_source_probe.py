@@ -9,7 +9,7 @@ from primary_policy import TEST_SELECTIONS, TEST_SEAM_CASES
 from preflight_policy import CASES as PREFLIGHT_CASES
 
 
-def check(records, mode):
+def check(records, mode, *, require_faults=False):
     kernel = json.loads(records['kernel-source.json'])
     provenance = json.loads(records['source-provenance.json'])
     summary = json.loads(records['summary.json'])
@@ -64,7 +64,7 @@ def check(records, mode):
     if tuple(collection) == PREFLIGHT_CASES:
         trackers = [row for row in summary['events'] if row['kind'] == 'registered'
                     and row.get('class') == 'source-multiprocess-tracker']
-        if len(trackers) != 1:
+        if len(trackers) != (5 if require_faults else 1):
             raise RuntimeError('preflight_actual_tracker_missing')
         pid = trackers[0]['pid']
         ready = [row for row in kernel['receipts']
@@ -84,12 +84,28 @@ def check(records, mode):
                         and row['owner_pid'] == child['pid']]
             if len(complete) != 1 or complete[0]['nonce'] != receipt['request']['nonce']:
                 raise RuntimeError('preflight_authenticated_ready_nonce')
-        if not any(row['kind'] == 'raw_actual_parent_waitpid' and row['pid'] == pid
-                   and type(row['raw_status']) is int and row['raw_status'] == 0
-                   for row in summary['events']):
-            raise RuntimeError('preflight_actual_tracker_wait_missing')
-        if not any(row['kind'] == 'ready' and row.get('owner_pid') == pid for row in summary['events']):
-            raise RuntimeError('preflight_tracker_ready_missing')
+        for tracker in trackers:
+            pid = tracker['pid']
+            if not any(row['kind'] == 'raw_actual_parent_waitpid' and row['pid'] == pid
+                       and type(row['raw_status']) is int and row['raw_status'] == 0
+                       for row in summary['events']):
+                raise RuntimeError('preflight_actual_tracker_wait_missing')
+            if not any(row['kind'] == 'ready' and row.get('owner_pid') == pid for row in summary['events']):
+                raise RuntimeError('preflight_tracker_ready_missing')
+        if require_faults:
+            faults = [row for row in summary['events'] if row['kind'] == 'owned_acquisition_fault']
+            if (len(faults) != 4 or {row['operation'] for row in faults}
+                    != {'dup', 'fstat', 'get_inheritable', 'set_inheritable'}
+                    or len({row['tracker_pid'] for row in faults}) != 4):
+                raise RuntimeError('preflight_acquisition_faults_missing')
+            for fault in faults:
+                birth = next((row for row in births if row['child'] == fault['tracker_pid']), None)
+                if (birth is None or birth['identity']['ppid'] != fault['parent']
+                        or fault['tracker_pid'] not in {row['pid'] for row in trackers}
+                        or fault['before_fds'] != fault['after_fds']
+                        or fault['original_exception_preserved'] is not True or fault['errno'] != 24
+                        or len(fault['pipe_identity']) != 3):
+                    raise RuntimeError('preflight_acquisition_fault_binding')
     negative = mode == 'TEST-poison' 
     if (kernel['guard_poison'] is not negative or summary['ready'] is negative
             or kernel['failure_code'] != ('source_guard_refused' if negative else None)

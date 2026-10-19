@@ -83,14 +83,24 @@ ACTIVE_ROOT = None
 CHILD_PREPARATION_FAILURE = None
 
 
+def acquire_retention(kind):
+    global ACTIVE_ROOT
+    if ACTIVE_ROOT is None:
+        from preparation_retention import acquire
+        ACTIVE_ROOT = acquire(Path(os.environ['RUNNER_TEMP']), kind)
+    else:
+        if ACTIVE_ROOT.name != kind:
+            raise RuntimeError('primary_retention_duty_changed')
+        from preparation_retention import check
+        check(ACTIVE_ROOT)
+    return ACTIVE_ROOT
+
+
 def prepare_capsule(spec, script, expected, source_input, test_mode, package_test):
     global STAGE, ACTIVE_ROOT, CHILD_PREPARATION_FAILURE
     kind = KINDS[spec['duty']]
-    root = Path(os.environ['RUNNER_TEMP']) / kind
-    root.mkdir(mode=0o700)
+    root = acquire_retention(kind)
     raw = root / 'raw'
-    raw.mkdir(mode=0o700)
-    ACTIVE_ROOT = root
     log = raw / 'coordinator.log'
     control = json.loads((Path(os.environ['RUNNER_TEMP']) / 'source-readiness/safe-provenance.json').read_bytes())
     if control['head_sha'] != os.environ['GITHUB_SHA'] or control['synthetic_exit_code'] != 0:
@@ -288,6 +298,15 @@ def main():
             return 0
         if decision['decision'] != 'execute-first-full' or decision['receipt'] is not None:
             raise RuntimeError('primary_decision_kind')
+    # Admit the literal duty before acquiring an output; physical input failures
+    # thereafter belong to this phase, including the initial consumer read.
+    if preflight:
+        context('PREFLIGHT')
+    if test_mode:
+        admitted = test_plan(script, workflow, test_mode)['duty']
+    else:
+        admitted = bound['name']
+    acquire_retention(KINDS[admitted])
     source_input = consume('PREFLIGHT', script) if preflight else None
     if not preflight and not test_mode and not package_test and (bound['name'] == 'v0.4.7 source suite'
             or bound['name'] in ORDER):
@@ -374,7 +393,7 @@ def main():
         expected_status = 2 if test_mode == 'TEST-poison' else 0
         if status == expected_status:
             try:
-                test_proof = check(records, test_mode)
+                test_proof = check(records, test_mode, require_faults=preflight)
                 negative_verified = test_mode == 'TEST-poison'
             except Exception:
                 status, stage = 125, 'source_test_refused'
@@ -427,37 +446,25 @@ def retained_main():
     stale directory is never adopted as this invocation's private evidence.
     """
     try:
-        return main()
+        result = main()
+        from preparation_retention import release, OWNED
+        if ACTIVE_ROOT in OWNED:
+            release(ACTIVE_ROOT)
+        return result
     except BaseException as error:
         root = ACTIVE_ROOT
         if root is None:
             raise
         if (root / 'evidence.cms').exists():
             raise
-        raw = root / 'raw'
+        from preparation_retention import retain
         record = {'schema': 'unrest.v046.primary-preparation-failure.v1',
                   'stage': STAGE, 'exit_code': 125, 'script_sha256': SCRIPT_PIN,
                   'script_size': SCRIPT_SIZE, 'source_checkpoint_ready': False,
                   'selected_carrier': None}
-        from preparation_diagnostics import failure
-        private = {**record, 'failure': failure(error),
-                   'child_failure_sha256': CHILD_PREPARATION_FAILURE}
-        (raw / 'preparation-status.json').write_bytes(canonical(private))
-        archive = root / 'raw.tar.gz'
-        with tarfile.open(archive, 'x:gz') as stream:
-            for path in sorted(raw.iterdir()):
-                if not path.is_file() or path.is_symlink():
-                    raise RuntimeError('primary_evidence_member')
-                stream.add(path, arcname=path.name, recursive=False)
-        if run(['openssl', 'cms', '-encrypt', '-binary', '-aes-256-cbc', '-outform', 'DER',
-                '-in', str(archive), '-out', str(root / 'evidence.cms'),
-                str(SUPPORT / 'evidence-recipient.pem')], root / 'encryption.log').returncode:
+        retain(root, record, error, CHILD_PREPARATION_FAILURE)
+        if not (root / 'evidence.cms').is_file():
             raise RuntimeError('primary_encryption_failed')
-        record.update(ciphertext_sha256=digest(root / 'evidence.cms'),
-                      plaintext_archive_sha256=digest(archive))
-        (root / 'safe-provenance.json').write_bytes(canonical(record))
-        shutil.rmtree(raw)
-        archive.unlink()
         return 125
 
 
