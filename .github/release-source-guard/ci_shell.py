@@ -17,8 +17,8 @@ from checkpoint_decision import expected_identity
 from primary_environment import build
 from source_controller import source_bindings
 from structured_evidence import EvidenceRefused, execution_identity
-from primary_custody import Binding, Custody, read_regular, ORDER, ARCHIVE, INSTALLED, CHECKSUM
-from primary_source_inputs import test_plan, decode
+from primary_custody import Binding, Custody, ORDER, ARCHIVE, INSTALLED, CHECKSUM
+from primary_source_inputs import test_plan
 from structured_evidence import canonical
 
 SUPPORT = Path(__file__).resolve().parent
@@ -84,90 +84,8 @@ SCRIPT_PIN = None
 SCRIPT_SIZE = None
 
 
-def main():
-    global STAGE, SCRIPT_PIN, SCRIPT_SIZE
-    test_mode = None
-    package_test = len(sys.argv) == 3 and sys.argv[1] == '--package-test'
-    if package_test and (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
-            or os.environ.get('GITHUB_REF') not in {
-                'refs/heads/codex/source-guard-structured-20261018-package-entry-' + epoch
-                for epoch in ('01', '02', '03', '04')} | {
-                'refs/heads/codex/source-guard-structured-20261018-package-entry-cache-record-' + epoch
-                for epoch in ('01', '02')} | {
-                'refs/heads/codex/source-guard-structured-20261018-package-entry-cache-lineage-' + epoch
-                for epoch in ('01', '02', '03', '04', '05', '06')} | {
-                'refs/heads/codex/source-guard-structured-20261018-package-entry-control-input-' + epoch
-                for epoch in ('01', '02', '03', '04', '05', '06')}):
-        raise RuntimeError('primary_package_test_workflow_identity')
-    if len(sys.argv) == 4 and sys.argv[1] == '--source-test':
-        test_mode = sys.argv[2]
-        if (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
-                or not (os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-root-allocation-' + epoch
-                    for epoch in ('01', '02', '03')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-producer-startup-' + epoch
-                    for epoch in ('01', '02', '03')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-cache-snapshot-' + epoch
-                    for epoch in ('01', '02', '03', '04', '05', '06')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-source-return-' + epoch
-                    for epoch in ('01', '02', '03', '04', '05', '06')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-primary-dependency-' + epoch
-                    for epoch in ('01', '02', '03', '04', '05', '06')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-raw-record-transport-' + epoch
-                    for epoch in ('01', '02', '03', '04')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-native-uv-mode-' + epoch
-                    for epoch in ('01', '02', '03', '04')}
-                    or os.environ.get('GITHUB_REF', '').startswith((
-                    'refs/heads/codex/source-guard-structured-20261018-source-entry-',
-                    'refs/heads/codex/source-guard-structured-20261018-source-composition-',
-                    'refs/heads/codex/source-guard-structured-20261018-exact-pipe-',
-                    'refs/heads/codex/source-guard-structured-20261018-source-receipt-',
-                    'refs/heads/codex/source-guard-structured-20261018-layered-source-',
-                    'refs/heads/codex/source-guard-structured-20261018-pinned-policy-',
-                    'refs/heads/codex/source-guard-structured-20261018-source-seams-')))):
-            raise RuntimeError('primary_test_workflow_identity')
-    elif len(sys.argv) != 2 and not package_test:
-        raise RuntimeError('primary_shell_argv')
-    script_path = Path(sys.argv[-1])
-    if script_path.is_symlink() or not script_path.is_file() or script_path.stat().st_size > 16384:
-        raise RuntimeError('primary_script_carrier')
-    script = script_path.read_bytes()
-    SCRIPT_PIN, SCRIPT_SIZE = hashlib.sha256(script).hexdigest(), len(script)
-    STAGE = 'binding'
-    expected = expected_identity()
-    workflow = (REPOSITORY / '.github/workflows/ci.yml').read_text()
-    bound = None if test_mode else bind_generated(script, workflow)
-    decision_path = Path(os.environ['RUNNER_TEMP']) / 'primary-decision.json'
-    if os.environ.get('GITHUB_WORKFLOW') == 'CI':
-        if decision_path.is_symlink():
-            raise RuntimeError('primary_decision_carrier')
-        decision = json.loads(decision_path.read_bytes())
-        if (decision['schema'] != 'unrest.v046.primary-decision.v1'
-                or decision['expected'] != expected):
-            raise RuntimeError('primary_decision_identity')
-        if decision['decision'] == 'reuse-authentic-full':
-            if not decision['receipt'] or decision['receipt']['head_sha'] != os.environ['GITHUB_SHA']:
-                raise RuntimeError('primary_reuse_identity')
-            return 0
-        if decision['decision'] != 'execute-first-full' or decision['receipt'] is not None:
-            raise RuntimeError('primary_decision_kind')
-    source_input = None
-    if not test_mode and not package_test and (bound['name'] == 'v0.4.6 source suite'
-            or bound['name'] in ORDER):
-        source_input = decode(read_regular(Path(os.environ['RUNNER_TEMP']) / 'primary-source-input.json', 65536, 0o600))
-        if source_input['definition'] != expected:
-            raise RuntimeError('primary_source_current_definition')
-    if package_test:
-        from primary_package_inputs import plan as package_plan
-        spec = package_plan(bound['script'], workflow, None, test=True)
-    else:
-        spec = test_plan(script, workflow, test_mode) if test_mode else plan(bound['script'], workflow, source_input)
+def prepare_capsule(spec, script, expected, source_input, test_mode, package_test):
+    global STAGE
     kind = KINDS[spec['duty']]
     root = Path(os.environ['RUNNER_TEMP']) / kind
     root.mkdir(mode=0o700)
@@ -264,6 +182,137 @@ def main():
     source_invocation = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     (inputs / 'transport-identity.json').write_bytes(canonical({
         'identity': identity, 'invocation_sha256': source_invocation}))
+    if run(argv, log).returncode:
+        raise RuntimeError('primary_create_failed')
+    try:
+        config = json.loads(subprocess.check_output(['docker', 'inspect', container]))[0]
+        validate(config, image, mounts)
+    except BaseException:
+        run(['docker', 'rm', '--force', container], log)
+        raise
+    return {'root': root, 'raw': raw, 'log': log, 'control': control,
+            'custody': custody, 'image': image, 'source_pins': source_pins,
+            'container': container, 'identity': identity,
+            'source_invocation': source_invocation, 'inputs': inputs}
+
+
+def main():
+    global STAGE, SCRIPT_PIN, SCRIPT_SIZE
+    from full_bootstrap import consume, context, reserved
+    prepare_only = len(sys.argv) == 3 and sys.argv[1] == '--prepare-full'
+    if reserved(os.environ.get('GITHUB_REF', '')):
+        if not prepare_only:
+            raise RuntimeError('primary_prepare_only_ref')
+        context('PREPAREONLY')
+    elif prepare_only:
+        raise RuntimeError('primary_prepare_only_context')
+    test_mode = None
+    package_test = len(sys.argv) == 3 and sys.argv[1] == '--package-test'
+    if package_test and (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
+            or os.environ.get('GITHUB_REF') not in {
+                'refs/heads/codex/source-guard-structured-20261018-package-entry-' + epoch
+                for epoch in ('01', '02', '03', '04')} | {
+                'refs/heads/codex/source-guard-structured-20261018-package-entry-cache-record-' + epoch
+                for epoch in ('01', '02')} | {
+                'refs/heads/codex/source-guard-structured-20261018-package-entry-cache-lineage-' + epoch
+                for epoch in ('01', '02', '03', '04', '05', '06')} | {
+                'refs/heads/codex/source-guard-structured-20261018-package-entry-control-input-' + epoch
+                for epoch in ('01', '02', '03', '04', '05', '06')}):
+        raise RuntimeError('primary_package_test_workflow_identity')
+    if len(sys.argv) == 4 and sys.argv[1] == '--source-test':
+        test_mode = sys.argv[2]
+        if (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
+                or not (os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-root-allocation-' + epoch
+                    for epoch in ('01', '02', '03')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-producer-startup-' + epoch
+                    for epoch in ('01', '02', '03')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-cache-snapshot-' + epoch
+                    for epoch in ('01', '02', '03', '04', '05', '06')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-source-return-' + epoch
+                    for epoch in ('01', '02', '03', '04', '05', '06')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-primary-dependency-' + epoch
+                    for epoch in ('01', '02', '03', '04', '05', '06')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-raw-record-transport-' + epoch
+                    for epoch in ('01', '02', '03', '04')}
+                    or os.environ.get('GITHUB_REF') in {
+                    'refs/heads/codex/source-guard-structured-20261018-native-uv-mode-' + epoch
+                    for epoch in ('01', '02', '03', '04')}
+                    or os.environ.get('GITHUB_REF', '').startswith((
+                    'refs/heads/codex/source-guard-structured-20261018-source-entry-',
+                    'refs/heads/codex/source-guard-structured-20261018-source-composition-',
+                    'refs/heads/codex/source-guard-structured-20261018-exact-pipe-',
+                    'refs/heads/codex/source-guard-structured-20261018-source-receipt-',
+                    'refs/heads/codex/source-guard-structured-20261018-layered-source-',
+                    'refs/heads/codex/source-guard-structured-20261018-pinned-policy-',
+                    'refs/heads/codex/source-guard-structured-20261018-source-seams-')))):
+            raise RuntimeError('primary_test_workflow_identity')
+    elif len(sys.argv) != 2 and not package_test and not prepare_only:
+        raise RuntimeError('primary_shell_argv')
+    script_path = Path(sys.argv[-1])
+    if script_path.is_symlink() or not script_path.is_file() or script_path.stat().st_size > 16384:
+        raise RuntimeError('primary_script_carrier')
+    script = script_path.read_bytes()
+    SCRIPT_PIN, SCRIPT_SIZE = hashlib.sha256(script).hexdigest(), len(script)
+    STAGE = 'binding'
+    expected = expected_identity()
+    workflow = (REPOSITORY / '.github/workflows/ci.yml').read_text()
+    bound = None if test_mode else bind_generated(script, workflow)
+    decision_path = Path(os.environ['RUNNER_TEMP']) / 'primary-decision.json'
+    if os.environ.get('GITHUB_WORKFLOW') == 'CI':
+        if decision_path.is_symlink():
+            raise RuntimeError('primary_decision_carrier')
+        decision = json.loads(decision_path.read_bytes())
+        if (decision['schema'] != 'unrest.v046.primary-decision.v1'
+                or decision['expected'] != expected):
+            raise RuntimeError('primary_decision_identity')
+        if decision['decision'] == 'reuse-authentic-full':
+            if not decision['receipt'] or decision['receipt']['head_sha'] != os.environ['GITHUB_SHA']:
+                raise RuntimeError('primary_reuse_identity')
+            return 0
+        if decision['decision'] != 'execute-first-full' or decision['receipt'] is not None:
+            raise RuntimeError('primary_decision_kind')
+    source_input = None
+    if not test_mode and not package_test and (bound['name'] == 'v0.4.6 source suite'
+            or bound['name'] in ORDER):
+        source_input = consume('PREPAREONLY' if prepare_only else 'FULL', script)
+        if source_input['definition'] != expected:
+            raise RuntimeError('primary_source_current_definition')
+    if package_test:
+        from primary_package_inputs import plan as package_plan
+        spec = package_plan(bound['script'], workflow, None, test=True)
+    else:
+        spec = test_plan(script, workflow, test_mode) if test_mode else plan(bound['script'], workflow, source_input)
+    prepared = prepare_capsule(spec, script, expected, source_input, test_mode, package_test)
+    root, raw, log, control, custody, image, source_pins, container, identity, source_invocation = (
+        prepared[key] for key in ('root', 'raw', 'log', 'control', 'custody', 'image',
+                                 'source_pins', 'container', 'identity', 'source_invocation'))
+    if prepare_only:
+        try:
+            consume('PREPAREONLY', script)
+            # No docker start and no payload entry point. The same create and
+            # inspect predicates above precede every eventual FULL dispatch.
+            inputs = prepared['inputs']
+            proof = {'schema': 'unrest.v046.full-preparation.v1',
+                     'identity': identity, 'definition': expected,
+                     'operation': 'PREPAREONLY', 'source_testcase_executed': False,
+                     'eligible_certificate': False, 'source_checkpoint_ready': False,
+                     'selected_carrier': None, 'primary_plan': public_plan(spec),
+                     'image_id': image, 'script_sha256': digest(inputs / 'github-script.sh'),
+                     'manifest_sha256': digest(inputs / 'source.json'),
+                     'registry_sha256': digest(inputs / 'registry.py'),
+                     'input_sha256': digest(inputs / 'source-input.json'),
+                     'kernel': {'system': os.uname().sysname, 'release_sha256': hashlib.sha256(os.uname().release.encode()).hexdigest(),
+                                'machine': os.uname().machine}}
+            (root / 'preparation.json').write_bytes(canonical(proof))
+        finally:
+            run(['docker', 'rm', '--force', container], log)
+        return 0
     status = 125
     records = {}
     capture_failure = None
@@ -271,10 +320,8 @@ def main():
     stage = 'create'
     STAGE = 'capsule'
     try:
-        if run(argv, log).returncode:
-            raise RuntimeError('primary_create_failed')
-        config = json.loads(subprocess.check_output(['docker', 'inspect', container]))[0]
-        validate(config, image, mounts)
+        if source_input is not None:
+            consume('FULL', script)
         stage = 'capture'
         from source_raw_transport import capture as capture_raw_source
         _, records = capture_raw_source(['docker', 'start', '--attach', container], raw, identity, 'primary-executor', source_invocation=source_invocation)

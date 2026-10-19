@@ -100,6 +100,14 @@ def identity_check(value):
         require(value['workflow_ref'] in {native_uv_prefix + epoch
                                         for epoch in ('01', '02', '03', '04')},
                 'workflow_identity')
+    bootstrap_family = 'source-guard-structured-20261018-full-bootstrap'
+    if bootstrap_family in value['workflow_ref']:
+        prefix = ('apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@'
+                  'refs/heads/codex/source-guard-structured-20261018-full-bootstrap-')
+        require(value['workflow_ref'] in {prefix + f'{epoch:02}' for epoch in range(1, 7)}
+                and value['artifact_name'] in {
+                    f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}"
+                    for kind in ('readiness', 'primary-source')}, 'workflow_identity')
     readiness = re.fullmatch(
         r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-[a-z0-9-]+',
         value['workflow_ref'])

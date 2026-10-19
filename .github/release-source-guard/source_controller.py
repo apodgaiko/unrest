@@ -80,6 +80,10 @@ def run(argv, log, **kwargs):
         return subprocess.run(argv, stdout=output, stderr=subprocess.STDOUT, check=False, **kwargs)
 
 def main():
+    from full_bootstrap import reserved
+    if reserved(os.environ.get('GITHUB_REF', '')):
+        raise RuntimeError('full_prepare_only_ref')
+
     root, controls = map(lambda s: Path(s).resolve(), sys.argv[1:3])
     selection = sys.argv[3] if len(sys.argv) == 4 else 'inprocess'
     if selection not in {'ci-mutations', 'inprocess', 'composed', 'backend', 'drain-controls', 'producer-contract', 'producer-distribution', 'producer-controls'}:

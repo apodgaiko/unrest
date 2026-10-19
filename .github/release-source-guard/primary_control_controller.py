@@ -26,6 +26,10 @@ def run(argv, log):
 
 
 def main():
+    from full_bootstrap import reserved
+    if reserved(os.environ.get('GITHUB_REF', '')):
+        raise RuntimeError('full_prepare_only_ref')
+
     root, prerequisite = map(Path, sys.argv[1:])
     root.mkdir(mode=0o700)
     raw = root / 'raw'

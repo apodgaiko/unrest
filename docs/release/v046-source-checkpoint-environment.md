@@ -1,40 +1,60 @@
 # v0.4.6 source-checkpoint environment
 
-The Linux source-guard port is **incomplete**. No source checkpoint, selected
-carrier, release certification, native-provider acceptance or timing claim
-follows from the readiness workflow. `source_checkpoint_ready=false` and
-`selected_carrier=null` remain mandatory until the source guard and subsequent
-carrier/package certification are complete.
+## FULL input preparation
 
-The first HTTPS credential could not write workflow files, and that rejected
-ref remains absent. A separately configured Git SSH credential subsequently
-authenticated to the same repository owner and accepted the authorized scratch
-branch through normal GitHub enforcement. The connected API's branch creation
-returned 403 despite its repository permission metadata; it was not retried.
+The trusted CI host creates a canonical mode-0600
+`$RUNNER_TEMP/primary-source-input.json` before FULL SOURCE or package execution.
+`full_bootstrap.py` reads the repository's exact `checkpoint-inputs.json`, checks
+its nonrecursive input scope, and constructs the existing closed SOURCE input
+schema with the actual current commit, tree, workflow, guard, runtime, command
+and lock identities. These runtime identities are separate from prospective
+readiness data. The input scope includes every tracked file except the exact
+carrier path `.github/release-source-guard/checkpoint-inputs.json`; unknown
+support JSON is refused. The complete guard definition includes the carrier's
+exact digest. No prefix or general JSON exclusion applies.
 
-The first original focused source proof succeeded in
-[run 39060025630](https://github.com/apodgaiko/unrest/actions/runs/39060025630)
-at `c746f728306934178ebd5d3f945e1e6ded65514f`. Downloaded ciphertext,
-plaintext archive, GitHub run/artifact identities and support bytes were verified
-locally. Original JUnit records all four in-process completion-refusal restart
-parameters passing, with zero failures, errors or skips. Kernel records contain
-16 actual original-parent wait4 results, root wait word 0 and zero poison. This
-proof covers that source function and its Git descendants; it does not cover the
-whole source suite, controlled backend or package certification.
-The native profile predicate and the same four original parameters also passed
-[run 39063771910](https://github.com/apodgaiko/unrest/actions/runs/39063771910)
-at `f366e4dde0a36de7630fc606e820ea1a6f471b85`.
+The host acquires a fresh owned mode-0700 custody directory and exclusively
+creates its private key, input and MAC receipt. The receipt binds the physical
+input inode/metadata, host UID, current run and attempt, workflow, carrier bytes,
+script and boot/monotonic/wall-clock deadline. Consumers retain the original
+single-link regular-file, no-follow, size, owner, mode and stable-read checks.
+The source actor receives only the closed data input through its read-only
+mount. Private host keys and acquisition receipts are never payload mounts.
+Copies, replaced carriers, stale runs, foreign roles, links and expired leases
+refuse. Neither caller Booleans nor copied repository data authorize execution.
 
-The whole original composed restart/stop/replacement/cancel test passed
-[run 39064611100](https://github.com/apodgaiko/unrest/actions/runs/39064611100)
-at `ba2cef976f7607fdd36e29b5097b677c823e3698`. Its original JUnit contains one
-passing case, no errors/failures/skips, and all original assertions. All 33
-registered descendants have actual waits; the kernel records 34 original-parent
-waits including the finite stock Git maintenance child, and 12 original stock
-`ps -axo pid=,ppid=,pgid=` inventories. Root and custodian returned zero, with
-zero kernel/guard poison. Downloaded artifact identities and all support hashes
-were independently checked locally before inspecting decrypted evidence.
-Earlier failures remain failures.
+`PREPAREONLY` is a distinct host operation, reserved to exactly six
+`full-bootstrap-01` through `full-bootstrap-06` readiness refs. The workflow runs
+the complete relevant Ubuntu controls and physical input controls, then invokes
+the common `ci_shell.prepare_capsule` boundary used by eventual FULL execution.
+It builds the actual image, source snapshot, manifest, registry and original
+script plan, creates the capsule and checks the original Docker predicates.
+It removes the capsule before any `docker start` or SOURCE testcase dispatch.
+Its proof explicitly returns `source_testcase_executed=false`,
+`eligible_certificate=false`, and `source_checkpoint_ready=false`.
+Malformed family refs, alternate workflows and execution on preparation refs
+refuse. Existing ordinary TEST and CI execution routes retain their scripts.
+
+A prospective carrier has operation `PREPAREONLY` and no preparation digest.
+It cannot authorize FULL execution. A sealed carrier requires a separately
+verified preparation digest, current finite applicability and preserved original
+mechanism attribution. A readiness seal authorizes only the subsequent frozen
+checkpoint; it is never evidence that the full source suite passed.
+
+The original 34-byte SOURCE script retains SHA256
+`83130e7c9c358fe2461d918192481beb7d97b5d88f02b695481052b28a931310`
+and argv `env -u CODEX_PATH uv run pytest -q`. SOURCE root, collection and drain
+budgets remain 7200, 300 and 60 seconds. No selectors, exclusions, test/plugin
+disabling or inferred controlled transport selection are introduced.
+
+The accepted original four-case SOURCE and caught-poison prerequisite is
+`766a6ca0002b181bfb700413880d46869e657152` / run `39174623606`.
+The accepted package TEST prerequisite is
+`8fd4b4f5ca1c38fc56d870a0a13669ea521bbf34` / run `39195370544`.
+Their actual original-parent waits, complete named records and platform/method
+attribution remain prerequisites rather than execution of the unexcluded suite.
+Native provider approval, reuse and final timing remain UNVERIFIED; experimental
+features remain off by default. All downstream release gates remain required.
 
 ## Synthetic compartment prerequisite
 

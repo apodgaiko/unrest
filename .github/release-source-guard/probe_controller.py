@@ -94,6 +94,10 @@ def prerequisite_status(identity, stage, error=None):
 
 
 def main() -> int:
+    from full_bootstrap import context, reserved
+    if reserved(os.environ.get('GITHUB_REF', '')):
+        context('PREPAREONLY')
+
     root = Path(sys.argv[1]).resolve()
     root.mkdir(mode=0o700)
     raw = root / "raw"

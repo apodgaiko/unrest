@@ -27,13 +27,33 @@ jobs:
           enable-cache: false
       - name: Synthetic kernel and observer controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
+      - name: Physical FULL input controls on trusted host
+        if: ${{ contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
+        run: python3 .github/release-source-guard/full_input_controls.py
+      - name: Prepare current FULL input on trusted host
+        if: ${{ contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
+        run: python3 .github/release-source-guard/full_bootstrap.py PREPAREONLY
+      - name: Prepare FULL capsule without SOURCE dispatch
+        if: ${{ contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
+        run: env -u CODEX_PATH uv run pytest -q
+        shell: python3 .github/release-source-guard/ci_shell.py --prepare-full {0}
+      - name: Upload dispatch-free FULL preparation
+        if: ${{ always() && contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-full-preparation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/primary-source/preparation.json
+          if-no-files-found: error
       - name: TEST original PRIMARY build producer
+        if: ${{ !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         run: uv build
         shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
       - name: TEST original PRIMARY archive consumer
+        if: ${{ !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         run: uv run python tools/check_distribution.py dist
         shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
       - name: TEST original PRIMARY installed consumer
+        if: ${{ !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         run: |
           uv venv --clear .wheel-venv
           uv pip install --python .wheel-venv/bin/python dist/*.whl
@@ -52,7 +72,7 @@ jobs:
           test "$output" = "unrest-server: startup configuration rejected"
         shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
       - name: Upload encrypted TEST package installed evidence
-        if: always()
+        if: ${{ always() && !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         uses: actions/upload-artifact@v4.6.2
         with:
           name: v046-primary-package-installed-${{ github.run_id }}-${{ github.run_attempt }}
@@ -62,6 +82,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: TEST original PRIMARY checksum consumer
+        if: ${{ !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         run: |
           test -f dist/unrest_harness-0.4.6-py3-none-any.whl
           test -f dist/unrest_harness-0.4.6.tar.gz
@@ -72,7 +93,7 @@ jobs:
           sha256sum --check --strict SHA256SUMS
         shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
       - name: Upload encrypted TEST package checksum evidence
-        if: always()
+        if: ${{ always() && !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         uses: actions/upload-artifact@v4.6.2
         with:
           name: v046-primary-package-checksum-${{ github.run_id }}-${{ github.run_attempt }}
@@ -82,7 +103,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload encrypted TEST package archive evidence
-        if: always()
+        if: ${{ always() && !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         uses: actions/upload-artifact@v4.6.2
         with:
           name: v046-primary-package-archive-${{ github.run_id }}-${{ github.run_attempt }}
@@ -92,7 +113,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload encrypted TEST package build evidence
-        if: always()
+        if: ${{ always() && !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         uses: actions/upload-artifact@v4.6.2
         with:
           name: v046-primary-package-build-${{ github.run_id }}-${{ github.run_attempt }}

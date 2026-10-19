@@ -92,6 +92,9 @@ def main():
     with destination.open('x') as stream:
         json.dump(result, stream, sort_keys=True)
     destination.chmod(0o600)
+    if result['receipt'] is None:
+        from full_bootstrap import produce
+        produce('FULL')
     print(json.dumps({'decision': result['decision'], 'eligible_prior_full': result['receipt'] is not None}))
     return 0
 
