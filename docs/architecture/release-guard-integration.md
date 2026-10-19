@@ -146,3 +146,17 @@ controls remain unchanged. The supplementary reducer distinguishes the five
 successful original trackers from one explicitly injected post-READY rollback;
 that sixth child requires its own numeric original-parent SIGKILL wait, preserved
 exception and restored descriptor census.
+
+The already registered line-218 ignoring child keeps the original registry,
+fallback validation and source anchor. After that unchanged consumption, the
+extension rechecks the exact production factory and emits only its startup join.
+The two newly bound literals and the original ignoring literal each have a
+separate controlled method identity; the latter proves SIGTERM refusal followed
+by genuine SIGKILL settlement without broadening any wait exception.
+
+Supplementary lease probes wait for both core and authenticated endpoint READY
+before exercising teardown. This does not change an original case or guard
+startup deadline. The two exact native Git inventory leaves retain the existing
+native-leaf READY disposition, source/argv/custody checks and actual-parent waits;
+the reducer requires their exact owner, two source lines and unchanged source pin
+instead of demanding a Python endpoint from a native executable.

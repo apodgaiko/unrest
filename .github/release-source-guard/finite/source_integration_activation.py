@@ -35,16 +35,23 @@ def create(state, emit, refuse, ready):
                 self.refuse('source_lease_activation_caller_drift')
             # The inherited before_python already consumed the immutable live
             # initialize_inner frame/token. Resolve the factory again here.
+            legacy = any(item is registration for item in state['commands'])
+            if legacy:
+                # Retain all original registry/fallback checks and the original
+                # source anchor before adding its startup-only consumption.
+                super().ordinary_python(guard, launch, argv, cwd, environment, registration)
             actual = checked('lease_routes.py')['admit'](
-                argv, cwd, environment, state, self.emit, self.refuse)
-            if actual != registration:
+                argv, cwd, environment, state, self.emit, self.refuse, legacy=legacy)
+            if actual is None or (not legacy and actual != registration):
                 self.refuse('source_lease_activation_registration_drift')
             self.shared()
             self.emit({'kind': 'source_lease_startup_consumption',
                        'launch_token': launch['launch_token'],
                        'source_binding': registration['source_binding'],
-                       'factory': registration['lease_factory'], 'argv': list(argv),
+                       'factory': actual['lease_factory'], 'argv': list(argv),
                        'cwd': str(cwd), 'environment': dict(environment)})
+            if legacy:
+                return
             self.emit({'kind': 'source_ordinary_startup_consumption',
                        'class': registration['class'], 'source_binding': registration['source_binding'],
                        'launch_token': launch['launch_token'], 'shared_startup_seal': True})

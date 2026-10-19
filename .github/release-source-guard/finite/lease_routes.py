@@ -12,16 +12,21 @@ SOURCE = 'tests/test_experimental_lease.py'
 PRODUCT = 'src/unrest_harness/experimental_confinement.py'
 CLEANUP = 'test_cleanup_failure_revokes_and_quarantines'
 BARRIER = 'test_close_waits_for_launch_registration'
+ORIGINAL = 'test_owned_ignoring_child_and_unknown_quarantine'
 METHOD = '.github/release-source-guard/multiprocess_guard_methods.py'
 METHOD_CASE = METHOD + '::test_owned_exit17_keeps_raw_status'
-CASES = {SOURCE + '::' + CLEANUP: ('cleanup', 399),
+CASES = {SOURCE + '::' + ORIGINAL: ('ignore', 218),
+         SOURCE + '::' + CLEANUP: ('cleanup', 399),
          **{SOURCE + '::' + BARRIER + '[' + mode + ']': (mode, 559)
             for mode in ('spawn', 'registration')}}
 
 
-def admit(argv, cwd, env, state, append, refuse):
+def admit(argv, cwd, env, state, append, refuse, *, legacy=False):
     case = state.get('case')
     controlled = case == METHOD_CASE
+    if case == SOURCE + '::' + ORIGINAL and not legacy:
+        # Preserve its original registry/fallback/anchor path unchanged.
+        return None
     if case not in CASES and not controlled:
         return None
     root = Path(state['checkout'])
@@ -70,21 +75,21 @@ def admit(argv, cwd, env, state, append, refuse):
                         state['isolated_source_code'](method_source), '_lease_launch')):
                 refuse('lease_method_code_globals_drift')
             mode = caller.f_locals.get('mode')
-            if mode not in ('cleanup', 'spawn', 'registration'):
+            if mode not in ('ignore', 'cleanup', 'spawn', 'registration'):
                 refuse('lease_method_parameter_drift')
-            line = 399 if mode == 'cleanup' else 559
+            line = {'ignore': 218, 'cleanup': 399, 'spawn': 559, 'registration': 559}[mode]
             if (caller.f_locals.get('owner') is not factory.f_locals.get('self')
                     or caller.f_locals.get('directory') != cwd):
                 refuse('lease_method_owner_drift')
         else:
             mode, line = CASES[case]
-            owner_name = CLEANUP if mode == 'cleanup' else BARRIER
+            owner_name = ORIGINAL if mode == 'ignore' else CLEANUP if mode == 'cleanup' else BARRIER
             owner = getattr(tests, owner_name)
             owner_code = state['isolated_named'](state['isolated_source_code'](source), owner_name)
             if owner.__globals__ is not vars(tests) or owner.__code__ != owner_code:
                 refuse('lease_original_owner_drift')
             callers = [f for f in stack if f.f_code.co_filename == str(source)]
-            if mode == 'cleanup':
+            if mode in ('ignore', 'cleanup'):
                 matched = [f for f in callers if f.f_code is owner.__code__ and f.f_lineno == line]
             else:
                 expected = state['isolated_named'](owner_code, 'paused_spawn')
@@ -94,9 +99,9 @@ def admit(argv, cwd, env, state, append, refuse):
                 refuse('lease_original_caller_drift')
         tree = ast.parse(source.read_bytes())
         node = next(n for n in ast.walk(tree) if isinstance(n, ast.Call) and n.lineno == line
-                    and ast.unparse(n.func) == ('owner.launch_local' if mode == 'cleanup'
+                    and ast.unparse(n.func) == ('owner.launch_local' if mode in ('ignore', 'cleanup')
                                               else 'pool.submit'))
-        vector = node.args[0 if mode == 'cleanup' else 1]
+        vector = node.args[0 if mode in ('ignore', 'cleanup') else 1]
         if (not isinstance(vector, ast.List) or len(vector.elts) != 3
                 or ast.unparse(vector.elts[0]) != 'sys.executable'):
             refuse('lease_literal_shape_drift')
@@ -111,7 +116,7 @@ def admit(argv, cwd, env, state, append, refuse):
                 or directory == Path(state['owned_root']) or os.getcwd() != state['checkout']
                 or type(owner_instance) is not module.OwnedProcesses
                 or owner_instance.closed or owner_instance.quarantined
-                or (not controlled and mode == 'cleanup' and (matched[0].f_locals.get('owner') is not owner_instance
+                or (not controlled and mode in ('ignore', 'cleanup') and (matched[0].f_locals.get('owner') is not owner_instance
                                           or matched[0].f_locals.get('tmp_path') != cwd))
                 or str(Path(argv[0]).resolve()) != state['runtime']['realpath']
                 or hashlib.sha256(Path(argv[0]).read_bytes()).hexdigest() != state['runtime']['sha256']):

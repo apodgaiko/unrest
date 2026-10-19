@@ -74,6 +74,16 @@ def check(records, mode, *, require_faults=False):
                  if row['request']['kind'] == 'ready' and row.get('ok')]
         registered = [row for row in summary['events'] if row['kind'] == 'registered']
         for child in registered:
+            if child['python'] is False:
+                if (child['class'] != 'source-current-binding-git'
+                        or child['case'] != PREFLIGHT_CASES[1]
+                        or child.get('owner_READY_required') is not True
+                        or child.get('native_child_READY') !=
+                        'not applicable only under approved exact ordinary native leaf disposition'):
+                    raise RuntimeError('preflight_unexpected_native_leaf')
+                # Native leaves retain exact exec/custody and actual-parent
+                # waits above; they cannot emit a Python endpoint receipt.
+                continue
             observations = [row for row in ready if row['request']['pid'] == child['pid']]
             if len(observations) != 1:
                 raise RuntimeError('preflight_authenticated_ready_missing')
@@ -149,11 +159,11 @@ def check_integration_probes(summary, kernel):
             or births[0]['identity']['ppid'] != rollback['owner_pid']):
         raise RuntimeError('preflight_refused_acquisition_actual_wait')
     leases = [row for row in events if row['kind'] == 'guard_lease_factory_proof']
-    if len(leases) != 3 or {row['mode'] for row in leases} != {'cleanup', 'spawn', 'registration'}:
+    if len(leases) != 4 or {row['mode'] for row in leases} != {'ignore', 'cleanup', 'spawn', 'registration'}:
         raise RuntimeError('preflight_lease_factory_missing')
     for lease in leases:
         child = lease['child_pid']
-        if (lease['child_returncode'] != -15 or lease['before_fds'] != lease['after_fds']
+        if (lease['child_returncode'] != (-9 if lease['mode'] == 'ignore' else -15) or lease['before_fds'] != lease['after_fds']
                 or lease['closed'] is not True or lease['quarantine'] is not (lease['mode'] == 'cleanup')):
             raise RuntimeError('preflight_lease_factory_binding')
         consumption = [row for row in events if row['kind'] == 'source_lease_startup_consumption'
@@ -168,6 +178,10 @@ def check_integration_probes(summary, kernel):
             raise RuntimeError('preflight_lease_consumption_binding')
     shared = [row for row in events if row['kind'] == 'guard_shared_binding_probe']
     routes = [row for row in events if row['kind'] == 'exact_current_binding_registration']
-    if len(shared) != 1 or shared[0]['path_count'] < 2 or len(routes) != 2:
+    if (len(shared) != 1 or shared[0]['path_count'] < 2 or len(routes) != 2
+            or {row['source_binding']['line'] for row in routes} != {36, 57}
+            or any(row['source_binding']['path'] != '/source/tools/release_binding.py'
+                   or row['source_binding']['sha256'] != shared[0]['original_source_sha256']
+                   or row['owner'] != PREFLIGHT_CASES[1] for row in routes)):
         raise RuntimeError('preflight_shared_route_missing')
     return pid

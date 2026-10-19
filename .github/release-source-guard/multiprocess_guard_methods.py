@@ -152,6 +152,10 @@ def _acquisition_faults():
 def _lease_launch(owner, mode, directory):
     # These are the two immutable original source literals. This helper has its
     # own guard-method identity and never impersonates an original test owner.
+    if mode == 'ignore':
+        return owner.launch_local([sys.executable, '-c',
+            'import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("ready",flush=True);time.sleep(30)'],
+            cwd=directory, env={})
     if mode == 'cleanup':
         return owner.launch_local([sys.executable, '-c', 'import time;time.sleep(30)'],
                                   cwd=directory, env={})
@@ -172,7 +176,7 @@ def _lease_factories():
     guard = sys.modules['runtime_guard']
     base = Path(guard._STATE['owned_root']) / 'guard-lease-factories'
     base.mkdir()
-    for mode in ('cleanup', 'spawn', 'registration'):
+    for mode in ('ignore', 'cleanup', 'spawn', 'registration'):
         census = len(os.listdir('/proc/self/fd'))
         directory = base / mode
         directory.mkdir()
@@ -186,6 +190,20 @@ def _lease_factories():
         def paused_spawn(*args, **kwargs):
             child = original(*args, **kwargs)
             children.append(child)
+            # Core READY precedes endpoint setup. This supplementary probe
+            # observes both before deliberately terminating its cleanup child.
+            import json
+            import time
+            ready_path = Path(guard._STATE['guard']).with_name('multiprocess_routes.py')
+            ready = guard.checked_source(ready_path, guard._STATE['direct_support']['files'][str(ready_path)])['endpoint_ready']
+            journal = Path(guard._STATE['events']) / (str(child.pid) + '.jsonl')
+            token = next(row['token'] for row in guard.summarize(guard._STATE['manifest_path'])['events']
+                         if row['kind'] == 'registered' and row.get('pid') == child.pid)
+            deadline = time.monotonic() + 5
+            while not ready([json.loads(line) for line in journal.read_text().splitlines()],
+                            guard._STATE, token, child.pid):
+                assert child.poll() is None and time.monotonic() < deadline
+                time.sleep(.001)
             if mode != 'cleanup':
                 assert child.stdout.readline() == b'ready\n'
             if mode == 'spawn':
@@ -201,7 +219,10 @@ def _lease_factories():
             owner._processes = RegistrationBarrier()
         try:
             with patch.object(subprocess, 'Popen', paused_spawn):
-                if mode == 'cleanup':
+                if mode == 'ignore':
+                    child = _lease_launch(owner, mode, directory)
+                    assert owner.close(.05) and child.returncode == -9
+                elif mode == 'cleanup':
                     child = _lease_launch(owner, mode, directory)
                     terminate = child.terminate
                     with patch.object(child, 'terminate', side_effect=OSError('controlled cleanup failure')):

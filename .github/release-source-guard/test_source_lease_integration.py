@@ -45,14 +45,18 @@ def named(code, name):
 def profile(mode='cleanup', controlled=False):
     binding = {'path': '/source/src/unrest_harness/experimental_confinement.py',
                'line': 69, 'sha256': pin(ROOT / 'src/unrest_harness/experimental_confinement.py')}
-    original = [PYTHON, '-c', 'import time;time.sleep(30)' if mode == 'cleanup'
+    original = [PYTHON, '-c',
+                'import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("ready",flush=True);time.sleep(30)'
+                if mode == 'ignore' else 'import time;time.sleep(30)' if mode == 'cleanup'
                 else 'import time;print("ready",flush=True);time.sleep(30)']
-    case = ('tests/test_experimental_lease.py::test_cleanup_failure_revokes_and_quarantines'
+    case = ('tests/test_experimental_lease.py::test_owned_ignoring_child_and_unknown_quarantine'
+            if mode == 'ignore' else
+            'tests/test_experimental_lease.py::test_cleanup_failure_revokes_and_quarantines'
             if mode == 'cleanup' else
             'tests/test_experimental_lease.py::test_close_waits_for_launch_registration[' + mode + ']')
     if controlled:
         case = '.github/release-source-guard/multiprocess_guard_methods.py::test_owned_exit17_keeps_raw_status'
-    factory = {'mode': mode, 'literal_line': 399 if mode == 'cleanup' else 559,
+    factory = {'mode': mode, 'literal_line': {'ignore': 218, 'cleanup': 399, 'spawn': 559, 'registration': 559}[mode],
                'case': case, 'controlled_guard_method': controlled,
                'owner_source_sha256': pin(ROOT / 'tests/test_experimental_lease.py')}
     def sha(value):
@@ -75,7 +79,7 @@ def profile(mode='cleanup', controlled=False):
     return registration, context
 
 
-@pytest.mark.parametrize('mode', ['cleanup', 'spawn', 'registration'])
+@pytest.mark.parametrize('mode', ['ignore', 'cleanup', 'spawn', 'registration'])
 @pytest.mark.parametrize('controlled', [False, True])
 def test_lease_postinit_requires_complete_original_binding(mode, controlled):
     registration, context = profile(mode, controlled)
@@ -139,7 +143,7 @@ def test_original_empty_exec_environment_and_flags_are_exact(env, flags):
     assert python_environment(env, registration, flags, lease_context=context) == env
 
 
-@pytest.mark.parametrize('mode', ['cleanup', 'spawn', 'registration'])
+@pytest.mark.parametrize('mode', ['ignore', 'cleanup', 'spawn', 'registration'])
 @pytest.mark.parametrize('mutation', [None, 'argv', 'env', 'owner', 'code', 'globals', 'parameter', 'case'])
 def test_real_controlled_factory_frames_recheck_identity(tmp_path, monkeypatch, mode, mutation):
     from unrest_harness.experimental_confinement import OwnedProcesses
@@ -326,11 +330,14 @@ def test_new_probe_reducer_requires_refused_child_and_all_lease_modes():
               {'kind': 'multiprocess_refused_acquisition_wait', 'pid': 42, 'raw_status': 9,
                'numeric_returncode': -9, 'owner_pid': 20, 'original_exception_preserved': True},
               {'kind': 'raw_actual_parent_waitpid', 'pid': 42, 'raw_status': 9},
-              {'kind': 'guard_shared_binding_probe', 'path_count': 42},
-              {'kind': 'exact_current_binding_registration'}, {'kind': 'exact_current_binding_registration'}]
-    for child, mode in enumerate(('cleanup', 'spawn', 'registration'), 50):
+              {'kind': 'guard_shared_binding_probe', 'path_count': 42, 'original_source_sha256': 'pin'},
+              *[{'kind': 'exact_current_binding_registration',
+                 'source_binding': {'path': '/source/tools/release_binding.py', 'line': line, 'sha256': 'pin'},
+                 'owner': '.github/release-source-guard/multiprocess_guard_methods.py::test_owned_exit17_keeps_raw_status'}
+                for line in (36, 57)]]
+    for child, mode in enumerate(('ignore', 'cleanup', 'spawn', 'registration'), 50):
         events += [{'kind': 'guard_lease_factory_proof', 'child_pid': child, 'mode': mode,
-                    'child_returncode': -15, 'before_fds': 7, 'after_fds': 7, 'closed': True,
+                    'child_returncode': -9 if mode == 'ignore' else -15, 'before_fds': 7, 'after_fds': 7, 'closed': True,
                     'quarantine': mode == 'cleanup'},
                    {'kind': 'source_lease_startup_consumption', 'factory': {'mode': mode},
                     'environment': {}, 'launch_token': mode},
@@ -346,3 +353,20 @@ def test_new_probe_reducer_requires_refused_child_and_all_lease_modes():
             changed[index]['after_fds'] += 1
             with pytest.raises(RuntimeError):
                 check_integration_probes({'events': changed}, kernel)
+
+
+def test_legacy_registry_literal_keeps_its_original_source_anchor():
+    registration, context = profile('ignore')
+    binding = {'path': '/source/tests/test_experimental_lease.py', 'line': 218,
+               'sha256': pin(ROOT / 'tests/test_experimental_lease.py')}
+    registration['source_binding'] = binding
+    context['events'][0]['source_binding'] = binding
+    assert python_environment({}, registration, [0, 0, 0], lease_context=context) == {'LC_CTYPE': 'C.UTF-8'}
+    context['events'][0]['factory']['mode'] = 'cleanup'
+    assert python_environment({}, registration, [0, 0, 0], lease_context=context) == {}
+
+
+def test_original_registry_case_is_never_replaced_by_extension_admission(monkeypatch):
+    routes = load('legacy_registry_control', SUPPORT / 'finite/lease_routes.py', monkeypatch)
+    state = {'case': routes.SOURCE + '::' + routes.ORIGINAL}
+    assert routes.admit([], None, {}, state, pytest.fail, pytest.fail) is None

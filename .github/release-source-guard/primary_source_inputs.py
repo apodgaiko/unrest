@@ -104,7 +104,9 @@ def exact_lease_environment(environment, registration, flags, context):
     from pathlib import PurePosixPath
     binding = {'path': '/source/src/unrest_harness/experimental_confinement.py',
                'line': 69, 'sha256': '25f3e7184ff560cb58067d211aba24c5ca18af50ff04f93c3fd3007796c3dc08'}
-    if registration['source_binding'] != binding:
+    legacy_binding = {'path': '/source/tests/test_experimental_lease.py', 'line': 218,
+                      'sha256': '01461f79560224089da8c906362bfc9606b3a3c620760c29def6c10f8dbe1d5f'}
+    if registration['source_binding'] not in (binding, legacy_binding):
         return False
     selected, manifest = context['selected'], context['manifest']
     runtime = manifest['runtime']
@@ -127,10 +129,12 @@ def exact_lease_environment(environment, registration, flags, context):
     row = rows[0]
     factory = row['factory']
     mode = factory['mode']
-    if mode not in {'cleanup', 'spawn', 'registration'}:
+    if mode not in {'ignore', 'cleanup', 'spawn', 'registration'}:
         return False
-    literal = 399 if mode == 'cleanup' else 559
-    case = ('tests/test_experimental_lease.py::test_cleanup_failure_revokes_and_quarantines'
+    literal = {'ignore': 218, 'cleanup': 399, 'spawn': 559, 'registration': 559}[mode]
+    case = ('tests/test_experimental_lease.py::test_owned_ignoring_child_and_unknown_quarantine'
+            if mode == 'ignore' else
+            'tests/test_experimental_lease.py::test_cleanup_failure_revokes_and_quarantines'
             if mode == 'cleanup' else
             'tests/test_experimental_lease.py::test_close_waits_for_launch_registration[' + mode + ']')
     if factory['controlled_guard_method'] is True:
@@ -141,10 +145,15 @@ def exact_lease_environment(environment, registration, flags, context):
     expected_factory = {'mode': mode, 'literal_line': literal, 'case': case,
                         'controlled_guard_method': factory['controlled_guard_method'],
                         'owner_source_sha256': '01461f79560224089da8c906362bfc9606b3a3c620760c29def6c10f8dbe1d5f'}
-    original = [vector[0], '-c', 'import time;time.sleep(30)' if mode == 'cleanup'
+    original = [vector[0], '-c',
+                'import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("ready",flush=True);time.sleep(30)'
+                if mode == 'ignore' else 'import time;time.sleep(30)' if mode == 'cleanup'
                 else 'import time;print("ready",flush=True);time.sleep(30)']
     directory = PurePosixPath(context['cwd'])
-    return (row['source_binding'] == binding and factory == expected_factory
+    actual_binding = registration['source_binding']
+    if actual_binding == legacy_binding and (mode != 'ignore' or factory['controlled_guard_method']):
+        return False
+    return (row['source_binding'] == actual_binding and factory == expected_factory
             and registration['argv_sha256'] == sha(json.dumps(original).encode())
             and row['argv'] == original and row['environment'] == {}
             and row['cwd'] == str(directory) == context['cwd']
