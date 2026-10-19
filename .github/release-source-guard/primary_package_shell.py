@@ -11,6 +11,7 @@ from primary_policy import PYTHON, UV, console, command_environment
 from producer_profile import query_package
 from producer_inputs import SOURCE_UV_ELF_SHA256
 from finite.linux_identity import identity
+from linux_observation import process_identity
 
 PREFIX = '/source/.wheel-venv'
 UNSET = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CODEX_API_KEY',
@@ -56,6 +57,44 @@ class PackageShellAuthority(Authority):
         self.unrelated = None
         self.pending_env = None
 
+    def substitution_parent(self, trace, parent):
+        """One no-exec Bash fork of the original final command substitution."""
+        if (self.plan['duty'] != INSTALLED or self.operation_index != len(self.operations) - 1
+                or parent in self.contexts or self.unrelated is None
+                or self.source is None):
+            return False
+        self.source.require_complete(trace)
+        current = process_identity(parent)
+        births = [row for row in trace.records if row['kind'] == 'kernel_child'
+                  and row['child'] == parent and row['identity']['tgid'] == parent]
+        if (len(births) != 1 or births[0]['parent'] != self.root or births[0]['event'] != 1
+                or current['ppid'] != self.root or current['uids'] != [20000] * 4
+                or any(current['capabilities'].values()) or current['no_new_privs'] != 1
+                or any(current[key] != births[0]['identity'][key]
+                       for key in ('pid', 'ppid', 'tgid', 'start_ticks', 'boot_id'))
+                or any(row['kind'] in {'kernel_exec', 'exec_attempt'} and row['pid'] == parent
+                       for row in trace.records)
+                or digest('/proc/' + str(parent) + '/exe') != digest('/bin/bash')
+                or digest('/proc/' + str(self.root) + '/exe') != digest('/bin/bash')
+                or str(Path('/proc/' + str(parent) + '/cwd').resolve()) != self.unrelated
+                or digest('/inputs/github-script.sh') != self.plan['script_sha256']):
+            return False
+        after = process_identity(parent)
+        if any(after[key] != current[key] for key in (
+                'pid', 'ppid', 'tgid', 'start_ticks', 'boot_id', 'uids',
+                'capabilities', 'no_new_privs')):
+            return False
+        bound = identity(parent)
+        if any(bound[key] != current[key] for key in ('pid', 'ppid', 'start_ticks', 'boot_id')):
+            return False
+        self.contexts[parent] = {'role': 'package-shell-substitution', 'identity': bound}
+        self.records.append({'kind': 'primary_package_shell_substitution', 'pid': parent,
+                             'identity': self.contexts[parent]['identity'],
+                             'root': self.root, 'kernel_birth_sha256': hashlib.sha256(
+                                 json.dumps(births[0], sort_keys=True).encode()).hexdigest(),
+                             'script_sha256': self.plan['script_sha256']})
+        return True
+
     def resolve(self, trace, pid, path, vector, environment, cwd):
         parent = trace.identities[pid]['ppid']
         previous = self.contexts.get(pid)
@@ -68,7 +107,14 @@ class PackageShellAuthority(Authority):
             return self.python(pid, parent, path, vector, environment, cwd, lifecycle=True, trace=trace)
         if self.operation_index < len(self.operations):
             expected = self.operations[self.operation_index]
-            if vector == expected and (parent == self.root or pid == self.root):
+            substitution = False
+            if (vector == expected and self.plan['duty'] == INSTALLED
+                    and self.operation_index == len(self.operations) - 1
+                    and parent != self.root and pid != self.root):
+                substitution = self.substitution_parent(trace, parent)
+                if not substitution:
+                    return self.refuse('package_shell_substitution_parent')
+            if vector == expected and (parent == self.root or pid == self.root or substitution):
                 native = expected[0]
                 if native in {'uv', 'mktemp', 'sha256sum', 'env'}:
                     selected = UV if native == 'uv' else '/usr/bin/' + native

@@ -165,3 +165,47 @@ def test_relative_installed_uv_query_retains_actual_argv(monkeypatch, change):
         assert observed[0][2][0] == '.wheel-venv/bin/python'
     else:
         assert not observed
+
+
+@pytest.mark.parametrize('change', ['exact', 'foreign-parent', 'wrong-image', 'executed-parent',
+                                  'foreign-birth', 'capability', 'wrong-cwd', 'stale-script', 'incomplete'])
+def test_final_command_substitution_is_one_current_original_shell_fork(change):
+    module = shell()
+    birth = {'pid': 104, 'ppid': 7, 'tgid': 104, 'start_ticks': 10, 'boot_id': 'boot',
+             'uids': [20000] * 4, 'capabilities': {'CapEff': 0}, 'no_new_privs': 1}
+    current = dict(birth)
+    module.process_identity = lambda pid: current
+    module.identity = lambda pid: {'pid': pid, 'ppid': current['ppid'], 'start_ticks': current['start_ticks'], 'boot_id': current['boot_id']}
+    module.digest = lambda path: 'foreign' if (change == 'wrong-image' and path == '/proc/104/exe') or (change == 'stale-script' and path == '/inputs/github-script.sh') else 'a' * 64
+    class Cwd:
+        def resolve(self):
+            return Path('/foreign' if change == 'wrong-cwd' else '/work/owned/tmp/tmp.exact')
+    module.Path = lambda path: Cwd()
+    owner = module.PackageShellAuthority.__new__(module.PackageShellAuthority)
+    owner.plan = {'duty': INSTALLED, 'script_sha256': 'a' * 64}
+    owner.operations, owner.operation_index = module.operations(INSTALLED), 9
+    owner.contexts, owner.records, owner.root = {}, [], 7
+    owner.unrelated = '/work/owned/tmp/tmp.exact'
+    def complete(trace):
+        if change == 'incomplete':
+            raise RuntimeError('package_installed_incomplete')
+    owner.source = SimpleNamespace(require_complete=complete)
+    rows = [{'kind': 'kernel_child', 'child': 104, 'parent': 7, 'event': 1, 'identity': birth}]
+    if change == 'foreign-parent':
+        current['ppid'] = 99
+    elif change == 'executed-parent':
+        rows.append({'kind': 'kernel_exec', 'pid': 104})
+    elif change == 'foreign-birth':
+        current['start_ticks'] = 99
+    elif change == 'capability':
+        current['capabilities'] = {'CapEff': 1}
+    if change == 'incomplete':
+        with pytest.raises(RuntimeError, match='incomplete'):
+            owner.substitution_parent(SimpleNamespace(records=rows), 104)
+    else:
+        assert owner.substitution_parent(SimpleNamespace(records=rows), 104) is (change == 'exact')
+    if change == 'exact':
+        assert owner.contexts[104]['role'] == 'package-shell-substitution'
+        assert owner.records[0]['script_sha256'] == 'a' * 64
+    else:
+        assert not owner.contexts and not owner.records

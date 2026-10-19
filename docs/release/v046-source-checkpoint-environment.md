@@ -1209,3 +1209,10 @@ resolves only that declared interpreter against the observed `/source` cwd,
 checks the current UV parent, renderer, environment and pinned interpreter bytes,
 and preserves the original argv in the startup profile. Foreign paths and
 contexts continue to refuse; the generic SOURCE authority stays unchanged.
+
+The original unsupported-profile assertion uses Bash command substitution. Its
+one no-exec subshell is bound to the original shell's current kernel fork, image,
+UID/capability/NNP, script hash and unrelated cwd after complete lifecycle return.
+Only the existing final server vector and unsupported environment may consume
+that relationship. The original parent waits and all-process census still apply
+to both shell and server; no descendant or descriptor exemption is introduced.
