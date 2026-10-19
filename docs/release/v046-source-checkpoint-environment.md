@@ -1356,3 +1356,27 @@ ownership controls prove cleanup, borrowed-tracker refusal, descriptor-generatio
 refusal, case drift, live-child refusal, causal-error preservation, original child
 statuses and unrelated-finalizer preservation. Finite source admission and
 frozen-candidate certification require separate current-byte proof.
+
+
+The finite multiprocessing route admits only the closed case/target pairs in
+`finite/multiprocess_routes.py`. It binds the current interpreter, stdlib source
+and callable globals, rewritten target code, actual owner, argv, cwd, environment
+and inherited descriptor generations. The existing bootstrap installs the guard
+in both tracker and spawned helper. Successful-exec custody checks every surviving
+nonstdio descriptor, the live original-parent FIFO and kernel birth/credentials
+before Python executes. Ordinary ownership supplies both child and tracker waits;
+no tracer, adopted-child or post-summary wait substitutes for either.
+
+The supporting Linux methods run with UID 20000, no capabilities, a private network
+namespace and complete byte/mode-verified read-only source and runtime views. They
+exercise the new source ownership cases and separately require sticky refusal for
+cloned stdlib globals, changed acquisition arguments, a foreign current case,
+reused descriptors and an unbound caller. An expected refusal remains a failing
+guard summary. The executable hash boundary accepts CPython's original bytes-valued
+path by filesystem decoding, without changing the original launch vector.
+
+Controlled-method preparation failures retain their own encrypted stdout, status
+and named missing records. Source projection uses an explicit archive umask to
+preserve checkout modes. These methods establish bounded current mechanisms;
+they do not replay or repair historical missing results, and the frozen unexcluded
+source checkpoint and same-candidate distribution/lifecycle gates remain required.
