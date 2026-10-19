@@ -179,3 +179,43 @@ def test_replaced_retention_root_never_receives_failure_or_ciphertext(tmp_path, 
         assert list((root / 'raw').iterdir()) == []
     finally:
         release(root)
+
+
+@pytest.mark.parametrize('mutation', [None, 'errno', 'exception', 'code', 'inode', 'mode',
+                                     'links', 'size', 'mtime', 'ctime', 'owner', 'group',
+                                     'host', 'custody', 'receipt'])
+def test_actual_linux_owner_refusal_requires_exact_error_and_physical_transition(mutation):
+    import copy
+    import stat
+    from preflight_evidence import check_owner_refusal
+    from structured_evidence import EvidenceRefused
+    original = [1, 2, stat.S_IFREG | 0o600, 1001, 1001, 1, 856, 100, 100]
+    changed = [*original]
+    changed[3:5] = [20000, 20000]
+    changed[8] = 101
+    before = {'input': original, 'custody': [1, 3, stat.S_IFDIR | 0o700, 1001, 1001],
+              'receipt': {'nonce_sha256': 'a' * 64}}
+    after = copy.deepcopy(before)
+    after['input'] = changed
+    physical = {'before': before, 'after': after}
+    failure = {'code': 'unknown', 'errno': errno.EACCES, 'exception_class': 'PermissionError'}
+    if mutation in {'errno', 'exception', 'code'}:
+        key, value = {'errno': ('errno', errno.ENOENT),
+                      'exception': ('exception_class', 'OSError'),
+                      'code': ('code', 'custody_file')}[mutation]
+        failure[key] = value
+    elif mutation in {'inode', 'mode', 'links', 'size', 'mtime', 'ctime', 'owner', 'group'}:
+        index = {'inode': 1, 'mode': 2, 'links': 5, 'size': 6, 'mtime': 7,
+                 'ctime': 8, 'owner': 3, 'group': 4}[mutation]
+        changed[index] = original[index] if mutation == 'ctime' else changed[index] + 1
+    elif mutation == 'host':
+        original[3] = 0
+    elif mutation == 'custody':
+        after['custody'][1] += 1
+    elif mutation == 'receipt':
+        after['receipt']['nonce_sha256'] = 'b' * 64
+    if mutation is None:
+        check_owner_refusal(failure, physical)
+    else:
+        with pytest.raises(EvidenceRefused, match='preflight_(owner_physical|wrong_refusal)'):
+            check_owner_refusal(failure, physical)

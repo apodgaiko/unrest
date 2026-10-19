@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import errno
+import stat
 import hashlib
 import io
 import json
@@ -41,6 +43,26 @@ def members(body):
             require(stream is not None, 'preflight_missing_member')
             result[row.name] = stream.read(LIMIT + 1)
         return result
+
+
+def check_owner_refusal(failure, physical):
+    """A foreign 0600 owner is rejected by Linux open before fstat."""
+    before, after = physical['before'], physical['after']
+    original, changed = before['input'], after['input']
+    require(all(type(row) is list and len(row) == 9
+                and all(type(value) is int for value in row)
+                for row in (original, changed)), 'preflight_owner_physical')
+    require(before['custody'] == after['custody'] and before['receipt'] == after['receipt']
+            and original[3:5] == before['custody'][3:5]
+            and original[3] not in {0, 20000, 20001}
+            and changed[3:5] == [20000, 20000]
+            and original[:3] == changed[:3]
+            and original[2] == stat.S_IFREG | 0o600
+            and original[5:8] == changed[5:8] and original[5] == 1
+            and changed[8] > original[8], 'preflight_owner_physical')
+    require(failure['exception_class'] == 'PermissionError'
+            and failure['errno'] == errno.EACCES and failure['code'] == 'unknown',
+            'preflight_wrong_refusal')
 
 
 def verify(root, run_id, artifact_id, head, key, support):
@@ -180,11 +202,13 @@ def verify(root, run_id, artifact_id, head, key, support):
                         and physical['before'] != physical['after'], 'preflight_physical_control')
             codes = {'host-root-mode': 'full_private_root', 'host-root-replaced': 'full_host_binding',
                      'host-input-replaced': 'full_host_binding', 'host-input-mode': 'custody_file',
-                     'host-input-owner': 'custody_file', 'host-input-hardlink': 'custody_file',
+                     'host-input-hardlink': 'custody_file',
                      'host-cross-run': 'full_host_binding', 'host-cross-head': 'full_host_binding',
                      'host-nonce': 'full_host_mac', 'host-deadline': 'full_host_deadline',
                      'host-clock': 'full_host_deadline', 'early': 'primary_same_head_controls'}
-            if name in codes:
+            if name == 'host-input-owner':
+                check_owner_refusal(failure['failure'], row['physical'])
+            elif name in codes:
                 require(failure['failure']['code'] == codes[name], 'preflight_wrong_refusal')
             elif name in {'host-input-symlink', 'host-missing', 'producer-acquisition'}:
                 require(failure['failure']['errno'] == {

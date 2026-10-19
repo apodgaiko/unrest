@@ -92,3 +92,11 @@ returned custody. Cleanup failures preserve the acquisition exception together
 with the cleanup error. Current supplementary canaries inject all four boundaries,
 check descriptor census, and bind each tracker to authenticated READY and a
 numeric kernel-observed original-parent wait; no modeled wait is evidence.
+
+The current Linux host owner control changes only the private input owner/group
+from the admitted host to UID/GID 20000. Its mode remains 0600, so the kernel
+refuses the host's nofollow open with PermissionError/EACCES before the later
+fstat ownership check. The reducer requires that exact exception/errno and the
+same inode, mode, link count, size and mtime, changed ctime, unchanged custody and
+receipt, and exact owner transition. An arbitrary access error or a second
+physical mutation cannot stand in for this control.
