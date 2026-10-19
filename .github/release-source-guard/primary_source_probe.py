@@ -88,7 +88,7 @@ def check(records, mode):
                    and type(row['raw_status']) is int and row['raw_status'] == 0
                    for row in summary['events']):
             raise RuntimeError('preflight_actual_tracker_wait_missing')
-        if not any(row['kind'] == 'ready' and row['pid'] == pid for row in summary['events']):
+        if not any(row['kind'] == 'ready' and row.get('owner_pid') == pid for row in summary['events']):
             raise RuntimeError('preflight_tracker_ready_missing')
     negative = mode == 'TEST-poison' 
     if (kernel['guard_poison'] is not negative or summary['ready'] is negative

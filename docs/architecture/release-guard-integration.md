@@ -68,3 +68,8 @@ variables, pinned CPython adds `LC_CTYPE=C.UTF-8`. The profile binds precisely
 that result; changed fixture class, path, line, bytes, flags or an existing locale
 variable cannot select this projection. Original pre-exec environment, argv,
 owner, session, descriptor and READY checks remain mandatory.
+
+Durable guard READY events identify their process with `owner_pid`; endpoint
+requests and process registrations use `pid`. The supplementary reducer joins
+those distinct schema fields to the same authenticated child. A missing or wrong
+durable owner cannot be replaced by a similarly named legacy `pid` field.

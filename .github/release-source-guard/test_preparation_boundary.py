@@ -116,3 +116,43 @@ def test_controlled_postinit_locale_keeps_exact_fixture_and_exec_environment(kin
         assert python_environment(original, changed, [0, 0, 0]) == original
     for flags in ([1, 0, 0], [0, 1, 0], [0, 0, 1]):
         assert python_environment(original, registration, flags) == original
+
+
+@pytest.mark.parametrize('tracker_owner', [26, 99, None])
+def test_preflight_ready_uses_durable_owner_schema_and_refuses_missing_or_wrong_owner(tracker_owner):
+    from preflight_policy import CASES
+    from primary_source_probe import check
+    ready = {'kind': 'ready', 'owner_pid': tracker_owner, 'token': 'tracker'}
+    # A legacy pid field must not substitute for the durable owner identity.
+    if tracker_owner is None:
+        ready = {'kind': 'ready', 'pid': 26, 'token': 'tracker'}
+    events = [{'kind': 'ready', 'owner_pid': 20, 'token': 'root'}, ready,
+              {'kind': 'registered', 'class': 'source-multiprocess-tracker',
+               'python': True, 'pid': 26},
+              {'kind': 'endpoint_install_complete', 'owner_pid': 26, 'nonce': 'bound-nonce'},
+              {'kind': 'raw_actual_parent_waitpid', 'pid': 26, 'raw_status': 0}]
+    birth = {'pid': 26, 'uid': 20000}
+    kernel = {'primary_plan': {'duty': 'TEST-source-positive'},
+              'root_parent_wait_raw': 0, 'poison': [], 'primary_denials': [],
+              'native_preinit_refusal': False, 'unregistered_processes': [],
+              'receipt_ledger_poison': [], 'missing_parent_waits': [],
+              'all_commands_dispatched': True, 'guard_poison': False, 'failure_code': None,
+              'records': [{'kind': 'kernel_child', 'child': 26,
+                           'identity': {'tgid': 26, 'ppid': 20}},
+                          {'kind': 'original_parent_wait4', 'child': 26, 'parent_tgid': 20}],
+              'primary_records': [{'kind': 'primary_native_preinit',
+                                   'role': 'source-bootstrap', 'pid': 26}],
+              'receipts': [{'request': {'kind': 'ready', 'pid': 26, 'nonce': 'bound-nonce'},
+                            'ok': True, 'identity': birth,
+                            'kernel_peer': {'birth': birth, 'uid': 20000}}]}
+    provenance = {'collection_before': list(CASES), 'collection_after': list(CASES),
+                  'deselected': 0, 'exitstatus': 0, 'invocation_args': ['-q', *CASES]}
+    records = {name: json.dumps(value).encode() for name, value in {
+        'kernel-source.json': kernel, 'summary.json': {'events': events, 'ready': True, 'failures': []},
+        'collection.json': list(CASES), 'source-provenance.json': provenance}.items()}
+    records['source.xml'] = b'<testsuite><testcase/><testcase/></testsuite>'
+    if tracker_owner == 26:
+        assert check(records, 'TEST-positive')['original_cases'] == 2
+    else:
+        with pytest.raises(RuntimeError, match='preflight_tracker_ready_missing'):
+            check(records, 'TEST-positive')
