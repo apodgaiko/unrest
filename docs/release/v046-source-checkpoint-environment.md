@@ -1380,3 +1380,9 @@ and named missing records. Source projection uses an explicit archive umask to
 preserve checkout modes. These methods establish bounded current mechanisms;
 they do not replay or repair historical missing results, and the frozen unexcluded
 source checkpoint and same-candidate distribution/lifecycle gates remain required.
+
+
+CI also retains the readiness capsule's encrypted evidence and safe provenance in
+the existing always-upload phase artifact, including when control-plane preparation
+fails before any source testcase. Missing historical preparation bytes stay missing;
+retaining a later failure never establishes an earlier failure's cause.

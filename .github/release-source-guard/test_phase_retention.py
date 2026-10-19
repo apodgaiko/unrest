@@ -147,3 +147,14 @@ def test_real_shell_encrypts_original_source_paths_even_before_issuer(tmp_path, 
     assert not (root / 'raw').exists() and not (root / 'raw.tar.gz').exists()
     assert not (tmp_path / 'primary-full').exists()
     assert not (tmp_path / 'dist').exists()
+
+
+def test_readiness_capsule_failure_outputs_are_always_retained_before_source():
+    paths = always_upload(WORKFLOW)
+    required = {'source-readiness/evidence.cms', 'source-readiness/safe-provenance.json'}
+    assert required <= set(paths)
+    for name in required:
+        broken = WORKFLOW.replace('            ${{ runner.temp }}/' + name + '\n', '')
+        assert name not in always_upload(broken)
+    assert bind_generated(SCRIPT, WORKFLOW)['full_source'] is True
+    assert SCRIPT == b'env -u CODEX_PATH uv run pytest -q' and len(SCRIPT) == 34

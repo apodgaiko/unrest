@@ -119,6 +119,8 @@ jobs:
         with:
           name: unrest-v046-primary-phases-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            ${{ runner.temp }}/source-readiness/evidence.cms
+            ${{ runner.temp }}/source-readiness/safe-provenance.json
             ${{ runner.temp }}/primary-install/evidence.cms
             ${{ runner.temp }}/primary-install/safe-provenance.json
             ${{ runner.temp }}/primary-import/evidence.cms
