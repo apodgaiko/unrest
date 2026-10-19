@@ -391,7 +391,7 @@ CASE_TARGETS = {
 
 
 def digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return hashlib.sha256(Path(os.fsdecode(path)).read_bytes()).hexdigest()
 
 
 def source_function(function, module):
