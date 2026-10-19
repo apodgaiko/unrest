@@ -43,9 +43,13 @@ def no_network(trace):
         raise OSError(ctypes.get_errno(), 'controlled no-network filter refused')
 
 
+def controlled_process(output):
+    output.put(('controlled', os.getpid()))
+
+
 def child(root):
     import multiprocessing
-    from multiprocessing import resource_tracker, util
+    from multiprocessing import resource_tracker, util, spawn, popen_spawn_posix
     path = root / 'launch.json'
     original = util.spawnv_passfds
     source = Path(inspect.getsourcefile(original))
@@ -60,12 +64,31 @@ def child(root):
         local = frame.f_locals
         vector = [os.fsdecode(v) for v in local['args']]
         fds = sorted(local['passfds'])
-        assert vector[:3] == [sys.executable, '-B', '-c'] and len(vector) == 4
+        assert vector[:3] == [sys.executable, '-B', '-c'] and len(vector) in (4, 5)
         prefix = 'from multiprocessing.resource_tracker import main;main('
-        assert vector[3].startswith(prefix) and vector[3].endswith(')')
-        fd = int(vector[3][len(prefix):-1])
+        if len(vector) == 4:
+            assert vector[3].startswith(prefix) and vector[3].endswith(')')
+            fd = int(vector[3][len(prefix):-1])
+            assert fds == [2, fd]
+            kind = 'tracker'
+            declaration_path = path
+        else:
+            caller = frame.f_back
+            assert caller.f_code is popen_spawn_posix.Popen._launch.__code__
+            assert caller.f_globals is vars(popen_spawn_posix)
+            process = caller.f_locals['process_obj']
+            assert process._target is controlled_process
+            assert controlled_process.__globals__ is globals()
+            fd = caller.f_locals['child_r']
+            tracker_fd = resource_tracker._resource_tracker._fd
+            expected = spawn.get_command_line(tracker_fd=tracker_fd, pipe_handle=fd)
+            assert vector == [os.fsdecode(v) for v in expected]
+            assert fds == sorted(caller.f_locals['self']._fds)
+            assert len(fds) == 3 and tracker_fd in fds and fd in fds
+            kind = 'spawned-process'
+            declaration_path = root / 'spawn.json'
         info = os.fstat(fd)
-        assert stat.S_ISFIFO(info.st_mode) and fds == [2, fd]
+        assert stat.S_ISFIFO(info.st_mode)
         frames = []
         current = frame
         while current:
@@ -77,20 +100,25 @@ def child(root):
                 frames.append({'path': str(p), 'sha256': sha(p), 'function': current.f_code.co_name,
                                'line': current.f_lineno})
             current = current.f_back
-        assert any(v['function'] == '_launch' for v in frames)
-        path.write_text(json.dumps({'root':os.getpid(),'argv':vector,'cwd':os.getcwd(),
+        assert kind == 'spawned-process' or any(v['function'] == '_launch' for v in frames)
+        declaration_path.write_text(json.dumps({'kind':kind,'root':os.getpid(),'argv':vector,'cwd':os.getcwd(),
             'environment':dict(os.environ),'runtime_sha256':sha(sys.executable),
             'source_sha256':sha(source),'source_code_identity':True,'source_globals_identity':True,
             'fifo':{'fd':fd,'device':info.st_dev,'inode':info.st_ino,'mode':info.st_mode},
             'frames':frames},sort_keys=True))
     sys.setprofile(observe)
     queue = multiprocessing.get_context('spawn').Queue()
+    process = multiprocessing.get_context('spawn').Process(target=controlled_process, args=(queue,))
+    process.start()
+    observed = queue.get(timeout=5)
+    process.join(10)
+    assert process.exitcode == 0 and observed == ('controlled', process.pid)
     sys.setprofile(None)
     owner = resource_tracker._resource_tracker
     assert path.is_file() and owner._pid is not None
     # This is the same point as pytest's pre-interpreter-finalization summary.
     (root / 'pre-finalization.json').write_text(json.dumps({'pid':os.getpid(),
-        'tracker_pid':owner._pid,'tracker_fd':owner._fd,'monotonic_ns':time.monotonic_ns(),
+        'tracker_pid':owner._pid,'tracker_fd':owner._fd,'joined_process_pid':process.pid,'monotonic_ns':time.monotonic_ns(),
         'tracker_still_running':True,'explicit_tracker_stop_called':False,
         'stdlib_has_destructor':hasattr(type(owner),'__del__'),
         'tracker_source_sha256':sha(resource_tracker.__file__)},sort_keys=True))
@@ -118,9 +146,12 @@ def run(root):
             os._exit(127)
     accepted = []
     def resolve(child_pid, path, argv, env, cwd):
-        if accepted or not (root/'launch.json').is_file():
+        if len(accepted) >= 2:
             return False
-        declaration = json.loads((root/'launch.json').read_bytes())
+        declaration_file = root / ('launch.json' if not accepted else 'spawn.json')
+        if not declaration_file.is_file():
+            return False
+        declaration = json.loads(declaration_file.read_bytes())
         if (path != sys.executable or argv != declaration['argv'] or env != declaration['environment']
                 or cwd != declaration['cwd'] or sha(path) != declaration['runtime_sha256']):
             return False
@@ -140,11 +171,16 @@ def run(root):
     proof = trace.OwnedTrace(pid,allowed,timeout=60,selective=True,resolve_exec=resolve).run()
     (root/'kernel.json').write_text(json.dumps(proof,sort_keys=True))
     (root/'accepted.json').write_text(json.dumps(accepted,sort_keys=True))
-    assert proof['root_parent_wait_raw'] == 0 and not proof['poison'] and len(accepted)==1
+    assert proof['root_parent_wait_raw'] == 0 and not proof['poison'] and len(accepted)==2
     summary = json.loads((root/'pre-finalization.json').read_bytes())
     waits = [v for v in proof['records'] if v['kind']=='original_parent_wait4'
              and v['parent']==pid and v['child']==accepted[0]['pid']]
-    result = {'actual_tracker_original_parent_waits':waits,'pre_finalization':summary,
+    joined = [v for v in proof['records'] if v['kind']=='original_parent_wait4'
+              and v['parent']==pid and v['child']==summary['joined_process_pid']]
+    assert len(joined)==1 and joined[0]['normalized']==0
+    assert not waits
+    result = {'actual_joined_process_original_parent_waits':joined,
+              'actual_tracker_original_parent_waits':waits,'pre_finalization':summary,
               'original_source_case_executed':False,'source_route_admission':False}
     (root/'projection.json').write_text(json.dumps(result,sort_keys=True))
     print(json.dumps(result,sort_keys=True))

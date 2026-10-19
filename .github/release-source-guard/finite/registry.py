@@ -1,4 +1,4 @@
-"""Finite original source bindings with compartment-local paths."""
+"""Finite source bindings, including the bounded session ownership repair."""
 
 COMMANDS = [
     {
@@ -16,73 +16,73 @@ COMMANDS = [
         "caller_bindings": [
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
-                "line": 501,
+                "line": 506,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
         ],
     },
@@ -198,73 +198,73 @@ COMMANDS = [
         "caller_bindings": [
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
             {
                 "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
-                "line": 548,
+                "line": 553,
                 "path": "src/unrest_harness/experimental_session.py",
                 "route": "asyncio.create_subprocess_exec",
-                "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+                "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
             },
         ],
     },
@@ -768,7 +768,8 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',0)); s.listen(); print(s.getsockname()[1],flush=True); time.sleep(30)",
+            "import socket,time; s=socket.socket(); s.bind(('127.0.0.1',0)); s.listen(); "
+            "print(s.getsockname()[1],flush=True); time.sleep(30)",
         ],
         "checkout_cwd": True,
         "source_binding": {
@@ -813,13 +814,16 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            "import json,sys,time\nfor line in sys.stdin:\n r=json.loads(line); time.sleep(.08)\n print(json.dumps({'id':r['id'],'result':{'ok':True}}),flush=True)\n",
+            "import json,sys,time\n"
+            "for line in sys.stdin:\n"
+            " r=json.loads(line); time.sleep(.08)\n"
+            " print(json.dumps({'id':r['id'],'result':{'ok':True}}),flush=True)\n",
         ],
         "checkout_cwd": True,
         "source_binding": {
             "path": "/source/tests/test_experimental_session.py",
             "line": 342,
-            "sha256": "5d2598b23f6e5a9bcc1e47189618c296eca702fa0aaa18c0426d0b7a1b2a00f1",
+            "sha256": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3",
         },
         "files": {},
         "caller_bindings": [],
@@ -829,13 +833,15 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            "import json,time\nprint(json.dumps({'method':'session/update','params':{}}),flush=True)\ntime.sleep(20)\n",
+            "import json,time\n"
+            "print(json.dumps({'method':'session/update','params':{}}),flush=True)\n"
+            "time.sleep(20)\n",
         ],
         "checkout_cwd": True,
         "source_binding": {
             "path": "/source/tests/test_experimental_session.py",
             "line": 377,
-            "sha256": "5d2598b23f6e5a9bcc1e47189618c296eca702fa0aaa18c0426d0b7a1b2a00f1",
+            "sha256": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3",
         },
         "files": {},
         "caller_bindings": [],
@@ -845,13 +851,14 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            "import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print('ready',flush=True);time.sleep(30)",
+            "import "
+            "signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print('ready',flush=True);time.sleep(30)",
         ],
         "checkout_cwd": True,
         "source_binding": {
             "path": "/source/tests/test_experimental_session.py",
             "line": 489,
-            "sha256": "5d2598b23f6e5a9bcc1e47189618c296eca702fa0aaa18c0426d0b7a1b2a00f1",
+            "sha256": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3",
         },
         "files": {},
         "caller_bindings": [],
@@ -1011,8 +1018,29 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
-            '["unrest_harness.baseline", "unrest_harness.governance", "unrest_harness.repository_contract"]',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            '["unrest_harness.baseline", "unrest_harness.governance", '
+            '"unrest_harness.repository_contract"]',
             '["--help"]',
         ],
         "checkout_cwd": True,
@@ -1057,8 +1085,29 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
-            '["unrest_harness.baseline", "unrest_harness.governance", "unrest_harness.repository_contract"]',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            '["unrest_harness.baseline", "unrest_harness.governance", '
+            '"unrest_harness.repository_contract"]',
             '["init", "--help"]',
         ],
         "checkout_cwd": True,
@@ -1103,8 +1152,29 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
-            '["unrest_harness.baseline", "unrest_harness.governance", "unrest_harness.repository_contract"]',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            '["unrest_harness.baseline", "unrest_harness.governance", '
+            '"unrest_harness.repository_contract"]',
             '["list-projects"]',
         ],
         "checkout_cwd": True,
@@ -1149,7 +1219,27 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
             "[]",
             '["check-repository"]',
         ],
@@ -1195,8 +1285,27 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport runpy\nimport sys\nblocked = tuple(json.loads(sys.argv[1]))\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nsys.argv = ["unrest-server", "--help"]\ntry:\n    runpy.run_module("unrest_harness.server", run_name="__main__")\nexcept SystemExit as exc:\n    if exc.code not in (None, 0):\n        raise\n',
-            '["unrest_harness.baseline", "unrest_harness.governance", "unrest_harness.repository_contract"]',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import runpy\n"
+            "import sys\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            'sys.argv = ["unrest-server", "--help"]\n'
+            "try:\n"
+            '    runpy.run_module("unrest_harness.server", run_name="__main__")\n'
+            "except SystemExit as exc:\n"
+            "    if exc.code not in (None, 0):\n"
+            "        raise\n",
+            '["unrest_harness.baseline", "unrest_harness.governance", '
+            '"unrest_harness.repository_contract"]',
         ],
         "checkout_cwd": True,
         "source_binding": {
@@ -1240,7 +1349,27 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
         ],
         "checkout_cwd": True,
         "source_binding": {
@@ -1255,7 +1384,25 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport runpy\nimport sys\nblocked = tuple(json.loads(sys.argv[1]))\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nsys.argv = ["unrest-server", "--help"]\ntry:\n    runpy.run_module("unrest_harness.server", run_name="__main__")\nexcept SystemExit as exc:\n    if exc.code not in (None, 0):\n        raise\n',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import runpy\n"
+            "import sys\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            'sys.argv = ["unrest-server", "--help"]\n'
+            "try:\n"
+            '    runpy.run_module("unrest_harness.server", run_name="__main__")\n'
+            "except SystemExit as exc:\n"
+            "    if exc.code not in (None, 0):\n"
+            "        raise\n",
         ],
         "checkout_cwd": True,
         "source_binding": {
@@ -1270,7 +1417,26 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\nargs = json.loads(sys.argv[1])\ntrap = sys.argv[2] == "1"\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if trap and fullname == "unrest_harness.runtime_observability":\n            raise RuntimeError("TRAPPED_STATUS_IMPORT")\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=args, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "loaded": "unrest_harness.runtime_observability" in sys.modules}))\n',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "args = json.loads(sys.argv[1])\n"
+            'trap = sys.argv[2] == "1"\n'
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if trap and fullname == "unrest_harness.runtime_observability":\n'
+            '            raise RuntimeError("TRAPPED_STATUS_IMPORT")\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=args, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "loaded": "unrest_harness.runtime_observability" in '
+            "sys.modules}))\n",
         ],
         "checkout_cwd": True,
         "source_binding": {
@@ -1297,7 +1463,40 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport json\nimport sys\nfrom pathlib import Path\n\nfrom unrest_harness.config import HarnessConfig\nfrom unrest_harness.controller import ProjectController\nfrom unrest_harness.dispatcher import MockDispatcher, MockTerminalReviewer\nfrom unrest_harness.models import TerminalReviewHandoff, WorkHandoff\n\nbundled = Path(sys.argv[1])\nhome = Path(sys.argv[2])\nprojects = Path(sys.argv[3])\nproject_id = sys.argv[4]\nconfig = HarnessConfig(\n    bundled_dir=bundled,\n    harness_home=home,\n    projects_dir=projects,\n    orchestrator_provider_name="claude",\n    worker_provider_name="claude",\n    worker_acp_command=None,\n    validator_provider_name=None,\n    validator_acp_command=None,\n    terminal_reviewer_provider_name=None,\n    terminal_reviewer_acp_command=None,\n    max_parallel_nodes=1,\n)\ncontroller = ProjectController(\n    config,\n    MockDispatcher(lambda request: WorkHandoff(node_id=request.task.id, done=True)),\n    MockTerminalReviewer(TerminalReviewHandoff(done=True)),\n)\nprint(json.dumps(controller.inspect_project(project_id).model_dump(mode="json"), sort_keys=True, separators=(",", ":")))\n',
+            "\n"
+            "import json\n"
+            "import sys\n"
+            "from pathlib import Path\n"
+            "\n"
+            "from unrest_harness.config import HarnessConfig\n"
+            "from unrest_harness.controller import ProjectController\n"
+            "from unrest_harness.dispatcher import MockDispatcher, MockTerminalReviewer\n"
+            "from unrest_harness.models import TerminalReviewHandoff, WorkHandoff\n"
+            "\n"
+            "bundled = Path(sys.argv[1])\n"
+            "home = Path(sys.argv[2])\n"
+            "projects = Path(sys.argv[3])\n"
+            "project_id = sys.argv[4]\n"
+            "config = HarnessConfig(\n"
+            "    bundled_dir=bundled,\n"
+            "    harness_home=home,\n"
+            "    projects_dir=projects,\n"
+            '    orchestrator_provider_name="claude",\n'
+            '    worker_provider_name="claude",\n'
+            "    worker_acp_command=None,\n"
+            "    validator_provider_name=None,\n"
+            "    validator_acp_command=None,\n"
+            "    terminal_reviewer_provider_name=None,\n"
+            "    terminal_reviewer_acp_command=None,\n"
+            "    max_parallel_nodes=1,\n"
+            ")\n"
+            "controller = ProjectController(\n"
+            "    config,\n"
+            "    MockDispatcher(lambda request: WorkHandoff(node_id=request.task.id, done=True)),\n"
+            "    MockTerminalReviewer(TerminalReviewHandoff(done=True)),\n"
+            ")\n"
+            'print(json.dumps(controller.inspect_project(project_id).model_dump(mode="json"), '
+            'sort_keys=True, separators=(",", ":")))\n',
         ],
         "checkout_cwd": True,
         "source_binding": {
@@ -1372,8 +1571,27 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport runpy\nimport sys\nblocked = tuple(json.loads(sys.argv[1]))\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nsys.argv = ["unrest-server", "--help"]\ntry:\n    runpy.run_module("unrest_harness.server", run_name="__main__")\nexcept SystemExit as exc:\n    if exc.code not in (None, 0):\n        raise\n',
-            '["unrest_harness.baseline", "unrest_harness.governance", "unrest_harness.repository_contract"]',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import runpy\n"
+            "import sys\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            'sys.argv = ["unrest-server", "--help"]\n'
+            "try:\n"
+            '    runpy.run_module("unrest_harness.server", run_name="__main__")\n'
+            "except SystemExit as exc:\n"
+            "    if exc.code not in (None, 0):\n"
+            "        raise\n",
+            '["unrest_harness.baseline", "unrest_harness.governance", '
+            '"unrest_harness.repository_contract"]',
         ],
         "checkout_cwd": True,
         "source_binding": {
@@ -1411,8 +1629,29 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
-            '["unrest_harness.baseline", "unrest_harness.governance", "unrest_harness.repository_contract"]',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            '["unrest_harness.baseline", "unrest_harness.governance", '
+            '"unrest_harness.repository_contract"]',
             '["--help"]',
         ],
         "checkout_cwd": True,
@@ -1428,7 +1667,27 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
             "[]",
             '["check-repository"]',
         ],
@@ -1445,8 +1704,29 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
-            '["unrest_harness.baseline", "unrest_harness.governance", "unrest_harness.repository_contract"]',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            '["unrest_harness.baseline", "unrest_harness.governance", '
+            '"unrest_harness.repository_contract"]',
             '["init", "--help"]',
         ],
         "checkout_cwd": True,
@@ -1462,8 +1742,29 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\n\nblocked = tuple(json.loads(sys.argv[1]))\narguments = json.loads(sys.argv[2])\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if any(fullname == name or fullname.startswith(name + ".") for name in blocked):\n            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
-            '["unrest_harness.baseline", "unrest_harness.governance", "unrest_harness.repository_contract"]',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "\n"
+            "blocked = tuple(json.loads(sys.argv[1]))\n"
+            "arguments = json.loads(sys.argv[2])\n"
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if any(fullname == name or fullname.startswith(name + ".") for name in '
+            "blocked):\n"
+            '            raise RuntimeError("TRAPPED_IMPORT:" + fullname)\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=arguments, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "modules": sorted(sys.modules)}, sort_keys=True))\n',
+            '["unrest_harness.baseline", "unrest_harness.governance", '
+            '"unrest_harness.repository_contract"]',
             '["list-projects"]',
         ],
         "checkout_cwd": True,
@@ -1509,7 +1810,26 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\nargs = json.loads(sys.argv[1])\ntrap = sys.argv[2] == "1"\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if trap and fullname == "unrest_harness.runtime_observability":\n            raise RuntimeError("TRAPPED_STATUS_IMPORT")\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=args, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "loaded": "unrest_harness.runtime_observability" in sys.modules}))\n',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "args = json.loads(sys.argv[1])\n"
+            'trap = sys.argv[2] == "1"\n'
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if trap and fullname == "unrest_harness.runtime_observability":\n'
+            '            raise RuntimeError("TRAPPED_STATUS_IMPORT")\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=args, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "loaded": "unrest_harness.runtime_observability" in '
+            "sys.modules}))\n",
             '["--help"]',
             "1",
         ],
@@ -1526,7 +1846,26 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\nargs = json.loads(sys.argv[1])\ntrap = sys.argv[2] == "1"\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if trap and fullname == "unrest_harness.runtime_observability":\n            raise RuntimeError("TRAPPED_STATUS_IMPORT")\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=args, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "loaded": "unrest_harness.runtime_observability" in sys.modules}))\n',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "args = json.loads(sys.argv[1])\n"
+            'trap = sys.argv[2] == "1"\n'
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if trap and fullname == "unrest_harness.runtime_observability":\n'
+            '            raise RuntimeError("TRAPPED_STATUS_IMPORT")\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=args, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "loaded": "unrest_harness.runtime_observability" in '
+            "sys.modules}))\n",
             '["list-projects"]',
             "1",
         ],
@@ -1543,7 +1882,26 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            '\nimport importlib.abc\nimport json\nimport sys\nargs = json.loads(sys.argv[1])\ntrap = sys.argv[2] == "1"\nclass Trap(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if trap and fullname == "unrest_harness.runtime_observability":\n            raise RuntimeError("TRAPPED_STATUS_IMPORT")\n        return None\nsys.meta_path.insert(0, Trap())\nerror = None\ntry:\n    from unrest_harness.cli import cli\n    cli.main(args=args, prog_name="unrest", standalone_mode=False)\nexcept BaseException as exc:\n    error = f"{type(exc).__name__}:{exc}"\nprint(json.dumps({"error": error, "loaded": "unrest_harness.runtime_observability" in sys.modules}))\n',
+            "\n"
+            "import importlib.abc\n"
+            "import json\n"
+            "import sys\n"
+            "args = json.loads(sys.argv[1])\n"
+            'trap = sys.argv[2] == "1"\n'
+            "class Trap(importlib.abc.MetaPathFinder):\n"
+            "    def find_spec(self, fullname, path=None, target=None):\n"
+            '        if trap and fullname == "unrest_harness.runtime_observability":\n'
+            '            raise RuntimeError("TRAPPED_STATUS_IMPORT")\n'
+            "        return None\n"
+            "sys.meta_path.insert(0, Trap())\n"
+            "error = None\n"
+            "try:\n"
+            "    from unrest_harness.cli import cli\n"
+            '    cli.main(args=args, prog_name="unrest", standalone_mode=False)\n'
+            "except BaseException as exc:\n"
+            '    error = f"{type(exc).__name__}:{exc}"\n'
+            'print(json.dumps({"error": error, "loaded": "unrest_harness.runtime_observability" in '
+            "sys.modules}))\n",
             '["observe-project", "--help"]',
             "0",
         ],
@@ -1560,7 +1918,8 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            "import sys; sys.stderr.write('adapter failed: adapter-stderr-secret-credential'); raise SystemExit(2)",
+            "import sys; sys.stderr.write('adapter failed: adapter-stderr-secret-credential'); "
+            "raise SystemExit(2)",
         ],
         "checkout_cwd": True,
         "source_binding": {
@@ -1640,7 +1999,8 @@ COMMANDS = [
         "python": True,
         "argv": [
             "-c",
-            'import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("ready",flush=True);time.sleep(30)',
+            "import "
+            'signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("ready",flush=True);time.sleep(30)',
         ],
         "checkout_cwd": False,
         "source_binding": {

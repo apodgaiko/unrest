@@ -216,3 +216,21 @@ def test_legacy_explicit_descriptor_close_then_fixture_finalization(local_sessio
     local_session.close_unstarted()
     local_session.close_unstarted()
     assert local_session.stopped
+
+
+def test_unstarted_stop_durability_failure_still_closes_resources(local_session, monkeypatch):
+    owner = local_session
+    fds = [owner.broker._root_fd, owner.broker._record_fd, owner.ledger._fd]
+    original = os.fsync
+    failure = OSError(errno.EIO, 'stop durability failure')
+
+    def fsync(fd):
+        if fd == owner.ledger._fd:
+            raise failure
+        return original(fd)
+
+    monkeypatch.setattr(os, 'fsync', fsync)
+    with pytest.raises(LeaseRefused, match='journal_unavailable'):
+        owner.close_unstarted()
+    assert_closed(fds)
+    owner.close_unstarted()

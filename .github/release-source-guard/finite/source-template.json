@@ -138,20 +138,20 @@
     {
       "expression_ast_sha256": "a69b962750cd44470abf783dfdaffb317499bf6547f77c024887e304347eeea2",
       "family": "controlled-session-backend-and-owned-lifecycle",
-      "line": 501,
+      "line": 506,
       "owner": "_open_role_owned",
       "path": "src/unrest_harness/experimental_session.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5"
+      "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2"
     },
     {
       "expression_ast_sha256": "e572c87b290e583729afb50fcbb746635aab605853d2a7fd5bfeb83be836af3b",
       "family": "controlled-session-backend-and-owned-lifecycle",
-      "line": 548,
+      "line": 553,
       "owner": "_open_role_owned",
       "path": "src/unrest_harness/experimental_session.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5"
+      "source_sha256": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2"
     },
     {
       "expression_ast_sha256": "d852f4e4a07f80a375b608ae0dcc008277fa5b955c7ba78ac4014226e8290873",
@@ -696,29 +696,29 @@
     {
       "expression_ast_sha256": "4163d9c6535ce6f1f73c56cba61aa2996e51105770371cbed3840e5a407439c9",
       "family": "controlled-session-backend-and-owned-lifecycle",
-      "line": 347,
+      "line": 352,
       "owner": "test_late_response_after_cancel_does_not_break_reader",
       "path": "tests/test_experimental_session.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "5d2598b23f6e5a9bcc1e47189618c296eca702fa0aaa18c0426d0b7a1b2a00f1"
+      "source_sha256": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3"
     },
     {
       "expression_ast_sha256": "4163d9c6535ce6f1f73c56cba61aa2996e51105770371cbed3840e5a407439c9",
       "family": "controlled-session-backend-and-owned-lifecycle",
-      "line": 381,
+      "line": 386,
       "owner": "test_callback_tasks_are_awaited_during_cleanup",
       "path": "tests/test_experimental_session.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "5d2598b23f6e5a9bcc1e47189618c296eca702fa0aaa18c0426d0b7a1b2a00f1"
+      "source_sha256": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3"
     },
     {
       "expression_ast_sha256": "e936d407354aa8262bd6991ef0cce1950da214341c7765dd45187aad7c357812",
       "family": "controlled-session-backend-and-owned-lifecycle",
-      "line": 490,
+      "line": 495,
       "owner": "test_sigterm_ignoring_owned_process_is_killed_and_reaped",
       "path": "tests/test_experimental_session.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "5d2598b23f6e5a9bcc1e47189618c296eca702fa0aaa18c0426d0b7a1b2a00f1"
+      "source_sha256": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3"
     },
     {
       "expression_ast_sha256": "154844c7d1150d2330fe5ddb134ca0d0e2fd60ed9fc1a84ba21ca2634ad6936d",
@@ -2098,13 +2098,13 @@
     "src/unrest_harness/experimental_confinement.py": "25f3e7184ff560cb58067d211aba24c5ca18af50ff04f93c3fd3007796c3dc08",
     "src/unrest_harness/experimental_custody.py": "1daba7ee49702f680d342f542f2e670fba0fb953234b7e4358a497f7abcae9a1",
     "src/unrest_harness/experimental_diagnostics.py": "b122297e02216c0fd28fda7e2d0c41b2dfdfb147ea3c3131bc8d6e41ee477ce7",
-    "src/unrest_harness/experimental_lease.py": "ac49f021ece0d0c37f5056a04df64ba073726046702f71cd7df19174020346e7",
+    "src/unrest_harness/experimental_lease.py": "b5989f7e1f151400ba6bba01d2e7984430657bc2b072cfb193deb86739f8cecb",
     "src/unrest_harness/experimental_model.py": "f7166d1d4f15fc420225457f1542b2cfef78a7a11f45ac8324417aea95f85ade",
     "src/unrest_harness/experimental_provider.py": "abdf4c0b4577ed421c57c3989f5d9a9522ecc23c2a002ab3e593f729cc79ff22",
     "src/unrest_harness/experimental_provider_config.py": "92c8d11fc6aedbf8a737be416387de5f0aa4a239ce8e9e048f543bb8cd4041a5",
     "src/unrest_harness/experimental_relay.py": "3260c54058794f1d6d5ed1fb12599f2a2b31e2ed93b96a7ab82603f8533c611b",
     "src/unrest_harness/experimental_resources.py": "1cd464075b96f9134a4f2ec81c3567145110a63cca49da4421f517f20e68efe4",
-    "src/unrest_harness/experimental_session.py": "3533413ec93aef350d9765b74a7fa71b31688714c17cf5d8905d9ec8bc80c2a5",
+    "src/unrest_harness/experimental_session.py": "7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2",
     "src/unrest_harness/foundation_store.py": "a2711c368eecfde7c1d01d984ab7157b91a3e02819c95812a9cc1b188b856640",
     "src/unrest_harness/foundation_tools.py": "2a2d7326ce415af623fabb4a11ee30d3737d05b36d0b9b9b18e7b9787ef44d65",
     "src/unrest_harness/improve_adapter.py": "bbee47e19f15b54d26da0277e32f07b2ecfc6e60bcf9be9b8762abc06b86b316",
@@ -2216,6 +2216,7 @@
     "tests/mock_acp_agent.py": "8141170328ff5fc28acf10dfd70bbf22f4062cceb1b2de8b8ea11ab0c17a48b6",
     "tests/mock_measurement_acp.py": "47d099bd120a96d86d1e052567744be63b3c103a11a043ad40976776d1f400dd",
     "tests/mock_provider_session_acp.py": "cf4070d08c7d60b028f56c87bdcf4271238f0275212d6a13b681664738eb3fdd",
+    "tests/session_lifetime.py": "00348bf7b41df3f512d171c9f515e99e3dbf52ca7803f6a6d17843d18c4a95af",
     "tests/test_acp_cleanup.py": "564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8",
     "tests/test_acp_runner.py": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0",
     "tests/test_acp_sandbox.py": "816d7296082e9fbed62a98a16ed46b59fc6ab05abe8d0a8127b7691c4dbf1a23",
@@ -2232,7 +2233,7 @@
     "tests/test_config_roots.py": "544e602c211200cbcff15ca9dc3588713a087e2dc7708d31967bbce0127381a5",
     "tests/test_controlled_acp_cancel.py": "f19e29820f7b6e65bd0ee863f2b58a8ff811984843b418b3d82f9c667b696233",
     "tests/test_controlled_acp_warnings.py": "8d0a9a1aa0d804357acbb267523d3d7c0b7baf37349432b0b5243e2787d6e3c7",
-    "tests/test_controlled_python_acp.py": "64f3bbd0daf0064b648c668fe4dba03749a9cfe6576568645420b3848b835161",
+    "tests/test_controlled_python_acp.py": "b1e700c6ba4bcdc734b595ae12ad9fcce5d5ff8f1fddc4f5f70e6629875665da",
     "tests/test_controlled_runtime_binding.py": "c84e669d3a9e735eff2bc8b72303c81a7694fc5da85144e17ecf92fed0ffdbf8",
     "tests/test_coordinator.py": "8ab30d0ce4bc4a318c3fd5f8fc295fb506e76dab128be6324dc5ab3713a6eeec",
     "tests/test_coordinator_parallel.py": "3d50ff2e690f1530a13cb3be0979fe9ce230ed4c651af2a3378cd2115bf17355",
@@ -2265,7 +2266,7 @@
     "tests/test_experimental_provider_config.py": "37e58fcde81734d88eaae954e5cc6dd860a8da8379a4ca8f29966c66c4d00c61",
     "tests/test_experimental_relay.py": "210fe876efe84395e6a2479a55e71d23d2f84e58ff75c82fe37011b268f5a90d",
     "tests/test_experimental_retained.py": "24ff6498a848f9681540fbbea21c7c9737537fff7913c4daad8e95653571a002",
-    "tests/test_experimental_session.py": "5d2598b23f6e5a9bcc1e47189618c296eca702fa0aaa18c0426d0b7a1b2a00f1",
+    "tests/test_experimental_session.py": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3",
     "tests/test_experimental_startup_diagnostics.py": "b2b2d05a217dcd4e082e06371c00e9ae91fb99a7c50bfcec15e7e810b2b7d65f",
     "tests/test_foundation_authority.py": "c8f63d70d4dcc3d74215a9db538632fc9115086d32d42f633235135dcaea2c70",
     "tests/test_foundation_integration.py": "bcbddfff3ffabd8b4374be17fa22b35872bd347d2daa8ca9ee3132f007caa8ef",
@@ -2295,6 +2296,7 @@
     "tests/test_runnable_selection.py": "794c68239851aa290185702e801f844da0736b50ca3d1681df432de909471079",
     "tests/test_runtime_observability.py": "bc4977de515c9f3a3b3ccab626a245525deccd9a6449fce8ad02253d220af305",
     "tests/test_server.py": "4524714474b49852af00d4533f30456b87839ed0d5bbd2d10ba5502717ddef4e",
+    "tests/test_session_resource_ownership.py": "7ed15c9c7caa6e38fb7a1de0b10e0f3685cb0a2889ca6fb50846efce3b566d14",
     "tests/test_smoke_parallel_acp.py": "7787fb90b36af4de4374a494656cb4456e6a59488640a6f591cd55950e2799a6",
     "tests/test_smoke_real_acp.py": "8264ac2434b2e7d1e5ede273ecabca7a0342b4d8c5ca48461f360c3a283d9330",
     "tests/test_smoke_zai_claude.py": "2143087ca6e73de551a12859ebf7061493d68f2cdce4d674bbab572bc8e933dc",
