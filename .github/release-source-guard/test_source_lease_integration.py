@@ -325,7 +325,13 @@ def test_extension_keeps_original_callback_for_nonlease(tmp_path, monkeypatch):
 
 def test_new_probe_reducer_requires_refused_child_and_all_lease_modes():
     from primary_source_probe import check_integration_probes
-    events = [{'kind': 'guard_refused_acquisition_proof', 'child_pid': 42, 'before_fds': 7,
+    events = [{'kind': 'guard_source_environment_proof', 'tmpdir': '/work/owned/tmp',
+               'source_environment_sha256': pin(SUPPORT / 'finite/source_environment.py'),
+               'directories': {'/work/owned': [1, 2, 0o40700, 20000, 20000],
+                               '/work/owned/tmp': [1, 3, 0o40700, 20000, 20000]},
+               'refused_tmpdir_values': ['/work/owned', '/work/owned/tmp/..'],
+               'original_environment_restored': True},
+              {'kind': 'guard_refused_acquisition_proof', 'child_pid': 42, 'before_fds': 7,
                'after_fds': 7, 'original_exception_preserved': True},
               {'kind': 'multiprocess_refused_acquisition_wait', 'pid': 42, 'raw_status': 9,
                'numeric_returncode': -9, 'owner_pid': 20, 'original_exception_preserved': True},

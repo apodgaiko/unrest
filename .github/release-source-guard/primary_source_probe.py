@@ -140,6 +140,20 @@ def check(records, mode, *, require_faults=False):
 def check_integration_probes(summary, kernel):
     """New own-identity probes supplement all five original successful trackers."""
     events = summary['events']
+    environment = [row for row in events if row['kind'] == 'guard_source_environment_proof']
+    if (len(environment) != 1 or environment[0]['tmpdir'] != '/work/owned/tmp'
+            or set(environment[0]['directories']) != {'/work/owned', '/work/owned/tmp'}
+            or environment[0]['refused_tmpdir_values'] != ['/work/owned', '/work/owned/tmp/..']
+            or environment[0]['original_environment_restored'] is not True):
+        raise RuntimeError('preflight_source_environment_missing')
+    from pathlib import Path
+    environment_source = Path(__file__).with_name('finite') / 'source_environment.py'
+    if (environment[0]['source_environment_sha256'] != hashlib.sha256(environment_source.read_bytes()).hexdigest()
+            or any(type(row) not in (list, tuple) or len(row) != 5
+                   or row[0] < 0 or row[1] <= 0 or row[2] & 0o170000 != 0o040000
+                   or row[3:] not in ([20000, 20000], (20000, 20000))
+                   for row in environment[0]['directories'].values())):
+        raise RuntimeError('preflight_source_environment_custody')
     refused = [row for row in events if row['kind'] == 'guard_refused_acquisition_proof']
     rollbacks = [row for row in events if row['kind'] == 'multiprocess_refused_acquisition_wait']
     if len(refused) != 1 or len(rollbacks) != 1:

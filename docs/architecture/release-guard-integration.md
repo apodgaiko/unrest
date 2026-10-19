@@ -160,3 +160,9 @@ startup deadline. The two exact native Git inventory leaves retain the existing
 native-leaf READY disposition, source/argv/custody checks and actual-parent waits;
 the reducer requires their exact owner, two source lines and unchanged source pin
 instead of demanding a Python endpoint from a native executable.
+
+The supplementary SOURCE environment probe reads the actual acquired directory
+generations under the production root. It requires their uid/gid20000 custody,
+rejects the exact parent/aliased TMPDIR mutations without launching anything,
+and restores the original environment before further guard methods run. The
+consumer binds that proof to the current environment-support bytes.

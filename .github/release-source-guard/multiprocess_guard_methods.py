@@ -33,6 +33,7 @@ def test_owned_exit17_keeps_raw_status():
     )
 
     _acquisition_faults()
+    _source_environment_probe()
     _binding_inventory()
     _lease_factories()
     _refused_acquisition()
@@ -314,3 +315,28 @@ def _binding_inventory():
     assert 'pyproject.toml' in paths and 'uv.lock' in paths
     guard.append({'kind': 'guard_shared_binding_probe', 'path_count': len(paths),
                   'original_source_sha256': guard.digest(path)})
+
+
+def _source_environment_probe():
+    """Exercise actual SOURCE root custody without an original owner identity."""
+    from pathlib import Path
+    guard = sys.modules['runtime_guard']
+    state = guard._STATE
+    path = Path(state['guard']).with_name('source_environment.py')
+    support = guard.checked_source(path, state['direct_support']['files'][str(path)])
+    assert support['matches'](state)
+    original = os.environ['TMPDIR']
+    failures = []
+    try:
+        for value in ('/work/owned', '/work/owned/tmp/..'):
+            os.environ['TMPDIR'] = value
+            assert not support['matches'](state)
+            failures.append(value)
+    finally:
+        os.environ['TMPDIR'] = original
+    assert support['matches'](state)
+    guard.append({'kind': 'guard_source_environment_proof',
+                  'source_environment_sha256': guard.digest(path),
+                  'directories': state['operation_activation'].owned_environment['directories'],
+                  'tmpdir': original, 'refused_tmpdir_values': failures,
+                  'original_environment_restored': True})
