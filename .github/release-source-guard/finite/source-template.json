@@ -2296,7 +2296,7 @@
     "tests/test_runnable_selection.py": "794c68239851aa290185702e801f844da0736b50ca3d1681df432de909471079",
     "tests/test_runtime_observability.py": "bc4977de515c9f3a3b3ccab626a245525deccd9a6449fce8ad02253d220af305",
     "tests/test_server.py": "4524714474b49852af00d4533f30456b87839ed0d5bbd2d10ba5502717ddef4e",
-    "tests/test_session_resource_ownership.py": "7ed15c9c7caa6e38fb7a1de0b10e0f3685cb0a2889ca6fb50846efce3b566d14",
+    "tests/test_session_resource_ownership.py": "a21f94426aa44a309e246295e50b43a6c8c7bce1f3dda732f8442e7de5286eea",
     "tests/test_smoke_parallel_acp.py": "7787fb90b36af4de4374a494656cb4456e6a59488640a6f591cd55950e2799a6",
     "tests/test_smoke_real_acp.py": "8264ac2434b2e7d1e5ede273ecabca7a0342b4d8c5ca48461f360c3a283d9330",
     "tests/test_smoke_zai_claude.py": "2143087ca6e73de551a12859ebf7061493d68f2cdce4d674bbab572bc8e933dc",

@@ -234,3 +234,43 @@ def test_unstarted_stop_durability_failure_still_closes_resources(local_session,
         owner.close_unstarted()
     assert_closed(fds)
     owner.close_unstarted()
+
+
+@pytest.mark.parametrize('phase', ['setup', 'body'])
+def test_actual_pytest_failure_finalizes_exact_factory(tmp_path, monkeypatch, phase):
+    import types
+    import sys
+    observer = types.ModuleType('_session_ownership_observer')
+    observer.owners = []
+    monkeypatch.setitem(sys.modules, observer.__name__, observer)
+    source = tmp_path / ('test_owned_failure_' + phase + '.py')
+    source.write_text('''import pytest
+from tests import test_controlled_python_acp as original
+from tests.session_lifetime import own_session_fixture
+import _session_ownership_observer as observer
+local_session = original.local_session
+transport = original.transport
+@pytest.fixture(autouse=True)
+def _lifetime(request):
+    own_session_fixture(request, 'local_session')
+@pytest.fixture
+def captured(local_session):
+    observer.owners.append(local_session)
+    if PHASE == 'setup':
+        raise RuntimeError('controlled pre-body failure')
+    return local_session
+async def test_failure(captured):
+    await captured.start()
+    raise RuntimeError('controlled body failure')
+'''.replace('PHASE', repr(phase)))
+    root = Path(__file__).resolve().parents[1]
+    result = pytest.main(['-c', str(root / 'pyproject.toml'), '-q', str(source)])
+    assert result == pytest.ExitCode.TESTS_FAILED
+    assert len(observer.owners) == 1
+    owner = observer.owners[0]
+    assert owner.broker._closed and owner.ledger._fd == -1
+    if phase == 'setup':
+        assert owner._unstarted_closed and owner._close_task is None
+    else:
+        assert owner._close_task.done()
+    owner.close_unstarted()

@@ -84,7 +84,9 @@ def child(root):
             expected = spawn.get_command_line(tracker_fd=tracker_fd, pipe_handle=fd)
             assert vector == [os.fsdecode(v) for v in expected]
             assert fds == sorted(caller.f_locals['self']._fds)
-            assert len(fds) == 3 and tracker_fd in fds and fd in fds
+            output, = process._args
+            assert fds == sorted([tracker_fd, fd, caller.f_locals['child_w'],
+                                  output._reader.fileno(), output._writer.fileno()])
             kind = 'spawned-process'
             declaration_path = root / 'spawn.json'
         info = os.fstat(fd)
