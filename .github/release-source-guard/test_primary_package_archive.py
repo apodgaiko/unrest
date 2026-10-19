@@ -83,3 +83,61 @@ def test_refused_or_forged_returns_never_become_package_proof(returned, mutation
     with pytest.raises((RuntimeError, KeyError)):
         owner.handle(request, [])
     assert not primary.records
+
+
+@pytest.mark.parametrize('change', ['exact', 'foreign-class', 'foreign-source', 'wrong-mode',
+                                  'wrong-parent', 'wrong-bootstrap', 'duplicate'])
+def test_extracted_profile_has_no_source_collection_prerequisite(tmp_path, monkeypatch, change):
+    import hashlib
+    import ast
+    from types import ModuleType
+    authority = ModuleType('controlled_package_authority')
+    path = Path(__file__).with_name('primary_package_authority.py')
+    node = next(n for n in ast.parse(path.read_bytes()).body
+                if isinstance(n, ast.ClassDef) and n.name == 'PackageArchivePrimaryAuthority')
+    authority.__dict__.update(Authority=object, Path=Path, hashlib=hashlib, json=json,
+                             SOURCE=Path('/source/tools/check_distribution.py'),
+                             COMMAND=['uv', 'run', 'python', 'tools/check_distribution.py', 'dist'],
+                             python_environment=lambda env, registration, flags: dict(env))
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), 'exec'), authority.__dict__)
+    source = '/source/tools/check_distribution.py'
+    vector = ['/source/.venv/bin/python', '-I', '-S', '-B', '-c', 'exact bootstrap']
+    selected = {'bootstrap_sha256': hashlib.sha256(vector[-1].encode()).hexdigest(),
+                'registration': {'class': 'source-extracted-oracle', 'owner_pid': 12,
+                                 'source_binding': {'path': source,
+                                      'function': '_run_extracted_restart_oracle', 'sha256': 'a' * 64}}}
+    owner = authority.PackageArchivePrimaryAuthority.__new__(authority.PackageArchivePrimaryAuthority)
+    owner.plan = {'package_mode': 'TEST', 'duty': 'Check distribution archives', 'commands': [authority.COMMAND]}
+    owner.source = SimpleNamespace(bound={13: selected}, path='/receipts/manifest.json', pin='b' * 64,
+                    manifest={'product_pins': {'tools/check_distribution.py': 'a' * 64}},
+                    exec_descriptors=lambda *a: [])
+    owner.contexts, owner.records = {}, []
+    startup = tmp_path / '13.json'
+    monkeypatch.setattr(authority, 'Path', lambda p: tmp_path if p == '/receipts/primary-startup' else Path(p))
+    monkeypatch.setattr(authority, 'identity', lambda pid: {'pid': pid, 'ppid': 12, 'start_ticks': 1, 'boot_id': 'boot'}, raising=False)
+    monkeypatch.setattr(authority, 'digest', lambda p: 'c' * 64, raising=False)
+    if change == 'foreign-class':
+        selected['registration']['class'] = 'unknown'
+    elif change == 'foreign-source':
+        selected['registration']['source_binding']['sha256'] = 'f' * 64
+    elif change == 'wrong-mode':
+        owner.plan['package_mode'] = 'unknown'
+    elif change == 'wrong-parent':
+        selected['registration']['owner_pid'] = 99
+    elif change == 'wrong-bootstrap':
+        selected['bootstrap_sha256'] = 'f' * 64
+    elif change == 'duplicate':
+        startup.write_text('{}')
+    def run():
+        return owner.profile(13, 12, vector, {}, '/extracted', 'cpython.run_command',
+                             vector[-1] + '\n', [1, 1, 1], 'source-bootstrap', trace=object())
+    if change == 'exact':
+        assert run() is True
+        profile = json.loads(startup.read_bytes())
+        assert profile['source_role'] == 'source-bootstrap'
+        assert 'source_mode' not in profile and 'source_budget' not in profile
+        assert owner.records[0]['role'] == 'source-bootstrap'
+    else:
+        with pytest.raises((RuntimeError, FileExistsError)):
+            run()
+        assert not owner.records

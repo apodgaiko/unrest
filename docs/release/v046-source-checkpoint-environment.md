@@ -1191,3 +1191,9 @@ read-only image data and current guard definition before starting controls.
 Missing, foreign, aliased, or unbound data refuses admission. Package TEST refs
 for this correction are the finite `package-entry-control-input-01` through `-06`
 family; malformed refs and foreign workflow contexts refuse before execution.
+
+The package archive's already admitted extracted-oracle bootstrap has a dedicated
+startup profile. It retains exact source/function, parent, transformed program,
+image and descriptor checks without requiring SOURCE collection mode or budgets.
+The shared SOURCE profile builder and all original archive/oracle bytes remain
+unchanged. The package path has no SOURCE collection authority.

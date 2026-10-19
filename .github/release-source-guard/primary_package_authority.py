@@ -7,6 +7,7 @@ from pathlib import Path
 
 from primary_authority import Authority, digest
 from primary_policy import PYTHON, command_environment
+from primary_source_inputs import python_environment
 from finite.linux_identity import identity
 
 COMMAND = ['uv', 'run', 'python', 'tools/check_distribution.py', 'dist']
@@ -14,6 +15,47 @@ SOURCE = Path('/source/tools/check_distribution.py')
 
 
 class PackageArchivePrimaryAuthority(Authority):
+    def profile(self, pid, parent, vector, environment, cwd, event, body, flags, role,
+                repository=False, trace=None):
+        if role != 'source-bootstrap':
+            return super().profile(pid, parent, vector, environment, cwd, event, body, flags,
+                                   role, repository=repository, trace=trace)
+        # The original extracted oracle uses the existing endpoint/bootstrap
+        # composition, but does not run the SOURCE collection observer.
+        selected = self.source.bound[pid]
+        registration = selected['registration']
+        binding = registration['source_binding']
+        actual = identity(pid)
+        if (self.plan.get('package_mode') not in {'TEST', 'FULL'}
+                or self.plan['duty'] != 'Check distribution archives'
+                or self.plan['commands'] != [COMMAND] or repository
+                or registration['class'] != 'source-extracted-oracle'
+                or binding['path'] != str(SOURCE)
+                or binding['function'] != '_run_extracted_restart_oracle'
+                or binding['sha256'] != self.source.manifest['product_pins']['tools/check_distribution.py']
+                or actual['ppid'] != parent or registration['owner_pid'] != parent
+                or event != 'cpython.run_command' or body != vector[-1] + '\n'
+                or selected['bootstrap_sha256'] != hashlib.sha256(vector[-1].encode()).hexdigest()):
+            raise RuntimeError('primary_package_extracted_profile_binding')
+        profile = {'pid': pid, 'parent': parent, 'start_ticks': actual['start_ticks'],
+                   'boot_id': actual['boot_id'], 'orig_argv': vector, 'environment': environment,
+                   'cwd': cwd, 'event': event, 'flags': flags,
+                   'body_sha256': hashlib.sha256(body.encode()).hexdigest(), 'repository': False,
+                   'repository_source_sha256': digest('/source/src/unrest_harness/repository_contract.py'),
+                   'console_source_sha256': None, 'source_role': role,
+                   'manifest': self.source.path, 'manifest_sha256': self.source.pin,
+                   'source_entry_sha256': digest('/guard/primary_source_entry.py'),
+                   'source_descriptors': self.source.exec_descriptors(trace, pid, vector, environment, cwd),
+                   'python_environment': python_environment(environment, registration, flags)}
+        path = Path('/receipts/primary-startup') / (str(pid) + '.json')
+        with path.open('x') as stream:
+            stream.write(json.dumps(profile, sort_keys=True))
+        path.chmod(0o444)
+        self.records.append({'kind': 'primary_native_preinit', 'pid': pid, 'parent': parent,
+                             'identity': actual, 'role': role, 'profile_sha256': digest(path)})
+        self.contexts[pid] = {'role': role, 'identity': actual, 'repository': False}
+        return True
+
     def resolve(self, trace, pid, path, vector, environment, cwd):
         parent = trace.identities[pid]['ppid']
         previous = self.contexts.get(pid)
