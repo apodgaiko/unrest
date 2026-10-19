@@ -214,10 +214,21 @@ def early(spec):
     original_pair = socket.socketpair
 
     def socketpair(*args, **kwargs):
-        check()
-        left, right = original_pair(*args, **kwargs)
-        request("socketpair", fds=[left.fileno(), right.fileno()])
-        return left, right
+        left = right = None
+        try:
+            check()
+            left, right = original_pair(*args, **kwargs)
+            request("socketpair", fds=[left.fileno(), right.fileno()])
+            return left, right
+        except BaseException:
+            # A rejected receipt must not strand sockets in retained tracebacks.
+            for stream in (left, right):
+                if stream is not None:
+                    _CONTROL_CLOSE(stream)
+            release = STATE.get("failed_loop_release")
+            if release is not None:
+                release(sys._getframe(1))
+            raise
 
     socket.socketpair = socketpair
     original_listen = socket.socket.listen
@@ -410,6 +421,12 @@ def attach(guard):
                 "sys_path_restored": True,
             }
         )
+        lifetime = Path(__file__).with_name("descriptor_lifetime.py")
+        lifetime_pin = guard._STATE["direct_support"]["files"][str(lifetime)]
+        release, pins = guard.checked_source(lifetime, lifetime_pin)["prepare"]()
+        STATE["failed_loop_release"] = release
+        guard.append({"kind": "descriptor_lifetime_binding", "support_sha256": lifetime_pin,
+                      "runtime_sources": pins, "ownership": "unreturned default loop only"})
         STATE["ready"] = True
         if "inventory_image" in guard._STATE:
             image_hook = Path(__file__).with_name("inventory_image.py")

@@ -19,7 +19,7 @@ import time
 
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
-CASES = ('journal', 'poisoned-loops')
+CASES = ('journal', 'positive-loops', 'poisoned-loops', 'caller-owned-selector', 'pair-receipt-refusal')
 
 
 def sha(path):
@@ -69,14 +69,44 @@ def child(manifest_path, case):
         for index in range(256):
             guard.append({'kind': 'descriptor_control', 'ordinal': index})
             assert census() == before
-    elif case == 'poisoned-loops':
+    elif case == 'positive-loops':
+        for index in range(32):
+            loop = asyncio.new_event_loop()
+            loop.close()
+            assert census() == before
+    elif case == 'pair-receipt-refusal':
+        import socket
+        try:
+            socket.socketpair(type=socket.SOCK_DGRAM)
+        except endpoint.EndpointRefusal as error:
+            errors.append(error)
+        else:
+            raise AssertionError('non-stream pair receipt unexpectedly returned')
+        assert census() == before
+    elif case in {'poisoned-loops', 'caller-owned-selector'}:
         # Explicit diagnostic poison. No forbidden command or socket payload.
         try:
             endpoint.request('poison', reason='descriptor_lifetime_control')
         except endpoint.EndpointRefusal:
             pass
         assert endpoint.STATE['poison']
-        for index in range(132):
+        if case == 'caller-owned-selector':
+            import selectors
+            selector = selectors.DefaultSelector()
+            owner_fd = selector.fileno()
+            try:
+                try:
+                    asyncio.SelectorEventLoop(selector)
+                except endpoint.EndpointRefusal as error:
+                    errors.append(error)
+                else:
+                    raise AssertionError('poisoned constructor unexpectedly returned')
+                assert selector.fileno() == owner_fd
+                assert os.fstat(owner_fd)
+            finally:
+                selector.close()
+            assert census() == before
+        for index in range(132 if case == 'poisoned-loops' else 0):
             previous = census()
             try:
                 loop = asyncio.new_event_loop()
@@ -163,16 +193,23 @@ def run(root):
             process.stdin.close()
             deadline = time.monotonic() + 90
             try:
-                while process.poll() is None:
+                while True:
+                    waited_pid, raw_status = os.waitpid(process.pid, os.WNOHANG)
+                    if waited_pid:
+                        assert waited_pid == process.pid
+                        break
                     supervisor.tick()
                     if time.monotonic() > deadline:
                         process.kill()
                         raise TimeoutError('descriptor control deadline')
                     time.sleep(.001)
-                status = process.wait()
+                status = os.waitstatus_to_exitcode(raw_status)
+                process.returncode = status
                 supervisor.tick()
                 proofs.append({'case': case, 'status': status, 'child': process.pid,
                     'parent': os.getpid(), 'identity': supervisor.root,
+                    'actual_owner_wait': {'pid': waited_pid, 'raw_status': raw_status,
+                                          'numeric_status': status},
                     'receipts': supervisor.receipts, 'poison': supervisor.poisoned,
                     'events': supervisor.events(), 'stdout_sha256': sha(output_path),
                     'stderr_sha256': sha(error_path)})
