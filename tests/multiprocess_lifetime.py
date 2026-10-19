@@ -13,6 +13,7 @@ from typing import Any, cast
 
 
 _process_owners: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
+_process_bindings: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
 
 def _source_bound(function: Any, module: Any) -> None:
     """Refuse a replaced callable before using a private CPython lifecycle API."""
@@ -145,6 +146,7 @@ class SpawnResources:
             if not process._closed:
                 process.close()
             _process_owners.pop(process, None)
+            _process_bindings.pop(process, None)
         for finalizer in reversed(self.finalizers):
             finalizer()
         self.finalizers.clear()
@@ -182,6 +184,7 @@ class _OwnedContext:
         process = self.original.Process(*args, **kwargs)
         self.owner.processes.append(process)
         _process_owners[process] = weakref.ref(self.owner)
+        _process_bindings[process] = (process._target, process._args, process._kwargs)
         return process
 
     def Pipe(self, *args: Any, **kwargs: Any) -> Any:

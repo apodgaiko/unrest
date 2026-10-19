@@ -85,6 +85,7 @@ def child(path):
 def run(root):
     assert sys.platform == "linux" and os.getuid() == 20000
     assert os.statvfs(REPOSITORY).f_flag & os.ST_RDONLY
+    assert os.statvfs(sys.base_prefix).f_flag & os.ST_RDONLY
     root.mkdir(mode=0o700)
     (root / "home").mkdir(mode=0o700)
     (root / "events").mkdir(mode=0o700)
@@ -205,6 +206,11 @@ def run(root):
         "LC_ALL": "C.UTF-8",
         "LANG": "C.UTF-8",
     }
+    sys.path.insert(0, str(SUPPORT))
+    from primary_source_authority import SourceAuthority
+
+    custody = SourceAuthority(path, sha(path), {}, {})
+    custody.supervisor = supervisor
     consumed = set()
     accepted = []
 
@@ -258,6 +264,8 @@ def run(root):
             writer["mode"],
         ):
             return False
+        custody.bound[child_pid] = {**selected, "registration": registration[0]}
+        custody.exec_descriptors(trace, child_pid, argv, env, cwd)
         consumed.add(selected["token"])
         accepted.append(
             {
@@ -277,7 +285,7 @@ def run(root):
         supervisor.tick()
 
     try:
-        proof = trace_module.OwnedTrace(
+        trace = trace_module.OwnedTrace(
             pid,
             [
                 {
@@ -295,8 +303,10 @@ def run(root):
             seize=True,
             on_attached=attached,
             selective=True,
-        ).run()
+        )
+        proof = trace.run()
         supervisor.tick()
+        (root / "exec-custody.json").write_text(json.dumps(custody.pipe_records, sort_keys=True))
         (root / "kernel.json").write_text(json.dumps(proof, sort_keys=True))
         (root / "accepted.json").write_text(json.dumps(accepted, sort_keys=True))
         (root / "receipts.json").write_text(json.dumps(supervisor.receipts, sort_keys=True))

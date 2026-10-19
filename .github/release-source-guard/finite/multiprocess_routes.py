@@ -134,6 +134,238 @@ TARGETS = {
 }
 
 
+CASE_TARGETS = {
+    "tests/test_attention.py::test_whole_envelope_bytes_match_in_independent_process_after_restart": (
+        ("tests.test_attention", "_inspect_in_process"),
+    ),
+    "tests/test_multiprocess_resource_ownership.py::test_altered_stdlib_stop_is_refused_before_launch": (),
+    "tests/test_multiprocess_resource_ownership.py::test_case_drift_refuses_without_releasing_owned_resources": (),
+    "tests/test_multiprocess_resource_ownership.py::test_joined_spawn_queue_event_and_value_close_before_summary": (
+        ("tests.test_multiprocess_resource_ownership", "_publish"),
+    ),
+    "tests/test_multiprocess_resource_ownership.py::test_live_child_refusal_preserves_original_error_and_does_not_kill": (
+        ("tests.test_multiprocess_resource_ownership", "_wait"),
+    ),
+    "tests/test_multiprocess_resource_ownership.py::test_original_child_status_is_preserved[0]": (
+        ("tests.test_multiprocess_resource_ownership", "_exit_with_status"),
+    ),
+    "tests/test_multiprocess_resource_ownership.py::test_original_child_status_is_preserved[17]": (
+        ("tests.test_multiprocess_resource_ownership", "_exit_with_status"),
+    ),
+    "tests/test_multiprocess_resource_ownership.py::test_original_failure_or_cancellation_survives_clean_teardown[error0]": (),
+    "tests/test_multiprocess_resource_ownership.py::test_original_failure_or_cancellation_survives_clean_teardown[error1]": (),
+    "tests/test_multiprocess_resource_ownership.py::test_parent_feeder_and_both_pipe_endpoints_are_settled": (),
+    "tests/test_multiprocess_resource_ownership.py::test_preexisting_tracker_is_refused_and_left_owned_by_its_parent": (),
+    "tests/test_multiprocess_resource_ownership.py::test_reused_descriptor_number_has_no_pipe_authority": (),
+    "tests/test_multiprocess_resource_ownership.py::test_unrelated_finalizer_is_not_consumed": (),
+    "tests/test_patch_transaction.py::test_interrupted_probe_coexists_with_committed_recovery": (
+        ("tests.test_patch_transaction", "_interrupt_rename_probe"),
+    ),
+    "tests/test_patch_transaction.py::test_two_mutators_and_two_inspectors_are_process_linearizable": (
+        ("tests.test_patch_transaction", "_inspector_process"),
+        ("tests.test_patch_transaction", "_mutator_process"),
+    ),
+    "tests/test_project_lock.py::test_legacy_lock_survives_nine_target_project_record_replacement": (
+        ("tests.test_project_lock", "_legacy_lock_contender"),
+        ("tests.test_project_lock", "_legacy_replacement_holder"),
+    ),
+    "tests/test_project_lock.py::test_os_releases_lock_after_abrupt_holder_death": (
+        ("tests.test_project_lock", "_holder_process"),
+        ("tests.test_project_lock", "_single_call_process"),
+    ),
+    "tests/test_project_lock.py::test_spawned_public_mutations_are_exclusive_and_project_scoped": (
+        ("tests.test_project_lock", "_competitor_process"),
+        ("tests.test_project_lock", "_holder_process"),
+    ),
+    "tests/test_supervision.py::test_independent_child_process_adapter_observes_bound_action[terminal_reviewer]": (
+        ("tests.test_supervision", "_process_wait_for_steering"),
+    ),
+    "tests/test_supervision.py::test_independent_child_process_adapter_observes_bound_action[validator]": (
+        ("tests.test_supervision", "_process_wait_for_steering"),
+    ),
+    "tests/test_supervision.py::test_independent_child_process_adapter_observes_bound_action[worker]": (
+        ("tests.test_supervision", "_process_wait_for_steering"),
+    ),
+    "tests/test_supervision_finalization.py::test_finalization_real_snapshot_contention_is_bounded": (
+        ("tests.test_supervision_finalization", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[False-finalization_first-terminal_reviewer]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[False-finalization_first-validator]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[False-finalization_first-worker]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[False-publication_first-terminal_reviewer]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[False-publication_first-validator]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[False-publication_first-worker]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[True-finalization_first-terminal_reviewer]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[True-finalization_first-validator]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[True-finalization_first-worker]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[True-publication_first-terminal_reviewer]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[True-publication_first-validator]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_finalization.py::test_process_orderings_preserve_carrier_and_terminal_fence[True-publication_first-worker]": (
+        ("tests.test_supervision_finalization", "_publisher"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[blocked]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[checkpoint]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[continue]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[nudge]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[other-checkpoint]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[other-steer]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[other-stop]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[recovery]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[stop]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_real_held_snapshot_refuses_and_reconciles[timeout]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_nested.py::test_supplemental_exact_cutoff_and_recovery_rows_share_context": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_competing_first_use_and_restart_share_carrier": (
+        ("tests.test_supervision_paths", "_first_save"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[hardlink-False]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[hardlink-True]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[mode-False]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[mode-True]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[remove-False]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[remove-True]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[replace-False]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[replace-True]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[symlink-False]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_paths.py::test_detectable_change_while_real_owner_holds[symlink-True]": (
+        ("tests.test_supervision_nested", "_hold_snapshot"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[cancelled-client-terminal_reviewer]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[cancelled-client-validator]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[cancelled-client-worker]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[held-inbox-terminal_reviewer]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[held-inbox-validator]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[held-inbox-worker]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[held-recovery-terminal_reviewer]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[held-recovery-validator]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_actual_role_excludes_both_diagnostic_interleavings[held-recovery-worker]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_contended_owner_release_before_original_cutoff_succeeds": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_distinct_processes_share_tail_and_compete_for_one_action": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_exact_and_after_deadline_do_not_retry_ownership[1.001]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_exact_and_after_deadline_do_not_retry_ownership[1.0]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_nonwaiter_contention_is_finite_and_checkpoint_cannot_publish": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_process_death_releases_stable_carrier_and_recovery_never_replays[after_consumed_inbox_fsync-wait-False]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_process_death_releases_stable_carrier_and_recovery_never_replays[after_pending_inbox_fsync-steer-True]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_process_death_releases_stable_carrier_and_recovery_never_replays[after_receipt_fsync:nudge_consumed-wait-False]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_process_death_releases_stable_carrier_and_recovery_never_replays[before_consumed_inbox_fsync-wait-True]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_real_contended_wait_uses_original_deadline_without_false_timeout[0.06]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_real_contended_wait_uses_original_deadline_without_false_timeout[0.15]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_supervision_transactions.py::test_real_contended_wait_uses_original_deadline_without_false_timeout[0]": (
+        ("tests.test_supervision_transactions", "_child"),
+    ),
+    "tests/test_terminal_review_report_ordering.py::test_crash_report_survives_finalization_refusal[held_snapshot]": (
+        ("tests.test_supervision_finalization", "_hold_snapshot"),
+    ),
+    "tests/test_terminal_review_report_ordering.py::test_crash_report_survives_finalization_refusal[path_fault]": (
+        ("tests.test_supervision_finalization", "_hold_snapshot"),
+    ),
+    "tests/test_terminal_review_report_ordering.py::test_crash_report_survives_finalization_refusal[storage_fault]": (
+        ("tests.test_supervision_finalization", "_hold_snapshot"),
+    ),
+}
+
+
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -185,7 +417,8 @@ def pair(reader, writer):
 
 
 def match(state, executable, argv, passfds, frame):
-    from multiprocessing import popen_spawn_posix, resource_tracker, spawn
+    from multiprocessing import popen_spawn_posix, resource_tracker, spawn, util
+    import subprocess
 
     root = Path(state["checkout"])
     case = state.get("case")
@@ -207,6 +440,10 @@ def match(state, executable, argv, passfds, frame):
     stack = frames_from(frame)
     source_frames = [f for f in stack if f.f_code is helper.SpawnResources.context.__code__]
     tracker = resource_tracker._resource_tracker
+    if not source_function(util._args_from_interpreter_flags, subprocess):
+        raise RuntimeError("multiprocess interpreter flag source mismatch")
+    if not source_function(spawn.get_command_line, spawn):
+        raise RuntimeError("multiprocess command renderer source mismatch")
     prefix = "from multiprocessing.resource_tracker import main;main("
     flags = [
         os.fsdecode(v)
@@ -264,6 +501,7 @@ def match(state, executable, argv, passfds, frame):
         target_path = TARGETS.get((target.__module__, target.__name__))
         if (
             target_path is None
+            or (target.__module__, target.__name__) not in CASE_TARGETS[case]
             or target_module is None
             or target is not getattr(target_module, target.__name__)
             or target.__globals__ is not vars(target_module)
@@ -295,6 +533,14 @@ def match(state, executable, argv, passfds, frame):
             or owner.pid != tracker._pid
         ):
             raise RuntimeError("multiprocess original process owner missing")
+        binding = helper._process_bindings.get(process)
+        if (
+            binding is None
+            or process._target is not binding[0]
+            or process._args is not binding[1]
+            or process._kwargs is not binding[2]
+        ):
+            raise RuntimeError("multiprocess acquisition arguments changed")
         tracker_pipe = descriptor(owner.fd)
         custody = descriptor(owner.custody)
         if any(tracker_pipe[k] != custody[k] for k in ("device", "inode", "mode")):
