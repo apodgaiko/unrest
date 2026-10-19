@@ -132,14 +132,26 @@ class PackageProducers(NativeProducers):
 
     def stage_response(self, request):
         result = super().stage_response(request)
+        from primary_package_retired_builds import consumed
+        consumed(self, request)
         from primary_package_directory_diagnostic import capture
         capture(self, self.children[request['pid']], 'original-module-return')
         return result
 
     def completed_cache(self, event, trace):
+        previous_names = getattr(self, 'cache_names', {})
+        original_view = None
+        if (event.get('kind') == 'kernel_exit' and event.get('raw') == 0
+                and event.get('pid') in self.uv and event['pid'] not in self.cache_completed):
+            from primary_package_retired_builds import current_names, checked_view
+            retained = current_names(self, self.uv[event['pid']], trace)
+            self.cache_names = {**previous_names, **retained}
+            original_view = self.interface.cache_view
+            self.interface.cache_view = checked_view(original_view, self.package_retired_parent)
         try:
             return super().completed_cache(event, trace)
         except RuntimeError as error:
+            self.cache_names = previous_names
             if str(error) == 'primary_cache_unbound_original_output' and event.get('pid') in self.uv:
                 from primary_package_cache_diagnostic import observe
                 try:
@@ -164,6 +176,9 @@ class PackageProducers(NativeProducers):
                         'source_checkpoint_ready': False, 'selected_carrier': None}
             # Preserve the exact original cache refusal and the failed epoch.
             raise
+        finally:
+            if original_view is not None:
+                self.interface.cache_view = original_view
 
     def resolve_child(self, pid, parent, path, vector, environment, cwd):
         context = self.uv.get(parent)

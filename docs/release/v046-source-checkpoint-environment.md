@@ -1125,3 +1125,13 @@ post-build presence cannot establish writer lineage or package acceptance.
 On Python 3.13, traceback frame locals use a proxy whose `keys()` returns a
 list. The diagnostic explicitly materializes key membership before projection;
 a regression exercises the actual refusing traceback rather than a plain dict.
+
+The actual package directory refusal was the empty `builds-v0` bucket after
+UV removed its temporary build environments. Pinned UV 0.11.0 `Cache::venv_dir`
+creates this bucket before `tempdir_in`. The package observer retains only the
+exact names consumed by the four authenticated original backend module returns,
+with current READY, profile, kernel birth, original parent waits and stable
+parent inode/ownership. The original complete census and ancestor predicate
+consume these retained names. A fresh census must match the observed empty
+parent; preexisting, replaced, foreign, symlink, changed-mode/owner or nonempty
+parents refuse. No other directory or retired generation receives authority.
