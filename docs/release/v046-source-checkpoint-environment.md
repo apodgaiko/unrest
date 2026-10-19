@@ -1197,3 +1197,8 @@ startup profile. It retains exact source/function, parent, transformed program,
 image and descriptor checks without requiring SOURCE collection mode or budgets.
 The shared SOURCE profile builder and all original archive/oracle bytes remain
 unchanged. The package path has no SOURCE collection authority.
+
+The image-only public wheel preparer runs with explicit `-I -B`. Isolated mode
+ignores `PYTHONDONTWRITEBYTECODE`; omitting `-B` lets support imports mutate the
+already sealed dependency closure. The original complete dependency inventory
+continues to reject every added cache file.

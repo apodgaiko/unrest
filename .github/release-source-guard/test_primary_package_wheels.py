@@ -68,3 +68,16 @@ def test_empty_or_total_oversize_input_refused():
     assert sum(package['wheels'][0]['size'] for package in lock['package']) > TOTAL
     with pytest.raises(RuntimeError, match='input_bound'):
         select(lock, [Tag('py3', 'none', 'any')])
+
+
+def test_image_wheel_preparer_cannot_mutate_dependency_byte_closure():
+    # -I ignores PYTHONDONTWRITEBYTECODE, so the command needs an explicit -B.
+    import ast
+    from pathlib import Path
+    tree = ast.parse(Path(__file__).with_name('primary_environment.py').read_bytes())
+    commands = [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant)
+                and isinstance(node.value, str) and '/bootstrap/primary_package_wheels.py' in node.value]
+    assert any('RUN /opt/deps/bin/python -I -B /bootstrap/primary_package_wheels.py' in command
+               for command in commands)
+    assert not any('RUN /opt/deps/bin/python -I /bootstrap/primary_package_wheels.py' in command
+                   for command in commands)

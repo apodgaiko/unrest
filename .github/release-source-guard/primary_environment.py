@@ -17,7 +17,7 @@ def build(root, base, support, log, *, package_wheels=False):
     if package_wheels:
         (root / 'primary_package_wheels.py').write_bytes((support / 'primary_package_wheels.py').read_bytes())
         package_input = ('COPY primary_package_wheels.py /bootstrap/primary_package_wheels.py\n'
-                         'RUN /opt/deps/bin/python -I /bootstrap/primary_package_wheels.py && rm -rf /bootstrap\n')
+                         'RUN /opt/deps/bin/python -I -B /bootstrap/primary_package_wheels.py && rm -rf /bootstrap\n')
     (root / 'Dockerfile').write_text(
         'FROM ' + base_tag + '\n'
         'COPY primary_entry.c primary_entry.py /opt/source-guard/\n'
