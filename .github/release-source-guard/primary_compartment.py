@@ -245,6 +245,8 @@ def main():
     if source is not None:
         result.update(source.finish())
     records = {'source-output.log': bytes(output)}
+    if package_build and spec['duty'] == 'Build wheel and source distribution' and getattr(source.producers, 'package_cache_refusal', None) is not None:
+        records['package-proof.json'] = json.dumps(source.producers.package_cache_refusal, sort_keys=True, separators=(',', ':')).encode()
     if package_build and status_guard_success(result):
         try:
             source.require_complete(trace)

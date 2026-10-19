@@ -130,6 +130,24 @@ class PackageProducers(NativeProducers):
                              'identity': identity(pid), 'origin_sha256': pin})
         return True
 
+    def completed_cache(self, event, trace):
+        try:
+            return super().completed_cache(event, trace)
+        except RuntimeError as error:
+            if str(error) == 'primary_cache_unbound_original_output' and event.get('pid') in self.uv:
+                from primary_package_cache_diagnostic import observe
+                try:
+                    self.package_cache_refusal = observe(self, self.uv[event['pid']])
+                except BaseException as diagnostic_error:
+                    self.package_cache_refusal = {
+                        'schema': 'unrest.v046.primary-package-cache-refusal.v1',
+                        'status': 'diagnostic-refused',
+                        'exception_class': type(diagnostic_error).__name__,
+                        'authority_granted': False, 'eligible_certificate': False,
+                        'source_checkpoint_ready': False, 'selected_carrier': None}
+            # Preserve the exact original cache refusal and the failed epoch.
+            raise
+
     def resolve_child(self, pid, parent, path, vector, environment, cwd):
         context = self.uv.get(parent)
         if context is None:

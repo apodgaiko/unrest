@@ -1096,3 +1096,9 @@ source, package and final-readiness input as the unexcluded source checkpoint.
 The original build script runs under finite PRIMARY kernel admission; its
 native UV backend children consume a separate live original-script origin.
 This does not impersonate a pytest fixture or infer READY or parent waits.
+
+Cache-refusal diagnostics carry bounded data shapes, complete-byte digests and
+matches to original query fields. They contain no cache body and grant no
+admission, output authority or certificate. The original writer/consumer
+checks still decide admission; a failed producer cannot create usable package
+custody.
