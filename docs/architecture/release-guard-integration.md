@@ -60,3 +60,11 @@ capsule correctly refuse `source_only_support_cache_poison`. This preparation
 setting prevents that contamination. Existing cache files still refuse; no cache
 is deleted or admitted, and source interpreter flags and payload environment
 bindings retain their original checks.
+
+The native startup profile keeps exec environment bytes separate from the exact
+post-initialization environment. For the two byte-pinned controlled backend and
+ACP fixtures with their original non-isolated interpreter flags and no locale
+variables, pinned CPython adds `LC_CTYPE=C.UTF-8`. The profile binds precisely
+that result; changed fixture class, path, line, bytes, flags or an existing locale
+variable cannot select this projection. Original pre-exec environment, argv,
+owner, session, descriptor and READY checks remain mandatory.

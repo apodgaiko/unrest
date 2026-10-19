@@ -64,14 +64,24 @@ def python_flags(vector, environment):
 
 
 def python_environment(environment, registration, flags):
-    """Post-init locale bytes for the existing isolated startup source fixture.
+    """Post-init locale bytes for exact source fixture registrations.
 
     Exec still consumes the exact original environment. The pinned CPython
-    image coerces its absent C locale before exposing os.environ under -I.
+    image coerces its absent C locale before exposing os.environ. Exec and
+    post-init environments remain independently exact; this grants no launch.
     """
-    if (registration['class'] == 'isolated-role-startup'
-            and registration['source_binding']['path'] == '/source/tests/test_stdio_startup.py'
-            and flags[0] == 1
+    controlled = {
+        'canonical-backend': ('/source/tests/fixtures/experimental_session_app_server.py',
+                              'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53'),
+        'controlled-acp': ('/source/tests/fixtures/controlled_python_acp.py',
+                           'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'),
+    }.get(registration['class'])
+    binding = registration['source_binding']
+    exact_controlled = (controlled is not None and flags == [0, 0, 0]
+                        and binding == {'path': controlled[0], 'line': 1, 'sha256': controlled[1]})
+    isolated = (registration['class'] == 'isolated-role-startup'
+                and binding['path'] == '/source/tests/test_stdio_startup.py' and flags[0] == 1)
+    if ((isolated or exact_controlled)
             and not any(key in environment for key in ('LC_CTYPE', 'LC_ALL', 'LANG'))):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     return dict(environment)

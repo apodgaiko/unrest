@@ -86,3 +86,33 @@ def test_host_control_import_cannot_poison_readonly_source_support(tmp_path, pre
     assert result.returncode == 0, result.stderr
     caches = list((support / 'finite/__pycache__').glob('linux_identity.*.pyc'))
     assert bool(caches) is not prevent_bytecode
+
+
+@pytest.mark.parametrize('kind,name,pin', [
+    ('canonical-backend', 'experimental_session_app_server.py',
+     'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53'),
+    ('controlled-acp', 'controlled_python_acp.py',
+     'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'),
+])
+def test_controlled_postinit_locale_keeps_exact_fixture_and_exec_environment(kind, name, pin):
+    from primary_source_inputs import python_environment
+    registration = {'class': kind, 'source_binding': {
+        'path': '/source/tests/fixtures/' + name, 'line': 1, 'sha256': pin}}
+    original = {'HOME': '/owned/home', 'PATH': '/usr/bin:/bin'}
+    before = dict(original)
+    assert python_environment(original, registration, [0, 0, 0]) == {
+        **original, 'LC_CTYPE': 'C.UTF-8'}
+    assert original == before
+    for key in ('LC_CTYPE', 'LC_ALL', 'LANG'):
+        environment = {**original, key: 'C'}
+        assert python_environment(environment, registration, [0, 0, 0]) == environment
+    for key, value in [('class', 'unknown'), ('path', '/foreign/copy.py'),
+                       ('line', 2), ('sha256', '0' * 64)]:
+        changed = copy.deepcopy(registration)
+        if key == 'class':
+            changed[key] = value
+        else:
+            changed['source_binding'][key] = value
+        assert python_environment(original, changed, [0, 0, 0]) == original
+    for flags in ([1, 0, 0], [0, 1, 0], [0, 0, 1]):
+        assert python_environment(original, registration, flags) == original
