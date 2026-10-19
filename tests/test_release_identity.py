@@ -12,7 +12,7 @@ from unrest_harness import __version__
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.4.6"
+EXPECTED_VERSION = "0.4.7"
 
 
 def test_public_release_identity_is_consistent() -> None:
@@ -30,9 +30,9 @@ def test_public_release_identity_is_consistent() -> None:
     assert installed_version("unrest-harness") == EXPECTED_VERSION
 
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "unrest_harness-0.4.6-py3-none-any.whl" in ci
-    assert "unrest_harness-0.4.6.tar.gz" in ci
-    assert "name: unrest-v0.4.6-python313" in ci
+    assert "unrest_harness-0.4.7-py3-none-any.whl" in ci
+    assert "unrest_harness-0.4.7.tar.gz" in ci
+    assert "name: unrest-v0.4.7-python313" in ci
     assert "unrest_harness-0.2.0" not in ci
 
 
@@ -81,7 +81,7 @@ def test_release_risk_disclosure_matches_help_and_experimental_status() -> None:
         assert LIMITATIONS[field] == "unverified"
     for relative in (
         "README.md",
-        "docs/release/lean-core-v0.4.6.md",
+        "docs/release/lean-core-v0.4.7.md",
         "docs/architecture/experimental-cohort.md",
         "docs/architecture/experimental-lease.md",
         "docs/architecture/approval-recovery.md",

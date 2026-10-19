@@ -78,7 +78,7 @@ def materialize(custody, destination):
 
 def main():
     require(os.environ['GITHUB_WORKFLOW'] == 'CI' and os.environ['GITHUB_EVENT_NAME'] == 'push'
-            and re.fullmatch(r'refs/heads/(?:main|codex/release-v046-[a-z0-9-]+)',
+            and re.fullmatch(r'refs/heads/(?:main|codex/release-v047-[a-z0-9-]+)',
                              os.environ['GITHUB_REF']), 'issuer_primary_execution_context')
     temporary = Path(os.environ['RUNNER_TEMP'])
     expected = expected_identity()

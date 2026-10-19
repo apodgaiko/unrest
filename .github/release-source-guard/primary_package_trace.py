@@ -19,7 +19,7 @@ from linux_trace import OwnedTrace, ptrace, _observation
 from producer_inputs import SOURCE_UV_ELF_SHA256
 
 COMMAND = ['uv', 'pip', 'install', '--python', '.wheel-venv/bin/python',
-           'dist/unrest_harness-0.4.6-py3-none-any.whl']
+           'dist/unrest_harness-0.4.7-py3-none-any.whl']
 
 
 def verify_retirements(records):

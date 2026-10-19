@@ -94,7 +94,7 @@ def test_each_transfer_rechecks_custody_bytes_after_prior_admission(tmp_path):
 def test_original_package_scripts_are_test_only_until_full_readiness(duty):
     registry = loads(REGISTRY.read_bytes())
     if duty not in (BUILD, ARCHIVE, 'Smoke-test installed wheel',
-                     'Generate and verify v0.4.6 build-local checksums'):
+                     'Generate and verify v0.4.7 build-local checksums'):
         return
     script = registry[duty].encode()
     script = script.rstrip(b'\n') if b'\n' not in script.rstrip(b'\n') else script

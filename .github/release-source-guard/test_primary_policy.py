@@ -22,7 +22,7 @@ def test_original_import_script_is_the_executed_shell_input():
     assert actual['timeout_seconds'] == 180 and actual['source_checkpoint_ready'] is False
 
 
-@pytest.mark.parametrize('name', ['v0.4.6 source suite', 'Build wheel and source distribution',
+@pytest.mark.parametrize('name', ['v0.4.7 source suite', 'Build wheel and source distribution',
                                   'Smoke-test installed wheel', 'Check distribution archives'])
 def test_focused_root_never_grants_full_or_package_authority(name):
     registry = json.loads(REGISTRY.read_bytes())

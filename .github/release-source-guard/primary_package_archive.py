@@ -42,8 +42,8 @@ def install_return_observer(authority, primary):
         result = request['result']
         if (type(result) is not dict or set(result) != {'package_files', 'restart_oracle', 'sdist', 'wheel'}
                 or type(result['package_files']) is not int or result['package_files'] <= 0
-                or result['wheel'] != 'unrest_harness-0.4.6-py3-none-any.whl'
-                or result['sdist'] != 'unrest_harness-0.4.6.tar.gz'
+                or result['wheel'] != 'unrest_harness-0.4.7-py3-none-any.whl'
+                or result['sdist'] != 'unrest_harness-0.4.7.tar.gz'
                 or type(result['restart_oracle']) is not dict or result['restart_oracle'].get('cases') != 15):
             raise RuntimeError('primary_package_original_return_shape')
         from primary_outputs import export

@@ -54,6 +54,8 @@ def decide(reader, expected, current_run):
 
 
 def main():
+    from preflight_policy import REFS as preflight_refs
+    require(os.environ.get('GITHUB_REF') not in preflight_refs, 'supplementary_preflight_is_not_checkpoint')
     destination = Path(os.environ['RUNNER_TEMP']) / 'primary-decision.json'
     if destination.exists() or destination.is_symlink():
         raise ReceiptRefused('decision_already_exists')

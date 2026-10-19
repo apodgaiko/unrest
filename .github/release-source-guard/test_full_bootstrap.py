@@ -173,6 +173,10 @@ def test_preparation_is_common_and_dispatch_free():
     text += ast.unparse(build)
     assert "'create'" in text and "'inspect'" in text
     assert "'start'" not in text and 'capture_raw_source' not in text
+    wrapper = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'retained_main')
+    assert sum(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+               and n.func.id == 'main' for n in ast.walk(wrapper)) == 1
+    assert 'primary_encryption_failed' in ast.unparse(wrapper)
     main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
     assert sum(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                and n.func.id == 'prepare_capsule' for n in ast.walk(main)) == 1
@@ -203,4 +207,4 @@ def test_workflow_preserves_original_scripts_and_routes_only_preparation():
     assert 'ci_shell.py --prepare-full {0}' in workflow
     assert workflow.count("if: ${{ !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}") == 4
     commands = json.loads(Path(__file__).with_name('ci_commands.json').read_bytes())
-    assert commands['v0.4.6 source suite'].encode() == full.SCRIPT + b'\n'
+    assert commands['v0.4.7 source suite'].encode() == full.SCRIPT + b'\n'

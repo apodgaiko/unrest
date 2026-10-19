@@ -32,7 +32,7 @@ def fixture(mutation=None):
                 info.external_attr = 0o120777 << 16
             archive.writestr(info, body)
     body = buffer.getvalue()
-    artifact = {'id': 7, 'name': 'unrest-v0.4.6-python313', 'expired': False,
+    artifact = {'id': 7, 'name': 'unrest-v0.4.7-python313', 'expired': False,
                 'size_in_bytes': len(body), 'digest': 'sha256:' + sha256(body),
                 'workflow_run': {'id': 1, 'head_sha': 'a' * 40}}
     return body, artifact, reuse, members

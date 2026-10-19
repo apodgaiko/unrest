@@ -8,9 +8,9 @@ import zipfile
 
 from checkpoint_receipt import require, sha256
 
-PACKAGE_ARTIFACT = 'unrest-v0.4.6-python313'
-WHEEL = 'unrest_harness-0.4.6-py3-none-any.whl'
-SDIST = 'unrest_harness-0.4.6.tar.gz'
+PACKAGE_ARTIFACT = 'unrest-v0.4.7-python313'
+WHEEL = 'unrest_harness-0.4.7-py3-none-any.whl'
+SDIST = 'unrest_harness-0.4.7.tar.gz'
 LIMIT = 128 * 1024 * 1024
 
 

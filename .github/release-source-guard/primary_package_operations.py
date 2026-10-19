@@ -33,8 +33,8 @@ class Operations(_PackageBase):
         body = Path('/inputs/package-input.json').read_bytes()
         if (json.loads(body) != descriptor or descriptor['duty'] != 'Check distribution archives'
                 or descriptor['schema'] != 'unrest.v046.primary-package-input.v1'
-                or set(descriptor['members']) != {'unrest_harness-0.4.6-py3-none-any.whl',
-                                                  'unrest_harness-0.4.6.tar.gz'}):
+                or set(descriptor['members']) != {'unrest_harness-0.4.7-py3-none-any.whl',
+                                                  'unrest_harness-0.4.7.tar.gz'}):
             self.refuse('primary_package_archive_input_binding')
         root = Path('/source/dist')
         if root.is_symlink() or {p.name for p in root.iterdir()} != set(descriptor['members']):
@@ -75,7 +75,7 @@ class Operations(_PackageBase):
                 and frame.f_code.co_name == '_extract_sdist_safely'):
             binding = source_frame(frame, '_extract_sdist_safely', 'tools/check_distribution.py')
             local = frame.f_locals
-            if local['path'] != Path('/source/dist/unrest_harness-0.4.6.tar.gz'):
+            if local['path'] != Path('/source/dist/unrest_harness-0.4.7.tar.gz'):
                 self.refuse('primary_package_extraction_archive')
             parent = self.import_package()
             destination = self.own(local['destination'])

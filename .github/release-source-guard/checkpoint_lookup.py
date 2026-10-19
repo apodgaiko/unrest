@@ -94,7 +94,7 @@ def lookup(reader, expected, current_run_id):
         if run['head_sha'] != head or run['path'] != '.github/workflows/ci.yml':
             raise ReceiptRefused('Actions returned a different workflow or source commit')
         if run['event'] != 'push' or not (run['head_branch'] == 'main'
-                or run['head_branch'].startswith('codex/release-v046-')):
+                or run['head_branch'].startswith('codex/release-v047-')):
             continue
         if run['status'] != 'completed':
             raise ReceiptRefused('another same-commit primary execution has not settled')
@@ -105,7 +105,7 @@ def lookup(reader, expected, current_run_id):
                    if job['name'] == 'primary source and package gate (py3.13)']
         if len(primary) != 1:
             raise ReceiptRefused('same-commit primary job identity is missing or ambiguous')
-        source = [step for step in primary[0]['steps'] if step['name'] == 'v0.4.6 source suite']
+        source = [step for step in primary[0]['steps'] if step['name'] == 'v0.4.7 source suite']
         if len(source) == 1 and source[0]['conclusion'] not in (None, 'skipped'):
             executed.append(run['id'])
         if run['conclusion'] != 'success':

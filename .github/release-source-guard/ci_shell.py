@@ -20,6 +20,7 @@ from structured_evidence import EvidenceRefused, execution_identity
 from primary_custody import Binding, Custody, ORDER, ARCHIVE, INSTALLED, CHECKSUM
 from primary_source_inputs import test_plan
 from structured_evidence import canonical
+from phase_catalog import catalog, require_retention
 
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
@@ -28,14 +29,10 @@ TMPFS = {'/work': 'rw,nosuid,nodev,size=512m,uid=20000,gid=20000,mode=0711',
          '/source': 'rw,exec,nosuid,nodev,size=256m,uid=20000,gid=20000,mode=0755',
          '/source/src/unrest_harness.egg-info': 'rw,nosuid,nodev,noexec,size=8m,uid=20000,gid=20000,mode=0700',
          '/receipts': 'rw,nosuid,nodev,noexec,size=32m,uid=20001,gid=20001,mode=0755'}
-KINDS = {'Install dependencies': 'primary-install', 'Import package': 'primary-import',
-         'Supported CLI surfaces': 'primary-help', 'Repository contract': 'primary-repository',
-         'Lint (ruff)': 'primary-lint', 'Type-check (mypy)': 'primary-types',
-         'v0.4.6 source suite': 'primary-source',
-         'Build wheel and source distribution': 'primary-package-build',
-         ARCHIVE: 'primary-package-archive', INSTALLED: 'primary-package-installed',
-         CHECKSUM: 'primary-package-checksum',
-         'TEST-source-positive': 'primary-source-positive', 'TEST-source-poison': 'primary-source-poison'}
+
+KINDS = {name: phase.output for name, phase in catalog().items()}
+KINDS.update({'TEST-source-positive': 'primary-source-positive',
+              'TEST-source-poison': 'primary-source-poison'})
 
 
 def digest(path):
@@ -82,15 +79,17 @@ def validate(config, image, mounts):
 STAGE = 'startup'
 SCRIPT_PIN = None
 SCRIPT_SIZE = None
+ACTIVE_ROOT = None
 
 
 def prepare_capsule(spec, script, expected, source_input, test_mode, package_test):
-    global STAGE
+    global STAGE, ACTIVE_ROOT
     kind = KINDS[spec['duty']]
     root = Path(os.environ['RUNNER_TEMP']) / kind
     root.mkdir(mode=0o700)
     raw = root / 'raw'
     raw.mkdir(mode=0o700)
+    ACTIVE_ROOT = root
     log = raw / 'coordinator.log'
     control = json.loads((Path(os.environ['RUNNER_TEMP']) / 'source-readiness/safe-provenance.json').read_bytes())
     if control['head_sha'] != os.environ['GITHUB_SHA'] or control['synthetic_exit_code'] != 0:
@@ -206,9 +205,13 @@ def main():
         context('PREPAREONLY')
     elif prepare_only:
         raise RuntimeError('primary_prepare_only_context')
+    preflight = len(sys.argv) in {3, 4} and sys.argv[1] in {'--preflight', '--preflight-package', '--preflight-phase'}
+    if preflight:
+        from preflight_policy import context as preflight_context
+        preflight_context()
     test_mode = None
-    package_test = len(sys.argv) == 3 and sys.argv[1] == '--package-test'
-    if package_test and (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
+    package_test = len(sys.argv) == 3 and sys.argv[1] in {'--package-test', '--preflight-package'}
+    if package_test and not preflight and (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
             or os.environ.get('GITHUB_REF') not in {
                 'refs/heads/codex/source-guard-structured-20261018-package-entry-' + epoch
                 for epoch in ('01', '02', '03', '04')} | {
@@ -219,40 +222,41 @@ def main():
                 'refs/heads/codex/source-guard-structured-20261018-package-entry-control-input-' + epoch
                 for epoch in ('01', '02', '03', '04', '05', '06')}):
         raise RuntimeError('primary_package_test_workflow_identity')
-    if len(sys.argv) == 4 and sys.argv[1] == '--source-test':
+    if len(sys.argv) == 4 and sys.argv[1] in {'--source-test', '--preflight'}:
         test_mode = sys.argv[2]
-        if (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
-                or not (os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-root-allocation-' + epoch
-                    for epoch in ('01', '02', '03')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-producer-startup-' + epoch
-                    for epoch in ('01', '02', '03')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-cache-snapshot-' + epoch
-                    for epoch in ('01', '02', '03', '04', '05', '06')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-source-return-' + epoch
-                    for epoch in ('01', '02', '03', '04', '05', '06')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-primary-dependency-' + epoch
-                    for epoch in ('01', '02', '03', '04', '05', '06')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-raw-record-transport-' + epoch
-                    for epoch in ('01', '02', '03', '04')}
-                    or os.environ.get('GITHUB_REF') in {
-                    'refs/heads/codex/source-guard-structured-20261018-native-uv-mode-' + epoch
-                    for epoch in ('01', '02', '03', '04')}
-                    or os.environ.get('GITHUB_REF', '').startswith((
-                    'refs/heads/codex/source-guard-structured-20261018-source-entry-',
-                    'refs/heads/codex/source-guard-structured-20261018-source-composition-',
-                    'refs/heads/codex/source-guard-structured-20261018-exact-pipe-',
-                    'refs/heads/codex/source-guard-structured-20261018-source-receipt-',
-                    'refs/heads/codex/source-guard-structured-20261018-layered-source-',
-                    'refs/heads/codex/source-guard-structured-20261018-pinned-policy-',
-                    'refs/heads/codex/source-guard-structured-20261018-source-seams-')))):
-            raise RuntimeError('primary_test_workflow_identity')
-    elif len(sys.argv) != 2 and not package_test and not prepare_only:
+        if not preflight:
+            if (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
+                    or not (os.environ.get('GITHUB_REF') in {
+                        'refs/heads/codex/source-guard-structured-20261018-root-allocation-' + epoch
+                        for epoch in ('01', '02', '03')}
+                        or os.environ.get('GITHUB_REF') in {
+                        'refs/heads/codex/source-guard-structured-20261018-producer-startup-' + epoch
+                        for epoch in ('01', '02', '03')}
+                        or os.environ.get('GITHUB_REF') in {
+                        'refs/heads/codex/source-guard-structured-20261018-cache-snapshot-' + epoch
+                        for epoch in ('01', '02', '03', '04', '05', '06')}
+                        or os.environ.get('GITHUB_REF') in {
+                        'refs/heads/codex/source-guard-structured-20261018-source-return-' + epoch
+                        for epoch in ('01', '02', '03', '04', '05', '06')}
+                        or os.environ.get('GITHUB_REF') in {
+                        'refs/heads/codex/source-guard-structured-20261018-primary-dependency-' + epoch
+                        for epoch in ('01', '02', '03', '04', '05', '06')}
+                        or os.environ.get('GITHUB_REF') in {
+                        'refs/heads/codex/source-guard-structured-20261018-raw-record-transport-' + epoch
+                        for epoch in ('01', '02', '03', '04')}
+                        or os.environ.get('GITHUB_REF') in {
+                        'refs/heads/codex/source-guard-structured-20261018-native-uv-mode-' + epoch
+                        for epoch in ('01', '02', '03', '04')}
+                        or os.environ.get('GITHUB_REF', '').startswith((
+                        'refs/heads/codex/source-guard-structured-20261018-source-entry-',
+                        'refs/heads/codex/source-guard-structured-20261018-source-composition-',
+                        'refs/heads/codex/source-guard-structured-20261018-exact-pipe-',
+                        'refs/heads/codex/source-guard-structured-20261018-source-receipt-',
+                        'refs/heads/codex/source-guard-structured-20261018-layered-source-',
+                        'refs/heads/codex/source-guard-structured-20261018-pinned-policy-',
+                        'refs/heads/codex/source-guard-structured-20261018-source-seams-')))):
+                raise RuntimeError('primary_test_workflow_identity')
+    elif len(sys.argv) != 2 and not package_test and not prepare_only and not preflight:
         raise RuntimeError('primary_shell_argv')
     script_path = Path(sys.argv[-1])
     if script_path.is_symlink() or not script_path.is_file() or script_path.stat().st_size > 16384:
@@ -262,9 +266,10 @@ def main():
     STAGE = 'binding'
     expected = expected_identity()
     workflow = (REPOSITORY / '.github/workflows/ci.yml').read_text()
+    require_retention(workflow)
     bound = None if test_mode else bind_generated(script, workflow)
     decision_path = Path(os.environ['RUNNER_TEMP']) / 'primary-decision.json'
-    if os.environ.get('GITHUB_WORKFLOW') == 'CI':
+    if os.environ.get('GITHUB_WORKFLOW') == 'CI' and not preflight:
         if decision_path.is_symlink():
             raise RuntimeError('primary_decision_carrier')
         decision = json.loads(decision_path.read_bytes())
@@ -277,8 +282,8 @@ def main():
             return 0
         if decision['decision'] != 'execute-first-full' or decision['receipt'] is not None:
             raise RuntimeError('primary_decision_kind')
-    source_input = None
-    if not test_mode and not package_test and (bound['name'] == 'v0.4.6 source suite'
+    source_input = consume('PREFLIGHT', script) if preflight else None
+    if not preflight and not test_mode and not package_test and (bound['name'] == 'v0.4.7 source suite'
             or bound['name'] in ORDER):
         source_input = consume('PREPAREONLY' if prepare_only else 'FULL', script)
         if source_input['definition'] != expected:
@@ -323,7 +328,7 @@ def main():
     STAGE = 'capsule'
     try:
         if source_input is not None:
-            consume('FULL', script)
+            consume('PREFLIGHT' if preflight else 'FULL', script)
         create_capsule(prepared)
         stage = 'capture'
         from source_raw_transport import capture as capture_raw_source
@@ -409,9 +414,47 @@ def main():
     return 0 if negative_verified else status
 
 
+def retained_main():
+    """The acquiring host retains preparation failures before returning.
+
+    ACTIVE_ROOT is assigned only after exclusive directory acquisition. A
+    stale directory is never adopted as this invocation's private evidence.
+    """
+    try:
+        return main()
+    except BaseException:
+        root = ACTIVE_ROOT
+        if root is None:
+            raise
+        if (root / 'evidence.cms').exists():
+            raise
+        raw = root / 'raw'
+        record = {'schema': 'unrest.v046.primary-preparation-failure.v1',
+                  'stage': STAGE, 'exit_code': 125, 'script_sha256': SCRIPT_PIN,
+                  'script_size': SCRIPT_SIZE, 'source_checkpoint_ready': False,
+                  'selected_carrier': None}
+        (raw / 'preparation-status.json').write_bytes(canonical(record))
+        archive = root / 'raw.tar.gz'
+        with tarfile.open(archive, 'x:gz') as stream:
+            for path in sorted(raw.iterdir()):
+                if not path.is_file() or path.is_symlink():
+                    raise RuntimeError('primary_evidence_member')
+                stream.add(path, arcname=path.name, recursive=False)
+        if run(['openssl', 'cms', '-encrypt', '-binary', '-aes-256-cbc', '-outform', 'DER',
+                '-in', str(archive), '-out', str(root / 'evidence.cms'),
+                str(SUPPORT / 'evidence-recipient.pem')], root / 'encryption.log').returncode:
+            raise RuntimeError('primary_encryption_failed')
+        record.update(ciphertext_sha256=digest(root / 'evidence.cms'),
+                      plaintext_archive_sha256=digest(archive))
+        (root / 'safe-provenance.json').write_bytes(canonical(record))
+        shutil.rmtree(raw)
+        archive.unlink()
+        return 125
+
+
 if __name__ == '__main__':
     try:
-        status = main()
+        status = retained_main()
     except BaseException:
         status = 125
     diagnostic = {'schema': 'primary-executor-status-v1', 'exit_code': status, 'stage': STAGE,

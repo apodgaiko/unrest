@@ -28,7 +28,7 @@ def archives():
     sdist = io.BytesIO()
     with gzip.GzipFile(fileobj=sdist, mode='wb', mtime=0) as compressed:
         with tarfile.open(fileobj=compressed, mode='w') as target:
-            row = tarfile.TarInfo('unrest_harness-0.4.6/src/unrest_harness/__init__.py')
+            row = tarfile.TarInfo('unrest_harness-0.4.7/src/unrest_harness/__init__.py')
             data = b'# synthetic package\n'
             row.size = len(data)
             target.addfile(row, io.BytesIO(data))
@@ -132,7 +132,7 @@ def test_actual_encryption_export_and_consumer_schema_are_compatible(tmp_path):
     archive, artifact = seal(result, (root / 'evidence.cms').read_bytes())
     run = {'status': 'completed', 'conclusion': 'success', 'path': '.github/workflows/ci.yml',
            'head_repository': {'full_name': 'apodgaiko/unrest'}, 'event': 'push',
-           'head_sha': result['head_sha'], 'head_branch': 'codex/release-v046-controlled',
+           'head_sha': result['head_sha'], 'head_branch': 'codex/release-v047-controlled',
            'id': 12, 'run_attempt': 1}
     artifact.update(name='unrest-v046-primary-12-1', workflow_run={'id': 12, 'head_sha': result['head_sha']})
     jobs = [{**job, 'conclusion': 'success', 'steps': [

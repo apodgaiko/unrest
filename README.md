@@ -12,10 +12,10 @@ objective into durable mission state, dispatches focused workers, requires
 independent validation, replans from evidence, and stops only after a fresh
 terminal review can account for the requested outcome.
 
-The 0.4.6 experimental reuse/cohort runtime and native approval recovery are
+The 0.4.7 experimental reuse/cohort runtime and native approval recovery are
 disabled by default. Genuine native approval, ACP live reuse campaign evidence
 and final-candidate timing remain **UNVERIFIED**; controlled local tests prove
-bounded local behavior. See the [release preparation note](docs/release/lean-core-v0.4.6.md)
+bounded local behavior. See the [release preparation note](docs/release/lean-core-v0.4.7.md)
 for trust limits and remaining certification requirements.
 
 ## Install

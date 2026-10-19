@@ -49,6 +49,8 @@ def admit_clock(manifest):
     namespace = {'__file__': str(path), '__name__': 'clock_source_inputs'}
     exec(compile(body, str(path), 'exec', dont_inherit=True), namespace)
     namespace['admit'](manifest, ROOT)
+    global CLOCK_READER
+    CLOCK_READER = namespace['read']
 
 
 def main():
@@ -58,6 +60,12 @@ def main():
         raise RuntimeError('invalid source epoch')
     manifest = json.loads((SUPPORT / 'source-template.json').read_bytes())
     admit_clock(manifest)
+    release_body = CLOCK_READER(Path('/guard'), 'release_source_inputs.py')
+    if hashlib.sha256(release_body).hexdigest() != '411620d745783ba7fd2064f537823747e7561e61d2126dd938ac3b8b4531d877':
+        raise RuntimeError('release_identity_support_drift')
+    release = {'__name__': 'release_source_inputs'}
+    exec(compile(release_body, '/guard/release_source_inputs.py', 'exec', dont_inherit=True), release)
+    release['admit'](manifest, ROOT, CLOCK_READER)
     for name, pin in manifest['product_pins'].items():
         observed = sha(ROOT / name)
         if observed != pin:

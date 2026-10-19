@@ -6,6 +6,7 @@ import hashlib
 import xml.etree.ElementTree as ET
 
 from primary_policy import TEST_SELECTIONS, TEST_SEAM_CASES
+from preflight_policy import CASES as PREFLIGHT_CASES
 
 
 def check(records, mode):
@@ -60,6 +61,35 @@ def check(records, mode):
                 or not {'source-checker', 'source-extracted-oracle',
                         'source-installed-provider-matrix'} <= consumers):
             raise RuntimeError('primary_source_affected_seams_missing')
+    if tuple(collection) == PREFLIGHT_CASES:
+        trackers = [row for row in summary['events'] if row['kind'] == 'registered'
+                    and row.get('class') == 'source-multiprocess-tracker']
+        if len(trackers) != 1:
+            raise RuntimeError('preflight_actual_tracker_missing')
+        pid = trackers[0]['pid']
+        ready = [row for row in kernel['receipts']
+                 if row['request']['kind'] == 'ready' and row.get('ok')]
+        registered = [row for row in summary['events'] if row['kind'] == 'registered']
+        for child in registered:
+            observations = [row for row in ready if row['request']['pid'] == child['pid']]
+            if len(observations) != 1:
+                raise RuntimeError('preflight_authenticated_ready_missing')
+            receipt = observations[0]
+            if (receipt['identity'] != receipt['kernel_peer']['birth']
+                    or receipt['identity']['uid'] != receipt['kernel_peer']['uid']
+                    or receipt['identity']['uid'] != 20000):
+                raise RuntimeError('preflight_authenticated_ready_identity')
+            complete = [row for row in summary['events']
+                        if row['kind'] == 'endpoint_install_complete'
+                        and row['owner_pid'] == child['pid']]
+            if len(complete) != 1 or complete[0]['nonce'] != receipt['request']['nonce']:
+                raise RuntimeError('preflight_authenticated_ready_nonce')
+        if not any(row['kind'] == 'raw_actual_parent_waitpid' and row['pid'] == pid
+                   and type(row['raw_status']) is int and row['raw_status'] == 0
+                   for row in summary['events']):
+            raise RuntimeError('preflight_actual_tracker_wait_missing')
+        if not any(row['kind'] == 'ready' and row['pid'] == pid for row in summary['events']):
+            raise RuntimeError('preflight_tracker_ready_missing')
     negative = mode == 'TEST-poison' 
     if (kernel['guard_poison'] is not negative or summary['ready'] is negative
             or kernel['failure_code'] != ('source_guard_refused' if negative else None)

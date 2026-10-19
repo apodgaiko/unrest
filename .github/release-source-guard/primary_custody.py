@@ -20,12 +20,8 @@ from checkpoint_packages import WHEEL, SDIST, LIMIT
 from checkpoint_receipt import DEFINITION_FIELDS
 from structured_evidence import canonical, loads, require
 
-BUILD = 'Build wheel and source distribution'
-ARCHIVE = 'Check distribution archives'
-INSTALLED = 'Smoke-test installed wheel'
-CHECKSUM = 'Generate and verify v0.4.6 build-local checksums'
-SOURCE = 'v0.4.6 source suite'
-ORDER = (BUILD, ARCHIVE, INSTALLED, CHECKSUM)
+from phase_catalog import (BUILD, ARCHIVE as ARCHIVE, INSTALLED as INSTALLED,
+                           CHECKSUM, SOURCE as SOURCE, ORDER)
 OUTPUTS = (WHEEL, SDIST, 'SHA256SUMS')
 
 

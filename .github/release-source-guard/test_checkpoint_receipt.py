@@ -24,7 +24,7 @@ def fixture():
     expected['source_command_sha256'] = hashlib.sha256(receipt.COMMAND.encode()).hexdigest()
     run = {'status': 'completed', 'conclusion': 'success', 'path': receipt.WORKFLOW,
            'head_repository': {'full_name': receipt.REPOSITORY}, 'event': 'push',
-           'head_sha': expected['head_sha'], 'head_branch': 'codex/release-v046-unit-control',
+           'head_sha': expected['head_sha'], 'head_branch': 'codex/release-v047-unit-control',
            'id': 1, 'run_attempt': 1}
     job = {'name': receipt.PRIMARY, 'conclusion': 'success', 'run_id': 1, 'id': 2,
            'steps': [{'name': name, 'status': 'completed', 'conclusion': 'success'}
@@ -44,8 +44,8 @@ def fixture():
                         'installed_lifecycle_exit_code': 0,
                         'extracted_oracle': {'cases': 15, 'failures': 0, 'errors': 0, 'skipped': 0},
                         'unrelated_cwd': True, 'full_member_bytes_verified': True,
-                        'archives': {'unrest_harness-0.4.6-py3-none-any.whl': 'c' * 64,
-                                     'unrest_harness-0.4.6.tar.gz': 'd' * 64}}}
+                        'archives': {'unrest_harness-0.4.7-py3-none-any.whl': 'c' * 64,
+                                     'unrest_harness-0.4.7.tar.gz': 'd' * 64}}}
     return expected, run, [job], data, cipher
 
 
@@ -82,7 +82,7 @@ def test_incomplete_or_different_execution_cannot_be_reused(mutation):
     elif mutation == 'failed_job':
         jobs[0]['conclusion'] = 'failure'
     elif mutation == 'skipped_source':
-        next(step for step in jobs[0]['steps'] if step['name'] == 'v0.4.6 source suite')['conclusion'] = 'skipped'
+        next(step for step in jobs[0]['steps'] if step['name'] == 'v0.4.7 source suite')['conclusion'] = 'skipped'
     elif mutation == 'filtered':
         data['source']['collection_filters'] = ['-k partial']
     elif mutation == 'count_gap':

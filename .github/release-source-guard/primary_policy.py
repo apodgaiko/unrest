@@ -8,6 +8,7 @@ import shlex
 from typing import NamedTuple
 
 from ci_commands import bind_generated
+from preflight_policy import CASES as PREFLIGHT_CASES
 
 FOCUSED = {'Install dependencies', 'Import package', 'Supported CLI surfaces',
            'Lint (ruff)', 'Type-check (mypy)', 'Repository contract'}
@@ -15,7 +16,7 @@ SHELL = '/bin/bash'
 SHELL_FLAGS = ['--noprofile', '--norc', '-e', '-o', 'pipefail']
 UV = '/opt/source-bootstrap/bin/uv'
 PYTHON = '/usr/local/bin/python-primary-audit'
-SOURCE = 'v0.4.6 source suite'
+SOURCE = 'v0.4.7 source suite'
 # Independent of focused capsules and every original test's own deadline.
 SOURCE_BUDGET = {'root_seconds': 7200, 'collection_seconds': 300, 'drain_seconds': 60}
 TEST_CASE = 'tests/test_stdio_startup.py::test_real_startup_rejection_is_bounded_and_body_free[invalid0-worker]'
@@ -26,7 +27,8 @@ TEST_SEAM_CASES = (
     'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex]',
     'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
 )
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES)
+
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 

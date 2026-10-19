@@ -208,6 +208,7 @@ def test_dependency_family_lookalikes_refused_at_both_gates(tail):
 def test_only_primary_compartment_selects_dependency_authority():
     import primary_source_authority
     import primary_dependency_authority
+    import owned_multiprocess_authority
     original = primary_source_authority.SourceAuthority
     specialized = primary_dependency_authority.DependencySourceAuthority
     assert specialized.__bases__ == (original,)
@@ -215,9 +216,18 @@ def test_only_primary_compartment_selects_dependency_authority():
         assert getattr(specialized, name) is getattr(original, name)
     tree = ast.parse((ROOT / 'primary_compartment.py').read_bytes())
     imports = [node for node in tree.body if isinstance(node, ast.ImportFrom)
-               and node.module == 'primary_dependency_authority']
+               and any(name.asname == 'SourceAuthority' for name in node.names)]
     assert len(imports) == 1 and [(name.name, name.asname) for name in imports[0].names] == [
         ('DependencySourceAuthority', 'SourceAuthority')]
+    assert imports[0].module == 'owned_multiprocess_authority'
+    selected = owned_multiprocess_authority.DependencySourceAuthority
+    assert selected.__bases__ == (owned_multiprocess_authority.OwnedMultiprocessCustody, specialized)
+    assert selected.exec_descriptors is owned_multiprocess_authority.OwnedMultiprocessCustody.exec_descriptors
+    for name in ('resolve', 'producer_profile', 'pipe_binding', 'finish'):
+        assert getattr(selected, name) is getattr(original, name)
+    assert {node.name for node in ast.parse((ROOT / 'owned_multiprocess_authority.py').read_bytes()).body
+            if isinstance(node, ast.ClassDef)} == {
+                'OwnedMultiprocessCustody', 'SourceAuthority', 'DependencySourceAuthority'}
 
 
 def test_focused_controls_wired_before_original_source():

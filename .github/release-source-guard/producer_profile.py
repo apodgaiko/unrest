@@ -896,11 +896,11 @@ def dependency_diagnostic(site):
             if source_name not in seed or item['source']['sha256'] != seed[source_name]['sha256']:
                 return 'bytecode-source-not-in-mirror'
             return 'exact-mirror-source-bytecode'
-        if name.startswith('unrest_harness-0.4.6.dist-info/'):
+        if name.startswith('unrest_harness-0.4.7.dist-info/'):
             leaf = Path(name).name
             return leaf if leaf in {'METADATA', 'WHEEL', 'RECORD', 'entry_points.txt',
                                    'INSTALLER', 'REQUESTED', 'direct_url.json', 'uv_cache.json'} else 'other'
-        if name == '__editable__.unrest_harness-0.4.6.pth':
+        if name == '__editable__.unrest_harness-0.4.7.pth':
             return 'editable-pth'
         return 'other'
     extra_classes = {}
@@ -914,7 +914,7 @@ def dependency_diagnostic(site):
     rows = []
     for name in sample:
         row = {'name_sha256': hashlib.sha256(name.encode()).hexdigest(), **actual[name]}
-        if name == '__editable__.unrest_harness-0.4.6.pth':
+        if name == '__editable__.unrest_harness-0.4.7.pth':
             row['exact_source_path'] = row['type'] == 'file' and (site / name).read_bytes() == b'/source/src\n'
         row['class'] = classification(name)
         rows.append(row)

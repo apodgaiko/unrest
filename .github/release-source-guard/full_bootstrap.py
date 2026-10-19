@@ -30,7 +30,7 @@ PREFIX = 'refs/heads/codex/source-guard-structured-20261018-full-bootstrap-'
 REFS = frozenset(PREFIX + f'{epoch:02}' for epoch in range(1, 7))
 WORKFLOW = 'apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@'
 SCRIPT = COMMAND.encode()
-OPERATIONS = {'PREPAREONLY', 'FULL'}
+OPERATIONS = {'PREPAREONLY', 'FULL', 'PREFLIGHT'}
 
 
 def sha(body):
@@ -46,7 +46,10 @@ def context(operation):
     require(operation in OPERATIONS and sys.platform == 'linux'
             and os.getuid() not in {0, 20000, 20001}, 'full_host_role')
     ref = os.environ['GITHUB_REF']
-    if operation == 'PREPAREONLY':
+    if operation == 'PREFLIGHT':
+        from preflight_policy import context as preflight_context
+        preflight_context()
+    elif operation == 'PREPAREONLY':
         require(ref in REFS
                 and os.environ['GITHUB_WORKFLOW'] == 'v0.4.6 source guard readiness'
                 and os.environ['GITHUB_WORKFLOW_REF'] == WORKFLOW + ref,
@@ -59,7 +62,7 @@ def context(operation):
     return identity
 
 
-def scope(repository=REPOSITORY):
+def semantic_manifest(repository=REPOSITORY):
     """Every tracked input, with precisely one nonrecursive carrier boundary."""
     names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=repository).decode().split('\0')
     require(len(names) == len(set(names)), 'full_scope_duplicates')
@@ -78,7 +81,12 @@ def scope(repository=REPOSITORY):
     actual = {str(p.relative_to(repository)) for p in support.rglob('*')
               if p.is_file() and p.suffix in {'.py', '.json', '.pem', '.c'}}
     require(actual <= set(result) | {CARRIER}, 'full_unknown_support')
-    return sha(canonical(result))
+    return {'schema': 'unrest.v046.semantic-candidate.v1', 'release_version': '0.4.7',
+            'inputs': result}
+
+
+def scope(repository=REPOSITORY):
+    return sha(canonical(semantic_manifest(repository)))
 
 
 def carrier(repository=REPOSITORY):
@@ -96,7 +104,7 @@ def carrier(repository=REPOSITORY):
                 'full_carrier_digest')
     require(value['input_scope_sha256'] == scope(repository), 'full_scope_drift')
     proof = value['preparation_sha256']
-    require((value['operation'] == 'PREPAREONLY' and proof is None)
+    require((value['operation'] in {'PREPAREONLY', 'PREFLIGHT'} and proof is None)
             or (value['operation'] == 'FULL' and type(proof) is str
                 and re.fullmatch('[0-9a-f]{64}', proof)), 'full_carrier_preparation')
     return value, sha(body)
@@ -126,17 +134,23 @@ def produce(operation):
                            check=False).returncode == 0, 'full_checkout_drift')
     definition = expected_identity()
     value, pin = carrier()
-    require(operation == 'PREPAREONLY' or value['operation'] == 'FULL', 'full_not_sealed')
+    require(operation in {'PREPAREONLY', 'PREFLIGHT'} or value['operation'] == 'FULL', 'full_not_sealed')
     workflow = (REPOSITORY / '.github/workflows/ci.yml').read_text()
     result = {'schema': 'unrest.v046.primary-source-input.v1', 'definition': definition,
               'source_carrier_sha256': value['source_carrier_sha256'],
               'package_closure_sha256': value['package_closure_sha256'],
               'final_closure_sha256': pin, 'source_checkpoint_ready': True,
               'selected_carrier': value['source_carrier_sha256']}
-    require_full_input(result, SCRIPT, workflow)
+    if operation == 'PREFLIGHT':
+        result = {'schema': 'unrest.v046.primary-preflight-input.v1', 'definition': definition,
+                  'candidate_sha256': value['input_scope_sha256'],
+                  'source_checkpoint_ready': False, 'selected_carrier': None}
+    else:
+        require_full_input(result, SCRIPT, workflow)
     runner = Path(os.environ['RUNNER_TEMP'])
     root, root_identity = private_root(runner, create=True)
     key = secrets.token_bytes(32)
+    exclusive(root / 'candidate.json', canonical(semantic_manifest()))
     exclusive(root / 'key', key)
     destination = runner / 'primary-source-input.json'
     exclusive(destination, canonical(result))
@@ -178,7 +192,10 @@ def consume(operation, script):
             and hmac.compare_digest(signed['mac'], hmac.digest(key, canonical(receipt), 'sha256').hex()),
             'full_host_mac')
     value, pin = carrier()
-    require(operation == 'PREPAREONLY' or value['operation'] == 'FULL', 'full_not_sealed')
+    candidate = read_regular(root / 'candidate.json', 64 * 1024 * 1024, 0o600)
+    require(candidate == canonical(semantic_manifest())
+            and sha(candidate) == value['input_scope_sha256'], 'full_semantic_candidate_drift')
+    require(operation in {'PREPAREONLY', 'PREFLIGHT'} or value['operation'] == 'FULL', 'full_not_sealed')
     path = runner / 'primary-source-input.json'
     body = read_regular(path, 65536, 0o600)
     now = clock()
@@ -197,7 +214,14 @@ def consume(operation, script):
             and receipt['input_sha256'] == sha(body) and receipt['carrier_sha256'] == pin
             and receipt['script_sha256'] == sha(SCRIPT), 'full_host_binding')
     result = decode(body)
-    require(result['definition'] == receipt['definition']
+    if operation == 'PREFLIGHT':
+        require(result == {'schema': 'unrest.v046.primary-preflight-input.v1',
+                          'definition': receipt['definition'],
+                          'candidate_sha256': value['input_scope_sha256'],
+                          'source_checkpoint_ready': False, 'selected_carrier': None},
+                'preflight_input_binding')
+    else:
+        require(result['definition'] == receipt['definition']
             and result['final_closure_sha256'] == pin
             and result['source_carrier_sha256'] == value['source_carrier_sha256']
             and result['package_closure_sha256'] == value['package_closure_sha256'], 'full_input_binding')
@@ -209,7 +233,14 @@ def consume(operation, script):
             'full_host_acquisition_changed')
     # Package scripts use the same SOURCE readiness closure, then their own
     # unchanged script validator. SOURCE must retain the literal original argv.
-    require_full_input(result, SCRIPT, (REPOSITORY / '.github/workflows/ci.yml').read_text())
+    if operation != 'PREFLIGHT':
+        require_full_input(result, SCRIPT, (REPOSITORY / '.github/workflows/ci.yml').read_text())
+    else:
+        from preflight_policy import SCRIPT as preflight_script
+        from phase_catalog import catalog
+        require(script == preflight_script or script in {
+            phase.command.rstrip('\n').encode() if '\n' not in phase.command.rstrip('\n')
+            else phase.command.encode() for phase in catalog().values()}, 'preflight_actual_script')
     if operation == 'PREPAREONLY':
         require(script == SCRIPT, 'full_prepare_script')
     return result

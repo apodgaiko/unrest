@@ -18,10 +18,10 @@ PRIMARY = 'primary source and package gate (py3.13)'
 COMMAND = 'env -u CODEX_PATH uv run pytest -q'
 REQUIRED_STEPS = (
     'Install dependencies', 'Import package', 'Supported CLI surfaces', 'Lint (ruff)',
-    'Type-check (mypy)', 'v0.4.6 source suite', 'Repository contract',
+    'Type-check (mypy)', 'v0.4.7 source suite', 'Repository contract',
     'Build wheel and source distribution', 'Check distribution archives',
-    'Smoke-test installed wheel', 'Generate and verify v0.4.6 build-local checksums',
-    'Upload v0.4.6 archives and checksums', 'Upload encrypted primary evidence',
+    'Smoke-test installed wheel', 'Generate and verify v0.4.7 build-local checksums',
+    'Upload v0.4.7 archives and checksums', 'Upload encrypted primary evidence',
 )
 DEFINITION_FIELDS = ('head_sha', 'source_tree', 'workflow_sha256', 'guard_definition_sha256',
                      'runtime_definition_sha256', 'source_command_sha256', 'package_command_sha256', 'lock_sha256')
@@ -76,7 +76,7 @@ def validate(archive, artifact, run, jobs, expected):
             'original run is not this repository primary workflow')
     require(run['event'] == 'push' and run['head_sha'] == expected['head_sha'],
             'original execution event or frozen SHA differs')
-    require(run['head_branch'] == 'main' or run['head_branch'].startswith('codex/release-v046-'),
+    require(run['head_branch'] == 'main' or run['head_branch'].startswith('codex/release-v047-'),
             'readiness or unrelated branch is not a primary checkpoint')
     require(artifact.get('expired') is False and artifact['workflow_run']['id'] == run['id']
             and artifact['workflow_run']['head_sha'] == run['head_sha'],
@@ -143,8 +143,8 @@ def validate(archive, artifact, run, jobs, expected):
     require(package['extracted_oracle'] == {'cases': 15, 'failures': 0, 'errors': 0, 'skipped': 0}
             and package['unrelated_cwd'] is True and package['full_member_bytes_verified'] is True,
             'extracted or installed package evidence is incomplete')
-    require(set(package['archives']) == {'unrest_harness-0.4.6-py3-none-any.whl',
-                                         'unrest_harness-0.4.6.tar.gz'},
+    require(set(package['archives']) == {'unrest_harness-0.4.7-py3-none-any.whl',
+                                         'unrest_harness-0.4.7.tar.gz'},
             'package archive set differs')
     require(all(re.fullmatch('[0-9a-f]{64}', value) for value in package['archives'].values()),
             'package archive digests are invalid')

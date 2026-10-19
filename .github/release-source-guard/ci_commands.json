@@ -1,7 +1,7 @@
 {
   "Build wheel and source distribution": "uv build\n",
   "Check distribution archives": "uv run python tools/check_distribution.py dist\n",
-  "Generate and verify v0.4.6 build-local checksums": "test -f dist/unrest_harness-0.4.6-py3-none-any.whl\ntest -f dist/unrest_harness-0.4.6.tar.gz\ncd dist\nsha256sum \\\n  unrest_harness-0.4.6-py3-none-any.whl \\\n  unrest_harness-0.4.6.tar.gz > SHA256SUMS\nsha256sum --check --strict SHA256SUMS\n",
+  "Generate and verify v0.4.7 build-local checksums": "test -f dist/unrest_harness-0.4.7-py3-none-any.whl\ntest -f dist/unrest_harness-0.4.7.tar.gz\ncd dist\nsha256sum \\\n  unrest_harness-0.4.7-py3-none-any.whl \\\n  unrest_harness-0.4.7.tar.gz > SHA256SUMS\nsha256sum --check --strict SHA256SUMS\n",
   "Import package": "uv run python -c \"import unrest_harness; from unrest_harness.config import HarnessConfig; HarnessConfig.discover()\"\n",
   "Install dependencies": "uv sync --locked\n",
   "Lint (ruff)": "uv run ruff check .\n",
@@ -9,5 +9,5 @@
   "Smoke-test installed wheel": "uv venv --clear .wheel-venv\nuv pip install --python .wheel-venv/bin/python dist/*.whl\ncd \"$(mktemp -d)\"\n\"$GITHUB_WORKSPACE/.wheel-venv/bin/unrest\" --help\n\"$GITHUB_WORKSPACE/.wheel-venv/bin/unrest\" measure-baseline --help\n\"$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server\" --help\n\"$GITHUB_WORKSPACE/.wheel-venv/bin/python\" -m unrest_harness --help\n\"$GITHUB_WORKSPACE/.wheel-venv/bin/python\" -c \"from unrest_harness.config import HarnessConfig; assert HarnessConfig.discover().capability_policy.schema_version == 1\"\nenv -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CODEX_API_KEY -u GLM_API_KEY -u OPENAI_API_KEY -u ZAI_API_KEY \"$GITHUB_WORKSPACE/.wheel-venv/bin/python\" -m unrest_harness.installed_wheel_check\nset +e\noutput=\"$(UNREST_CAPABILITY_PROFILE=unsupported \"$GITHUB_WORKSPACE/.wheel-venv/bin/unrest-server\" --mode orchestrator 2>&1)\"\nstatus=$?\nset -e\ntest \"$status\" -ne 0\ntest \"$output\" = \"unrest-server: startup configuration rejected\"\n",
   "Supported CLI surfaces": "uv run unrest --help\nuv run unrest measure-baseline --help\nuv run unrest-server --help\nuv run python -m unrest_harness --help\n",
   "Type-check (mypy)": "uv run mypy src\n",
-  "v0.4.6 source suite": "env -u CODEX_PATH uv run pytest -q\n"
+  "v0.4.7 source suite": "env -u CODEX_PATH uv run pytest -q\n"
 }

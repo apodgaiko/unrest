@@ -86,7 +86,7 @@ def main():
     package_build = spec.get('package_mode') is not None
     package_archive = package_build and spec['duty'] == 'Check distribution archives'
     package_installed = package_build and spec['duty'] == 'Smoke-test installed wheel'
-    package_checksum = package_build and spec['duty'] == 'Generate and verify v0.4.6 build-local checksums'
+    package_checksum = package_build and spec['duty'] == 'Generate and verify v0.4.7 build-local checksums'
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
     expected = json.loads(Path('/inputs/identity.json').read_bytes())

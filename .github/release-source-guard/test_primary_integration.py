@@ -19,7 +19,7 @@ def test_current_primary_original_run_blocks_bind_and_literal_mutation_anchors_s
 
 def test_actual_primary_uses_custom_shell_for_every_original_duty_and_release_ref_activation():
     actual = (Path(__file__).resolve().parents[2] / '.github/workflows/ci.yml').read_text()
-    assert "branches: [main, 'codex/release-v046-*']" in actual
+    assert "branches: [main, 'codex/release-v047-*']" in actual
     assert 'cancel-in-progress: false' in actual
     for name in json.loads(commands.REGISTRY.read_bytes()):
         block = actual.split('      - name: ' + name + '\n', 1)[1].split('      - ', 1)[0]

@@ -20,9 +20,9 @@ SITE = Path('/source/.venv/lib/python3.13/site-packages')
 SOURCE_ROOT = Path('/source')
 IMAGE = Path('/opt/primary-deps/lib/python3.13/site-packages')
 RECEIPTS = Path('/receipts/producers')
-DIST = 'unrest_harness-0.4.6.dist-info'
-PTH = '__editable__.unrest_harness-0.4.6.pth'
-WHEEL_NAME = 'unrest_harness-0.4.6-0.editable-py3-none-any.whl'
+DIST = 'unrest_harness-0.4.7.dist-info'
+PTH = '__editable__.unrest_harness-0.4.7.pth'
+WHEEL_NAME = 'unrest_harness-0.4.7-0.editable-py3-none-any.whl'
 LIMIT = 64 * 1024 * 1024
 
 

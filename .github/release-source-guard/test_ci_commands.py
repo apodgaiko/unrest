@@ -32,14 +32,14 @@ def test_every_original_run_block_binds_exact_actual_bytes():
     for name, script in registry.items():
         result = commands.bind(script.encode(), actual)
         assert result['name'] == name and result['script'] == script.encode()
-        assert result['full_source'] == (name == 'v0.4.6 source suite')
+        assert result['full_source'] == (name == 'v0.4.7 source suite')
 
 
 @pytest.mark.parametrize('mutation', ['echo', 'filter', 'extra', 'newline', 'changed_other_duty'])
 def test_script_or_any_original_duty_drift_is_refused(mutation):
     registry = json.loads(commands.REGISTRY.read_bytes())
     actual = workflow(registry)
-    script = registry['v0.4.6 source suite'].encode()
+    script = registry['v0.4.7 source suite'].encode()
     if mutation == 'echo':
         script = b'echo ' + script
     elif mutation == 'filter':
@@ -65,7 +65,7 @@ def test_actual_original_duties_cannot_be_made_conditional(control, condition):
         actual = actual.replace('      - name: Type-check (mypy)\n',
                                 '      - name: Type-check (mypy)\n        if: ' + condition + '\n')
     with pytest.raises(RuntimeError):
-        commands.bind(registry['v0.4.6 source suite'].encode(), actual)
+        commands.bind(registry['v0.4.7 source suite'].encode(), actual)
 
 
 

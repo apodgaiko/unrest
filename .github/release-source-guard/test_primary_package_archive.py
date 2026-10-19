@@ -32,8 +32,8 @@ def returned(tmp_path, monkeypatch):
     monkeypatch.setattr(archive, 'sha', lambda p: 'a' * 64)
     monkeypatch.setattr(archive, 'identity', lambda pid: birth)
     monkeypatch.setattr(primary_outputs, 'export', lambda duty: records(ARCHIVE, output)['package-output.json'])
-    result = {'package_files': 1, 'wheel': 'unrest_harness-0.4.6-py3-none-any.whl',
-              'sdist': 'unrest_harness-0.4.6.tar.gz', 'restart_oracle': {'cases': 15}}
+    result = {'package_files': 1, 'wheel': 'unrest_harness-0.4.7-py3-none-any.whl',
+              'sdist': 'unrest_harness-0.4.7.tar.gz', 'restart_oracle': {'cases': 15}}
     request = {'id': 'b' * 32, 'kind': 'primary_package_function_return', 'nonce': 'n',
                'pid': os.getpid(), 'token': 'root', 'identity': birth,
                'function': 'check_distribution', 'source_sha256': 'a' * 64, 'result': result}
@@ -78,7 +78,7 @@ def test_refused_or_forged_returns_never_become_package_proof(returned, mutation
         request['result']['restart_oracle']['cases'] = 14
     else:
         body = json.loads(descriptor.read_bytes())
-        body['members']['unrest_harness-0.4.6.tar.gz']['sha256'] = 'f' * 64
+        body['members']['unrest_harness-0.4.7.tar.gz']['sha256'] = 'f' * 64
         descriptor.write_text(json.dumps(body))
     with pytest.raises((RuntimeError, KeyError)):
         owner.handle(request, [])

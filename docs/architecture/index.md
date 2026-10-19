@@ -112,3 +112,7 @@ At a completed implementation slice, also run the milestone checks in the root
 
 The repository command validates source state and CI wiring. It does not
 approve, promote, deploy, or roll back changes.
+
+The [release guard integration contract](release-guard-integration.md) describes
+candidate identity, physical execution custody, phase retention and the bounded
+supplementary preflight used before freezing a release candidate.

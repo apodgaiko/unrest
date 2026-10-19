@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'codex/release-v046-*']
+    branches: [main, 'codex/release-v047-*']
   pull_request:
 
 concurrency:
@@ -52,7 +52,7 @@ jobs:
       - name: Type-check (mypy)
         run: uv run mypy src
         shell: python3 .github/release-source-guard/ci_shell.py {0}
-      - name: v0.4.6 source suite
+      - name: v0.4.7 source suite
         run: env -u CODEX_PATH uv run pytest -q
         shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Repository contract
@@ -82,25 +82,25 @@ jobs:
           test "$status" -ne 0
           test "$output" = "unrest-server: startup configuration rejected"
         shell: python3 .github/release-source-guard/ci_shell.py {0}
-      - name: Generate and verify v0.4.6 build-local checksums
+      - name: Generate and verify v0.4.7 build-local checksums
         run: |
-          test -f dist/unrest_harness-0.4.6-py3-none-any.whl
-          test -f dist/unrest_harness-0.4.6.tar.gz
+          test -f dist/unrest_harness-0.4.7-py3-none-any.whl
+          test -f dist/unrest_harness-0.4.7.tar.gz
           cd dist
           sha256sum \
-            unrest_harness-0.4.6-py3-none-any.whl \
-            unrest_harness-0.4.6.tar.gz > SHA256SUMS
+            unrest_harness-0.4.7-py3-none-any.whl \
+            unrest_harness-0.4.7.tar.gz > SHA256SUMS
           sha256sum --check --strict SHA256SUMS
         shell: python3 .github/release-source-guard/ci_shell.py {0}
       - name: Issue original full checkpoint
         run: python3 .github/release-source-guard/checkpoint_finalize.py
-      - name: Upload v0.4.6 archives and checksums
+      - name: Upload v0.4.7 archives and checksums
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: unrest-v0.4.6-python313
+          name: unrest-v0.4.7-python313
           path: |
-            dist/unrest_harness-0.4.6-py3-none-any.whl
-            dist/unrest_harness-0.4.6.tar.gz
+            dist/unrest_harness-0.4.7-py3-none-any.whl
+            dist/unrest_harness-0.4.7.tar.gz
             dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 90
@@ -119,6 +119,8 @@ jobs:
         with:
           name: unrest-v046-primary-phases-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            ${{ runner.temp }}/primary-preparation/evidence.cms
+            ${{ runner.temp }}/primary-preparation/safe-provenance.json
             ${{ runner.temp }}/source-readiness/evidence.cms
             ${{ runner.temp }}/source-readiness/safe-provenance.json
             ${{ runner.temp }}/primary-install/evidence.cms
@@ -135,10 +137,56 @@ jobs:
             ${{ runner.temp }}/primary-types/safe-provenance.json
             ${{ runner.temp }}/primary-source/evidence.cms
             ${{ runner.temp }}/primary-source/safe-provenance.json
+            ${{ runner.temp }}/primary-package-build/evidence.cms
+            ${{ runner.temp }}/primary-package-build/safe-provenance.json
+            ${{ runner.temp }}/primary-package-archive/evidence.cms
+            ${{ runner.temp }}/primary-package-archive/safe-provenance.json
+            ${{ runner.temp }}/primary-package-installed/evidence.cms
+            ${{ runner.temp }}/primary-package-installed/safe-provenance.json
+            ${{ runner.temp }}/primary-package-checksum/evidence.cms
+            ${{ runner.temp }}/primary-package-checksum/safe-provenance.json
             ${{ runner.temp }}/primary-full/evidence.cms
             ${{ runner.temp }}/primary-full/safe-provenance.json
             ${{ runner.temp }}/primary-host-stage.json
             ${{ runner.temp }}/primary-image-stage.json
             ${{ runner.temp }}/primary-decision-status.json
+          if-no-files-found: error
+          retention-days: 90
+
+  guard-preflight:
+    name: supplementary production guard preflight (py3.13)
+    if: ${{ startsWith(github.ref, 'refs/heads/codex/release-v047-preflight-20261019-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Guard composition controls before capsules
+        run: >
+          uv run --locked pytest -q
+          .github/release-source-guard/test_guard_integration.py
+          .github/release-source-guard/test_owned_multiprocess_authority.py
+          .github/release-source-guard/test_phase_retention.py
+          .github/release-source-guard/test_full_bootstrap.py
+          .github/release-source-guard/test_primary_dependency.py::test_only_primary_compartment_selects_dependency_authority
+      - name: Production control image and original complete controls
+        run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
+      - name: Supplementary candidate and capsule canaries
+        run: python3 .github/release-source-guard/preflight_controller.py
+      - name: Retain encrypted supplementary preflight
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: unrest-v046-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/preflight-retained
+            ${{ runner.temp }}/source-readiness/evidence.cms
+            ${{ runner.temp }}/source-readiness/safe-provenance.json
           if-no-files-found: error
           retention-days: 90

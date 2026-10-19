@@ -6,10 +6,8 @@ no launch authority and never imports repository product modules on the host.
 from __future__ import annotations
 
 import hashlib
-import json
-from pathlib import Path
 
-REGISTRY = Path(__file__).with_name('ci_commands.json')
+from phase_catalog import REGISTRY as REGISTRY, catalog
 
 
 def primary_commands(workflow):
@@ -74,7 +72,7 @@ def require_executable_duties(workflow, names):
 
 
 def bind(script, workflow):
-    registry = json.loads(REGISTRY.read_bytes())
+    registry = {name: phase.command for name, phase in catalog().items()}
     actual = primary_commands(workflow)
     require_executable_duties(workflow, registry)
     for name, original in registry.items():
@@ -89,7 +87,7 @@ def bind(script, workflow):
     name, command = matches[0]
     return {'name': name, 'script': script,
             'script_sha256': hashlib.sha256(command.encode()).hexdigest(),
-            'full_source': name == 'v0.4.6 source suite'}
+            'full_source': name == 'v0.4.7 source suite'}
 
 
 def bind_generated(script, workflow):
@@ -99,7 +97,7 @@ def bind_generated(script, workflow):
     registry stores newline-terminated logical duties, independently checked by
     bind. No alternate rendering of an executable block is accepted.
     """
-    registry = json.loads(REGISTRY.read_bytes())
+    registry = {name: phase.command for name, phase in catalog().items()}
     if workflow.count('  primary:\n    name: primary source and package gate (py3.13)\n') != 1:
         raise RuntimeError('primary_job_identity_drift')
     actual = primary_commands(workflow)
@@ -130,4 +128,4 @@ def bind_generated(script, workflow):
     if len(matches) != 1:
         raise RuntimeError('unregistered generated primary script')
     return {'name': matches[0], 'script': script, 'script_sha256': hashlib.sha256(script).hexdigest(),
-            'full_source': matches[0] == 'v0.4.6 source suite'}
+            'full_source': matches[0] == 'v0.4.7 source suite'}

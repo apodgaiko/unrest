@@ -86,12 +86,12 @@ jobs:
       - name: TEST original PRIMARY checksum consumer
         if: ${{ !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}
         run: |
-          test -f dist/unrest_harness-0.4.6-py3-none-any.whl
-          test -f dist/unrest_harness-0.4.6.tar.gz
+          test -f dist/unrest_harness-0.4.7-py3-none-any.whl
+          test -f dist/unrest_harness-0.4.7.tar.gz
           cd dist
           sha256sum \
-            unrest_harness-0.4.6-py3-none-any.whl \
-            unrest_harness-0.4.6.tar.gz > SHA256SUMS
+            unrest_harness-0.4.7-py3-none-any.whl \
+            unrest_harness-0.4.7.tar.gz > SHA256SUMS
           sha256sum --check --strict SHA256SUMS
         shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
       - name: Upload encrypted TEST package checksum evidence
