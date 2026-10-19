@@ -7,9 +7,12 @@ from multiprocessing import resource_tracker, synchronize, util
 import os
 from pathlib import Path
 import stat
+import weakref
 from types import TracebackType
 from typing import Any, cast
 
+
+_process_owners: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
 
 def _source_bound(function: Any, module: Any) -> None:
     """Refuse a replaced callable before using a private CPython lifecycle API."""
@@ -141,6 +144,7 @@ class SpawnResources:
         for process in self.processes:
             if not process._closed:
                 process.close()
+            _process_owners.pop(process, None)
         for finalizer in reversed(self.finalizers):
             finalizer()
         self.finalizers.clear()
@@ -177,6 +181,7 @@ class _OwnedContext:
     def Process(self, *args: Any, **kwargs: Any) -> Any:
         process = self.original.Process(*args, **kwargs)
         self.owner.processes.append(process)
+        _process_owners[process] = weakref.ref(self.owner)
         return process
 
     def Pipe(self, *args: Any, **kwargs: Any) -> Any:

@@ -112,15 +112,13 @@ def test_original_child_status_is_preserved(status):
 
 def test_preexisting_tracker_is_refused_and_left_owned_by_its_parent():
     tracker = resource_tracker._resource_tracker
-    tracker.ensure_running()
-    identity = tracker._pid, tracker._fd, os.fstat(tracker._fd)
-    try:
+    with SpawnResources() as original:
+        original.context(multiprocessing.get_context('spawn'))
+        identity = tracker._pid, tracker._fd, os.fstat(tracker._fd)
         with pytest.raises(RuntimeError, match='preexisting'):
             with SpawnResources() as owner:
                 owner.context(multiprocessing.get_context('spawn'))
         assert (tracker._pid, tracker._fd, os.fstat(tracker._fd)) == identity
-    finally:
-        tracker._stop()
     assert tracker._exitcode == 0
 
 
