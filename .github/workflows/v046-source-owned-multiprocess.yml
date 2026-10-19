@@ -26,14 +26,20 @@ jobs:
           python-version: "3.13"
           enable-cache: false
       - name: Install locked controlled dependencies
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
         run: |
           uv sync --locked
           runtime_root="$(uv run --no-sync python -B -c 'import sys; print(sys.base_prefix)')"
           sudo cp -a "$runtime_root" /opt/owned-multiprocess-python
           sudo chmod -R a+rX /opt/owned-multiprocess-python
           uv run --no-sync python -B .github/release-source-guard/runtime_copy_metadata.py /opt/owned-multiprocess-python "$RUNNER_TEMP/runtime-copy.json"
-          uv venv --clear --python /opt/owned-multiprocess-python/bin/python3.13 .venv
-          uv sync --locked --python /opt/owned-multiprocess-python/bin/python3.13
+          sudo install -d -m 0755 -o "$(id -u)" -g "$(id -g)" /opt/owned-multiprocess-source
+          git archive HEAD | tar -x -C /opt/owned-multiprocess-source
+          uv venv --python /opt/owned-multiprocess-python/bin/python3.13 /opt/owned-multiprocess-source/.venv
+          uv sync --locked --directory /opt/owned-multiprocess-source --python /opt/owned-multiprocess-python/bin/python3.13
+          chmod -R a+rX /opt/owned-multiprocess-source
+          uv run --no-sync python -B .github/release-source-guard/owned_source_metadata.py /opt/owned-multiprocess-source "$RUNNER_TEMP/source-copy.json"
       - name: Actual guard descriptor lifetime controls only
         env:
           PYTHONDONTWRITEBYTECODE: "1"
@@ -48,11 +54,11 @@ jobs:
             mount -o remount,bind,ro /opt/owned-multiprocess-python
             ip link set lo up
             exec setpriv --reuid=20000 --regid=20000 --clear-groups --bounding-set=-all --inh-caps=-all --ambient-caps=-all --no-new-privs "$1/.venv/bin/python" -B "$1/.github/release-source-guard/multiprocess_guard_controls.py" "$2/result"
-          ' controls "$GITHUB_WORKSPACE" "$RUNNER_TEMP/owned-multiprocess" > "$RUNNER_TEMP/ownership.log" 2>&1
+          ' controls /opt/owned-multiprocess-source "$RUNNER_TEMP/owned-multiprocess" > "$RUNNER_TEMP/ownership.log" 2>&1
           status=$?
           set -e
           printf '%s\n' "$status" > "$RUNNER_TEMP/ownership-status"
-          sudo tar --exclude='owned-multiprocess/result/pytest' --exclude='*.sock' -czf "$RUNNER_TEMP/ownership.tar.gz" -C "$RUNNER_TEMP" owned-multiprocess ownership.log ownership-status runtime-copy.json
+          sudo tar --exclude='owned-multiprocess/result/pytest' --exclude='*.sock' -czf "$RUNNER_TEMP/ownership.tar.gz" -C "$RUNNER_TEMP" owned-multiprocess ownership.log ownership-status runtime-copy.json source-copy.json
           openssl cms -encrypt -binary -aes-256-cbc -in "$RUNNER_TEMP/ownership.tar.gz" -outform DER -out "$RUNNER_TEMP/ownership.cms" .github/release-source-guard/evidence-recipient.pem
           exit "$status"
       - name: Retain encrypted original control evidence
