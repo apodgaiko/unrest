@@ -23,3 +23,20 @@ def test_executable_path_representation_preserves_complete_bytes(tmp_path, kind)
     path.write_bytes(body)
     actual = path if kind == "path" else str(path) if kind == "str" else os.fsencode(path)
     assert routes.digest(actual) == hashlib.sha256(body).hexdigest()
+
+
+def test_core_ready_cannot_release_parent_before_authenticated_endpoint_setup():
+    state = {"pin": "manifest", "guard_sha256": "guard", "endpoint": {"nonce": "nonce"}}
+    common = {"token": "child", "owner_pid": 42, "parent_pid": os.getpid(),
+              "manifest_sha256": "manifest", "guard_sha256": "guard"}
+    core = {**common, "kind": "ready"}
+    complete = {**common, "kind": "endpoint_install_complete", "nonce": "nonce",
+                "identity": {"pid": 42, "ppid": os.getpid(), "uid": os.getuid()}}
+    assert not routes.endpoint_ready([core], state, "child", 42)
+    assert not routes.endpoint_ready([complete], state, "child", 42)
+    assert routes.endpoint_ready([core, complete], state, "child", 42)
+    for field in ("nonce", "token", "owner_pid", "parent_pid", "manifest_sha256", "guard_sha256"):
+        assert not routes.endpoint_ready([core, {**complete, field: "drift"}], state, "child", 42)
+    for field in ("pid", "ppid", "uid"):
+        changed = {**complete, "identity": {**complete["identity"], field: -1}}
+        assert not routes.endpoint_ready([core, changed], state, "child", 42)

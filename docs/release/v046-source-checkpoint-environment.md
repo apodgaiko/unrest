@@ -1392,3 +1392,9 @@ executable AST. Multiprocessing admission must attach through the existing endpo
 extension and authority specialization while preserving those original files. A
 changed extension needs fresh finite Linux custody proof before full execution;
 local structural checks and earlier hook placement do not establish that proof.
+
+A multiprocessing parent waits for both the original durable guard READY and the
+child's completed endpoint installation, including its authenticated observer
+identity and nonce. The earlier core READY occurs before endpoint authentication;
+it cannot release a parent that may immediately exercise a sticky refusal control.
+A failed earlier execution remains failed, including its actual tracker exit status.

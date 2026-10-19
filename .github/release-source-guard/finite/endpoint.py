@@ -471,6 +471,16 @@ def attach(guard):
         sys.modules["preexit_drain"] = drain
         exec(compile(drain_path.read_bytes(), str(drain_path), "exec"), drain.__dict__)
         drain.install(guard, sys.modules[__name__])
+        # The core READY record precedes endpoint authentication and setup.
+        # Parents may proceed only after this child has completed both.
+        guard.append({
+            "kind": "endpoint_install_complete",
+            "token": STATE["token"],
+            "nonce": spec["nonce"],
+            "identity": STATE["identity"],
+            "manifest_sha256": guard._STATE["pin"],
+            "guard_sha256": guard._STATE["guard_sha256"],
+        })
 
     def bootstrap(*args, **kwargs):
         text = original_bootstrap(*args, **kwargs)

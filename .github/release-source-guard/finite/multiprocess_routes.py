@@ -582,6 +582,29 @@ def match(state, executable, argv, passfds, frame):
     return {"class": kind, "source_binding": binding, "python": True}, inherited, pipes
 
 
+
+def endpoint_ready(rows, state, token, pid):
+    common = {
+        "token": token,
+        "owner_pid": pid,
+        "parent_pid": os.getpid(),
+        "manifest_sha256": state["pin"],
+        "guard_sha256": state["guard_sha256"],
+    }
+    core = any(row.get("kind") == "ready"
+               and all(row.get(key) == value for key, value in common.items())
+               for row in rows)
+    return core and any(
+        row.get("kind") == "endpoint_install_complete"
+        and all(row.get(key) == value for key, value in common.items())
+        and row.get("nonce") == state["endpoint"]["nonce"]
+        and row.get("identity", {}).get("pid") == pid
+        and row.get("identity", {}).get("ppid") == os.getpid()
+        and row.get("identity", {}).get("uid") == os.getuid()
+        for row in rows
+    )
+
+
 def install(state, append, refuse, ready, bootstrap, inherited_environment):
     from multiprocessing import util
 
@@ -659,15 +682,7 @@ def install(state, append, refuse, ready, bootstrap, inherited_environment):
                 if journal.exists()
                 else []
             )
-            if any(
-                row.get("kind") == "ready"
-                and row.get("token") == token
-                and row.get("owner_pid") == pid
-                and row.get("parent_pid") == os.getpid()
-                and row.get("manifest_sha256") == state["pin"]
-                and row.get("guard_sha256") == state["guard_sha256"]
-                for row in rows
-            ):
+            if endpoint_ready(rows, state, token, pid):
                 break
             if time.monotonic() >= deadline:
                 refuse("multiprocess_child_READY_deadline")
