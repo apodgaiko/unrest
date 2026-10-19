@@ -15,6 +15,7 @@ from structured_evidence import capture, execution_identity
 from source_console import TARGET as CONSOLE_TARGET, render as render_console
 from drain_controls import check as check_drain_controls
 from producer_controls import check as check_producer_controls
+import source_root
 
 SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
@@ -30,18 +31,11 @@ def tmpfs_for(selection):
     if selection == 'ci-mutations':
         roots['/work'] = 'rw,nosuid,nodev,size=512m,uid=20000,gid=20000,mode=0711'
     if selection.startswith('producer-'):
-        roots.update({
-            '/source': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0755',
-            '/source/build': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0700',
-            '/source/src/unrest_harness.egg-info': 'rw,nosuid,nodev,noexec,size=8m,uid=20000,gid=20000,mode=0700',
-        })
+        roots.update(source_root.OVERLAYS)
     return roots
 
 
 def source_bindings(source, selection):
-    if selection.startswith('producer-'):
-        return {'/source/' + path.name: str(path) for path in sorted(source.iterdir())
-                if path.name != 'build'}
     return {'/source': str(source)}
 
 
@@ -121,11 +115,13 @@ def main():
         destination.write_bytes(expected)
         pins[name] = sha(destination)
     if selection.startswith('producer-'):
-        (source / 'build').mkdir()
-        (source / 'src/unrest_harness.egg-info').mkdir(exist_ok=True)
+        source_root.layout(source)
+        source = source_root.seal(source, log)
     (raw / 'source-pins.json').write_text(json.dumps(pins, sort_keys=True))
     inputs = root / 'inputs'
     inputs.mkdir()
+    if selection.startswith('producer-'):
+        (inputs / 'source-custody.json').write_text(json.dumps(source_root.inventory(source), sort_keys=True))
     console_mounts = []
     if selection == 'ci-mutations':
         console = inputs / 'console-unrest'
@@ -161,6 +157,7 @@ def main():
         try:
             if run(argv, log).returncode:
                 raise RuntimeError('focused source container creation failed')
+            source_root.CONTAINERS.add(container)
             inspected = subprocess.check_output(['docker','inspect',container])
             (raw / 'container-inspect.json').write_bytes(inspected)
             config = json.loads(inspected)[0]
@@ -178,7 +175,8 @@ def main():
                 traceback.print_exc(file=output)
             exit_code = 125
         finally:
-            run(['docker','rm','--force',container], log)
+            if run(['docker','rm','--force',container], log).returncode == 0:
+                source_root.CONTAINERS.discard(container)
     control_exit = exit_code
     negative_proof = None
     if selection in {'drain-controls', 'producer-controls'}:
@@ -225,4 +223,7 @@ def main():
     return control_exit
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    finally:
+        source_root.release()

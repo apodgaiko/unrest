@@ -34,6 +34,15 @@ from test_execution_owner import (  # noqa: F401
     test_shared_physical_sites_use_exact_original_owner_sets,
 )
 
+from test_source_root import (  # noqa: F401
+    test_complete_source_bind_and_finite_artifacts,
+    test_inspected_container_drift_refuses,
+    test_host_snapshot_drift_refuses,
+    test_mountpoint_must_be_empty_and_real,
+    test_probe_requires_actual_linux_source_identity,
+    test_producer_canary_no_longer_claims_writable_root,
+)
+
 import release_source_inputs
 
 ROOT = Path(__file__).resolve().parents[2]

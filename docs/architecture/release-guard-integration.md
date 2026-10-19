@@ -203,3 +203,33 @@ original-parent waits and no residue. They do not replace original source tests,
 parameters, assertions, or any failed checkpoint evidence. Changed owner
 composition invalidates affected old production proof until fresh bounded Linux
 producer/consumer evidence and independent guard acceptance exist.
+
+## Immutable producer source root
+
+The primary producer binds one complete `/source` snapshot read-only. No writable
+source-root tmpfs or per-child source bindings remain. Before container creation,
+`source_root` moves the private tracked snapshot into an exclusive root-owned
+physical directory below `/var/lib/unrest-source-custody`, removes write modes,
+and makes its host bind mount read-only. Its root-owned physical ancestors cannot
+be renamed by the runner or source UID. The snapshot has no background writer.
+The host verifies exact member bytes, modes, device/inode identities, ownership,
+and physical ancestors immediately before dispatch. Host custody lasts until
+container removal; cleanup unmounts before removing only that acquired directory.
+A failed unmount retains the sealed backing. Container capabilities and security
+settings are unchanged; no container remount permission is added.
+
+Only `.venv`, `build`, `dist`, `src/unrest_harness.egg-info`, `.pytest_cache`,
+`.ruff_cache`, and `.mypy_cache` receive finite tmpfs overlays. Their empty
+mountpoints exist before sealing. Dependency cache and temporary work remain in
+`/work`. Strict Docker inspection binds the complete source mount and exact
+closed overlay options and rejects extra overlays or writable source mounts.
+
+Before guard activation or source execution, an own-identity Linux probe under
+UID/GID 20000 checks actual mountinfo, read-only source/ancestor filesystems,
+search permissions and every non-overlay source member's bytes and physical
+identity. It observes denial of source-file writing, root creation, file/root
+rename, and root/ancestor mode changes, then writes, reads and removes a canary
+in every exact artifact overlay. The observer preserves these facts, runtime
+bytes/version/flags and mount identities in the encrypted kernel evidence.
+This prerequisite is supplementary proof; constructor compatibility and fresh
+integrated guard acceptance still precede any changed full-source certification.

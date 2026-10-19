@@ -326,6 +326,9 @@ def main():
     status = 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
                    and not authority.denials and not native_failure and not failure
                    and not children - waits and result['all_commands_dispatched']) else 2
+    setup_proof = Path('/receipts/producers/setup-controls.json')
+    if setup_proof.is_file():
+        result['immutable_source_root'] = json.loads(setup_proof.read_bytes())
     records['kernel-source.json'] = json.dumps(result, sort_keys=True, separators=(',', ':')).encode()
     emit_source(records, result, transport_identity['identity'], transport_identity['invocation_sha256'], status)
     return status

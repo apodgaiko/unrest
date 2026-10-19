@@ -16,6 +16,7 @@ from ci_commands import bind_generated
 from checkpoint_decision import expected_identity
 from primary_environment import build
 from source_controller import source_bindings
+import source_root
 from structured_evidence import EvidenceRefused, execution_identity
 from primary_custody import Binding, Custody, ORDER, ARCHIVE, INSTALLED, CHECKSUM
 from primary_source_inputs import test_plan
@@ -26,8 +27,7 @@ SUPPORT = Path(__file__).resolve().parent
 REPOSITORY = SUPPORT.parent.parent
 TMPFS = {'/work': 'rw,nosuid,nodev,size=512m,uid=20000,gid=20000,mode=0711',
          '/tmp': 'rw,nosuid,nodev,noexec,size=64m,mode=1777',
-         '/source': 'rw,exec,nosuid,nodev,size=256m,uid=20000,gid=20000,mode=0755',
-         '/source/src/unrest_harness.egg-info': 'rw,nosuid,nodev,noexec,size=8m,uid=20000,gid=20000,mode=0700',
+         **source_root.OVERLAYS,
          '/receipts': 'rw,nosuid,nodev,noexec,size=32m,uid=20001,gid=20001,mode=0755'}
 
 KINDS = {name: phase.output for name, phase in catalog().items()}
@@ -129,8 +129,9 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
         target = source / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(body)
+        target.chmod(path.stat().st_mode & 0o777)
         source_pins[name] = hashlib.sha256(body).hexdigest()
-    (source / 'src/unrest_harness.egg-info').mkdir(exist_ok=True)
+    source_root.layout(source)
     # Minimal public read-only discovery metadata, with no runner Git config,
     # hooks, credentials, alternate object path or private history.
     git_root = source / '.git'
@@ -143,8 +144,10 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
     # Git's repository-ownership safety check with configuration overrides.
     if run(['sudo', '-n', 'chown', '--no-dereference', '-R', '20000:20000', str(git_root)], log).returncode:
         raise RuntimeError('primary_git_metadata_owner')
+    source = source_root.seal(source, log)
     inputs = root / 'inputs'
     inputs.mkdir()
+    (inputs / 'source-custody.json').write_bytes(canonical(source_root.inventory(source)))
     (inputs / 'github-script.sh').write_bytes(script)
     (inputs / 'plan.json').write_text(json.dumps(spec, sort_keys=True))
     (inputs / 'uv.toml').write_bytes(b'')
@@ -207,8 +210,11 @@ def create_capsule(prepared):
     """Common inspected capsule creation; callers own the original error sink."""
     if run(prepared['argv'], prepared['log']).returncode:
         raise RuntimeError('primary_create_failed')
+    source_root.CONTAINERS.add(prepared['container'])
     config = json.loads(subprocess.check_output(['docker', 'inspect', prepared['container']]))[0]
     validate(config, prepared['image'], prepared['mounts'])
+    source_root.verify(Path(prepared['mounts']['/source']),
+                       json.loads((prepared['inputs'] / 'source-custody.json').read_bytes()))
 
 
 def main():
@@ -343,7 +349,8 @@ def main():
                                 'machine': os.uname().machine}}
             (root / 'preparation.json').write_bytes(canonical(proof))
         finally:
-            run(['docker', 'rm', '--force', container], log)
+            if run(['docker', 'rm', '--force', container], log).returncode == 0:
+                source_root.CONTAINERS.discard(container)
         return 0
     status = 125
     records = {}
@@ -380,7 +387,8 @@ def main():
                 container_state = {'running': state['Running'], 'oom_killed': state['OOMKilled'],
                                    'exit_code': state['ExitCode']}
     finally:
-        run(['docker', 'rm', '--force', container], log)
+        if run(['docker', 'rm', '--force', container], log).returncode == 0:
+            source_root.CONTAINERS.discard(container)
     phase_sha256 = None
     if status == 0 and not test_mode:
         status, phase_sha256 = retain_phase(custody, spec, records, source_pins)
@@ -440,6 +448,13 @@ def main():
 
 
 def retained_main():
+    try:
+        return _retained_main()
+    finally:
+        source_root.release()
+
+
+def _retained_main():
     """The acquiring host retains preparation failures before returning.
 
     ACTIVE_ROOT is assigned only after exclusive directory acquisition. A
