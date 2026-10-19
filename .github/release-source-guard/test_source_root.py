@@ -103,5 +103,29 @@ def test_producer_canary_no_longer_claims_writable_root():
     source = Path(__file__).with_name('producer_setup.py').read_text()
     assert 'artifact_directory_create_remove' not in source
     assert 'source_root.probe()' in source
-    assert "result['immutable_source_root']" in Path(__file__).with_name('primary_compartment.py').read_text()
+    assert "source_root.retain_proof(result, root_identity, runtime)" in Path(__file__).with_name('primary_compartment.py').read_text()
     assert json.loads(json.dumps(source_root.OVERLAYS)) == source_root.OVERLAYS
+
+
+def test_own_proof_uses_unchanged_closed_transport(tmp_path, monkeypatch):
+    import source_raw_transport as raw
+    import structured_evidence as evidence
+    from test_structured_evidence import identity
+    proof = {'pid': 17, 'source_uid': 20000, 'source_gid': 20000}
+    carrier = tmp_path / 'setup-controls.json'
+    carrier.write_text(json.dumps(proof))
+    monkeypatch.setattr(source_root, 'Path', lambda name: carrier)
+    kernel = {'primary_records': []}
+    source_root.retain_proof(kernel, {'pid': 17}, {'primary': {'entry': 'own-test'}})
+    assert kernel['primary_records'][0]['kind'] == 'immutable_source_root'
+    assert kernel['primary_records'][0]['proof'] == proof
+    records = {'kernel-source.json': evidence.canonical(kernel)}
+    nonce = '1' * 64
+    header = evidence.source_header(records, kernel, identity(), nonce, 0)
+    envelope, frame = evidence.current_header(header + raw.encode(records, identity(), nonce),
+                                               identity(), nonce)
+    assert raw.decode(frame, identity(), nonce, envelope['records']) == records
+    with pytest.raises(evidence.EvidenceRefused, match='header_kernel_fields'):
+        evidence.source_header(records, {**kernel, 'immutable_source_root': proof}, identity(), nonce, 0)
+    with pytest.raises(RuntimeError, match='source_setup_owner_drift'):
+        source_root.retain_proof(kernel, {'pid': 18}, {})

@@ -47,7 +47,9 @@ def inventory(source: Path) -> dict[str, Any]:
         rows[str(path.relative_to(source))] = {
             'identity': key(path),
             'sha256': hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None}
-    return {'physical_path': str(source), 'members': rows,
+    return {'physical_path': str(source),
+            'host_mount_flags': os.statvfs(source).f_flag,
+            'host_readonly': bool(os.statvfs(source).f_flag & os.ST_RDONLY), 'members': rows,
             'ancestors': {str(p): key(p) for p in source.parents}}
 
 
@@ -227,4 +229,20 @@ def probe() -> dict[str, Any]:
                         'version': sys.version, 'implementation': sys.implementation.name,
                         'executable': str(runtime), 'sha256': hashlib.sha256(runtime.read_bytes()).hexdigest(),
                         'flags': list(sys.flags)},
-            'source_uid': os.getuid(), 'source_checkpoint_ready': False}
+            'pid': os.getpid(), 'source_uid': os.getuid(), 'source_gid': os.getgid(),
+            'source_checkpoint_ready': False}
+
+
+def retain_proof(result: dict[str, Any], identity: dict[str, Any], runtime: dict[str, Any]) -> None:
+    """Keep the observed source setup in the existing typed primary stream."""
+    path = Path('/receipts/producers/setup-controls.json')
+    if not path.is_file():
+        return
+    proof = json.loads(path.read_bytes())
+    if (proof['pid'] != identity['pid'] or proof['source_uid'] != 20000
+            or proof['source_gid'] != 20000):
+        raise RuntimeError('source_setup_owner_drift')
+    result['primary_records'].append({
+        'kind': 'immutable_source_root', 'pid': identity['pid'], 'identity': identity,
+        'proof': proof, 'runtime_binding': {name: runtime[name] for name in (
+            'primary', 'source_native', 'source_profile_gate', 'source_abi') if name in runtime}})

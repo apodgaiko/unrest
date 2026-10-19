@@ -232,6 +232,7 @@ search permissions and every non-overlay source member's bytes and physical
 identity. It observes denial of source-file writing, root creation, file/root
 rename, and root/ancestor mode changes, then writes, reads and removes a canary
 in every exact artifact overlay. The observer preserves these facts, runtime
-bytes/version/flags and mount identities in the encrypted kernel evidence.
+bytes/version/flags and mount identities in the encrypted kernel evidence as an `immutable_source_root` primary record.
+The closed top-level kernel schema and existing consumers remain unchanged.
 This prerequisite is supplementary proof; constructor compatibility and fresh
 integrated guard acceptance still precede any changed full-source certification.

@@ -17,6 +17,7 @@ from primary_authority import Authority
 from primary_source_inputs import test_plan, decode
 from owned_multiprocess_authority import DependencySourceAuthority as SourceAuthority
 import producer_setup
+import source_root
 import dependency_closure
 import primary_entry_build
 from structured_evidence import source_binding, HEADER_LIMIT
@@ -326,9 +327,7 @@ def main():
     status = 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
                    and not authority.denials and not native_failure and not failure
                    and not children - waits and result['all_commands_dispatched']) else 2
-    setup_proof = Path('/receipts/producers/setup-controls.json')
-    if setup_proof.is_file():
-        result['immutable_source_root'] = json.loads(setup_proof.read_bytes())
+    source_root.retain_proof(result, root_identity, runtime)
     records['kernel-source.json'] = json.dumps(result, sort_keys=True, separators=(',', ':')).encode()
     emit_source(records, result, transport_identity['identity'], transport_identity['invocation_sha256'], status)
     return status
