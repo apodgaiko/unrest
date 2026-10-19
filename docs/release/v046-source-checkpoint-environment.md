@@ -15,7 +15,7 @@ exact digest. No prefix or general JSON exclusion applies.
 
 The host acquires a fresh owned mode-0700 custody directory and exclusively
 creates its private key, input and MAC receipt. The receipt binds the physical
-input inode/metadata, host UID, current run and attempt, workflow, carrier bytes,
+input inode/metadata, runner directory identity, host UID, current run and attempt, workflow, carrier bytes,
 script and boot/monotonic/wall-clock deadline. Consumers retain the original
 single-link regular-file, no-follow, size, owner, mode and stable-read checks.
 The source actor receives only the closed data input through its read-only

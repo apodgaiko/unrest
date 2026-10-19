@@ -112,6 +112,16 @@ def test_owned_private_root_refuses_alias_or_changed_mode(tmp_path):
         full.private_root(tmp_path)
 
 
+def test_moving_custody_preserves_child_inode_but_changes_runner_identity(tmp_path):
+    root, identity = full.private_root(tmp_path, create=True)
+    original_runner = full.file_identity(tmp_path.lstat())[:5]
+    moved = tmp_path / 'new-runner'
+    moved.mkdir(mode=0o700)
+    root.rename(moved / root.name)
+    assert full.private_root(moved)[1] == identity
+    assert full.file_identity(moved.lstat())[:5] != original_runner
+
+
 def test_nonrecursive_scope_exempts_only_exact_carrier(tmp_path):
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     support = tmp_path / '.github/release-source-guard'

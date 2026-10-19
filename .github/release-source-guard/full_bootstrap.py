@@ -143,6 +143,8 @@ def produce(operation):
     require(read_regular(destination, 65536, 0o600) == canonical(result), 'full_input_write')
     receipt = {'schema': 'unrest.v046.full-host-input.v1', 'operation': operation,
                'identity': identity, 'definition': definition, 'uid': os.getuid(),
+               # Sibling capsule creation can change runner nlink/timestamps.
+               'runner_identity': file_identity(runner.lstat())[:5],
                'root_identity': root_identity, 'input_identity': file_identity(destination.lstat()),
                'input_sha256': sha(canonical(result)), 'carrier_sha256': pin,
                'script_sha256': sha(SCRIPT), 'nonce': secrets.token_hex(32), 'clock': clock()}
@@ -165,7 +167,7 @@ def consume(operation, script):
     require(type(signed) is dict and set(signed) == {'receipt', 'mac'}, 'full_host_envelope')
     receipt = signed['receipt']
     require(type(receipt) is dict and set(receipt) == {
-        'schema', 'operation', 'identity', 'definition', 'uid', 'root_identity',
+        'schema', 'operation', 'identity', 'definition', 'uid', 'runner_identity', 'root_identity',
         'input_identity', 'input_sha256', 'carrier_sha256', 'script_sha256', 'nonce', 'clock'}
         and type(receipt['clock']) is dict and set(receipt['clock']) == {
             'wall_ns', 'monotonic_ns', 'boot_sha256'}
@@ -189,6 +191,7 @@ def consume(operation, script):
     require(receipt['schema'] == 'unrest.v046.full-host-input.v1'
             and receipt['identity'] == identity and receipt['definition'] == expected_identity()
             and receipt['operation'] == operation and receipt['uid'] == os.getuid()
+            and receipt['runner_identity'] == list(file_identity(runner.lstat())[:5])
             and receipt['root_identity'] == list(root_identity)
             and receipt['input_identity'] == list(file_identity(path.lstat()))
             and receipt['input_sha256'] == sha(body) and receipt['carrier_sha256'] == pin

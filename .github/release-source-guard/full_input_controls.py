@@ -17,7 +17,7 @@ def main():
     original = os.environ['RUNNER_TEMP']
     cases = ('valid', 'stale-copy', 'replace', 'mode', 'owner', 'hardlink', 'symlink', 'partial', 'carrier',
              'cross-run', 'cross-attempt', 'workflow', 'operation', 'script',
-             'clock', 'deadline', 'mac', 'key', 'missing', 'root-mode', 'root-replaced')
+             'clock', 'deadline', 'mac', 'key', 'missing', 'root-mode', 'root-replaced', 'moved-runner')
     passed = []
     for case in cases:
         root = Path(tempfile.mkdtemp(prefix='full-input-control-', dir=original))
@@ -84,6 +84,12 @@ def main():
             elif case == 'root-replaced':
                 custody.rename(root / 'old')
                 shutil.copytree(root / 'old', custody)
+            elif case == 'moved-runner':
+                moved = root / 'relocated-runner'
+                moved.mkdir(mode=0o700)
+                custody.rename(moved / custody.name)
+                target.rename(moved / target.name)
+                os.environ['RUNNER_TEMP'] = str(moved)
             refused = False
             try:
                 consume(operation, script)
