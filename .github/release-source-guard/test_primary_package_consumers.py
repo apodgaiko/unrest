@@ -209,3 +209,151 @@ def test_final_command_substitution_is_one_current_original_shell_fork(change):
         assert owner.records[0]['script_sha256'] == 'a' * 64
     else:
         assert not owner.contexts and not owner.records
+
+
+@pytest.fixture
+def pending_thread():
+    import primary_package_trace as module
+    birth = {'pid': 72, 'ppid': 7, 'tgid': 12, 'start_ticks': 10, 'boot_id': 'boot',
+             'uids': [20000] * 4, 'capabilities': {'CapEff': 0}, 'no_new_privs': 1}
+    group = {**birth, 'pid': 12, 'tgid': 12, 'start_ticks': 5}
+    owner = SimpleNamespace(root=7, denials=[], operation_index=2,
+                           plan={'package_mode': 'TEST', 'duty': INSTALLED},
+                           operations=[[], module.COMMAND], contexts={12: {
+                               'role': 'uv', 'command': module.COMMAND, 'identity': group}},
+                           records=[{'kind': 'primary_package_shell_operation', 'pid': 12,
+                                     'operation_index': 1, 'identity': group,
+                                     'image_sha256': module.SOURCE_UV_ELF_SHA256}])
+    trace = module.PackageInstalledTrace.__new__(module.PackageInstalledTrace)
+    trace.package_authority, trace.child = owner, 7
+    trace.identities, trace.active, trace.poison = {72: birth, 12: group}, {7, 12, 72}, []
+    trace.records = [{'kind': 'kernel_child', 'child': 72, 'parent': 13,
+                      'event': 3, 'identity': birth}]
+    return module, trace
+
+
+@pytest.mark.parametrize('change', ['exact', 'leader', 'foreign-group', 'image', 'generation',
+                                  'capability', 'poison', 'wrong-phase', 'unobserved', 'duplicate'])
+def test_terminal_retirement_never_grants_execution_or_substitutes_a_wait(pending_thread, change):
+    import copy
+    module, trace = pending_thread
+    if change == 'leader':
+        trace.identities[72] = {**trace.identities[72], 'tgid': 72}
+    elif change == 'foreign-group':
+        trace.package_authority.contexts.clear()
+    elif change == 'image':
+        trace.package_authority.records[0]['image_sha256'] = 'foreign'
+    elif change == 'generation':
+        trace.identities[12] = {**trace.identities[12], 'start_ticks': 99}
+    elif change == 'capability':
+        trace.identities[72]['capabilities'] = {'CapEff': 1}
+    elif change == 'poison':
+        trace.poison.append('original poison')
+    elif change == 'wrong-phase':
+        trace.package_authority.operation_index = 3
+    elif change == 'unobserved':
+        trace.records.clear()
+    elif change == 'duplicate':
+        trace.records.append({'kind': 'primary_package_thread_exit_pending', 'pid': 72})
+    before = copy.deepcopy(trace.records)
+    assert trace.defer_thread_exit(72, 'exit-message') is (change == 'exact')
+    if change == 'exact':
+        assert trace.active == {7, 12, 72}
+        with pytest.raises(RuntimeError, match='actual_terminal_wait_missing'):
+            module.verify_retirements(trace.records)
+        trace.records.append({'kind': 'failure_cleanup_tracer_wait', 'pid': 72, 'raw': 0})
+        with pytest.raises(RuntimeError, match='actual_terminal_wait_missing'):
+            module.verify_retirements(trace.records)
+        trace.records.append({'kind': 'tracer_terminal_wait', 'pid': 72, 'raw': 0,
+                              'identity': trace.identities[72]})
+        assert module.verify_retirements(trace.records) == 1
+    else:
+        assert trace.records == before
+
+
+@pytest.mark.parametrize('operation', ['exit-message', 'exit-resume'])
+@pytest.mark.parametrize('algorithm', ['original', 'package'])
+def test_real_owned_loop_collects_terminal_status_after_exit_stop_esrch(pending_thread, monkeypatch, operation, algorithm):
+    import ctypes
+    import errno
+    import os
+    import signal
+    from linux_trace import DiagnosticTrace
+    module, trace = pending_thread
+    identities = {**trace.identities, 7: {**trace.identities[12], 'pid': 7, 'tgid': 7, 'ppid': 1}}
+    trace.identities, trace.active, trace.records = {}, {7}, []
+    trace.seize, trace.selective, trace.timeout = True, True, 180
+    trace.on_attached, trace.on_tick = None, None
+    trace.pending, trace.newborn = {}, set()
+    trace.root_parent_wait, trace.diagnostic_trace = None, DiagnosticTrace()
+    def stopped(event):
+        return (event << 16) | (signal.SIGTRAP << 8) | 0x7f
+    events = [(7, stopped(128)), (7, stopped(1)), (12, stopped(3)),
+              (72, stopped(128)), (72, stopped(6)), (72, 0), (12, 0), (7, 0)]
+    last = [None]
+    def waitpid(pid, flags):
+        if pid == -1:
+            return min(trace.active), 0
+        if events and pid == events[0][0]:
+            value = events.pop(0)
+            last[0] = value
+            return value
+        return 0, 0
+    injected = []
+    def ptrace(request, pid, address=0, data=0):
+        if request == 0x4201:
+            if pid in {7, 12}:
+                ctypes.cast(data, ctypes.POINTER(ctypes.c_ulong))[0] = 12 if pid == 7 else 72
+            elif operation == 'exit-message':
+                injected.append((request, pid))
+                raise ProcessLookupError(errno.ESRCH, 'controlled terminal race')
+        if (operation == 'exit-resume' and request == 7 and pid == 72
+                and last[0] == (72, stopped(6))):
+            injected.append((request, pid))
+            raise ProcessLookupError(errno.ESRCH, 'controlled terminal race')
+        return 0
+    controlled_os = SimpleNamespace(waitpid=waitpid, WNOHANG=os.WNOHANG,
+        WIFEXITED=os.WIFEXITED, WIFSIGNALED=os.WIFSIGNALED, WIFSTOPPED=os.WIFSTOPPED,
+        WSTOPSIG=os.WSTOPSIG, waitstatus_to_exitcode=os.waitstatus_to_exitcode)
+    monkeypatch.setattr(module, 'os', controlled_os)
+    monkeypatch.setattr(module, 'ptrace', ptrace)
+    monkeypatch.setattr(module, '_observation', SimpleNamespace(process_identity=lambda pid: identities[pid]))
+    if algorithm == 'original':
+        import types
+        from linux_trace import OwnedTrace
+        original = types.FunctionType(OwnedTrace.run.__code__, {
+            **OwnedTrace.run.__globals__, 'os': controlled_os, 'ptrace': ptrace,
+            '_observation': SimpleNamespace(process_identity=lambda pid: identities[pid])})
+        with pytest.raises(ProcessLookupError):
+            original(trace)
+        assert len(injected) == 1
+        assert any(row['kind'] == 'failure_cleanup_tracer_wait' for row in trace.records)
+        return
+    result = trace.run()
+    assert len(injected) == 1 and not events and result['root_parent_wait_raw'] == 0
+    assert not trace.active and module.verify_retirements(result['records']) == 1
+    assert not any(row['kind'] == 'failure_cleanup_tracer_wait' for row in result['records'])
+    assert sum(row['kind'] == 'tracer_terminal_wait' and row['pid'] == 72
+               and row['raw'] == 0 for row in result['records']) == 1
+
+
+def test_package_loop_preserves_original_trace_algorithm_outside_terminal_boundary():
+    import copy
+    original = ast.parse((ROOT / 'linux_trace.py').read_bytes())
+    package = ast.parse((ROOT / 'primary_package_trace.py').read_bytes())
+    def run(tree, name):
+        owner = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == name)
+        return next(n for n in owner.body if isinstance(n, ast.FunctionDef) and n.name == 'run')
+    class StripRepair(ast.NodeTransformer):
+        def visit_Try(self, node):
+            node = self.generic_visit(node)
+            if node.handlers and any(isinstance(n, ast.Attribute) and n.attr == 'defer_thread_exit'
+                                     for handler in node.handlers for n in ast.walk(handler)):
+                return node.body
+            return node
+        def visit_Expr(self, node):
+            if isinstance(node.value, ast.Call) and ast.unparse(node.value.func) == 'verify_retirements':
+                return None
+            return node
+    restored = StripRepair().visit(copy.deepcopy(run(package, 'PackageInstalledTrace')))
+    assert ast.dump(restored, include_attributes=False) == ast.dump(run(original, 'OwnedTrace'), include_attributes=False)

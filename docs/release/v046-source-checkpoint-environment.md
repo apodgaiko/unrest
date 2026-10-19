@@ -1216,3 +1216,12 @@ UID/capability/NNP, script hash and unrelated cwd after complete lifecycle retur
 Only the existing final server vector and unsupported environment may consume
 that relationship. The original parent waits and all-process census still apply
 to both shell and server; no descendant or descriptor exemption is introduced.
+
+During native package installation, Linux can retire a UV worker after its
+observed thread exit stop and before ptrace reads the exit message or resumes
+it. The package-only observer leaves that current, byte-bound UV thread active
+and waits through the original owned wait loop for its real terminal status.
+Completion requires exactly one zero terminal wait with the same kernel birth;
+cleanup waits, inferred values, process leaders and unrelated ptrace errors never
+qualify. The generic SOURCE tracer, process-parent wait floor, deadlines, flags
+and all-process census remain unchanged.

@@ -84,6 +84,8 @@ def check_installed(records):
     if kernel['primary_plan'].get('package_mode') != 'TEST' or kernel['primary_plan']['duty'] != INSTALLED:
         raise RuntimeError('primary_package_installed_test_identity')
     kernel_success(records, kernel['actual_script_sha256'])
+    from primary_package_trace import verify_retirements
+    verify_retirements(kernel['records'])
     proof = loads(records['package-proof.json'])
     observed_return({'records': {name: base64.b64encode(body).decode() for name, body in records.items()}}, proof)
     corruption = [row for row in kernel['native_source_records']

@@ -233,9 +233,16 @@ def main():
     def resolve(pid, path, argv, values, cwd):
         return authority.resolve(trace, pid, path, argv, values, cwd)
     allocation = primary_root_allocation() if spec['timeout_seconds'] > 180 else None
-    trace = OwnedTrace(child, allowed, spec['timeout_seconds'], on_tick=tick,
-                       resolve_exec=resolve, seize=True, on_attached=attached, selective=True,
-                       primary_allocation=allocation)
+    if package_installed:
+        from primary_package_trace import PackageInstalledTrace
+        trace = PackageInstalledTrace(child, allowed, spec['timeout_seconds'], on_tick=tick,
+                                      resolve_exec=resolve, seize=True, on_attached=attached,
+                                      selective=True, primary_allocation=allocation,
+                                      package_authority=authority)
+    else:
+        trace = OwnedTrace(child, allowed, spec['timeout_seconds'], on_tick=tick,
+                           resolve_exec=resolve, seize=True, on_attached=attached, selective=True,
+                           primary_allocation=allocation)
     failure = None
     trace_status = None
     STAGE = 'trace'
