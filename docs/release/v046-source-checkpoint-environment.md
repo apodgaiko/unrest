@@ -1135,3 +1135,12 @@ parent inode/ownership. The original complete census and ancestor predicate
 consume these retained names. A fresh census must match the observed empty
 parent; preexisting, replaced, foreign, symlink, changed-mode/owner or nonempty
 parents refuse. No other directory or retired generation receives authority.
+
+The live consumed virtualenv root is mode 0755 (the authenticated native
+observations bind all four consumers). The retired-name predicate uses that
+observed mode, and refuses 0700 and other drift. Archive TEST execution uses a
+separate package primary-authority subclass, preserving the SOURCE authority's
+whole executable AST. Only the original archive command may activate its native
+file entry. The observer checks the actual function return and complete archive
+bytes; host custody supplies a read-only, same-run descriptor to the next capsule.
+All fifteen extracted persistence cases must run under the original checker.

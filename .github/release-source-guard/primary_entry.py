@@ -149,8 +149,9 @@ def main(event, arguments):
         sys.modules[module.__name__] = module
         exec(compile(data, str(source), 'exec', dont_inherit=True), module.__dict__)
         return
-    if profile.get('source_role') in {'source-root', 'source-bootstrap'}:
-        source = Path('/guard/primary_source_entry.py')
+    if profile.get('source_role') in {'source-root', 'source-bootstrap', 'package-root'}:
+        source = Path('/guard/primary_package_entry.py' if profile['source_role'] == 'package-root'
+                      else '/guard/primary_source_entry.py')
         data = source.read_bytes()
         if hashlib.sha256(data).hexdigest() != profile['source_entry_sha256']:
             os._exit(86)

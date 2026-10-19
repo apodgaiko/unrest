@@ -17,7 +17,7 @@ from checkpoint_decision import expected_identity
 from primary_environment import build
 from source_controller import source_bindings
 from structured_evidence import EvidenceRefused, execution_identity
-from primary_custody import Binding, Custody, read_regular
+from primary_custody import Binding, Custody, read_regular, ORDER, ARCHIVE, INSTALLED, CHECKSUM
 from primary_source_inputs import test_plan, decode
 from structured_evidence import canonical
 
@@ -33,6 +33,8 @@ KINDS = {'Install dependencies': 'primary-install', 'Import package': 'primary-i
          'Lint (ruff)': 'primary-lint', 'Type-check (mypy)': 'primary-types',
          'v0.4.6 source suite': 'primary-source',
          'Build wheel and source distribution': 'primary-package-build',
+         ARCHIVE: 'primary-package-archive', INSTALLED: 'primary-package-installed',
+         CHECKSUM: 'primary-package-checksum',
          'TEST-source-positive': 'primary-source-positive', 'TEST-source-poison': 'primary-source-poison'}
 
 
@@ -155,7 +157,7 @@ def main():
             raise RuntimeError('primary_decision_kind')
     source_input = None
     if not test_mode and not package_test and (bound['name'] == 'v0.4.6 source suite'
-            or bound['name'] == 'Build wheel and source distribution'):
+            or bound['name'] in ORDER):
         source_input = decode(read_regular(Path(os.environ['RUNNER_TEMP']) / 'primary-source-input.json', 65536, 0o600))
         if source_input['definition'] != expected:
             raise RuntimeError('primary_source_current_definition')
@@ -237,6 +239,13 @@ def main():
         (inputs / 'registry.py').write_text(value['registry'])
     mounts = {'/guard': str(SUPPORT), '/inputs': str(inputs),
               **source_bindings(source, 'producer-primary')}
+    if spec.get('package_input_required'):
+        from primary_package_inputs import prepare as prepare_package_input
+        descriptor = prepare_package_input(custody, spec['duty'], root / 'package-input')
+        if descriptor['binding'] != custody.binding or descriptor['duty'] != spec['duty']:
+            raise RuntimeError('primary_package_current_input')
+        (inputs / 'package-input.json').write_bytes(canonical(descriptor))
+        mounts['/package-input'] = str(root / 'package-input')
     container = 'primary-script-' + spec['script_sha256'][:24]
     argv = ['docker', 'create', '--name', container, '--read-only', '--network=none',
             '--ipc=private', '--cgroupns=private', '--cap-drop=ALL', '--cap-add=SETUID',
@@ -305,7 +314,8 @@ def main():
                 status, stage = 125, 'source_test_refused'
     package_test_proof = None
     if package_test and status == 0:
-        from primary_package_probe import check as check_package
+        from primary_package_probe import check as check_build, check_archive
+        check_package = check_archive if spec['duty'] == ARCHIVE else check_build
         try:
             package_test_proof = check_package(records)
         except Exception:

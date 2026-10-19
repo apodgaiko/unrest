@@ -83,7 +83,7 @@ def names(ledger, final, *, preexisting):
                 or before['uid'] != 20000 or before['gid'] != 20000
                 or before['empty'] or before['links'] < 3
                 or child['type'] != stat.S_IFDIR or child['uid'] != 20000
-                or child['gid'] != 20000 or child['mode'] != 0o700):
+                or child['gid'] != 20000 or child['mode'] != 0o755):
             raise RuntimeError('package_retired_build_lineage_drift')
         relative = root.relative_to('/work/cache').as_posix()
         result[sha(relative.encode())] = relative

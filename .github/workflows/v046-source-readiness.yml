@@ -30,6 +30,19 @@ jobs:
       - name: TEST original PRIMARY build producer
         run: uv build
         shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
+      - name: TEST original PRIMARY archive consumer
+        run: uv run python tools/check_distribution.py dist
+        shell: python3 .github/release-source-guard/ci_shell.py --package-test {0}
+      - name: Upload encrypted TEST package archive evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v046-primary-package-archive-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/primary-package-archive/evidence.cms
+            ${{ runner.temp }}/primary-package-archive/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload encrypted TEST package build evidence
         if: always()
         uses: actions/upload-artifact@v4.6.2

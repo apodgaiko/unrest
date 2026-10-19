@@ -84,6 +84,7 @@ def main():
     else:
         spec = test_plan(script, workflow, test_mode) if test_mode else plan(script, workflow, source_input)
     package_build = spec.get('package_mode') is not None
+    package_archive = package_build and spec['duty'] == 'Check distribution archives'
     if spec != json.loads(Path('/inputs/plan.json').read_bytes()):
         raise RuntimeError('primary_script_plan_drift')
     expected = json.loads(Path('/inputs/identity.json').read_bytes())
@@ -108,7 +109,7 @@ def main():
                    'source_profile_gate': profile_gate_build.verify(),
                    'source_metadata': native_metadata.verify(),
                    'source_producer_inputs': producer_inputs.verify()}
-    env = environment(source=bool(spec.get('source_mode')))
+    env = environment(source=bool(spec.get('source_mode')) or package_archive)
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
     start_read, start_write = os.pipe2(os.O_CLOEXEC)
@@ -134,6 +135,13 @@ def main():
                     if target.startswith('/opt/primary-cache/'):
                         path.unlink()
                         path.symlink_to('/work/cache/' + target.removeprefix('/opt/primary-cache/'))
+            if spec.get('package_input_required'):
+                from primary_package_inputs import consume as consume_package_input
+                descriptor = json.loads(Path('/inputs/package-input.json').read_bytes())
+                if descriptor['binding']['definition'] != expected or descriptor['duty'] != spec['duty']:
+                    raise RuntimeError('primary_package_input_binding')
+                consumption = consume_package_input(descriptor)
+                Path('/work/package-input-consumption.json').write_text(json.dumps(consumption, sort_keys=True))
             install_observation_filter()
             os.setsid()
             os.chdir('/source')
@@ -154,19 +162,37 @@ def main():
         raise RuntimeError('primary_child_fence')
     os.close(ready_read)
     STAGE = 'authority'
-    authority = Authority(spec, child, env)
+    if package_archive:
+        from primary_package_authority import PackageArchivePrimaryAuthority
+        authority = PackageArchivePrimaryAuthority(spec, child, env)
+    else:
+        authority = Authority(spec, child, env)
+    if spec.get('package_input_required'):
+        descriptor = json.loads(Path('/inputs/package-input.json').read_bytes())
+        consumption = json.loads(Path('/work/package-input-consumption.json').read_bytes())
+        expected_consumption = {
+            'schema': 'unrest.v046.primary-package-input-consumption.v1',
+            'descriptor_sha256': sha(json.dumps(descriptor, sort_keys=True, separators=(',', ':')).encode()),
+            'members': descriptor['members']}
+        if consumption != expected_consumption or descriptor['binding']['definition'] != expected:
+            raise RuntimeError('primary_package_actual_input_consumption')
+        authority.records.append({'kind': 'primary_package_input_consumption', 'pid': child,
+                                  'identity': process_identity(child), **consumption})
     source = None
     if spec.get('source_mode') or package_build:
         initial_path = Path('/inputs/source.json')
         initial = json.loads(initial_path.read_bytes())
         manifest_path, pin, common = producer_setup.prepare(initial, sha(initial_path.read_bytes()))
-        if package_build:
+        if package_archive:
+            from primary_package_archive import PackageArchiveAuthority
+            source = PackageArchiveAuthority(manifest_path, pin, common, authority.contexts)
+        elif package_build:
             from primary_package_build import PackageBuildAuthority
             source = PackageBuildAuthority(manifest_path, pin, common, authority.contexts)
         else:
             source = SourceAuthority(manifest_path, pin, common, authority.contexts)
         authority.source, authority.output_fd = source, read
-        if package_build:
+        if package_build and not package_archive:
             source.initialize(authority, child, read)
     os.set_blocking(read, False)
     output = bytearray()
@@ -252,6 +278,8 @@ def main():
             source.require_complete(trace)
             from primary_outputs import export
             records['package-output.json'] = export(spec['duty'])
+            if package_archive:
+                records['package-proof.json'] = json.dumps(source.package_proof, sort_keys=True, separators=(',', ':')).encode()
         except BaseException as error:
             failure = 'package_output_refused'
             result['failure_code'] = failure

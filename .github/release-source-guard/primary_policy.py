@@ -163,8 +163,8 @@ def console(name, interpreter='/source/.venv/bin/python'):
 def public_plan(spec):
     """Public evidence carries only closed identities/counts and input hashes."""
     import re
-    from primary_custody import BUILD
-    if (spec['duty'] not in FOCUSED | {SOURCE, 'TEST-source-positive', 'TEST-source-poison', BUILD}
+    from primary_custody import ORDER
+    if (spec['duty'] not in FOCUSED | {SOURCE, 'TEST-source-positive', 'TEST-source-poison', *ORDER}
             or spec['timeout_seconds'] != root_seconds(spec)
             or spec['source_checkpoint_ready'] is not False or spec['selected_carrier'] is not None
             or any(not isinstance(spec[key], str) or not re.fullmatch('[0-9a-f]{64}', spec[key])

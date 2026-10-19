@@ -80,7 +80,7 @@ def identity_check(value):
         require(type(value[key]) is str and re.fullmatch('[1-9][0-9]*', value[key]), 'run_identity')
     require(value['artifact_name'] in {
         f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}"
-        for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations', 'primary-install', 'primary-import', 'primary-help', 'primary-repository', 'primary-lint', 'primary-types', 'primary-controls', 'primary-source', 'primary-source-positive', 'primary-source-poison', 'primary-package-build')}, 'artifact_identity')
+        for kind in ('readiness', 'producer-controls', 'producer-contract', 'producer-distribution', 'ci-mutations', 'primary-install', 'primary-import', 'primary-help', 'primary-repository', 'primary-lint', 'primary-types', 'primary-controls', 'primary-source', 'primary-source-positive', 'primary-source-poison', 'primary-package-build', 'primary-package-archive', 'primary-package-installed', 'primary-package-checksum')}, 'artifact_identity')
     require(type(value['workflow_ref']) is str, 'workflow_identity')
     dependency_prefix = ('apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@'
                          'refs/heads/codex/source-guard-structured-20261018-primary-dependency-')
@@ -108,7 +108,7 @@ def identity_check(value):
         value['workflow_ref'])
     primary_kinds = {'readiness', 'primary-install', 'primary-import', 'primary-help',
                      'primary-repository', 'primary-lint', 'primary-types', 'primary-controls',
-                     'primary-source', 'primary-source-positive', 'primary-source-poison', 'primary-package-build'}
+                     'primary-source', 'primary-source-positive', 'primary-source-poison', 'primary-package-build', 'primary-package-archive', 'primary-package-installed', 'primary-package-checksum'}
     primary_artifact = value['artifact_name'] in {
         f"v046-source-{kind}-{value['run_id']}-{value['run_attempt']}" for kind in primary_kinds}
     package_prefix = ('apodgaiko/unrest/.github/workflows/v046-source-readiness.yml@'

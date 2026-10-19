@@ -13,7 +13,7 @@ def evidence():
              'links': 2, 'empty': True, 'leaf_count': 0}
     parent = {**final, 'identity': [5, 12, stat.S_IFDIR | 0o755, 20000, 20000, 3, 10, 10],
               'links': 3, 'empty': False, 'leaf_count': 1}
-    root = {**parent, 'type': stat.S_IFDIR, 'mode': 0o700}
+    root = {**parent, 'type': stat.S_IFDIR, 'mode': 0o755}
     ledger = [{'helper': helper, 'pid': i + 20, 'root': '/work/cache/builds-v0/.tmp' + str(i),
                'root_metadata': copy.deepcopy(root), 'parent_metadata': copy.deepcopy(parent)}
               for i, helper in enumerate(sorted(HELPERS))]
@@ -63,7 +63,7 @@ def test_unknown_foreign_replaced_or_unbound_directory_stays_denied(change):
     elif change == 'child-owner':
         ledger[0]['root_metadata']['uid'] = 0
     elif change == 'child-mode':
-        ledger[0]['root_metadata']['mode'] = 0o755
+        ledger[0]['root_metadata']['mode'] = 0o700
     elif change == 'observed-empty':
         ledger[0]['parent_metadata']['empty'] = True
     with pytest.raises(RuntimeError, match='package_retired_build_'):
