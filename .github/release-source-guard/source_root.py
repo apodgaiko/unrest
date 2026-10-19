@@ -62,7 +62,7 @@ def verify(source: Path, expected: dict[str, Any]) -> None:
         raise RuntimeError('source_host_mount_writable')
     for path in [source, *source.parents]:
         info = path.lstat()
-        if info.st_uid != 0 or info.st_mode & 0o022:
+        if info.st_uid != (20000 if path == source else 0) or info.st_mode & 0o022:
             raise RuntimeError('source_host_ancestor_custody')
 
 
@@ -88,7 +88,9 @@ def seal(source: Path, log: Path) -> Path:
     run('chown', '--no-dereference', '-R', '0:0', str(target))
     if (target / '.git').exists():
         run('chown', '--no-dereference', '-R', '20000:20000', str(target / '.git'))
-    run('chmod', '-R', 'a-w', str(target))
+    # Git checks both worktree and .git ownership. The read-only host mount,
+    # not mode normalization, seals their owner while retaining strict 0644 inputs.
+    run('chown', '--no-dereference', '20000:20000', str(target))
     run('mount', '--bind', str(target), str(target))
     run('mount', '-o', 'remount,bind,ro,nosuid,nodev', str(target))
     verify(target, inventory(target))

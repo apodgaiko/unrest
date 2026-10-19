@@ -209,8 +209,10 @@ producer/consumer evidence and independent guard acceptance exist.
 The primary producer binds one complete `/source` snapshot read-only. No writable
 source-root tmpfs or per-child source bindings remain. Before container creation,
 `source_root` moves the private tracked snapshot into an exclusive root-owned
-physical directory below `/var/lib/unrest-source-custody`, removes write modes,
-and makes its host bind mount read-only. Its root-owned physical ancestors cannot
+physical directory below `/var/lib/unrest-source-custody` and makes its host
+bind mount read-only. Original source file modes remain unchanged for the strict
+acquisition readers. Worktree and `.git` roots keep UID20000 for stock Git ownership
+checks; their immutable host mount prevents owner writes or mode changes. Its root-owned physical ancestors cannot
 be renamed by the runner or source UID. The snapshot has no background writer.
 The host verifies exact member bytes, modes, device/inode identities, ownership,
 and physical ancestors immediately before dispatch. Host custody lasts until

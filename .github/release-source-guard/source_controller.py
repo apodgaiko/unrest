@@ -113,6 +113,7 @@ def main():
         destination = source / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(expected)
+        destination.chmod(path.stat().st_mode & 0o777)
         pins[name] = sha(destination)
     if selection.startswith('producer-'):
         source_root.layout(source)

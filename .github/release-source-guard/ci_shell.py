@@ -147,7 +147,9 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
     source = source_root.seal(source, log)
     inputs = root / 'inputs'
     inputs.mkdir()
-    (inputs / 'source-custody.json').write_bytes(canonical(source_root.inventory(source)))
+    source_custody = canonical(source_root.inventory(source))
+    (inputs / 'source-custody.json').write_bytes(source_custody)
+    (raw / 'source-custody.json').write_bytes(source_custody)
     (inputs / 'github-script.sh').write_bytes(script)
     (inputs / 'plan.json').write_text(json.dumps(spec, sort_keys=True))
     (inputs / 'uv.toml').write_bytes(b'')
@@ -211,7 +213,9 @@ def create_capsule(prepared):
     if run(prepared['argv'], prepared['log']).returncode:
         raise RuntimeError('primary_create_failed')
     source_root.CONTAINERS.add(prepared['container'])
-    config = json.loads(subprocess.check_output(['docker', 'inspect', prepared['container']]))[0]
+    inspected = subprocess.check_output(['docker', 'inspect', prepared['container']])
+    (prepared['raw'] / 'container-inspect.json').write_bytes(inspected)
+    config = json.loads(inspected)[0]
     validate(config, prepared['image'], prepared['mounts'])
     source_root.verify(Path(prepared['mounts']['/source']),
                        json.loads((prepared['inputs'] / 'source-custody.json').read_bytes()))
@@ -429,6 +433,8 @@ def main():
                 'source_test_proof': test_proof,
                 'transport_provenance_sha256': digest(raw / 'transport-provenance.json') if (raw / 'transport-provenance.json').is_file() else None,
                 'capture_failure': capture_failure, 'container_state': container_state,
+                'source_host_custody_sha256': digest(raw / 'source-custody.json'),
+                'container_inspect_sha256': digest(raw / 'container-inspect.json') if (raw / 'container-inspect.json').is_file() else None,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'
     with tarfile.open(archive, 'w:gz') as stream:
