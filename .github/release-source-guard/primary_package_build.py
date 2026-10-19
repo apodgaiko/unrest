@@ -130,6 +130,12 @@ class PackageProducers(NativeProducers):
                              'identity': identity(pid), 'origin_sha256': pin})
         return True
 
+    def stage_response(self, request):
+        result = super().stage_response(request)
+        from primary_package_directory_diagnostic import capture
+        capture(self, self.children[request['pid']], 'original-module-return')
+        return result
+
     def completed_cache(self, event, trace):
         try:
             return super().completed_cache(event, trace)
@@ -145,6 +151,17 @@ class PackageProducers(NativeProducers):
                         'exception_class': type(diagnostic_error).__name__,
                         'authority_granted': False, 'eligible_certificate': False,
                         'source_checkpoint_ready': False, 'selected_carrier': None}
+            if str(error) == 'primary_cache_output_extra_directory' and event.get('pid') in self.uv:
+                from primary_package_directory_diagnostic import refusal
+                try:
+                    self.package_cache_refusal = refusal(self, self.uv[event['pid']], error, trace)
+                except BaseException as diagnostic_error:
+                    self.package_cache_refusal = {
+                        'schema': 'unrest.v046.primary-package-directory-diagnostic.v1',
+                        'status': 'diagnostic-refused',
+                        'exception_class': type(diagnostic_error).__name__,
+                        'authority_granted': False, 'eligible_certificate': False,
+                        'source_checkpoint_ready': False, 'selected_carrier': None}
             # Preserve the exact original cache refusal and the failed epoch.
             raise
 
@@ -154,6 +171,8 @@ class PackageProducers(NativeProducers):
             return None
         # NativeProducers derives and pins the exact child spec before exec.
         # Add only this observer-owned origin to that derivation.
+        from primary_package_directory_diagnostic import capture
+        capture(self, {'pid': pid, 'parent': parent, 'helper': None, 'cwd': cwd}, 'before-original-child')
         original = self.common
         self.common = {**original, 'primary_package_origin': context['package_origin']}
         try:

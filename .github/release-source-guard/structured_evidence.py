@@ -116,9 +116,10 @@ def identity_check(value):
     if value['workflow_ref'].startswith(package_prefix.removesuffix('-')):
         require(value['workflow_ref'] in {package_prefix + epoch
                 for epoch in ('01', '02', '03', '04')} | {package_prefix + 'cache-record-' + epoch
-                for epoch in ('01', '02')}, 'workflow_identity')
+                for epoch in ('01', '02')} | {package_prefix + 'cache-lineage-' + epoch
+                for epoch in ('01', '02', '03', '04', '05', '06')}, 'workflow_identity')
     package = re.fullmatch(
-        r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-package-entry-(?:0[1-4]|cache-record-0[1-2])',
+        r'apodgaiko/unrest/\.github/workflows/v046-source-readiness\.yml@refs/heads/codex/source-guard-structured-20261018-package-entry-(?:0[1-4]|cache-record-0[1-2]|cache-lineage-0[1-6])',
         value['workflow_ref'])
     require(readiness is not None or (primary is not None or package is not None) and primary_artifact, 'workflow_identity')
 

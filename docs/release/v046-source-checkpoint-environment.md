@@ -1113,3 +1113,11 @@ Every remaining cache member retains the original predicates, and the UV
 parent's final numeric wait is still required before archive export. The wire
 layout follows the pinned [UV interpreter source](https://github.com/astral-sh/uv/blob/1f31f0e9fbcfcf95aed89b44a376596e14b40e06/crates/uv-python/src/interpreter.rs)
 and [Unix timestamp source](https://github.com/astral-sh/uv/blob/1f31f0e9fbcfcf95aed89b44a376596e14b40e06/crates/uv-cache-info/src/timestamp.rs).
+
+The finite package cache-lineage TEST epochs 01–06 may observe the unchanged
+extra-directory refusal. Observer snapshots bracket actual native child entry
+and the authenticated original module return. The diagnostic exports bounded
+directory identity and membership hashes, with the original refusing frame's
+exact directory predicate. It grants no cache authority and preserves the
+original refusal even if metadata capture fails. Familiar directory names and
+post-build presence cannot establish writer lineage or package acceptance.
