@@ -42,7 +42,9 @@ jobs:
         uses: actions/upload-artifact@v4.6.2
         with:
           name: v046-full-preparation-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/primary-source/preparation.json
+          path: |
+            ${{ runner.temp }}/primary-source/preparation.json
+            ${{ runner.temp }}/full-host-controls.json
           if-no-files-found: error
       - name: TEST original PRIMARY build producer
         if: ${{ !contains(github.ref, 'source-guard-structured-20261018-full-bootstrap') }}

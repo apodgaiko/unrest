@@ -1,5 +1,6 @@
 """Physical acquisition and exact preparation routing negatives."""
 import ast
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -68,6 +69,36 @@ def test_exclusive_input_never_overwrites_stale_or_link(tmp_path):
     assert not (tmp_path / 'missing').exists()
 
 
+def test_payload_or_nonlinux_role_cannot_issue_host_input():
+    if sys.platform == 'linux' and os.getuid() not in {0, 20000, 20001}:
+        pytest.skip('payload-role control runs inside the source-free Ubuntu capsule')
+    with pytest.raises(EvidenceRefused, match='full_host_role'):
+        full.context('PREPAREONLY')
+
+
+def test_physical_replacement_during_real_read_refuses(tmp_path, monkeypatch):
+    import primary_custody as custody
+    target = tmp_path / 'primary-source-input.json'
+    exclusive(target, b'original input')
+    original_fdopen = custody.os.fdopen
+
+    @contextmanager
+    def replacing_stream(descriptor, mode, closefd):
+        with original_fdopen(descriptor, mode, closefd=closefd) as stream:
+            class Reader:
+                def read(self, count):
+                    body = stream.read(count)
+                    target.rename(tmp_path / 'original')
+                    target.write_bytes(body)
+                    target.chmod(0o600)
+                    return body
+            yield Reader()
+
+    monkeypatch.setattr(custody.os, 'fdopen', replacing_stream)
+    with pytest.raises(EvidenceRefused, match='custody_file_changed'):
+        read_regular(target, 65536, 0o600)
+
+
 def test_owned_private_root_refuses_alias_or_changed_mode(tmp_path):
     root, identity = full.private_root(tmp_path, create=True)
     assert full.private_root(tmp_path)[1] == identity
@@ -86,6 +117,8 @@ def test_nonrecursive_scope_exempts_only_exact_carrier(tmp_path):
     support = tmp_path / '.github/release-source-guard'
     support.mkdir(parents=True)
     (support / 'policy.json').write_text('{}')
+    (support / 'guard.py').write_text('original guard')
+    (support / 'runtime.py').write_text('original runtime')
     (tmp_path / 'source.py').write_text('original')
     (tmp_path / 'doc.md').write_text('original')
     subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
@@ -95,7 +128,8 @@ def test_nonrecursive_scope_exempts_only_exact_carrier(tmp_path):
     assert full.scope(tmp_path) == before
     (tmp_path / full.CARRIER).write_text('{"changed":true}')
     assert full.scope(tmp_path) == before
-    for name in ('source.py', 'doc.md', '.github/release-source-guard/policy.json'):
+    for name in ('source.py', 'doc.md', '.github/release-source-guard/policy.json',
+                 '.github/release-source-guard/guard.py', '.github/release-source-guard/runtime.py'):
         target = tmp_path / name
         original = target.read_bytes()
         target.write_bytes(original + b' ')
@@ -110,8 +144,10 @@ def test_nonrecursive_scope_exempts_only_exact_carrier(tmp_path):
 
 def test_preparation_is_common_and_dispatch_free():
     tree = ast.parse(Path(__file__).with_name('ci_shell.py').read_bytes())
-    prepare = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'prepare_capsule')
+    prepare = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'create_capsule')
     text = ast.unparse(prepare)
+    build = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'prepare_capsule')
+    text += ast.unparse(build)
     assert "'create'" in text and "'inspect'" in text
     assert "'start'" not in text and 'capture_raw_source' not in text
     main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
@@ -122,6 +158,15 @@ def test_preparation_is_common_and_dispatch_free():
     assert any(isinstance(n, ast.Return) and n.value.value == 0 for n in branch.body)
     assert 'source_testcase_executed' in ast.unparse(branch)
     assert 'eligible_certificate' in ast.unparse(branch)
+    capture = next(n for n in main.body if isinstance(n, ast.Try)
+                   and 'capture_raw_source' in ast.unparse(n))
+    assert 'create_capsule(prepared)' in ast.unparse(capture)
+    assert 'create_capsule(prepared)' in ast.unparse(branch)
+    # Creation/inspect failures retain the same closed status, cleanup and
+    # encryption path as transport failures; preparation never starts payload.
+    assert 'status = 125' in ast.unparse(capture)
+    assert "'--force'" in ast.unparse(capture)
+    assert 'primary_encryption_failed' in ast.unparse(main)
     assert full.sha(full.SCRIPT) == '83130e7c9c358fe2461d918192481beb7d97b5d88f02b695481052b28a931310'
 
 

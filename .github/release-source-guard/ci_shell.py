@@ -182,18 +182,18 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
     source_invocation = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     (inputs / 'transport-identity.json').write_bytes(canonical({
         'identity': identity, 'invocation_sha256': source_invocation}))
-    if run(argv, log).returncode:
-        raise RuntimeError('primary_create_failed')
-    try:
-        config = json.loads(subprocess.check_output(['docker', 'inspect', container]))[0]
-        validate(config, image, mounts)
-    except BaseException:
-        run(['docker', 'rm', '--force', container], log)
-        raise
     return {'root': root, 'raw': raw, 'log': log, 'control': control,
             'custody': custody, 'image': image, 'source_pins': source_pins,
             'container': container, 'identity': identity,
-            'source_invocation': source_invocation, 'inputs': inputs}
+            'source_invocation': source_invocation, 'inputs': inputs, 'argv': argv, 'mounts': mounts}
+
+
+def create_capsule(prepared):
+    """Common inspected capsule creation; callers own the original error sink."""
+    if run(prepared['argv'], prepared['log']).returncode:
+        raise RuntimeError('primary_create_failed')
+    config = json.loads(subprocess.check_output(['docker', 'inspect', prepared['container']]))[0]
+    validate(config, prepared['image'], prepared['mounts'])
 
 
 def main():
@@ -294,7 +294,9 @@ def main():
                                  'source_pins', 'container', 'identity', 'source_invocation'))
     if prepare_only:
         try:
+            STAGE = 'capsule'
             consume('PREPAREONLY', script)
+            create_capsule(prepared)
             # No docker start and no payload entry point. The same create and
             # inspect predicates above precede every eventual FULL dispatch.
             inputs = prepared['inputs']
@@ -322,6 +324,7 @@ def main():
     try:
         if source_input is not None:
             consume('FULL', script)
+        create_capsule(prepared)
         stage = 'capture'
         from source_raw_transport import capture as capture_raw_source
         _, records = capture_raw_source(['docker', 'start', '--attach', container], raw, identity, 'primary-executor', source_invocation=source_invocation)

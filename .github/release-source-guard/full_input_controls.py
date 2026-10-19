@@ -5,16 +5,17 @@ import hmac
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 
 from full_bootstrap import consume, produce, SCRIPT
-from primary_custody import read_regular
+from primary_custody import exclusive, read_regular
 from structured_evidence import canonical, loads, require
 
 
 def main():
     original = os.environ['RUNNER_TEMP']
-    cases = ('valid', 'stale-copy', 'replace', 'mode', 'hardlink', 'symlink', 'partial',
+    cases = ('valid', 'stale-copy', 'replace', 'mode', 'owner', 'hardlink', 'symlink', 'partial', 'carrier',
              'cross-run', 'cross-attempt', 'workflow', 'operation', 'script',
              'clock', 'deadline', 'mac', 'key', 'missing', 'root-mode', 'root-replaced')
     passed = []
@@ -35,6 +36,9 @@ def main():
                 replacement.replace(target)
             elif case == 'mode':
                 target.chmod(0o644)
+            elif case == 'owner':
+                subprocess.run(['sudo', '-n', 'chown', '--no-dereference', '20000:20000',
+                                str(target)], check=True)
             elif case == 'hardlink':
                 os.link(target, root / 'alias')
             elif case == 'symlink':
@@ -42,6 +46,10 @@ def main():
                 target.symlink_to(root / 'original')
             elif case == 'partial':
                 target.write_bytes(b'{}')
+            elif case == 'carrier':
+                value = loads(target.read_bytes())
+                value['final_closure_sha256'] = '0' * 64
+                target.write_bytes(canonical(value))
             elif case in {'cross-run', 'cross-attempt'}:
                 name = 'GITHUB_RUN_ID' if case == 'cross-run' else 'GITHUB_RUN_ATTEMPT'
                 os.environ[name] = str(int(os.environ[name]) + 1)
@@ -87,8 +95,10 @@ def main():
             os.environ.clear()
             os.environ.update(environment)
             shutil.rmtree(root)
-    print(canonical({'schema': 'unrest.v046.full-host-controls.v1', 'controls': passed,
-                     'source_testcase_executed': False, 'eligible_certificate': False}).decode())
+    result = canonical({'schema': 'unrest.v046.full-host-controls.v1', 'controls': passed,
+                        'source_testcase_executed': False, 'eligible_certificate': False})
+    exclusive(Path(original) / 'full-host-controls.json', result)
+    print(result.decode())
 
 
 if __name__ == '__main__':
