@@ -221,4 +221,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except BaseException:
+        print(canonical({'schema': 'unrest.v046.full-input-produced.v1', 'status': 'refused',
+                         'source_testcase_executed': False, 'eligible_certificate': False}).decode())
+        raise SystemExit(125) from None

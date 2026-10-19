@@ -22,6 +22,8 @@ The source actor receives only the closed data input through its read-only
 mount. Private host keys and acquisition receipts are never payload mounts.
 Copies, replaced carriers, stale runs, foreign roles, links and expired leases
 refuse. Neither caller Booleans nor copied repository data authorize execution.
+Host CLI refusals return 125 with a closed status object and no raw traceback,
+private path or exception body.
 
 `PREPAREONLY` is a distinct host operation, reserved to exactly six
 `full-bootstrap-01` through `full-bootstrap-06` readiness refs. The workflow runs

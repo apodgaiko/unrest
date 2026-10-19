@@ -15,6 +15,19 @@ from primary_custody import exclusive, read_regular
 from structured_evidence import EvidenceRefused, identity_check
 
 
+@pytest.mark.parametrize('entry', ['full_bootstrap.py', 'full_input_controls.py'])
+def test_host_cli_refusal_never_exports_traceback_or_private_paths(tmp_path, entry):
+    result = subprocess.run([sys.executable, '-B', str(Path(__file__).with_name(entry))],
+                            env={'RUNNER_TEMP': str(tmp_path)}, capture_output=True, check=False)
+    assert result.returncode == 125 and result.stderr == b''
+    value = json.loads(result.stdout)
+    assert value == {'schema': ('unrest.v046.full-input-produced.v1' if entry == 'full_bootstrap.py'
+                                else 'unrest.v046.full-host-controls.v1'),
+                     'status': 'refused', 'source_testcase_executed': False,
+                     'eligible_certificate': False}
+    assert str(tmp_path).encode() not in result.stdout
+
+
 @pytest.mark.parametrize('tail', ['01', '02', '03', '04', '05', '06', '00', '07',
                                  '1', '01-extra', '', '-01', 'x-01'])
 @pytest.mark.parametrize('workflow', ['v046-source-readiness.yml', 'ci.yml', 'other.yml'])
