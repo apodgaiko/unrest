@@ -32,11 +32,11 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: |
           set +e
-          uv run --no-sync python -B .github/release-source-guard/session_ownership_controls.py "$RUNNER_TEMP/ownership" > "$RUNNER_TEMP/ownership.log" 2>&1
+          uv run --no-sync python -B .github/release-source-guard/tracker_ownership_diagnosis.py "$RUNNER_TEMP/tracker" > "$RUNNER_TEMP/ownership.log" 2>&1
           status=$?
           set -e
           printf '%s\n' "$status" > "$RUNNER_TEMP/ownership-status"
-          tar -czf "$RUNNER_TEMP/ownership.tar.gz" -C "$RUNNER_TEMP" ownership ownership.log ownership-status
+          tar -czf "$RUNNER_TEMP/ownership.tar.gz" -C "$RUNNER_TEMP" tracker ownership.log ownership-status
           openssl cms -encrypt -binary -aes-256-cbc -in "$RUNNER_TEMP/ownership.tar.gz" -outform DER -out "$RUNNER_TEMP/ownership.cms" .github/release-source-guard/evidence-recipient.pem
           exit "$status"
       - name: Retain encrypted original control evidence
