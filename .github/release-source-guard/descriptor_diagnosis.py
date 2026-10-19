@@ -280,6 +280,29 @@ def run(root):
         'module_sha256': sha(module), 'source_sha256': sha(SUPPORT / 'profile_gate.c'),
         'proofs': proofs}, sort_keys=True))
     assert all(p['status'] == (3 if p['case'] == 'poisoned-owner-fixtures' else 0) for p in proofs)
+    for proof in proofs:
+        body = json.loads((root / proof['case'] / 'stdout').read_bytes())
+        assert body['ready'] and proof['actual_owner_wait']['pid'] == proof['child']
+        assert proof['actual_owner_wait']['numeric_status'] == proof['status']
+        ready = [row for row in proof['receipts']
+                 if row['ok'] and row['request']['kind'] == 'ready']
+        assert len(ready) == 1 and ready[0]['kernel_peer']['pid'] == proof['child']
+        if proof['case'] == 'poisoned-owner-fixtures':
+            assert proof['status'] == 3 and body['poison'] and proof['poison']
+            assert len(body['after']) == 128 and body['records'][-1]['errno'] == 24
+            assert sum(row.get('owner_reclaimed', False) for row in body['records']) == 41
+            new = [row for row in body['after'] if row['fd'] >= 3]
+            assert len(new) == 125 and all('eventpoll' not in row['target'] for row in new)
+        else:
+            assert body['before'] == body['after']
+        if proof['case'] == 'poisoned-loops':
+            assert len(body['records']) == 132 and body['poison'] and proof['poison']
+            assert all(row['exception'] == 'EndpointRefusal' and row['errno'] is None
+                       and row['before'] == row['after'] for row in body['records'])
+        if proof['case'] == 'finalized-owner-fixtures':
+            assert len(body['records']) == 48 and body['poison'] and proof['poison']
+            assert all(row['owner_reclaimed'] and row['errno'] is None
+                       for row in body['records'])
 
 
 if __name__ == '__main__':

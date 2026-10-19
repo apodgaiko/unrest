@@ -1266,3 +1266,32 @@ before inspecting the named private collection, JUnit, summary, provenance,
 guard, and original-parent wait evidence. Missing records remain missing;
 prerequisite execution cannot reconstruct them. A completed runner cannot
 recover evidence omitted from its upload.
+
+### Descriptor ownership on refusal
+
+A refused socket-pair receipt closes both newly created sockets before the
+original exception propagates. When refusal interrupts CPython 3.13's default
+Linux event-loop constructor before it installs its self-pipe, the endpoint
+also releases that abandoned constructor's selector. Cleanup binds the exact
+original constructor and self-pipe code, module globals, caller chain, default
+selector type and unreturned loop state. Caller-supplied selectors and already
+constructed loops retain their original owners. Cleanup grants no launch or
+network permission, clears no poison, and suppresses no original exception.
+
+The finite causal-control workflow runs only on its six exact dated control
+`codex/source-guard-full-causal-20261019-01` through `-06` refs.
+`descriptor_diagnosis.py` installs the current guard, authenticates READY
+through the real supervisor and retains actual numeric original-parent waits.
+Journal, positive-loop, refused-loop, caller-owned-selector and rejected-pair
+controls distinguish journal lifetime from abandoned constructor resources.
+Public-constructor controls separately demonstrate the ownership of session
+broker directories and ledger descriptors. They execute no original source
+case or fixture function and launch no provider or backend. Their complete
+original output and receipts are encrypted before artifact upload. These
+method controls do not establish a successful full source checkpoint.
+
+Session fixtures must finalize their broker and ledger even when subsequent
+async event-loop setup fails. Reclaiming an object does not close descriptors
+stored as integers. Resource-pressure evidence must retain the original
+failure; neither higher limits nor successful guard cleanup establishes closure
+of independently owned product resources.

@@ -61,7 +61,9 @@ def prepare():
                 or selector_events.BaseSelectorEventLoop._make_self_pipe is not pipe
                 or selector_events.BaseSelectorEventLoop.__init__ is not constructor
                 or unix_events._UnixSelectorEventLoop.__init__ is not outer
-                or selectors.EpollSelector.close is not close):
+                or selectors.EpollSelector.close is not close
+                or selectors.DefaultSelector is not selector_type
+                or unix_events._UnixSelectorEventLoop is not loop_type):
             return False
         loop = frame.f_locals.get('self')
         selector = constructor_frame.f_locals.get('selector')
