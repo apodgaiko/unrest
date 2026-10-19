@@ -119,3 +119,18 @@ def test_controller_rejects_before_script_or_external_operation(monkeypatch, ref
     monkeypatch.setenv('GITHUB_REF', 'refs/heads/codex/source-guard-structured-20261018-package-entry-cache-lineage-' + ref)
     with pytest.raises(RuntimeError, match='primary_package_test_workflow_identity'):
         ci_shell.main()
+
+
+def test_exact_original_refusal_frame_projection(monkeypatch):
+    import primary_package_directory_diagnostic as diagnostic
+    owner = SimpleNamespace(cache_current={}, common={'cache': '/work/cache'}, package_directory_history=[])
+    namespace = {}
+    exec('def completed_cache(self):\n current = {"key": {"type": "directory"}}\n names = {"key": "root/empty"}\n permitted = set()\n allowed_dirs = set()\n raise RuntimeError("primary_cache_output_extra_directory")\n', namespace)
+    try:
+        namespace['completed_cache'](owner)
+    except RuntimeError as error:
+        monkeypatch.setattr(diagnostic, 'metadata', lambda path: {'empty': True})
+        result = diagnostic.refusal(owner, {'pid': 12, 'identity': {}, 'token': 'token'}, error,
+                                    SimpleNamespace(records=[]))
+    assert result['directories'][0]['path'] == 'root/empty'
+    assert result['authority_granted'] is False

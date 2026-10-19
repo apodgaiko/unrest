@@ -89,7 +89,7 @@ def refusal(producers, context, error, trace):
         if cursor.tb_frame.f_code.co_name == 'completed_cache' and cursor.tb_frame.f_locals.get('self') is producers:
             frames.append(cursor.tb_frame)
         cursor = cursor.tb_next
-    frames = [frame for frame in frames if {'current', 'names', 'permitted', 'allowed_dirs'} <= frame.f_locals.keys()]
+    frames = [frame for frame in frames if {'current', 'names', 'permitted', 'allowed_dirs'} <= set(frame.f_locals)]
     if len(frames) != 1:
         raise RuntimeError('package_directory_diagnostic_original_frame')
     values = frames[0].f_locals

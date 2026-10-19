@@ -1121,3 +1121,7 @@ directory identity and membership hashes, with the original refusing frame's
 exact directory predicate. It grants no cache authority and preserves the
 original refusal even if metadata capture fails. Familiar directory names and
 post-build presence cannot establish writer lineage or package acceptance.
+
+On Python 3.13, traceback frame locals use a proxy whose `keys()` returns a
+list. The diagnostic explicitly materializes key membership before projection;
+a regression exercises the actual refusing traceback rather than a plain dict.
