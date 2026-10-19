@@ -9,6 +9,22 @@ from pathlib import Path
 import pytest
 
 import phase_catalog
+# The existing host selection runs these new guard-only controls on Linux too.
+from test_source_lease_integration import (  # noqa: F401
+    test_lease_postinit_requires_complete_original_binding,
+    test_lease_postinit_mutations_never_get_locale_exemption,
+    test_original_empty_exec_environment_and_flags_are_exact,
+    test_real_controlled_factory_frames_recheck_identity,
+    test_shared_original_helper_declines_only_other_owner,
+    test_source_temporary_environment_keeps_exact_generation,
+    test_shared_route_order_uses_real_helper_and_own_probe_identity,
+    test_exact_existing_controlled_fixture_mapping_stays_bound,
+    test_extension_keeps_original_callback_for_nonlease,
+    test_new_probe_reducer_requires_refused_child_and_all_lease_modes,
+    test_legacy_registry_literal_keeps_its_original_source_anchor,
+    test_original_registry_case_is_never_replaced_by_extension_admission,
+)
+
 import release_source_inputs
 
 ROOT = Path(__file__).resolve().parents[2]
