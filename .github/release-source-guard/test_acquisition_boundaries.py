@@ -15,6 +15,8 @@ import ci_shell
 import full_bootstrap as full
 from preflight_policy import SCRIPT
 from structured_evidence import execution_identity
+# Guard-only pytest selection does not insert the repository package root.
+sys.path.insert(0, str(full.REPOSITORY))
 from tests.multiprocess_lifetime import SpawnResources
 
 
