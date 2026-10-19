@@ -23,6 +23,7 @@ from test_source_lease_integration import (  # noqa: F401
     test_new_probe_reducer_requires_refused_child_and_all_lease_modes,
     test_legacy_registry_literal_keeps_its_original_source_anchor,
     test_original_registry_case_is_never_replaced_by_extension_admission,
+    test_nested_reference_dispatch_requires_all_original_context,
 )
 
 import release_source_inputs

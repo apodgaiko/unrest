@@ -321,6 +321,8 @@ def test_extension_keeps_original_callback_for_nonlease(tmp_path, monkeypatch):
     with pytest.raises(Consumed):
         h.owner.launch(h.vector, h.tmp, {'FINITE': 'original'})
     assert len(current.python_consumed) == 1 and not h.poison
+    with pytest.raises(RuntimeError, match='source_lease_activation_caller_drift'):
+        current.ordinary_python(h.guard, {}, [], None, {}, {'class': 'source-lease-owned-child'})
 
 
 def test_new_probe_reducer_requires_refused_child_and_all_lease_modes():
@@ -376,3 +378,51 @@ def test_original_registry_case_is_never_replaced_by_extension_admission(monkeyp
     routes = load('legacy_registry_control', SUPPORT / 'finite/lease_routes.py', monkeypatch)
     state = {'case': routes.SOURCE + '::' + routes.ORIGINAL}
     assert routes.admit([], None, {}, state, pytest.fail, pytest.fail) is None
+
+
+@pytest.mark.parametrize('mutation', [None, 'outer', 'relative', 'owner', 'class', 'payload-class',
+                                     'mode', 'target', 'binding-path', 'binding-pin', 'selection', 'marker'])
+def test_nested_reference_dispatch_requires_all_original_context(monkeypatch, mutation):
+    """Exercise the exact predicate, never execute or impersonate its source owner."""
+    import ast
+    import os
+    tree = ast.parse((SUPPORT / 'finite/cohort3_routes.py').read_bytes())
+    condition = next(node.test for node in ast.walk(tree) if isinstance(node, ast.If)
+                     and ast.unparse(node.test).startswith('case == reference_case and'))
+    outer = 'tests/contracts/test_lean_evidence_crosswalk.py::test_crosswalk_is_complete_and_every_mapped_node_passes'
+    nested = 'tests/test_repository_contract.py::test_current_repository_passes_deterministically_without_writes'
+    kind = 'reference:tests/contracts/test_lean_evidence_crosswalk.py'
+    payload = {'class': kind, 'mode': 'module', 'target': 'pytest',
+               'source_binding': {'path': str(ROOT / 'tests/contracts/conftest.py'), 'sha256': 'pin'},
+               'sys_argv': ['-m', 'pytest', '-q', nested]}
+    state = {'checkout': str(ROOT), 'class': kind, 'product_pins': {'tests/contracts/conftest.py': 'pin'}}
+    values = {'case': outer, 'reference_case': outer, 'nested': nested,
+              'relative': 'tests/test_repository_contract.py',
+              'frame': types.SimpleNamespace(f_code=types.SimpleNamespace(co_name=nested.split('::')[1])),
+              'state': state, 'payload': payload, 'Path': Path, 'os': os}
+    marker = nested + ' (call)'
+    if mutation == 'outer':
+        values['case'] = 'other'
+    elif mutation == 'relative':
+        values['relative'] = 'tests/other.py'
+    elif mutation == 'owner':
+        values['frame'].f_code.co_name = 'other'
+    elif mutation == 'class':
+        state['class'] = 'other'
+    elif mutation == 'payload-class':
+        payload['class'] = 'other'
+    elif mutation == 'mode':
+        payload['mode'] = 'inline'
+    elif mutation == 'target':
+        payload['target'] = 'other'
+    elif mutation == 'binding-path':
+        payload['source_binding']['path'] = '/foreign'
+    elif mutation == 'binding-pin':
+        payload['source_binding']['sha256'] = 'changed'
+    elif mutation == 'selection':
+        payload['sys_argv'] = []
+    elif mutation == 'marker':
+        marker = outer + ' (call)'
+    monkeypatch.setenv('PYTEST_CURRENT_TEST', marker)
+    predicate = compile(ast.Expression(condition), '<exact-current-nested-predicate>', 'eval')
+    assert eval(predicate, values) is (mutation is None)
