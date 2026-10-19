@@ -130,3 +130,21 @@ def test_own_proof_uses_unchanged_closed_transport(tmp_path, monkeypatch):
         evidence.source_header(records, {**kernel, 'immutable_source_root': proof}, identity(), nonce, 0)
     with pytest.raises(RuntimeError, match='source_setup_owner_drift'):
         source_root.retain_proof(kernel, {'pid': 18}, {})
+
+
+def test_output_export_rejects_mount_generation_substitution(tmp_path, monkeypatch):
+    import primary_package_exports as package
+    from test_primary_package_exports import fixture
+    source, kernel, root, context = fixture(tmp_path, monkeypatch)
+    context['package_output_identity'][1] += 1
+    with pytest.raises(RuntimeError, match='package_build_export_output_generation'):
+        package.export(source, object(), kernel)
+
+
+def test_empty_dist_refuses_foreign_mount_or_owner(tmp_path, monkeypatch):
+    path = tmp_path / 'dist'
+    path.mkdir(mode=0o700)
+    monkeypatch.setattr(source_root, 'Path', lambda name: path)
+    monkeypatch.setattr(source_root, 'mount_inventory', lambda: {})
+    with pytest.raises(RuntimeError, match='primary_package_preexisting_output'):
+        source_root.require_empty_dist(source_root.key(path))

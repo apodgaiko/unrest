@@ -39,7 +39,8 @@ def fixture(tmp_path, monkeypatch):
     def read(path, limit):
         return path.read_bytes(), ('current-identity',)
     monkeypatch.setattr(package, 'read', read)
-    context = {'pid': 8, 'owner_pid': 7, 'identity': {'pid': 8, 'uid': 20000}, 'package_output_before': 'absent'}
+    context = {'pid': 8, 'owner_pid': 7, 'identity': {'pid': 8, 'uid': 20000}, 'package_output_before': 'empty-artifact-mount',
+               'package_output_identity': package.source_root.key(root)}
     producers = SimpleNamespace(uv={8: context}, cache_completed={8}, records=[],
                                 kernel=SimpleNamespace(identity=lambda pid: {'uid': 20000}))
     source = SimpleNamespace(producers=producers, require_complete=lambda trace: None)

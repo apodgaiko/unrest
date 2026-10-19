@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 import stat
 
+import source_root
+
 from primary_custody import BUILD, WHEEL, SDIST, canonical, kernel_success, file_identity, sha
 from checkpoint_packages import LIMIT
 
@@ -44,12 +46,14 @@ def export(source, trace, kernel):
     kernel_success({'kernel-source.json': canonical(kernel)}, kernel['actual_script_sha256'])
     source.require_complete(trace)
     contexts = list(source.producers.uv.values())
-    if (len(contexts) != 1 or contexts[0].get('package_output_before') != 'absent'
+    if (len(contexts) != 1 or contexts[0].get('package_output_before') != 'empty-artifact-mount'
             or contexts[0]['pid'] not in source.producers.cache_completed
             or contexts[0]['identity']['uid'] != 20000):
         raise RuntimeError('package_build_export_current_origin')
     if ROOT.resolve() != ROOT or ROOT.is_symlink() or not ROOT.is_dir():
         raise RuntimeError('package_build_export_root')
+    if source_root.key(ROOT) != contexts[0].get('package_output_identity'):
+        raise RuntimeError('package_build_export_output_generation')
     root_before = ROOT.lstat()
     wanted = {WHEEL, SDIST, '.gitignore'}
     if {path.name for path in ROOT.iterdir()} != wanted:

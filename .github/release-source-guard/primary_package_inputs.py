@@ -64,9 +64,14 @@ def consume(expected, destination=Path('/source/dist'), root=Path(MOUNT)):
                 and expected['members'][name]['size'] == len(body)
                 and expected['members'][name]['sha256'] == sha(body)
                 for name, body in members.items()), 'package_input_bytes')
-    require(destination.parent.resolve() == destination.parent and not destination.exists()
-            and not destination.is_symlink(), 'package_input_output')
-    destination.mkdir(mode=0o700)
+    if destination == Path('/source/dist'):
+        import source_root
+        setup = loads(Path('/work/producer-setup-controls.json').read_bytes())
+        source_root.require_empty_dist(setup['artifacts']['/source/dist'])
+    else:
+        require(destination.parent.resolve() == destination.parent and not destination.exists()
+                and not destination.is_symlink(), 'package_input_output')
+        destination.mkdir(mode=0o700)
     for name, body in sorted(members.items()):
         exclusive(destination / name, body, 0o600)
     return {'schema': 'unrest.v046.primary-package-input-consumption.v1',

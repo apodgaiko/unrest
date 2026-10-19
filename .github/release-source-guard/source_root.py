@@ -6,11 +6,13 @@ import json
 import os
 from pathlib import Path
 import secrets
+import stat
 import subprocess
 import sys
 from typing import Any
 
 OVERLAYS = {
+    '/source/.wheel-venv': 'rw,exec,nosuid,nodev,size=256m,uid=20000,gid=20000,mode=0700',
     '/source/.venv': 'rw,exec,nosuid,nodev,size=256m,uid=20000,gid=20000,mode=0700',
     '/source/build': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0700',
     '/source/dist': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0700',
@@ -209,6 +211,8 @@ def probe() -> dict[str, Any]:
             raise RuntimeError('source_probe_mutation_succeeded')
     artifacts = {}
     for name in OVERLAYS:
+        if name == '/source/dist':
+            require_empty_dist(key(Path(name)))
         path = Path(name) / '.immutable-artifact-canary'
         with path.open('xb') as stream:
             stream.write(b'finite-artifact\n')
@@ -246,3 +250,16 @@ def retain_proof(result: dict[str, Any], identity: dict[str, Any], runtime: dict
         'kind': 'immutable_source_root', 'pid': identity['pid'], 'identity': identity,
         'proof': proof, 'runtime_binding': {name: runtime[name] for name in (
             'primary', 'source_native', 'source_profile_gate', 'source_abi') if name in runtime}})
+
+
+def require_empty_dist(expected: list[int]) -> list[int]:
+    """An existing artifact mountpoint is not a preexisting build output."""
+    path = Path('/source/dist')
+    current = key(path)
+    mount = mount_inventory().get('/source/dist')
+    if (path.resolve(strict=True) != path or not stat.S_ISDIR(current[2])
+            or current[3:5] != [20000, 20000] or stat.S_IMODE(current[2]) != 0o700
+            or current != expected or mount is None or mount['filesystem'] != 'tmpfs'
+            or 'rw' not in mount['options'] or any(path.iterdir())):
+        raise RuntimeError('primary_package_preexisting_output')
+    return current

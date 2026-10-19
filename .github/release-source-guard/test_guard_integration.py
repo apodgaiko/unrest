@@ -42,6 +42,8 @@ from test_source_root import (  # noqa: F401
     test_probe_requires_actual_linux_source_identity,
     test_producer_canary_no_longer_claims_writable_root,
     test_own_proof_uses_unchanged_closed_transport,
+    test_output_export_rejects_mount_generation_substitution,
+    test_empty_dist_refuses_foreign_mount_or_owner,
 )
 
 import release_source_inputs

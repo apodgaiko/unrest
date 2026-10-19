@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import stat
 import secrets
+import source_root
 from types import SimpleNamespace
 
 from primary_source_authority import SourceAuthority, sha
@@ -103,8 +104,8 @@ class PackageProducers(NativeProducers):
         current, _ = self.interface.cache_view(self.common, self.cache_external)
         if current != self.cache_current:
             raise RuntimeError('primary_package_unregistered_cache_writer')
-        if Path('/source/dist').exists() or Path('/source/dist').is_symlink():
-            raise RuntimeError('primary_package_preexisting_output')
+        setup = json.loads(Path('/receipts/producers/setup-controls.json').read_bytes())
+        output_identity = source_root.require_empty_dist(setup['artifacts']['/source/dist'])
         token = secrets.token_hex(16)
         binding = {'path': '/inputs/github-script.sh', 'sha256': plan['script_sha256'],
                    'function': 'PRIMARY-original-script'}
@@ -120,7 +121,8 @@ class PackageProducers(NativeProducers):
                    'record_sha256': pin, 'profile': profile, 'binding': binding,
                    'seen_requests': set(), 'children': [],
                    'package_origin': {'path': str(path), 'sha256': pin},
-                   'package_output_before': 'absent'}
+                   'package_output_before': 'empty-artifact-mount',
+                   'package_output_identity': output_identity}
         self.uv[pid] = context
         # This is an actual observed admission, not an emulated fixture event.
         # The native origin consumer uses only the separate private receipt.
@@ -130,7 +132,8 @@ class PackageProducers(NativeProducers):
         original_events = self.supervisor.events
         self.supervisor.events = lambda: [*original_events(), *self.package_admissions]
         self.records.append({'kind': 'primary_package_build_admission', 'pid': pid,
-                             'identity': identity(pid), 'origin_sha256': pin, 'output_before': 'absent'})
+                             'identity': identity(pid), 'origin_sha256': pin, 'output_before': 'empty-artifact-mount',
+                             'output_identity': output_identity})
         return True
 
     def stage_response(self, request):

@@ -220,7 +220,7 @@ container removal; cleanup unmounts before removing only that acquired directory
 A failed unmount retains the sealed backing. Container capabilities and security
 settings are unchanged; no container remount permission is added.
 
-Only `.venv`, `build`, `dist`, `src/unrest_harness.egg-info`, `.pytest_cache`,
+Only `.venv`, `.wheel-venv`, `build`, `dist`, `src/unrest_harness.egg-info`, `.pytest_cache`,
 `.ruff_cache`, and `.mypy_cache` receive finite tmpfs overlays. Their empty
 mountpoints exist before sealing. Dependency cache and temporary work remain in
 `/work`. Strict Docker inspection binds the complete source mount and exact
@@ -236,3 +236,17 @@ bytes/version/flags and mount identities in the encrypted kernel evidence as an 
 The closed top-level kernel schema and existing consumers remain unchanged.
 This prerequisite is supplementary proof; constructor compatibility and fresh
 integrated guard acceptance still precede any changed full-source certification.
+
+
+Package build admission requires the setup-observed empty UID20000 `/source/dist`
+tmpfs mount rather than an absent root. It records that exact device/inode/mode/
+owner generation, and export requires the same root after the original native UV
+query and four backend operations settle. Preexisting members, substituted roots,
+wrong owner/mode or another filesystem refuse. No original test, native operation,
+READY or actual-parent-wait requirement changes with this artifact invariant.
+
+Archive and installed consumers transfer only the same authenticated two archive
+members into the setup-observed empty `dist` mount. Generic caller-supplied output
+paths retain their original absent-directory requirement. The installed producer's
+original `uv venv --clear .wheel-venv` command receives its own initially empty,
+executable tmpfs overlay; its argv and package lifecycle checks remain unchanged.
