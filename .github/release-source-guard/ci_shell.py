@@ -433,7 +433,7 @@ def main():
                 'source_test_proof': test_proof,
                 'transport_provenance_sha256': digest(raw / 'transport-provenance.json') if (raw / 'transport-provenance.json').is_file() else None,
                 'capture_failure': capture_failure, 'container_state': container_state,
-                'source_host_custody_sha256': digest(raw / 'source-custody.json'),
+                'source_host_custody_sha256': digest(raw / 'source-custody.json') if (raw / 'source-custody.json').is_file() else None,
                 'container_inspect_sha256': digest(raw / 'container-inspect.json') if (raw / 'container-inspect.json').is_file() else None,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'
