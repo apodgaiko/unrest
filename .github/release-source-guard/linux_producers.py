@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from primary_package_cache import admit as admit_package_interpreter_output
 import secrets
 import sys
 
@@ -384,6 +385,9 @@ class NativeProducers:
             elif (context['operation'] == 'source-install' and len(Path(names[key]).parts) == 3
                   and Path(names[key]).parts[0] == 'interpreter-v4' and path.suffix == '.msgpack'
                   and entry['type'] == 'file'):
+                pass
+            elif (context.get('package_origin') is not None
+                  and admit_package_interpreter_output(self, context, key, entry, current, names, trace)):
                 pass
             elif names[key] in fixed and path.read_bytes() == fixed[names[key]]:
                 pass

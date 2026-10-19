@@ -1102,3 +1102,14 @@ matches to original query fields. They contain no cache body and grant no
 admission, output authority or certificate. The original writer/consumer
 checks still decide admission; a failed producer cannot create usable package
 custody.
+
+The original PRIMARY build has a separate finite interpreter-metadata output.
+Its complete decoded record must equal the single original query result in
+UV0.11.0's declared field order and the canonical interpreter image's Unix
+ctime. The protected original script, current UV birth, completed native
+query/backend consumers and their numeric waits bind the producer. One fresh
+metadata record is data only; it cannot authorize a cache mount or executable.
+Every remaining cache member retains the original predicates, and the UV
+parent's final numeric wait is still required before archive export. The wire
+layout follows the pinned [UV interpreter source](https://github.com/astral-sh/uv/blob/1f31f0e9fbcfcf95aed89b44a376596e14b40e06/crates/uv-python/src/interpreter.rs)
+and [Unix timestamp source](https://github.com/astral-sh/uv/blob/1f31f0e9fbcfcf95aed89b44a376596e14b40e06/crates/uv-cache-info/src/timestamp.rs).

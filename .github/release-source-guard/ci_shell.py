@@ -89,7 +89,9 @@ def main():
     if package_test and (os.environ.get('GITHUB_WORKFLOW') != 'v0.4.6 source guard readiness'
             or os.environ.get('GITHUB_REF') not in {
                 'refs/heads/codex/source-guard-structured-20261018-package-entry-' + epoch
-                for epoch in ('01', '02', '03', '04')}):
+                for epoch in ('01', '02', '03', '04')} | {
+                'refs/heads/codex/source-guard-structured-20261018-package-entry-cache-record-' + epoch
+                for epoch in ('01', '02')}):
         raise RuntimeError('primary_package_test_workflow_identity')
     if len(sys.argv) == 4 and sys.argv[1] == '--source-test':
         test_mode = sys.argv[2]
