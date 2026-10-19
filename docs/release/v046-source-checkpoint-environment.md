@@ -1144,3 +1144,15 @@ whole executable AST. Only the original archive command may activate its native
 file entry. The observer checks the actual function return and complete archive
 bytes; host custody supplies a read-only, same-run descriptor to the next capsule.
 All fifteen extracted persistence cases must run under the original checker.
+
+Package output refusal is a closed failed status (2/125), allowed only for exact
+package artifact identities. SOURCE failure predicates retain their original
+closed set. A failure to export must remain visible in the current named kernel
+record rather than being masked by the transport's bootstrap-failure fallback.
+UV's pinned build command writes `dist/.gitignore` as the single byte `*`.
+The build-only export requires a previously absent output root, completed current
+query/four-backend/cache/kernel/wait closure, and exact local native metadata.
+Only the versioned wheel and sdist enter custody. The metadata remains in the
+producer root and its identity/hash remains in evidence. Unexpected members,
+links, owners, modes or metadata bytes refuse; the generic strict exporter is
+unchanged.

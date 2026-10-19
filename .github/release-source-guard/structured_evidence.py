@@ -233,7 +233,11 @@ def validate_header(value, identity, invocation):
             and (status['root_parent_wait_raw'] is None or numeric(status['root_parent_wait_raw']))
             and (status['guard_poison'] is None or type(status['guard_poison']) is bool)
             and numeric(status['poison_count']) and numeric(status['receipt_poison_count'])
-            and status['failure_code'] in {None, 'trace_failure', 'source_guard_refused', 'bootstrap_failure'}, 'header_status')
+            and (status['failure_code'] in {None, 'trace_failure', 'source_guard_refused', 'bootstrap_failure'}
+                 or status['failure_code'] == 'package_output_refused' and status['exit_code'] in {2, 125}
+                 and identity['artifact_name'] in {
+                     f"v046-source-primary-package-{kind}-{identity['run_id']}-{identity['run_attempt']}"
+                     for kind in ('build', 'archive', 'installed', 'checksum')}), 'header_status')
 
     trace = status['trace_failure_status']
     if trace is not None:

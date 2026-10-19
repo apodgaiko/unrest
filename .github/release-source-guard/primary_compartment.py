@@ -277,7 +277,11 @@ def main():
         try:
             source.require_complete(trace)
             from primary_outputs import export
-            records['package-output.json'] = export(spec['duty'])
+            if spec['duty'] == 'Build wheel and source distribution':
+                from primary_package_exports import export as export_build
+                records['package-output.json'] = export_build(source, trace, result)
+            else:
+                records['package-output.json'] = export(spec['duty'])
             if package_archive:
                 records['package-proof.json'] = json.dumps(source.package_proof, sort_keys=True, separators=(',', ':')).encode()
         except BaseException as error:
