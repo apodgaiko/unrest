@@ -64,6 +64,15 @@ def admit(argv, cwd, env, state, append, refuse):
             + ")\n"
             + body
         )
+        primary_environment = False
+        if state.get('source_selection') == 'primary-source':
+            carrier = Path(state['guard']).with_name('source_environment.py')
+            body = carrier.read_bytes()
+            if hashlib.sha256(body).hexdigest() != state['direct_support']['files'][str(carrier)]:
+                refuse('crash_environment_support_drift')
+            namespace = {'__file__': str(carrier)}
+            exec(compile(body, str(carrier), 'exec', dont_inherit=True), namespace)
+            primary_environment = namespace['matches'](state)
         if (
             boundary not in BOUNDARIES
             or state.get("case")
@@ -75,7 +84,8 @@ def admit(argv, cwd, env, state, append, refuse):
             or cwd is not None
             or env is not None
             or Path.cwd() != Path(state["checkout"])
-            or os.environ.get("TMPDIR") != state["owned_root"]
+            or not (primary_environment if state.get('source_selection') == 'primary-source'
+                    else os.environ.get("TMPDIR") == state["owned_root"])
         ):
             refuse("crash_vector_environment_root_drift")
         spec = state.get("exact_crash_disposition")

@@ -174,7 +174,12 @@ class Authority:
         if role == 'source-bootstrap':
             profile['source_descriptors'] = self.source.exec_descriptors(trace, pid, vector, environment, cwd)
             profile['python_environment'] = python_environment(
-                environment, self.source.bound[pid]['registration'], flags)
+                environment, self.source.bound[pid]['registration'], flags,
+                lease_context={'selected': self.source.bound[pid],
+                               'events': self.source.supervisor.events(),
+                               'manifest': self.source.manifest, 'vector': vector,
+                               'cwd': cwd, 'parent': parent}
+                if self.source.bound[pid]['registration']['class'] == 'source-lease-owned-child' else None)
         path = Path('/receipts/primary-startup') / (str(pid) + '.json')
         if path.exists():
             return self.refuse('duplicate_profile')

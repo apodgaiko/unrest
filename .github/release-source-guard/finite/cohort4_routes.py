@@ -89,6 +89,12 @@ def select(
             and state.get("case", "").split("[")[0] not in state["cohort4_cases"]
         ):
             return None
+        # This shared helper has multiple original owners. A selector that does
+        # not own this exact case must leave it to the later closed resolver.
+        # This is dispatch only; no vector is admitted by declining this route.
+        if (relative == "tools/release_binding.py" and frame.f_lineno in (36, 57)
+                and state.get("case", "") not in state["cohort4_full_cases"]):
+            return None
         source = Path(state["checkout"]) / relative
         pin = hashlib.sha256(source.read_bytes()).hexdigest()
         if pin != state["product_pins"][relative]:

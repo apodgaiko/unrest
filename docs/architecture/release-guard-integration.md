@@ -100,3 +100,38 @@ fstat ownership check. The reducer requires that exact exception/errno and the
 same inode, mode, link count, size and mtime, changed ctime, unchanged custody and
 receipt, and exact owner transition. An arbitrary access error or a second
 physical mutation cannot stand in for this control.
+
+## Shared source dispatch and unpublished acquisition
+
+A shared helper callsite does not determine its owner. Cohort selectors decline
+shared release-binding helpers outside their exact case sets; the later closed
+resolver must still bind current code, module globals, caller chain, argv and
+environment. A reference child retains its outer custody case. An exact nested
+repository-check owner additionally needs its original selected payload node and
+current pytest call marker; that does not authorize other nested outcomes.
+
+The two additional original lease literals remain separate from the protected
+finite registry. Their extension binds the original production factory and
+original owner or the explicitly named controlled guard method. Cleanup
+quarantine and the spawn/registration barrier remain the original owner's
+responsibility. Empty exec environments also require an exact primary startup
+locale representation; factory admission alone does not establish startup
+composition or release readiness.
+
+A multiprocessing child whose PID has not returned from the guard's spawn
+wrapper is still owned by that wrapper. If acquisition fails, the original
+parent must reap that exact unpublished child and retain its numeric wait before
+rethrowing the original failure. That rollback grants no wait exception, does not
+adopt another process and does not clear global poison or extend READY deadlines.
+SOURCE crash launches use the exact pre-body owned temporary-directory generation
+and inherited environment, including pytest's exact current-call/version fields.
+An arbitrary, aliased or replaced root cannot acquire authority from its spelling.
+
+The two exact lease factory literals retain an empty exec environment. Their
+CPython post-init locale representation is consumed separately: the immutable
+factory owner, original literal/parameter, admitted argv digest, launch token,
+parent, cwd, transformed bootstrap and runtime must join the source startup
+consumption. Only that join with flags `[0, 0, 0]` maps the empty environment to
+`LC_CTYPE=C.UTF-8`. An explicit locale variable, another environment key, mutated
+binding or a class name alone gets no locale mapping. Existing exact controlled
+fixture mappings retain their own original identities.

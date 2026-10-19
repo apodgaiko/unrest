@@ -63,7 +63,7 @@ def python_flags(vector, environment):
             int('-B' in flags or ('-I' not in flags and bool(environment.get('PYTHONDONTWRITEBYTECODE'))))]
 
 
-def python_environment(environment, registration, flags):
+def python_environment(environment, registration, flags, *, lease_context=None):
     """Post-init locale bytes for exact source fixture registrations.
 
     Exec still consumes the exact original environment. The pinned CPython
@@ -81,7 +81,72 @@ def python_environment(environment, registration, flags):
                         and binding == {'path': controlled[0], 'line': 1, 'sha256': controlled[1]})
     isolated = (registration['class'] == 'isolated-role-startup'
                 and binding['path'] == '/source/tests/test_stdio_startup.py' and flags[0] == 1)
-    if ((isolated or exact_controlled)
+    if ((isolated or exact_controlled or exact_lease_environment(
+            environment, registration, flags, lease_context))
             and not any(key in environment for key in ('LC_CTYPE', 'LC_ALL', 'LANG'))):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     return dict(environment)
+
+
+def exact_lease_environment(environment, registration, flags, context):
+    """Join the admitted factory to its token-bound pre-exec consumption.
+
+    This maps only the two original empty-env literals. The kernel authority
+    already consumed the exact transformed argv, runtime and source binding;
+    the join below also requires the immutable original owner/parameter/vector.
+    """
+    if (registration['class'] != 'source-lease-owned-child' or context is None
+            or environment != {} or flags != [0, 0, 0]):
+        return False
+    from primary_policy import PYTHON
+    from pathlib import PurePosixPath
+    binding = {'path': '/source/src/unrest_harness/experimental_confinement.py',
+               'line': 69, 'sha256': '25f3e7184ff560cb58067d211aba24c5ca18af50ff04f93c3fd3007796c3dc08'}
+    if registration['source_binding'] != binding:
+        return False
+    selected, manifest = context['selected'], context['manifest']
+    runtime = manifest['runtime']
+    vector = context['vector']
+    if (manifest['checkout'] != '/source' or manifest['owned_root'] != '/work/owned'
+            or runtime['realpath'] != PYTHON or len(vector) != 3 or vector[1] != '-c'
+            or vector[0] not in runtime['paths'] or context['cwd'] != selected['cwd']
+            or selected['registration'] != registration
+            or selected['owner_pid'] != context['parent']
+            or selected['transformed_argv_sha256'] != sha(json.dumps(vector).encode())
+            or selected['bootstrap_sha256'] != sha(vector[2].encode())
+            or selected['environment_sha256'] != sha(json.dumps({}, sort_keys=True).encode())):
+        return False
+    rows = [row for row in context['events']
+            if row['kind'] == 'source_lease_startup_consumption'
+            and row['owner_pid'] == context['parent']
+            and row['launch_token'] == selected['token']]
+    if len(rows) != 1:
+        return False
+    row = rows[0]
+    factory = row['factory']
+    mode = factory['mode']
+    if mode not in {'cleanup', 'spawn', 'registration'}:
+        return False
+    literal = 399 if mode == 'cleanup' else 559
+    case = ('tests/test_experimental_lease.py::test_cleanup_failure_revokes_and_quarantines'
+            if mode == 'cleanup' else
+            'tests/test_experimental_lease.py::test_close_waits_for_launch_registration[' + mode + ']')
+    if factory['controlled_guard_method'] is True:
+        case = ('.github/release-source-guard/multiprocess_guard_methods.py::'
+                'test_owned_exit17_keeps_raw_status')
+    elif factory['controlled_guard_method'] is not False:
+        return False
+    expected_factory = {'mode': mode, 'literal_line': literal, 'case': case,
+                        'controlled_guard_method': factory['controlled_guard_method'],
+                        'owner_source_sha256': '01461f79560224089da8c906362bfc9606b3a3c620760c29def6c10f8dbe1d5f'}
+    original = [vector[0], '-c', 'import time;time.sleep(30)' if mode == 'cleanup'
+                else 'import time;print("ready",flush=True);time.sleep(30)']
+    directory = PurePosixPath(context['cwd'])
+    return (row['source_binding'] == binding and factory == expected_factory
+            and registration['argv_sha256'] == sha(json.dumps(original).encode())
+            and row['argv'] == original and row['environment'] == {}
+            and row['cwd'] == str(directory) == context['cwd']
+            and directory.is_relative_to('/work/owned') and directory != PurePosixPath('/work/owned')
+            and '..' not in directory.parts
+            and manifest['product_pins']['tests/test_experimental_lease.py'] == factory['owner_source_sha256']
+            and manifest['product_pins']['src/unrest_harness/experimental_confinement.py'] == binding['sha256'])

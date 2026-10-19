@@ -33,6 +33,9 @@ def test_owned_exit17_keeps_raw_status():
     )
 
     _acquisition_faults()
+    _binding_inventory()
+    _lease_factories()
+    _refused_acquisition()
 
 
 @pytest.mark.parametrize("kind", ["globals", "arguments", "case", "descriptor", "caller"])
@@ -144,3 +147,149 @@ def _acquisition_faults():
                       'pipe_identity': list(owner.identity), 'errno': error.errno,
                       'before_fds': census, 'after_fds': len(os.listdir('/proc/self/fd')),
                       'original_exception_preserved': True})
+
+
+def _lease_launch(owner, mode, directory):
+    # These are the two immutable original source literals. This helper has its
+    # own guard-method identity and never impersonates an original test owner.
+    if mode == 'cleanup':
+        return owner.launch_local([sys.executable, '-c', 'import time;time.sleep(30)'],
+                                  cwd=directory, env={})
+    return owner.launch_local([sys.executable, '-c',
+                               'import time;print("ready",flush=True);time.sleep(30)'],
+                              cwd=directory, env={})
+
+
+def _lease_factories():
+    from pathlib import Path
+    from concurrent.futures import ThreadPoolExecutor
+    from unittest.mock import patch
+    import threading
+    import subprocess
+    from unrest_harness.experimental_confinement import OwnedProcesses
+    from unrest_harness.experimental_lease import TurnBroker
+
+    guard = sys.modules['runtime_guard']
+    base = Path(guard._STATE['owned_root']) / 'guard-lease-factories'
+    base.mkdir()
+    for mode in ('cleanup', 'spawn', 'registration'):
+        census = len(os.listdir('/proc/self/fd'))
+        directory = base / mode
+        directory.mkdir()
+        candidate = directory / 'candidate'
+        candidate.mkdir()
+        broker = TurnBroker(candidate, directory / 'records')
+        owner = OwnedProcesses(broker)
+        entered, release, closed = threading.Event(), threading.Event(), threading.Event()
+        original = subprocess.Popen
+        children = []
+        def paused_spawn(*args, **kwargs):
+            child = original(*args, **kwargs)
+            children.append(child)
+            if mode != 'cleanup':
+                assert child.stdout.readline() == b'ready\n'
+            if mode == 'spawn':
+                entered.set()
+                assert release.wait(5)
+            return child
+        class RegistrationBarrier(list):
+            def append(self, child):
+                entered.set()
+                assert release.wait(5)
+                super().append(child)
+        if mode == 'registration':
+            owner._processes = RegistrationBarrier()
+        try:
+            with patch.object(subprocess, 'Popen', paused_spawn):
+                if mode == 'cleanup':
+                    child = _lease_launch(owner, mode, directory)
+                    terminate = child.terminate
+                    with patch.object(child, 'terminate', side_effect=OSError('controlled cleanup failure')):
+                        assert not owner.close(.05) and owner.quarantined and broker.quarantined
+                    terminate()
+                    child.wait(timeout=3)
+                    for stream in (child.stdin, child.stdout, child.stderr):
+                        stream.close()
+                else:
+                    def close():
+                        result = owner.close(.1)
+                        closed.set()
+                        return result
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        launch = pool.submit(_lease_launch, owner, mode, directory)
+                        assert entered.wait(5)
+                        cleanup = pool.submit(close)
+                        try:
+                            assert not closed.wait(.1)
+                        finally:
+                            release.set()
+                        assert launch.result(timeout=5) is children[0]
+                        assert cleanup.result(timeout=5)
+        finally:
+            release.set()
+            for child in children:
+                if child.poll() is None:
+                    child.kill()
+                child.wait(timeout=5)
+                for stream in (child.stdin, child.stdout, child.stderr):
+                    stream.close()
+            broker.close()
+        assert len(os.listdir('/proc/self/fd')) == census
+        guard.append({'kind': 'guard_lease_factory_proof', 'mode': mode,
+                      'child_pid': children[0].pid, 'child_returncode': children[0].returncode,
+                      'before_fds': census, 'after_fds': len(os.listdir('/proc/self/fd')),
+                      'quarantine': owner.quarantined, 'closed': owner.closed})
+
+
+def _refused_acquisition():
+    from unittest.mock import patch
+    guard = sys.modules['runtime_guard']
+    hook = guard._STATE['_owned_multiprocess_hook']
+    namespace = hook.__globals__
+    original = namespace['endpoint_ready']
+    cause = RuntimeError('controlled post-READY acquisition failure')
+    injected = False
+    def fail(rows, state, token, pid):
+        nonlocal injected
+        answer = original(rows, state, token, pid)
+        if answer and not injected:
+            injected = True
+            raise cause
+        return answer
+    census = len(os.listdir('/proc/self/fd'))
+    owner = SpawnResources()
+    with patch.dict(namespace, endpoint_ready=fail):
+        with pytest.raises(RuntimeError) as caught:
+            with owner:
+                owner.context(multiprocessing.get_context('spawn'))
+    assert injected and caught.value is cause and owner.closed
+    assert owner.tracker._fd is None and owner.tracker._pid is None
+    assert len(os.listdir('/proc/self/fd')) == census
+    rows = guard.summarize(guard._STATE['manifest_path'])['events']
+    proof = [row for row in rows if row['kind'] == 'multiprocess_refused_acquisition_wait']
+    assert len(proof) == 1
+    child = proof[0]['pid']
+    assert any(row['kind'] == 'raw_actual_parent_waitpid' and row['pid'] == child for row in rows)
+    with pytest.raises(ChildProcessError):
+        os.waitpid(child, os.WNOHANG)
+    guard.append({'kind': 'guard_refused_acquisition_proof', 'child_pid': child,
+                  'before_fds': census, 'after_fds': len(os.listdir('/proc/self/fd')),
+                  'original_exception_preserved': True})
+
+
+def _binding_inventory():
+    """Own supplementary identity for the original shared inventory helpers."""
+    import importlib.util
+    from pathlib import Path
+    guard = sys.modules['runtime_guard']
+    root = Path(guard._STATE['checkout'])
+    path = root / 'tools/release_binding.py'
+    spec = importlib.util.spec_from_file_location('_guard_binding_inventory', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    paths = module.candidate_regular_paths(root)
+    assert paths == sorted(set(paths), key=lambda name: name.encode('utf-8'))
+    assert 'pyproject.toml' in paths and 'uv.lock' in paths
+    guard.append({'kind': 'guard_shared_binding_probe', 'path_count': len(paths),
+                  'original_source_sha256': guard.digest(path)})

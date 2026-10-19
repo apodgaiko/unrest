@@ -126,6 +126,13 @@ def result(name, binding, argv, directory, environment, append, **extra):
 
 def admit(argv, cwd, env, state, append, refuse):
     global _ACTIVE_STATE
+    lease = Path(__file__).with_name("lease_routes.py")
+    if str(lease) in state["direct_support"]["files"]:
+        namespace = {"__file__": str(lease)}
+        exec(support_code(lease, state), namespace)
+        selected = namespace["admit"](argv, cwd, env, state, append, refuse)
+        if selected is not None:
+            return selected
     carrier = Path(__file__).with_name("crash_route.py")
     namespace = {"__file__": str(carrier)}
     exec(support_code(carrier, state), namespace)

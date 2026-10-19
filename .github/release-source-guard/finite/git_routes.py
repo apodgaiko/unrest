@@ -206,6 +206,15 @@ def admit(argv, cwd, env, state, append, refuse):
     resolved = shutil.which(argv[0], path=environment.get("PATH"))
     if resolved not in state["copy_git"] or sha(resolved) != state["copy_git"][resolved]:
         refuse("git_executable_identity")
+    current = Path(state['guard']).with_name('binding_routes.py')
+    if str(current) in state['direct_support']['files']:
+        if sha(current) != state['direct_support']['files'][str(current)]:
+            refuse('current_binding_support_drift')
+        namespace = {'__file__': str(current)}
+        exec(compile(current.read_bytes(), str(current), 'exec'), namespace)
+        selected = namespace['admit'](argv, cwd, env, state, append, refuse)
+        if selected is not None:
+            return selected
     crash = Path(state["guard"]).with_name("crash_route.py")
     namespace = {"__file__": str(crash)}
     exec(compile(crash.read_bytes(), str(crash), "exec"), namespace)

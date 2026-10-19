@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import signal
 import sys
 import time
 import uuid
@@ -665,29 +666,49 @@ def install(state, append, refuse, ready, bootstrap, inherited_environment):
             }
         )
         pid = original(executable, child_argv, passfds)
-        append(
-            {
-                "kind": "launch_lifecycle_binding",
-                "token": token,
-                "start_new_session": False,
-                "executable_sha256": digest(executable),
-            }
-        )
-        append({"kind": "registered", "token": token, "pid": pid, **registration})
-        deadline = time.monotonic() + 5
-        journal = Path(state["events"]) / (str(pid) + ".jsonl")
-        while True:
-            rows = (
-                [json.loads(line) for line in journal.read_text().splitlines()]
-                if journal.exists()
-                else []
+        try:
+            append(
+                {
+                    "kind": "launch_lifecycle_binding",
+                    "token": token,
+                    "start_new_session": False,
+                    "executable_sha256": digest(executable),
+                }
             )
-            if endpoint_ready(rows, state, token, pid):
-                break
-            if time.monotonic() >= deadline:
-                refuse("multiprocess_child_READY_deadline")
-            time.sleep(0.001)
-        append({"kind": "bounded_multiprocess_READY_handshake", "token": token, "pid": pid})
+            append({"kind": "registered", "token": token, "pid": pid, **registration})
+            deadline = time.monotonic() + 5
+            journal = Path(state["events"]) / (str(pid) + ".jsonl")
+            while True:
+                rows = (
+                    [json.loads(line) for line in journal.read_text().splitlines()]
+                    if journal.exists()
+                    else []
+                )
+                if endpoint_ready(rows, state, token, pid):
+                    break
+                if time.monotonic() >= deadline:
+                    refuse("multiprocess_child_READY_deadline")
+                time.sleep(0.001)
+            append({"kind": "bounded_multiprocess_READY_handshake", "token": token, "pid": pid})
+        except BaseException as error:
+            # The PID has not returned to CPython, so its tracker/Process owner
+            # cannot yet reap it. Only this unpublished, registered child belongs
+            # to this rollback. An unreaped child PID cannot be reused meanwhile.
+            try:
+                waited, raw = os.waitpid(pid, os.WNOHANG)
+                if not waited:
+                    os.kill(pid, signal.SIGKILL)
+                    waited, raw = os.waitpid(pid, 0)
+                if waited != pid:
+                    raise RuntimeError("multiprocess rollback returned another child")
+                append({"kind": "multiprocess_refused_acquisition_wait", "token": token,
+                        "pid": pid, "raw_status": raw,
+                        "numeric_returncode": os.waitstatus_to_exitcode(raw),
+                        "original_exception_preserved": True})
+            except BaseException as cleanup_error:
+                raise BaseExceptionGroup("multiprocess startup and rollback failed",
+                                         [error, cleanup_error]) from None
+            raise
         return pid
 
     util.spawnv_passfds = spawnv
