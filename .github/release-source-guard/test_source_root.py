@@ -122,9 +122,10 @@ def test_own_proof_uses_unchanged_closed_transport(tmp_path, monkeypatch):
     records = {'kernel-source.json': evidence.canonical(kernel)}
     nonce = '1' * 64
     header = evidence.source_header(records, kernel, identity(), nonce, 0)
-    envelope, frame = evidence.current_header(header + raw.encode(records, identity(), nonce),
-                                               identity(), nonce)
-    assert raw.decode(frame, identity(), nonce, envelope['records']) == records
+    envelope = evidence.loads(header[len(evidence.HEADER_PREFIX):-1])
+    evidence.validate_header(envelope, identity(), nonce)
+    assert raw.decode(raw.encode(records, identity(), nonce), identity(), nonce,
+                      envelope['records']) == records
     with pytest.raises(evidence.EvidenceRefused, match='header_kernel_fields'):
         evidence.source_header(records, {**kernel, 'immutable_source_root': proof}, identity(), nonce, 0)
     with pytest.raises(RuntimeError, match='source_setup_owner_drift'):
