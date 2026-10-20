@@ -249,3 +249,21 @@ def test_existing_primary_wrapper_self_reference_is_checked():
                                     'require_ready', 'self', 'state'}
     source = (ROOT / 'finite/child_relative.py').read_text()
     assert "cells['native_init'].cell_contents is not captured" in source
+
+
+@pytest.mark.parametrize('mutation', ['none', 'missing', 'code', 'defaults', 'keyword-defaults', 'globals'])
+def test_saved_stock_constructor_metadata(mutation):
+    import subprocess
+    stock = subprocess.Popen.__init__
+    code, defaults, keywords = stock.__code__, stock.__defaults__, stock.__kwdefaults__
+    if mutation == 'missing':
+        stock = None
+    elif mutation == 'code':
+        code = test_saved_stock_constructor_metadata.__code__
+    elif mutation == 'defaults':
+        defaults = ('wrong-default',)
+    elif mutation == 'keyword-defaults':
+        keywords = {'unknown': True}
+    elif mutation == 'globals':
+        stock = test_saved_stock_constructor_metadata
+    assert boundary.stock_matches(stock, code, defaults, keywords) is (mutation == 'none')

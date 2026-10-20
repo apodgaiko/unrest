@@ -246,6 +246,12 @@ def validate_runtime(actual, runtime_pin, refuse):
     if actual != expected_runtime(runtime_pin):
         refuse('child_relative_runtime')
 
+
+def stock_matches(stock, code, defaults, keyword_defaults):
+    return (type(stock) is types.FunctionType and stock.__globals__ is vars(subprocess)
+            and stock.__code__ == code and stock.__closure__ is None
+            and stock.__defaults__ == defaults and stock.__kwdefaults__ == keyword_defaults)
+
 def install(state, activation, emit, refuse, checked):
     guard = sys.modules['runtime_guard']
     current = inspect.currentframe()
@@ -296,7 +302,7 @@ def install(state, activation, emit, refuse, checked):
     defaults = tuple(ast.literal_eval(node) for node in initializer.args.defaults)
     keyword_defaults = {argument.arg: ast.literal_eval(value) for argument, value in
                         zip(initializer.args.kwonlyargs, initializer.args.kw_defaults, strict=True)}
-    if stock.__defaults__ != defaults or stock.__kwdefaults__ != keyword_defaults:
+    if not stock_matches(stock, stock_code, defaults, keyword_defaults):
         refuse('child_relative_saved_constructor_defaults')
     execute = subprocess.Popen._execute_child
     # Both platform branches occur in the compiled class; only the actual
@@ -361,8 +367,7 @@ def install(state, activation, emit, refuse, checked):
             'use_spawn': subprocess._USE_POSIX_SPAWN, 'use_vfork': subprocess._USE_VFORK,
             'runtime': guard.digest(state['runtime']['realpath'])}
         validate_runtime(actual_runtime, state['runtime']['sha256'], refuse)
-        if (stock.__code__ != stock_code or stock.__globals__ is not vars(subprocess)
-                or stock.__defaults__ != defaults or stock.__kwdefaults__ != keyword_defaults
+        if (not stock_matches(stock, stock_code, defaults, keyword_defaults)
                 or subprocess.Popen._execute_child is not execute or execute.__code__ not in execute_codes
                 or execute.__globals__ is not vars(subprocess) or subprocess._fork_exec is not fork_exec
                 or _posixsubprocess.fork_exec is not fork_exec):
