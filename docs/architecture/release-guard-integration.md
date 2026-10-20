@@ -449,3 +449,11 @@ the original finite operation and handle-wait implementation remains byte-identi
 a bounded, body-free type/errno and support-code location diagnostic before the
 original exception is re-raised; this diagnostic does not admit a launch or
 replace any original failure.
+
+The shared-input hook can run inside the original `admit` call before the guard
+has assigned `registration`. Child-relative custody capture defers only at that
+byte-current call instruction, with all later launch locals still absent. It
+captures no facts and consumes no token there. Unknown phases refuse; the later
+constructor still requires the original single-use custody and all saved
+context checks. The Linux compartment controls exercise this ordering through
+the actual unchanged guard constructor frame without launching a child.

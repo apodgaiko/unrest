@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import dis
 import hashlib
 import inspect
 import json
@@ -271,6 +272,28 @@ def stock_matches(stock, code, defaults, keyword_defaults):
             and stock.__code__ == code and stock.__closure__ is None
             and stock.__defaults__ == defaults and stock.__kwdefaults__ == keyword_defaults)
 
+def admission_offsets(core):
+    """Locate only the unchanged guard's original admission call instruction."""
+    syntax = ast.parse(Path(core.co_filename).read_bytes())
+    owners = [node for node in ast.walk(syntax) if isinstance(node, ast.FunctionDef)
+              and node.name == 'initialize_inner']
+    calls = [node.value for owner in owners for node in ast.walk(owner)
+             if isinstance(node, ast.Assign) and len(node.targets) == 1
+             and isinstance(node.targets[0], ast.Tuple)
+             and [getattr(item, 'id', None) for item in node.targets[0].elts] == ['registration', 'argv']
+             and isinstance(node.value, ast.Call)]
+    expected = ast.parse('admit(args, kwargs.get("cwd"), kwargs.get("env"))', mode='eval').body
+    if len(owners) != 1 or len(calls) != 1 or ast.dump(calls[0]) != ast.dump(expected):
+        raise RuntimeError('child_relative_admission_source')
+    call = calls[0]
+    position = (call.lineno, call.end_lineno, call.col_offset, call.end_col_offset)
+    instructions = [item for item in dis.get_instructions(core, show_caches=True)
+                    if tuple(item.positions) == position and item.opname in {'CALL', 'CACHE'}]
+    if len([item for item in instructions if item.opname == 'CALL']) != 1:
+        raise RuntimeError('child_relative_admission_instruction')
+    return frozenset(item.offset for item in instructions)
+
+
 def install(state, activation, emit, refuse, checked):
     guard = sys.modules['runtime_guard']
     current = inspect.currentframe()
@@ -345,6 +368,7 @@ def install(state, activation, emit, refuse, checked):
     fork_exec = subprocess._fork_exec
     core = named(compile(Path(state['guard']).read_bytes(), state['guard'], 'exec',
                          dont_inherit=True), 'initialize_inner')
+    admission = admission_offsets(core)
     observe = checked('child_relative_view.py')['view']
     used = set()
     contexts = {}
@@ -373,6 +397,13 @@ def install(state, activation, emit, refuse, checked):
         if frame is None:
             return
         launch = frame_check(frame)
+        if 'registration' not in launch:
+            # Operations validate shared inputs while the original admit call
+            # is still resolving. This phase cannot capture or consume custody.
+            if (frame.f_lasti not in admission
+                    or any(name in launch for name in ('argv', 'launch_token', 'child_argv', 'activation'))):
+                refuse('child_relative_capture_phase')
+            return
         registration = launch['registration']
         if not registration['python'] or launch['kwargs'].get('cwd') is not None:
             return
