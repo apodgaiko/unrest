@@ -1,7 +1,6 @@
 """Finite artifact overlays and host custody for the immutable source namespace."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -71,17 +70,20 @@ def verify(source: Path, expected: dict[str, Any]) -> None:
             raise RuntimeError('source_host_ancestor_custody')
 
 
-@dataclass
 class Custody:
-    target: Path
-    log: Path
-    base_identity: list[int]
-    source: Path
-    members: dict[str, Any]
-    parent_identity: list[int] | None = None
-    phase: str = 'creating'
-    pending: str | None = None
-    owners: dict[str, list[list[int]]] | None = None
+    def __init__(self, target: Path, log: Path, base_identity: list[int], source: Path,
+                 members: dict[str, Any], parent_identity: list[int] | None = None,
+                 phase: str = 'creating', pending: str | None = None,
+                 owners: dict[str, list[list[int]]] | None = None) -> None:
+        self.target = target
+        self.log = log
+        self.base_identity = base_identity
+        self.source = source
+        self.members = members
+        self.parent_identity = parent_identity
+        self.phase = phase
+        self.pending = pending
+        self.owners = owners
 
 
 OWNED: list[Custody] = []
@@ -364,14 +366,14 @@ def release_one(record: Custody) -> None:
                     if not parent.is_relative_to(record.target):
                         break
                     relative = str(parent.relative_to(record.target))
+                    if parent.resolve(strict=True) != parent or parent.is_symlink():
+                        raise RuntimeError('source_host_delete_alias')
                     members_match(Custody(record.target, record.log, record.base_identity,
                                           record.source, {relative: record.members[relative]},
                                           owners=record.owners),
                                   {relative: {'identity': key(parent),
                                               'sha256': hashlib.sha256(parent.read_bytes()).hexdigest()
                                               if parent.is_file() else None}})
-                    if parent.resolve(strict=True) != parent:
-                        raise RuntimeError('source_host_delete_alias')
                 record.pending = name
                 event(record, 'before_delete', member=name, identity=record.members[name]['identity'])
                 command = 'rmdir' if stat.S_ISDIR(record.members[name]['identity'][2]) else 'rm'

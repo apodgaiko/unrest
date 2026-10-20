@@ -56,6 +56,7 @@ from test_child_relative import (  # noqa: F401
 )
 
 from test_source_custody import (  # noqa: F401
+    test_custody_setup_loader_needs_no_module_registration,
     test_custody_parent_delete_substitution_retains_new_object,
     test_custody_partial_chown_retries_only_known_owners,
     test_custody_unexpected_mount_absence_retains_ownership,

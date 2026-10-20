@@ -364,3 +364,15 @@ def test_custody_parent_delete_substitution_retains_new_object(custody, monkeypa
     monkeypatch.setattr(root, 'host', host)
     root.release()
     assert not root.OWNED
+
+
+def test_custody_setup_loader_needs_no_module_registration():
+    import importlib.util
+    import sys
+    name = 'own_unregistered_source_custody'
+    assert name not in sys.modules
+    spec = importlib.util.spec_from_file_location(name, root.__file__)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.OVERLAYS == root.OVERLAYS and module.OWNED == []
+    assert name not in sys.modules
