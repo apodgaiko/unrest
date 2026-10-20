@@ -441,3 +441,11 @@ or trace error, and after trace settlement. These observations use the existing
 encrypted native-source records; they change no mount capacity, permissions,
 admission, deadline, poison, completion or parent-wait rule. Historical ENOSPC
 occupancy remains unknown when it was not measured.
+
+Operation settlement readers consume only complete LF-framed records from live
+owner journals. An incomplete final write cannot supply a settlement or a wait;
+a malformed committed record still refuses. Inherited operation references use this framing in the PRIMARY specialization;
+the original finite operation and handle-wait implementation remains byte-identical. Unexpected binding exceptions retain
+a bounded, body-free type/errno and support-code location diagnostic before the
+original exception is re-raised; this diagnostic does not admit a launch or
+replace any original failure.

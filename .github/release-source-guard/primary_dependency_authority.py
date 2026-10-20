@@ -65,5 +65,5 @@ class DependencySourceAuthority(SourceAuthority):
         operations['primary_dependency_support'] = support
         path = Path('/receipts/producers/primary-operations.json')
         pin = write(path, operations)
-        original.update(path='/guard/primary_operations.py', sha256=sha('/guard/primary_operations.py'),
+        original.update(path='/guard/primary_operation_journal.py', sha256=sha('/guard/primary_operation_journal.py'),
                     spec_path=str(path), spec_sha256=pin)

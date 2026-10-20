@@ -292,14 +292,20 @@ def install(state, activation, emit, refuse, checked):
     captured = subprocess.Popen.__init__
     support = state['operation_support']
     operations = state['operations']
-    operations_source = Path(support['path'])
+    selected_source = Path(support['path'])
+    if (support['path'] not in {'/guard/primary_operations.py', '/guard/primary_operation_journal.py'}
+            or guard.digest(selected_source) != support['sha256']):
+        refuse('child_relative_operation_selection')
+    # The journal specialization inherits this exact constructor and native
+    # route. Its selection does not make any new constructor acceptable.
+    operations_source = Path('/guard/primary_operations.py')
+    if guard.digest(operations_source) != 'd09b313bd7587996e3b5e9380732db624623cd8723ec0d4ed89ddd2ebd325470':
+        refuse('child_relative_operation_constructor_source')
     operations_code = compile(operations_source.read_bytes(), str(operations_source),
                               'exec', dont_inherit=True)
     namespace = operations.__init__.__globals__
     cells = dict(zip(captured.__code__.co_freevars, captured.__closure__ or ()))
-    if (support['path'] != '/guard/primary_operations.py'
-            or guard.digest(operations_source) != support['sha256']
-            or captured.__code__ != named(operations_code, 'native_init')
+    if (captured.__code__ != named(operations_code, 'native_init')
             or captured.__globals__ is not namespace
             or set(cells) != {'guard', 'initialize', 'native_init', 'original_init', 'require_ready', 'self', 'state'}
             or cells['guard'].cell_contents is not guard

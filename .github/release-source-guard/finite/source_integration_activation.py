@@ -90,7 +90,8 @@ def create(state, emit, refuse, ready):
 
     activation = SourceIntegrationActivation()
     if (state.get('source_selection') == 'primary-source'
-            and state['operation_support']['path'] == '/guard/primary_operations.py'):
+            and state['operation_support']['path'] in {
+                '/guard/primary_operations.py', '/guard/primary_operation_journal.py'}):
         activation.capture_child_relative = checked('child_relative.py')['install'](
             state, activation, emit, refuse, checked)
     return activation
