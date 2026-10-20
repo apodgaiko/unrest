@@ -255,3 +255,9 @@ The pinned setuptools84 sdist producer creates the exact versioned release tree
 `unrest_harness-0.4.7` at project root. Its bounded noexec overlay supports that
 original build operation without making the source namespace writable. This is
 one literal versioned artifact directory, not a prefix rule or source subtree.
+
+The encrypted raw host source manifest uses the existing admitted
+`source-pins.json` carrier. It retains bytes, modes, physical identities and host
+mount flags; its exact digest joins the own-identity proof. The input descriptor
+remains `/inputs/source-custody.json`. No archive member or consumer allowlist is
+expanded for this retention.

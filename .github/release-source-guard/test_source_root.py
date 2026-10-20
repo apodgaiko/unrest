@@ -110,7 +110,7 @@ def test_producer_canary_no_longer_claims_writable_root():
 def test_own_proof_uses_unchanged_closed_transport(tmp_path, monkeypatch):
     import source_raw_transport as raw
     import structured_evidence as evidence
-    from test_structured_evidence import identity
+    from test_structured_evidence import identity, archive
     proof = {'pid': 17, 'source_uid': 20000, 'source_gid': 20000}
     carrier = tmp_path / 'setup-controls.json'
     carrier.write_text(json.dumps(proof))
@@ -126,6 +126,24 @@ def test_own_proof_uses_unchanged_closed_transport(tmp_path, monkeypatch):
     evidence.validate_header(envelope, identity(), nonce)
     assert raw.decode(raw.encode(records, identity(), nonce), identity(), nonce,
                       envelope['records']) == records
+    retained = tmp_path / 'retained'
+    retained.mkdir()
+    body = records['kernel-source.json']
+    member = 'structured-kernel-source.json'
+    (retained / member).write_bytes(body)
+    direct = {'schema': evidence.SCHEMA, 'scope': 'primary-executor', 'identity': identity(),
+              'records': {'kernel-source.json': {'member': member, 'sha256': evidence.digest(body),
+                                                'size': len(body)}},
+              'source_checkpoint_ready': False, 'selected_carrier': None}
+    encoded = evidence.canonical(direct)
+    (retained / evidence.MEMBER).write_bytes(encoded)
+    (retained / 'source-pins.json').write_text('{}')
+    (retained / 'container-inspect.json').write_text('[]')
+    assert evidence.consume(archive(retained), identity(), evidence.digest(encoded)) == (
+        'primary-executor', records)
+    (retained / 'source-custody.json').write_text('{}')
+    with pytest.raises(evidence.EvidenceRefused, match='unknown_archive_member'):
+        evidence.consume(archive(retained), identity(), evidence.digest(encoded))
     with pytest.raises(evidence.EvidenceRefused, match='header_kernel_fields'):
         evidence.source_header(records, {**kernel, 'immutable_source_root': proof}, identity(), nonce, 0)
     with pytest.raises(RuntimeError, match='source_setup_owner_drift'):

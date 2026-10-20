@@ -149,7 +149,7 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
     inputs.mkdir()
     source_custody = canonical(source_root.inventory(source))
     (inputs / 'source-custody.json').write_bytes(source_custody)
-    (raw / 'source-custody.json').write_bytes(source_custody)
+    (raw / 'source-pins.json').write_bytes(source_custody)
     (inputs / 'github-script.sh').write_bytes(script)
     (inputs / 'plan.json').write_text(json.dumps(spec, sort_keys=True))
     (inputs / 'uv.toml').write_bytes(b'')
@@ -433,7 +433,7 @@ def main():
                 'source_test_proof': test_proof,
                 'transport_provenance_sha256': digest(raw / 'transport-provenance.json') if (raw / 'transport-provenance.json').is_file() else None,
                 'capture_failure': capture_failure, 'container_state': container_state,
-                'source_host_custody_sha256': digest(raw / 'source-custody.json') if (raw / 'source-custody.json').is_file() else None,
+                'source_host_custody_sha256': digest(raw / 'source-pins.json') if (raw / 'source-pins.json').is_file() else None,
                 'container_inspect_sha256': digest(raw / 'container-inspect.json') if (raw / 'container-inspect.json').is_file() else None,
                 'structured_envelope_sha256': digest(raw / 'structured-envelope.json') if records else None}
     archive = root / 'raw.tar.gz'
