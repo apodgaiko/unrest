@@ -119,6 +119,13 @@ def main():
     if spec.get('source_mode') in {'TEST-positive', 'TEST-poison'}:
         from child_relative_control import run as own_prebody_probe
         own_prebody_control = own_prebody_probe(runtime['primary'], env)
+        if own_prebody_control.get('verified') is not True:
+            failure = {'failure_code': 'child_relative_control_refused',
+                       'stage': 'child_relative_control', 'primary_records': [own_prebody_control],
+                       'source_checkpoint_ready': False, 'selected_carrier': None}
+            emit_source({'kernel-source.json': json.dumps(failure, sort_keys=True).encode()}, failure,
+                        transport_identity['identity'], transport_identity['invocation_sha256'], 125)
+            return 125
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
     start_read, start_write = os.pipe2(os.O_CLOEXEC)
@@ -132,6 +139,9 @@ def main():
             os.close(start_write)
             source_credentials()
             resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
+            if own_prebody_control is not None:
+                from child_relative_control import source_cleanup
+                source_cleanup(own_prebody_control)
             for name in ('home', 'tmp', 'events', 'owned'):
                 (Path('/work') / name).mkdir(mode=0o700)
             if spec.get('source_mode') or package_build:
@@ -180,6 +190,8 @@ def main():
     else:
         authority = Authority(spec, child, env)
     if own_prebody_control is not None:
+        from child_relative_control import confirm_source_cleanup
+        confirm_source_cleanup(own_prebody_control)
         authority.records.append(own_prebody_control)
     if spec.get('package_input_required'):
         descriptor = json.loads(Path('/inputs/package-input.json').read_bytes())

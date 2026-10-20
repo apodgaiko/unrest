@@ -300,7 +300,10 @@ all-five independent checks and the release gates remain separate requirements.
 A separate own native prebody denial control runs only in the existing positive
 and poison TEST source capsules, before their source root starts. It uses the same
 byte-pinned primary native entry and prebody consumer, an actual UID20000 child,
-and its own controller-owned denied header. It claims no constructor admission or
+and its own controller-owned denied header. A dedicated coordinator uses the
+existing observer credential transition; it does not change the primary bootstrap
+parent or request additional capabilities. Its source-owned temporary inputs are
+identity-checked and removed before the ordinary source setup continues. It claims no constructor admission or
 original case identity. The unchanged kernel record stream retains its real exec,
 prebody denial, actual direct-parent status86, closed descriptors and equal parent
 census. No original source selection, scenario, consumer, policy or cap is replaced.

@@ -404,20 +404,36 @@ def test_outer_predicate_requires_parent_search_and_pending_child_search():
 
 def without_own_prebody_probe(tree):
     import ast
-    templates = ast.parse('''
-own_prebody_control = None
+    templates = ast.parse('''own_prebody_control = None
 if spec.get('source_mode') in {'TEST-positive', 'TEST-poison'}:
     from child_relative_control import run as own_prebody_probe
     own_prebody_control = own_prebody_probe(runtime['primary'], env)
+    if own_prebody_control.get('verified') is not True:
+        failure = {'failure_code': 'child_relative_control_refused',
+                   'stage': 'child_relative_control', 'primary_records': [own_prebody_control],
+                   'source_checkpoint_ready': False, 'selected_carrier': None}
+        emit_source({'kernel-source.json': json.dumps(failure, sort_keys=True).encode()}, failure,
+                    transport_identity['identity'], transport_identity['invocation_sha256'], 125)
+        return 125
 if own_prebody_control is not None:
+    from child_relative_control import source_cleanup
+    source_cleanup(own_prebody_control)
+if own_prebody_control is not None:
+    from child_relative_control import confirm_source_cleanup
+    confirm_source_cleanup(own_prebody_control)
     authority.records.append(own_prebody_control)
 ''').body
     expected = {ast.dump(node, include_attributes=False) for node in templates}
-    main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'main')
-    found = [node for node in main.body if ast.dump(node, include_attributes=False) in expected]
-    assert len(found) == 3 and {ast.dump(node, include_attributes=False) for node in found} == expected
-    main.body = [node for node in main.body if node not in found]
-    return tree
+    found = []
+    class Strip(ast.NodeTransformer):
+        def visit(self, node):
+            if ast.dump(node, include_attributes=False) in expected:
+                found.append(node)
+                return None
+            return super().visit(node)
+    original = Strip().visit(tree)
+    assert len(found) == 4 and {ast.dump(node, include_attributes=False) for node in found} == expected
+    return original
 
 
 def test_own_native_probe_preserves_all_prior_stage1_compartment_statements():
