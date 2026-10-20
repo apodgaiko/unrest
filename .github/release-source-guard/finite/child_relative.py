@@ -1,6 +1,7 @@
 """Single-use Method C context after existing finite SOURCE admission."""
 from __future__ import annotations
 
+import ast
 import hashlib
 import inspect
 import json
@@ -288,8 +289,15 @@ def install(state, activation, emit, refuse, checked):
     if (type(stock) is not types.FunctionType or stock.__globals__ is not vars(subprocess)
             or stock.__code__ != stock_code or stock.__closure__ is not None):
         refuse('child_relative_saved_constructor')
-    defaults = stock.__defaults__
-    keyword_defaults = dict(stock.__kwdefaults__) if stock.__kwdefaults__ is not None else None
+    syntax = ast.parse(source.read_bytes())
+    cls = next(node for node in syntax.body if isinstance(node, ast.ClassDef) and node.name == 'Popen')
+    initializer = next(node for node in cls.body if isinstance(node, ast.FunctionDef)
+                       and node.name == '__init__')
+    defaults = tuple(ast.literal_eval(node) for node in initializer.args.defaults)
+    keyword_defaults = {argument.arg: ast.literal_eval(value) for argument, value in
+                        zip(initializer.args.kwonlyargs, initializer.args.kw_defaults, strict=True)}
+    if stock.__defaults__ != defaults or stock.__kwdefaults__ != keyword_defaults:
+        refuse('child_relative_saved_constructor_defaults')
     execute = subprocess.Popen._execute_child
     # Both platform branches occur in the compiled class; only the actual
     # stock function's code can select the hosted POSIX implementation.
@@ -304,7 +312,9 @@ def install(state, activation, emit, refuse, checked):
     used = set()
 
     def frame_check(frame):
-        if (frame is None or frame.f_code != core or frame.f_globals is not vars(guard)
+        if (frame is None or frame.f_code != core
+                or frame.f_code is not captured_cells['initialize']
+                or frame.f_globals is not vars(guard)
                 or frame.f_locals.get('state') is not state
                 or guard._STATE is not state
                 or guard.digest(state['guard']) != state['guard_sha256']):
