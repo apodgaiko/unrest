@@ -214,6 +214,37 @@ def named(code, name):
     return None
 
 
+
+def consume(launch, handle, argv, options, activation, constructor, used, refuse):
+    """Validate data from the caller-authenticated core frame; grants no launch."""
+    token = launch['launch_token']
+    registration = launch['registration']
+    if (launch.get('original_init') is not constructor or launch.get('handle') is not handle
+            or launch.get('child_argv') is not argv or launch.get('activation') is not activation
+            or token not in activation.python_consumed or registration['class'] not in APPLICABLE
+            or options != launch['kwargs'] or options.get('cwd') is not None
+            or not registration['python']):
+        refuse('child_relative_launch_binding')
+    if token in used:
+        refuse('child_relative_reused_context')
+    if any(options.get(key) is not None for key in
+           ('preexec_fn', 'user', 'group', 'extra_groups', 'executable')) or options.get('shell'):
+        refuse('child_relative_custom_options')
+    used.add(token)
+    return token, registration
+
+
+def expected_runtime(runtime_pin):
+    return {'platform': 'linux', 'version': VERSION, 'implementation': 'cpython',
+            'uids': (20000, 20000, 20000), 'gids': (20000, 20000, 20000),
+            'stdlib': STDLIB, 'native': NATIVE, 'use_spawn': True, 'use_vfork': True,
+            'runtime': runtime_pin}
+
+
+def validate_runtime(actual, runtime_pin, refuse):
+    if actual != expected_runtime(runtime_pin):
+        refuse('child_relative_runtime')
+
 def install(state, activation, emit, refuse, checked):
     guard = sys.modules['runtime_guard']
     current = inspect.currentframe()
@@ -238,10 +269,11 @@ def install(state, activation, emit, refuse, checked):
             or guard.digest(operations_source) != support['sha256']
             or captured.__code__ != named(operations_code, 'native_init')
             or captured.__globals__ is not namespace
-            or set(cells) != {'guard', 'initialize', 'original_init', 'require_ready', 'self', 'state'}
+            or set(cells) != {'guard', 'initialize', 'native_init', 'original_init', 'require_ready', 'self', 'state'}
             or cells['guard'].cell_contents is not guard
             or cells['state'].cell_contents is not state
-            or cells['self'].cell_contents is not operations):
+            or cells['self'].cell_contents is not operations
+            or cells['native_init'].cell_contents is not captured):
         refuse('child_relative_existing_constructor')
     stock = cells['original_init'].cell_contents
     route = operations.native_executable.__func__
@@ -256,7 +288,8 @@ def install(state, activation, emit, refuse, checked):
     if (type(stock) is not types.FunctionType or stock.__globals__ is not vars(subprocess)
             or stock.__code__ != stock_code or stock.__closure__ is not None):
         refuse('child_relative_saved_constructor')
-    defaults, keyword_defaults = stock.__defaults__, stock.__kwdefaults__
+    defaults = stock.__defaults__
+    keyword_defaults = dict(stock.__kwdefaults__) if stock.__kwdefaults__ is not None else None
     execute = subprocess.Popen._execute_child
     # Both platform branches occur in the compiled class; only the actual
     # stock function's code can select the hosted POSIX implementation.
@@ -302,34 +335,27 @@ def install(state, activation, emit, refuse, checked):
             return stock(handle, args, **{**kwargs, 'executable': selected})
         if not registration['python'] or kwargs.get('cwd') is not None:
             return stock(handle, args, **kwargs)
-        if (launch.get('activation') is not activation or token not in activation.python_consumed
-                or registration['class'] not in APPLICABLE
-                or kwargs != launch['kwargs']):
-            refuse('child_relative_launch_binding')
-        if token in used:
-            refuse('child_relative_reused_context')
-        used.add(token)
+        token, registration = consume(launch, handle, args, kwargs, activation, constructor,
+                                      used, refuse)
         try:
             facts = observe()
         except (OSError, RuntimeError, KeyError, ValueError):
             refuse('child_relative_source_context')
             raise RuntimeError('refusal callback returned')
-        if any(kwargs.get(key) is not None for key in
-               ('preexec_fn', 'user', 'group', 'extra_groups', 'executable')) or kwargs.get('shell'):
-            refuse('child_relative_custom_options')
         import _posixsubprocess
-        if (sys.platform != 'linux' or sys.version != VERSION or sys.implementation.name != 'cpython'
-                or os.getresuid() != (20000, 20000, 20000)
-                or os.getresgid() != (20000, 20000, 20000)
-                or hashlib.sha256(source.read_bytes()).hexdigest() != STDLIB
-                or hashlib.sha256(Path(_posixsubprocess.__file__).read_bytes()).hexdigest() != NATIVE
-                or not subprocess._USE_POSIX_SPAWN or not subprocess._USE_VFORK
-                or stock.__code__ != stock_code or stock.__globals__ is not vars(subprocess)
+        actual_runtime = {
+            'platform': sys.platform, 'version': sys.version, 'implementation': sys.implementation.name,
+            'uids': os.getresuid(), 'gids': os.getresgid(),
+            'stdlib': hashlib.sha256(source.read_bytes()).hexdigest(),
+            'native': hashlib.sha256(Path(_posixsubprocess.__file__).read_bytes()).hexdigest(),
+            'use_spawn': subprocess._USE_POSIX_SPAWN, 'use_vfork': subprocess._USE_VFORK,
+            'runtime': guard.digest(state['runtime']['realpath'])}
+        validate_runtime(actual_runtime, state['runtime']['sha256'], refuse)
+        if (stock.__code__ != stock_code or stock.__globals__ is not vars(subprocess)
                 or stock.__defaults__ != defaults or stock.__kwdefaults__ != keyword_defaults
                 or subprocess.Popen._execute_child is not execute or execute.__code__ not in execute_codes
                 or execute.__globals__ is not vars(subprocess) or subprocess._fork_exec is not fork_exec
-                or _posixsubprocess.fork_exec is not fork_exec
-                or guard.digest(state['runtime']['realpath']) != state['runtime']['sha256']):
+                or _posixsubprocess.fork_exec is not fork_exec):
             refuse('child_relative_runtime')
         if observe() != facts:
             refuse('child_relative_parent_cwd_drift')

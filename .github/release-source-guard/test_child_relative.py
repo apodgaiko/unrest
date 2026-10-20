@@ -99,3 +99,153 @@ def test_install_never_accepts_a_direct_caller(monkeypatch):
         patch.setattr(subprocess.Popen, '__init__', stock)
         with pytest.raises(Refusal, match='child_relative_install_context'):
             boundary.install(state, object(), lambda row: None, refuse, checked)
+
+
+@pytest.mark.skipif(__import__('sys').platform != 'linux', reason='Linux stock fork/exec primitive')
+@pytest.mark.parametrize('change', ['before-fork', 'after-fork'])
+def test_stock_relative_cwd_follows_child_inheritance(tmp_path, change):
+    import json
+    import os
+    import subprocess
+    import sys
+    before = len(os.listdir('/proc/self/fd'))
+    original = Path.cwd()
+    first, second = tmp_path / 'first', tmp_path / 'second'
+    first.mkdir()
+    second.mkdir()
+    gate = tmp_path / 'gate'
+    child = None
+    # Exact own control body; it launches nothing and waits on an owned file.
+    code = ('import os,json,sys,time;from pathlib import Path;'
+            'gate=Path(sys.argv[1]);deadline=time.monotonic()+5\n'
+            'while not gate.exists():\n'
+            ' if time.monotonic()>deadline: raise RuntimeError("gate deadline")\n'
+            ' time.sleep(.001)\n'
+            's=os.stat(".");print(json.dumps([s.st_dev,s.st_ino]),flush=True)')
+    try:
+        os.chdir(first)
+        if change == 'before-fork':
+            os.chdir(second)
+        child = subprocess.Popen([sys.executable, '-I', '-S', '-c', code, str(gate)],
+                                 cwd='.', stdout=subprocess.PIPE)
+        if change == 'after-fork':
+            os.chdir(second)
+        gate.touch()
+        output, _ = child.communicate(timeout=8)
+        assert child.returncode == 0
+        expected = (second if change == 'before-fork' else first).stat()
+        assert json.loads(output) == [expected.st_dev, expected.st_ino]
+        with pytest.raises(ChildProcessError):
+            os.waitpid(child.pid, os.WNOHANG)
+    finally:
+        os.chdir(original)
+        if child is not None:
+            if child.poll() is None:
+                child.kill()
+            child.wait()
+            if child.stdout is not None:
+                child.stdout.close()
+    assert before == len(os.listdir('/proc/self/fd'))
+
+
+@pytest.mark.skipif(__import__('sys').platform != 'linux', reason='Linux search permission/chdir errno')
+def test_stock_relative_cwd_preserves_search_permission_error(tmp_path):
+    import errno
+    import os
+    import subprocess
+    import sys
+    assert os.geteuid() != 0  # Actual compartment source identity; never root's override.
+    before = len(os.listdir('/proc/self/fd'))
+    original = Path.cwd()
+    directory = tmp_path / 'unsearchable'
+    directory.mkdir()
+    try:
+        os.chdir(directory)
+        directory.chmod(0o600)
+        with pytest.raises(PermissionError) as caught:
+            subprocess.Popen([sys.executable, '-I', '-S', '-c', 'pass'], cwd='.')
+        assert caught.value.errno == errno.EACCES and caught.value.filename == '.'
+    finally:
+        directory.chmod(0o700)
+        os.chdir(original)
+    assert before == len(os.listdir('/proc/self/fd'))
+
+
+@pytest.mark.parametrize('mutation', ['token', 'handle', 'argv-object', 'constructor', 'activation',
+                                    'registration', 'options', 'explicit-cwd', 'reused',
+                                    'preexec_fn', 'user', 'group', 'extra_groups', 'executable', 'shell'])
+def test_context_data_mutation_refuses_without_launch_authority(mutation):
+    # Pure data checks: no fake core frame, original case, receipt or child.
+    handle, constructor = object(), object()
+    argv = ['owned-control']
+    activation = SimpleNamespace(python_consumed={'token'})
+    options = {'cwd': None}
+    launch = {'launch_token': 'token', 'registration': {'class': 'source-child-relative-probe',
+                                                      'python': True},
+              'original_init': constructor, 'handle': handle, 'child_argv': argv,
+              'activation': activation, 'kwargs': options}
+    used = set()
+    if mutation == 'token':
+        launch['launch_token'] = 'other'
+    elif mutation == 'handle':
+        handle = object()
+    elif mutation == 'argv-object':
+        argv = list(argv)
+    elif mutation == 'constructor':
+        constructor = object()
+    elif mutation == 'activation':
+        activation = SimpleNamespace(python_consumed={'token'})
+    elif mutation == 'registration':
+        launch['registration'] = {'class': 'unknown', 'python': True}
+    elif mutation == 'options':
+        options = {'cwd': None, 'stdout': -1}
+    elif mutation == 'explicit-cwd':
+        options['cwd'] = '/source'
+    elif mutation == 'reused':
+        used.add('token')
+    else:
+        options[mutation] = True
+    refused = []
+    def refuse(reason):
+        refused.append(reason)
+        raise RuntimeError(reason)
+    with pytest.raises(RuntimeError):
+        boundary.consume(launch, handle, argv, options, activation, constructor, used, refuse)
+    assert len(refused) == 1
+
+
+def test_context_data_is_single_use_without_launch_authority():
+    handle, constructor = object(), object()
+    argv, options = [], {}
+    activation = SimpleNamespace(python_consumed={'token'})
+    launch = {'launch_token': 'token', 'registration': {'class': 'source-child-relative-probe',
+                                                      'python': True},
+              'original_init': constructor, 'handle': handle, 'child_argv': argv,
+              'activation': activation, 'kwargs': options}
+    def refuse(reason):
+        raise RuntimeError(reason)
+    used = set()
+    assert boundary.consume(launch, handle, argv, options, activation, constructor, used, refuse)[0] == 'token'
+    with pytest.raises(RuntimeError, match='reused_context'):
+        boundary.consume(launch, handle, argv, options, activation, constructor, used, refuse)
+
+
+@pytest.mark.parametrize('mutation', ['platform', 'version', 'implementation', 'uids', 'gids',
+                                    'stdlib', 'native', 'use_spawn', 'use_vfork', 'runtime'])
+def test_runtime_inventory_mutations_are_not_equivalent(mutation):
+    actual = boundary.expected_runtime('bound-runtime-pin')
+    actual[mutation] = 'drift'
+    def refuse(reason):
+        raise RuntimeError(reason)
+    with pytest.raises(RuntimeError, match='child_relative_runtime'):
+        boundary.validate_runtime(actual, 'bound-runtime-pin', refuse)
+
+
+def test_existing_primary_wrapper_self_reference_is_checked():
+    compiled = compile((ROOT / 'primary_operations.py').read_bytes(),
+                       '/guard/primary_operations.py', 'exec', dont_inherit=True)
+    code = boundary.named(compiled, 'native_init')
+    assert set(code.co_freevars) == {'guard', 'initialize', 'native_init', 'original_init',
+                                    'require_ready', 'self', 'state'}
+    source = (ROOT / 'finite/child_relative.py').read_text()
+    assert "cells['native_init'].cell_contents is not captured" in source
