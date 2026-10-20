@@ -28,10 +28,12 @@ def test_stopped_child_binding_refuses_before_receipt(monkeypatch, mutation):
     import json
     vector = ['python', '-c', 'pass']
     pin = hashlib.sha256(json.dumps(vector).encode()).hexdigest()
-    facts = {'cwd': '/source', 'identity': [1, 2]}
+    parent_view = {'cwd': '/source', 'identity': [1, 2], 'mount': {'options': ['ro']},
+                   'readonly': True, 'searchable': True}
+    facts = {**parent_view, 'searchable': None}
     row = {'kind': 'child_relative_constructor', 'owner_pid': 11, 'token': 'token',
            'original_cwd': None, 'constructor_cwd': '.', 'class': 'class',
-           'argv_sha256': pin, 'parent_view': facts}
+           'argv_sha256': pin, 'parent_view': parent_view}
     selected = {'owner_pid': 11, 'token': 'token', 'bootstrap_sha256': 'pin',
                 'registration': {'class': 'class'}, 'transformed_argv_sha256': pin, 'cwd': '/source'}
     rows = [row]
@@ -104,6 +106,7 @@ def test_stock_relative_cwd_follows_child_inheritance(tmp_path, change):
     import os
     import subprocess
     import sys
+    require_linux_stock()
     before = len(os.listdir('/proc/self/fd'))
     original = Path.cwd()
     first, second = tmp_path / 'first', tmp_path / 'second'
@@ -151,6 +154,7 @@ def test_stock_relative_cwd_preserves_search_permission_error(tmp_path):
     import subprocess
     import sys
     assert os.geteuid() != 0  # Actual compartment source identity; never root's override.
+    require_linux_stock()
     before = len(os.listdir('/proc/self/fd'))
     original = Path.cwd()
     directory = tmp_path / 'unsearchable'
@@ -227,7 +231,7 @@ def test_context_data_is_single_use_without_launch_authority():
 
 
 @pytest.mark.parametrize('mutation', ['platform', 'version', 'implementation', 'uids', 'gids',
-                                    'stdlib', 'native', 'use_spawn', 'use_vfork', 'runtime'])
+                                    'stdlib', 'native', 'library', 'use_spawn', 'use_vfork', 'runtime'])
 def test_runtime_inventory_mutations_are_not_equivalent(mutation):
     actual = boundary.expected_runtime('bound-runtime-pin')
     actual[mutation] = 'drift'
@@ -344,3 +348,55 @@ def test_saved_context_mutations_are_not_rebound(mutation):
     elif mutation == 'environment':
         env['OWN_CONTROL'] = 'drift'
     assert boundary.matches_saved(saved, launch, handle, options) is (mutation == 'none')
+
+
+def require_linux_stock():
+    import hashlib
+    import subprocess
+    import sys
+    import _posixsubprocess
+    assert sys.version == boundary.VERSION and sys.implementation.name == 'cpython'
+    assert subprocess._USE_POSIX_SPAWN and subprocess._USE_VFORK
+    assert hashlib.sha256(Path(subprocess.__file__).read_bytes()).hexdigest() == boundary.STDLIB
+    assert hashlib.sha256(Path(_posixsubprocess.__file__).read_bytes()).hexdigest() == boundary.NATIVE
+    assert hashlib.sha256(Path('/usr/local/lib/libpython3.13.so.1.0').read_bytes()).hexdigest() == boundary.LIBRARY
+
+
+@pytest.mark.parametrize('mutation', ['none', 'child-search', 'identity', 'mount', 'readonly', 'unknown-field'])
+def test_search_is_attested_by_child_against_stopped_object(mutation):
+    from finite.child_relative_view import child_matches
+    stopped = {'cwd': '/source', 'identity': [1, 2], 'mount': {'options': ['ro']},
+               'readonly': True, 'searchable': None}
+    actual = {**stopped, 'searchable': True}
+    if mutation == 'child-search':
+        actual['searchable'] = False
+    elif mutation == 'identity':
+        actual['identity'] = [1, 3]
+    elif mutation == 'mount':
+        actual['mount'] = {'options': ['rw']}
+    elif mutation == 'readonly':
+        actual['readonly'] = False
+    elif mutation == 'unknown-field':
+        actual['unknown'] = True
+    assert child_matches(actual, stopped) is (mutation == 'none')
+
+
+def test_outer_predicate_requires_parent_search_and_pending_child_search():
+    import hashlib
+    import json
+    vector = ['owned-control']
+    pin = hashlib.sha256(json.dumps(vector).encode()).hexdigest()
+    parent = {'cwd': '/source', 'identity': [1, 2], 'mount': {'options': ['ro']},
+              'readonly': True, 'searchable': True}
+    actual = {**parent, 'searchable': None}
+    selected = {'registration': {'class': 'source-child-relative-probe'},
+                'transformed_argv_sha256': pin, 'cwd': '/source'}
+    row = {'original_cwd': None, 'constructor_cwd': '.', 'class': 'source-child-relative-probe',
+           'argv_sha256': pin, 'parent_view': parent}
+    custody.validate(selected, row, actual, vector)
+    for target in (parent, actual):
+        previous = target['searchable']
+        target['searchable'] = False
+        with pytest.raises(RuntimeError):
+            custody.validate(selected, row, actual, vector)
+        target['searchable'] = previous

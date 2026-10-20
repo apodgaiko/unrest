@@ -37,9 +37,13 @@ def activate(profile, event, arguments):
         import stat
         info = receipt.lstat()
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != 20001
-                or stat.S_IMODE(info.st_mode) != 0o444 or info.st_nlink != 1):
+                or stat.S_IMODE(info.st_mode) != 0o444 or info.st_nlink != 1 or info.st_size > 65536):
             os._exit(86)
         context = json.loads(receipt.read_bytes())
+        if (type(context) is not dict or set(context) != {
+                'schema', 'token', 'identity', 'view', 'constructor', 'prebody_required', 'allowed', 'refusal'}
+                or context['schema'] != 'unrest.v047.child-relative-prebody.v1'):
+            os._exit(86)
         if context.get('allowed') is not True:
             diagnostic = Path('/work') / ('primary-native-state-' + str(os.getpid()) + '.json')
             observed = json.loads(diagnostic.read_bytes())
@@ -51,11 +55,21 @@ def activate(profile, event, arguments):
         module = load('child_relative_view', str(support),
                       manifest['direct_support']['files'][str(support)])
         birth = context['identity']
-        actual_view = module.view()
+        try:
+            actual_view = module.view()
+        except (OSError, RuntimeError, ValueError, KeyError):
+            os._exit(86)
         if (birth['pid'] != profile['pid'] or birth['ppid'] != profile['parent']
                 or birth['start_ticks'] != profile['start_ticks']
                 or birth['boot_id'] != profile['boot_id'] or not context['prebody_required']
-                or actual_view != context['view']):
+                or birth['uid'] != os.geteuid() or os.getresuid() != (20000, 20000, 20000)
+                or os.getresgid() != (20000, 20000, 20000)
+                or not module.child_matches(actual_view, context['view'])
+                or context['constructor']['token'] != context['token']
+                or context['constructor']['original_cwd'] is not None
+                or context['constructor']['constructor_cwd'] != '.'
+                or context['constructor']['argv_sha256'] != hashlib.sha256(
+                    json.dumps(profile['orig_argv']).encode()).hexdigest()):
             os._exit(86)
         diagnostic = Path('/work') / ('primary-native-state-' + str(os.getpid()) + '.json')
         observed = json.loads(diagnostic.read_bytes())

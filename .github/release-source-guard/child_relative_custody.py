@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from finite.child_relative_view import view
+from finite.child_relative_view import view, same_object
 from finite.linux_identity import identity
 
 
@@ -17,7 +17,9 @@ def validate(selected, record, actual, vector):
             or record['class'] != selected['registration']['class']
             or record['argv_sha256'] != selected['transformed_argv_sha256']
             or record['argv_sha256'] != hashlib.sha256(json.dumps(vector).encode()).hexdigest()
-            or actual != record['parent_view'] or actual['cwd'] != selected['cwd']):
+            or not same_object(actual, record['parent_view'])
+            or record['parent_view']['searchable'] is not True
+            or actual['searchable'] is not None or actual['cwd'] != selected['cwd']):
         raise RuntimeError('child_relative_child_cwd_binding')
 
 def check(authority, trace, pid, vector):
@@ -40,7 +42,7 @@ def check(authority, trace, pid, vector):
                    'facts': getattr(error, 'facts', None)}
         trace.poison.append('primary_source_child_relative_cwd')
         authority.supervisor.poison('primary_source_child_relative_cwd')
-    receipt = {'token': selected['token'], 'identity': identity(pid), 'view': actual,
+    receipt = {'schema': 'unrest.v047.child-relative-prebody.v1', 'token': selected['token'], 'identity': identity(pid), 'view': actual,
                'constructor': record, 'prebody_required': True, 'allowed': refusal is None,
                'refusal': refusal}
     path = Path('/receipts/primary-startup') / (str(pid) + '.child-relative.json')

@@ -285,7 +285,9 @@ against its inherited cwd. A parent cwd change before the fork can affect that
 inheritance. Parent inspection alone therefore does not prove the launch safe.
 
 Before native pre-body admission, stopped-child custody joins the exact constructor
-record to actual child cwd device/inode, source manifest, mount and launch binding.
+record to actual child cwd device/inode, source manifest, mount and launch binding. Observer-side procfs access does not
+attest child search permission: the UID20000 child checks that itself before body
+or READY, while object/mount facts must match the exact stopped-child binding.
 A controller-owned receipt carries either verified facts or a retained denial. A
 denied child exits86 before bootstrap/READY, allowing its genuine parent to collect
 status while global poison remains set. A permitted child repeats the check before its original

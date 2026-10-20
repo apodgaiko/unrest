@@ -14,6 +14,7 @@ import weakref
 
 STDLIB = 'e4049ed91ed101b09b0dc96bbf234f646c1728090d643a474b024276cc2a028c'
 NATIVE = '925e5f643c0c5f9d5e897d6faca9af7d9f7dbe624b7d31cab4d97dde15a748af'
+LIBRARY = '9dfc25c8ade9fb31dbeb1f5e79ac693d588245e2dbb8fa7ebd939db6231fe06d'
 APPLICABLE = frozenset({
     'canonical-backend',
     'composed-http-role:orchestrator',
@@ -256,7 +257,7 @@ def consume(launch, handle, argv, options, activation, constructor, used, refuse
 def expected_runtime(runtime_pin):
     return {'platform': 'linux', 'version': VERSION, 'implementation': 'cpython',
             'uids': (20000, 20000, 20000), 'gids': (20000, 20000, 20000),
-            'stdlib': STDLIB, 'native': NATIVE, 'use_spawn': True, 'use_vfork': True,
+            'stdlib': STDLIB, 'native': NATIVE, 'library': LIBRARY, 'use_spawn': True, 'use_vfork': True,
             'runtime': runtime_pin}
 
 
@@ -435,6 +436,7 @@ def install(state, activation, emit, refuse, checked):
             'uids': os.getresuid(), 'gids': os.getresgid(),
             'stdlib': hashlib.sha256(source.read_bytes()).hexdigest(),
             'native': hashlib.sha256(Path(_posixsubprocess.__file__).read_bytes()).hexdigest(),
+            'library': hashlib.sha256(Path('/usr/local/lib/libpython3.13.so.1.0').read_bytes()).hexdigest(),
             'use_spawn': subprocess._USE_POSIX_SPAWN, 'use_vfork': subprocess._USE_VFORK,
             'runtime': guard.digest(state['runtime']['realpath'])}
         validate_runtime(actual_runtime, state['runtime']['sha256'], refuse)
@@ -448,7 +450,8 @@ def install(state, activation, emit, refuse, checked):
         emit({'kind': 'child_relative_constructor', 'token': token,
               'class': registration['class'], 'original_cwd': None, 'constructor_cwd': '.',
               'parent_view': facts, 'argv_sha256': hashlib.sha256(json.dumps(args).encode()).hexdigest(),
-              'stock_stdlib_sha256': STDLIB, 'stock_native_sha256': NATIVE})
+              'stock_stdlib_sha256': STDLIB, 'stock_native_sha256': NATIVE,
+              'stock_library_sha256': LIBRARY, 'runtime': actual_runtime})
         # No catch/retry: stock chdir and constructor errors retain their errno.
         return stock(handle, args, **{**kwargs, 'cwd': '.'})
 
