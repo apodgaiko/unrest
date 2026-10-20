@@ -144,8 +144,7 @@ def main():
     prepare = ['docker','run','--rm','--network=none','--read-only','--cap-drop=ALL',
                '--security-opt=no-new-privileges','--user=20001:20001',*mounts,*console_mounts,
                '--entrypoint=/usr/local/bin/python',image,'-I','/guard/prepare_source.py',nonce,selection]
-    with log.open('ab') as errors:
-        prepared = subprocess.run(prepare, stdout=subprocess.PIPE, stderr=errors, check=False)
+    prepared = source_root.run_preparer(prepare, source, log)
     (raw / 'prepared.stdout').write_bytes(prepared.stdout)
     exit_code = prepared.returncode
     container = 'focused-source-' + secrets.token_hex(12)

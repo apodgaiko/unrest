@@ -376,3 +376,50 @@ def test_custody_setup_loader_needs_no_module_registration():
     spec.loader.exec_module(module)
     assert module.OVERLAYS == root.OVERLAYS and module.OWNED == []
     assert name not in sys.modules
+
+
+@pytest.mark.parametrize('outcome', ['success', 'process-error', 'stop-error', 'both-errors'])
+def test_custody_preparer_is_owned_before_launch(custody, monkeypatch, outcome):
+    target = custody.seal()
+    seen = []
+    stop = root.stop_capsule
+
+    def run(argv, **kwargs):
+        assert argv[:2] == ['docker', 'run']
+        name = argv[argv.index('--name') + 1]
+        assert root.CONTAINERS[name]['source'] == str(target)
+        assert '--label=unrest.source-custody=' + root.CONTAINERS[name]['token'] in argv
+        seen.append(name)
+        if outcome in {'process-error', 'both-errors'}:
+            raise OSError('preparer process failure')
+        return SimpleNamespace(returncode=0, stdout=b'original setup output')
+
+    def stopped(name):
+        assert seen == [name] and name in root.CONTAINERS
+        if outcome in {'stop-error', 'both-errors'}:
+            raise RuntimeError('preparer stop failure')
+        del root.CONTAINERS[name]
+
+    mount_run = root.subprocess.run
+    monkeypatch.setattr(root.subprocess, 'run', run)
+    monkeypatch.setattr(root, 'stop_capsule', stopped)
+    if outcome == 'success':
+        assert root.run_preparer(['docker', 'run', '--rm'], target, custody.log).stdout == b'original setup output'
+    elif outcome == 'both-errors':
+        with pytest.raises(BaseExceptionGroup) as result:
+            root.run_preparer(['docker', 'run', '--rm'], target, custody.log)
+        assert isinstance(result.value.exceptions[0], OSError)
+        assert isinstance(result.value.exceptions[1], RuntimeError)
+    else:
+        with pytest.raises(OSError if outcome == 'process-error' else RuntimeError):
+            root.run_preparer(['docker', 'run', '--rm'], target, custody.log)
+    assert custody.mounted and root.OWNED
+    if outcome in {'stop-error', 'both-errors'}:
+        assert len(root.CONTAINERS) == 1
+        outcome = 'success'
+        stopped(seen[0])
+    assert not root.CONTAINERS
+    monkeypatch.setattr(root, 'stop_capsule', stop)
+    monkeypatch.setattr(root.subprocess, 'run', mount_run)
+    root.release()
+    assert not root.OWNED

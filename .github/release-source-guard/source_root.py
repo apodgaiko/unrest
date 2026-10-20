@@ -273,6 +273,32 @@ def plan_capsule(argv: list[str], source: Path) -> list[str]:
     return [*argv[:2], '--label=unrest.source-custody=' + token, *argv[2:]]
 
 
+def run_preparer(argv: list[str], source: Path, log: Path) -> subprocess.CompletedProcess[bytes]:
+    """The short source-bound setup capsule has the same ownership lifetime."""
+    name = 'source-prepare-' + secrets.token_hex(16)
+    command = plan_capsule([*argv[:2], '--name', name, *argv[2:]], source)
+    initiating: BaseException | None = None
+    try:
+        with log.open('ab') as errors:
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=errors, check=False)
+        record = CONTAINERS[name]['custody']
+        if record is not None:
+            event(record, 'preparer_exit', exit_code=result.returncode)
+        if result.returncode:
+            initiating = subprocess.CalledProcessError(result.returncode, command, output=result.stdout)
+        return result
+    except BaseException as error:
+        initiating = error
+        raise
+    finally:
+        try:
+            stop_capsule(name)
+        except BaseException as cleanup:
+            if initiating is not None:
+                raise BaseExceptionGroup('source preparation and stop failed', [initiating, cleanup]) from None
+            raise
+
+
 def bind_capsule(config: dict[str, Any]) -> None:
     name = config['Name'].removeprefix('/')
     owned = CONTAINERS[name]

@@ -178,8 +178,7 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
                    '--mount=type=bind,src=' + str(source) + ',dst=/source,readonly',
                    '--entrypoint=/usr/local/bin/python', image, '-B',
                    '/guard/primary_source_setup.py', secrets.token_hex(32)]
-        with log.open('ab') as errors:
-            prepared = subprocess.run(prepare, stdout=subprocess.PIPE, stderr=errors, check=False)
+        prepared = source_root.run_preparer(prepare, source, log)
         if prepared.returncode:
             # Retain the named bounded child record before the parent refuses.
             if len(prepared.stdout) <= 8192:

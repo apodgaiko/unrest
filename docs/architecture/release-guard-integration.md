@@ -321,7 +321,9 @@ single-link regular files exclude shared or partially copied backing.
 
 A capsule create intent has an unpredictable ownership label before Docker runs.
 The inspected immutable capsule ID, label and exact read-only source binding join
-that intent. Stop reauthenticates the ID and removes only that capsule. A successful
+that intent. The short source-bound preparation capsule also registers its labeled name before
+launch and confirms absence after its original auto-removal. Stop reauthenticates
+the ID and removes only that capsule. A successful
 exact-name listing proves absence; Docker query or stop failures retain ownership
 and prevent unsealing. No unrelated container is stopped by a reused name.
 
