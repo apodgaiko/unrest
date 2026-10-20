@@ -482,3 +482,28 @@ report. This survives a later test hang that prevents pytest's terminal summary.
 Report bodies stay inside encrypted evidence; public events retain outcome
 metadata only. The observer changes no report, item, timeout, assertion, or exit
 status. A diagnostic write error cannot replace the original result.
+
+For the existing local terminal-redaction registration only, the primary profile
+records stock CPython's post-initialization `LC_CTYPE=C.UTF-8` addition when the
+original exact two-key fixture environment has no locale. The complete immutable
+registration, source pin, literal vector, interpreter flags, and synthetic
+credential digest must match. Exec consumes the unchanged original environment;
+the post-init environment is independently exact. This is no new launch route or
+provider permission, and every other environment difference still refuses.
+
+The primary source namespace carries a closed public Git projection rather than
+an empty object directory with a dangling HEAD. It contains the exact current
+commit graph, current tree/index, FM000 tree, and the byte-pinned v0.2.0, v0.2.1
+and v0.4.0 tag/tree objects required by unchanged history tests. The producer
+verifies the packed object set with no external deltas. Runner Git configuration,
+hooks, remotes, alternate paths, replacement refs and unrelated history trees are
+not copied. Normal immutable-source custody covers the resulting pack, index and
+refs. No source test or Git query result is synthesized.
+
+Only the full-source environment appends the existing `/native/bin` data location
+to PATH for stat-only launcher preflight in ordinary mocked-startup tests. Its
+byte-pinned adapter metadata already exists in the image; the Darwin Node image
+stays nonexecutable, and the kernel/finite guards grant no native adapter launch.
+This preserves early launch-error checks while allowing tests of a later startup
+failure to reach their original mocked child. Metadata presence remains distinct
+from transport selection and genuine native-provider acceptance.

@@ -77,6 +77,10 @@ def environment(*, source=False):
             'UV_PYTHON': PYTHON, 'UV_PYTHON_DOWNLOADS': 'never',
             'UV_CONFIG_FILE': '/inputs/uv.toml', 'PYTHONDONTWRITEBYTECODE': '1',
             'SOURCE_DATE_EPOCH': '1700000000', 'GITHUB_WORKSPACE': '/source'}
+    if source:
+        # Existing byte-pinned adapter data satisfies stat-only preflight.
+        # Its Node image stays nonexecutable; no execution route is admitted.
+        result['PATH'] += ':/native/bin'
     from primary_type_cache import runtime_environment
     return runtime_environment(result, source=source)
 

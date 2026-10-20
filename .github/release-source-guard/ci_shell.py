@@ -141,14 +141,11 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
         target.chmod(path.stat().st_mode & 0o777)
         source_pins[name] = hashlib.sha256(body).hexdigest()
     source_root.layout(source)
-    # Minimal public read-only discovery metadata, with no runner Git config,
-    # hooks, credentials, alternate object path or private history.
+    # Preserve required public Git semantics without copying runner metadata.
+    from public_git_snapshot import prepare as prepare_public_git
+    git_projection = prepare_public_git(REPOSITORY, source, os.environ['GITHUB_SHA'])
+    (raw / 'public-git-projection.json').write_bytes(canonical(git_projection))
     git_root = source / '.git'
-    git_root.mkdir()
-    (git_root / 'objects').mkdir()
-    (git_root / 'refs').mkdir()
-    (git_root / 'HEAD').write_text(os.environ['GITHUB_SHA'] + '\n')
-    (git_root / 'config').write_text('[core]\nrepositoryformatversion = 0\nbare = false\n')
     # The readonly bind must have the real source UID, rather than bypassing
     # Git's repository-ownership safety check with configuration overrides.
     if run(['sudo', '-n', 'chown', '--no-dereference', '-R', '20000:20000', str(git_root)], log).returncode:
