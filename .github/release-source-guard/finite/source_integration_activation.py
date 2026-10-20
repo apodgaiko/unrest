@@ -48,7 +48,9 @@ def create(state, emit, refuse, ready):
                 if actual != registration:
                     self.refuse('source_owner_probe_activation_registration_drift')
                 self.shared()
-                self.emit({'kind': 'source_execution_owner_startup_consumption',
+                self.emit({'kind': ('source_child_relative_startup_consumption'
+                                    if registration['class'] == 'source-child-relative-probe'
+                                    else 'source_execution_owner_startup_consumption'),
                            'launch_token': launch['launch_token'],
                            'source_binding': registration['source_binding'],
                            'custody_case': state['case'], 'execution_owner': owner})
