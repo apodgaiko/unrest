@@ -71,8 +71,31 @@ def test_prebody_extension_precedes_bootstrap_ready():
 
 def test_stock_constructor_has_no_retry_or_private_execute_child_copy():
     source = (ROOT / 'finite/child_relative.py').read_text()
-    assert 'except' not in source[source.index('    def constructor('):]
+    assert 'except' not in source[source.index('        # No catch/retry:') :]
     import ast
     assert not any(isinstance(node, ast.FunctionDef) and node.name == '_execute_child'
                    for node in ast.walk(ast.parse(source)))
     assert "'cwd': '.'" in source
+
+
+def test_install_never_accepts_a_direct_caller(monkeypatch):
+    import subprocess
+    import sys
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('runtime_guard', ROOT / 'finite/runtime_guard.py')
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    monkeypatch.setitem(sys.modules, 'runtime_guard', guard)
+    state = {'guard': str(ROOT / 'finite/runtime_guard.py')}
+    guard._STATE = state
+    class Refusal(RuntimeError):
+        pass
+    def refuse(reason):
+        raise Refusal(reason)
+    def checked(name):
+        return {'view': lambda: None}
+    stock = subprocess.Popen.__init__
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess.Popen, '__init__', stock)
+        with pytest.raises(Refusal, match='child_relative_install_context'):
+            boundary.install(state, object(), lambda row: None, refuse, checked)

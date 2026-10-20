@@ -25,8 +25,6 @@ def create(state, emit, refuse, ready):
                 self.owned_environment = checked('source_environment.py')['capture'](state)
 
         def ordinary_python(self, guard, launch, argv, cwd, environment, registration):
-            if hasattr(self, 'arm_child_relative'):
-                self.arm_child_relative(argv, cwd, environment, registration)
             owner = checked('execution_owner.py')['current'](state, self.refuse)
             if owner != state.get('case', ''):
                 self.emit({'kind': 'source_nested_execution_owner',
@@ -84,7 +82,8 @@ def create(state, emit, refuse, ready):
                        'launch_token': launch['launch_token'], 'shared_startup_seal': True})
 
     activation = SourceIntegrationActivation()
-    if state.get('source_selection') == 'primary-source':
-        activation.arm_child_relative = checked('child_relative.py')['install'](
+    if (state.get('source_selection') == 'primary-source'
+            and state['operation_support']['path'] == '/guard/primary_operations.py'):
+        checked('child_relative.py')['install'](
             state, activation, emit, refuse, checked)
     return activation

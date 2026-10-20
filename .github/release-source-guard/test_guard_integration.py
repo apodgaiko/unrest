@@ -48,6 +48,7 @@ from test_source_root import (  # noqa: F401
 
 from test_child_relative import (  # noqa: F401
     test_closed_applicable_inventory_includes_ordinary_routes,
+    test_install_never_accepts_a_direct_caller,
     test_stopped_child_binding_refuses_before_receipt,
     test_no_constructor_record_retains_original_custody,
     test_prebody_extension_precedes_bootstrap_ready,
