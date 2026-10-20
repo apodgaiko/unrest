@@ -466,3 +466,12 @@ module bytes, payload/token custody and live code/globals. Outer parameter
 labels do not grant authority. The terminal vector, handler, policy, cwd,
 environment and runtime checks remain identical; no registry entry or native
 provider route is added.
+
+The original CLI import positive control can issue exactly one read-only Git
+query of the frozen source root: `git -C <source> rev-parse --show-toplevel`.
+Admission joins its authenticated original inline payload and live globals to
+the source-pinned CLI callback and repository checker, and checks the selected
+Git image. Other vectors, repositories, explicit cwd/environment substitutions,
+Git environment redirects and changed payload/caller identities refuse. This
+route does not authorize a general Git command family or any provider launch;
+the existing native parent-wait and execution-custody gates remain required.

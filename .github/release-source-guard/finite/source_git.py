@@ -14,6 +14,18 @@ def admit(argv, cwd, env, state, append, refuse):
     exec(compile(fallback.read_bytes(), str(fallback), "exec"), namespace)
     frames = namespace["active_frames"]()
     try:
+        if state.get('class') == 'original-cli-import:_import_probe':
+            guard = sys.modules['runtime_guard']
+            path = Path(state['guard']).with_name('repository_probe_git.py')
+            try:
+                selected = guard.checked_source(path, state['direct_support']['files'][str(path)])['admit'](
+                    argv, cwd, env, state, append, refuse, frames)
+            except guard.GuardRefusal:
+                raise
+            except (OSError, RuntimeError, KeyError, AttributeError, TypeError, ValueError):
+                refuse('original_import_probe_git_binding_error')
+            if selected is not None:
+                return selected
         foundation = root / "src/unrest_harness/foundation_tools.py"
         effect = next(
             (
