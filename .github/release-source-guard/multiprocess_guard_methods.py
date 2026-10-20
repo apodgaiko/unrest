@@ -36,6 +36,8 @@ def test_owned_exit17_keeps_raw_status():
     _source_environment_probe()
     _binding_inventory()
     _nested_owner_probe()
+    from child_relative_methods import probe
+    probe()
     _lease_factories()
     _refused_acquisition()
 

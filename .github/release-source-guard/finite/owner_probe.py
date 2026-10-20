@@ -16,6 +16,9 @@ INNER = NESTED + '::test_nested_owner'
 def admit(argv, cwd, env, state, append, refuse):
     if state.get('case') != OUTER:
         return None
+    own = child_relative(argv, cwd, env, state, append, refuse)
+    if own is not None:
+        return own
     nested = state.get('class') == 'source-execution-owner-probe'
     relative, name = (NESTED, 'test_nested_owner') if nested else (METHOD, '_nested_owner_probe')
     root = Path(state['checkout'])
@@ -68,3 +71,29 @@ def admit(argv, cwd, env, state, append, refuse):
                 'python': True, 'source_binding': binding}
     finally:
         frames.clear()
+
+
+def child_relative(argv, cwd, env, state, append, refuse):
+    relative = '.github/release-source-guard/child_relative_methods.py'
+    source = Path(state['checkout']) / relative
+    frame = sys._getframe(1)
+    while frame is not None and not (frame.f_code.co_filename == str(source)
+                                      and frame.f_code.co_name == 'probe'):
+        frame = frame.f_back
+    if frame is None:
+        return None
+    module = sys.modules.get('child_relative_methods')
+    pin = state['product_pins'][relative]
+    fn = getattr(module, 'probe', None)
+    syntax = ast.parse(source.read_bytes())
+    calls = [n for n in ast.walk(syntax) if isinstance(n, ast.Call)
+             and ast.unparse(n.func) == 'subprocess.run']
+    if (len(calls) != 1 or frame.f_lineno != calls[0].lineno or fn is None
+            or frame.f_globals is not vars(module) or frame.f_code is not fn.__code__
+            or fn.__code__ != state['isolated_named'](state['isolated_source_code'](source), 'probe')
+            or hashlib.sha256(source.read_bytes()).hexdigest() != pin
+            or argv != [sys.executable, '-I', '-S', '-c', 'pass'] or cwd is not None
+            or env is not None or os.getcwd() != state['checkout']):
+        refuse('child_relative_probe_binding')
+    return {'class': 'source-child-relative-probe', 'python': True,
+            'source_binding': {'path': str(source), 'line': calls[0].lineno, 'sha256': pin}}

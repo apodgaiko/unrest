@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from primary_source_authority import SourceAuthority as OriginalSourceAuthority
 from multiprocess_custody import exec_custody
+from child_relative_custody import check as child_relative_check
 from primary_dependency_authority import DependencySourceAuthority as OriginalDependencySourceAuthority
 
 
 class OwnedMultiprocessCustody:
     def exec_descriptors(self, trace, pid, vector, environment, cwd):
+        child_relative_check(self, trace, pid, vector)
         registration = self.bound.get(pid, {}).get("registration", {})
         if registration.get("class") not in {
             "source-multiprocess-tracker",

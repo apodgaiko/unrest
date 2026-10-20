@@ -32,6 +32,23 @@ def activate(profile, event, arguments):
     if hashlib.sha256(body).hexdigest() != profile['manifest_sha256']:
         os._exit(86)
     manifest = json.loads(body)
+    receipt = Path('/receipts/primary-startup') / (str(os.getpid()) + '.child-relative.json')
+    if receipt.exists():
+        import stat
+        info = receipt.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 20001
+                or stat.S_IMODE(info.st_mode) != 0o444 or info.st_nlink != 1):
+            os._exit(86)
+        context = json.loads(receipt.read_bytes())
+        support = Path('/guard/finite/child_relative_view.py')
+        module = load('child_relative_view', str(support),
+                      manifest['direct_support']['files'][str(support)])
+        birth = context['identity']
+        if (birth['pid'] != profile['pid'] or birth['ppid'] != profile['parent']
+                or birth['start_ticks'] != profile['start_ticks']
+                or birth['boot_id'] != profile['boot_id'] or not context['prebody_required']
+                or module.view() != context['view']):
+            os._exit(86)
     if profile['source_role'] == 'source-bootstrap':
         # The observer already consumed the fixture's exact transformed argv,
         # parent identity, source binding and environment. Its pinned -c program

@@ -45,6 +45,8 @@ def main():
                            'realpath': PYTHON, 'sha256': sha(PYTHON)}
     # Source applicability remains pinned to the original template. The complete
     # current snapshot is a separate custody input, never a rebased baseline.
+    manifest['product_pins']['.github/release-source-guard/child_relative_methods.py'] = sha(
+        '/source/.github/release-source-guard/child_relative_methods.py')
     manifest['source_selection'] = 'primary-source'
     manifest['source_case'] = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
     manifest['scope'] = 'primary source entry'

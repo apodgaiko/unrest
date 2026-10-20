@@ -261,3 +261,32 @@ The encrypted raw host source manifest uses the existing admitted
 mount flags; its exact digest joins the own-identity proof. The input descriptor
 remains `/inputs/source-custody.json`. No archive member or consumer allowlist is
 expanded for this retention.
+
+
+### Checked child-relative constructor boundary
+
+Only an already admitted ordinary Python SOURCE launch with original `cwd=None`
+can consume the single-use constructor context. The checked activation installs
+its saved stock `Popen.__init__` wrapper before the unchanged finite core captures
+that constructor. At invocation, the wrapper authenticates the actual inner core
+code/globals, registration, handle, token, original argv and exact options. The
+static `child_relative.APPLICABLE` inventory enumerates existing Python classes;
+it grants no admission. Explicit cwd and non-source contexts retain stock handling.
+
+Method C passes `cwd='.'` to the stock constructor, retaining every other argument.
+It requires the exact hosted CPython/stdlib/native implementation, unchanged source
+credentials, no custom preexec or credential switches, and a searchable read-only
+source cwd matching the host manifest and actual mount. No global spawn flag or
+private execute-child implementation is replaced. Direct posix_spawn still refuses.
+A non-None cwd selects the existing stock fork/exec path; the child resolves `.`
+against its inherited cwd. A parent cwd change before the fork can affect that
+inheritance. Parent inspection alone therefore does not prove the launch safe.
+
+Before native pre-body admission, stopped-child custody joins the exact constructor
+record to actual child cwd device/inode, source manifest, mount and launch binding.
+A controller-owned receipt makes the child repeat that check before its original
+bootstrap or any successful authenticated READY. Failed checks retain poison; stock
+constructor/chdir errors propagate without swallowing or retry. This bounded method
+does not claim universal cwd equivalence or native interception. Its own-identity
+supplementary probe shares the production boundary; original source certification,
+all-five independent checks and the release gates remain separate requirements.

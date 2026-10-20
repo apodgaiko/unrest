@@ -25,12 +25,14 @@ def create(state, emit, refuse, ready):
                 self.owned_environment = checked('source_environment.py')['capture'](state)
 
         def ordinary_python(self, guard, launch, argv, cwd, environment, registration):
+            if hasattr(self, 'arm_child_relative'):
+                self.arm_child_relative(argv, cwd, environment, registration)
             owner = checked('execution_owner.py')['current'](state, self.refuse)
             if owner != state.get('case', ''):
                 self.emit({'kind': 'source_nested_execution_owner',
                            'custody_case': state['case'], 'execution_owner': owner,
                            'launch_token': launch['launch_token']})
-            if registration['class'] in {'source-execution-owner-probe', 'source-execution-owner-leaf'}:
+            if registration['class'] in {'source-execution-owner-probe', 'source-execution-owner-leaf', 'source-child-relative-probe'}:
                 caller = inspect.currentframe().f_back
                 if (caller.f_code is not original.before_python.__code__
                         or caller.f_globals is not original.before_python.__globals__
@@ -81,4 +83,8 @@ def create(state, emit, refuse, ready):
                        'class': registration['class'], 'source_binding': registration['source_binding'],
                        'launch_token': launch['launch_token'], 'shared_startup_seal': True})
 
-    return SourceIntegrationActivation()
+    activation = SourceIntegrationActivation()
+    if state.get('source_selection') == 'primary-source':
+        activation.arm_child_relative = checked('child_relative.py')['install'](
+            state, activation, emit, refuse, checked)
+    return activation

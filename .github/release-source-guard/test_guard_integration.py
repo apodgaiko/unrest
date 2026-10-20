@@ -46,6 +46,14 @@ from test_source_root import (  # noqa: F401
     test_empty_dist_refuses_foreign_mount_or_owner,
 )
 
+from test_child_relative import (  # noqa: F401
+    test_closed_applicable_inventory_includes_ordinary_routes,
+    test_stopped_child_binding_refuses_before_receipt,
+    test_no_constructor_record_retains_original_custody,
+    test_prebody_extension_precedes_bootstrap_ready,
+    test_stock_constructor_has_no_retry_or_private_execute_child_copy,
+)
+
 import release_source_inputs
 
 ROOT = Path(__file__).resolve().parents[2]
