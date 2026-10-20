@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import types
+import weakref
 
 STDLIB = 'e4049ed91ed101b09b0dc96bbf234f646c1728090d643a474b024276cc2a028c'
 NATIVE = '925e5f643c0c5f9d5e897d6faca9af7d9f7dbe624b7d31cab4d97dde15a748af'
@@ -216,6 +217,23 @@ def named(code, name):
 
 
 
+
+def same_options(before, after):
+    return (before.keys() == after.keys()
+            and all(type(before[key]) is type(after[key]) and before[key] == after[key]
+                    for key in before))
+
+
+def matches_saved(saved, launch, handle, options):
+    value = saved['value']
+    environment = options.get('env')
+    return (saved['handle']() is handle
+            and value['registration_id'] == id(launch['registration'])
+            and value['registration'] == json.dumps(launch['registration'], sort_keys=True)
+            and value['argv_id'] == id(launch['argv']) and value['argv'] == launch['argv']
+            and same_options(value['options'], options)
+            and value['environment'] == (None if environment is None else dict(environment)))
+
 def consume(launch, handle, argv, options, activation, constructor, used, refuse):
     """Validate data from the caller-authenticated core frame; grants no launch."""
     token = launch['launch_token']
@@ -223,7 +241,7 @@ def consume(launch, handle, argv, options, activation, constructor, used, refuse
     if (launch.get('original_init') is not constructor or launch.get('handle') is not handle
             or launch.get('child_argv') is not argv or launch.get('activation') is not activation
             or token not in activation.python_consumed or registration['class'] not in APPLICABLE
-            or options != launch['kwargs'] or options.get('cwd') is not None
+            or not same_options(options, launch['kwargs']) or options.get('cwd') is not None
             or not registration['python']):
         refuse('child_relative_launch_binding')
     if token in used:
@@ -264,6 +282,12 @@ def install(state, activation, emit, refuse, checked):
             or caller.f_locals.get('activation') is not activation
             or guard.digest(origin) != state['direct_support']['files'][str(origin)]):
         refuse('child_relative_install_context')
+    shared = activation.shared.__func__
+    shared_code, shared_globals = shared.__code__, shared.__globals__
+    if (shared_code != named(compile(origin.read_bytes(), str(origin), 'exec',
+                                    dont_inherit=True), 'shared')
+            or shared_globals is not caller.f_globals):
+        refuse('child_relative_shared_callback')
     captured = subprocess.Popen.__init__
     support = state['operation_support']
     operations = state['operations']
@@ -316,6 +340,7 @@ def install(state, activation, emit, refuse, checked):
                          dont_inherit=True), 'initialize_inner')
     observe = checked('child_relative_view.py')['view']
     used = set()
+    contexts = {}
 
     def frame_check(frame):
         if (frame is None or frame.f_code != core
@@ -326,6 +351,46 @@ def install(state, activation, emit, refuse, checked):
                 or guard.digest(state['guard']) != state['guard_sha256']):
             refuse('child_relative_core_frame')
         return frame.f_locals
+
+    def capture():
+        current = inspect.currentframe()
+        caller = current.f_back if current else None
+        if (caller is None or caller.f_code is not shared_code or caller.f_globals is not shared_globals
+                or activation.shared.__func__ is not shared or shared.__code__ is not shared_code
+                or shared.__globals__ is not shared_globals
+                or caller.f_locals.get('self') is not activation):
+            refuse('child_relative_capture_caller')
+        frame = caller.f_back
+        while frame is not None and frame.f_code is not captured_cells['initialize']:
+            frame = frame.f_back
+        if frame is None:
+            return
+        launch = frame_check(frame)
+        registration = launch['registration']
+        if not registration['python'] or launch['kwargs'].get('cwd') is not None:
+            return
+        token = launch['launch_token']
+        if launch.get('activation') is not activation or token not in activation.python_consumed:
+            refuse('child_relative_capture_context')
+        if token in used:
+            refuse('child_relative_reused_context')
+        options = dict(launch['kwargs'])
+        env = options.get('env')
+        value = {'registration_id': id(registration),
+                 'registration': json.dumps(registration, sort_keys=True),
+                 'argv_id': id(launch['argv']), 'argv': list(launch['argv']),
+                 'options': options, 'environment': None if env is None else dict(env),
+                 'facts': None}
+        try:
+            value['facts'] = observe()
+        except (OSError, RuntimeError, KeyError, ValueError):
+            return
+        existing = contexts.get(token)
+        if existing is not None:
+            if existing['handle']() is not launch['handle'] or existing['value'] != value:
+                refuse('child_relative_capture_drift')
+            return
+        contexts[token] = {'handle': weakref.ref(launch['handle']), 'value': value}
 
     def constructor(handle, args, *positional, **kwargs):
         current = inspect.currentframe()
@@ -353,6 +418,12 @@ def install(state, activation, emit, refuse, checked):
             return stock(handle, args, **kwargs)
         token, registration = consume(launch, handle, args, kwargs, activation, constructor,
                                       used, refuse)
+        saved = contexts.pop(token, None)
+        if saved is None:
+            refuse('child_relative_missing_context')
+        value = saved['value']
+        if not matches_saved(saved, launch, handle, kwargs):
+            refuse('child_relative_saved_context_drift')
         try:
             facts = observe()
         except (OSError, RuntimeError, KeyError, ValueError):
@@ -372,7 +443,7 @@ def install(state, activation, emit, refuse, checked):
                 or execute.__globals__ is not vars(subprocess) or subprocess._fork_exec is not fork_exec
                 or _posixsubprocess.fork_exec is not fork_exec):
             refuse('child_relative_runtime')
-        if observe() != facts:
+        if facts != value['facts'] or observe() != facts:
             refuse('child_relative_parent_cwd_drift')
         emit({'kind': 'child_relative_constructor', 'token': token,
               'class': registration['class'], 'original_cwd': None, 'constructor_cwd': '.',
@@ -382,4 +453,4 @@ def install(state, activation, emit, refuse, checked):
         return stock(handle, args, **{**kwargs, 'cwd': '.'})
 
     subprocess.Popen.__init__ = constructor
-    return constructor
+    return capture

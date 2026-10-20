@@ -24,6 +24,11 @@ def create(state, emit, refuse, ready):
                     and state.get('class') == 'pytest-root' and state.get('token') == 'root'):
                 self.owned_environment = checked('source_environment.py')['capture'](state)
 
+        def shared(self):
+            super().shared()
+            if hasattr(self, 'capture_child_relative'):
+                self.capture_child_relative()
+
         def ordinary_python(self, guard, launch, argv, cwd, environment, registration):
             owner = checked('execution_owner.py')['current'](state, self.refuse)
             if owner != state.get('case', ''):
@@ -84,6 +89,6 @@ def create(state, emit, refuse, ready):
     activation = SourceIntegrationActivation()
     if (state.get('source_selection') == 'primary-source'
             and state['operation_support']['path'] == '/guard/primary_operations.py'):
-        checked('child_relative.py')['install'](
+        activation.capture_child_relative = checked('child_relative.py')['install'](
             state, activation, emit, refuse, checked)
     return activation

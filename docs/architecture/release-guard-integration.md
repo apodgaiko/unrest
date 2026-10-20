@@ -269,7 +269,9 @@ Only an already admitted ordinary Python SOURCE launch with original `cwd=None`
 can consume the single-use constructor context. The checked activation installs
 its saved stock `Popen.__init__` wrapper before the unchanged finite core captures
 that constructor. At invocation, the wrapper authenticates the actual inner core
-code/globals, registration, handle, token, original argv and exact options. The
+code/globals, registration, handle, token, original argv and exact options. A snapshot
+after checked shared activation binds registration bytes, environment and argument
+values to that handle; construction consumes it once without retaining the handle. The
 static `child_relative.APPLICABLE` inventory enumerates existing Python classes;
 it grants no admission. Explicit cwd and non-source contexts retain stock handling.
 

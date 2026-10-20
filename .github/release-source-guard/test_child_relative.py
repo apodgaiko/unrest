@@ -270,15 +270,20 @@ def test_saved_stock_constructor_metadata(mutation):
 
 
 @pytest.mark.parametrize('mutation', ['none', 'argv', 'cwd', 'environment', 'pin'])
-def test_plain_own_probe_uses_its_real_frame(monkeypatch, mutation):
+def test_plain_own_probe_uses_its_real_frame(tmp_path, monkeypatch, mutation):
     import hashlib
     import os
     import subprocess
     import sys
-    import child_relative_methods
     from finite import owner_probe
-    checkout = ROOT.resolve().parents[1]
+    checkout = tmp_path / 'own-source'
     source = checkout / '.github/release-source-guard/child_relative_methods.py'
+    source.parent.mkdir(parents=True)
+    source.write_bytes((ROOT / 'child_relative_methods.py').read_bytes())
+    spec = importlib.util.spec_from_file_location('child_relative_methods', source)
+    child_relative_methods = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, 'child_relative_methods', child_relative_methods)
+    spec.loader.exec_module(child_relative_methods)
     state = {'checkout': str(checkout), 'product_pins': {
         '.github/release-source-guard/child_relative_methods.py': hashlib.sha256(source.read_bytes()).hexdigest()},
         'isolated_named': boundary.named}
@@ -306,3 +311,40 @@ def test_plain_own_probe_uses_its_real_frame(monkeypatch, mutation):
     else:
         with pytest.raises(RuntimeError, match='child_relative_probe_binding'):
             child_relative_methods.probe()
+
+
+@pytest.mark.parametrize('mutation', ['none', 'handle', 'registration-id', 'registration-bytes',
+                                    'argv-id', 'argv-bytes', 'options', 'option-type', 'environment'])
+def test_saved_context_mutations_are_not_rebound(mutation):
+    import copy
+    import json
+    import weakref
+    class OwnHandle:
+        pass
+    handle = OwnHandle()
+    registration = {'class': 'source-child-relative-probe', 'python': True}
+    argv = ['owned-control']
+    env = {'OWN_CONTROL': 'original'}
+    options = {'env': env, 'close_fds': True}
+    launch = {'registration': registration, 'argv': argv}
+    saved = {'handle': weakref.ref(handle), 'value': {
+        'registration_id': id(registration), 'registration': json.dumps(registration, sort_keys=True),
+        'argv_id': id(argv), 'argv': list(argv), 'options': dict(options),
+        'environment': copy.deepcopy(env)}}
+    if mutation == 'handle':
+        handle = OwnHandle()
+    elif mutation == 'registration-id':
+        launch['registration'] = dict(registration)
+    elif mutation == 'registration-bytes':
+        registration['python'] = 1
+    elif mutation == 'argv-id':
+        launch['argv'] = list(argv)
+    elif mutation == 'argv-bytes':
+        argv.append('drift')
+    elif mutation == 'options':
+        options['stdout'] = -1
+    elif mutation == 'option-type':
+        options['close_fds'] = 1
+    elif mutation == 'environment':
+        env['OWN_CONTROL'] = 'drift'
+    assert boundary.matches_saved(saved, launch, handle, options) is (mutation == 'none')
