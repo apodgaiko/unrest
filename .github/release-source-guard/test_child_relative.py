@@ -267,3 +267,42 @@ def test_saved_stock_constructor_metadata(mutation):
     elif mutation == 'globals':
         stock = test_saved_stock_constructor_metadata
     assert boundary.stock_matches(stock, code, defaults, keywords) is (mutation == 'none')
+
+
+@pytest.mark.parametrize('mutation', ['none', 'argv', 'cwd', 'environment', 'pin'])
+def test_plain_own_probe_uses_its_real_frame(monkeypatch, mutation):
+    import hashlib
+    import os
+    import subprocess
+    import sys
+    import child_relative_methods
+    from finite import owner_probe
+    checkout = ROOT.resolve().parents[1]
+    source = checkout / '.github/release-source-guard/child_relative_methods.py'
+    state = {'checkout': str(checkout), 'product_pins': {
+        '.github/release-source-guard/child_relative_methods.py': hashlib.sha256(source.read_bytes()).hexdigest()},
+        'isolated_named': boundary.named}
+    if mutation == 'pin':
+        state['product_pins']['.github/release-source-guard/child_relative_methods.py'] = '0' * 64
+    class StopProbe(RuntimeError):
+        pass
+    def refuse(reason):
+        raise RuntimeError(reason)
+    def consume(argv, **options):
+        changed = [*argv, 'drift'] if mutation == 'argv' else argv
+        cwd = checkout if mutation == 'cwd' else None
+        env = {} if mutation == 'environment' else None
+        row = owner_probe.child_relative(changed, cwd, env, state, None, refuse)
+        assert mutation == 'none' and row['class'] == 'source-child-relative-probe'
+        raise StopProbe()
+    monkeypatch.chdir(checkout)
+    monkeypatch.setitem(sys.modules, 'runtime_guard', SimpleNamespace(_STATE=state))
+    monkeypatch.setattr(subprocess, 'run', consume)
+    original_listdir = os.listdir
+    monkeypatch.setattr(os, 'listdir', lambda path: [] if path == '/proc/self/fd' else original_listdir(path))
+    if mutation == 'none':
+        with pytest.raises(StopProbe):
+            child_relative_methods.probe()
+    else:
+        with pytest.raises(RuntimeError, match='child_relative_probe_binding'):
+            child_relative_methods.probe()

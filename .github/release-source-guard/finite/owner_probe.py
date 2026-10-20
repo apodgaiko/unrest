@@ -90,7 +90,8 @@ def child_relative(argv, cwd, env, state, append, refuse):
              and ast.unparse(n.func) == 'subprocess.run']
     if (len(calls) != 1 or frame.f_lineno != calls[0].lineno or fn is None
             or frame.f_globals is not vars(module) or frame.f_code is not fn.__code__
-            or fn.__code__ != state['isolated_named'](state['isolated_source_code'](source), 'probe')
+            or fn.__code__ != state['isolated_named'](
+                compile(source.read_bytes(), str(source), 'exec', dont_inherit=True), 'probe')
             or hashlib.sha256(source.read_bytes()).hexdigest() != pin
             or argv != [sys.executable, '-I', '-S', '-c', 'pass'] or cwd is not None
             or env is not None or os.getcwd() != state['checkout']):
