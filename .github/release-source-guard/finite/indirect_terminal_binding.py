@@ -10,6 +10,11 @@ import types
 
 CASE = 'tests/test_capability_policy.py::test_raw_acp_terminal_protocol_redacts_credential_values'
 OUTER = 'tests/contracts/test_lean_evidence_crosswalk.py::test_crosswalk_is_complete_and_every_mapped_node_passes'
+NESTED_MODULES = frozenset({
+    'tests/contracts/test_lean_evidence_crosswalk.py',
+    'tests/contracts/test_lean_provider_security.py',
+    'tests/contracts/test_retained_boundaries.py',
+})
 OWNER = CASE.split('::')[1]
 VECTOR = ['-c', "import os; print(os.environ['ZAI_API_KEY'])"]
 
@@ -38,10 +43,17 @@ def matches(registration, argv, cwd, environment, state, frames):
             or bound != {'path': str(original), 'line': 549,
                          'sha256': state['product_pins'].get('tests/test_capability_policy.py')}
             or state.get('phase') != 'READY' or not state.get('token')
-            or state.get('case') not in (CASE, OUTER) or os.getcwd() != str(root)):
+            or os.getcwd() != str(root)):
         return None
     guard.require_ready(state['token'])
-    if state['case'] == OUTER:
+    if state.get('case') != CASE:
+        outer_module = state.get('case', '').split('::', 1)[0]
+        if (outer_module not in NESTED_MODULES
+                or state.get('class') != 'reference:' + outer_module):
+            return None
+        # All three existing reference selections contain this exact leaf.
+        # The resolver still authenticates their bytes, ordered nodes, payload,
+        # token and live leaf frame; an outer case label grants nothing.
         support = Path(state['guard']).with_name('execution_owner.py')
         resolve = guard.checked_source(support, state['direct_support']['files'][str(support)])['resolve']
         if resolve(state, guard.refuse, frames) != CASE:

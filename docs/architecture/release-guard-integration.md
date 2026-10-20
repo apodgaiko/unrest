@@ -457,3 +457,12 @@ captures no facts and consumes no token there. Unknown phases refuse; the later
 constructor still requires the original single-use custody and all saved
 context checks. The Linux compartment controls exercise this ordering through
 the actual unchanged guard constructor frame without launching a child.
+
+The indirect terminal-redaction binding follows its three existing finite
+reference selections: evidence crosswalk, provider security, and retained
+boundaries. Each nested invocation must resolve to the same original leaf via
+the pinned execution-owner resolver, including original selection order,
+module bytes, payload/token custody and live code/globals. Outer parameter
+labels do not grant authority. The terminal vector, handler, policy, cwd,
+environment and runtime checks remain identical; no registry entry or native
+provider route is added.
