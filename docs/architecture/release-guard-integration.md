@@ -286,7 +286,9 @@ inheritance. Parent inspection alone therefore does not prove the launch safe.
 
 Before native pre-body admission, stopped-child custody joins the exact constructor
 record to actual child cwd device/inode, source manifest, mount and launch binding.
-A controller-owned receipt makes the child repeat that check before its original
+A controller-owned receipt carries either verified facts or a retained denial. A
+denied child exits86 before bootstrap/READY, allowing its genuine parent to collect
+status while global poison remains set. A permitted child repeats the check before its original
 bootstrap or any successful authenticated READY. Failed checks retain poison; stock
 constructor/chdir errors propagate without swallowing or retry. This bounded method
 does not claim universal cwd equivalence or native interception. Its own-identity

@@ -7,6 +7,12 @@ from pathlib import Path
 import stat
 
 
+class ViewRefusal(RuntimeError):
+    def __init__(self, reason, facts):
+        super().__init__(reason)
+        self.facts = facts
+
+
 def view(cwd='.', *, process=None):
     """No launch authority: compare actual cwd with the sealed source member."""
     expected = json.loads(Path('/inputs/source-custody.json').read_bytes())
@@ -16,10 +22,14 @@ def view(cwd='.', *, process=None):
     row = expected['members'][relative]
     info = actual.stat()
     key = [info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid, info.st_nlink]
+    flags = os.statvfs(actual).f_flag
+    searchable = os.access(actual, os.X_OK)
     if (key != row['identity'] or not stat.S_ISDIR(info.st_mode)
-            or not os.statvfs(actual).f_flag & os.ST_RDONLY
-            or not os.access(actual, os.X_OK)):
-        raise RuntimeError('child_relative_source_cwd')
+            or not flags & os.ST_RDONLY or not searchable):
+        raise ViewRefusal('child_relative_source_cwd', {
+            'cwd': directory, 'identity': key, 'expected_identity': row['identity'],
+            'statvfs_flags': flags, 'searchable': searchable, 'observer_uid': os.geteuid(),
+            'process': process})
     mounts = []
     mountinfo = Path('/proc/self/mountinfo' if process is None else
                      '/proc/' + str(process) + '/mountinfo')

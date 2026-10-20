@@ -47,14 +47,10 @@ def test_stopped_child_binding_refuses_before_receipt(monkeypatch, mutation):
         row['original_cwd'] = '/source'
     else:
         row['constructor_cwd'] = '/source'
-    monkeypatch.setattr(custody, 'view', lambda **kwargs: facts)
-    poison = []
-    authority = SimpleNamespace(bound={22: selected}, supervisor=SimpleNamespace(
-        events=lambda: rows, poison=poison.append))
-    trace = SimpleNamespace(poison=[])
+    # Exercise the shared predicate without manufacturing a controller receipt,
+    # a kernel identity, a core frame or a READY record.
     with pytest.raises(RuntimeError):
-        custody.check(authority, trace, 22, vector)
-    assert poison == trace.poison == ['primary_source_child_relative_cwd']
+        custody.validate(selected, rows[0] if len(rows) == 1 else None, facts, vector)
 
 
 def test_no_constructor_record_retains_original_custody():

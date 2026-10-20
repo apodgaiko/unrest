@@ -40,6 +40,13 @@ def activate(profile, event, arguments):
                 or stat.S_IMODE(info.st_mode) != 0o444 or info.st_nlink != 1):
             os._exit(86)
         context = json.loads(receipt.read_bytes())
+        if context.get('allowed') is not True:
+            diagnostic = Path('/work') / ('primary-native-state-' + str(os.getpid()) + '.json')
+            observed = json.loads(diagnostic.read_bytes())
+            observed['child_relative_prebody_refusal'] = {
+                'token': context['token'], 'receipt_sha256': hashlib.sha256(receipt.read_bytes()).hexdigest()}
+            diagnostic.write_text(json.dumps(observed, sort_keys=True))
+            os._exit(86)
         support = Path('/guard/finite/child_relative_view.py')
         module = load('child_relative_view', str(support),
                       manifest['direct_support']['files'][str(support)])
