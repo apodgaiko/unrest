@@ -400,3 +400,29 @@ def test_outer_predicate_requires_parent_search_and_pending_child_search():
         with pytest.raises(RuntimeError):
             custody.validate(selected, row, actual, vector)
         target['searchable'] = previous
+
+
+def without_own_prebody_probe(tree):
+    import ast
+    templates = ast.parse('''
+own_prebody_control = None
+if spec.get('source_mode') in {'TEST-positive', 'TEST-poison'}:
+    from child_relative_control import run as own_prebody_probe
+    own_prebody_control = own_prebody_probe(runtime['primary'], env)
+if own_prebody_control is not None:
+    authority.records.append(own_prebody_control)
+''').body
+    expected = {ast.dump(node, include_attributes=False) for node in templates}
+    main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'main')
+    found = [node for node in main.body if ast.dump(node, include_attributes=False) in expected]
+    assert len(found) == 3 and {ast.dump(node, include_attributes=False) for node in found} == expected
+    main.body = [node for node in main.body if node not in found]
+    return tree
+
+
+def test_own_native_probe_preserves_all_prior_stage1_compartment_statements():
+    import ast
+    import hashlib
+    original = without_own_prebody_probe(ast.parse((ROOT / 'primary_compartment.py').read_bytes()))
+    assert hashlib.sha256(ast.dump(original, include_attributes=False).encode()).hexdigest() == (
+        '2732b831754671df4bdecc3cf8d88bf8872713360752a02bb0b240cb5fbb0972')

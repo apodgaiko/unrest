@@ -115,6 +115,10 @@ def main():
     env = environment(source=bool(spec.get('source_mode')) or package_archive or package_installed)
     if package_installed:
         env = {**env, 'UV_FIND_LINKS': '/opt/primary-installed-wheels'}
+    own_prebody_control = None
+    if spec.get('source_mode') in {'TEST-positive', 'TEST-poison'}:
+        from child_relative_control import run as own_prebody_probe
+        own_prebody_control = own_prebody_probe(runtime['primary'], env)
     read, write = os.pipe2(os.O_CLOEXEC)
     ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
     start_read, start_write = os.pipe2(os.O_CLOEXEC)
@@ -175,6 +179,8 @@ def main():
         authority = PackageArchivePrimaryAuthority(spec, child, env)
     else:
         authority = Authority(spec, child, env)
+    if own_prebody_control is not None:
+        authority.records.append(own_prebody_control)
     if spec.get('package_input_required'):
         descriptor = json.loads(Path('/inputs/package-input.json').read_bytes())
         consumption = json.loads(Path('/work/package-input-consumption.json').read_bytes())

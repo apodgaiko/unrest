@@ -296,3 +296,11 @@ constructor/chdir errors propagate without swallowing or retry. This bounded met
 does not claim universal cwd equivalence or native interception. Its own-identity
 supplementary probe shares the production boundary; original source certification,
 all-five independent checks and the release gates remain separate requirements.
+
+A separate own native prebody denial control runs only in the existing positive
+and poison TEST source capsules, before their source root starts. It uses the same
+byte-pinned primary native entry and prebody consumer, an actual UID20000 child,
+and its own controller-owned denied header. It claims no constructor admission or
+original case identity. The unchanged kernel record stream retains its real exec,
+prebody denial, actual direct-parent status86, closed descriptors and equal parent
+census. No original source selection, scenario, consumer, policy or cap is replaced.
