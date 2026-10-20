@@ -175,3 +175,16 @@ def test_acquired_preparation_failure_is_encrypted_without_adopting_stale_root(t
     with pytest.raises(RuntimeError):
         ci_shell.retained_main()
     assert sorted(path.name for path in tmp_path.iterdir()) == ['primary-import']
+
+
+from test_lease_probe_lifetime import (  # noqa: F401, E402
+    test_success_keeps_all_modes_and_actual_future_observation,
+    test_main_timeout_preserves_worker_and_settles_before_shutdown,
+    test_diagnostic_failure_cannot_erase_main_or_worker,
+    test_cleanup_failure_retains_initiating_assertion,
+    test_original_assertions_and_deadlines_have_ordered_unchanged_inventory,
+    test_each_original_assertion_failure_remains_failure,
+    probe,
+    test_late_entered_never_supersedes_original_main_timeout,
+    test_simultaneous_child_cleanup_is_serial_and_waits_are_labeled,
+)

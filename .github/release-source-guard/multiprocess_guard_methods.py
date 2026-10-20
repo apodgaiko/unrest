@@ -215,37 +215,79 @@ def _lease_factories():
         entered, release, closed = threading.Event(), threading.Event(), threading.Event()
         original = subprocess.Popen
         children = []
-        def paused_spawn(*args, **kwargs):
-            child = _lease_popen(original, mode, *args, **kwargs)
-            children.append(child)
-            # Core READY precedes endpoint setup. This supplementary probe
-            # observes both before deliberately terminating its cleanup child.
-            import json
+        publication = threading.Lock()
+        cleanup_lock = threading.RLock()
+        cancelling = threading.Event()
+        errors = []
+        error_lock = threading.Lock()
+
+        def retain(role, error):
+            with error_lock:
+                if not any(existing_role == role and existing is error
+                           for existing_role, existing in errors):
+                    errors.append((role, error))
+
+        def observe(stage, child=None, **fields):
             import time
-            ready_path = Path(guard._STATE['guard']).with_name('multiprocess_routes.py')
-            ready = guard.checked_source(ready_path, guard._STATE['direct_support']['files'][str(ready_path)])['endpoint_ready']
-            journal = Path(guard._STATE['events']) / (str(child.pid) + '.jsonl')
-            token = next(row['token'] for row in guard.summarize(guard._STATE['manifest_path'])['events']
-                         if row['kind'] == 'registered' and row.get('pid') == child.pid)
-            deadline = time.monotonic() + 5
-            while not ready([json.loads(line) for line in journal.read_text().splitlines()],
-                            guard._STATE, token, child.pid):
-                assert child.poll() is None and time.monotonic() < deadline
-                time.sleep(.001)
-            if mode != 'cleanup':
-                assert child.stdout.readline() == b'ready\n'
-            if mode == 'spawn':
-                entered.set()
-                assert release.wait(5)
-            return child
-        class RegistrationBarrier(list):
-            def append(self, child):
-                entered.set()
-                assert release.wait(5)
-                super().append(child)
-        if mode == 'registration':
-            owner._processes = RegistrationBarrier()
-        try:
+            # Capture the event time here, in the actual executing thread.
+            event = {'kind': 'own_lease_probe_stage', 'mode': mode, 'stage': stage,
+                     'monotonic_ns': time.monotonic_ns(),
+                     'thread_id': threading.get_ident(), **fields}
+            if child is not None:
+                event['child_pid'] = child.pid
+            try:
+                guard.append(event)
+            except BaseException as error:
+                retain('diagnostic_write', error)
+
+        def exercise():
+            def paused_spawn(*args, **kwargs):
+                observe('constructor_begin')
+                child = _lease_popen(original, mode, *args, **kwargs)
+                with publication:
+                    children.append(child)
+                    cancelled = cancelling.is_set()
+                observe('constructor_return', child)
+                if cancelled:
+                    finish_child(child)
+                    raise RuntimeError('owned_lease_probe_cancelled')
+                # Core READY precedes endpoint setup. This supplementary probe
+                # observes both before deliberately terminating its cleanup child.
+                import json
+                import time
+                ready_path = Path(guard._STATE['guard']).with_name('multiprocess_routes.py')
+                ready = guard.checked_source(ready_path, guard._STATE['direct_support']['files'][str(ready_path)])['endpoint_ready']
+                journal = Path(guard._STATE['events']) / (str(child.pid) + '.jsonl')
+                observe('registration_lookup_begin', child)
+                token = next(row['token'] for row in guard.summarize(guard._STATE['manifest_path'])['events']
+                             if row['kind'] == 'registered' and row.get('pid') == child.pid)
+                observe('registration_lookup_complete', child)
+                deadline = time.monotonic() + 5
+                while not ready([json.loads(line) for line in journal.read_text().splitlines()],
+                                guard._STATE, token, child.pid):
+                    assert child.poll() is None and time.monotonic() < deadline
+                    time.sleep(.001)
+                observe('endpoint_complete', child)
+                if cancelling.is_set():
+                    finish_child(child)
+                    raise RuntimeError('owned_lease_probe_cancelled')
+                if mode != 'cleanup':
+                    observe('stdout_begin', child)
+                    assert child.stdout.readline() == b'ready\n'
+                    observe('stdout_complete', child)
+                if mode == 'spawn':
+                    entered.set()
+                    observe('entered_set', child)
+                    assert release.wait(5)
+                return child
+            class RegistrationBarrier(list):
+                def append(self, child):
+                    entered.set()
+                    observe('entered_set', child)
+                    assert release.wait(5)
+                    super().append(child)
+            if mode == 'registration':
+                owner._processes = RegistrationBarrier()
             with patch.object(subprocess, 'Popen', paused_spawn):
                 if mode == 'ignore':
                     child = _lease_launch(owner, mode, directory)
@@ -261,28 +303,126 @@ def _lease_factories():
                         stream.close()
                 else:
                     def close():
-                        result = owner.close(.1)
+                        with cleanup_lock:
+                            result = owner.close(.1)
                         closed.set()
                         return result
-                    with ThreadPoolExecutor(max_workers=2) as pool:
-                        launch = pool.submit(_lease_launch, owner, mode, directory)
-                        assert entered.wait(5)
-                        cleanup = pool.submit(close)
+                    def run_launch():
                         try:
-                            assert not closed.wait(.1)
-                        finally:
-                            release.set()
-                        assert launch.result(timeout=5) is children[0]
-                        assert cleanup.result(timeout=5)
-        finally:
-            release.set()
-            for child in children:
+                            result = _lease_launch(owner, mode, directory)
+                        except BaseException as error:
+                            retain('worker', error)
+                            observe('worker_error', error_type=type(error).__name__,
+                                    errno=getattr(error, 'errno', None))
+                            raise
+                        observe('worker_return')
+                        return result
+                    futures = []
+                    try:
+                        with ThreadPoolExecutor(max_workers=2) as pool:
+                            try:
+                                launch = pool.submit(run_launch)
+                                futures.append(('worker', launch))
+                                assert entered.wait(5)
+                                cleanup = pool.submit(close)
+                                futures.append(('owner_cleanup', cleanup))
+                                try:
+                                    assert not closed.wait(.1)
+                                finally:
+                                    release.set()
+                                assert launch.result(timeout=5) is children[0]
+                                assert cleanup.result(timeout=5)
+                            except BaseException as error:
+                                retain('main', error)
+                                cancel_owned()
+                            finally:
+                                # This must run before Executor.__exit__ joins workers.
+                                release.set()
+                    except BaseException as error:
+                        retain('executor_shutdown', error)
+                    finally:
+                        # A joined executor establishes completion; an absent future
+                        # or a worker-stage observation never stands in for this.
+                        for role, future in futures:
+                            if not future.done():
+                                retain(role, RuntimeError('owned_lease_future_incomplete'))
+                                continue
+                            try:
+                                future_error = future.exception()
+                            except BaseException as error:
+                                future_error = error
+                                retain(role, error)
+                            else:
+                                if future_error is not None:
+                                    retain(role, future_error)
+                            observe('future_joined_observation', role=role,
+                                    failed=future_error is not None)
+
+        def finish_child(child):
+            with cleanup_lock:
+                observe('child_cleanup_begin', child, status_before_poll=child.returncode)
                 if child.poll() is None:
                     child.kill()
+                wait_cached = child.returncode is not None
                 child.wait(timeout=5)
                 for stream in (child.stdin, child.stdout, child.stderr):
                     stream.close()
-            broker.close()
+                observe('child_cleanup_complete', child, wait_cached=wait_cached,
+                        returncode=child.returncode)
+
+        def cancel_owned():
+            # Publish cancellation before taking the snapshot. A late constructor
+            # must clean its own returned handle before endpoint/stdout work.
+            with publication:
+                cancelling.set()
+                published = tuple(children)
+            release.set()
+            observe('cancellation_published')
+            for child in published:
+                try:
+                    finish_child(child)
+                except BaseException as error:
+                    retain('cancellation_cleanup', error)
+
+        try:
+            exercise()
+        except BaseException as error:
+            retain('main', error)
+        finally:
+            release.set()
+            for child in children:
+                try:
+                    finish_child(child)
+                except BaseException as error:
+                    retain('outer_cleanup', error)
+            try:
+                broker.close()
+            except BaseException as error:
+                retain('broker_cleanup', error)
+        observe('mode_settled', before_fds=census,
+                after_fds=len(os.listdir('/proc/self/fd')), child_count=len(children))
+        if errors:
+            import hashlib
+            failures = tuple(errors)
+            for role, failure in failures:
+                frames = []
+                frame = failure.__traceback__
+                while frame is not None:
+                    try:
+                        digest = hashlib.sha256(Path(frame.tb_frame.f_code.co_filename).read_bytes()).hexdigest()
+                    except OSError:
+                        digest = None
+                    frames.append({'source_sha256': digest, 'line': frame.tb_lineno})
+                    frame = frame.tb_next
+                observe('failure', role=role, error_type=type(failure).__name__,
+                        errno=getattr(failure, 'errno', None), frames=frames[-8:])
+            actual = []
+            for _, failure in errors:
+                if not any(existing is failure for existing in actual):
+                    actual.append(failure)
+            if len(actual) == 1:
+                raise actual[0]
+            raise BaseExceptionGroup('owned lease probe failures', actual)
         assert len(os.listdir('/proc/self/fd')) == census
         guard.append({'kind': 'guard_lease_factory_proof', 'mode': mode,
                       'child_pid': children[0].pid, 'child_returncode': children[0].returncode,

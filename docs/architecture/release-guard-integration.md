@@ -346,3 +346,24 @@ members of an exception group when both occur. Fault controls exercise the same
 helper, while actual Linux capsule-exit/unmount/deletion observations supply the
 production cleanup proof. These records do not certify the original source suite
 or replace independent validation.
+
+
+The own lease-factory probe releases its barrier inside the executor lifetime.
+An initiating failure publishes cancellation before cleanup snapshots the owned
+handles. A constructor returning afterward closes its exact handle before any
+endpoint or stdout stage; a published handle can be killed and waited before
+executor shutdown to unblock its stdout reader. One cleanup lock serializes this
+boundary with the own owner-close task; the original outer cleanup remains an
+idempotent final boundary. All four modes, original assertions and original
+wait durations remain unchanged. Cancellation does not admit a launch or supply
+READY. An incomplete owned startup boundary remains a failure.
+
+Private own-stage observations record monotonic time in the executing thread at
+constructor, registration, endpoint, stdout and barrier stages. Future completion
+is observed only after executor shutdown and an actual completed future; its
+observation time is not a claimed worker completion time. Cleanup distinguishes
+cached status from a new wait and retains FD censuses. Initiating, worker,
+diagnostic-write and cleanup failures remain independent actual exception
+objects; private failure metadata contains only role, type, errno and bounded
+source-hashed frame locations, never messages, repr, locals or source bodies.
+These diagnostics do not change consumer eligibility or any original policy.
