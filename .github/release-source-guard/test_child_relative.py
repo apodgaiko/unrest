@@ -65,8 +65,8 @@ def test_no_constructor_record_retains_original_custody():
 
 def test_prebody_extension_precedes_bootstrap_ready():
     source = (ROOT / 'primary_source_entry.py').read_text()
-    assert source.index('module.view()') < source.index("if profile['source_role'] == 'source-bootstrap':")
-    assert source.index('module.view()') < source.index('endpoint.early(')
+    assert source.index('actual_view = module.view()') < source.index("if profile['source_role'] == 'source-bootstrap':")
+    assert source.index('actual_view = module.view()') < source.index('endpoint.early(')
 
 
 def test_stock_constructor_has_no_retry_or_private_execute_child_copy():

@@ -35,6 +35,8 @@ def check(authority, trace, pid, vector):
         with path.open('x') as stream:
             stream.write(json.dumps(receipt, sort_keys=True))
         path.chmod(0o444)
+        authority.pipe_records.append({'kind': 'child_relative_prebody_cwd', **receipt,
+                                       'receipt_sha256': hashlib.sha256(path.read_bytes()).hexdigest()})
     except BaseException:
         trace.poison.append('primary_source_child_relative_cwd')
         authority.supervisor.poison('primary_source_child_relative_cwd')

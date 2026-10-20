@@ -44,11 +44,18 @@ def activate(profile, event, arguments):
         module = load('child_relative_view', str(support),
                       manifest['direct_support']['files'][str(support)])
         birth = context['identity']
+        actual_view = module.view()
         if (birth['pid'] != profile['pid'] or birth['ppid'] != profile['parent']
                 or birth['start_ticks'] != profile['start_ticks']
                 or birth['boot_id'] != profile['boot_id'] or not context['prebody_required']
-                or module.view() != context['view']):
+                or actual_view != context['view']):
             os._exit(86)
+        diagnostic = Path('/work') / ('primary-native-state-' + str(os.getpid()) + '.json')
+        observed = json.loads(diagnostic.read_bytes())
+        observed['child_relative_prebody'] = {
+            'token': context['token'], 'view': actual_view,
+            'receipt_sha256': hashlib.sha256(receipt.read_bytes()).hexdigest()}
+        diagnostic.write_text(json.dumps(observed, sort_keys=True))
     if profile['source_role'] == 'source-bootstrap':
         # The observer already consumed the fixture's exact transformed argv,
         # parent identity, source binding and environment. Its pinned -c program
