@@ -40,6 +40,15 @@ def digest(path):
 
 
 def run(argv, log):
+    if argv[:3] == ['docker', 'rm', '--force']:
+        initiating = sys.exception()
+        try:
+            source_root.stop_capsule(argv[3])
+        except BaseException as cleanup:
+            if initiating is not None:
+                raise BaseExceptionGroup('capsule operation and stop failed', [initiating, cleanup]) from None
+            raise
+        return subprocess.CompletedProcess(argv, 0)
     with log.open('ab') as stream:
         return subprocess.run(argv, stdout=stream, stderr=subprocess.STDOUT, check=False)
 
@@ -210,12 +219,12 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
 
 def create_capsule(prepared):
     """Common inspected capsule creation; callers own the original error sink."""
-    if run(prepared['argv'], prepared['log']).returncode:
+    if run(source_root.plan_capsule(prepared['argv'], Path(prepared['mounts']['/source'])), prepared['log']).returncode:
         raise RuntimeError('primary_create_failed')
-    source_root.CONTAINERS.add(prepared['container'])
     inspected = subprocess.check_output(['docker', 'inspect', prepared['container']])
     (prepared['raw'] / 'container-inspect.json').write_bytes(inspected)
     config = json.loads(inspected)[0]
+    source_root.bind_capsule(config)
     validate(config, prepared['image'], prepared['mounts'])
     source_root.verify(Path(prepared['mounts']['/source']),
                        json.loads((prepared['inputs'] / 'source-custody.json').read_bytes()))
@@ -354,7 +363,7 @@ def main():
             (root / 'preparation.json').write_bytes(canonical(proof))
         finally:
             if run(['docker', 'rm', '--force', container], log).returncode == 0:
-                source_root.CONTAINERS.discard(container)
+                source_root.settle(sys.exception())
         return 0
     status = 125
     records = {}
@@ -392,7 +401,7 @@ def main():
                                    'exit_code': state['ExitCode']}
     finally:
         if run(['docker', 'rm', '--force', container], log).returncode == 0:
-            source_root.CONTAINERS.discard(container)
+            source_root.settle(sys.exception())
     phase_sha256 = None
     if status == 0 and not test_mode:
         status, phase_sha256 = retain_phase(custody, spec, records, source_pins)
@@ -466,6 +475,11 @@ def retained_main():
             release(ACTIVE_ROOT)
         return result
     except BaseException as error:
+        retained_error = error
+        try:
+            source_root.settle(error)
+        except BaseException as combined:
+            retained_error = combined
         root = ACTIVE_ROOT
         if root is None:
             raise
@@ -476,12 +490,10 @@ def retained_main():
                   'stage': STAGE, 'exit_code': 125, 'script_sha256': SCRIPT_PIN,
                   'script_size': SCRIPT_SIZE, 'source_checkpoint_ready': False,
                   'selected_carrier': None}
-        retain(root, record, error, CHILD_PREPARATION_FAILURE)
+        retain(root, record, retained_error, CHILD_PREPARATION_FAILURE)
         if not (root / 'evidence.cms').is_file():
             raise RuntimeError('primary_encryption_failed')
         return 125
-    finally:
-        source_root.release()
 
 
 if __name__ == '__main__':

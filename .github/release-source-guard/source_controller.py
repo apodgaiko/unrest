@@ -70,6 +70,15 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def run(argv, log, **kwargs):
+    if argv[:3] == ['docker', 'rm', '--force']:
+        initiating = sys.exception()
+        try:
+            source_root.stop_capsule(argv[3])
+        except BaseException as cleanup:
+            if initiating is not None:
+                raise BaseExceptionGroup('capsule operation and stop failed', [initiating, cleanup]) from None
+            raise
+        return subprocess.CompletedProcess(argv, 0)
     with log.open('ab') as output:
         return subprocess.run(argv, stdout=output, stderr=subprocess.STDOUT, check=False, **kwargs)
 
@@ -156,12 +165,12 @@ def main():
                 *payload_mounts, '--mount=type=bind,src=' + str(inputs) + ',dst=/inputs,readonly',
                 '--entrypoint=/usr/local/bin/python',image,'-B','/guard/source_compartment.py']
         try:
-            if run(argv, log).returncode:
+            if run(source_root.plan_capsule(argv, source), log).returncode:
                 raise RuntimeError('focused source container creation failed')
-            source_root.CONTAINERS.add(container)
             inspected = subprocess.check_output(['docker','inspect',container])
             (raw / 'container-inspect.json').write_bytes(inspected)
             config = json.loads(inspected)[0]
+            source_root.bind_capsule(config)
             validate(config, image, source, inputs, selection)
             evidence_stage = 'capture'
             _, records = capture(['docker','start','--attach',container], raw, direct_identity, selection)
@@ -177,7 +186,7 @@ def main():
             exit_code = 125
         finally:
             if run(['docker','rm','--force',container], log).returncode == 0:
-                source_root.CONTAINERS.discard(container)
+                source_root.settle(sys.exception())
     control_exit = exit_code
     negative_proof = None
     if selection in {'drain-controls', 'producer-controls'}:
@@ -227,4 +236,4 @@ if __name__ == '__main__':
     try:
         raise SystemExit(main())
     finally:
-        source_root.release()
+        source_root.settle(sys.exception())

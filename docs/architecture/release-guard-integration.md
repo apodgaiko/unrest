@@ -307,3 +307,40 @@ identity-checked and removed before the ordinary source setup continues. It clai
 original case identity. The unchanged kernel record stream retains its real exec,
 prebody denial, actual direct-parent status86, closed descriptors and equal parent
 census. No original source selection, scenario, consumer, policy or cap is replaced.
+
+### Host snapshot acquisition and release
+
+Host custody uses only a newly acquired random `source` snapshot under the
+validated root-owned `/var/lib/unrest-source-custody` base. The host self-bind and
+read-only remount preserve source bytes and modes; they grant no mount capability
+to the capsule. Source root and Git metadata retain UID20000, with the remaining
+source members root-owned. Canonical root, parent and member identities are
+recorded before subsequent fallible acquisitions. Creation, move, partial owner
+transitions, bind and remount each have an explicit phase. Same-device moves and
+single-link regular files exclude shared or partially copied backing.
+
+A capsule create intent has an unpredictable ownership label before Docker runs.
+The inspected immutable capsule ID, label and exact read-only source binding join
+that intent. Stop reauthenticates the ID and removes only that capsule. A successful
+exact-name listing proves absence; Docker query or stop failures retain ownership
+and prevent unsealing. No unrelated container is stopped by a reused name.
+
+Release retains its record until verified absence of both source and random
+parent. The root-owned canonical util-linux mountpoint executable is byte and
+identity pinned for the lifetime: status0 means mounted, documented status32 means
+not mounted, and all other results retain the backing and retry record. The
+source manifest and base/parent/member identities are rechecked before unmount
+and deletion. Cleanup removes individually recorded files and empty directories;
+it never recursively removes an arbitrary path. Each pending deletion is recorded
+before the syscall, so a reported error after a successful deletion can be
+reconciled on a bounded retry. Partial owner transitions accept only the recorded
+old/new owners with unchanged identity, bytes and modes. Substitution, unknown
+members or lifecycle ambiguity refuse deletion.
+
+The private coordinator log retains acquisition identities, phase transitions,
+authenticated capsule absence, mount-query outcomes and verified zero-residue
+release before encryption. Initiating and cleanup exceptions remain separate
+members of an exception group when both occur. Fault controls exercise the same
+helper, while actual Linux capsule-exit/unmount/deletion observations supply the
+production cleanup proof. These records do not certify the original source suite
+or replace independent validation.

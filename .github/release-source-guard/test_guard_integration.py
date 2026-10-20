@@ -55,6 +55,23 @@ from test_child_relative import (  # noqa: F401
     test_stock_constructor_has_no_retry_or_private_execute_child_copy,
 )
 
+from test_source_custody import (  # noqa: F401
+    test_custody_parent_delete_substitution_retains_new_object,
+    test_custody_partial_chown_retries_only_known_owners,
+    test_custody_unexpected_mount_absence_retains_ownership,
+    test_custody_acquisition_fault_retains_retry,
+    test_custody_cleanup_fault_retains_retry,
+    test_custody_mount_query_error_retains_seal,
+    test_custody_documented_absence_and_post_unmount_retry,
+    test_custody_substitution_never_deletes_replacement,
+    test_custody_parent_delete_failure_after_complete_tree,
+    test_custody_partial_delete_detects_other_member_mutation,
+    test_custody_dual_error_keeps_initiating_and_cleanup,
+    test_custody_capsule_failure_prevents_unsealing,
+    test_custody_release_proof_records_actual_disappearance,
+)
+from test_source_custody import custody  # noqa: F401
+
 import release_source_inputs
 
 ROOT = Path(__file__).resolve().parents[2]
