@@ -69,7 +69,7 @@ def plan(script, workflow, source_input=None):
 
 
 def environment(*, source=False):
-    return {'HOME': '/work/home', 'PATH': '/opt/source-bootstrap/bin:/usr/local/bin:/usr/bin:/bin',
+    result = {'HOME': '/work/home', 'PATH': '/opt/source-bootstrap/bin:/usr/local/bin:/usr/bin:/bin',
             'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8',
             'TMPDIR': '/work/owned/tmp' if source else '/work/tmp',
             'UV_CACHE_DIR': '/work/cache', 'UV_OFFLINE': '1', 'UV_NO_INDEX': '1',
@@ -77,6 +77,8 @@ def environment(*, source=False):
             'UV_PYTHON': PYTHON, 'UV_PYTHON_DOWNLOADS': 'never',
             'UV_CONFIG_FILE': '/inputs/uv.toml', 'PYTHONDONTWRITEBYTECODE': '1',
             'SOURCE_DATE_EPOCH': '1700000000', 'GITHUB_WORKSPACE': '/source'}
+    from primary_type_cache import runtime_environment
+    return runtime_environment(result, source=source)
 
 
 def command_environment(value, root, *, source=False):

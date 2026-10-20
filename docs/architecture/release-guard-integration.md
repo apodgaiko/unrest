@@ -408,3 +408,23 @@ Committed malformed records still fail through the original acquisition rollback
 The original endpoint/nonce/identity predicates, five-second deadline, writer
 fsync and READY semantics remain unchanged. Terminal evidence requires complete
 valid records; this live framing rule does not certify truncated final evidence.
+
+### Type-check derived storage
+
+The authenticated Linux `Type-check (mypy)` duty alone receives exactly
+`MYPY_CACHE_DIR=/dev/null` in its initial capsule environment. Its original
+`uv run mypy src` command, pinned mypy 1.19.1, options, coverage, diagnostics
+and exit status remain unchanged. The original script/workflow binding and
+reconstructed plan select this fixed configuration; an incoming cache override
+is rejected. Existing exact child-environment comparison requires the setting
+and rejects a missing value, another value or an additional key. Other duties,
+including SOURCE, retain their exact environments and gain no launch authority.
+
+This is a prospective support/configuration change requiring new semantic pins
+and production proof. Global developer defaults and OS Independent product
+support are unchanged. In pinned mypy, the null path disables metastore writes
+and is not a directory, so the final `record_missing_stub_packages` directory
+check also prevents its separate metadata write. `--no-incremental` alone does
+not provide that guarantee. The earlier ENOSPC and duplicate CI runs remain
+failures with their original attribution; their byte/inode cause and duplicate
+origin remain unproven.

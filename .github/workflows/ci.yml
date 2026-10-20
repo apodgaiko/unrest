@@ -182,6 +182,8 @@ jobs:
           .github/release-source-guard/test_primary_dependency.py::test_only_primary_compartment_selects_dependency_authority
       - name: Production control image and original complete controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
+      - name: Supplementary original type-check storage proof
+        run: python3 .github/release-source-guard/type_cache_controller.py
       - name: Supplementary candidate and capsule canaries
         run: python3 .github/release-source-guard/preflight_controller.py
       - name: Retain encrypted supplementary preflight
@@ -193,5 +195,15 @@ jobs:
             ${{ runner.temp }}/preflight-retained
             ${{ runner.temp }}/source-readiness/evidence.cms
             ${{ runner.temp }}/source-readiness/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Retain encrypted type-check storage proof
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: unrest-v047-type-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/type-cache-proof/primary-types/evidence.cms
+            ${{ runner.temp }}/type-cache-proof/primary-types/safe-provenance.json
           if-no-files-found: error
           retention-days: 90
