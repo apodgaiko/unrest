@@ -10,7 +10,10 @@ import subprocess
 TAGS = {
     'v0.2.0': '687ad97c3d4622d3a793a3363bc154ba5e6aa9cf',
     'v0.2.1': '2652e657ea69e7ed65b2e5cf19278a45260989c4',
+    'v0.3.0': 'c0e7a4faae8863b935c5cd8a0f37a8408860b2e4',
+    'v0.3.1': 'fb52910a3d2499375d9283791ba35b31fc620943',
     'v0.4.0': '111396f755a82d8194ee3ad649ba3d0519504158',
+    'v0.4.5': 'a77a8be304b736f54acfa6b7181661560aa8433d',
 }
 FM000 = '2b17a613b99ef182c9bae18b8171efc17e8fe8d2'
 OID = re.compile(r'[0-9a-f]{40}')
@@ -116,4 +119,4 @@ def prepare(repository: Path, destination: Path, head: str) -> dict[str, object]
     git(destination, 'merge-base', '--is-ancestor', FM000, head)
     return {'head': head, 'historical_tags': tags, 'objects': len(objects),
             'pack_sha256': hashlib.sha256(pack).hexdigest(), 'external_deltas': False,
-            'scope': 'public HEAD commit graph; HEAD/FM000/three historical trees; exact tag objects'}
+            'scope': 'public HEAD commit graph; HEAD/FM000/six historical trees; exact tag objects'}

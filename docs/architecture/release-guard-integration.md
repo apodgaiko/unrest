@@ -493,8 +493,8 @@ provider permission, and every other environment difference still refuses.
 
 The primary source namespace carries a closed public Git projection rather than
 an empty object directory with a dangling HEAD. It contains the exact current
-commit graph, current tree/index, FM000 tree, and the byte-pinned v0.2.0, v0.2.1
-and v0.4.0 tag/tree objects required by unchanged history tests. The producer
+commit graph, current tree/index, FM000 tree, and the byte-pinned v0.2.0, v0.2.1, v0.3.0, v0.3.1,
+v0.4.0 and v0.4.5 tag/tree objects required by unchanged history tests. The producer
 verifies the packed object set with no external deltas. Runner Git configuration,
 hooks, remotes, alternate paths, replacement refs and unrelated history trees are
 not copied. Normal immutable-source custody covers the resulting pack, index and

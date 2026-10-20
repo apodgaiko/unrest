@@ -43,6 +43,8 @@ def test_real_status_index_and_historical_queries_are_faithful(copied):
         ROOT, 'show', 'v0.4.0:docs/release/lean-core-v0.4.0.md')
     assert git(destination, 'diff', '--name-only', FM000, 'v0.2.1') == git(
         ROOT, 'diff', '--name-only', FM000, 'v0.2.1')
+    assert git(destination, 'archive', '5a3d568aa881c746432b7034597bbb8a1ffe025f') == git(
+        ROOT, 'archive', '5a3d568aa881c746432b7034597bbb8a1ffe025f')
     assert proof['external_deltas'] is False
 
 
@@ -141,3 +143,9 @@ def test_status_handles_readonly_metadata_without_rewriting_index(copied):
     finally:
         for path, mode in modes.items():
             path.chmod(mode)
+
+
+def test_all_required_release_binding_revisions_are_in_the_closed_projection():
+    assert set(TAGS) == {'v0.2.0', 'v0.2.1', 'v0.3.0', 'v0.3.1', 'v0.4.0', 'v0.4.5'}
+    assert git(ROOT, 'rev-parse', 'v0.4.5^{commit}').decode().strip() == (
+        '5a3d568aa881c746432b7034597bbb8a1ffe025f')
