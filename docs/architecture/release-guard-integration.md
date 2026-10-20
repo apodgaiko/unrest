@@ -400,3 +400,11 @@ fork return precedes the child's body marker; the parent changes cwd while that
 child remains blocked, then releases it. The child's retained cwd, earlier real
 allowed custody and authenticated READY must join its genuine original-parent
 wait. This does not claim the parent changed cwd before prebody verification.
+
+Live multiprocessing readiness reads journal bytes through the last LF before
+strict UTF-8 and JSON decoding. The trailing fragment remains pending, even if
+it already looks like a complete JSON object; it supplies no endpoint authority.
+Committed malformed records still fail through the original acquisition rollback.
+The original endpoint/nonce/identity predicates, five-second deadline, writer
+fsync and READY semantics remain unchanged. Terminal evidence requires complete
+valid records; this live framing rule does not certify truncated final evidence.

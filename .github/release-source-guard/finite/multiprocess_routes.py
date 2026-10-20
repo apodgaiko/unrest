@@ -584,6 +584,15 @@ def match(state, executable, argv, passfds, frame):
 
 
 
+def journal_rows(journal):
+    """Parse complete LF-framed records; an in-flight final write stays pending."""
+    data = journal.read_bytes()
+    committed = data[:data.rfind(b"\n") + 1]
+    # Decode only after framing: a pending tail may split a UTF-8 code point.
+    # Committed encoding/JSON errors must propagate to the acquisition rollback.
+    return [json.loads(line) for line in committed.decode("utf-8").split("\n")[:-1]]
+
+
 def endpoint_ready(rows, state, token, pid):
     common = {
         "token": token,
@@ -680,7 +689,7 @@ def install(state, append, refuse, ready, bootstrap, inherited_environment):
             journal = Path(state["events"]) / (str(pid) + ".jsonl")
             while True:
                 rows = (
-                    [json.loads(line) for line in journal.read_text().splitlines()]
+                    journal_rows(journal)
                     if journal.exists()
                     else []
                 )

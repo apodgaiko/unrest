@@ -253,17 +253,18 @@ def _lease_factories():
                     raise RuntimeError('owned_lease_probe_cancelled')
                 # Core READY precedes endpoint setup. This supplementary probe
                 # observes both before deliberately terminating its cleanup child.
-                import json
                 import time
                 ready_path = Path(guard._STATE['guard']).with_name('multiprocess_routes.py')
-                ready = guard.checked_source(ready_path, guard._STATE['direct_support']['files'][str(ready_path)])['endpoint_ready']
+                readers = guard.checked_source(ready_path, guard._STATE['direct_support']['files'][str(ready_path)])
+                ready = readers['endpoint_ready']
+                journal_rows = readers['journal_rows']
                 journal = Path(guard._STATE['events']) / (str(child.pid) + '.jsonl')
                 observe('registration_lookup_begin', child)
                 token = next(row['token'] for row in guard.summarize(guard._STATE['manifest_path'])['events']
                              if row['kind'] == 'registered' and row.get('pid') == child.pid)
                 observe('registration_lookup_complete', child)
                 deadline = time.monotonic() + 5
-                while not ready([json.loads(line) for line in journal.read_text().splitlines()],
+                while not ready(journal_rows(journal),
                                 guard._STATE, token, child.pid):
                     assert child.poll() is None and time.monotonic() < deadline
                     time.sleep(.001)

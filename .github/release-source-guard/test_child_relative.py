@@ -2,12 +2,17 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import signal
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import child_relative_custody as custody
+from finite import multiprocess_routes as routes
 
 ROOT = Path(__file__).parent
 spec = importlib.util.spec_from_file_location('child_relative', ROOT / 'finite/child_relative.py')
@@ -442,3 +447,179 @@ def test_own_native_probe_preserves_all_prior_stage1_compartment_statements():
     original = without_own_prebody_probe(ast.parse((ROOT / 'primary_compartment.py').read_bytes()))
     assert hashlib.sha256(ast.dump(original, include_attributes=False).encode()).hexdigest() == (
         '2732b831754671df4bdecc3cf8d88bf8872713360752a02bb0b240cb5fbb0972')
+
+
+# These controls call the actual live reader. Local children model journal
+# publication only; they do not claim production admission or native acceptance.
+
+
+FRAMED_ROW = {'key': 'quoted " string, nonce café 雪', 'kind': 'ready'}
+FRAMED_BYTES = json.dumps(FRAMED_ROW, ensure_ascii=False).encode('utf-8') + b'\n'
+
+
+@pytest.mark.parametrize('cut', range(len(FRAMED_BYTES)))
+def test_live_journal_every_byte_split_and_lf_completion(tmp_path, cut):
+    journal = tmp_path / 'live.jsonl'
+    journal.write_bytes(FRAMED_BYTES[:cut])
+    assert routes.journal_rows(journal) == []
+    with journal.open('ab') as stream:
+        stream.write(FRAMED_BYTES[cut:])
+    assert routes.journal_rows(journal) == [FRAMED_ROW]
+
+
+@pytest.mark.parametrize('tail', [b'', b'{"key":', b'{"valid":true}', b'\xe9', b'\xe9\x9b'])
+def test_live_journal_complete_prefix_and_pending_tail(tmp_path, tail):
+    journal = tmp_path / 'live.jsonl'
+    journal.write_bytes(FRAMED_BYTES * 2 + tail)
+    assert routes.journal_rows(journal) == [FRAMED_ROW, FRAMED_ROW]
+
+
+@pytest.mark.parametrize('data,error', [
+    (b'{broken}\n', json.JSONDecodeError),
+    (b'\xff\n', UnicodeDecodeError),
+    (FRAMED_BYTES + b'\xff\n' + FRAMED_BYTES, UnicodeDecodeError),
+    (FRAMED_BYTES + b'\n' + FRAMED_BYTES, json.JSONDecodeError),
+    (FRAMED_BYTES + b'{broken}\n' + b'{"pending":', json.JSONDecodeError),
+])
+def test_live_journal_committed_corruption_propagates(tmp_path, data, error):
+    journal = tmp_path / 'live.jsonl'
+    journal.write_bytes(data)
+    with pytest.raises(error):
+        routes.journal_rows(journal)
+
+
+def test_live_journal_empty_and_unterminated_json_are_pending(tmp_path):
+    journal = tmp_path / 'live.jsonl'
+    for data in (b'', b'{}', b'{"nonce":"unfinished', b'\xff'):
+        journal.write_bytes(data)
+        assert routes.journal_rows(journal) == []
+
+
+def test_live_journal_concurrent_writer_uses_explicit_barriers(tmp_path):
+    journal = tmp_path / 'live.jsonl'
+    prefix_written, finish = threading.Event(), threading.Event()
+    errors = []
+    cut = FRAMED_BYTES.index('雪'.encode()) + 1
+    def write():
+        try:
+            with journal.open('wb', buffering=0) as stream:
+                stream.write(FRAMED_BYTES[:cut])
+                prefix_written.set()
+                assert finish.wait(5)
+                stream.write(FRAMED_BYTES[cut:])
+        except BaseException as error:
+            errors.append(error)
+    writer = threading.Thread(target=write)
+    writer.start()
+    try:
+        assert prefix_written.wait(5)
+        assert routes.journal_rows(journal) == []
+    finally:
+        finish.set()
+        writer.join(5)
+    assert not writer.is_alive() and errors == []
+    assert routes.journal_rows(journal) == [FRAMED_ROW]
+
+
+@pytest.mark.parametrize('kind', ['pending', 'json', 'utf8'])
+def test_live_spawn_reader_preserves_deadline_error_and_real_rollback(tmp_path, monkeypatch, kind):
+    from multiprocessing import util
+    import time
+    before = set(os.listdir('/dev/fd' if os.sys.platform == 'darwin' else '/proc/self/fd'))
+    events, children = [], []
+    state = {'token': 'owner', 'case': 'own-framing', 'manifest_path': 'own',
+             'pin': 'pin', 'guard': 'guard', 'guard_sha256': 'guard-pin',
+             'events': str(tmp_path), 'endpoint': {'nonce': 'nonce'}}
+    read_fd, write_fd = os.pipe()
+    def original(executable, argv, passfds):
+        pid = os.fork()
+        if pid == 0:
+            try:
+                os.close(read_fd)
+                token = next(row['token'] for row in events if row['kind'] == 'admitted')
+                common = {'token': token, 'owner_pid': os.getpid(), 'parent_pid': os.getppid(),
+                          'manifest_sha256': state['pin'], 'guard_sha256': state['guard_sha256']}
+                ready_row = {'kind': 'ready', **common}
+                endpoint = {'kind': 'endpoint_install_complete', **common, 'nonce': 'nonce',
+                            'identity': {'pid': os.getpid(), 'ppid': os.getppid(), 'uid': os.getuid()}}
+                pending = json.dumps(ready_row).encode() + b'\n' + json.dumps(endpoint).encode()
+                data = {'pending': pending, 'json': b'{broken}\n',
+                        'utf8': b'\xff\n'}[kind]
+                Path(tmp_path / (str(os.getpid()) + '.jsonl')).write_bytes(data)
+                os.write(write_fd, b'1')
+                signal.pause()
+            finally:
+                os._exit(99)
+        children.append(pid)
+        os.close(write_fd)
+        assert os.read(read_fd, 1) == b'1'
+        os.close(read_fd)
+        return pid
+    monkeypatch.setattr(util, 'spawnv_passfds', original)
+    monkeypatch.setattr(routes, 'source_function', lambda *args: True)
+    monkeypatch.setattr(routes, 'match', lambda *args:
+                        ({'class': 'own-framing', 'source_binding': {}}, [], []))
+    class Refused(RuntimeError):
+        pass
+    def refuse(reason):
+        raise Refused(reason)
+    launch = routes.install(state, events.append, refuse, lambda *args: None,
+                            lambda *args: 'own-no-exec', lambda: {})
+    start = time.monotonic()
+    try:
+        error = {'pending': Refused, 'json': json.JSONDecodeError,
+                 'utf8': UnicodeDecodeError}[kind]
+        with pytest.raises(error) as caught:
+            launch(os.fsencode(os.sys.executable), [os.sys.executable, '-c', 'own'], ())
+        if kind == 'pending':
+            assert str(caught.value) == 'multiprocess_child_READY_deadline'
+            assert 5 <= time.monotonic() - start < 10
+        else:
+            # The strict parser's original error type and detail survive rollback.
+            with pytest.raises(error) as direct:
+                routes.journal_rows(tmp_path / (str(children[0]) + '.jsonl'))
+            assert str(caught.value) == str(direct.value)
+        waits = [row for row in events if row['kind'] == 'multiprocess_refused_acquisition_wait']
+        assert len(waits) == 1 and waits[0]['pid'] == children[0]
+        assert waits[0]['numeric_returncode'] == -signal.SIGKILL
+        assert waits[0]['original_exception_preserved'] is True
+        assert not any(row['kind'] == 'bounded_multiprocess_READY_handshake' for row in events)
+        with pytest.raises(ChildProcessError):
+            os.waitpid(children[0], os.WNOHANG)
+    finally:
+        for pid in children:
+            try:
+                waited, _ = os.waitpid(pid, os.WNOHANG)
+                if not waited:
+                    os.kill(pid, signal.SIGKILL)
+                    os.waitpid(pid, 0)
+            except ChildProcessError:
+                pass
+        for fd in (read_fd, write_fd):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+    assert set(os.listdir('/dev/fd' if os.sys.platform == 'darwin' else '/proc/self/fd')) == before
+
+
+def test_live_journal_lf_completion_keeps_exact_endpoint_predicate(tmp_path):
+    pid = os.getpid()
+    state = {'pin': 'pin', 'guard_sha256': 'guard-pin', 'endpoint': {'nonce': 'nonce'}}
+    common = {'token': 'token', 'owner_pid': pid, 'parent_pid': pid,
+              'manifest_sha256': 'pin', 'guard_sha256': 'guard-pin'}
+    core = {'kind': 'ready', **common}
+    endpoint = {'kind': 'endpoint_install_complete', **common, 'nonce': 'nonce',
+                'identity': {'pid': pid, 'ppid': pid, 'uid': os.getuid()}}
+    journal = tmp_path / 'live.jsonl'
+    prefix = json.dumps(core).encode() + b'\n'
+    journal.write_bytes(prefix + json.dumps(endpoint).encode())
+    assert not routes.endpoint_ready(routes.journal_rows(journal), state, 'token', pid)
+    with journal.open('ab') as stream:
+        stream.write(b'\n')
+    assert routes.endpoint_ready(routes.journal_rows(journal), state, 'token', pid)
+    assert not routes.endpoint_ready(routes.journal_rows(journal), state, 'other-token', pid)
+    assert not routes.endpoint_ready(routes.journal_rows(journal), state, 'token', pid + 1)
+    endpoint['nonce'] = 'other-nonce'
+    journal.write_bytes(prefix + json.dumps(endpoint).encode() + b'\n')
+    assert not routes.endpoint_ready(routes.journal_rows(journal), state, 'token', pid)

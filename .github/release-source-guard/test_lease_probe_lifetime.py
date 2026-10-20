@@ -96,9 +96,11 @@ def probe(tmp_path, monkeypatch):
     state = {'owned_root': str(tmp_path), 'guard': str(tmp_path / 'runtime_guard.py'),
              'direct_support': {'files': {str(route): 'control'}},
              'events': str(tmp_path), 'manifest_path': 'control'}
+    from finite.multiprocess_routes import journal_rows
     guard = types.SimpleNamespace(
         _STATE=state, append=events.append,
-        checked_source=lambda *args: {'endpoint_ready': lambda *args: True},
+        checked_source=lambda *args: {'endpoint_ready': lambda *args: True,
+                                      'journal_rows': journal_rows},
         summarize=lambda *args: {'events': [
             {'kind': 'registered', 'pid': child.pid, 'token': 'control'} for child in children]})
     monkeypatch.setitem(sys.modules, 'runtime_guard', guard)
@@ -249,7 +251,9 @@ def test_each_original_assertion_failure_remains_failure(probe, index):
     module._lease_popen = constructor
     # The endpoint-loop assertion requires an actual loop iteration.
     if index == 0:
-        sys.modules['runtime_guard'].checked_source = lambda *args: {'endpoint_ready': lambda *args: False}
+        from finite.multiprocess_routes import journal_rows
+        sys.modules['runtime_guard'].checked_source = lambda *args: {
+            'endpoint_ready': lambda *args: False, 'journal_rows': journal_rows}
     with pytest.raises(BaseException) as caught:
         module._lease_factories()
     assert any(isinstance(error, AssertionError) for error in leaves(caught.value))
