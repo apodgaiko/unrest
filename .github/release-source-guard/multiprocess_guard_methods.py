@@ -298,9 +298,12 @@ def _lease_factories():
                     with patch.object(child, 'terminate', side_effect=OSError('controlled cleanup failure')):
                         assert not owner.close(.05) and owner.quarantined and broker.quarantined
                     terminate()
-                    child.wait(timeout=3)
-                    for stream in (child.stdin, child.stdout, child.stderr):
-                        stream.close()
+                    try:
+                        child.wait(timeout=3)
+                    except BaseException as error:
+                        retain('synchronous_wait', error)
+                    finally:
+                        close_streams(child)
                 else:
                     def close():
                         with cleanup_lock:
@@ -358,17 +361,55 @@ def _lease_factories():
                             observe('future_joined_observation', role=role,
                                     failed=future_error is not None)
 
+        def close_streams(child):
+            # Keep the handle's lock across every action. A failing close may
+            # already have consumed its fd; retry only the stream object, never
+            # its former numeric descriptor (which may now belong to someone else).
+            with cleanup_lock:
+                for name in ('stdin', 'stdout', 'stderr'):
+                    try:
+                        stream = getattr(child, name)
+                        if stream is not None and not stream.closed:
+                            stream.close()
+                    except BaseException as error:
+                        retain('stream_close_' + name, error)
+                        observe('stream_close_error', child, stream=name,
+                                error_type=type(error).__name__, errno=getattr(error, 'errno', None))
+
         def finish_child(child):
             with cleanup_lock:
                 observe('child_cleanup_begin', child, status_before_poll=child.returncode)
-                if child.poll() is None:
-                    child.kill()
+                stopped = False
+                try:
+                    stopped = child.poll() is not None
+                except BaseException as error:
+                    retain('child_poll', error)
+                if not stopped:
+                    try:
+                        child.kill()
+                    except BaseException as error:
+                        retain('child_stop', error)
                 wait_cached = child.returncode is not None
-                child.wait(timeout=5)
-                for stream in (child.stdin, child.stdout, child.stderr):
-                    stream.close()
-                observe('child_cleanup_complete', child, wait_cached=wait_cached,
-                        returncode=child.returncode)
+                waited = False
+                try:
+                    child.wait(timeout=5)
+                    waited = True
+                except BaseException as error:
+                    retain('child_wait', error)
+                finally:
+                    close_streams(child)
+                unsettled = []
+                for name in ('stdin', 'stdout', 'stderr'):
+                    try:
+                        stream = getattr(child, name)
+                        if stream is not None and not stream.closed:
+                            unsettled.append(name)
+                    except BaseException as error:
+                        retain('stream_state_' + name, error)
+                        unsettled.append(name)
+                observe('child_cleanup_complete' if waited and not unsettled else 'child_cleanup_unsettled',
+                        child, wait_cached=wait_cached, returncode=child.returncode,
+                        waited=waited, unsettled_streams=unsettled)
 
         def cancel_owned():
             # Publish cancellation before taking the snapshot. A late constructor
@@ -399,8 +440,13 @@ def _lease_factories():
                 broker.close()
             except BaseException as error:
                 retain('broker_cleanup', error)
-        observe('mode_settled', before_fds=census,
-                after_fds=len(os.listdir('/proc/self/fd')), child_count=len(children))
+        try:
+            after_fds = len(os.listdir('/proc/self/fd'))
+        except BaseException as error:
+            retain('descriptor_census', error)
+            after_fds = None
+        observe('mode_failed' if errors else 'mode_settled', before_fds=census,
+                after_fds=after_fds, child_count=len(children))
         if errors:
             import hashlib
             failures = tuple(errors)

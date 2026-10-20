@@ -187,4 +187,8 @@ from test_lease_probe_lifetime import (  # noqa: F401, E402
     probe,
     test_late_entered_never_supersedes_original_main_timeout,
     test_simultaneous_child_cleanup_is_serial_and_waits_are_labeled,
+    test_independent_owned_descriptor_failures_attempt_every_stream,
+    test_cleanup_diagnostic_errors_preserve_every_owned_action,
+    test_unsettled_stream_is_retained_without_closing_a_reused_number,
+    test_closed_stream_number_reuse_is_not_closed_by_later_cleanup,
 )

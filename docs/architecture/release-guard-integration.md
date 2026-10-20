@@ -367,3 +367,13 @@ diagnostic-write and cleanup failures remain independent actual exception
 objects; private failure metadata contains only role, type, errno and bounded
 source-hashed frame locations, never messages, repr, locals or source bodies.
 These diagnostics do not change consumer eligibility or any original policy.
+
+Each own handle's poll, stop, wait and individual stdin/stdout/stderr close is an
+independent cleanup action under that same lock. A poll or wait failure cannot
+skip stream closure, and one stream's close failure cannot skip another stream.
+The synchronous cleanup branch uses the same stream settlement. Failed actions
+retain their original exception objects with separate roles; diagnostic writes
+cannot interrupt these actions. A closed stream object is never retried by its
+former numeric descriptor, which may already belong to an unrelated object.
+An unsuccessful wait or an open stream records unsettled ownership; any retained
+failure prevents successful mode settlement or a descriptor equality claim.

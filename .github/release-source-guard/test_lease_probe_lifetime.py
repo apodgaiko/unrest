@@ -298,3 +298,192 @@ def test_simultaneous_child_cleanup_is_serial_and_waits_are_labeled(probe):
     assert completions[0]['wait_cached'] is False
     assert all(row['wait_cached'] is True for row in completions[1:])
     assert_settled(children)
+
+
+@pytest.mark.parametrize(('mode', 'earlier'), [('spawn', 'none'), ('spawn', 'poll'),
+                                                    ('spawn', 'wait'), ('spawn', 'stop'),
+                                                    ('cleanup', 'none'), ('cleanup', 'wait')])
+def test_independent_owned_descriptor_failures_attempt_every_stream(probe, monkeypatch, earlier, mode):
+    import os
+    module, events, children, options = probe
+    lookup = OSError(errno.EIO, 'own lookup')
+    if mode == 'spawn':
+        options['lookup_error'] = lookup
+    original = module._lease_popen
+    streams, failures = [], []
+    action_error = OSError(errno.EIO, 'own earlier action')
+    original_action = getattr(Child, {'stop': 'kill'}.get(earlier, earlier), None)
+    injected = False
+    if earlier != 'none':
+        def action(child, *args, **kwargs):
+            nonlocal injected
+            if (child.mode == mode and not injected
+                    and (sys._getframe(1).f_code.co_name == 'finish_child'
+                         or mode == 'cleanup' and kwargs.get('timeout') == 3)):
+                injected = True
+                raise action_error
+            return original_action(child, *args, **kwargs)
+        monkeypatch.setattr(Child, {'stop': 'kill'}.get(earlier, earlier), action)
+    class OwnedStream:
+        def __init__(self, fail):
+            self.fd, write = os.pipe()
+            os.close(write)
+            self.identity = descriptor_identity(self.fd)
+            self.closed, self.fail, self.calls = False, fail, 0
+            self.error = OSError(errno.EIO, 'own close')
+            streams.append(self)
+        def close(self):
+            self.calls += 1
+            if self.closed:
+                raise AssertionError('closed stream retried')
+            assert descriptor_identity(self.fd) == self.identity
+            os.close(self.fd)
+            self.closed = True
+            if self.fail:
+                failures.append(self.error)
+                raise self.error
+    def construct(*args, **kwargs):
+        child = original(*args, **kwargs)
+        if child.mode == mode:
+            child.stdin, child.stdout, child.stderr = (OwnedStream(True), OwnedStream(True), OwnedStream(False))
+        return child
+    monkeypatch.setattr(module, '_lease_popen', construct)
+    try:
+        with pytest.raises(BaseExceptionGroup) as caught:
+            module._lease_factories()
+        actual = leaves(caught.value)
+        assert len(failures) == 2 and all(error in actual for error in failures)
+        if mode == 'spawn':
+            assert lookup in actual and any(isinstance(error, AssertionError) for error in actual)
+        if earlier != 'none':
+            # Poll/stop can occur in owner.close too; every actual error must survive.
+            assert injected and action_error in actual
+        assert len(streams) == 3 and all(stream.closed and stream.calls == 1 for stream in streams)
+        for stream in streams:
+            with pytest.raises(OSError) as bad:
+                os.fstat(stream.fd)
+            assert bad.value.errno == errno.EBADF
+        assert_settled(children)
+        assert not any(row.get('stage') == 'mode_settled' and row.get('mode') == mode for row in events)
+    finally:
+        for stream in streams:
+            if not stream.closed:
+                assert descriptor_identity(stream.fd) == stream.identity
+                os.close(stream.fd)
+                stream.closed = True
+
+
+@pytest.mark.parametrize('stage', ['child_cleanup_begin', 'child_cleanup_complete', 'stream_close_error'])
+def test_cleanup_diagnostic_errors_preserve_every_owned_action(probe, monkeypatch, stage):
+    module, events, children, options = probe
+    options.update(lookup_error=OSError(errno.EIO, 'worker'), diagnostic_stage=stage)
+    close_error = OSError(errno.EIO, 'stream')
+    original = Stream.close
+    def close(stream):
+        original(stream)
+        if stream.child.mode == 'spawn' and stream is stream.child.stdin:
+            raise close_error
+    monkeypatch.setattr(Stream, 'close', close)
+    with pytest.raises(BaseExceptionGroup) as caught:
+        module._lease_factories()
+    failures = leaves(caught.value)
+    assert options['lookup_error'] in failures and close_error in failures
+    assert any(isinstance(error, AssertionError) for error in failures)
+    assert any(isinstance(error, OSError) and error.errno == errno.ENOSPC for error in failures)
+    assert_settled(children)
+
+
+def test_unsettled_stream_is_retained_without_closing_a_reused_number(probe, monkeypatch):
+    import os
+    module, events, children, options = probe
+    options['lookup_error'] = OSError(errno.EIO, 'worker')
+    original = module._lease_popen
+    held = []
+    failure = OSError(errno.EIO, 'close refused before consumption')
+    class RefusingStream:
+        closed = False
+        def __init__(self):
+            self.fd, write = os.pipe()
+            os.close(write)
+            self.identity = descriptor_identity(self.fd)
+            self.calls = 0
+        def close(self):
+            self.calls += 1
+            raise failure
+    def construct(*args, **kwargs):
+        child = original(*args, **kwargs)
+        if child.mode == 'spawn':
+            held.append(RefusingStream())
+            child.stdin = held[-1]
+        return child
+    monkeypatch.setattr(module, '_lease_popen', construct)
+    try:
+        with pytest.raises(BaseExceptionGroup) as caught:
+            module._lease_factories()
+        assert failure in leaves(caught.value)
+        stream = held[0]
+        assert stream.calls >= 2 and descriptor_identity(stream.fd) == stream.identity
+        rows = [row for row in events if row.get('mode') == 'spawn']
+        assert any(row.get('stage') == 'child_cleanup_unsettled' and row['unsettled_streams'] == ['stdin'] for row in rows)
+        assert not any(row.get('stage') in {'child_cleanup_complete', 'mode_settled'} for row in rows)
+        assert children[-1].stdout.closed and children[-1].stderr.closed
+        assert not any(thread.name.startswith('ThreadPoolExecutor') for thread in threading.enumerate())
+    finally:
+        for stream in held:
+            assert descriptor_identity(stream.fd) == stream.identity
+            os.close(stream.fd)
+            stream.closed = True
+
+
+def descriptor_identity(fd):
+    import os
+    info = os.fstat(fd)
+    return info.st_dev, info.st_ino, info.st_mode, info.st_rdev
+
+
+def test_closed_stream_number_reuse_is_not_closed_by_later_cleanup(probe, monkeypatch):
+    import os
+    module, events, children, options = probe
+    options['lookup_error'] = OSError(errno.EIO, 'worker')
+    original = module._lease_popen
+    owned, replacements = [], []
+    failure = OSError(errno.EIO, 'close consumed descriptor')
+    class ReusedStream:
+        closed = False
+        def __init__(self):
+            self.fd, self.write = os.pipe()
+            self.identity = descriptor_identity(self.fd)
+            owned.append(self)
+        def close(self):
+            assert not self.closed and descriptor_identity(self.fd) == self.identity
+            os.close(self.fd)
+            self.closed = True
+            # All lower descriptors remain occupied: the new unrelated pipe
+            # acquires exactly the consumed read descriptor number.
+            read, write = os.pipe()
+            replacements.append((read, write, descriptor_identity(read)))
+            assert read == self.fd and descriptor_identity(read) != self.identity
+            raise failure
+    def construct(*args, **kwargs):
+        child = original(*args, **kwargs)
+        if child.mode == 'spawn':
+            child.stdin = ReusedStream()
+        return child
+    monkeypatch.setattr(module, '_lease_popen', construct)
+    try:
+        with pytest.raises(BaseExceptionGroup) as caught:
+            module._lease_factories()
+        assert failure in leaves(caught.value)
+        assert_settled(children)
+        assert len(replacements) == 1
+        assert descriptor_identity(replacements[0][0]) == replacements[0][2]
+    finally:
+        for read, write, identity in replacements:
+            assert descriptor_identity(read) == identity
+            os.close(read)
+            os.close(write)
+        for stream in owned:
+            if not stream.closed:
+                assert descriptor_identity(stream.fd) == stream.identity
+                os.close(stream.fd)
+            os.close(stream.write)
