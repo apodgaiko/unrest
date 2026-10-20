@@ -220,7 +220,7 @@ container removal; cleanup unmounts before removing only that acquired directory
 A failed unmount retains the sealed backing. Container capabilities and security
 settings are unchanged; no container remount permission is added.
 
-Only `.venv`, `.wheel-venv`, `build`, `dist`, `src/unrest_harness.egg-info`, `.pytest_cache`,
+Only `.venv`, `.wheel-venv`, `build`, `dist`, `unrest_harness-0.4.7`, `src/unrest_harness.egg-info`, `.pytest_cache`,
 `.ruff_cache`, and `.mypy_cache` receive finite tmpfs overlays. Their empty
 mountpoints exist before sealing. Dependency cache and temporary work remain in
 `/work`. Strict Docker inspection binds the complete source mount and exact
@@ -250,3 +250,8 @@ members into the setup-observed empty `dist` mount. Generic caller-supplied outp
 paths retain their original absent-directory requirement. The installed producer's
 original `uv venv --clear .wheel-venv` command receives its own initially empty,
 executable tmpfs overlay; its argv and package lifecycle checks remain unchanged.
+
+The pinned setuptools84 sdist producer creates the exact versioned release tree
+`unrest_harness-0.4.7` at project root. Its bounded noexec overlay supports that
+original build operation without making the source namespace writable. This is
+one literal versioned artifact directory, not a prefix rule or source subtree.

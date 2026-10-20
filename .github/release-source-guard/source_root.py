@@ -14,6 +14,7 @@ from typing import Any
 OVERLAYS = {
     '/source/.wheel-venv': 'rw,exec,nosuid,nodev,size=256m,uid=20000,gid=20000,mode=0700',
     '/source/.venv': 'rw,exec,nosuid,nodev,size=256m,uid=20000,gid=20000,mode=0700',
+    '/source/unrest_harness-0.4.7': 'rw,nosuid,nodev,noexec,size=128m,uid=20000,gid=20000,mode=0700',
     '/source/build': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0700',
     '/source/dist': 'rw,nosuid,nodev,noexec,size=64m,uid=20000,gid=20000,mode=0700',
     '/source/src/unrest_harness.egg-info': 'rw,nosuid,nodev,noexec,size=8m,uid=20000,gid=20000,mode=0700',
