@@ -123,6 +123,7 @@ class Observer:
         self.deselected = 0
         self.custodian = None
         self.collection_timer = None
+        self.failure_reports = 0
         self.snapshot_rpc_started = {}
         self.snapshot_rpc_counts = {}
         guard._STATE['primary_snapshot_observer'] = self.observe_snapshot_rpc
@@ -256,7 +257,25 @@ class Observer:
                                               for v in (left, right)]})
         return None
 
+    def retain_failure(self, report):
+        # The command's stderr is already private encrypted evidence. Emit the
+        # original report there now: a later hung test must not erase the first
+        # failure by preventing pytest's terminal summary. No body enters events.
+        if not report.failed or self.failure_reports >= 12:
+            return
+        self.failure_reports += 1
+        try:
+            body = report.longreprtext.encode('utf-8', errors='backslashreplace')
+            body = body[:65536].decode('utf-8', errors='ignore')
+            stream = sys.__stderr__
+            stream.write('\n[retained original pytest failure]\n' + body + '\n')
+            stream.flush()
+        except (OSError, AttributeError, UnicodeError):
+            # A diagnostic write cannot replace the original test result.
+            pass
+
     def pytest_runtest_logreport(self, report):
+        self.retain_failure(report)
         self.guard.append({'kind': 'test_outcome', 'nodeid': report.nodeid,
                            'phase': report.when, 'outcome': report.outcome})
         if report.when == 'teardown' and self.custodian is not None:

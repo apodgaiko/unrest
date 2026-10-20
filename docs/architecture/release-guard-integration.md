@@ -475,3 +475,10 @@ Git image. Other vectors, repositories, explicit cwd/environment substitutions,
 Git environment redirects and changed payload/caller identities refuse. This
 route does not authorize a general Git command family or any provider launch;
 the existing native parent-wait and execution-custody gates remain required.
+
+The full-source observer writes the first twelve original failed pytest reports
+to the existing private stderr capture as they occur, with a 64 KiB bound per
+report. This survives a later test hang that prevents pytest's terminal summary.
+Report bodies stay inside encrypted evidence; public events retain outcome
+metadata only. The observer changes no report, item, timeout, assertion, or exit
+status. A diagnostic write error cannot replace the original result.
