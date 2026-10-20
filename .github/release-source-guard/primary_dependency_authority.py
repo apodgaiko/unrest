@@ -12,6 +12,11 @@ class DependencySourceAuthority(SourceAuthority):
         super().start(pid, output_fd, trace=trace, primary=primary)
         from primary_ready_snapshot import install
         install(self.supervisor, self.producers)
+        from filesystem_telemetry import Telemetry
+        self.filesystem_telemetry = Telemetry()
+        self.filesystem_telemetry.observe('before_dispatch')
+        self.producers.records.append({'kind': 'filesystem_telemetry',
+                                       'records': self.filesystem_telemetry.records})
         import primary_dependency
         descriptor = self.primary_dependency_declaration
         body, receipt = primary_dependency.read(descriptor['path'], 20001)
@@ -31,7 +36,15 @@ class DependencySourceAuthority(SourceAuthority):
             import primary_dependency
             primary_dependency.capture(self, trace)
             return
-        super().tick(trace)
+        try:
+            super().tick(trace)
+        except BaseException as error:
+            self.filesystem_telemetry.observe('trace_failure', error)
+            raise
+        if self.supervisor.poisoned:
+            self.filesystem_telemetry.observe('first_poison')
+        if not trace.active and trace.root_parent_wait is not None:
+            self.filesystem_telemetry.observe('after_trace')
 
     def prepare_primary_dependency(self):
         import producer_profile

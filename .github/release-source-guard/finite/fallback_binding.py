@@ -72,6 +72,16 @@ def matches(registration, argv, cwd, environment, state):
                 return None
         except (OSError, KeyError, AttributeError, TypeError, ValueError):
             return None
+    if registration['class'] == 'reference-descendant:terminal-redaction':
+        path = Path(state['guard']).with_name('indirect_terminal_binding.py')
+        try:
+            guard = sys.modules['runtime_guard']
+            return guard.checked_source(path, state['direct_support']['files'][str(path)])[
+                'matches'](registration, argv, cwd, environment, state, frames)
+        except (OSError, KeyError, AttributeError, TypeError, ValueError):
+            return None
+        finally:
+            frames.clear()
     diagnostics = []
     try:
         for frame in frames:

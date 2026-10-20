@@ -428,3 +428,16 @@ check also prevents its separate metadata write. `--no-incremental` alone does
 not provide that guarantee. The earlier ENOSPC and duplicate CI runs remain
 failures with their original attribution; their byte/inode cause and duplicate
 origin remain unproven.
+
+
+The existing terminal-redaction registration also binds its indirect ACP request
+route. Admission checks the original request literal, live test and ACP handler
+code/globals, client and policy identity, exact executable/argv/environment/cwd,
+and authenticated owner/token. Other ACP calls gain no launch authority.
+
+The primary dependency specialization records bounded read-only filesystem
+identity and free byte/inode observations before dispatch, on the first poison
+or trace error, and after trace settlement. These observations use the existing
+encrypted native-source records; they change no mount capacity, permissions,
+admission, deadline, poison, completion or parent-wait rule. Historical ENOSPC
+occupancy remains unknown when it was not measured.
