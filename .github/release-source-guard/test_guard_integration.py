@@ -9,6 +9,14 @@ from pathlib import Path
 import pytest
 
 import phase_catalog
+from test_own_constructor import (  # noqa: F401
+    test_previous_callback_failure_precedes_own_effect_and_restores_exact_profile,
+    test_restoration_attempts_profile_after_independent_os_errors,
+    test_owned_directory_is_restored_removed_without_touching_source,
+    test_changed_directory_identity_is_not_chmodded_or_removed,
+    test_existing_negative_capsule_cannot_be_invoked_with_unknown_mode,
+    test_current_native_gate_chains_original_arguments_and_restores_after_error,
+)
 # The existing host selection runs these new guard-only controls on Linux too.
 from test_source_lease_integration import (  # noqa: F401
     test_lease_postinit_requires_complete_original_binding,

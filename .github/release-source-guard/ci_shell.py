@@ -229,7 +229,7 @@ def create_capsule(prepared):
                        json.loads((prepared['inputs'] / 'source-custody.json').read_bytes()))
 
 
-def main():
+def main(*, own_constructor_fault=None):
     global STAGE, SCRIPT_PIN, SCRIPT_SIZE
     from full_bootstrap import consume, context, reserved
     prepare_only = len(sys.argv) == 3 and sys.argv[1] == '--prepare-full'
@@ -337,6 +337,23 @@ def main():
     else:
         spec = test_plan(script, workflow, test_mode) if test_mode else plan(bound['script'], workflow, source_input)
     prepared = prepare_capsule(spec, script, expected, source_input, test_mode, package_test)
+    if own_constructor_fault is not None:
+        from child_relative_host import MODES
+        wrapper = sys._getframe(1)
+        caller = sys._getframe(2)
+        host = sys.modules.get(caller.f_globals.get('__name__'))
+        if (own_constructor_fault not in MODES or host is None
+                or wrapper.f_code is not retained_main.__code__ or wrapper.f_globals is not globals()
+                or caller.f_code is not host.main.__code__
+                or caller.f_globals is not vars(host) or host.main.__code__.co_filename != str(SUPPORT / 'child_relative_host.py')
+                or not preflight or test_mode != 'TEST-positive'):
+            raise RuntimeError('own_constructor_host_caller')
+        own_pin = prepared['source_pins']['.github/release-source-guard/child_relative_methods.py']
+        (prepared['inputs'] / 'own-constructor-fault.json').write_bytes(canonical(
+            {'mode': own_constructor_fault, 'source_sha256': own_pin}))
+    elif preflight and test_mode == 'TEST-positive':
+        from child_relative_host import run as constructor_faults
+        constructor_faults(prepared)
     root, raw, log, control, custody, image, source_pins, container, identity, source_invocation = (
         prepared[key] for key in ('root', 'raw', 'log', 'control', 'custody', 'image',
                                  'source_pins', 'container', 'identity', 'source_invocation'))
@@ -408,7 +425,11 @@ def main():
             stage = 'custody_refused'
     negative_verified = False
     test_proof = None
-    if test_mode:
+    own_fault_proof = None
+    if own_constructor_fault is not None:
+        from child_relative_host import reduce_fault
+        own_fault_proof = reduce_fault(records, own_constructor_fault)
+    if test_mode and own_constructor_fault is None:
         from primary_source_probe import check
         expected_status = 2 if test_mode == 'TEST-poison' else 0
         if status == expected_status:
@@ -429,7 +450,7 @@ def main():
                     {duty: custody.phase(duty) for duty in ORDER}, source_pins)
         except Exception:
             status, stage = 125, 'package_test_refused'
-    metadata = {'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,
+    metadata = {'own_constructor_fault': own_fault_proof, 'direct_identity': identity, 'source_checkpoint_ready': False, 'selected_carrier': None,
                 'source_exit_code': status, 'stage': stage, 'primary_plan': public_plan(spec),
                 'head_sha': os.environ['GITHUB_SHA'], 'source_tree': expected['source_tree'], 'image_id': image,
                 'source_pins_sha256': hashlib.sha256(json.dumps(source_pins, sort_keys=True).encode()).hexdigest(),
@@ -461,14 +482,15 @@ def main():
     return 0 if negative_verified else status
 
 
-def retained_main():
+def retained_main(*, own_constructor_fault=None):
     """The acquiring host retains preparation failures before returning.
 
     ACTIVE_ROOT is assigned only after exclusive directory acquisition. A
     stale directory is never adopted as this invocation's private evidence.
     """
     try:
-        result = main()
+        options = {} if own_constructor_fault is None else {'own_constructor_fault': own_constructor_fault}
+        result = main(**options)
         from preparation_retention import release, OWNED
         if ACTIVE_ROOT in OWNED:
             release(ACTIVE_ROOT)

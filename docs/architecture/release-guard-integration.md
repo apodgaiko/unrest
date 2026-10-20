@@ -377,3 +377,26 @@ cannot interrupt these actions. A closed stream object is never retried by its
 former numeric descriptor, which may already belong to an unrelated object.
 An unsuccessful wait or an open stream records unsettled ownership; any retained
 failure prevents successful mode settlement or a descriptor equality claim.
+
+
+The finite child-relative own probe chains the current native profile observer
+before inspecting only its exact saved-stock constructor frame. Existing guard
+and constructor code, globals, launch token, handle, registration, options and
+source pins remain authoritative. The scoped observer restores the exact prior
+observer and cwd in finally, retaining independent restoration errors. A native
+callback refusal propagates with its original exception identity.
+
+Own wrong-cwd and search-permission faults run in separate production capsules
+using the existing command, image, credentials, mounts and limits. Wrong cwd is
+refused by the original primary source resolver at the real exec stop, before
+child custody or a startup receipt exists; it must retain the denied syscall and
+sticky poison. Search failure may stop in the stock child chdir before any exec
+attempt. Only a newly owned work directory may have its mode changed. The host
+retains the original failed capsules inside the existing encrypted negative
+control member; neither failure becomes a successful source checkpoint.
+
+The successful postfork own body uses an explicit pipe barrier. Its recorded
+fork return precedes the child's body marker; the parent changes cwd while that
+child remains blocked, then releases it. The child's retained cwd, earlier real
+allowed custody and authenticated READY must join its genuine original-parent
+wait. This does not claim the parent changed cwd before prebody verification.
