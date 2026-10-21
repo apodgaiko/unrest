@@ -47,7 +47,7 @@ def model(monkeypatch):
         raise RuntimeError(reason)
     def frames(path, pin):
         assert str(path) == '/guard/finite/fallback_binding.py' and pin == 'fallback'
-        return {'active_frames': lambda: [owner, active]}
+        return {'active_frames': lambda: [owner, active, active]}
     guard = types.SimpleNamespace(_STATE=state, digest=lambda path: route.PIN,
                                   checked_source=frames, refuse=refuse)
     payload = {'class': route.CLASS, 'case': state['case'], 'mode': 'inline', 'target': route.BODY,
@@ -99,3 +99,11 @@ def test_foreign_live_claims_refuse_without_network_plan(model, change):
         payload['case'] = 'foreign'
     with pytest.raises(RuntimeError, match='negative_readiness_'):
         route.plan(guard, payload, lambda *a, **k: pytest.fail('foreign plan'))
+
+
+def test_distinct_concurrent_owner_is_not_a_duplicate_reference(model):
+    guard, payload, owner, active = model
+    other = types.SimpleNamespace(**vars(owner))
+    guard.checked_source = lambda *args: {'active_frames': lambda: [owner, other, active]}
+    with pytest.raises(RuntimeError, match='live_owner'):
+        route.plan(guard, payload, lambda *a, **k: pytest.fail('ambiguous plan'))

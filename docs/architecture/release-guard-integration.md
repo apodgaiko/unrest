@@ -705,3 +705,11 @@ and launch token. It grants no listener or connection: unchanged supervisor
 policy requires the admitted child token/vector and current kernel identity,
 then returns the existing pending-listener refusal without a connect syscall.
 Original 50-ms timeout and cancellation assertions remain intact.
+
+Repeated references to one live frame are deduplicated by identity before owner
+uniqueness checks; distinct active invocations still refuse. TCP readiness may
+precede application accept. For the original connected stage's pending-peer
+result only, the integration discards its provisional connection key and
+reapplies the unchanged payload policy with fresh kernel observations. SYN
+states keep waiting; only the existing owned-queue or reciprocal-peer policy
+can establish the connection. Foreign and changed bindings still refuse.

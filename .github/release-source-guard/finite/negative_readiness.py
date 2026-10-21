@@ -30,11 +30,11 @@ def plan(guard, payload, request):
     try:
         code = state['isolated_named'](state['isolated_source_code'](source), OWNER)
         exercise_code = state['isolated_named'](code, 'exercise')
-        owners = [f for f in frames if f.f_code == code and f.f_code.co_filename == str(source)]
-        active = [f for f in frames if f.f_code == exercise_code and f.f_code.co_filename == str(source)]
+        owners = {id(f): f for f in frames if f.f_code == code and f.f_code.co_filename == str(source)}
+        active = {id(f): f for f in frames if f.f_code == exercise_code and f.f_code.co_filename == str(source)}
         if len(owners) != 1 or len(active) != 1:
             guard.refuse('negative_readiness_live_owner')
-        owner, caller = owners[0], active[0]
+        owner, caller = next(iter(owners.values())), next(iter(active.values()))
         module = sys.modules.get(owner.f_globals.get('__name__'))
         function = getattr(module, OWNER, None)
         exercise = owner.f_locals.get('exercise')

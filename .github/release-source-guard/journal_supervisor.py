@@ -5,7 +5,7 @@ from pathlib import Path
 import time
 
 from event_journal import EventJournal, JournalSnapshot
-from linux_supervisor import Supervisor
+from linux_supervisor import Supervisor, AwaitOwnedPeer
 
 
 class RefreshInput:
@@ -52,4 +52,27 @@ class JournalSupervisor(Supervisor):
         # The original handler still receives the entire current ordinary JSON list.
         if type(events) is JournalSnapshot:
             events = events.materialize()
-        return Supervisor.handle(self, request, events)
+        previous = set(self.connections) if request.get('kind') == 'connected' else None
+        try:
+            return Supervisor.handle(self, request, events)
+        except AwaitOwnedPeer as error:
+            if (request.get('kind') != 'connected'
+                    or str(error) != 'accepted_peer_not_yet_observable'):
+                raise
+            # TCP readiness can precede application accept(). Reapply the
+            # original payload policy's kernel-owned queue check instead of
+            # retaining the provisional connection key made before the wait.
+            provisional = set(self.connections)
+            self.connections.intersection_update(previous)
+            own = next((row for row in self.observe(request['pid'])
+                        if row['fd'] == request['fd']), None)
+            if own is None:
+                raise RuntimeError('queued_connection_descriptor_changed') from error
+            key = (request['pid'], own['socket_cookie'], own['inode'],
+                   own['local_port'], own['remote_port'])
+            if key not in provisional:
+                raise RuntimeError('queued_connection_binding_changed') from error
+            self.connections.discard(key)
+            if own['state'] not in (1, 8):
+                raise
+            return Supervisor.handle(self, {**request, 'kind': 'payload'}, events)
