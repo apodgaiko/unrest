@@ -553,12 +553,14 @@ launch plan argv and environment all remain required. The same existing local
 adapter class is reused; no provider, generic Python, Git or class-prefix route
 is added. Original assertions, process waits and deadlines remain unchanged.
 
-The observer rereads complete current journal bytes on every acquisition. It may
-reuse decoding only when those entire bytes are identical. The internal tick refresh
-borrows observer-private parsed values; public event consumers and each receipt
-policy decision receive fresh objects from another current read. Diagnostic
-records copy borrowed values before exposure. Size/mtime equality is never
-journal authority, and read/decode failures never fall back to an older snapshot.
-Append, prefix replacement, truncation, deletion and malformed-line behavior retain
-the previous reader semantics. This removes repeated decoding from the tick loop
-without pausing a test clock, increasing a deadline, or caching a policy verdict.
+The source-authority extension composes a parsing-only journal reader after the
+original supervisor constructor. The original instance, sockets, callback
+references and state remain intact. The base supervisor's complete executable
+AST remains unchanged; policy, authentication, refresh, tick and kernel ownership
+methods are inherited without overrides. Every event acquisition rereads all
+current bytes, with no size/mtime trust or stale fallback. Decoding validation may
+be reused only for identical bytes; every consumer receives fresh ordinary JSON
+objects. No mutable parsed rows or policy verdicts are cached. Append, prefix
+replacement, truncation, deletion, unreadable data and malformed-line handling
+retain the original reader behavior. This removes redundant per-line decoder
+calls without pausing a test clock or increasing any deadline.

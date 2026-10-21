@@ -9,6 +9,12 @@ from primary_dependency_authority import DependencySourceAuthority as OriginalDe
 
 
 class OwnedMultiprocessCustody:
+    def start(self, *args, **kwargs):
+        result = super().start(*args, **kwargs)
+        from journal_supervisor import JournalSupervisor
+        JournalSupervisor.adopt(self.supervisor)
+        return result
+
     def exec_descriptors(self, trace, pid, vector, environment, cwd):
         child_relative_check(self, trace, pid, vector)
         registration = self.bound.get(pid, {}).get("registration", {})

@@ -42,8 +42,7 @@ def transport(tmp_path, monkeypatch):
               'endpoint': {'responses': str(tmp_path), 'nonce': 'a' * 64,
                            'socket': str(tmp_path / 'receipt.sock')}}
     supervisor = host.Supervisor(config, type('Child', (), {'pid': os.getpid()})())
-    monkeypatch.setattr(supervisor, '_refresh_for_tick', lambda: [])
-    monkeypatch.setattr(supervisor, 'events', lambda: [])
+    monkeypatch.setattr(supervisor, 'refresh', lambda: [])
     clock = [host.time.monotonic()]
     def monotonic():
         clock[0] += .006

@@ -1,8 +1,7 @@
 """Observer-only JSON decoding reuse after complete current-byte reads.
 
 No stat/mtime shortcut and no stale fallback: every acquisition reads every
-current journal. Public consumers receive fresh JSON objects. Only the trusted
-refresh loop borrows parsed rows; policy decisions read fresh objects again.
+current journal. Public consumers receive fresh JSON objects. No policy result or parsed mutable object is retained between consumers.
 """
 from __future__ import annotations
 
@@ -22,24 +21,28 @@ class EventJournal:
             snapshot = self._snapshots.get(path)
             if snapshot is None or snapshot[0] != body:
                 text = body.decode('utf-8')
-                rows, lines = [], []
+                lines = []
                 for line in text.splitlines():
                     try:
-                        value = json.loads(line)
+                        json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    rows.append(value)
                     lines.append(line)
-                snapshot = (body, rows, '[' + ','.join(lines) + ']')
+                snapshot = (body, lines, '[' + ','.join(lines) + ']')
             retained[path] = snapshot
             current.append(snapshot)
         self._snapshots = retained
         return current
 
-    def for_refresh(self, directory):
-        """Private borrowed rows: the refresh loop only reads these values."""
-        return [row for snapshot in self._current(directory) for row in snapshot[1]]
-
     def events(self, directory):
         """Current values with fresh mutable identities, as before caching."""
-        return [row for snapshot in self._current(directory) for row in json.loads(snapshot[2])]
+        result = []
+        for snapshot in self._current(directory):
+            try:
+                rows = json.loads(snapshot[2])
+            except RecursionError:
+                # The array envelope adds one level; retain the original
+                # per-line semantics for a current record near that limit.
+                rows = [json.loads(line) for line in snapshot[1]]
+            result.extend(rows)
+        return result

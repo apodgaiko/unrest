@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 import __future__
-import copy
-from event_journal import EventJournal
 import hashlib
 import importlib.util
 import json
@@ -63,25 +61,20 @@ class Supervisor:
                 {"reason": reason, "nonce": self.spec["endpoint"]["nonce"]},
             )
 
-    def _journal(self):
-        if not hasattr(self, '_event_journal'):
-            self._event_journal = EventJournal()
-        return self._event_journal
-
     def events(self):
-        return self._journal().events(Path(self.manifest['events']))
+        rows = []
+        for path in sorted(Path(self.manifest["events"]).glob("*.jsonl")):
+            for line in path.read_text().splitlines():
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        return rows
 
     def refresh(self):
-        return self._refresh_current(borrowed=False)
-
-    def _refresh_for_tick(self):
-        return self._refresh_current(borrowed=True)
-
-    def _refresh_current(self, *, borrowed):
         diagnostic_refresh_wall = time.monotonic_ns()
         diagnostic_refresh_cpu = time.process_time_ns()
-        events = (self._journal().for_refresh(Path(self.manifest['events']))
-                  if borrowed else self.events())
+        events = self.events()
         for event in events:
             if event['kind'] in {'admitted', 'actual_launch_binding', 'ready', 'source_entry',
                                  'test_outcome', 'actual_parent_preexit_drain', 'custody_IPC_listener_ready', 'custodian_stage'}:
@@ -89,7 +82,7 @@ class Supervisor:
                                                           'phase', 'outcome', 'class'))
                 if marker not in self.timed_events:
                     self.timed_events.add(marker)
-                    self.event_timings.append({'event_sha256': hashlib.sha256(json.dumps(event, sort_keys=True).encode()).hexdigest(), 'event': copy.deepcopy(event),
+                    self.event_timings.append({'event_sha256': hashlib.sha256(json.dumps(event, sort_keys=True).encode()).hexdigest(), 'event': event,
                                                'observed_monotonic': time.monotonic()})
             if event["kind"] == "forbidden":
                 self.poison("finite_guard:" + event["reason"])
@@ -522,7 +515,7 @@ class Supervisor:
             diagnostic_tick_wall - (self.diagnostic_schedule["last_tick_ns"] or diagnostic_tick_wall))
         self.diagnostic_schedule["last_tick_ns"] = diagnostic_tick_wall
         self.tick_count += 1
-        events = self._refresh_for_tick()
+        events = self.refresh()
         self.event_count = len(events)
         while len(self.clients) < 128:
             try:
@@ -593,7 +586,7 @@ class Supervisor:
                     policy_started = time.monotonic()
                     state['policy_attempts'] += 1
                     try:
-                        answer = self.handle(request, self.events())
+                        answer = self.handle(request, events)
                         result = {"ok": True, "request": request, **answer}
                     except AwaitOwnedPeer as error:
                         state["pending_reason"] = (str(error) if str(error) in {
