@@ -74,7 +74,8 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     if (registration['class'] in {'source-lease-owned-child', 'reference-descendant:terminal-redaction'}
             or registration['class'] == 'inline:test_acp_cleanup.py:51' and environment == {}
             or registration['class'] in {'source-owned-role:worker', 'source-owned-role:terminal-reviewer'}
-            and environment.get('LANG') == 'C') and lease_context is None:
+            and (environment.get('LANG') == 'C' or registration.get('case', '').startswith(
+                'tests/test_acp_runner.py::test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained['))) and lease_context is None:
         lease_context = lease_profile_context(environment, registration, flags)
     controlled = {
         'canonical-backend': ('/source/tests/fixtures/experimental_session_app_server.py',
@@ -85,6 +86,8 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     binding = registration['source_binding']
     exact_controlled = (controlled is not None and flags == [0, 0, 0]
                         and binding == {'path': controlled[0], 'line': 1, 'sha256': controlled[1]})
+    if exact_stream_environment(environment, registration, flags, lease_context):
+        return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     if exact_inventory_environment(environment, registration, flags, lease_context):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     exact_terminal = exact_terminal_environment(environment, registration, flags, lease_context)
@@ -97,6 +100,46 @@ def python_environment(environment, registration, flags, *, lease_context=None):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     return dict(environment)
 
+
+
+
+def exact_stream_environment(environment, registration, flags, context):
+    """Map CPython locale only for the original two fixed output-only children."""
+    from pathlib import PurePosixPath
+    from primary_policy import PYTHON
+    role = registration.get('class', '').removeprefix('source-owned-role:')
+    prefix = ('tests/test_acp_runner.py::'
+              'test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained')
+    keys = {'PATH', 'UNREST_NODE_ASSIGNMENT'} if role == 'worker' else {'PATH'}
+    if (role not in {'worker', 'terminal-reviewer'} or context is None or flags != [0, 0, 0]
+            or registration.get('kind') != 'admitted' or registration.get('case') != prefix + '[' + role + ']'
+            or set(environment) != keys or any(type(v) is not str or not v for v in environment.values())
+            or role == 'worker' and environment['UNREST_NODE_ASSIGNMENT'] !=
+                '{"targets":["VAL-SEC-014"],"task_type":"work"}'):
+        return False
+    selected, manifest, vector = context['selected'], context['manifest'], context['vector']
+    from finite.chatty_role import BODY, PIN, PRODUCT_PIN
+    binding = {'path': '/source/tests/test_acp_runner.py', 'line': 341, 'sha256': PIN}
+    runtime, directory = manifest['runtime'], PurePosixPath(context['cwd'])
+    consumed = [e for e in context['events'] if e.get('kind') == 'source_ordinary_startup_consumption'
+                and e.get('owner_pid') == context['parent'] and e.get('launch_token') == selected['token']]
+    return (registration['class'] == 'source-owned-role:' + role and registration['source_binding'] == binding
+            and manifest['checkout'] == '/source' and manifest['owned_root'] == '/work/owned'
+            and runtime['realpath'] == PYTHON and len(vector) == 3 and vector[1] == '-c'
+            and vector[0] in runtime['paths'] and context['cwd'] == selected['cwd'] == str(directory)
+            and directory.is_relative_to('/work/owned/pytest') and directory.name == 'workspace'
+            and '..' not in directory.parts and selected['registration'] is registration
+            and selected['owner_pid'] == registration['owner_pid'] == context['parent']
+            and selected['token'] == registration['token'] and selected['case'] == registration['case']
+            and selected['transformed_argv_sha256'] == sha(json.dumps(vector).encode())
+            and selected['bootstrap_sha256'] == sha(vector[2].encode())
+            and selected['environment_sha256'] == sha(json.dumps(environment, sort_keys=True).encode())
+            and registration['argv_sha256'] == sha(json.dumps([vector[0], '-c', BODY]).encode())
+            and len(consumed) == 1 and consumed[0].get('source_binding') == binding
+            and consumed[0].get('class') == registration['class']
+            and consumed[0].get('shared_startup_seal') is True
+            and manifest['product_pins']['tests/test_acp_runner.py'] == PIN
+            and manifest['product_pins']['src/unrest_harness/acp_runner.py'] == PRODUCT_PIN)
 
 
 def exact_inventory_environment(environment, registration, flags, context):

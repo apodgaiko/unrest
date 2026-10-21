@@ -767,3 +767,15 @@ Neither disappearance, a source-only wait claim nor a tracer wait alone is
 enough. Only the old listener cache entry is removed: historical records and
 existing connection evidence remain, and the replacement receives no network
 authority until the original policy observes its new live listener.
+
+The original oversized-stream worker and terminal-reviewer tests substitute a
+fixed output-only Python child for the role command. Their separate route
+binds both immutable source files, the actual original test and spy code,
+captured stdlib coroutine, live factory, argv/environment/cwd and passed pipe.
+It retains the existing owned-role descriptor census and independent repeated
+resolution, with a truthful binding to the test's actual call expression.
+Only these two consumed fixtures receive the exact CPython locale mapping.
+Their original output sizes, redaction checks, bounded tails, five-second
+cleanup deadline and actual exit/wait assertions remain unchanged. This
+substitution is controlled local output coverage, not native provider or MCP
+acceptance. Every unrelated role/vector retains its original refusal.

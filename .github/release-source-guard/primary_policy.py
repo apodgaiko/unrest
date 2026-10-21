@@ -38,6 +38,9 @@ TEST_READINESS_CASES = tuple(
 TEST_INVENTORY_CASES = tuple(
     'tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart[' + mode + ']'
     for mode in ('worker', 'terminal-reviewer'))
+TEST_STREAM_CASES = tuple(
+    'tests/test_acp_runner.py::test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained[' + mode + ']'
+    for mode in ('worker', 'terminal-reviewer'))
 TEST_CLEANUP_CASES = (
     'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-work]',
     'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-validate]',
@@ -91,7 +94,7 @@ TEST_CLEANUP_CASES = (
     'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False]',
     'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[True]',
 )
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES)
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 

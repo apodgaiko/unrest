@@ -183,7 +183,7 @@ def test_exact_startup_diagnosis_is_bounded_and_cannot_certify_full():
 
 def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     import yaml
-    from primary_policy import TEST_INVENTORY_CASES
+    from primary_policy import TEST_STREAM_CASES
     path = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
     document = yaml.safe_load(path.read_text())
     job = document['jobs']['startup-cancellation-diagnosis']
@@ -192,7 +192,7 @@ def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
     steps = job['steps']
     call = next(step for step in steps if step.get('shell'))
-    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_INVENTORY_CASES)
+    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_STREAM_CASES)
     assert call['shell'] == 'python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}'
     assert steps[-1]['if'] == 'always()'
 
@@ -242,6 +242,24 @@ def test_exact_inventory_diagnosis_cannot_certify_full_source():
         plan(script, text, value)
     for altered in [script + b' --maxfail=1',
                     (COMMAND + ' ' + TEST_INVENTORY_CASES[0]).encode(),
+                    script.replace(b'[worker]', b'[foreign]')]:
+        with pytest.raises(RuntimeError):
+            make_test_plan(altered, text, 'TEST-positive')
+
+
+def test_exact_stream_diagnosis_keeps_both_original_modes_and_cannot_certify_full():
+    from primary_policy import TEST_STREAM_CASES, root_seconds
+    text, value = inputs()
+    prefix = 'tests/test_acp_runner.py::test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained['
+    assert TEST_STREAM_CASES == tuple(prefix + mode + ']' for mode in ('worker', 'terminal-reviewer'))
+    script = (COMMAND + ' ' + ' '.join(TEST_STREAM_CASES)).encode()
+    result = make_test_plan(script, text, 'TEST-positive')
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    assert root_seconds(result) == result['timeout_seconds'] == 180
+    with pytest.raises(RuntimeError):
+        plan(script, text, value)
+    for altered in [script + b' --maxfail=1',
+                    (COMMAND + ' ' + TEST_STREAM_CASES[0]).encode(),
                     script.replace(b'[worker]', b'[foreign]')]:
         with pytest.raises(RuntimeError):
             make_test_plan(altered, text, 'TEST-positive')

@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import sys
 
 
 def admit(argv, cwd, environment, state, append, refuse):
@@ -54,10 +55,19 @@ def admit(argv, cwd, environment, state, append, refuse):
             "--sensitive-inventory-fd",
             str(fd),
         ]
+        substitute = None
+        if argv != expected and state.get('case') in {
+                'tests/test_acp_runner.py::test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained[worker]',
+                'tests/test_acp_runner.py::test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained[terminal-reviewer]'}:
+            support = Path(state['guard']).with_name('chatty_role.py')
+            guard = sys.modules['runtime_guard']
+            substitute = guard.checked_source(
+                support, state['direct_support']['files'][str(support)])['bind'](
+                    argv, cwd, environment, state, role, frame, fd, expected, refuse)
         directory = Path(cwd).resolve()
         expected_env = local.get("child_environment", local["environment"])
         if (
-            argv != expected
+            (argv != expected and substitute is None)
             or not isinstance(port, int)
             or not 0 < port < 65536
             or directory != Path(local["workspace_dir"]).resolve()
@@ -68,7 +78,7 @@ def admit(argv, cwd, environment, state, append, refuse):
             or fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE != os.O_RDONLY
         ):
             refuse("owned_role_identity")
-        binding = {"path": str(source), "line": frame.f_code.co_firstlineno, "sha256": pin}
+        binding = substitute or {"path": str(source), "line": frame.f_code.co_firstlineno, "sha256": pin}
         append(
             {
                 "kind": "concrete_owned_role_registration",
