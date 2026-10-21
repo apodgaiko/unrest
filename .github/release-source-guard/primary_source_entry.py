@@ -100,19 +100,29 @@ def activate(profile, event, arguments):
     import _pytest.config
     original = _pytest.config.get_config
     plugin = Observer(guard, endpoint, manifest, profile)
+    nested_path = Path(guard._STATE['guard']).with_name('owned_nested_pytest.py')
+    nested = guard.checked_source(nested_path, guard._STATE['direct_support']['files'][str(nested_path)])['owned']
 
-    def get_config(args=None, plugins=None):
-        config = original(args, plugins)
-        config.pluginmanager.register(plugin, 'primary-source-observer')
-        return config
-
-    _pytest.config.get_config = get_config
+    _pytest.config.get_config = config_factory(original, plugin, nested, guard)
     # Collection hooks observe the original list before and after all hooks;
     # neither hook returns replacement items or adds marks/options/selectors.
     plugin.pytest_collection_modifyitems.__func__.pytest_impl = {'wrapper': True, 'tryfirst': True}
     plugin.pytest_configure.__func__.pytest_impl = {'tryfirst': True}
     plugin.pytest_runtest_setup.__func__.pytest_impl = {'tryfirst': True}
     assert pytest.console_main is not None
+
+
+def config_factory(original, plugin, nested, guard):
+    def get_config(args=None, plugins=None):
+        config = original(args, plugins)
+        # Only authenticated original negative sessions omit the outer observer.
+        allowed = nested(guard, args, plugins)
+        if type(allowed) is not bool:
+            guard.refuse('primary_nested_verdict_type')
+        if not allowed:
+            config.pluginmanager.register(plugin, 'primary-source-observer')
+        return config
+    return get_config
 
 
 class Observer:

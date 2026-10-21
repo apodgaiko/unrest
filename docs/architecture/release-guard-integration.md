@@ -545,8 +545,12 @@ An existing configuration or an inconsistent SOURCE plan refuses setup rather
 than overwriting data. Real Git controls verify the original empty commit, clean
 status and absence of an automatic child, before the source suite.
 
-Cleanup certification binds both original fixture families: the twelve recorded
-transport cases and fifteen repeated-cancellation/fault cases. The latter's
+Cleanup certification enumerates every original owner of the local fixture:
+twelve recorded transport cases, fifteen repeated-cancellation/fault cases and
+three saved-review observer cases. The last family additionally binds the
+original frozen observer function to the actual terminal-review lifecycle
+callback, runner, store and attempt. Its role and progress/receipt/raw scenario
+are exact; it receives no Git authority. The fault family's
 separately created runner task must be the current task owned by the live frozen
 test frame. Role, fault, source/fixture bytes, exact scenario, owned workspace,
 launch plan argv and environment all remain required. The same existing local
@@ -556,7 +560,10 @@ is added. Original assertions, process waits and deadlines remain unchanged.
 The source-authority extension preserves the original supervisor instance,
 sockets and callback references. Its base executable AST remains unchanged.
 Every census rereads all current journal bytes; only immutable line metadata
-is reused for identical bytes. No size/mtime trust, stale fallback, mutable
+is reused for identical bytes. Append handling compares the complete current
+byte prefix, reuses only closed-line validation and always reparses the last
+physical line. Prefix replacement or truncation invalidates that reuse. No
+size/mtime trust, stale fallback, mutable
 parsed-row cache or cached authorization verdict is permitted.
 
 The original refresh loop receives every forbidden row, every unresolved Python
@@ -589,3 +596,12 @@ workspace, without changing test assertions or deadlines. Other duties retain
 their previous limits. Inspected capacity, paths, ownership, read-only source,
 network isolation and capabilities must still match the exact selected plan;
 no additional mount, executable or native/provider authority follows.
+
+Two original resource-ownership tests intentionally run failing pytest sessions
+in process. Their exact frozen caller, generated source, empty observer, phase,
+arguments and owned path distinguish those sessions from the release session.
+They keep pytest's original execution and failure result without registering the
+outer collection/certificate observer twice. Root collection, XML and result
+accounting remain attached only to the original full suite; child admission and
+cleanup checks remain active in both scopes. Unknown nested invocations retain
+the strict outer observer and cannot acquire this exception.

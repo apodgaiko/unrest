@@ -132,7 +132,10 @@ def test_parameter_catalog_matches_frozen_original_decorators(owner):
     declarations = {ast.literal_eval(n.args[0]): ast.literal_eval(n.args[1])
                     for n in function.decorator_list if isinstance(n, ast.Call)}
     assert tuple(declarations[parameter]) == values
-    assert declarations['role'] == ['work', 'validate', 'terminal_reviewer']
+    if owner == routes.OBSERVER:
+        assert 'role' not in declarations
+    else:
+        assert declarations['role'] == ['work', 'validate', 'terminal_reviewer']
 
 
 @pytest.mark.parametrize('role', ['work', 'validate', 'terminal_reviewer'])
@@ -151,3 +154,102 @@ def test_existing_transport_family_keeps_its_exact_scenario_and_plan(model, role
     assert result['class'] == 'source-cleanup-adapter'
     assert result['source_binding']['owner'] == owner
     assert m.events[-1]['scenario'] == case and m.events[-1]['role'] == role
+
+
+@pytest.fixture
+def observer_model(model, monkeypatch):
+    m = model
+    code = compile(m.source.read_bytes(), str(m.source), 'exec', dont_inherit=True)
+    fn = FunctionType(named(code, routes.OBSERVER), vars(m.module))
+    setattr(m.module, routes.OBSERVER, fn)
+    observer = FunctionType(named(fn.__code__, 'observer'), vars(m.module),
+                            closure=tuple((lambda value: lambda: value)(None).__closure__[0]
+                                          for _ in named(fn.__code__, 'observer').co_freevars))
+    product_module = ModuleType('cleanup_product_callback_control')
+    from importlib.machinery import SourceFileLoader, ModuleSpec
+    loader = SourceFileLoader(product_module.__name__, str(m.product))
+    product_module.__loader__ = loader
+    product_module.__spec__ = ModuleSpec(product_module.__name__, loader, origin=str(m.product))
+    product_code = compile(m.product.read_bytes(), str(m.product), 'exec', dont_inherit=True)
+    method = FunctionType(named(product_code, '_run_terminal_review_lifecycle'), vars(product_module))
+    product_module.ACPNodeRunner = SimpleNamespace(_run_terminal_review_lifecycle=method)
+    monkeypatch.setitem(sys.modules, product_module.__name__, product_module)
+    runner, store = object(), object()
+    m.frame.f_code = fn.__code__
+    m.frame.f_locals = {'tmp_path': m.scenario.parent, 'fault': 'observer', 'observer': observer,
+                        'runner': runner, 'store': store}
+    callback = SimpleNamespace(f_code=method.__code__, f_globals=vars(product_module),
+                                f_locals={'self': runner, 'store': store, 'progress_callback': observer,
+                                          'project_id': 'project', 'mission_id': 'mission-001', 'spawn_ts': 'attempt-1'})
+    m.module._frames = [m.frame, m.launch, callback]
+    monkeypatch.setattr(routes, 'task_frames', lambda: list(m.module._frames))
+    m.callback = callback
+    def select(fault):
+        m.frame.f_locals['fault'] = fault
+        m.state['case'] = 'tests/test_acp_cleanup.py::' + routes.OBSERVER + '[' + fault + ']'
+        m.scenario.write_text(json.dumps(routes.scenario_value(routes.OBSERVER, fault, 'terminal_reviewer', m.scenario.parent)))
+    m.select_observer = select
+    select('observer')
+    return m
+
+
+@pytest.mark.parametrize('fault', ['observer', 'cancel', 'transport'])
+def test_each_original_saved_observer_variant_keeps_exact_callback_and_scenario(observer_model, fault):
+    m = observer_model
+    m.select_observer(fault)
+    value = routes.admit(m.argv, m.workspace, m.environment, m.state, m.events.append, m.refuse)
+    assert value['class'] == 'source-cleanup-adapter'
+    assert value['source_binding']['owner'] == routes.OBSERVER
+    assert m.events[-1]['role'] == 'terminal_reviewer' and m.events[-1]['scenario'] == fault
+
+
+@pytest.mark.parametrize('change', ['case', 'parameter', 'callback', 'runner', 'store', 'attempt',
+                                   'module', 'code', 'scenario', 'environment', 'cwd', 'argv', 'loader', 'origin'])
+def test_saved_observer_custody_mutations_refuse(observer_model, change):
+    m = observer_model
+    if change == 'case':
+        m.state['case'] = m.state['case'].replace('[observer]', '[transport]')
+    elif change == 'parameter':
+        m.frame.f_locals['fault'] = 'foreign'
+    elif change == 'callback':
+        m.callback.f_locals['progress_callback'] = object()
+    elif change == 'runner':
+        m.callback.f_locals['self'] = object()
+    elif change == 'store':
+        m.callback.f_locals['store'] = object()
+    elif change == 'attempt':
+        m.callback.f_locals['spawn_ts'] = 'foreign'
+    elif change == 'module':
+        m.callback.f_globals = dict(m.callback.f_globals)
+    elif change == 'code':
+        m.callback.f_code = m.frame.f_code
+    elif change == 'loader':
+        m.callback.f_globals['__loader__'] = object()
+    elif change == 'origin':
+        m.callback.f_globals['__spec__'].origin = '/foreign'
+    elif change == 'scenario':
+        m.scenario.write_text('{}')
+    elif change == 'environment':
+        m.environment = {'PATH': '/foreign'}
+    elif change == 'cwd':
+        m.workspace = m.workspace.parent
+    else:
+        m.argv.append('foreign')
+    with pytest.raises((RuntimeError, KeyError), match='cleanup_|ACPNodeRunner'):
+        routes.admit(m.argv, m.workspace, m.environment, m.state, m.events.append, m.refuse)
+    assert m.events == []
+
+
+def test_every_frozen_owner_of_this_fixture_is_enumerated():
+    import ast
+    tree = ast.parse((ROOT / 'tests/test_acp_cleanup.py').read_bytes())
+    owners = {fn.name for fn in tree.body if isinstance(fn, ast.AsyncFunctionDef)
+              and any(isinstance(n, ast.Name) and n.id == 'FIXTURE' for n in ast.walk(fn))}
+    assert owners == set(routes.PARAMETERS)
+
+
+def test_saved_observer_never_receives_git_authority(observer_model):
+    m = observer_model
+    assert routes.admit(['git', 'rev-parse', 'HEAD'], m.workspace, None,
+                        m.state, m.events.append, m.refuse) is None
+    assert m.events == []

@@ -106,15 +106,27 @@ class EventJournal:
             body = path.read_bytes()
             chunk = self._snapshots.get(path)
             if chunk is None or chunk[0] != body:
-                lines, metadata = [], []
-                for line in body.decode('utf-8').splitlines():
+                prefix, count = b'', 0
+                if chunk is not None and body.startswith(chunk[4]):
+                    prefix, count = chunk[4], chunk[5]
+                lines = list(chunk[1][:count]) if count else []
+                metadata = list(chunk[3][:count]) if count else []
+                tail = body[len(prefix):].decode('utf-8')
+                pieces = tail.splitlines(keepends=True)
+                stable_count = len(lines)
+                for index, line in enumerate(tail.splitlines()):
                     try:
                         row = json.loads(line)
                     except json.JSONDecodeError:
-                        continue
-                    lines.append(line)
-                    metadata.append(descriptor(row))
-                chunk = (body, tuple(lines), '[' + ','.join(lines) + ']', tuple(metadata))
+                        pass
+                    else:
+                        lines.append(line)
+                        metadata.append(descriptor(row))
+                    if index < len(pieces) - 1:
+                        stable_count = len(lines)
+                stable_bytes = body[:len(body) - len(pieces[-1].encode('utf-8'))] if pieces else body
+                chunk = (body, tuple(lines), '[' + ','.join(lines) + ']', tuple(metadata),
+                         stable_bytes, stable_count)
             retained[path] = chunk
             current.append(chunk)
         self._snapshots = retained
