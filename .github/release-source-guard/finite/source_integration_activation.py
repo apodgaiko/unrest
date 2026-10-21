@@ -55,6 +55,35 @@ def create(state, emit, refuse, ready):
                            'source_binding': registration['source_binding'],
                            'custody_case': state['case'], 'execution_owner': owner})
                 return
+            if (registration['class'] == 'inline:test_acp_cleanup.py:51'
+                    and state.get('case') in {
+                        'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False]',
+                        'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[True]'}):
+                caller = inspect.currentframe().f_back
+                if (caller.f_code is not original.before_python.__code__
+                        or caller.f_globals is not original.before_python.__globals__
+                        or caller.f_locals.get('self') is not self
+                        or caller.f_locals.get('launch') is not launch
+                        or caller.f_locals.get('registration') is not registration
+                        or caller.f_locals.get('guard') is not guard):
+                    self.refuse('source_inflight_activation_caller_drift')
+                frames = checked('cleanup_routes.py')['task_frames']()
+                try:
+                    actual = checked('inflight_cleanup.py')['admit'](
+                        argv, cwd, environment, state, frames, self.refuse)
+                    if actual is None or actual != registration:
+                        self.refuse('source_inflight_activation_registration_drift')
+                finally:
+                    frames.clear()
+                # Keep the actual captured-alias source anchor. It is a bound
+                # use of the existing literal, not the registry's line-51 caller.
+                self.shared()
+                self.emit({'kind': 'source_ordinary_startup_consumption',
+                           'class': registration['class'],
+                           'source_binding': registration['source_binding'],
+                           'launch_token': launch['launch_token'],
+                           'shared_startup_seal': True})
+                return
             if registration['class'] != 'source-lease-owned-child':
                 return super().ordinary_python(guard, launch, argv, cwd, environment, registration)
             caller = inspect.currentframe().f_back

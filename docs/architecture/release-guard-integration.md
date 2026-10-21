@@ -671,3 +671,9 @@ Only the exact complete-cleanup TEST selection also receives FULL's existing
 disposable read-only Git configuration. This suppresses incidental automatic
 maintenance in the diagnostic's own home; other TEST selections, user homes,
 original Git commands and native launch permissions remain unchanged.
+
+Activation re-resolves the registration-order fixture through the same pinned
+live-owner resolver after the original guard consumes the launch token. Its
+ordinary startup seal retains the actual alias/product source anchor rather
+than substituting the registry's unrelated line-51 call site. Foreign cases,
+changed vectors and calls outside the original activation frame still refuse.

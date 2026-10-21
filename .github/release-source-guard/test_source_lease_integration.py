@@ -461,3 +461,56 @@ def test_same_captured_popen_boundary_checks_live_own_frame(monkeypatch, mutatio
     else:
         with pytest.raises(RuntimeError, match='lease_original_caller_drift'):
             methods._lease_popen(intercepted, 'spawn', *arguments, **supplied)
+
+
+@pytest.mark.parametrize('mutation', [None, 'binding', 'resolver-refusal', 'outside'])
+def test_inflight_activation_rechecks_live_binding_and_keeps_actual_anchor(tmp_path, monkeypatch, mutation):
+    from test_source_activation_composition import setup, Consumed
+    h = setup(tmp_path, monkeypatch)
+    profile_file = tmp_path / 'profile.json'
+    profile_file.write_text('{}')
+    h.state['isolated_support'] = {'spec_path': str(profile_file), 'spec_sha256': pin(profile_file)}
+    h.state['case'] = ('tests/test_acp_cleanup.py::'
+                       'test_inflight_terminal_registration_before_inventory[False]')
+    registration = {'class': 'inline:test_acp_cleanup.py:51', 'python': True,
+                    'source_binding': {'path': str(h.source), 'line': 421,
+                                       'sha256': pin(h.source)}}
+    checked = h.guard.checked_source
+    frames = [object()]
+    calls = []
+    def resolve(argv, cwd, environment, state, actual_frames, refuse):
+        assert argv == h.vector and cwd == h.tmp and environment == {'FINITE': 'original'}
+        assert state is h.state and actual_frames is frames
+        calls.append('resolved')
+        if mutation == 'resolver-refusal':
+            refuse('inflight_owner_or_vector_drift')
+        return ({**registration, 'source_binding': {}} if mutation == 'binding'
+                else dict(registration))
+    def support(path, digest):
+        if Path(path).name == 'cleanup_routes.py':
+            assert digest == pin(Path(path))
+            return {'task_frames': lambda: frames}
+        if Path(path).name == 'inflight_cleanup.py':
+            assert digest == pin(Path(path))
+            return {'admit': resolve}
+        return checked(path, digest)
+    monkeypatch.setattr(h.guard, 'checked_source', support)
+    extension = load('inflight_activation_control', SUPPORT / 'finite/source_integration_activation.py', monkeypatch)
+    current = extension.create(h.state, h.activation.emit, h.activation.refuse, h.activation.ready)
+    current.shared = lambda: calls.append('shared')
+    # Isolate the integration callback; the preceding controls exercise the
+    # unchanged launch-token consumption through the real guard frame.
+    current.python_launch = lambda *args: (h.guard, {'launch_token': 'exact'})
+    with pytest.raises(Consumed if mutation is None else RuntimeError):
+        if mutation == 'outside':
+            current.ordinary_python(h.guard, {}, h.vector, h.tmp, {'FINITE': 'original'}, registration)
+        else:
+            current.before_python(h.vector, h.tmp, {'FINITE': 'original'}, registration)
+    if mutation is None:
+        assert calls == ['resolved', 'shared'] and not h.poison
+        assert h.events[-1]['source_binding'] == registration['source_binding']
+        assert h.events[-1]['launch_token'] == 'exact'
+    else:
+        assert 'shared' not in calls and h.poison
+    if mutation != 'outside':
+        assert frames == []
