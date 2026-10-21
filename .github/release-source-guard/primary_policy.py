@@ -44,6 +44,7 @@ TEST_STREAM_CASES = tuple(
 TEST_FORMAT_CASES = tuple(
     'tests/test_acp_runner.py::test_full_jobs_and_handoffs_preserve_complete_format_templates[' + role + '-' + provider + ']'
     for role in ('worker', 'validator') for provider in ('claude', 'codex'))
+TEST_NATIVE_SLEEP_CASES = ('tests/test_acp_runner.py::test_full_jobs_and_handoffs_preserve_complete_format_templates[worker-claude]', 'tests/test_acp_runner.py::test_full_jobs_and_handoffs_preserve_complete_format_templates[worker-codex]', 'tests/test_acp_runner.py::test_full_jobs_and_handoffs_preserve_complete_format_templates[validator-claude]', 'tests/test_acp_runner.py::test_full_jobs_and_handoffs_preserve_complete_format_templates[validator-codex]', 'tests/test_acp_runner.py::test_full_jobs_do_not_infer_credentials_inside_format_fields[worker-claude]', 'tests/test_acp_runner.py::test_full_jobs_do_not_infer_credentials_inside_format_fields[worker-codex]', 'tests/test_acp_runner.py::test_full_jobs_do_not_infer_credentials_inside_format_fields[validator-claude]', 'tests/test_acp_runner.py::test_full_jobs_do_not_infer_credentials_inside_format_fields[validator-codex]', 'tests/test_acp_runner.py::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success[claude]', 'tests/test_acp_runner.py::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success[codex]', 'tests/test_acp_runner.py::test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling[claude]', 'tests/test_acp_runner.py::test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling[codex]', 'tests/test_acp_runner.py::test_owned_node_launch_uses_one_identical_plan[work]', 'tests/test_acp_runner.py::test_owned_node_launch_uses_one_identical_plan[validate]', 'tests/test_acp_runner.py::test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[work]', 'tests/test_acp_runner.py::test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[validate]', 'tests/test_acp_runner.py::test_terminal_real_startup_failure_is_safe_and_starts_no_protocol')
 TEST_CLEANUP_CASES = (
     'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-work]',
     'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-validate]',
@@ -97,7 +98,7 @@ TEST_CLEANUP_CASES = (
     'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False]',
     'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[True]',
 )
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES)
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 

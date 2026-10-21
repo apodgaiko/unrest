@@ -163,3 +163,37 @@ def test_original_resolver_exception_cannot_reach_native_fallback(monkeypatch):
     with pytest.raises(RuntimeError) as caught:
         authority.resolve('trace', 42, '/bin/sleep', native.VECTOR, {}, '/source')
     assert caught.value is cause
+
+
+@pytest.mark.parametrize('line', sorted(native.SITES))
+def test_seven_closed_original_call_sites_do_not_share_case_or_stdio_authority(line):
+    site = native.SITES[line]
+    registration = {'class': 'source-cohort2:' + native.SOURCE + ':' + str(line),
+                    'python': False, 'source_binding': native.binding('/source', line)}
+    options = {'shell': False, 'stdin': None, 'stdout': site['stdio'], 'stderr': site['stdio'],
+               'universal_newlines': False, 'bufsize': 0}
+    for case in site['cases']:
+        native.validate(registration, native.VECTOR, options, case, '/source')
+    for case in native.ALL_CASES - set(site['cases']):
+        with pytest.raises(RuntimeError):
+            native.validate(registration, native.VECTOR, options, case, '/source')
+    with pytest.raises(RuntimeError):
+        native.validate(registration, native.VECTOR, {**options, 'stdout': -1 if site['stdio'] == -3 else -3}, site['cases'][0], '/source')
+
+
+def test_seven_site_diagnosis_is_closed_and_noncertifying():
+    from primary_policy import TEST_NATIVE_SLEEP_CASES, plan
+    from primary_source_inputs import test_plan as make_test_plan
+    from test_primary_source_entry import inputs, COMMAND
+    assert set(native.SITES) == {544, 632, 1079, 1380, 1840, 2206, 2265}
+    assert len(native.ALL_CASES) == 17
+    assert set(TEST_NATIVE_SLEEP_CASES) == native.ALL_CASES
+    text, source = inputs()
+    script = (COMMAND + ' ' + ' '.join(TEST_NATIVE_SLEEP_CASES)).encode()
+    value = make_test_plan(script, text, 'TEST-positive')
+    assert value['source_checkpoint_ready'] is False and value['selected_carrier'] is None
+    with pytest.raises(RuntimeError):
+        plan(script, text, source)
+    for changed in [script + b' --maxfail=1', (COMMAND + ' ' + ' '.join(TEST_NATIVE_SLEEP_CASES[:-1])).encode()]:
+        with pytest.raises(RuntimeError):
+            make_test_plan(changed, text, 'TEST-positive')

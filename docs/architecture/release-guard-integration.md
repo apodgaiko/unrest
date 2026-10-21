@@ -801,3 +801,12 @@ former auxiliary method-object identity assertion is now a delegation-order
 contract for this mixin, with both selected authority classes, every original
 return disposition and exception propagation checked. Unknown leaves still
 return false; there is no generic native or absolute-path fallback.
+
+The same constructor/kernel join covers the closed seven original sleep
+call expressions at `test_acp_runner.py:544`, `632`, `1079`, `1380`, `1840`,
+`2206` and `2265`, spanning exactly 17 original collected cases. Each table
+entry binds its own original function, case IDs, source hash and DEVNULL or
+PIPE pair. The vector remains exactly `/bin/sleep 30`; the table admits no
+additional program, argument, case or source site. PIPE fixtures retain their
+original drains. The bounded TEST command enumerates all 17 node IDs and
+cannot certify FULL or substitute for the unexcluded source checkpoint.

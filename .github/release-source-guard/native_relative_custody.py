@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from finite.native_relative import CASES, CLASS, PIN, SOURCE, VECTOR, binding
+from finite.native_relative import PIN, SOURCE, SITES, VECTOR, site_for
 from finite.child_relative_view import view, same_object
 from finite.linux_identity import identity
 
@@ -13,8 +13,7 @@ from finite.linux_identity import identity
 def validate(selected, rows, vector, environment, cwd, path, checkout, facts):
     registration = selected['registration']
     if (selected.get('bootstrap_sha256') is not None
-            or registration.get('class') != CLASS or registration.get('case') not in CASES
-            or registration.get('source_binding') != binding(checkout)
+            or site_for(registration, registration.get('case'), checkout) is None
             or vector != VECTOR or path != VECTOR[0] or cwd != checkout
             or selected.get('cwd') != cwd
             or selected.get('transformed_argv_sha256') != hashlib.sha256(json.dumps(vector).encode()).hexdigest()
@@ -22,7 +21,7 @@ def validate(selected, rows, vector, environment, cwd, path, checkout, facts):
             or len(rows) != 1):
         raise RuntimeError('native_relative_launch_join')
     row = rows[0]
-    if (row.get('class') != CLASS or row.get('source_binding') != registration['source_binding']
+    if (row.get('class') != registration['class'] or row.get('source_binding') != registration['source_binding']
             or row.get('case') != registration['case']
             or row.get('token') != selected['token'] or row.get('owner_pid') != selected['owner_pid']
             or row.get('original_cwd') is not None or row.get('constructor_cwd') != '.'
@@ -33,7 +32,8 @@ def validate(selected, rows, vector, environment, cwd, path, checkout, facts):
 
 def resolve(authority, trace, pid, path, vector, environment, cwd):
     selected = authority.bound.get(pid)
-    if selected is None or selected.get('registration', {}).get('class') != CLASS:
+    if selected is None or selected.get('registration', {}).get('class') not in {
+            'source-cohort2:' + SOURCE + ':' + str(line) for line in SITES}:
         return False
     supervisor = authority.supervisor
     try:
