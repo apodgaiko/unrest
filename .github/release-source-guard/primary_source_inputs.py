@@ -72,7 +72,9 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     post-init environments remain independently exact; this grants no launch.
     """
     if (registration['class'] in {'source-lease-owned-child', 'reference-descendant:terminal-redaction'}
-            or registration['class'] == 'inline:test_acp_cleanup.py:51' and environment == {}) and lease_context is None:
+            or registration['class'] == 'inline:test_acp_cleanup.py:51' and environment == {}
+            or registration['class'] in {'source-owned-role:worker', 'source-owned-role:terminal-reviewer'}
+            and environment.get('LANG') == 'C') and lease_context is None:
         lease_context = lease_profile_context(environment, registration, flags)
     controlled = {
         'canonical-backend': ('/source/tests/fixtures/experimental_session_app_server.py',
@@ -83,6 +85,8 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     binding = registration['source_binding']
     exact_controlled = (controlled is not None and flags == [0, 0, 0]
                         and binding == {'path': controlled[0], 'line': 1, 'sha256': controlled[1]})
+    if exact_inventory_environment(environment, registration, flags, lease_context):
+        return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     exact_terminal = exact_terminal_environment(environment, registration, flags, lease_context)
     exact_inflight = exact_inflight_environment(environment, registration, flags, lease_context)
     isolated = (registration['class'] == 'isolated-role-startup'
@@ -92,6 +96,51 @@ def python_environment(environment, registration, flags, *, lease_context=None):
             and not any(key in environment for key in ('LC_CTYPE', 'LC_ALL', 'LANG'))):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     return dict(environment)
+
+
+
+def exact_inventory_environment(environment, registration, flags, context):
+    """Only the two original minimal-C-locale inventory roles get coercion."""
+    from pathlib import PurePosixPath
+    from primary_policy import PYTHON
+    prefix = 'tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart['
+    roles = {'worker': 2139, 'terminal-reviewer': 2219}
+    role = registration.get('class', '').removeprefix('source-owned-role:')
+    common = {'LANG', 'PATH', 'UNREST_HOME', 'UNREST_MISSION_ID', 'UNREST_PROJECT_ID'}
+    extra = ({'UNREST_HANDOFF_PATH', 'UNREST_NODE_ID', 'UNREST_NODE_TYPE', 'UNREST_NODE_ASSIGNMENT'}
+             if role == 'worker' else {'UNREST_TERMINAL_REVIEW_PATH'})
+    if (role not in roles or registration.get('kind') != 'admitted'
+            or registration.get('case') != prefix + role + ']'
+            or flags != [0, 0, 0] or context is None
+            or set(environment) != common | extra or environment.get('LANG') != 'C'
+            or any(type(v) is not str or not v for v in environment.values())):
+        return False
+    binding = {'path': '/source/src/unrest_harness/acp_runner.py', 'line': roles[role],
+               'sha256': '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f'}
+    selected, manifest, vector = context['selected'], context['manifest'], context['vector']
+    runtime, directory = manifest['runtime'], PurePosixPath(context['cwd'])
+    consumed = [e for e in context['events'] if e.get('kind') == 'source_ordinary_startup_consumption'
+                and e.get('owner_pid') == context['parent'] and e.get('launch_token') == selected['token']]
+    return (registration['class'] == 'source-owned-role:' + role
+            and registration['source_binding'] == binding
+            and manifest['checkout'] == '/source' and manifest['owned_root'] == '/work/owned'
+            and runtime['realpath'] == PYTHON and len(vector) == 3 and vector[1] == '-c'
+            and vector[0] in runtime['paths'] and context['cwd'] == selected['cwd'] == str(directory)
+            and directory.parent.parent == PurePosixPath('/work/owned/pytest')
+            and directory.parent.name.startswith('test_real_mcp_inventory_fd_red')
+            and directory.name == 'workspace' and '..' not in directory.parts
+            and selected['registration'] is registration
+            and selected['owner_pid'] == registration['owner_pid'] == context['parent']
+            and selected['token'] == registration['token'] and selected['case'] == registration['case']
+            and selected['transformed_argv_sha256'] == sha(json.dumps(vector).encode())
+            and selected['bootstrap_sha256'] == sha(vector[2].encode())
+            and selected['environment_sha256'] == sha(json.dumps(environment, sort_keys=True).encode())
+            and len(consumed) == 1 and consumed[0].get('source_binding') == binding
+            and consumed[0].get('class') == registration['class']
+            and consumed[0].get('shared_startup_seal') is True
+            and manifest['product_pins']['src/unrest_harness/acp_runner.py'] == binding['sha256']
+            and manifest['product_pins']['tests/test_acp_runner.py'] ==
+                'b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0')
 
 
 def exact_inflight_environment(environment, registration, flags, context):

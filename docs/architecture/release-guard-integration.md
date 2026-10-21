@@ -727,3 +727,11 @@ source/caller/vector/environment, root, file identity and prior init result,
 and refuses symlinks, hardlinks, races or changed repeated inputs. Commands,
 environment and assertions stay unchanged; no maintenance executable is admitted
 and no user/global Git configuration is read or written.
+
+The two original inventory crash/restart modes explicitly supply `LANG=C` in
+their minimal child environments. Their consumed, byte-pinned owned-role
+registrations may map only CPython's post-initialization `LC_CTYPE=C.UTF-8`
+addition. The native exec environment, original role arguments, inherited
+inventory pipe, source bindings, nonce, process birth, and actual parent wait
+remain exact. A missing or duplicated startup consumption, different owner,
+case, environment, source, bootstrap or flags does not gain this mapping.
