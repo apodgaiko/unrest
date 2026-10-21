@@ -5,24 +5,27 @@ import json
 import pytest
 
 import primary_source_inputs as inputs
-from test_terminal_locale import fixture as terminal_fixture
+from primary_policy import PYTHON
 
 
 def fixture():
-    registration, _, context = terminal_fixture()
-    registration.update({'class': 'inline:test_acp_cleanup.py:51',
-        'case': 'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False]',
-        'source_binding': {'path': '/source/src/unrest_harness/acp_runner.py', 'line': 1034,
-            'sha256': '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f'}})
-    vector = context['vector']
-    registration['argv_sha256'] = inputs.sha(json.dumps([vector[0], '-c', 'import time; time.sleep(30)']).encode())
-    selected = context['selected']
-    selected.update(case=registration['case'], cwd='/work/owned/pytest/test_inflight_terminal_regist0',
-                    environment_sha256=inputs.sha(b'{}'))
-    context['cwd'] = selected['cwd']
-    context['manifest']['product_pins'].update({
-        'src/unrest_harness/acp_runner.py': registration['source_binding']['sha256'],
-        'tests/test_acp_cleanup.py': '564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8'})
+    vector = ['/source/.venv/bin/python', '-c', 'authenticated finite bootstrap']
+    case = 'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False]'
+    binding = {'path': '/source/src/unrest_harness/acp_runner.py', 'line': 1034,
+               'sha256': '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f'}
+    registration = {'kind': 'admitted', 'class': 'inline:test_acp_cleanup.py:51',
+        'case': case, 'source_binding': binding, 'owner_pid': 77, 'token': 'owned-token',
+        'argv_sha256': inputs.sha(json.dumps([vector[0], '-c', 'import time; time.sleep(30)']).encode())}
+    cwd = '/work/owned/pytest/test_inflight_terminal_regist0'
+    selected = {'registration': registration, 'owner_pid': 77, 'token': 'owned-token',
+        'case': case, 'cwd': cwd, 'environment_sha256': inputs.sha(b'{}'),
+        'transformed_argv_sha256': inputs.sha(json.dumps(vector).encode()),
+        'bootstrap_sha256': inputs.sha(vector[2].encode())}
+    context = {'selected': selected, 'vector': vector, 'cwd': cwd, 'parent': 77,
+        'manifest': {'checkout': '/source', 'owned_root': '/work/owned',
+            'runtime': {'realpath': PYTHON, 'paths': [vector[0]]}, 'product_pins': {
+                'src/unrest_harness/acp_runner.py': binding['sha256'],
+                'tests/test_acp_cleanup.py': '564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8'}}}
     return registration, context
 
 
