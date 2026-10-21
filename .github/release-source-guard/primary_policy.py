@@ -105,7 +105,12 @@ TEST_CANDIDATE_FIXTURE_CASES = (
     'tests/test_experimental_candidate.py::test_literal_manifest_and_independent_oracle',
 )
 TEST_CANDIDATE_ORACLE_CASES = ('tests/test_experimental_candidate.py::test_literal_manifest_and_independent_oracle',)
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES, TEST_CANDIDATE_FIXTURE_CASES, TEST_CANDIDATE_ORACLE_CASES)
+TEST_NATIVE_TERMINAL_CASES = (
+    'tests/test_acp_runner.py::test_run_node_with_mock_agent',
+    'tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params0]',
+    'tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params1]',
+)
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES, TEST_CANDIDATE_FIXTURE_CASES, TEST_CANDIDATE_ORACLE_CASES, TEST_NATIVE_TERMINAL_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 

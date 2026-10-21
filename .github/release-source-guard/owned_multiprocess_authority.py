@@ -46,7 +46,10 @@ class OwnedMultiprocessCustody:
         if candidate_resolve(self, trace, pid, path, vector, environment, cwd):
             return True
         from invalid_format_custody import resolve as invalid_resolve
-        return invalid_resolve(self, trace, pid, path, vector, environment, cwd)
+        if invalid_resolve(self, trace, pid, path, vector, environment, cwd):
+            return True
+        from registry_native_custody import resolve as registry_resolve
+        return registry_resolve(self, trace, pid, path, vector, environment, cwd)
 
     def exec_descriptors(self, trace, pid, vector, environment, cwd):
         if self.bound.get(pid, {}).get('registration', {}).get('class') == 'source-cohort2:invalid-format':

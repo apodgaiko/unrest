@@ -162,7 +162,7 @@ jobs:
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
       - name: Original candidate manifest oracle
-        run: env -u CODEX_PATH uv run pytest -q tests/test_experimental_candidate.py::test_literal_manifest_and_independent_oracle
+        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params0] tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params1]
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: Preserve encrypted diagnostic evidence
         if: always()

@@ -908,3 +908,13 @@ source file hash. All 176 observations remain present. Its owner AST, exact
 Popen expression AST, line151, route and family must match the original record;
 only the file hash may become the exact repaired postimage. Unknown membership,
 owner, expression, route or line drift refuses before any pin changes.
+
+The literal terminal defaults fixture keeps its original `/usr/bin/true` launch.
+The kernel resolver consumes the unique pre-existing finite registry entry, its
+current source binding, actual parent birth, launch token, exact argv, cwd and
+environment digest, and the current Linux image hash. The fallback is confined
+to the two original optional-null parameter cases. An altered registry, extra
+argument, foreign case or changed parent remains refused. The focused diagnostic
+also runs the original separate mock-agent case, so the unchanged probe reducer
+observes a genuine Python bootstrap rather than receiving a synthetic bridge.
+This focused result carries no full-source or provider-acceptance certification.
