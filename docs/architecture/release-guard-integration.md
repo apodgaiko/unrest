@@ -713,3 +713,8 @@ result only, the integration discards its provisional connection key and
 reapplies the unchanged payload policy with fresh kernel observations. SYN
 states keep waiting; only the existing owned-queue or reciprocal-peer policy
 can establish the connection. Foreign and changed bindings still refuse.
+
+The authenticated startup observer parses only the current journal prefix
+ending in a newline. A live writer's partial final record cannot supply READY
+evidence and is retried within the same original deadline. Malformed completed
+records still fail closed; no bytes, cursor or deadline are repaired or edited.

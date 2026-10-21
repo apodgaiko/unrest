@@ -158,7 +158,9 @@ def observe(guard, endpoint_state, frame, event, value):
     while True:
         if time.monotonic() >= local['deadline']:
             guard.refuse('negative_startup_authenticated_READY_deadline')
-        records = [json.loads(line) for line in journal.read_bytes().splitlines()] if journal.exists() else []
+        data = journal.read_bytes() if journal.exists() else b''
+        committed = data[:data.rfind(b'\n') + 1]
+        records = [json.loads(line) for line in committed.splitlines()]
         if any(complete(row, state, endpoint_state, token, pid) for row in records):
             del state['negative_startup_plans'][token]
             return

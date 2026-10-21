@@ -166,3 +166,48 @@ def test_unselected_source_profile_does_not_load_startup_support():
         observer = Observer(value, None, {}, {})
         observer.observe_snapshot_rpc(None, 'call', None)
         assert observer.negative_startup is None
+
+
+def test_partial_ready_record_is_reacquired_until_newline_within_original_deadline(tmp_path, monkeypatch):
+    import json
+    value, endpoint, frame, row = barrier(tmp_path)
+    journal = tmp_path / '170.jsonl'
+    body = json.dumps(row).encode()
+    split = len(body) // 2
+    journal.write_bytes(b'{"kind":"installing"}\n' + body[:split])
+    sleeps = []
+    monkeypatch.setattr(negative.time, 'monotonic', lambda: 9.99)
+    def finish(seconds):
+        sleeps.append(seconds)
+        assert 'token' in value._STATE['negative_startup_plans']
+        with journal.open('ab') as stream:
+            stream.write(body[split:] + b'\n')
+    monkeypatch.setattr(negative.time, 'sleep', finish)
+    negative.observe(value, endpoint, frame, 'return', None)
+    assert sleeps == [.001] and value._STATE['negative_startup_plans'] == {}
+    assert frame.f_locals['deadline'] == 10.0
+
+
+def test_valid_but_unterminated_ready_record_cannot_extend_original_deadline(tmp_path, monkeypatch):
+    import json
+    value, endpoint, frame, row = barrier(tmp_path)
+    (tmp_path / '170.jsonl').write_bytes(json.dumps(row).encode())
+    times = iter([9.99, 10.0])
+    monkeypatch.setattr(negative.time, 'monotonic', lambda: next(times))
+    sleeps = []
+    monkeypatch.setattr(negative.time, 'sleep', sleeps.append)
+    with pytest.raises(RuntimeError, match='authenticated_READY_deadline'):
+        negative.observe(value, endpoint, frame, 'return', None)
+    assert sleeps == [.001] and 'token' in value._STATE['negative_startup_plans']
+    assert frame.f_locals['deadline'] == 10.0
+
+
+def test_malformed_complete_record_is_not_ignored_even_before_valid_ready(tmp_path, monkeypatch):
+    import json
+    value, endpoint, frame, row = barrier(tmp_path)
+    (tmp_path / '170.jsonl').write_bytes(b'{"broken":}\n' + json.dumps(row).encode() + b'\n')
+    monkeypatch.setattr(negative.time, 'monotonic', lambda: 9.99)
+    monkeypatch.setattr(negative.time, 'sleep', lambda *args: pytest.fail('malformed record retried'))
+    with pytest.raises(json.JSONDecodeError):
+        negative.observe(value, endpoint, frame, 'return', None)
+    assert 'token' in value._STATE['negative_startup_plans']
