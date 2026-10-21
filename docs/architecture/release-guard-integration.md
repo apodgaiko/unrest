@@ -610,7 +610,7 @@ A single delayed diagnostic for each original startup-cleanup case records only
 thread and coroutine code locations and cancellation counts in the existing
 private encrypted stderr capture. It reads no source bodies, saves no locals or
 task names, adds no public event or archive member, and cannot alter a test,
-signal, wait, result or deadline. Teardown cancels the observer. This retains
+signal, wait or result. A call result or teardown cancels the observer. This retains
 evidence for the observed cancellation hang without declaring it a product or
 guard defect before the suspended task is identified.
 
@@ -623,3 +623,11 @@ source command remain unchanged; TEST output cannot issue or reuse a release
 certificate. No original test, deadline, child admission or review restriction
 changes. Ordinary cancellation may retain only a partial wrapper archive; that
 archive remains incomplete and cannot substitute for task or wait evidence.
+
+For the nine bounded startup-cleanup cases in FULL only, a successful stall
+snapshot flush after 60 seconds without a call result ends that isolated root
+with nonzero diagnostic status 89. It cannot produce passing test outcomes,
+settled parent waits or a release certificate. Other cases and the existing
+two-hour root budget are unchanged. TEST diagnostics retain their existing
+three-minute trace bound. This stricter diagnostic failure bound preserves the
+original product timeouts and assertions while avoiding silent multi-hour hangs.

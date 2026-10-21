@@ -246,14 +246,24 @@ class Observer:
         if not item.nodeid.startswith(prefix):
             return
         import asyncio
-        loop = next((v for v in item.funcargs.values()
-                     if isinstance(v, asyncio.AbstractEventLoop)), None)
+        loops = [v if isinstance(v, asyncio.AbstractEventLoop)
+                 else getattr(v, '_loop', None) if type(v) is asyncio.Runner else None
+                 for v in item.funcargs.values()]
+        loop = next((v for v in loops if isinstance(v, asyncio.AbstractEventLoop)), None)
         token = object()
         self.startup_stall_token = token
         self.startup_stall_timer = threading.Timer(
-            60, lambda: self.retain_startup_stall(token, item.nodeid, loop))
+            60, lambda: self.finish_startup_stall(token, item.nodeid, loop))
         self.startup_stall_timer.daemon = True
         self.startup_stall_timer.start()
+
+    def finish_startup_stall(self, token, case, loop):
+        captured = self.retain_startup_stall(token, case, loop)
+        if (captured and self.profile.get('source_mode') == 'SOURCE'
+                and self.startup_stall_token is token and self.guard._STATE.get('case') == case):
+            # End only this failed isolated root, after its private stack flush.
+            # Missing results/waits remain failures; no certificate can issue.
+            os._exit(89)
 
     def retain_startup_stall(self, token, case, loop):
         if self.startup_stall_token is not token or self.guard._STATE.get('case') != case:
@@ -286,6 +296,7 @@ class Observer:
             if self.startup_stall_token is token:
                 sys.__stderr__.write('\n[retained startup stall]\n' + body + '\n')
                 sys.__stderr__.flush()
+                return True
         except (OSError, AttributeError, RuntimeError, UnicodeError):
             # Private stack diagnostics cannot change a test or its deadline.
             pass
@@ -345,7 +356,7 @@ class Observer:
             pass
 
     def pytest_runtest_logreport(self, report):
-        if report.when == 'teardown' and self.startup_stall_timer is not None:
+        if report.when in {'call', 'teardown'} and self.startup_stall_timer is not None:
             self.startup_stall_token = None
             self.startup_stall_timer.cancel()
             self.startup_stall_timer = None
