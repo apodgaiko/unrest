@@ -16,6 +16,13 @@ class OwnedMultiprocessCustody:
         self.supervisor.owned_trace = kwargs.get('trace')
         return result
 
+    def resolve(self, trace, pid, path, vector, environment, cwd):
+        result = super().resolve(trace, pid, path, vector, environment, cwd)
+        if result is not False:
+            return result
+        from native_relative_custody import resolve
+        return resolve(self, trace, pid, path, vector, environment, cwd)
+
     def exec_descriptors(self, trace, pid, vector, environment, cwd):
         child_relative_check(self, trace, pid, vector)
         registration = self.bound.get(pid, {}).get("registration", {})

@@ -452,7 +452,21 @@ def install(state, activation, emit, refuse, checked):
             if registration['python']:
                 refuse('child_relative_python_native_route')
             return stock(handle, args, **{**kwargs, 'executable': selected})
-        if not registration['python'] or kwargs.get('cwd') is not None:
+        if not registration['python']:
+            native = checked('native_relative.py')
+            if native['prepare'](launch, kwargs, state, observe, emit, refuse):
+                if (hashlib.sha256(source.read_bytes()).hexdigest() != STDLIB
+                        or not stock_matches(stock, stock_code, defaults, keyword_defaults)
+                        or subprocess.Popen._execute_child is not execute
+                        or execute.__code__ not in execute_codes
+                        or execute.__globals__ is not vars(subprocess)
+                        or subprocess._fork_exec is not fork_exec):
+                    refuse('native_relative_stock_constructor_drift')
+                # Relative chdir selects stock fork/exec without changing the
+                # inherited directory or permitting the denied posix_spawn API.
+                return stock(handle, args, **{**kwargs, 'cwd': '.'})
+            return stock(handle, args, **kwargs)
+        if kwargs.get('cwd') is not None:
             return stock(handle, args, **kwargs)
         token, registration = consume(launch, handle, args, kwargs, activation, constructor,
                                       used, refuse)

@@ -779,3 +779,16 @@ Their original output sizes, redaction checks, bounded tails, five-second
 cleanup deadline and actual exit/wait assertions remain unchanged. This
 substitution is controlled local output coverage, not native provider or MCP
 acceptance. Every unrelated role/vector retains its original refusal.
+
+The original format-template fixture at `test_acp_runner.py:544` substitutes
+only `/bin/sleep 30` for four worker/validator and Claude/Codex cases. After
+the unchanged finite admission and authenticated READY, its exact stock
+constructor uses `cwd="."` to select fork/exec instead of the refused
+`os.posix_spawn` audit route. The effective sealed read-only directory, argv,
+environment, descriptor options and original parent waits remain unchanged.
+An independent stopped-child check joins that constructor to the consumed
+launch token, original source binding, parent birth, current native image
+bytes and kernel cwd before admitting this exact absolute native leaf. Other
+absolute images and posix_spawn calls remain refused. This is fixture custody,
+not native provider acceptance; all original format-preservation assertions
+and review restrictions remain in force.
