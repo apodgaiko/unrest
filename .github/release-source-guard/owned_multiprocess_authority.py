@@ -13,6 +13,7 @@ class OwnedMultiprocessCustody:
         result = super().start(*args, **kwargs)
         from journal_supervisor import JournalSupervisor
         JournalSupervisor.adopt(self.supervisor)
+        self.supervisor.owned_trace = kwargs.get('trace')
         return result
 
     def exec_descriptors(self, trace, pid, vector, environment, cwd):

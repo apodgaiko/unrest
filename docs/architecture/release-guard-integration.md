@@ -758,3 +758,12 @@ before build and retains the waiting regression and original four affected
 cases. Historical diagnostic job labels or duplicate selector strings do not
 substitute for that source checkpoint. The exact source/clock pins and all
 original functional tests remain required.
+
+An authenticated new finite plan may expire a cached listener whose old owner
+has completed its actual parent wait. Expiry joins the registered child and
+parent births/tokens, run nonce, exact raw/numeric wait, and the observer's real
+ordered kernel birth, exit, tracer terminal wait and original-parent wait.
+Neither disappearance, a source-only wait claim nor a tracer wait alone is
+enough. Only the old listener cache entry is removed: historical records and
+existing connection evidence remain, and the replacement receives no network
+authority until the original policy observes its new live listener.

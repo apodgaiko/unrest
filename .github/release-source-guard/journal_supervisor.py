@@ -6,6 +6,7 @@ import time
 
 from event_journal import EventJournal, JournalSnapshot
 from linux_supervisor import Supervisor, AwaitOwnedPeer
+from listener_lifecycle import retire
 
 
 class RefreshInput:
@@ -54,7 +55,10 @@ class JournalSupervisor(Supervisor):
             events = events.materialize()
         previous = set(self.connections) if request.get('kind') == 'connected' else None
         try:
-            return Supervisor.handle(self, request, events)
+            answer = Supervisor.handle(self, request, events)
+            if request.get('kind') == 'plan':
+                retire(self, request, events)
+            return answer
         except AwaitOwnedPeer as error:
             if (request.get('kind') != 'connected'
                     or str(error) != 'accepted_peer_not_yet_observable'):
