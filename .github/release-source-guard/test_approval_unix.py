@@ -96,11 +96,18 @@ def host_context(monkeypatch):
     request = {'pid': 20, 'fd': 4, 'address': address, 'case': case, 'operation': 'bind',
                'source_binding': {'path': '/source/src/unrest_harness/approval_recovery.py',
                                   'line': 215, 'sha256': client.PINS['src/unrest_harness/approval_recovery.py']}}
-    current = {'inode': 100, 'device': 9, 'uid': 20000, 'cookie': 1000, 'owner_identity': birth,
+    current = {'fd': 4, 'inode': 100, 'device': 9, 'uid': 20000, 'cookie': 1000, 'owner_identity': birth,
                'local': '', 'remote': None, 'peer': None, 'listening': False}
     carrier = SimpleNamespace(st_mode=0o140600, st_uid=20000, st_nlink=1, st_ino=77, st_dev=9)
     monkeypatch.setattr(host, 'identity', lambda pid: birth if pid == 20 else {'pid': pid})
-    monkeypatch.setattr(host, 'observe', lambda pid, fd: deepcopy(current))
+    snapshots = {}
+    def observe(pid, fd):
+        if fd == current['fd']:
+            snapshots[fd] = deepcopy(current)
+        if fd not in snapshots:
+            raise RuntimeError('closed original fd')
+        return deepcopy(snapshots[fd])
+    monkeypatch.setattr(host, 'observe', observe)
     monkeypatch.setattr(host, 'owned_address', lambda address, root, uid: True)
     monkeypatch.setattr(host, 'Path', lambda path: SimpleNamespace(exists=lambda: False, lstat=lambda: carrier))
     return supervisor, request, current, carrier
@@ -111,7 +118,7 @@ def test_actual_fd_plan_precedes_listener_and_peer_payload(monkeypatch):
     assert host.handle(supervisor, request, [])['approval_unix'] == 'bind'
     current.update(local=request['address'], listening=True)
     assert host.handle(supervisor, {**request, 'operation': 'listen'}, [])['approval_unix'] == 'listen'
-    current.update(inode=101, cookie=1001, local='', listening=False)
+    current.update(fd=5, inode=101, cookie=1001, local='', listening=False)
     connect = {**request, 'fd': 5, 'operation': 'connect',
                'source_binding': {'path': '/source/' + client.TEST, 'line': 325, 'sha256': client.PINS[client.TEST]}}
     assert host.handle(supervisor, connect, [])['approval_unix'] == 'connect'
@@ -140,7 +147,7 @@ def test_changed_listener_or_peer_cannot_send_payload(monkeypatch, field):
     host.handle(supervisor, request, [])
     current.update(local=request['address'], listening=True)
     host.handle(supervisor, {**request, 'operation': 'listen'}, [])
-    current.update(inode=101, cookie=1001, local='', listening=False)
+    current.update(fd=5, inode=101, cookie=1001, local='', listening=False)
     connect = {**request, 'fd': 5, 'operation': 'connect',
                'source_binding': {'path': '/source/' + client.TEST, 'line': 325, 'sha256': client.PINS[client.TEST]}}
     host.handle(supervisor, connect, [])
@@ -156,3 +163,13 @@ def test_changed_listener_or_peer_cannot_send_payload(monkeypatch, field):
         current['peer'][field.removeprefix('peer_')] += 1
     with pytest.raises(RuntimeError):
         host.handle(supervisor, payload, [])
+
+
+def test_connect_requires_a_registered_same_case_listener_before_effect(monkeypatch):
+    supervisor, request, current, _ = host_context(monkeypatch)
+    current.update(fd=5, inode=101, cookie=1001)
+    connect = {**request, 'fd': 5, 'operation': 'connect',
+               'source_binding': {'path': '/source/' + client.TEST, 'line': 325, 'sha256': client.PINS[client.TEST]}}
+    with pytest.raises(RuntimeError, match='unknown_listener'):
+        host.handle(supervisor, connect, [])
+    assert not supervisor.approval_unix_plans

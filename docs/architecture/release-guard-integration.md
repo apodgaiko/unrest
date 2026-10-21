@@ -983,3 +983,9 @@ identity. Clients and accepted peers require actual SO_PEERCRED UID/GID/PID join
 to a live registered birth and the same-case listener. No native image, provider,
 approval decision, submission or new process launch is authorized by this envelope.
 Controlled API plumbing is not native human/provider acceptance.
+
+A connect receipt is issued before the connect effect only while the registered
+same-case listener still holds its exact live listening FD and kernel cookie.
+The private socket path must retain its original inode/device, owner and mode
+0600. Missing, closed, replaced or foreign listeners cannot acquire a client
+plan; post-connect peer checks provide an additional boundary, not the first.

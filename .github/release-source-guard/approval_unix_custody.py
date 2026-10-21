@@ -71,8 +71,23 @@ def handle(supervisor, request, events):
             raise RuntimeError('approval_unix_effect_binding')
         if key in plans:
             raise RuntimeError('approval_unix_duplicate_effect')
-        if operation == 'bind' and Path(address).exists():
+        if operation == 'bind' and os.path.lexists(address):
             raise RuntimeError('approval_unix_existing_listener_path')
+        if operation == 'connect':
+            listener = listeners.get(address)
+            if listener is None or listener['case'] != case:
+                raise RuntimeError('approval_unix_unknown_listener')
+            owner = listener['owner']
+            live = observe(owner['pid'], listener['key'][1])
+            info = Path(address).lstat()
+            if (identity(owner['pid']) != owner
+                    or supervisor.registered.get(owner['pid'], {}).get('identity') != owner
+                    or not live['listening'] or live['local'] != address
+                    or (owner['pid'], listener['key'][1], live['inode'], live['cookie']) != listener['key']
+                    or not stat.S_ISSOCK(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600
+                    or info.st_uid != saved['uid']
+                    or (info.st_dev, info.st_ino) != (listener['path_device'], listener['path_inode'])):
+                raise RuntimeError('approval_unix_preconnect_listener_drift')
         plans[key] = {'operation': operation, 'address': address, 'case': case, 'owner': saved}
         return answer(approval_unix=operation, kernel_fd=observed)
     if operation == 'listen':
