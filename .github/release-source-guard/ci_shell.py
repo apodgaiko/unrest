@@ -39,8 +39,15 @@ def resources(spec=None):
         if (spec.get('duty') != 'v0.4.7 source suite' or spec.get('source_mode') != 'SOURCE'
                 or spec.get('commands') != [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']]):
             raise RuntimeError('primary_source_resource_scope')
-        mounts['/work'] = 'rw,nosuid,nodev,size=2g,uid=20000,gid=20000,mode=0711'
+        mounts['/work'] = 'rw,exec,nosuid,nodev,size=2g,uid=20000,gid=20000,mode=0711'
         memory = 3221225472
+    if spec is not None and spec.get('source_mode') == 'TEST-positive':
+        from primary_policy import TEST_SELECTIONS
+        commands = [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *cases]
+                    for cases in TEST_SELECTIONS]
+        if spec.get('duty') != 'TEST-source-positive' or spec.get('commands') not in [[c] for c in commands]:
+            raise RuntimeError('primary_source_fixture_mount_scope')
+        mounts['/work'] = mounts['/work'].replace('rw,', 'rw,exec,', 1)
     return mounts, memory
 
 KINDS = {name: phase.output for name, phase in catalog().items()}

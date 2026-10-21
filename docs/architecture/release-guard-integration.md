@@ -846,3 +846,27 @@ negative or timing controls keep the existing eager FastMCP setup. All core
 checks, authenticated READY, shared startup validation, audit/constructor
 enforcement, descriptor lifetime, restart custody, pre-exit drains and
 endpoint-complete evidence remain unchanged. No timer or launch grant changes.
+
+### Original candidate Git and malformed launcher fixtures
+
+Candidate fixture Git calls retain their absolute `/usr/bin/git` argv, isolated
+configuration environment, owned repository, original configuration canaries,
+and actual parent waits. Registration checks the current pinned original helper,
+its callable and caller code/globals, the actual source call expression and
+arguments, and the current case. The stopped-child adapter runs only after the
+original resolver explicitly declines; it joins that consumed registration to
+actual parent birth, cwd, argv/environment digests and the pinned native image.
+Object reads retain the original product's closed `cat-file` kinds and full OIDs.
+Unknown absolute native commands remain refused. No missing mutable state key
+implicitly creates source authority.
+
+The exact full source command and closed positive source fixtures require an
+explicit executable `/work` tmpfs option: Docker's implicit `noexec` otherwise
+turns the original mode0700 malformed launchers into preflight permission errors.
+Other phases, negative capsules and noexec mounts are unchanged. This mount flag
+is not executable admission: every exec retains the unchanged kernel observer.
+Only the three original malformed-launcher cases may attempt their exact single
+relative argv, original workspace, mode0700 single-link owned file and literal
+non-script/non-ELF bytes, after the consumed launch/parent identity join. A
+successful exec is a poison condition stopped before the body. No script
+conversion, shell fallback, arbitrary native image or provider launch is added.

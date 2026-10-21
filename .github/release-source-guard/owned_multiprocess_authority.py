@@ -40,9 +40,19 @@ class OwnedMultiprocessCustody:
         if result is not False:
             return result
         from native_relative_custody import resolve
-        return resolve(self, trace, pid, path, vector, environment, cwd)
+        if resolve(self, trace, pid, path, vector, environment, cwd):
+            return True
+        from candidate_git_custody import resolve as candidate_resolve
+        if candidate_resolve(self, trace, pid, path, vector, environment, cwd):
+            return True
+        from invalid_format_custody import resolve as invalid_resolve
+        return invalid_resolve(self, trace, pid, path, vector, environment, cwd)
 
     def exec_descriptors(self, trace, pid, vector, environment, cwd):
+        if self.bound.get(pid, {}).get('registration', {}).get('class') == 'source-cohort2:invalid-format':
+            trace.poison.append('invalid_format_unexpected_successful_exec')
+            self.supervisor.poison('invalid_format_unexpected_successful_exec')
+            raise RuntimeError('invalid_format_unexpected_successful_exec')
         child_relative_check(self, trace, pid, vector)
         registration = self.bound.get(pid, {}).get("registration", {})
         if registration.get("class") not in {

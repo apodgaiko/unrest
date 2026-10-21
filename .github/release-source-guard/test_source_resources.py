@@ -15,7 +15,7 @@ def test_only_full_source_changes_workspace_capacity():
     original = deepcopy(ci_shell.TMPFS)
     mounts, memory = ci_shell.resources(spec())
     assert memory == 3 * 1024 ** 3
-    assert mounts['/work'] == 'rw,nosuid,nodev,size=2g,uid=20000,gid=20000,mode=0711'
+    assert mounts['/work'] == 'rw,exec,nosuid,nodev,size=2g,uid=20000,gid=20000,mode=0711'
     assert {k: v for k, v in mounts.items() if k != '/work'} == {k: v for k, v in original.items() if k != '/work'}
     assert ci_shell.TMPFS == original
     assert ci_shell.resources({'duty': 'Build wheel and source distribution'}) == (original, 1073741824)
@@ -53,3 +53,20 @@ def test_inspected_source_resources_refuse_drift(change):
         mounts['/extra'] = 'rw'
     with pytest.raises(RuntimeError, match='configuration'):
         ci_shell.validate(current, 'sha256:owned', origins, spec())
+
+
+def test_only_closed_positive_source_fixtures_receive_executable_mount():
+    from primary_policy import TEST_CANDIDATE_FIXTURE_CASES
+    value = {'duty': 'TEST-source-positive', 'source_mode': 'TEST-positive',
+             'commands': [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q',
+                           *TEST_CANDIDATE_FIXTURE_CASES]]}
+    mounts, memory = ci_shell.resources(value)
+    assert 'exec' in mounts['/work'].split(',') and memory == 1073741824
+    assert ci_shell.TMPFS['/work'].startswith('rw,nosuid,nodev,')
+    for key in ('commands', 'duty'):
+        changed = deepcopy(value)
+        changed[key] = 'foreign'
+        with pytest.raises(RuntimeError, match='fixture_mount_scope'):
+            ci_shell.resources(changed)
+    mounts, _ = ci_shell.resources({'source_mode': 'TEST-poison'})
+    assert mounts == ci_shell.TMPFS

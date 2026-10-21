@@ -246,6 +246,14 @@ def admit(argv, cwd, env, state, append, refuse):
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
+    candidate = Path(state["guard"]).with_name("candidate_git.py")
+    if sha(candidate) != state["direct_support"]["files"][str(candidate)]:
+        refuse("candidate_git_support_drift")
+    namespace = {"__file__": str(candidate)}
+    exec(compile(candidate.read_bytes(), str(candidate), "exec"), namespace)
+    selected = namespace["admit"](argv, cwd, env, state, append, refuse)
+    if selected is not None:
+        return selected
     selected = coordinator(argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
@@ -302,7 +310,7 @@ def admit(argv, cwd, env, state, append, refuse):
             if source.is_relative_to(Path(state["checkout"])):
                 relative = str(source.relative_to(Path(state["checkout"])))
                 pin = state["product_pins"].get(relative)
-                if relative in state["git_callsite_sources"]:
+                if relative in {"src/unrest_harness/experimental_candidate.py", "src/unrest_harness/evolution.py"}:
                     if sha(source) != pin:
                         refuse("git_callsite_source_drift")
                     if (
@@ -311,6 +319,14 @@ def admit(argv, cwd, env, state, append, refuse):
                         and frame.f_code.co_firstlineno == 147
                     ):
                         local = frame.f_locals
+                        method = type(local['self']).git
+                        codes = state['isolated_source_code'](source)
+                        class_code = state['isolated_named'](codes, '_Observation')
+                        if (not isinstance(method, types.FunctionType)
+                                or method.__globals__ is not frame.f_globals
+                                or method.__code__ is not frame.f_code
+                                or frame.f_code != state['isolated_named'](class_code, 'git')):
+                            refuse('candidate_object_git_callable')
                         arguments = local["arguments"]
                         expected_env = {
                             "PATH": "/usr/bin:/bin",
