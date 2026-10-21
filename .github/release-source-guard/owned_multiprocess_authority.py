@@ -16,7 +16,26 @@ class OwnedMultiprocessCustody:
         self.supervisor.owned_trace = kwargs.get('trace')
         return result
 
+    def tick(self, trace):
+        if getattr(self, 'supervisor', None) is None:
+            return super().tick(trace)
+        from trace_tick_schedule import TickSchedule
+        if not hasattr(self, '_source_tick_schedule'):
+            self._source_tick_schedule = TickSchedule()
+        if self._source_tick_schedule.due(trace, self.supervisor):
+            result = super().tick(trace)
+            self._source_tick_schedule.complete(trace)
+            return result
+        return None
+
     def resolve(self, trace, pid, path, vector, environment, cwd):
+        if getattr(self, 'supervisor', None) is not None:
+            # An exec decision never relies on an idle poll or prior census.
+            super().tick(trace)
+            if self.supervisor.poisoned or trace.poison:
+                return False
+            if hasattr(self, '_source_tick_schedule'):
+                self._source_tick_schedule.complete(trace)
         result = super().resolve(trace, pid, path, vector, environment, cwd)
         if result is not False:
             return result

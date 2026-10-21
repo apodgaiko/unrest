@@ -1,113 +1,141 @@
-"""Deterministic callback ordering plus the real finite Linux exec seam."""
+"""Idle-only suppression; every actual decision retains fresh original checks."""
 from __future__ import annotations
 
-import os
-from pathlib import Path
-import sys
+import socket
+from types import SimpleNamespace
 
 import pytest
 
 import trace_tick_schedule as scheduling
+from owned_multiprocess_authority import OwnedMultiprocessCustody
 
 
-def test_empty_spins_do_not_reacquire_and_every_kernel_event_forces_fresh_service(monkeypatch):
+def objects():
+    first, second = socket.socketpair()
+    trace = SimpleNamespace(records=[], active={1}, pending={}, poison=[])
+    supervisor = SimpleNamespace(channel=first, clients={}, poisoned=False)
+    return first, second, trace, supervisor
+
+
+def test_empty_spins_do_not_reacquire_and_ten_ms_uses_actual_clock(monkeypatch):
     now = [100.0]
     monkeypatch.setattr(scheduling.time, 'monotonic', lambda: now[0])
-    owner = object()
+    first, second, trace, supervisor = objects()
+    try:
+        service = scheduling.TickSchedule()
+        assert service.due(trace, supervisor)
+        service.complete(trace)
+        assert not any(service.due(trace, supervisor) for _ in range(1000))
+        now[0] += 0.009
+        assert not service.due(trace, supervisor)
+        now[0] += 0.002
+        assert service.due(trace, supervisor)
+    finally:
+        first.close()
+        second.close()
+
+
+@pytest.mark.parametrize('event', ['records', 'active', 'pending', 'poison', 'clients', 'readable', 'final', 'supervisor_poison'])
+def test_each_pending_or_decision_boundary_forces_service_without_reading_request(monkeypatch, event):
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: 100.0)
+    first, second, trace, supervisor = objects()
+    try:
+        service = scheduling.TickSchedule()
+        service.complete(trace)
+        if event == 'records':
+            trace.records.append({'kind': 'actual_kernel_stop'})
+        elif event == 'active':
+            trace.active.add(2)
+        elif event == 'pending':
+            trace.pending[1] = {'syscall': 59}
+        elif event == 'poison':
+            trace.poison.append('actual refusal')
+        elif event == 'clients':
+            supervisor.clients[first] = {'pending_reason': 'frame'}
+        elif event == 'readable':
+            second.sendall(b'unchanged request bytes')
+        elif event == 'final':
+            trace.active.clear()
+        else:
+            supervisor.poisoned = True
+        assert service.due(trace, supervisor)
+        if event == 'readable':
+            assert first.recv(100) == b'unchanged request bytes'
+    finally:
+        first.close()
+        second.close()
+
+
+def test_clock_reversal_cannot_be_ignored(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: now[0])
+    first, second, trace, supervisor = objects()
+    try:
+        service = scheduling.TickSchedule()
+        service.complete(trace)
+        now[0] -= 1
+        with pytest.raises(RuntimeError, match='clock_reversed'):
+            service.due(trace, supervisor)
+    finally:
+        first.close()
+        second.close()
+
+
+@pytest.mark.parametrize('failure', [None, 'poison', 'exception'])
+def test_exec_decision_forces_original_callback_before_original_resolver(failure):
     calls = []
-    service = scheduling.TickSchedule(calls.append, owner)
-    service.service()
-    for _ in range(1000):
-        service.service()
-    assert calls == [owner]
-    for _ in range(5):
-        service.service(kernel_event=True)
-    assert calls == [owner] * 6
-    now[0] += 0.009
-    service.service()
-    assert len(calls) == 6
-    now[0] += 0.002
-    service.service()
-    assert len(calls) == 7
-
-
-def test_idle_interval_starts_after_complete_callback_not_before_acquisition(monkeypatch):
-    now = [100.0]
-    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: now[0])
-    calls = []
-    def acquire(owner):
-        calls.append(owner)
-        now[0] += 1.0
-    service = scheduling.TickSchedule(acquire, 'owner')
-    service.service()
-    service.service()
-    assert calls == ['owner'] and service.last == 101.0
-    service.service(kernel_event=True)
-    assert calls == ['owner', 'owner'] and service.last == 102.0
-
-
-def test_callback_failure_and_clock_reversal_cannot_be_ignored(monkeypatch):
-    now = [100.0]
-    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: now[0])
+    trace = SimpleNamespace(poison=[])
     cause = RuntimeError('fresh acquisition refused')
-    def refuse(owner):
-        raise cause
-    service = scheduling.TickSchedule(refuse, 'owner')
-    with pytest.raises(RuntimeError) as caught:
-        service.service(kernel_event=True)
-    assert caught.value is cause and service.last is None
-    service = scheduling.TickSchedule(lambda owner: None, 'owner')
-    service.service()
-    now[0] -= 1
-    with pytest.raises(RuntimeError, match='clock_reversed'):
-        service.service(kernel_event=True)
+    class Original:
+        def tick(self, actual):
+            assert actual is trace
+            calls.append('full_callback')
+            if failure == 'exception':
+                raise cause
+            if failure == 'poison':
+                self.supervisor.poisoned = True
+        def resolve(self, *args):
+            calls.append('original_resolver')
+            return True
+    class Authority(OwnedMultiprocessCustody, Original):
+        pass
+    authority = Authority()
+    authority.supervisor = SimpleNamespace(poisoned=False)
+    if failure == 'exception':
+        with pytest.raises(RuntimeError) as caught:
+            authority.resolve(trace, 2, '/native', [], {}, '/source')
+        assert caught.value is cause
+    else:
+        assert authority.resolve(trace, 2, '/native', [], {}, '/source') is (failure is None)
+    assert calls == (['full_callback', 'original_resolver'] if failure is None else ['full_callback'])
 
 
-def test_absent_callback_retains_plain_trace_behavior():
-    service = scheduling.TickSchedule(None, 'owner')
-    service.service()
-    service.service(kernel_event=True)
-    assert service.last is None
-
-
-@pytest.mark.skipif(sys.platform != 'linux' or os.uname().machine != 'x86_64',
-                    reason='actual Linux ptrace and exec custody')
-@pytest.mark.parametrize('accepted', [False, True])
-def test_every_actual_exec_stop_is_serviced_before_permission_and_resume(monkeypatch, accepted):
-    import linux_trace as trace
-    import hashlib
-    argv = [sys.executable, '-I', '-S', '-c', 'import os; os._exit(0)']
-    child = os.fork()
-    if child == 0:
-        try:
-            trace.install_observation_filter()
-            trace.trace_me()
-            os.execve(sys.executable, argv, {})
-        finally:
-            os._exit(127)
-    fresh = [False]
+def test_idle_callback_completion_follows_full_acquisition_and_propagates_failure(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: now[0])
+    first, second, trace, supervisor = objects()
     calls = []
-    real_ptrace = trace.ptrace
-    def ptrace(request, *args, **kwargs):
-        if request in (7, 24):
-            fresh[0] = False
-        return real_ptrace(request, *args, **kwargs)
-    def callback(owner):
-        fresh[0] = True
-        calls.append(len(owner.records))
-    attempts = []
-    def resolve(pid, path, vector, environment, cwd):
-        assert fresh[0]
-        assert pid == child and vector == argv and environment == {} and cwd == os.getcwd()
-        assert path == sys.executable
-        assert hashlib.sha256(Path(path).read_bytes()).hexdigest()
-        attempts.append(pid)
-        return accepted
-    monkeypatch.setattr(trace, 'ptrace', ptrace)
-    result = trace.OwnedTrace(child, [], timeout=10, selective=True,
-                              on_tick=callback, resolve_exec=resolve).run()
-    assert attempts == [child] and calls
-    assert bool(result['poison']) is (not accepted)
-    assert result['root_parent_wait_raw'] == (0 if accepted else 127 << 8)
-    with pytest.raises(ChildProcessError):
-        os.waitpid(child, os.WNOHANG)
+    cause = RuntimeError('full callback failure')
+    class Original:
+        def tick(self, actual):
+            assert actual is trace
+            calls.append(now[0])
+            now[0] += 1
+            if len(calls) == 2:
+                raise cause
+    class Authority(OwnedMultiprocessCustody, Original):
+        pass
+    authority = Authority()
+    authority.supervisor = supervisor
+    try:
+        authority.tick(trace)
+        assert authority._source_tick_schedule.last == 101.0
+        authority.tick(trace)
+        assert len(calls) == 1
+        now[0] += .011
+        with pytest.raises(RuntimeError) as caught:
+            authority.tick(trace)
+        assert caught.value is cause and authority._source_tick_schedule.last == 101.0
+    finally:
+        first.close()
+        second.close()

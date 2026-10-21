@@ -1,25 +1,30 @@
-"""Service every kernel stop; avoid full censuses on empty wait-loop spins."""
+"""Idle source callback scheduling, with explicit decision and final barriers."""
 from __future__ import annotations
 
+import select
 import time
 
 IDLE_SECONDS = 0.010
 
 
-class TickSchedule:
-    def __init__(self, callback, owner):
-        self.callback, self.owner = callback, owner
-        self.last = None
+def progress(trace):
+    return (len(trace.records), frozenset(trace.active), frozenset(trace.pending), tuple(trace.poison))
 
-    def service(self, *, kernel_event=False):
-        if self.callback is None:
-            return
+
+class TickSchedule:
+    def __init__(self):
+        self.last = None
+        self.observed = None
+
+    def due(self, trace, supervisor):
         now = time.monotonic()
         if self.last is not None and now < self.last:
-            raise RuntimeError('trace_service_clock_reversed')
-        if not kernel_event and self.last is not None and now - self.last < IDLE_SECONDS:
-            return
-        # The callback and its current-byte acquisitions finish before policy,
-        # effect dispatch or child resume. A failure propagates to trace cleanup.
-        self.callback(self.owner)
+            raise RuntimeError('source_poll_clock_reversed')
+        return (self.last is None or not trace.active or supervisor.poisoned
+                or bool(supervisor.clients) or progress(trace) != self.observed
+                or bool(select.select([supervisor.channel], [], [], 0)[0])
+                or now - self.last >= IDLE_SECONDS)
+
+    def complete(self, trace):
+        self.observed = progress(trace)
         self.last = time.monotonic()

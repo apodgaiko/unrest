@@ -811,21 +811,22 @@ additional program, argument, case or source site. PIPE fixtures retain their
 original drains. The bounded TEST command enumerates all 17 node IDs and
 cannot certify FULL or substitute for the unexcluded source checkpoint.
 
-### Kernel-event service and idle polling
+### Source callback idle polling
 
-The tracer runs the unchanged full source/producer/supervisor callback before
-processing every harvested kernel event, including exec authorization, waits,
-exits and child resume. Its initial callback remains eager. Empty nonblocking
-wait spins service the same callback at a fixed ten-millisecond idle cadence,
-not on every hundred-microsecond spin. Pending receipt requests still use the
-original authentication, current journal bytes, policy and actual four-second
-deadline before any response grants an effect. A callback error still enters
-ordinary fail-closed trace cleanup.
+The Linux tracer, its deadline algorithm and every original supervisor method
+remain unchanged. The selected source custody mixin calls the original full
+callback eagerly, when kernel records/active/pending/poison state changes,
+whenever receipt clients exist or the receipt listener is readable, and when ten milliseconds have elapsed after the last completed idle check.
+Final trace settlement always forces
+the callback. No request is accepted, read, authenticated or answered by the
+readiness predicate itself.
 
-This removes repeated full journal acquisitions and producer scans while no
-kernel event or policy decision is occurring. It does not cache a decision or
-replace current input checks, pause a clock, alter test deadlines, defer a check
-past exec or grant a new launch. Recorded controller CPU and event timestamps
-remain actual observations. The original one-second session-overlap assertion
-is retained; a direct two-case diagnostic with the original mock ACP commands
-is supplemental and does not certify the guarded source suite.
+Every source exec resolver invocation first forces the original complete
+callback before running the original resolver. Poison or an acquisition error
+refuses before any exec grant. This explicit barrier, the original pending
+receipt callback and finalization all reacquire full current inputs and
+journals. No decision is cached, no clock is paused and no original test or
+receipt deadline changes. Empty wait spins merely avoid repeated full census
+work while there is no decision to make. Controller timestamps stay actual.
+The original one-second session-overlap assertion remains unchanged; direct
+mock-only local diagnostics do not certify the guarded source suite.

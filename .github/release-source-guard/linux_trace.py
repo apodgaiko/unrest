@@ -19,8 +19,6 @@ import sys
 import time
 from typing import Any
 
-from trace_tick_schedule import TickSchedule
-
 _spec = importlib.util.spec_from_file_location(
     "linux_observation", Path(__file__).with_name("linux_observation.py")
 )
@@ -350,10 +348,10 @@ class OwnedTrace:
         started = time.monotonic()
         root_wait = None
         last_waited = 0
-        tick_schedule = TickSchedule(self.on_tick, self)
         try:
             while self.active:
-                tick_schedule.service()
+                if self.on_tick is not None:
+                    self.on_tick(self)
                 if time.monotonic() - started > self.timeout:
                     raise TimeoutError("owned trace deadline exceeded")
                 # A newborn stop may become waitable before its parent's
@@ -371,9 +369,6 @@ class OwnedTrace:
                 if not pid:
                     time.sleep(0.0001)
                     continue
-                # Every harvested kernel event gets a fresh full callback,
-                # independent of the idle cadence, before any effect or resume.
-                tick_schedule.service(kernel_event=True)
                 if os.WIFEXITED(raw) or os.WIFSIGNALED(raw):
                     self.active.remove(pid)
                     self.records.append({"kind": "tracer_terminal_wait", "pid": pid,
