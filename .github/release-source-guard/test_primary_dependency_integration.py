@@ -6,18 +6,24 @@ import ast
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_clock_and_projection_controls_precede_unchanged_original_tuple():
-    workflow = (ROOT / '.github/workflows/v046-source-readiness.yml').read_text()
-    command = ('env -u CODEX_PATH uv run --locked pytest -q tests/test_waiting_elapsed.py '
-               '.github/release-source-guard/test_primary_dependency_integration.py')
-    assert workflow.count(command) == 1
-    assert workflow.index('Ordinary waiting checkpoint regression') < workflow.index('TEST primary affected source seams')
-    original = ('env -u CODEX_PATH uv run pytest -q '
-                'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct '
-                'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[claude] '
-                'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex] '
-                'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance')
-    assert workflow.count(original) == 2
+def test_full_source_lane_retains_clock_regression_and_original_affected_tuple():
+    import yaml
+    from primary_policy import TEST_SEAM_CASES
+    workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+    steps = workflow['jobs']['primary']['steps']
+    source = next(step for step in steps if step.get('name') == 'v0.4.7 source suite')
+    assert source['run'] == 'env -u CODEX_PATH uv run pytest -q'
+    assert source['shell'] == 'python3 .github/release-source-guard/ci_shell.py {0}'
+    assert 'if' not in source
+    assert steps.index(source) < next(i for i, step in enumerate(steps)
+                                    if step.get('name') == 'Build wheel and source distribution')
+    assert (ROOT / 'tests/test_waiting_elapsed.py').is_file()
+    assert TEST_SEAM_CASES == (
+        'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct',
+        'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[claude]',
+        'tests/contracts/test_lean_provider_security.py::test_installed_supported_provider_matrix[codex]',
+        'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
+    )
 
 
 def test_exact_clock_source_and_regression_bytes():

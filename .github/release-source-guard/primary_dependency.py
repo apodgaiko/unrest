@@ -58,8 +58,19 @@ def read(path, uid, gid=None):
     try:
         if key(os.fstat(descriptor)) != key(before):
             raise RuntimeError('primary_dependency_open_race')
-        with os.fdopen(descriptor, 'rb', closefd=False) as stream:
-            body = stream.read(LIMIT + 1)
+        # The descriptor is already proved regular and size-bounded. Read its
+        # complete current bytes directly, including one growth-detection byte;
+        # an additional buffered file object would repeat native FD setup for
+        # every member on every consumption inside the original test deadline.
+        remaining = before.st_size + 1
+        chunks = []
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        body = b''.join(chunks)
         if (len(body) != before.st_size or key(os.fstat(descriptor)) != key(before)
                 or key(os.stat(pathname, follow_symlinks=False)) != key(before)):
             raise RuntimeError('primary_dependency_read_race')

@@ -743,3 +743,18 @@ descriptor snapshot. Neither a partial inventory nor a previous successful
 observation supplies authority. All other observation errors fail immediately;
 three consecutive census races still fail closed. The original listener, peer,
 cookie, address, ownership and payload checks run on the resulting fresh rows.
+
+Dependency member reads use the already opened and custody-checked regular
+descriptor directly. Each consumption still reads all current member bytes;
+the bounded loop handles short reads and reads one byte beyond the original
+size to detect growth. It retains no-follow opening, before/open/after/path
+identity checks, original size and owner bounds, complete SHA256 comparison,
+and the final directory census. Removing a second buffered descriptor wrapper
+does not authorize a stat-only cache or defer verification beyond launch.
+
+The checkout dependency integration control follows the authoritative full
+0.4.7 CI lane: the unconditional, unexcluded Python 3.13 source command runs
+before build and retains the waiting regression and original four affected
+cases. Historical diagnostic job labels or duplicate selector strings do not
+substitute for that source checkpoint. The exact source/clock pins and all
+original functional tests remain required.
