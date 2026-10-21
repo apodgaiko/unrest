@@ -54,3 +54,68 @@ def test_closed_bulk_diagnostic_keeps_existing_budget_and_original_deadlines():
     assert plan['source_checkpoint_ready'] is False
     with pytest.raises(RuntimeError):
         make_plan((COMMAND + ' ' + ' '.join(TEST_APPROVAL_CLOSURE_CASES[:-1])).encode(), text, 'TEST-positive')
+
+
+def test_approval_inventory_pipe_keeps_original_descriptor_custody(monkeypatch):
+    import owned_multiprocess_authority as owned
+    import approval_pipe_custody as pipe
+    authority = object.__new__(owned.SourceAuthority)
+    marker = object()
+    monkeypatch.setattr(owned.OriginalSourceAuthority, 'pipe_binding', lambda *args: marker)
+    monkeypatch.setattr(pipe, 'binding', lambda *args: pytest.fail('original result bypassed'))
+    assert authority.pipe_binding(42) is marker
+
+
+def test_unrelated_class_gets_no_approval_inventory_descriptor():
+    import approval_pipe_custody as pipe
+    from types import SimpleNamespace
+    assert pipe.binding(SimpleNamespace(bound={42: {'registration': {'class': 'foreign'}}}), 42) is None
+
+
+def approval_pipe_fixture(monkeypatch):
+    import approval_pipe_custody as pipe
+    from types import SimpleNamespace
+    import copy
+    original_read = Path.read_bytes
+    checkout = Path(__file__).resolve().parents[2]
+    monkeypatch.setattr(Path, 'read_bytes', lambda p: original_read(checkout / p.relative_to('/source'))
+                        if p.is_relative_to('/source') else original_read(p))
+    monkeypatch.setattr(pipe, 'identity', lambda pid: {'ppid': 7})
+    row = {'kind': 'exact_controlled_approval_registration', 'owner_pid': 7,
+           'class': 'source-approval-mcp', 'source_binding': {'path': '/source/' + pipe.SOURCE,
+           'line': 2191, 'sha256': pipe.PIN}, 'argv_sha256': 'a' * 64,
+           'case': routes.PREFIX + '[success]', 'native_provider': False,
+           'pipe_device': 1, 'pipe_inode': 2}
+    rows = [copy.deepcopy(row), copy.deepcopy(row)]
+    selected = {key: row[key] for key in ('class', 'source_binding', 'argv_sha256')}
+    authority = SimpleNamespace(bound={42: {'registration': selected}},
+                                manifest={'product_pins': {pipe.SOURCE: pipe.PIN, pipe.TEST: pipe.TEST_PIN}},
+                                supervisor=SimpleNamespace(events=lambda: rows))
+    return pipe, authority, rows
+
+
+def test_only_two_identical_original_approval_registrations_bind_pipe(monkeypatch):
+    pipe, authority, rows = approval_pipe_fixture(monkeypatch)
+    assert pipe.binding(authority, 42) == rows[0]
+
+
+@pytest.mark.parametrize('mutation', ['one', 'extra', 'different', 'foreign_case', 'native',
+                                       'negative_fd', 'bool_fd', 'source_pin', 'argv', 'parent'])
+def test_approval_pipe_registration_mutations_refuse(monkeypatch, mutation):
+    pipe, authority, rows = approval_pipe_fixture(monkeypatch)
+    if mutation == 'one':
+        rows.pop()
+    elif mutation == 'extra':
+        rows.append(dict(rows[0]))
+    elif mutation == 'different':
+        rows[1]['pipe_inode'] = 9
+    elif mutation == 'source_pin':
+        authority.manifest['product_pins'][pipe.SOURCE] = '0' * 64
+    else:
+        key, value = {'foreign_case': ('case', 'foreign'), 'native': ('native_provider', True),
+                      'negative_fd': ('pipe_inode', -1), 'bool_fd': ('pipe_inode', True),
+                      'argv': ('argv_sha256', 'b' * 64), 'parent': ('owner_pid', 8)}[mutation]
+        for row in rows:
+            row[key] = value
+    with pytest.raises(RuntimeError):
+        pipe.binding(authority, 42)

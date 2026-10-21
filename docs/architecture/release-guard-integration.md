@@ -1018,3 +1018,10 @@ aggregate assignment budget, matching the existing cleanup/seam diagnostic
 mechanism. Every original per-case assertion and 2/15/25-second deadline remains
 unchanged; the command stays an exact source-only TEST selection with no release
 checkpoint authority. Altered or shortened selections retain refusal.
+
+The controlled approval MCP inherits its original sensitive-inventory read pipe.
+Its two independent source registrations bind that FIFO's device and inode to
+the exact approval case, argv and original ACP caller. The existing ordinary
+pipe custody then observes pre-exec and successful-exec descriptor inventories,
+UID, access mode, process birth, credentials and complete argv/environment. No
+extra descriptor is omitted or accepted, and unrelated classes gain no pipe.

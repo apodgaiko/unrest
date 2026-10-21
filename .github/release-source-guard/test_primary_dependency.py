@@ -226,7 +226,8 @@ def test_only_primary_compartment_selects_dependency_authority():
     assert selected.resolve is owned_multiprocess_authority.OwnedMultiprocessCustody.resolve
     assert owned_multiprocess_authority.SourceAuthority.__bases__ == (
         owned_multiprocess_authority.OwnedMultiprocessCustody, original)
-    for name in ('producer_profile', 'pipe_binding', 'finish'):
+    assert selected.pipe_binding is owned_multiprocess_authority.OwnedMultiprocessCustody.pipe_binding
+    for name in ('producer_profile', 'finish'):
         assert getattr(selected, name) is getattr(original, name)
     assert {node.name for node in ast.parse((ROOT / 'owned_multiprocess_authority.py').read_bytes()).body
             if isinstance(node, ast.ClassDef)} == {

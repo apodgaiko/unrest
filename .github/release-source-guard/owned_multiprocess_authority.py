@@ -59,6 +59,13 @@ class OwnedMultiprocessCustody:
         from launch_preflight_custody import resolve as plan_resolve
         return plan_resolve(self, trace, pid, path, vector, environment, cwd)
 
+    def pipe_binding(self, pid):
+        original = super().pipe_binding(pid)
+        if original is not None:
+            return original
+        from approval_pipe_custody import binding
+        return binding(self, pid)
+
     def exec_descriptors(self, trace, pid, vector, environment, cwd):
         if self.bound.get(pid, {}).get('registration', {}).get('class') == 'source-cohort2:invalid-format':
             trace.poison.append('invalid_format_unexpected_successful_exec')

@@ -69,7 +69,7 @@ def select(argv, cwd, env, state, append, refuse):
             ):
                 refuse("approval_callable_drift")
 
-        def registration(kind, source, line, translated):
+        def registration(kind, source, line, translated, **custody):
             binding = {"path": str(source), "line": line, "sha256": sha(source)}
             append(
                 {
@@ -83,6 +83,7 @@ def select(argv, cwd, env, state, append, refuse):
                         ).encode()
                     ).hexdigest(),
                     "native_provider": False,
+                    **custody,
                 }
             )
             return {"class": kind, "python": True, "source_binding": binding}, translated
@@ -136,7 +137,8 @@ def select(argv, cwd, env, state, append, refuse):
                 or not Path(cwd).resolve().is_relative_to(owned)
             ):
                 refuse("approval_mcp_vector_drift")
-            return registration("source-approval-mcp", acp, 2191, argv)
+            return registration("source-approval-mcp", acp, 2191, argv,
+                                pipe_device=info.st_dev, pipe_inode=info.st_ino)
         spawn = next(
             (
                 f
