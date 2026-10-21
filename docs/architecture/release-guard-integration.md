@@ -718,3 +718,12 @@ The authenticated startup observer parses only the current journal prefix
 ending in a newline. A live writer's partial final record cannot supply READY
 evidence and is retried within the same original deadline. Malformed completed
 records still fail closed; no bytes, cursor or deadline are repaired or edited.
+
+The frozen inventory-FD worker fixture deliberately uses Git with global config
+disabled. After its original successful init and before its original empty
+commit, a bound setup step disables automatic maintenance in that exact owned
+repository's local config. It preserves the existing bytes and mode, checks
+source/caller/vector/environment, root, file identity and prior init result,
+and refuses symlinks, hardlinks, races or changed repeated inputs. Commands,
+environment and assertions stay unchanged; no maintenance executable is admitted
+and no user/global Git configuration is read or written.

@@ -161,8 +161,8 @@ jobs:
           enable-cache: false
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Original readiness attribution cases
-        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_readiness_attributes_local_child_and_drains[early_exit] tests/test_acp_runner.py::test_readiness_attributes_local_child_and_drains[never_ready] tests/test_acp_runner.py::test_readiness_attributes_local_child_and_drains[ready] tests/test_acp_runner.py::test_readiness_attributes_local_child_and_drains[cancel]
+      - name: Original inventory crash and restart cases
+        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart[worker] tests/test_acp_runner.py::test_real_mcp_inventory_fd_redacts_before_crash_and_restart[terminal-reviewer]
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: Preserve encrypted diagnostic evidence
         if: always()

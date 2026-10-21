@@ -239,6 +239,12 @@ def select(
             script_pin = state["product_pins"].get(str(script.relative_to(state["checkout"])))
             if script_pin is None or hashlib.sha256(script.read_bytes()).hexdigest() != script_pin:
                 refuse("cohort_script_bytes_drift")
+        if (relative == 'tests/test_acp_runner.py' and call.lineno == 214
+                and argv == ['git', 'commit', '--allow-empty', '--quiet', '-m', 'base']):
+            support = Path(state['guard']).with_name('owned_git_fixture.py')
+            sys.modules['runtime_guard'].checked_source(
+                support, state['direct_support']['files'][str(support)])['configure'](
+                    frame, argv, directory, env, state, append, refuse)
         binding = {
             "path": str(source),
             "line": call.lineno,
