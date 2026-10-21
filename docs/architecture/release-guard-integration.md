@@ -810,3 +810,22 @@ PIPE pair. The vector remains exactly `/bin/sleep 30`; the table admits no
 additional program, argument, case or source site. PIPE fixtures retain their
 original drains. The bounded TEST command enumerates all 17 node IDs and
 cannot certify FULL or substitute for the unexcluded source checkpoint.
+
+### Kernel-event service and idle polling
+
+The tracer runs the unchanged full source/producer/supervisor callback before
+processing every harvested kernel event, including exec authorization, waits,
+exits and child resume. Its initial callback remains eager. Empty nonblocking
+wait spins service the same callback at a fixed ten-millisecond idle cadence,
+not on every hundred-microsecond spin. Pending receipt requests still use the
+original authentication, current journal bytes, policy and actual four-second
+deadline before any response grants an effect. A callback error still enters
+ordinary fail-closed trace cleanup.
+
+This removes repeated full journal acquisitions and producer scans while no
+kernel event or policy decision is occurring. It does not cache a decision or
+replace current input checks, pause a clock, alter test deadlines, defer a check
+past exec or grant a new launch. Recorded controller CPU and event timestamps
+remain actual observations. The original one-second session-overlap assertion
+is retained; a direct two-case diagnostic with the original mock ACP commands
+is supplemental and does not certify the guarded source suite.
