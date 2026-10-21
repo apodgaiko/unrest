@@ -107,6 +107,23 @@ def check():
         raise EndpointRefusal("global_poison_retained")
 
 
+def approval_unix():
+    guard = sys.modules.get('runtime_guard')
+    if (guard is None or type(getattr(guard, '_STATE', None)) is not dict
+            or not str(guard._STATE.get('case', '')).startswith('tests/test_approval_recovery.py::')
+            or 'guard' not in guard._STATE):
+        return None
+    path = Path(guard._STATE['guard']).with_name('approval_unix.py')
+    pin = guard._STATE.get('direct_support', {}).get('files', {}).get(str(path))
+    return None if pin is None else guard.checked_source(path, pin)
+
+
+def approval_unix_receipt(operation, stream):
+    support = approval_unix()
+    return (support is not None and support['receipt'](
+        operation, stream, sys.modules['runtime_guard']._STATE, sys.modules[__name__]))
+
+
 def audit(event, args):
     if event == "socket.connect":
         stream, address = args
@@ -140,6 +157,11 @@ def audit(event, args):
         check()
         stream, address = args[:2]
         if stream.family == socket.AF_UNIX and event in ("socket.bind", "socket.connect"):
+            support = approval_unix()
+            if support is not None and support['authorize'](
+                    event, stream, address, sys.modules['runtime_guard']._STATE,
+                    sys.modules[__name__], sys.modules['runtime_guard']):
+                return
             return sys.modules["custody_ipc"].authorize(event, args)
         if (
             stream.family != socket.AF_INET
@@ -190,15 +212,18 @@ def early(spec):
         try:
             result = original_connect(stream, address)
         except BlockingIOError:
-            request("connected", fd=stream.fileno())
+            if not approval_unix_receipt('connected', stream):
+                request("connected", fd=stream.fileno())
             raise
-        request("connected", fd=stream.fileno())
+        if not approval_unix_receipt('connected', stream):
+            request("connected", fd=stream.fileno())
         return result
 
     def connect_ex(stream, address):
         result = original_connect_ex(stream, address)
         if result in (0, errno.EINPROGRESS, errno.EWOULDBLOCK, errno.EALREADY):
-            request("connected", fd=stream.fileno())
+            if not approval_unix_receipt('connected', stream):
+                request("connected", fd=stream.fileno())
         return result
 
     socket.socket.connect = connect
@@ -239,6 +264,13 @@ def early(spec):
 
     def listen(stream, backlog=128):
         check()
+        if stream.family == socket.AF_UNIX:
+            support = approval_unix()
+            if support is not None and support['bound'](stream, sys.modules['runtime_guard']._STATE) is not None:
+                original_listen(stream, backlog)
+                if not approval_unix_receipt('listen', stream):
+                    refuse('approval_unix_listener_unregistered')
+                return
         if stream.family != socket.AF_INET or stream.type != socket.SOCK_STREAM:
             refuse("listener_address_class")
         address = stream.getsockname()
@@ -249,6 +281,8 @@ def early(spec):
 
     def payload(stream):
         check()
+        if approval_unix_receipt('payload', stream):
+            return
         if getattr(LOCAL, "checking", False):
             return
         LOCAL.checking = True

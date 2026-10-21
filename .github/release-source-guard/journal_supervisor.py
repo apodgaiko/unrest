@@ -53,6 +53,12 @@ class JournalSupervisor(Supervisor):
         # The original handler still receives the entire current ordinary JSON list.
         if type(events) is JournalSnapshot:
             events = events.materialize()
+        if request.get('kind') == 'approval_unix':
+            if self.poisoned:
+                raise RuntimeError('global_poison_retained')
+            self.authenticate(request, events)
+            from approval_unix_custody import handle
+            return handle(self, request, events)
         previous = set(self.connections) if request.get('kind') == 'connected' else None
         try:
             answer = Supervisor.handle(self, request, events)

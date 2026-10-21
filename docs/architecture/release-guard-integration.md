@@ -963,3 +963,23 @@ there require refusal even for mode-0700 fixture files; they do not change the
 mount or replace the real access probe. Successful script/PATH execution is
 verified by the original source fixtures in the separately declared exec-mounted
 SOURCE compartment. Direct-path observation does not grant execution authority.
+
+Approval source tests use a separate finite Unix-channel envelope. It covers only
+the original closed approval-test owners and the five byte-pinned bind/connect
+call sites in ApprovalOwner.launch_environment, install_pending, review_approval
+and the controlled relay. Actual source code/globals and await sites, original
+address values, a mode-0700 owned temporary parent and the literal control name
+are checked before an effect. Ordinary product code uses ordinary compilation;
+only pytest fixtures use assertion rewriting. Unknown cases, roots, sites and
+Unix addresses continue through the original custody refusal.
+
+The endpoint retains original TCP and socketpair handling. Unix listen, connected
+and payload operations require independent observer receipts. The existing
+receipt ledger authenticates the kernel control peer and nonce; the journal
+supervisor invokes the original authenticate method and retains global poison.
+The observer duplicates the actual FD, verifies AF_UNIX/SOCK_STREAM, inode, kernel
+SO_COOKIE, addresses, listening state, live owner birth and private socket-path
+identity. Clients and accepted peers require actual SO_PEERCRED UID/GID/PID joined
+to a live registered birth and the same-case listener. No native image, provider,
+approval decision, submission or new process launch is authorized by this envelope.
+Controlled API plumbing is not native human/provider acceptance.
