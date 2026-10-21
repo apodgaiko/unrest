@@ -252,3 +252,44 @@ def test_cleanup_snapshot_is_passive_before_original_twenty_second_deadline(monk
     value.pytest_runtest_call(SimpleNamespace(
         nodeid='tests/test_acp_cleanup.py::test_recorded_transport_failures[success-work]', funcargs={}))
     assert calls == ['private snapshot only']
+
+
+@pytest.mark.parametrize('change', ['none', 'case', 'name', 'pin', 'read', 'write'])
+def test_candidate_metadata_diagnostic_cannot_replace_original_failure(monkeypatch, change):
+    import hashlib
+    source = Path('/source/src/unrest_harness/experimental_candidate.py')
+    body = ("class CandidateInputError(ValueError): pass\n"
+            "class _Observation:\n"
+            " def metadata(self):\n"
+            f"  name = {'../foreign' if change == 'name' else 'branches'!r}\n"
+            "  raise CandidateInputError('unsupported_git_metadata')\n").encode()
+    namespace = {}
+    exec(compile(body, str(source), 'exec', dont_inherit=True), namespace)
+    try:
+        namespace['_Observation']().metadata()
+    except ValueError as error:
+        original = error
+    traceback = original.__traceback__
+    value, events = observer()
+    value.manifest = {'product_pins': {'src/unrest_harness/experimental_candidate.py':
+                      'foreign' if change == 'pin' else hashlib.sha256(body).hexdigest()}}
+    original_read = Path.read_bytes
+    def read(path):
+        if path == source:
+            if change == 'read':
+                raise OSError('unavailable')
+            return body
+        return original_read(path)
+    monkeypatch.setattr(Path, 'read_bytes', read)
+    if change == 'write':
+        def broken(event):
+            raise OSError('unavailable')
+        value.guard.append = broken
+    item = SimpleNamespace(nodeid='foreign' if change == 'case' else
+        'tests/test_experimental_candidate.py::test_literal_manifest_and_independent_oracle')
+    call = SimpleNamespace(when='call', excinfo=SimpleNamespace(value=original))
+    assert value.pytest_runtest_makereport(item, call) is None
+    assert original.__traceback__ is traceback
+    assert str(original) == 'unsupported_git_metadata'
+    assert events == ([{'kind': 'candidate_metadata_refusal_entry', 'entry': 'branches',
+                       'error_code': 'unsupported_git_metadata'}] if change == 'none' else [])

@@ -888,3 +888,9 @@ its ordinary core/user configuration, main ref and SHA1-verified loose commit
 with the original fixed author, committer, dates and source-bound message. Extra
 config, changed metadata or descendants receive no authority. The unchanged
 kernel trace retains actual native parent waits; no provider permission follows.
+
+A passive failure diagnostic for the unchanged candidate manifest oracle records
+only a bounded ASCII relative metadata entry name from its already-failed,
+byte-pinned product `metadata` frame. It reads no file bodies, changes no exception
+or report, and returns no replacement hook result. Other cases and failures are
+inapplicable; source checkpoint and launch authority are unchanged.

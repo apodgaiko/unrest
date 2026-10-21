@@ -364,6 +364,49 @@ class Observer:
             # A diagnostic write cannot replace the original test result.
             pass
 
+    def pytest_runtest_makereport(self, item, call):
+        # Observe only the original oracle's already-failed metadata check.
+        case = 'tests/test_experimental_candidate.py::test_literal_manifest_and_independent_oracle'
+        if item.nodeid != case or call.when != 'call' or call.excinfo is None:
+            return None
+        error = call.excinfo.value
+        if type(error).__name__ != 'CandidateInputError' or str(error) != 'unsupported_git_metadata':
+            return None
+        try:
+            traceback = error.__traceback__
+            for _ in range(128):
+                if traceback is None:
+                    break
+                frame = traceback.tb_frame
+                source = Path('/source/src/unrest_harness/experimental_candidate.py')
+                if frame.f_code.co_filename == str(source) and frame.f_code.co_name == 'metadata':
+                    name = frame.f_locals.get('name')
+                    body = source.read_bytes()
+                    compiled = compile(body, str(source), 'exec', dont_inherit=True)
+                    owner_code = next(v for v in compiled.co_consts
+                                      if type(v) is types.CodeType and v.co_name == '_Observation')
+                    method_code = next(v for v in owner_code.co_consts
+                                       if type(v) is types.CodeType and v.co_name == 'metadata')
+                    owner = frame.f_globals.get('_Observation')
+                    method = getattr(owner, 'metadata', None)
+                    if (type(name) is str and len(name) <= 256
+                            and all(part and part not in {'.', '..'}
+                                    and all(c.isascii() and (c.isalnum() or c in '._-') for c in part)
+                                    for part in name.split('/'))
+                            and isinstance(method, types.FunctionType)
+                            and method.__code__ is frame.f_code and method.__globals__ is frame.f_globals
+                            and frame.f_code == method_code
+                            and hashlib.sha256(body).hexdigest()
+                            == self.manifest['product_pins']['src/unrest_harness/experimental_candidate.py']):
+                        self.guard.append({'kind': 'candidate_metadata_refusal_entry', 'entry': name,
+                                           'error_code': 'unsupported_git_metadata'})
+                    break
+                traceback = traceback.tb_next
+        except (OSError, AttributeError, KeyError, TypeError, ValueError, RuntimeError, StopIteration):
+            # Optional private diagnosis cannot replace the original failure.
+            pass
+        return None
+
     def pytest_runtest_logreport(self, report):
         if report.when in {'call', 'teardown'} and self.startup_stall_timer is not None:
             self.startup_stall_token = None
