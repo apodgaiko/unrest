@@ -4,7 +4,8 @@
 
 /* The Python observer already ignores these events. Keep that predicate here
  * so ignored dependency calls need no Python callback frame. Selected events,
- * including c_call/c_return, are forwarded with their original arguments. */
+ * including c_call/c_return, are forwarded with their original arguments.
+ * The source observer also receives its bound guard constructor return. */
 typedef struct {
     PyObject_HEAD
     PyObject *callback;
@@ -70,6 +71,17 @@ static PyObject *gate_call(PyObject *object, PyObject *args, PyObject *kwargs) {
         if (codes != Py_None) selected = PyObject_RichCompareBool((PyObject *)code, codes, Py_EQ);
         Py_DECREF(codes);
     }
+    /* The source observer joins endpoint authentication at the existing guarded
+     * constructor return. Forward that one event even though guard internals
+     * are outside the ordinary source-file predicate. This observes no body
+     * early and grants no execution, endpoint, or deadline authority. */
+    if (selected == 0 && PyUnicode_CompareWithASCIIString(event, "return") == 0
+            && PyUnicode_CompareWithASCIIString(code->co_name, "initialize_inner") == 0) {
+        PyObject *observer = PyDict_GetItemString(self->state, "primary_snapshot_observer");
+        PyObject *guard = PyDict_GetItemString(self->state, "guard");
+        if (observer && PyCallable_Check(observer) && guard && PyUnicode_Check(guard))
+            selected = PyObject_RichCompareBool(code->co_filename, guard, Py_EQ);
+    }
     Py_DECREF(code);
     if (selected < 0 || PyErr_Occurred()) return NULL;
     if (!selected) Py_RETURN_NONE;
@@ -110,7 +122,7 @@ static PyObject *make_gate(PyObject *module, PyObject *args) {
 }
 
 static PyMethodDef methods[] = {
-    {"make", make_gate, METH_VARARGS, "Forward exactly the existing selected profile events."},
+    {"make", make_gate, METH_VARARGS, "Forward selected source events and the bound guard constructor return."},
     {NULL, NULL, 0, NULL}
 };
 static struct PyModuleDef definition = {

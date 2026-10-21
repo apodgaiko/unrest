@@ -529,3 +529,9 @@ still receives the exact original environment. Public Git metadata remains
 covered by source custody; no extra raw archive member is emitted and the strict
 evidence consumer continues to reject unknown members. Earlier invalid archives
 and failed outcomes remain failures.
+The compiled profile predicate forwards that exact guard-path
+`initialize_inner` return when the existing source observer is installed. It
+forwards the original frame, event and result; other guard internals keep their
+existing predicate. The observer still authenticates the frozen constructor and
+nine-case ownership before using the event. Compiled predicate controls run in
+the isolated control image before the original source suite.
