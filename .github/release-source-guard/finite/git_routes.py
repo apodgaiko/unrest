@@ -320,7 +320,7 @@ def admit(argv, cwd, env, state, append, refuse):
                     ):
                         local = frame.f_locals
                         method = type(local['self']).git
-                        codes = state['isolated_source_code'](source)
+                        codes = compile(source.read_bytes(), str(source), 'exec', dont_inherit=True)
                         class_code = state['isolated_named'](codes, '_Observation')
                         if (not isinstance(method, types.FunctionType)
                                 or method.__globals__ is not frame.f_globals

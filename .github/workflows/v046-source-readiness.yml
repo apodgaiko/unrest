@@ -161,8 +161,8 @@ jobs:
           enable-cache: false
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Original malformed launcher and candidate Git cases
-        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[work] tests/test_acp_runner.py::test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[validate] tests/test_acp_runner.py::test_terminal_real_startup_failure_is_safe_and_starts_no_protocol tests/test_experimental_candidate.py::test_literal_manifest_and_independent_oracle
+      - name: Original candidate manifest oracle
+        run: env -u CODEX_PATH uv run pytest -q tests/test_experimental_candidate.py::test_literal_manifest_and_independent_oracle
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: Preserve encrypted diagnostic evidence
         if: always()

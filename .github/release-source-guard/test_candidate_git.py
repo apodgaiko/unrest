@@ -119,3 +119,62 @@ def test_successful_exec_of_malformed_fixture_stops_before_body():
     with pytest.raises(RuntimeError, match='unexpected_successful_exec'):
         owned.OwnedMultiprocessCustody.exec_descriptors(authority, trace, 21, [], {}, '/source')
     assert trace.poison == errors == ['invalid_format_unexpected_successful_exec']
+
+
+def test_original_fixture_callable_frame_registers_without_running_git(tmp_path, monkeypatch):
+    import importlib.util
+    import sys
+    from finite import candidate_git
+    from finite.isolated_refusal import named
+    source = Path(__file__).parent.parent.parent / 'tests/test_experimental_candidate.py'
+    if not source.is_file():
+        pytest.skip('original source is absent from the isolated control capsule')
+    spec = importlib.util.spec_from_file_location('_candidate_original_control', source)
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+    root = tmp_path / 'pytest/case'
+    root.mkdir(parents=True)
+    pin = hashlib.sha256(source.read_bytes()).hexdigest()
+    state = {'checkout': str(source.parents[1]), 'owned_root': str(tmp_path),
+             'case': SOURCE + '::test_literal_manifest_and_independent_oracle',
+             'product_pins': {SOURCE: pin}, 'copy_git': {'/usr/bin/git': 'image-pin'},
+             'isolated_named': named,
+             'isolated_source_code': lambda p: compile(p.read_bytes(), str(p), 'exec', dont_inherit=True)}
+    records = []
+    class Observed(Exception):
+        pass
+    def refuse(reason):
+        raise AssertionError(reason)
+    def capture(argv, **kwargs):
+        selected = candidate_git.admit(argv, kwargs['cwd'], kwargs['env'], state, records.append, refuse)
+        assert selected['class'] == CLASS
+        assert selected['source_binding']['caller'] == 'repo'
+        assert selected['source_binding']['caller_line'] == 35
+        raise Observed
+    monkeypatch.setattr(module.subprocess, 'check_output', capture)
+    original = module.repo.__wrapped__
+    with pytest.raises(Observed):
+        original(root)
+    assert len(records) == 1
+
+
+def test_product_object_reader_is_bound_to_plain_import_code():
+    from finite.isolated_refusal import named
+    path = Path(__file__).parent.parent.parent / 'src/unrest_harness/experimental_candidate.py'
+    if not path.is_file():
+        pytest.skip('product source is absent from the isolated control capsule')
+    from unrest_harness.experimental_candidate import _Observation
+    path = Path(_Observation.git.__code__.co_filename)
+    if not path.is_file():
+        pytest.skip('product source is absent from the isolated control capsule')
+    compiled = compile(path.read_bytes(), str(path), 'exec', dont_inherit=True)
+    assert named(named(compiled, '_Observation'), 'git') == _Observation.git.__code__
+
+
+def test_admitted_journal_omits_template_python_field_but_bootstrap_is_native():
+    selected, *arguments = selection()
+    del selected['registration']['python']
+    assert git.eligible(selected, *arguments)
+    selected['bootstrap_sha256'] = 'python-body'
+    assert not git.eligible(selected, *arguments)

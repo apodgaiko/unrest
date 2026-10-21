@@ -870,3 +870,9 @@ relative argv, original workspace, mode0700 single-link owned file and literal
 non-script/non-ELF bytes, after the consumed launch/parent identity join. A
 successful exec is a poison condition stopped before the body. No script
 conversion, shell fallback, arbitrary native image or provider launch is added.
+
+The native join consumes the serialized admission event, which omits the template's
+`python` field. Native bootstrap absence, exact class, source binding and image
+remain mandatory; a supplied foreign Python marker is refused. Ordinary imported
+product methods are compared with ordinary compiled source code; pytest assertion
+rewriting applies only to the original test owners that actually use it.

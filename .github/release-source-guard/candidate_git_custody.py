@@ -39,7 +39,7 @@ def eligible(selected, vector, environment, cwd, checkout, owned_root, pins):
             and binding.get('path') == str(Path(checkout) / relative)
             and binding.get('sha256') == pins.get(relative) and pins.get(relative) is not None
             and binding.get('line') == line and binding.get('function') == function
-            and registration.get('python') is False
+            and registration.get('python', False) is False
             and selected.get('cwd') == cwd
             and selected.get('owner_pid') == registration.get('owner_pid')
             and selected.get('token') == registration.get('token')
