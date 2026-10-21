@@ -33,6 +33,9 @@ def test_inflight_discovery_includes_running_and_suspended_owners(monkeypatch):
             assert 'running_leaf' not in task_names
             assert {'running_leaf', 'running_producer', 'suspended_owner'} <= all_names
             assert len({id(frame) for frame in combined}) == len(combined)
+            acquisition = next(frame for frame in combined
+                               if frame.f_code is cleanup_routes.inflight_frames.__code__)
+            assert acquisition.f_locals['active'] == []
         finally:
             suspended_only.clear()
             combined.clear()

@@ -49,7 +49,10 @@ def inflight_frames(state):
     guard = sys.modules['runtime_guard']
     active = guard.checked_source(
         support, state['direct_support']['files'][str(support)])['active_frames']()
-    return list({id(frame): frame for frame in [*active, *task_frames()]}.values())
+    try:
+        return list({id(frame): frame for frame in [*active, *task_frames()]}.values())
+    finally:
+        active.clear()
 
 
 def scenario_value(owner, parameter, role, temporary):
