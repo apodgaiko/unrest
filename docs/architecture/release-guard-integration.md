@@ -894,3 +894,11 @@ only a bounded ASCII relative metadata entry name from its already-failed,
 byte-pinned product `metadata` frame. It reads no file bodies, changes no exception
 or report, and returns no replacement hook result. Other cases and failures are
 inapplicable; source checkpoint and launch authority are unchanged.
+
+The candidate template compatibility repair has a separate exact input
+transition. It retains the original source template, requires both original
+product/document pins and the absence of the added regression file, then reads
+all three exact postimages through the existing read-only descriptor acquisition.
+Only after every input matches does it update those three pins. This does not
+admit a changed native Git owner, command, provider or arbitrary source drift;
+the seven new source cases join the full unexcluded collection.

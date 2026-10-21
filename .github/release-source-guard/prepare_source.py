@@ -82,6 +82,15 @@ def admit_tracker_acquisition(manifest):
     manifest['product_pins'][name] = pin
 
 
+def admit_candidate_template(manifest):
+    body = CLOCK_READER(Path('/guard'), 'candidate_template_source_inputs.py')
+    if hashlib.sha256(body).hexdigest() != '0a10e29619137a6dfbfeac7655f02b6503f15932c60961adbe4c8264affbde78':
+        raise RuntimeError('candidate_template_support_drift')
+    namespace = {'__name__': 'candidate_template_source_inputs'}
+    exec(compile(body, '/guard/candidate_template_source_inputs.py', 'exec', dont_inherit=True), namespace)
+    namespace['admit'](manifest, ROOT, CLOCK_READER)
+
+
 def main():
     nonce, selection = sys.argv[1:]
     case = CASES[selection]
@@ -97,6 +106,7 @@ def main():
     release['admit'](manifest, ROOT, CLOCK_READER)
     admit_ownership_document(manifest)
     admit_tracker_acquisition(manifest)
+    admit_candidate_template(manifest)
     for name, pin in manifest['product_pins'].items():
         observed = sha(ROOT / name)
         if observed != pin:
