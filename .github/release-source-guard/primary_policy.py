@@ -28,7 +28,11 @@ TEST_SEAM_CASES = (
     'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance',
 )
 
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES)
+TEST_STARTUP_CASES = tuple(
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[' + failure + '-' + role + ']'
+    for failure in ('exit', 'deadline', 'cancel')
+    for role in ('work', 'validate', 'terminal_reviewer'))
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 

@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   compartment-controls:
+    if: ${{ github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-startup-cancel-20261021' }}
     name: Linux compartment controls (not a source checkpoint)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -143,3 +144,35 @@ jobs:
             ${{ runner.temp }}/source-readiness/safe-provenance.json
           if-no-files-found: error
           retention-days: 30
+
+  startup-cancellation-diagnosis:
+    name: Bounded startup cancellation diagnosis (not certification)
+    if: ${{ github.ref == 'refs/heads/codex/source-guard-structured-20261018-source-composition-startup-cancel-20261021' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          python-version: "3.13"
+          enable-cache: false
+      - name: Original compartment controls
+        run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
+      - name: Original nine startup cleanup cases with private task capture
+        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-work] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-validate] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-terminal_reviewer] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-work] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-validate] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-terminal_reviewer] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-work] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-validate] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-terminal_reviewer]
+        shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
+      - name: Preserve encrypted diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: startup-cancellation-diagnosis-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/source-readiness/evidence.cms
+            ${{ runner.temp }}/source-readiness/safe-provenance.json
+            ${{ runner.temp }}/primary-source-positive/evidence.cms
+            ${{ runner.temp }}/primary-source-positive/safe-provenance.json
+          if-no-files-found: error
+          retention-days: 90

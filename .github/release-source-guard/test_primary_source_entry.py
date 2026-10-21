@@ -160,3 +160,38 @@ def test_owned_role_inventory_pipe_requires_exact_source_and_kernel_identity(mon
     else:
         with pytest.raises(RuntimeError, match='primary_source_role_pipe_'):
             instance.descriptors(11)
+
+
+def test_exact_startup_diagnosis_is_bounded_and_cannot_certify_full():
+    from primary_policy import TEST_STARTUP_CASES, root_seconds
+    text, value = inputs()
+    assert len(TEST_STARTUP_CASES) == 9 and len(set(TEST_STARTUP_CASES)) == 9
+    assert all('test_startup_failure_attribution_and_owned_cleanup[' in case
+               for case in TEST_STARTUP_CASES)
+    script = (COMMAND + ' ' + ' '.join(TEST_STARTUP_CASES)).encode()
+    result = make_test_plan(script, text, 'TEST-positive')
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    assert result['duty'] == 'TEST-source-positive'
+    assert root_seconds(result) == result['timeout_seconds'] == 180
+    with pytest.raises(RuntimeError):
+        plan(script, text, value)
+    with pytest.raises(RuntimeError):
+        make_test_plan(script + b' --maxfail=1', text, 'TEST-positive')
+    with pytest.raises(RuntimeError):
+        make_test_plan((COMMAND + ' ' + ' '.join(TEST_STARTUP_CASES[:-1])).encode(), text, 'TEST-positive')
+
+
+def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
+    import yaml
+    from primary_policy import TEST_STARTUP_CASES
+    path = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
+    document = yaml.safe_load(path.read_text())
+    job = document['jobs']['startup-cancellation-diagnosis']
+    ref = 'refs/heads/codex/source-guard-structured-20261018-source-composition-startup-cancel-20261021'
+    assert job['if'] == "${{ github.ref == '" + ref + "' }}"
+    assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
+    steps = job['steps']
+    call = next(step for step in steps if step.get('shell'))
+    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_STARTUP_CASES)
+    assert call['shell'] == 'python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}'
+    assert steps[-1]['if'] == 'always()'

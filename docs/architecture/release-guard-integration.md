@@ -613,3 +613,13 @@ task names, adds no public event or archive member, and cannot alter a test,
 signal, wait, result or deadline. Teardown cancels the observer. This retains
 evidence for the observed cancellation hang without declaring it a product or
 guard defect before the suspended task is identified.
+
+Startup cancellation diagnosis uses the existing TEST executor with the exact
+nine original startup-cleanup selections. Its existing 180-second trace bound
+closes a hang and exports encrypted task locations without waiting for FULL's
+two-hour bound. The dedicated exact-ref supplementary job executes no release
+checkpoint or package certification. The ordinary CI workflow and literal full
+source command remain unchanged; TEST output cannot issue or reuse a release
+certificate. No original test, deadline, child admission or review restriction
+changes. Ordinary cancellation may retain only a partial wrapper archive; that
+archive remains incomplete and cannot substitute for task or wait evidence.
