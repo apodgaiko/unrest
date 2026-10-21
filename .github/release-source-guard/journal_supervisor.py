@@ -53,11 +53,14 @@ class JournalSupervisor(Supervisor):
         # The original handler still receives the entire current ordinary JSON list.
         if type(events) is JournalSnapshot:
             events = events.materialize()
-        if request.get('kind') == 'approval_unix':
+        if request.get('kind') in {'approval_unix', 'fixture_unix_bind'}:
             if self.poisoned:
                 raise RuntimeError('global_poison_retained')
             self.authenticate(request, events)
-            from approval_unix_custody import handle
+            if request['kind'] == 'fixture_unix_bind':
+                from fixture_unix_custody import handle
+            else:
+                from approval_unix_custody import handle
             return handle(self, request, events)
         previous = set(self.connections) if request.get('kind') == 'connected' else None
         try:

@@ -161,8 +161,8 @@ jobs:
           enable-cache: false
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Original approval Unix channel cases
-        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/test_approval_recovery.py::test_exact_supported_backend_admission[cc0a05e34876414280a79726153d0fe8d55c93f704ef6c292ec409bfe36d5b06] tests/test_approval_recovery.py::test_exact_supported_backend_admission[09fa44fdc37a5fc70dc1ace31235f90468a2e193d0e85f7552eab068ea2582be] tests/test_approval_recovery.py::test_exact_supported_backend_admission[0d5ac7aae20c4eda6242428d5e218c55ba96d8763fda2a271088ff37104b9d28] tests/test_approval_recovery.py::test_selection_rechecks_unsafe_display_without_opening_form tests/test_approval_recovery.py::test_actual_mcp_accept_single_submit_and_receipt tests/test_approval_recovery.py::test_pending_inspection_reference_is_read_only
+      - name: Original unsafe socket carrier cases
+        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/test_supervision_paths.py::test_static_carrier_refuses_without_outside_effects[socket-False] tests/test_supervision_paths.py::test_static_carrier_refuses_without_outside_effects[socket-True]
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: Preserve encrypted diagnostic evidence
         if: always()

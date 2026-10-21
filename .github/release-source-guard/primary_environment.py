@@ -20,6 +20,7 @@ def build(root, base, support, log, *, package_wheels=False):
                          'RUN /opt/deps/bin/python -I -B /bootstrap/primary_package_wheels.py && rm -rf /bootstrap\n')
     (root / 'Dockerfile').write_text(
         'FROM ' + base_tag + '\n'
+        'RUN install -d -m 0755 /private && ln -s /work/owned/tmp /private/tmp\n'
         'COPY primary_entry.c primary_entry.py /opt/source-guard/\n'
         'COPY primary_entry_build.py /bootstrap/primary_entry_build.py\n'
         'RUN python -I /bootstrap/primary_entry_build.py && rm -rf /bootstrap\n'

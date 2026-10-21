@@ -989,3 +989,15 @@ same-case listener still holds its exact live listening FD and kernel cookie.
 The private socket path must retain its original inode/device, owner and mode
 0600. Missing, closed, replaced or foreign listeners cannot acquire a client
 plan; post-connect peer checks provide an additional boundary, not the first.
+
+The two original unsafe socket-lock fixtures remain unchanged, including the
+short /private/tmp spelling needed by macOS. The isolated primary image provides
+a root-owned immutable /private/tmp symlink to the already owned /work/owned/tmp;
+there is no additional writable mount or runtime redirect. A separate bind-only
+envelope checks the exact two source cases, original test code/globals/site,
+socket object and path locals, private temporary directory and owned lock target.
+The authenticated observer checks the actual unbound AF_UNIX stream FD, cookie,
+UID and birth before allowing only filesystem socket creation. It registers no
+listener, connection or payload rights. The original test then moves that real
+socket into the unsafe carrier and retains every outside-effect assertion.
+The alias shares the existing owned tmpfs, preserving the original same-filesystem rename into the lock carrier.

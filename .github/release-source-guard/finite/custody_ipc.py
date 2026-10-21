@@ -60,6 +60,13 @@ def authorize(event, args):
     """Called only by the inherited endpoint audit before Unix socket effects."""
     endpoint = sys.modules["endpoint"]
     guard = sys.modules["runtime_guard"]
+    if event == 'socket.bind' and str(guard._STATE.get('case', '')).startswith(
+            'tests/test_supervision_paths.py::test_static_carrier_refuses_without_outside_effects[socket-'):
+        path = Path(guard._STATE['guard']).with_name('fixture_unix.py')
+        pin = guard._STATE['direct_support']['files'].get(str(path))
+        if pin is not None and guard.checked_source(path, pin)['authorize'](
+                event, args, guard._STATE, endpoint, guard):
+            return
     selected = getattr(endpoint.LOCAL, "custody_effect", None)
     expected = (event, address())
     if (
