@@ -41,16 +41,22 @@ SOURCE_GITCONFIG = b'[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n'
 
 
 def source_git_setup(home, plan):
-    """No automatic Git helper launches in the disposable full-suite home.
+    """No automatic Git helper launches in the exact disposable source home.
 
     Original Git commands, repositories and assertions are unchanged. Explicit
     maintenance remains subject to the existing finite authority; this grants
     no additional native child or process-group permission.
     """
-    if plan.get('source_mode') != 'SOURCE':
+    from primary_policy import TEST_CLEANUP_CASES
+    source = plan.get('source_mode') == 'SOURCE'
+    cleanup = (plan.get('source_mode') == 'TEST-positive'
+               and plan.get('duty') == 'TEST-source-positive'
+               and plan.get('commands') == [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q',
+                                             *TEST_CLEANUP_CASES]])
+    if not source and not cleanup:
         return
-    if (plan.get('duty') != 'v0.4.7 source suite'
-            or plan.get('commands') != [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']]
+    if (source and (plan.get('duty') != 'v0.4.7 source suite'
+                   or plan.get('commands') != [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']])
             or home.is_symlink() or not home.is_dir() or home.resolve() != home):
         raise RuntimeError('source_git_setup_binding')
     target = home / '.gitconfig'

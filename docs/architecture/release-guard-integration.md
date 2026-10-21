@@ -666,3 +666,8 @@ An early source-free control failure forwards its already bounded private output
 to the existing encrypted coordinator log before required-witness checks run.
 Missing kernel controls still refuse the run; no witness or source certificate
 is synthesized and no raw body enters public metadata.
+
+Only the exact complete-cleanup TEST selection also receives FULL's existing
+disposable read-only Git configuration. This suppresses incidental automatic
+maintenance in the diagnostic's own home; other TEST selections, user homes,
+original Git commands and native launch permissions remain unchanged.

@@ -90,3 +90,21 @@ def test_setup_is_wired_to_the_real_primary_child_before_body_execution():
     controls = ast.parse((root / 'compartment_probe.py').read_bytes())
     assert sum(isinstance(n, ast.Constant) and n.value == '/guard/test_source_git_setup.py'
                for n in ast.walk(controls)) == 1
+
+
+def test_only_exact_complete_cleanup_test_receives_same_disposable_config(tmp_path):
+    from primary_policy import TEST_CLEANUP_CASES
+    selected = {'source_mode': 'TEST-positive', 'duty': 'TEST-source-positive',
+                'commands': [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *TEST_CLEANUP_CASES]]}
+    home = tmp_path / 'exact'
+    home.mkdir()
+    source_git_setup(home, selected)
+    assert (home / '.gitconfig').read_bytes() == SOURCE_GITCONFIG
+    for index, changed in enumerate((
+            {**selected, 'source_mode': 'TEST-poison'},
+            {**selected, 'duty': 'foreign'},
+            {**selected, 'commands': [selected['commands'][0][:-1]]})):
+        other = tmp_path / str(index)
+        other.mkdir()
+        source_git_setup(other, changed)
+        assert list(other.iterdir()) == []
