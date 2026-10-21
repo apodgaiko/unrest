@@ -340,99 +340,105 @@ def attach(guard):
         STATE["token"] = guard._STATE["token"]
         answer = request("ready")
         STATE["identity"] = answer["identity"]
-        # Source role policy intentionally filters FASTMCP_* environment names.
-        # Configure only the supported optional banner check, in every inherited
-        # process, after identity/READY and before any product body or payload.
-        environment = dict(os.environ)
-        saved_path = list(sys.path)
-        saved_profile = sys.getprofile()
-        saved_thread_profile = threading.getprofile()
-        diagnostic = guard._STATE.get("setup_mode") == "profile-timing"
-        stats = {"calls": 0, "observer_seconds": 0.0, "product_or_test_frames": 0}
+        setup_path = Path(guard._STATE['guard']).with_name('mock_backend_setup.py')
+        setup = guard.checked_source(setup_path, guard._STATE['direct_support']['files'][str(setup_path)])
+        inapplicable = setup['select'](guard, STATE)
+        if inapplicable is not None:
+            guard.append(inapplicable)
+        else:
+            # Source role policy intentionally filters FASTMCP_* environment names.
+            # Configure only the supported optional banner check, in every inherited
+            # process, after identity/READY and before any product body or payload.
+            environment = dict(os.environ)
+            saved_path = list(sys.path)
+            saved_profile = sys.getprofile()
+            saved_thread_profile = threading.getprofile()
+            diagnostic = guard._STATE.get("setup_mode") == "profile-timing"
+            stats = {"calls": 0, "observer_seconds": 0.0, "product_or_test_frames": 0}
 
-        def measured(frame, event, value):
+            def measured(frame, event, value):
+                started = time.perf_counter()
+                try:
+                    return saved_profile(frame, event, value)
+                finally:
+                    stats["calls"] += 1
+                    stats["observer_seconds"] += time.perf_counter() - started
+                    if frame.f_code.co_filename.startswith(
+                        guard._STATE["checkout"] + "/src/"
+                    ) or frame.f_code.co_filename.startswith(guard._STATE["checkout"] + "/tests/"):
+                        stats["product_or_test_frames"] += 1
+
+            STATE["checkout"] = guard._STATE["checkout"]
+            STATE["dependency_window"] = True
             started = time.perf_counter()
+            if diagnostic:
+                sys.setprofile(measured)
+                threading.setprofile(measured)
+            else:
+                # The observer measured 3.27M callbacks / 3.04s in a dependency-only
+                # window with zero product/test frames. Audit hooks, finite Popen
+                # admission and the no-source/pre-READY barriers stay active.
+                sys.setprofile(None)
+                threading.setprofile(None)
             try:
-                return saved_profile(frame, event, value)
-            finally:
-                stats["calls"] += 1
-                stats["observer_seconds"] += time.perf_counter() - started
-                if frame.f_code.co_filename.startswith(
-                    guard._STATE["checkout"] + "/src/"
-                ) or frame.f_code.co_filename.startswith(guard._STATE["checkout"] + "/tests/"):
-                    stats["product_or_test_frames"] += 1
+                mode = guard._STATE.get("setup_mode")
+                if mode == "dependency-source-negative":
+                    exec(
+                        compile(
+                            'raise AssertionError("uncontained source body")',
+                            guard._STATE["checkout"] + "/src/unrest_harness/server.py",
+                            "exec",
+                        ),
+                        {},
+                    )
+                if mode == "dependency-launch-negative":
+                    import subprocess
 
-        STATE["checkout"] = guard._STATE["checkout"]
-        STATE["dependency_window"] = True
-        started = time.perf_counter()
-        if diagnostic:
-            sys.setprofile(measured)
-            threading.setprofile(measured)
-        else:
-            # The observer measured 3.27M callbacks / 3.04s in a dependency-only
-            # window with zero product/test frames. Audit hooks, finite Popen
-            # admission and the no-source/pre-READY barriers stay active.
-            sys.setprofile(None)
-            threading.setprofile(None)
-        try:
-            mode = guard._STATE.get("setup_mode")
-            if mode == "dependency-source-negative":
-                exec(
-                    compile(
-                        'raise AssertionError("uncontained source body")',
-                        guard._STATE["checkout"] + "/src/unrest_harness/server.py",
-                        "exec",
-                    ),
-                    {},
+                    subprocess.Popen(["/usr/bin/true"])
+                sys.path.insert(
+                    0, "/opt/deps/lib/python3.13/site-packages"
                 )
-            if mode == "dependency-launch-negative":
-                import subprocess
+                import fastmcp
+                from fastmcp.utilities.version_check import check_for_newer_version
 
-                subprocess.Popen(["/usr/bin/true"])
-            sys.path.insert(
-                0, "/opt/deps/lib/python3.13/site-packages"
-            )
-            import fastmcp
-            from fastmcp.utilities.version_check import check_for_newer_version
-
-            fastmcp.settings.check_for_updates = "off"
-            assert check_for_newer_version() is None
-        finally:
-            sys.path[:] = saved_path
-            STATE["dependency_window"] = False
-            sys.setprofile(saved_profile)
-            threading.setprofile(saved_thread_profile)
-        if diagnostic:
+                fastmcp.settings.check_for_updates = "off"
+                assert check_for_newer_version() is None
+            finally:
+                sys.path[:] = saved_path
+                STATE["dependency_window"] = False
+                sys.setprofile(saved_profile)
+                threading.setprofile(saved_thread_profile)
+            if diagnostic:
+                guard.append(
+                    {
+                        "kind": "dependency_profile_timing",
+                        "wall_seconds": time.perf_counter() - started,
+                        **stats,
+                    }
+                )
+            else:
+                guard.append(
+                    {
+                        "kind": "bounded_dependency_window",
+                        "wall_seconds": time.perf_counter() - started,
+                        "profile_restored": sys.getprofile() is saved_profile,
+                        "thread_profile_restored": threading.getprofile() is saved_thread_profile,
+                        "source_execution_barrier": True,
+                        "finite_audit_and_constructor_enforcement": True,
+                    }
+                )
+            if dict(os.environ) != environment:
+                refuse("dependency_configuration_environment_drift")
             guard.append(
                 {
-                    "kind": "dependency_profile_timing",
-                    "wall_seconds": time.perf_counter() - started,
-                    **stats,
+                    "kind": "dependency_offline_configuration",
+                    "setting": "check_for_updates=off",
+                    "module": fastmcp.__file__,
+                    "module_sha256": digest(fastmcp.__file__),
+                    "environment_unchanged": True,
+                    "sys_path_restored": True,
                 }
             )
-        else:
-            guard.append(
-                {
-                    "kind": "bounded_dependency_window",
-                    "wall_seconds": time.perf_counter() - started,
-                    "profile_restored": sys.getprofile() is saved_profile,
-                    "thread_profile_restored": threading.getprofile() is saved_thread_profile,
-                    "source_execution_barrier": True,
-                    "finite_audit_and_constructor_enforcement": True,
-                }
-            )
-        if dict(os.environ) != environment:
-            refuse("dependency_configuration_environment_drift")
-        guard.append(
-            {
-                "kind": "dependency_offline_configuration",
-                "setting": "check_for_updates=off",
-                "module": fastmcp.__file__,
-                "module_sha256": digest(fastmcp.__file__),
-                "environment_unchanged": True,
-                "sys_path_restored": True,
-            }
-        )
         lifetime = Path(__file__).with_name("descriptor_lifetime.py")
         lifetime_pin = guard._STATE["direct_support"]["files"][str(lifetime)]
         release, pins = guard.checked_source(lifetime, lifetime_pin)["prepare"]()
