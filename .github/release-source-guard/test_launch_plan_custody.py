@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -104,7 +105,13 @@ def test_lifecycle_image_uses_child_cwd_for_relative_path(tmp_path, monkeypatch,
     target.write_text('#!/bin/sh\nexit 0\n')
     target.chmod(0o700)
     monkeypatch.chdir(parent)
-    assert Path(image('adapter', child, {'PATH': entry})) == target
+    # Synthetic controls deliberately mount /work noexec. A real access probe
+    # must respect that mount even when mode bits contain execute permission.
+    if getattr(os, 'ST_NOEXEC', 0) & os.statvfs(child).f_flag:
+        with pytest.raises(FileNotFoundError):
+            image('adapter', child, {'PATH': entry})
+    else:
+        assert Path(image('adapter', child, {'PATH': entry})) == target
     assert image('./' + str(Path(entry) / 'adapter'), child, {}) == str(child / entry / 'adapter')
 
 
@@ -115,7 +122,11 @@ def test_image_skips_directory_and_non_executable_without_host_fallback(tmp_path
     selected = tmp_path / 'selected/adapter'
     selected.write_bytes(b'fixed')
     selected.chmod(0o700)
-    assert image('adapter', tmp_path, {'PATH': 'blocked:selected'}) == str(selected)
+    if getattr(os, 'ST_NOEXEC', 0) & os.statvfs(tmp_path).f_flag:
+        with pytest.raises(FileNotFoundError):
+            image('adapter', tmp_path, {'PATH': 'blocked:selected'})
+    else:
+        assert image('adapter', tmp_path, {'PATH': 'blocked:selected'}) == str(selected)
     selected.chmod(0o600)
     with pytest.raises(FileNotFoundError):
         image('adapter', tmp_path, {'PATH': 'blocked:selected'})

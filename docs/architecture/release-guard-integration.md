@@ -957,3 +957,9 @@ existing dependency-verification override as well as rows and admit, and pins
 that override's original AST. It continues to forbid a constructor override.
 The finite native/grammar/LaunchPlan regression controls run inside the Linux
 compartment control suite as well as locally.
+
+The synthetic compartment retains its noexec work mount. Image-search controls
+there require refusal even for mode-0700 fixture files; they do not change the
+mount or replace the real access probe. Successful script/PATH execution is
+verified by the original source fixtures in the separately declared exec-mounted
+SOURCE compartment. Direct-path observation does not grant execution authority.
