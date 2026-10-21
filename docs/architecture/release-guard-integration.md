@@ -544,3 +544,21 @@ finite authority. Other capsule modes and all user/global homes are unchanged.
 An existing configuration or an inconsistent SOURCE plan refuses setup rather
 than overwriting data. Real Git controls verify the original empty commit, clean
 status and absence of an automatic child, before the source suite.
+
+Cleanup certification binds both original fixture families: the twelve recorded
+transport cases and fifteen repeated-cancellation/fault cases. The latter's
+separately created runner task must be the current task owned by the live frozen
+test frame. Role, fault, source/fixture bytes, exact scenario, owned workspace,
+launch plan argv and environment all remain required. The same existing local
+adapter class is reused; no provider, generic Python, Git or class-prefix route
+is added. Original assertions, process waits and deadlines remain unchanged.
+
+The observer rereads complete current journal bytes on every acquisition. It may
+reuse decoding only when those entire bytes are identical. The internal tick refresh
+borrows observer-private parsed values; public event consumers and each receipt
+policy decision receive fresh objects from another current read. Diagnostic
+records copy borrowed values before exposure. Size/mtime equality is never
+journal authority, and read/decode failures never fall back to an older snapshot.
+Append, prefix replacement, truncation, deletion and malformed-line behavior retain
+the previous reader semantics. This removes repeated decoding from the tick loop
+without pausing a test clock, increasing a deadline, or caching a policy verdict.

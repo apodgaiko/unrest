@@ -129,7 +129,7 @@ def source_controls() -> None:
          "/guard/test_clock_source_inputs.py", "/guard/test_source_failure_facts.py", "/guard/test_primary_native_route.py", "/guard/test_linux_primary_native_route.py", "/guard/test_native_uv_mode_refs.py", "/guard/test_raw_transport_refs.py", "/guard/test_source_raw_transport.py", "/guard/test_primary_install_binding.py", "/guard/test_primary_ready_snapshot.py",
          "/guard/test_dependency_closure.py", "/guard/test_profile_gate.py", "/guard/test_constructor_profile_gate.py", "/guard/test_linux_native_custody.py",
          "/guard/test_checkpoint_receipt.py", "/guard/test_checkpoint_lookup.py", "/guard/test_ci_commands.py",
-         "/guard/test_native_entry.py", "/guard/test_primary_pipe.py", "/guard/test_linux_supervisor.py", "/guard/test_pinned_policy.py", "/guard/test_source_derivations.py", '/guard/test_startup_phases.py', '/guard/test_fresh_tree.py', '/guard/test_source_transport.py', "/guard/test_linux_sockets.py", "/guard/test_linux_git.py", "/guard/test_linux_receipts.py"],
+         "/guard/test_native_entry.py", "/guard/test_primary_pipe.py", "/guard/test_linux_supervisor.py", "/guard/test_event_journal.py", "/guard/test_pinned_policy.py", "/guard/test_source_derivations.py", '/guard/test_startup_phases.py', '/guard/test_fresh_tree.py', '/guard/test_source_transport.py', "/guard/test_linux_sockets.py", "/guard/test_linux_git.py", "/guard/test_linux_receipts.py"],
         cwd="/work", check=False,
     )
     raise SystemExit(result.returncode)

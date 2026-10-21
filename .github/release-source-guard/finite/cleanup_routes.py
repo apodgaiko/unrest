@@ -1,5 +1,6 @@
 """Finite unchanged cleanup owner vectors and exact scenario-backed adapter."""
 
+import asyncio
 import hashlib
 import json
 import os
@@ -7,10 +8,56 @@ from pathlib import Path
 import sys
 
 CASE = "tests/test_acp_cleanup.py::test_recorded_transport_failures"
+FAULT_CASE = "tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation"
+PARAMETERS = {
+    'test_recorded_transport_failures': ('case', ('deep_json', 'array_id', 'object_id', 'success')),
+    'test_cleanup_faults_and_repeated_cancellation': ('fault', ('reader', 'client', 'progress', 'cancel', 'primary')),
+}
+
+
+def current_task():
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
+def task_frames():
+    try:
+        tasks = asyncio.all_tasks()
+    except RuntimeError:
+        return []
+    result = {}
+    for task in tasks:
+        coroutine, seen = task.get_coro(), set()
+        while coroutine is not None and id(coroutine) not in seen:
+            seen.add(id(coroutine))
+            frame = getattr(coroutine, 'cr_frame', None) or getattr(coroutine, 'gi_frame', None)
+            if frame is not None:
+                result[id(frame)] = frame
+            coroutine = getattr(coroutine, 'cr_await', None) or getattr(coroutine, 'gi_yieldfrom', None)
+    return list(result.values())
+
+
+def scenario_value(owner, parameter, role, temporary):
+    if owner not in PARAMETERS or role not in ('work', 'validate', 'terminal_reviewer'):
+        raise ValueError('cleanup_parameter_drift')
+    if parameter not in PARAMETERS[owner][1]:
+        raise ValueError('cleanup_parameter_drift')
+    if owner == 'test_cleanup_faults_and_repeated_cancellation':
+        return {'role': role, 'no_handoff': True}
+    raw = (None if parameter == 'success' else '[' * 10000 + '0' + ']' * 10000
+           if parameter == 'deep_json' else json.dumps({
+               'jsonrpc': '2.0', 'id': [] if parameter == 'array_id' else {}, 'result': {}}))
+    return {'raw': raw, 'role': role, 'receipt': str(temporary / 'receipt')}
+
 
 
 def admit(argv, cwd, env, state, append, refuse):
-    if not state.get("case", "").startswith(CASE + "["):
+    selected_case = state.get('case') or ''
+    owner = next((name for name in PARAMETERS
+                  if selected_case.startswith('tests/test_acp_cleanup.py::' + name + '[')), None)
+    if owner is None:
         return None
     root = Path(state["checkout"])
     source = root / "tests/test_acp_cleanup.py"
@@ -23,6 +70,8 @@ def admit(argv, cwd, env, state, append, refuse):
     namespace = {}
     exec(compile(fallback.read_bytes(), str(fallback), "exec"), namespace)
     frames = namespace["active_frames"]()
+    if owner == 'test_cleanup_faults_and_repeated_cancellation':
+        frames = list({id(f): f for f in [*frames, *task_frames()]}.values())
     try:
         server = root / "src/unrest_harness/server.py"
         completion = next(
@@ -33,7 +82,8 @@ def admit(argv, cwd, env, state, append, refuse):
             ),
             None,
         )
-        if completion is not None and state["class"] == "source-owned-role:worker":
+        if (owner == "test_recorded_transport_failures" and completion is not None
+                and state["class"] == "source-owned-role:worker"):
             function = completion.f_globals["_completion_context"]
             module = sys.modules.get(function.__module__)
             pin = state["product_pins"]["src/unrest_harness/server.py"]
@@ -72,7 +122,7 @@ def admit(argv, cwd, env, state, append, refuse):
                 f
                 for f in frames
                 if f.f_code.co_filename == str(source)
-                and f.f_code.co_name == "test_recorded_transport_failures"
+                and f.f_code.co_name == owner
             ),
             None,
         )
@@ -92,16 +142,22 @@ def admit(argv, cwd, env, state, append, refuse):
         ):
             refuse("cleanup_owner_drift")
         local = frame.f_locals
-        role, case = local["role"], local["case"]
-        if role not in ("work", "validate", "terminal_reviewer") or case not in (
-            "deep_json",
-            "array_id",
-            "object_id",
-            "success",
-        ):
-            refuse("cleanup_parameter_drift")
-        temporary = local["tmp_path"]
-        ws = local["ws"]
+        role, case = local['role'], local[PARAMETERS[owner][0]]
+        temporary = local['tmp_path']
+        try:
+            expected_scenario = scenario_value(owner, case, role, temporary)
+        except ValueError:
+            refuse('cleanup_parameter_drift')
+            return None
+        if selected_case != 'tests/test_acp_cleanup.py::' + owner + '[' + case + '-' + role + ']':
+            refuse('cleanup_case_binding')
+        if owner == 'test_cleanup_faults_and_repeated_cancellation':
+            task = current_task()
+            if task is None or local.get('task') is not task:
+                refuse('cleanup_task_owner_drift')
+            ws = temporary / 'workspace'
+        else:
+            ws = local['ws']
         if (
             not temporary.resolve().is_relative_to(Path(state["owned_root"]))
             or not ws.resolve().is_relative_to(Path(state["owned_root"]))
@@ -109,6 +165,8 @@ def admit(argv, cwd, env, state, append, refuse):
         ):
             refuse("cleanup_root_drift")
         if argv[0] in ("git", "/usr/bin/git"):
+            if owner != 'test_recorded_transport_failures':
+                return None
             expected = {
                 123: ["git", "init", "-q", str(ws)],
                 124: [
@@ -142,22 +200,8 @@ def admit(argv, cwd, env, state, append, refuse):
             ):
                 refuse("cleanup_fixture_drift")
             scenario = temporary / "scenario.json"
-            raw = (
-                None
-                if case == "success"
-                else (
-                    "[" * 10000 + "0" + "]" * 10000
-                    if case == "deep_json"
-                    else json.dumps(
-                        {"jsonrpc": "2.0", "id": [] if case == "array_id" else {}, "result": {}}
-                    )
-                )
-            )
-            if json.loads(scenario.read_bytes()) != {
-                "raw": raw,
-                "role": role,
-                "receipt": str(temporary / "receipt"),
-            }:
+            if (scenario.resolve() != scenario or not scenario.is_file()
+                    or json.loads(scenario.read_bytes()) != expected_scenario):
                 refuse("cleanup_scenario_drift")
             launch = next(
                 (
@@ -186,7 +230,7 @@ def admit(argv, cwd, env, state, append, refuse):
             "path": str(source),
             "line": line,
             "sha256": pin,
-            "owner": "test_recorded_transport_failures",
+            "owner": owner,
         }
         append(
             {
