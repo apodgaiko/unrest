@@ -39,7 +39,10 @@ Missing, corrupt or wrongly typed objects fail locally without repair.
 
 Metadata permits HEAD, config, index, description, COMMIT_EDITMSG, ORIG_HEAD,
 info/exclude, ordinary heads/tags, local branch logs, inactive `hooks/*.sample`,
-loose object directories, and empty objects/info and objects/pack directories.
+loose object directories, and empty branches, objects/info and objects/pack directories.
+The legacy template branches directory is inert only while empty; files, nested
+directories and links beneath it still refuse before Git. No branch alias or
+remote lookup is interpreted.
 Other metadata refuses, including packed objects/refs, shallow history,
 replacement refs, grafts, alternates, promisor files, linked-worktree indirection,
 active hooks, extensions and nested repositories. Metadata links/special files
@@ -104,5 +107,5 @@ persist candidate/correction history or prove crash/rotation recovery. The
 integration and recovery; ordinary `return_workspace` still requires HEAD at
 the lease base. Neither module's controlled tests prove genuine provider acceptance.
 
-Run `uv run pytest -q tests/test_experimental_candidate.py` for disposable
+Run `uv run pytest -q tests/test_experimental_candidate.py tests/test_experimental_candidate_templates.py` for disposable
 committed-fixture success/refusal and independent byte/digest evidence.

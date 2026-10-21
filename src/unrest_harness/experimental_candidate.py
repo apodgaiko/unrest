@@ -246,7 +246,7 @@ class _Observation:
             self.tick()
             parts = name.split("/")
             if stat.S_ISDIR(info.st_mode):
-                allowed = name in {"objects", "objects/info", "objects/pack", "refs",
+                allowed = name in {"branches", "objects", "objects/info", "objects/pack", "refs",
                                    "refs/heads", "refs/tags", "logs", "logs/refs",
                                    "logs/refs/heads", "hooks", "info"}
                 allowed |= bool(re.fullmatch(r"objects/[0-9a-f]{2}", name))
