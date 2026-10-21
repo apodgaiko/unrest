@@ -830,3 +830,18 @@ receipt deadline changes. Empty wait spins merely avoid repeated full census
 work while there is no decision to make. Controller timestamps stay actual.
 The original one-second session-overlap assertion remains unchanged; direct
 mock-only local diagnostics do not certify the guarded source suite.
+
+The sealed CPython 3.13 native profile gate promotes only its own already
+installed thread-local observer from the Python callable trampoline to the
+interpreter's C profile hook. Its predicate, selected frames, event names,
+values and original callback are unchanged. `sys.getprofile()` and thread
+inheritance keep the same Gate object; restoring another observer or None
+uses the ordinary interpreter API. Calling a Gate directly cannot replace
+an unrelated observer. Callback errors propagate unchanged.
+
+The optimization avoids a Python argument tuple and callable dispatch for
+ignored dependency events. It does not turn profiling off, skip selected
+events, change any current-byte verification, admit a child or alter a timer.
+The original differential profile and constructor-return controls remain
+required, with native-mode, exception, unrelated-observer and thread identity
+controls alongside them. Compiler/runtime/source/module pins remain exact.

@@ -12,13 +12,27 @@ typedef struct {
     PyObject *state;
     PyObject *sources;
     PyObject *runner_suffix;
+    PyObject *events[7];
+    PyObject *keys[6];
 } Gate;
+
+enum { OPERATIONS, OPERATION_SOURCES, COMPOSITION, SNAPSHOT, GUARD, CODES };
+static const char *key_names[6] = {
+    "operations", "operation_profile_sources", "isolated_composition",
+    "primary_snapshot_observer", "guard", "codes"
+};
+static const char *event_names[7] = {
+    [PyTrace_CALL] = "call", [PyTrace_RETURN] = "return", [PyTrace_C_CALL] = "c_call",
+    [PyTrace_C_EXCEPTION] = "c_exception", [PyTrace_C_RETURN] = "c_return"
+};
 
 static int gate_traverse(Gate *self, visitproc visit, void *arg) {
     Py_VISIT(self->callback);
     Py_VISIT(self->state);
     Py_VISIT(self->sources);
     Py_VISIT(self->runner_suffix);
+    for (int i = 0; i < 7; i++) Py_VISIT(self->events[i]);
+    for (int i = 0; i < 6; i++) Py_VISIT(self->keys[i]);
     return 0;
 }
 
@@ -27,6 +41,8 @@ static int gate_clear(Gate *self) {
     Py_CLEAR(self->state);
     Py_CLEAR(self->sources);
     Py_CLEAR(self->runner_suffix);
+    for (int i = 0; i < 7; i++) Py_CLEAR(self->events[i]);
+    for (int i = 0; i < 6; i++) Py_CLEAR(self->keys[i]);
     return 0;
 }
 
@@ -34,6 +50,74 @@ static void gate_dealloc(Gate *self) {
     PyObject_GC_UnTrack(self);
     gate_clear(self);
     PyObject_GC_Del(self);
+}
+
+static int gate_profile(PyObject *object, PyFrameObject *frame, int event, PyObject *value);
+
+static int gate_selected(Gate *self, PyFrameObject *frame, PyObject *event) {
+    PyObject *operations = PyDict_GetItem(self->state, self->keys[OPERATIONS]);
+    PyObject *operation_sources = PyDict_GetItem(self->state, self->keys[OPERATION_SOURCES]);
+    if (operations && operations != Py_None && (!operation_sources || !PyFrozenSet_Check(operation_sources)))
+        return 1;
+    PyCodeObject *code = PyFrame_GetCode(frame);
+    if (!code) return -1;
+    int selected = PySet_Contains(self->sources, code->co_filename);
+    if (selected == 0 && PyUnicode_CompareWithASCIIString(code->co_name, "call_and_report") == 0) {
+        selected = PyUnicode_Tailmatch(code->co_filename, self->runner_suffix, 0, PY_SSIZE_T_MAX, 1);
+    }
+    if (selected == 0) {
+        PyObject *composition = PyDict_GetItem(self->state, self->keys[COMPOSITION]);
+        if (!composition) {
+            Py_DECREF(code);
+            return 1;
+        }
+        PyObject *codes = PyObject_GetAttr(composition, self->keys[CODES]);
+        if (!codes) {
+            Py_DECREF(code);
+            return -1;
+        }
+        if (codes != Py_None) selected = PyObject_RichCompareBool((PyObject *)code, codes, Py_EQ);
+        Py_DECREF(codes);
+    }
+    /* The source observer joins endpoint authentication at the existing guarded
+     * constructor return. Forward that one event even though guard internals
+     * are outside the ordinary source-file predicate. This observes no body
+     * early and grants no execution, endpoint, or deadline authority. */
+    if (selected == 0 && PyUnicode_CompareWithASCIIString(event, "return") == 0
+            && PyUnicode_CompareWithASCIIString(code->co_name, "initialize_inner") == 0) {
+        PyObject *observer = PyDict_GetItem(self->state, self->keys[SNAPSHOT]);
+        PyObject *guard = PyDict_GetItem(self->state, self->keys[GUARD]);
+        if (observer && PyCallable_Check(observer) && guard && PyUnicode_Check(guard))
+            selected = PyObject_RichCompareBool(code->co_filename, guard, Py_EQ);
+    }
+    Py_DECREF(code);
+    if (selected < 0 || PyErr_Occurred()) return -1;
+    return selected;
+}
+
+static PyObject *gate_forward(Gate *self, PyFrameObject *frame, PyObject *event, PyObject *value) {
+    int selected = gate_selected(self, frame, event);
+    if (selected < 0) return NULL;
+    if (!selected) Py_RETURN_NONE;
+    return PyObject_CallFunctionObjArgs(self->callback, (PyObject *)frame, event, value, NULL);
+}
+
+static int gate_profile(PyObject *object, PyFrameObject *frame, int what, PyObject *value) {
+    /* PyEval's native hook keeps this exact Gate as c_profileobj, so
+     * sys.getprofile(), restoration and thread inheritance keep their identity.
+     * Ignored events no longer allocate a Python argument tuple or call Gate.
+     * The unchanged predicate and selected-event callback still see every event. */
+    Gate *self = (Gate *)object;
+    if (what < 0 || what >= 7 || !self->events[what]) {
+        PyErr_SetString(PyExc_RuntimeError, "unsupported native profile event");
+        return -1;
+    }
+    PyObject *event = Py_NewRef(self->events[what]);
+    PyObject *result = gate_forward((Gate *)object, frame, event, value ? value : Py_None);
+    Py_DECREF(event);
+    if (!result) return -1;
+    Py_DECREF(result);
+    return 0;
 }
 
 static PyObject *gate_call(PyObject *object, PyObject *args, PyObject *kwargs) {
@@ -47,45 +131,20 @@ static PyObject *gate_call(PyObject *object, PyObject *args, PyObject *kwargs) {
         PyErr_SetString(PyExc_TypeError, "profile frame and event required");
         return NULL;
     }
-    PyObject *operations = PyDict_GetItemString(self->state, "operations");
-    PyObject *operation_sources = PyDict_GetItemString(self->state, "operation_profile_sources");
-    if (operations && operations != Py_None && (!operation_sources || !PyFrozenSet_Check(operation_sources)))
-        return PyObject_CallObject(self->callback, args);
-    PyCodeObject *code = PyFrame_GetCode((PyFrameObject *)frame);
-    if (!code) return NULL;
-    int selected = PySet_Contains(self->sources, code->co_filename);
-    if (selected == 0 && PyUnicode_CompareWithASCIIString(code->co_name, "call_and_report") == 0) {
-        selected = PyUnicode_Tailmatch(code->co_filename, self->runner_suffix, 0, PY_SSIZE_T_MAX, 1);
+    PyThreadState *thread = PyThreadState_Get();
+    /* Only promote a Gate actually installed by sys.setprofile on this thread.
+     * A direct call cannot install or replace a different profile observer. */
+    if (thread->c_profileobj == object && thread->c_profilefunc != gate_profile) {
+        PyEval_SetProfile(gate_profile, object);
+        if (PyErr_Occurred()) return NULL;
     }
-    if (selected == 0) {
-        PyObject *composition = PyDict_GetItemString(self->state, "isolated_composition");
-        if (!composition) {
-            Py_DECREF(code);
-            return PyObject_CallObject(self->callback, args);
-        }
-        PyObject *codes = PyObject_GetAttrString(composition, "codes");
-        if (!codes) {
-            Py_DECREF(code);
-            return NULL;
-        }
-        if (codes != Py_None) selected = PyObject_RichCompareBool((PyObject *)code, codes, Py_EQ);
-        Py_DECREF(codes);
-    }
-    /* The source observer joins endpoint authentication at the existing guarded
-     * constructor return. Forward that one event even though guard internals
-     * are outside the ordinary source-file predicate. This observes no body
-     * early and grants no execution, endpoint, or deadline authority. */
-    if (selected == 0 && PyUnicode_CompareWithASCIIString(event, "return") == 0
-            && PyUnicode_CompareWithASCIIString(code->co_name, "initialize_inner") == 0) {
-        PyObject *observer = PyDict_GetItemString(self->state, "primary_snapshot_observer");
-        PyObject *guard = PyDict_GetItemString(self->state, "guard");
-        if (observer && PyCallable_Check(observer) && guard && PyUnicode_Check(guard))
-            selected = PyObject_RichCompareBool(code->co_filename, guard, Py_EQ);
-    }
-    Py_DECREF(code);
-    if (selected < 0 || PyErr_Occurred()) return NULL;
-    if (!selected) Py_RETURN_NONE;
-    return PyObject_CallObject(self->callback, args);
+    return gate_forward(self, (PyFrameObject *)frame, event, value);
+}
+
+static PyObject *uses_native_profile(PyObject *module, PyObject *object) {
+    (void)module;
+    PyThreadState *thread = PyThreadState_Get();
+    return PyBool_FromLong(thread->c_profilefunc == gate_profile && thread->c_profileobj == object);
 }
 
 static PyTypeObject GateType = {
@@ -109,6 +168,8 @@ static PyObject *make_gate(PyObject *module, PyObject *args) {
     }
     Gate *gate = PyObject_GC_New(Gate, &GateType);
     if (!gate) return NULL;
+    for (int i = 0; i < 7; i++) gate->events[i] = NULL;
+    for (int i = 0; i < 6; i++) gate->keys[i] = NULL;
     gate->callback = Py_NewRef(callback);
     gate->state = Py_NewRef(state);
     gate->sources = Py_NewRef(sources);
@@ -117,12 +178,23 @@ static PyObject *make_gate(PyObject *module, PyObject *args) {
         Py_DECREF(gate);
         return NULL;
     }
+    for (int i = 0; i < 7; i++) {
+        if (event_names[i]) {
+            gate->events[i] = PyUnicode_InternFromString(event_names[i]);
+            if (!gate->events[i]) { Py_DECREF(gate); return NULL; }
+        }
+    }
+    for (int i = 0; i < 6; i++) {
+        gate->keys[i] = PyUnicode_InternFromString(key_names[i]);
+        if (!gate->keys[i]) { Py_DECREF(gate); return NULL; }
+    }
     PyObject_GC_Track(gate);
     return (PyObject *)gate;
 }
 
 static PyMethodDef methods[] = {
     {"make", make_gate, METH_VARARGS, "Forward selected source events and the bound guard constructor return."},
+    {"uses_native_profile", uses_native_profile, METH_O, "Whether this Gate is the current thread's native profile observer."},
     {NULL, NULL, 0, NULL}
 };
 static struct PyModuleDef definition = {
