@@ -284,6 +284,11 @@ def observer() -> None:
     actual_pid, raw = os.waitpid(pid, 0)
     Path("/records/source-output.log").write_bytes(log)
     assert actual_pid == pid
+    if os.waitstatus_to_exitcode(raw) != 0:
+        # Docker stderr is already the host's private encrypted coordinator log.
+        # Preserve an early control error even when required witnesses are absent.
+        sys.stderr.buffer.write(b'\n[retained original control failure]\n' + bytes(log))
+        sys.stderr.buffer.flush()
     write(Path("/records/observer.json"), {
         "synthetic_only": True, "source_checkpoint_ready": False,
         "selected_carrier": None, "abi": abi,
@@ -306,6 +311,9 @@ def observer() -> None:
     for name in sorted(controls):
         control = Path('/work') / name
         if not control.is_file() or control.is_symlink():
+            if os.waitstatus_to_exitcode(raw) == 0:
+                sys.stderr.buffer.write(b'\n[retained missing-witness control output]\n' + bytes(log))
+                sys.stderr.buffer.flush()
             raise RuntimeError('required kernel control evidence missing')
         body = control.read_bytes()
         if len(body) > 131072:

@@ -661,3 +661,8 @@ owned cwd, runtime and registration identity; exec bytes stay empty and no
 command or provider permission follows. Ten-second passive task snapshots for
 the three adapter cleanup families do not change their original 15/20-second
 assertions or failure types.
+
+An early source-free control failure forwards its already bounded private output
+to the existing encrypted coordinator log before required-witness checks run.
+Missing kernel controls still refuse the run; no witness or source certificate
+is synthesized and no raw body enters public metadata.
