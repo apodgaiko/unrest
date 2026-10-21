@@ -94,6 +94,7 @@ def python_environment(environment, registration, flags, *, lease_context=None):
 def exact_terminal_environment(environment, registration, flags, context):
     """Bind locale coercion to the actual admitted event and consumed exec."""
     from primary_policy import PYTHON
+    from pathlib import PurePosixPath
     binding = {'path': '/source/tests/test_capability_policy.py', 'line': 549,
                'sha256': 'ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'}
     if (registration.get('kind') != 'admitted'
@@ -107,9 +108,12 @@ def exact_terminal_environment(environment, registration, flags, context):
         return False
     selected, manifest, vector = context['selected'], context['manifest'], context['vector']
     runtime = manifest['runtime']
+    directory = PurePosixPath(context['cwd'])
     return (manifest['checkout'] == '/source' and manifest['owned_root'] == '/work/owned'
             and runtime['realpath'] == PYTHON and len(vector) == 3 and vector[1] == '-c'
-            and vector[0] in runtime['paths'] and context['cwd'] == selected['cwd'] == '/source'
+            and vector[0] in runtime['paths'] and context['cwd'] == selected['cwd'] == str(directory)
+            and directory.is_relative_to('/work/owned') and directory.name == 'workspace'
+            and '..' not in directory.parts
             and selected['registration'] is registration
             and selected['owner_pid'] == registration['owner_pid'] == context['parent']
             and selected['token'] == registration['token']

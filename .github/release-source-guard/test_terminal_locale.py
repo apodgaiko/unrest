@@ -36,11 +36,11 @@ def fixture():
                     'token': 'a' * 32, 'case': 'original-frozen-case',
                     'argv_sha256': sha(json.dumps([vector[0], *command['argv']]).encode())}
     selected = {'registration': registration, 'owner_pid': 20, 'parent_pid': 8,
-                'token': registration['token'], 'case': registration['case'], 'cwd': '/source',
+                'token': registration['token'], 'case': registration['case'], 'cwd': '/work/owned/tmp/test-redaction/workspace',
                 'transformed_argv_sha256': sha(json.dumps(vector).encode()),
                 'bootstrap_sha256': sha(vector[2].encode()),
                 'environment_sha256': sha(json.dumps(environment, sort_keys=True).encode())}
-    context = {'selected': selected, 'parent': 20, 'cwd': '/source', 'vector': vector,
+    context = {'selected': selected, 'parent': 20, 'cwd': selected['cwd'], 'vector': vector,
                'manifest': {'checkout': '/source', 'owned_root': '/work/owned',
                             'runtime': {'realpath': PYTHON, 'paths': [vector[0]]},
                             'product_pins': {'tests/test_capability_policy.py':
@@ -120,3 +120,58 @@ def test_registry_shape_and_absent_context_are_not_profile_authority():
     assert inputs.python_environment(environment, registration, [0, 0, 0]) == environment
     command = next(row for row in COMMANDS if row['class'] == registration['class'])
     assert not inputs.exact_terminal_environment(environment, command, [0, 0, 0], None)
+
+
+def test_real_unchanged_profile_producer_consumes_the_live_frame(tmp_path, monkeypatch):
+    import pathlib
+    from types import ModuleType, SimpleNamespace
+    original_path = Path(__file__).with_name('primary_authority.py')
+    body = original_path.read_bytes()
+    assert hashlib.sha256(body).hexdigest() == '8660867109287601279c2014157ce3cd704d9e0afb96334a188447a892c87f4c'
+    module = ModuleType('primary_authority')
+    module.__file__ = '/guard/primary_authority.py'
+    # The profile method does not execute producer startup or package queries.
+    # Keep their Linux-only import-time filesystem setup outside this control.
+    producer = ModuleType('producer_inputs')
+    producer.SOURCE_UV_ELF_SHA256 = '0' * 64
+    queries = ModuleType('producer_profile')
+    queries.query_package = lambda *a: None
+    with monkeypatch.context() as patch:
+        patch.setitem(sys.modules, 'producer_inputs', producer)
+        patch.setitem(sys.modules, 'producer_profile', queries)
+        exec(compile(body, module.__file__, 'exec', dont_inherit=True), vars(module))
+    registration, environment, context = fixture()
+    owner = module.Authority.__new__(module.Authority)
+    owner.source = SimpleNamespace(
+        bound={170: context['selected']}, manifest=context['manifest'], path='manifest', pin='pin',
+        supervisor=SimpleNamespace(events=lambda: []), exec_descriptors=lambda *a: {})
+    owner.plan = {'source_mode': 'SOURCE', 'source_budget': {}}
+    owner.records, owner.contexts = [], {}
+    module.identity = lambda pid: {'start_ticks': 101, 'boot_id': 'boot'}
+    module.digest = lambda path: '0' * 64
+    module.Path = lambda path: tmp_path
+    concrete = type(Path())
+    class SourcePath(concrete):
+        def read_bytes(self):
+            if str(self) == module.__file__:
+                return body
+            return super().read_bytes()
+    # Only filesystem adaptation is synthetic. The protected function, live
+    # frame/code/globals, object type, registration identity and mapper are real.
+    with monkeypatch.context() as patch:
+        patch.setitem(sys.modules, 'primary_authority', module)
+        patch.setattr(pathlib, 'Path', SourcePath)
+        assert owner.profile(170, context['parent'], context['vector'], environment,
+                             context['cwd'], 'cpython.run_command', 'bootstrap\n',
+                             [0, 0, 0], 'source-bootstrap') is True
+    profile = json.loads((tmp_path / '170.json').read_bytes())
+    assert profile['environment'] == environment
+    assert profile['python_environment'] == {**environment, 'LC_CTYPE': 'C.UTF-8'}
+
+
+@pytest.mark.parametrize('cwd', ['/source', '/foreign/workspace', '/work/owned',
+                                 '/work/owned/x/../workspace', '/work/owned/x/not-workspace'])
+def test_no_foreign_or_noncanonical_terminal_workspace_is_normalized(cwd):
+    registration, environment, context = fixture()
+    context['cwd'] = context['selected']['cwd'] = cwd
+    assert not inputs.exact_terminal_environment(environment, registration, [0, 0, 0], context)

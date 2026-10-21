@@ -524,7 +524,7 @@ selection, or review decision changes.
 Terminal locale normalization consumes the actual admitted event, rather than a
 registry declaration. It joins the original synthetic two-key environment to the
 same consumed token, parent, transformed argv, bootstrap, runtime, source pin and
-checkout before describing stock CPython's post-init `LC_CTYPE` addition. Exec
+original canonical workspace under the owned temporary root before describing stock CPython's post-init `LC_CTYPE` addition. Exec
 still receives the exact original environment. Public Git metadata remains
 covered by source custody; no extra raw archive member is emitted and the strict
 evidence consumer continues to reject unknown members. Earlier invalid archives
@@ -535,3 +535,12 @@ forwards the original frame, event and result; other guard internals keep their
 existing predicate. The observer still authenticates the frozen constructor and
 nine-case ownership before using the event. Compiled predicate controls run in
 the isolated control image before the original source suite.
+
+Full SOURCE setup writes a fresh, read-only `.gitconfig` only in its disposable
+home. `maintenance.auto=false` and `gc.auto=0` keep original Git commands from
+spawning incidental automatic workers. No original command, repository commit,
+test parameter, or assertion changes; explicit maintenance retains its existing
+finite authority. Other capsule modes and all user/global homes are unchanged.
+An existing configuration or an inconsistent SOURCE plan refuses setup rather
+than overwriting data. Real Git controls verify the original empty commit, clean
+status and absence of an automatic child, before the source suite.

@@ -37,6 +37,33 @@ def write(path, value):
     return hashlib.sha256(body).hexdigest()
 
 
+SOURCE_GITCONFIG = b'[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n'
+
+
+def source_git_setup(home, plan):
+    """No automatic Git helper launches in the disposable full-suite home.
+
+    Original Git commands, repositories and assertions are unchanged. Explicit
+    maintenance remains subject to the existing finite authority; this grants
+    no additional native child or process-group permission.
+    """
+    if plan.get('source_mode') != 'SOURCE':
+        return
+    if (plan.get('duty') != 'v0.4.7 source suite'
+            or plan.get('commands') != [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']]
+            or home.is_symlink() or not home.is_dir() or home.resolve() != home):
+        raise RuntimeError('source_git_setup_binding')
+    target = home / '.gitconfig'
+    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400)
+    try:
+        with os.fdopen(descriptor, 'wb', closefd=False) as stream:
+            stream.write(SOURCE_GITCONFIG)
+            stream.flush()
+            os.fsync(stream.fileno())
+    finally:
+        os.close(descriptor)
+
+
 def source_child_setup(*, primary=False):
     if os.getuid() != 20000 or CACHE.exists():
         raise RuntimeError('fresh unprivileged producer setup required')
@@ -46,6 +73,7 @@ def source_child_setup(*, primary=False):
     controls['candidate_write_errno'] = controls['denials']['write']
     Path('/work/producer-setup-controls.json').write_text(json.dumps(controls, sort_keys=True))
     if primary:
+        source_git_setup(Path('/work/home'), json.loads(Path('/inputs/plan.json').read_bytes()))
         return
     seed = Path('/opt/source-bootstrap/cache')
     CACHE.mkdir(mode=0o700)
