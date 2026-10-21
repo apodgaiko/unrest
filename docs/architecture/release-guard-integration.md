@@ -792,3 +792,12 @@ bytes and kernel cwd before admitting this exact absolute native leaf. Other
 absolute images and posix_spawn calls remain refused. This is fixture custody,
 not native provider acceptance; all original format-preservation assertions
 and review restrictions remain in force.
+
+The dependency specialization still inherits every original authority method.
+Its selected custody mixin delegates resolution to the byte-identical original
+method first. Existing acceptance, non-selection and exceptions return unchanged;
+only an explicit false result can enter the exact sleep-leaf join above. The
+former auxiliary method-object identity assertion is now a delegation-order
+contract for this mixin, with both selected authority classes, every original
+return disposition and exception propagation checked. Unknown leaves still
+return false; there is no generic native or absolute-path fallback.

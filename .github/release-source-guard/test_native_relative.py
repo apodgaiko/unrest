@@ -130,3 +130,36 @@ def test_exact_test_selection_never_certifies_full():
             plan(changed, text, source)
     with pytest.raises(RuntimeError):
         make_test_plan((COMMAND + ' ' + TEST_FORMAT_CASES[0]).encode(), text, 'TEST-positive')
+
+
+@pytest.mark.parametrize('selected_class', [owned.SourceAuthority, owned.DependencySourceAuthority])
+@pytest.mark.parametrize('original_result', [None, True, False, 'source-bootstrap'])
+def test_native_adapter_calls_original_first_and_only_after_explicit_nonacceptance(monkeypatch, selected_class, original_result):
+    authority = object.__new__(selected_class)
+    calls = []
+    def original(*args):
+        calls.append(('original', args))
+        return original_result
+    def fallback(*args):
+        calls.append(('fallback', args))
+        return False
+    monkeypatch.setattr(owned.OriginalSourceAuthority, 'resolve', original)
+    monkeypatch.setattr(custody, 'resolve', fallback)
+    result = authority.resolve('trace', 42, '/bin/sleep', native.VECTOR, {}, '/source')
+    assert [kind for kind, _ in calls] == (['original', 'fallback'] if original_result is False else ['original'])
+    assert result is original_result
+    assert all(args == (authority, 'trace', 42, '/bin/sleep', native.VECTOR, {}, '/source') for _, args in calls)
+
+
+def test_original_resolver_exception_cannot_reach_native_fallback(monkeypatch):
+    authority = object.__new__(owned.DependencySourceAuthority)
+    cause = RuntimeError('original custody refused')
+    def original(*args):
+        raise cause
+    def fallback(*args):
+        pytest.fail('original refusal was intercepted')
+    monkeypatch.setattr(owned.OriginalSourceAuthority, 'resolve', original)
+    monkeypatch.setattr(custody, 'resolve', fallback)
+    with pytest.raises(RuntimeError) as caught:
+        authority.resolve('trace', 42, '/bin/sleep', native.VECTOR, {}, '/source')
+    assert caught.value is cause
