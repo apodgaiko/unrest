@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import json
+import math
 from pathlib import Path
 
 TIMED = frozenset({'admitted', 'actual_launch_binding', 'ready', 'source_entry',
@@ -22,6 +23,9 @@ def descriptor(row):
         enabled = kind == 'registered' and bool(row.get('python', True))
         pid = row['pid'] if enabled else None
         hash(pid)
+        values = (kind, pid, *(marker or ()))
+        if any(type(value) is float and not math.isfinite(value) for value in values):
+            return None
         return kind, marker, pid, enabled
     except (KeyError, TypeError):
         # Let the complete original loop establish error order and side effects.
@@ -30,7 +34,8 @@ def descriptor(row):
 
 class JournalSnapshot(Sequence):
     """One current acquisition; mutable JSON values never cross snapshots."""
-    def __init__(self, chunks):
+    def __init__(self, chunks, index=None):
+        self.index = index if index is not None else CensusIndex()
         self.chunks = chunks
         self.count = sum(len(chunk[1]) for chunk in chunks)
         self.parsed = {}
@@ -76,12 +81,31 @@ class JournalSnapshot(Sequence):
 
     def census(self, registered, timed):
         """Keep every effectful original refresh row and its lifecycle witnesses."""
+        selected = self.index.select(self.chunks, registered, timed)
+        return self.materialize() if selected is None else [self[index] for index in selected]
+
+
+class CensusIndex:
+    """Immutable no-effect indices; original refresh still makes every decision."""
+    def __init__(self):
+        self.key = None
+        self.selected = None
+
+    def select(self, chunks, registered, timed):
+        key = (chunks, frozenset(registered), frozenset(timed))
+        if self.key != key:
+            self.selected = self.build(chunks, registered, timed)
+            self.key = key
+        return self.selected
+
+    @staticmethod
+    def build(chunks, registered, timed):
         selected, lifecycles, pending = [], [], False
         index = 0
-        for chunk in self.chunks:
+        for chunk in chunks:
             for item in chunk[3]:
                 if item is None:
-                    return self.materialize()
+                    return None
                 kind, marker, pid, enabled = item
                 unresolved = enabled and pid not in registered
                 if kind == 'forbidden' or unresolved or marker is not None and marker not in timed:
@@ -93,12 +117,13 @@ class JournalSnapshot(Sequence):
                 index += 1
         if pending:
             selected = sorted(set(selected) | set(lifecycles))
-        return [self[index] for index in selected]
+        return tuple(selected)
 
 
 class EventJournal:
     def __init__(self):
         self._snapshots = {}
+        self._index = CensusIndex()
 
     def snapshot(self, directory):
         current, retained = [], {}
@@ -130,7 +155,7 @@ class EventJournal:
             retained[path] = chunk
             current.append(chunk)
         self._snapshots = retained
-        return JournalSnapshot(tuple(current))
+        return JournalSnapshot(tuple(current), self._index)
 
     def events(self, directory):
         return self.snapshot(directory).materialize()

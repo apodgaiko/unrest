@@ -67,6 +67,15 @@ def admit(argv, cwd, env, state, append, refuse):
     owner = next((name for name in PARAMETERS
                   if selected_case.startswith('tests/test_acp_cleanup.py::' + name + '[')), None)
     if owner is None:
+        if selected_case.startswith('tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory['):
+            support = Path(state['guard']).with_name('inflight_cleanup.py')
+            guard = sys.modules['runtime_guard']
+            frames = task_frames()
+            try:
+                return guard.checked_source(support, state['direct_support']['files'][str(support)])['admit'](
+                    argv, cwd, env, state, frames, refuse)
+            finally:
+                frames.clear()
         return None
     root = Path(state["checkout"])
     source = root / "tests/test_acp_cleanup.py"

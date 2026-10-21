@@ -105,9 +105,9 @@ def test_stall_snapshot_reads_live_tasks_without_resuming_or_cancelling(monkeypa
     task = loop.create_task(suspended(), name='do-not-save-private-task-name')
     try:
         before = (task.done(), task.cancelling(), task.get_coro().cr_frame.f_lineno)
-        value.retain_startup_stall(token, case, loop)
+        value.retain_stall_snapshot(token, case, loop)
         assert (task.done(), task.cancelling(), task.get_coro().cr_frame.f_lineno) == before
-        body = sink.getvalue().split('[retained startup stall]\n')[1]
+        body = sink.getvalue().split('[retained task snapshot]\n')[1]
         recorded = json.loads(body)
         assert recorded['case'] == case and len(recorded['tasks']) == 1
         assert recorded['tasks'][0]['done'] is False
@@ -130,7 +130,7 @@ def test_teardown_disarms_stale_timer_without_altering_original_result(monkeypat
     monkeypatch.setattr(sys, '__stderr__', sink)
     report = SimpleNamespace(failed=False, nodeid='original-case', when='teardown', outcome='passed')
     value.pytest_runtest_logreport(report)
-    value.retain_startup_stall(token, 'original-case', None)
+    value.retain_stall_snapshot(token, 'original-case', None)
     assert cancelled == [True] and value.startup_stall_timer is None
     assert not sink.getvalue() and events[0]['outcome'] == 'passed'
 
@@ -160,7 +160,7 @@ def test_only_flushed_current_full_stall_ends_as_failure(monkeypatch, mode, capt
     def capture(*args):
         calls.append('private-flush')
         return captured
-    value.retain_startup_stall = capture
+    value.retain_stall_snapshot = capture
     exits = []
     monkeypatch.setattr(primary_source_entry.os, '_exit', lambda status: exits.append(status))
     value.finish_startup_stall(token, 'original-case', None)
@@ -189,3 +189,66 @@ def test_pytest_asyncio_runner_loop_is_read_without_lazy_initialization(monkeypa
         actual = runner.get_loop()
         value.pytest_runtest_call(item)
         assert captured == [None, actual] and runner._loop is actual
+
+
+def test_original_failure_sets_supported_session_stop_without_changing_report(monkeypatch):
+    value, events = observer()
+    session = SimpleNamespace(shouldfail=False)
+    value.pytest_sessionstart(session)
+    monkeypatch.setattr(sys, '__stderr__', StringIO())
+    report = SimpleNamespace(failed=True, nodeid='original-case', when='call',
+                             outcome='failed', longreprtext='original failure')
+    before = vars(report).copy()
+    value.pytest_runtest_logreport(report)
+    assert session.shouldfail and vars(report) == before
+    assert events == [{'kind': 'test_outcome', 'nodeid': 'original-case',
+                       'phase': 'call', 'outcome': 'failed'}]
+    session.shouldfail = 'earlier original failure'
+    value.pytest_runtest_logreport(report)
+    assert session.shouldfail == 'earlier original failure'
+
+
+def test_pytest_failure_stops_after_actual_fixture_teardown(tmp_path, monkeypatch):
+    value, _ = observer()
+    monkeypatch.setattr(sys, '__stderr__', StringIO())
+    source = tmp_path / 'test_stop.py'
+    source.write_text('''from pathlib import Path
+import pytest
+ROOT = Path(__file__).parent
+@pytest.fixture
+def owned():
+    yield
+    (ROOT / 'closed').write_text('closed')
+def test_failure(owned):
+    assert False, 'retained original failure'
+def test_later():
+    (ROOT / 'later').write_text('must not execute')
+''')
+    class Forward:
+        def pytest_sessionstart(self, session):
+            value.pytest_sessionstart(session)
+        def pytest_runtest_logreport(self, report):
+            value.pytest_runtest_logreport(report)
+    (tmp_path / 'empty.ini').write_text('[pytest]\n')
+    result = pytest.main(['-q', '-c', str(tmp_path / 'empty.ini'), str(source)], plugins=[Forward()])
+    assert result == pytest.ExitCode.TESTS_FAILED
+    assert (tmp_path / 'closed').read_text() == 'closed'
+    assert not (tmp_path / 'later').exists()
+
+
+def test_cleanup_snapshot_is_passive_before_original_twenty_second_deadline(monkeypatch):
+    import primary_source_entry
+    value, _ = observer()
+    calls = []
+    class Timer:
+        def __init__(self, seconds, callback):
+            assert seconds == 10
+            self.callback = callback
+        def start(self):
+            self.callback()
+    monkeypatch.setattr(primary_source_entry.threading, 'Timer', Timer)
+    value.retain_stall_snapshot = lambda *args: calls.append('private snapshot only')
+    value.finish_startup_stall = lambda *args: pytest.fail('cleanup deadline changed')
+    value.pytest_runtest_call(SimpleNamespace(
+        nodeid='tests/test_acp_cleanup.py::test_recorded_transport_failures[success-work]', funcargs={}))
+    assert calls == ['private snapshot only']

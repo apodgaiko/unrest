@@ -135,6 +135,7 @@ class Observer:
         self.custodian = None
         self.collection_timer = None
         self.failure_reports = 0
+        self.session = None
         self.snapshot_rpc_started = {}
         self.snapshot_rpc_counts = {}
         self.negative_startup = None
@@ -191,6 +192,9 @@ class Observer:
                            'snapshot_sha256': hashlib.sha256(canonical(snapshot)).hexdigest(),
                            'identity_sha256': hashlib.sha256(canonical(identity)).hexdigest()})
 
+    def pytest_sessionstart(self, session):
+        self.session = session
+
     def pytest_configure(self, config):
         expected = ['-q']
         if self.profile['source_mode'].startswith('TEST-'):
@@ -243,7 +247,11 @@ class Observer:
 
     def pytest_runtest_call(self, item):
         prefix = 'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup['
-        if not item.nodeid.startswith(prefix):
+        startup = item.nodeid.startswith(prefix)
+        cleanup = item.nodeid.startswith(tuple('tests/test_acp_cleanup.py::' + owner + '[' for owner in (
+            'test_recorded_transport_failures', 'test_cleanup_faults_and_repeated_cancellation',
+            'test_saved_review_observer_compatibility')))
+        if not startup and not cleanup:
             return
         import asyncio
         loops = [v if isinstance(v, asyncio.AbstractEventLoop)
@@ -252,20 +260,21 @@ class Observer:
         loop = next((v for v in loops if isinstance(v, asyncio.AbstractEventLoop)), None)
         token = object()
         self.startup_stall_token = token
+        callback = self.finish_startup_stall if startup else self.retain_stall_snapshot
         self.startup_stall_timer = threading.Timer(
-            60, lambda: self.finish_startup_stall(token, item.nodeid, loop))
+            60 if startup else 10, lambda: callback(token, item.nodeid, loop))
         self.startup_stall_timer.daemon = True
         self.startup_stall_timer.start()
 
     def finish_startup_stall(self, token, case, loop):
-        captured = self.retain_startup_stall(token, case, loop)
+        captured = self.retain_stall_snapshot(token, case, loop)
         if (captured and self.profile.get('source_mode') == 'SOURCE'
                 and self.startup_stall_token is token and self.guard._STATE.get('case') == case):
             # End only this failed isolated root, after its private stack flush.
             # Missing results/waits remain failures; no certificate can issue.
             os._exit(89)
 
-    def retain_startup_stall(self, token, case, loop):
+    def retain_stall_snapshot(self, token, case, loop):
         if self.startup_stall_token is not token or self.guard._STATE.get('case') != case:
             return
         try:
@@ -294,7 +303,7 @@ class Observer:
             body = canonical({'case': case, 'threads': threads, 'tasks': tasks})[:65536].decode(
                 'utf-8', errors='ignore')
             if self.startup_stall_token is token:
-                sys.__stderr__.write('\n[retained startup stall]\n' + body + '\n')
+                sys.__stderr__.write('\n[retained task snapshot]\n' + body + '\n')
                 sys.__stderr__.flush()
                 return True
         except (OSError, AttributeError, RuntimeError, UnicodeError):
@@ -363,6 +372,9 @@ class Observer:
         self.retain_failure(report)
         self.guard.append({'kind': 'test_outcome', 'nodeid': report.nodeid,
                            'phase': report.when, 'outcome': report.outcome})
+        if report.failed and self.session is not None and not self.session.shouldfail:
+            # pytest stops after this item's ordinary teardown, never mid-cleanup.
+            self.session.shouldfail = 'original source failure retained; corrected full candidate required'
         if report.when == 'teardown' and self.custodian is not None:
             self.endpoint.request('custody_close')
             status = self.custodian.wait(timeout=25)

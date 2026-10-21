@@ -32,7 +32,60 @@ TEST_STARTUP_CASES = tuple(
     'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[' + failure + '-' + role + ']'
     for failure in ('exit', 'deadline', 'cancel')
     for role in ('work', 'validate', 'terminal_reviewer'))
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES)
+TEST_CLEANUP_CASES = (
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-work]',
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-validate]',
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-work]',
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-validate]',
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-work]',
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-validate]',
+    'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[deep_json-work]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[deep_json-validate]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[deep_json-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[array_id-work]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[array_id-validate]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[array_id-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[object_id-work]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[object_id-validate]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[object_id-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[success-work]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[success-validate]',
+    'tests/test_acp_cleanup.py::test_recorded_transport_failures[success-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[reader-work]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[reader-validate]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[reader-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[client-work]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[client-validate]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[client-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[progress-work]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[progress-validate]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[progress-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[cancel-work]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[cancel-validate]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[cancel-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[primary-work]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[primary-validate]',
+    'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[primary-terminal_reviewer]',
+    'tests/test_acp_cleanup.py::test_client_cleanup_reaps_main_after_reader_failure',
+    'tests/test_acp_cleanup.py::test_client_exhausts_terminals_pending_and_main[False]',
+    'tests/test_acp_cleanup.py::test_client_exhausts_terminals_pending_and_main[True]',
+    'tests/test_acp_cleanup.py::test_response_correlation_keeps_numeric_identity[1_0]',
+    'tests/test_acp_cleanup.py::test_response_correlation_keeps_numeric_identity[1_1]',
+    'tests/test_acp_cleanup.py::test_response_correlation_keeps_numeric_identity[None]',
+    'tests/test_acp_cleanup.py::test_response_correlation_keeps_numeric_identity[True]',
+    'tests/test_acp_cleanup.py::test_response_correlation_keeps_numeric_identity[1.0]',
+    'tests/test_acp_cleanup.py::test_response_correlation_keeps_numeric_identity[rid5]',
+    'tests/test_acp_cleanup.py::test_response_correlation_keeps_numeric_identity[rid6]',
+    'tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[observer]',
+    'tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[cancel]',
+    'tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[transport]',
+    'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False]',
+    'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[True]',
+)
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 
@@ -194,14 +247,16 @@ def root_seconds(spec):
     if mode == 'SOURCE':
         return SOURCE_BUDGET['root_seconds']
     if mode in {'TEST-positive', 'TEST-poison'}:
-        script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_SEAM_CASES)).encode()
-        if (spec['commands'] == [shlex.split(script.decode())]
-                and spec['script_sha256'] == sha(script)
-                and spec['shell_argv'] == [SHELL, *SHELL_FLAGS, '/inputs/github-script.sh']
-                and spec['duty'] == 'TEST-source-' + mode.removeprefix('TEST-')
-                and spec['source_budget'] == SOURCE_BUDGET
-                and spec['source_input_sha256'] == sha(canonical({'mode': mode}))):
-            return TEST_SEAM_ROOT_SECONDS
+        scripts = {('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
+                   for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES)}
+        for script in scripts:
+            if (spec['commands'] == [shlex.split(script.decode())]
+                    and spec['script_sha256'] == sha(script)
+                    and spec['shell_argv'] == [SHELL, *SHELL_FLAGS, '/inputs/github-script.sh']
+                    and spec['duty'] == 'TEST-source-' + mode.removeprefix('TEST-')
+                    and spec['source_budget'] == SOURCE_BUDGET
+                    and spec['source_input_sha256'] == sha(canonical({'mode': mode}))):
+                return TEST_SEAM_ROOT_SECONDS
     return 180
 
 

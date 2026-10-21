@@ -6,7 +6,7 @@ import json
 import re
 import shlex
 
-from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
+from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
 
 
 def require_full_input(value, script, workflow):
@@ -37,13 +37,14 @@ def test_plan(script, workflow, mode):
                for cases in TEST_SELECTIONS]
     if script not in allowed:
         raise RuntimeError('primary_source_test_script')
-    seam_script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_SEAM_CASES)).encode()
+    seam_scripts = {('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
+                    for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES)}
     return {'schema': 'unrest.v046.primary-script-plan.v1',
             'duty': 'TEST-source-' + mode.removeprefix('TEST-'),
             'script_sha256': sha(script), 'workflow_sha256': sha(workflow.encode()),
             'shell_argv': [SHELL, *SHELL_FLAGS, '/inputs/github-script.sh'],
             'commands': [shlex.split(script.decode())], 'source_checkpoint_ready': False,
-            'selected_carrier': None, 'timeout_seconds': (TEST_SEAM_ROOT_SECONDS if script == seam_script else 180),
+            'selected_carrier': None, 'timeout_seconds': (TEST_SEAM_ROOT_SECONDS if script in seam_scripts else 180),
             'source_mode': mode, 'source_budget': SOURCE_BUDGET,
             'source_input_sha256': hashlib.sha256(canonical({'mode': mode})).hexdigest()}
 
@@ -70,7 +71,8 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     image coerces its absent C locale before exposing os.environ. Exec and
     post-init environments remain independently exact; this grants no launch.
     """
-    if registration['class'] in {'source-lease-owned-child', 'reference-descendant:terminal-redaction'} and lease_context is None:
+    if (registration['class'] in {'source-lease-owned-child', 'reference-descendant:terminal-redaction'}
+            or registration['class'] == 'inline:test_acp_cleanup.py:51' and environment == {}) and lease_context is None:
         lease_context = lease_profile_context(environment, registration, flags)
     controlled = {
         'canonical-backend': ('/source/tests/fixtures/experimental_session_app_server.py',
@@ -82,13 +84,48 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     exact_controlled = (controlled is not None and flags == [0, 0, 0]
                         and binding == {'path': controlled[0], 'line': 1, 'sha256': controlled[1]})
     exact_terminal = exact_terminal_environment(environment, registration, flags, lease_context)
+    exact_inflight = exact_inflight_environment(environment, registration, flags, lease_context)
     isolated = (registration['class'] == 'isolated-role-startup'
                 and binding['path'] == '/source/tests/test_stdio_startup.py' and flags[0] == 1)
-    if ((isolated or exact_controlled or exact_terminal or exact_lease_environment(
+    if ((isolated or exact_controlled or exact_terminal or exact_inflight or exact_lease_environment(
             environment, registration, flags, lease_context))
             and not any(key in environment for key in ('LC_CTYPE', 'LC_ALL', 'LANG'))):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     return dict(environment)
+
+
+def exact_inflight_environment(environment, registration, flags, context):
+    """Only the consumed third local cleanup child gets CPython locale coercion."""
+    from pathlib import PurePosixPath
+    from primary_policy import PYTHON
+    binding = {'path': '/source/src/unrest_harness/acp_runner.py', 'line': 1034,
+               'sha256': '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f'}
+    cases = {'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[' + str(v) + ']'
+             for v in (False, True)}
+    if (environment != {} or flags != [0, 0, 0] or context is None
+            or registration.get('kind') != 'admitted'
+            or registration['class'] != 'inline:test_acp_cleanup.py:51'
+            or registration['source_binding'] != binding or registration.get('case') not in cases):
+        return False
+    selected, manifest, vector = context['selected'], context['manifest'], context['vector']
+    runtime, directory = manifest['runtime'], PurePosixPath(context['cwd'])
+    return (manifest['checkout'] == '/source' and manifest['owned_root'] == '/work/owned'
+            and runtime['realpath'] == PYTHON and len(vector) == 3 and vector[1] == '-c'
+            and vector[0] in runtime['paths'] and context['cwd'] == selected['cwd'] == str(directory)
+            and directory.parent == PurePosixPath('/work/owned/pytest')
+            and directory.name.startswith('test_inflight_terminal_reg') and '..' not in directory.parts
+            and selected['registration'] is registration
+            and selected['owner_pid'] == registration['owner_pid'] == context['parent']
+            and selected['token'] == registration['token']
+            and selected['case'] == registration['case']
+            and selected['transformed_argv_sha256'] == sha(json.dumps(vector).encode())
+            and selected['bootstrap_sha256'] == sha(vector[2].encode())
+            and selected['environment_sha256'] == sha(json.dumps(environment, sort_keys=True).encode())
+            and registration['argv_sha256'] == sha(json.dumps([
+                vector[0], '-c', 'import time; time.sleep(30)']).encode())
+            and manifest['product_pins']['src/unrest_harness/acp_runner.py'] == binding['sha256']
+            and manifest['product_pins']['tests/test_acp_cleanup.py'] ==
+                '564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8')
 
 
 def exact_terminal_environment(environment, registration, flags, context):

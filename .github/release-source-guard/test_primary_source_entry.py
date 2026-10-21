@@ -183,7 +183,7 @@ def test_exact_startup_diagnosis_is_bounded_and_cannot_certify_full():
 
 def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     import yaml
-    from primary_policy import TEST_STARTUP_CASES
+    from primary_policy import TEST_CLEANUP_CASES
     path = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
     document = yaml.safe_load(path.read_text())
     job = document['jobs']['startup-cancellation-diagnosis']
@@ -192,6 +192,19 @@ def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
     steps = job['steps']
     call = next(step for step in steps if step.get('shell'))
-    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_STARTUP_CASES)
+    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_CLEANUP_CASES)
     assert call['shell'] == 'python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}'
     assert steps[-1]['if'] == 'always()'
+
+
+def test_complete_cleanup_diagnosis_uses_existing_ten_minute_bound_only():
+    from primary_policy import TEST_CLEANUP_CASES, root_seconds
+    text, value = inputs()
+    assert len(TEST_CLEANUP_CASES) == len(set(TEST_CLEANUP_CASES)) == 51
+    assert all(case.startswith('tests/test_acp_cleanup.py::') for case in TEST_CLEANUP_CASES)
+    script = (COMMAND + ' ' + ' '.join(TEST_CLEANUP_CASES)).encode()
+    result = make_test_plan(script, text, 'TEST-positive')
+    assert result['timeout_seconds'] == root_seconds(result) == 600
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    with pytest.raises(RuntimeError):
+        plan(script, text, value)

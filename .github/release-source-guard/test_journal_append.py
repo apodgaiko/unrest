@@ -50,3 +50,40 @@ def test_only_byte_identical_closed_prefix_reuses_validation(tmp_path, monkeypat
     snapshot = reader.snapshot(tmp_path)
     assert len(calls) == 2 and len(snapshot) == 101
     assert snapshot[-1] == {'kind': 'forbidden', 'reason': 'new'}
+
+
+def test_index_reuse_requires_current_chunks_and_complete_deduplication_state(tmp_path, monkeypatch):
+    path = tmp_path / '1.jsonl'
+    path.write_text('{"kind":"registered","pid":2,"token":"child"}\n'
+                    '{"kind":"launch_lifecycle_binding","token":"child"}\n'
+                    '{"kind":"forbidden","reason":"repeat"}\n')
+    journal = event_journal.EventJournal()
+    calls = []
+    original_build = event_journal.CensusIndex.build
+    def build(*args):
+        calls.append(True)
+        return original_build(*args)
+    monkeypatch.setattr(event_journal.CensusIndex, 'build', staticmethod(build))
+    first = journal.snapshot(tmp_path).census({}, set())
+    first[0]['pid'] = 999
+    assert journal.snapshot(tmp_path).census({}, set())[0]['pid'] == 2
+    assert len(calls) == 1
+    assert journal.snapshot(tmp_path).census({2: {}}, set()) == [{'kind': 'forbidden', 'reason': 'repeat'}]
+    assert len(calls) == 2
+    journal.snapshot(tmp_path).census({3: {}}, set())
+    assert len(calls) == 3  # Equal cardinality is not equal membership.
+    with path.open('a') as stream:
+        stream.write('{"kind":"ready","token":"new"}\n')
+    rows = journal.snapshot(tmp_path).census({3: {}}, set())
+    assert rows[-1]['kind'] == 'ready' and len(calls) == 4
+
+
+def test_nonreflexive_metadata_uses_original_full_materialization(tmp_path):
+    path = tmp_path / '1.jsonl'
+    path.write_text('{"kind":"ready","pid":NaN}\n')
+    journal = event_journal.EventJournal()
+    snapshot = journal.snapshot(tmp_path)
+    assert snapshot.chunks[0][3] == (None,)
+    rows = snapshot.census({}, set())
+    assert rows is snapshot.materialize()
+    assert str(rows[0]['pid']) == 'nan'

@@ -631,3 +631,33 @@ settled parent waits or a release certificate. Other cases and the existing
 two-hour root budget are unchanged. TEST diagnostics retain their existing
 three-minute trace bound. This stricter diagnostic failure bound preserves the
 original product timeouts and assertions while avoiding silent multi-hour hangs.
+
+The census reuses only immutable no-effect row indices while the complete
+current chunk bytes and complete registered/timing membership sets are equal.
+Equal set cardinality is insufficient. Every unresolved registration, forbidden
+row and required lifecycle witness still reaches the unchanged original refresh
+on each acquisition; kernel identity and permission decisions are never cached.
+Materialized JSON values remain fresh. Malformed or non-reflexive metadata falls
+back to the complete original loop.
+
+The registration-order fixture's two original boolean cases bind their captured
+stdlib spawn alias to the frozen original owner. Its initial two literal children
+keep checkout cwd/inherited environment; the third requires the original paused
+producer, actual terminal-create method, same two owned client children, exact
+owned cwd and empty terminal environment. They reuse only the existing guarded
+inline literal class; no generic alias, Python or provider authority is added.
+
+After a real root test failure, the observer sets pytest's supported session
+failure flag. The original item completes ordinary teardown before pytest stops;
+the failed report and any missing waits stay failed. A passing candidate still
+executes the complete unexcluded collection, and an incomplete failed attempt
+cannot issue or reuse a release certificate.
+
+The complete 51-case cleanup diagnostic selection uses the existing ten-minute
+TEST allocation. It remains a separate non-certifying selection, not a filtered
+FULL invocation. The third registration-order child has an exact empty-env
+post-init locale mapping bound to the actual consumed exec, source pins, case,
+owned cwd, runtime and registration identity; exec bytes stay empty and no
+command or provider permission follows. Ten-second passive task snapshots for
+the three adapter cleanup families do not change their original 15/20-second
+assertions or failure types.
