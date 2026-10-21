@@ -50,7 +50,8 @@ def eligible(selected, vector, environment, cwd, checkout, owned_root, pins):
 
 def resolve(authority, trace, pid, path, vector, environment, cwd):
     if path != '/usr/bin/git':
-        return False
+        from candidate_git_maintenance import resolve as maintenance
+        return maintenance(authority, trace, pid, path, vector, environment, cwd)
     selected = authority.bound.get(pid)
     if (selected is None
             or not eligible(selected, vector, environment, cwd, '/source',

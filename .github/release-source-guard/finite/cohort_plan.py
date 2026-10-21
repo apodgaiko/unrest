@@ -159,7 +159,7 @@ def select(
                 "environment_sha256": hashlib.sha256(
                     json.dumps(dict(env), sort_keys=True).encode()
                 ).hexdigest(),
-                "expected_startup": "original ENOEXEC; no child created"
+                "expected_startup": "original ENOEXEC; no successful exec or protocol"
                 if invalid
                 else "exact controlled mock agent",
             }

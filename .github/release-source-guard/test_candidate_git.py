@@ -178,3 +178,95 @@ def test_admitted_journal_omits_template_python_field_but_bootstrap_is_native():
     assert git.eligible(selected, *arguments)
     selected['bootstrap_sha256'] = 'python-body'
     assert not git.eligible(selected, *arguments)
+
+
+def maintenance_fixture(tmp_path):
+    import zlib
+    from candidate_git_maintenance import SITES
+    root = tmp_path / 'pytest/case/repository'
+    git_dir = root / '.git'
+    (git_dir / 'refs/heads').mkdir(parents=True)
+    (git_dir / 'config').write_text('[core]\nrepositoryformatversion=0\nfilemode=true\nbare=false\nlogallrefupdates=true\n[user]\nname=Fixture\nemail=fixture@example.invalid\n')
+    (git_dir / 'HEAD').write_text('ref: refs/heads/main\n')
+    body = b'tree ' + b'0' * 40 + b'\nauthor Fixture <fixture@example.invalid> 946684800 +0000\ncommitter Fixture <fixture@example.invalid> 946684800 +0000\n\nbase\n'
+    raw = b'commit ' + str(len(body)).encode() + b'\0' + body
+    oid = hashlib.sha1(raw).hexdigest()
+    objects = git_dir / 'objects' / oid[:2]
+    objects.mkdir(parents=True)
+    (objects / oid[2:]).write_bytes(zlib.compress(raw))
+    (git_dir / 'refs/heads/main').write_text(oid + '\n')
+    parent = {'argv': ['/usr/bin/git', 'commit', '-m', 'base'], 'cwd': str(root),
+              'environment': environment(root), 'candidate_registration': {'case': SOURCE + '::test_literal_manifest_and_independent_oracle',
+              'source_binding': {'caller': 'repo', 'caller_line': 41}}}
+    env = {**parent['environment'], 'PATH': '/usr/lib/git-core:/usr/bin:/bin',
+           'GIT_EXEC_PATH': '/usr/lib/git-core', 'GIT_PREFIX': '', 'GIT_AUTHOR_NAME': 'Fixture',
+           'GIT_AUTHOR_EMAIL': 'fixture@example.invalid', 'GIT_AUTHOR_DATE': '@946684800 +0000'}
+    assert SITES[('repo', 41)] == 'base'
+    return parent, env, str(root), str(tmp_path)
+
+
+def test_exact_stock_maintenance_metadata(tmp_path):
+    from candidate_git_maintenance import metadata
+    assert metadata(*maintenance_fixture(tmp_path))
+
+
+@pytest.mark.parametrize('change', ['caller', 'line', 'argv', 'cwd', 'parent_env', 'env', 'config',
+                                   'head', 'ref', 'object', 'git_symlink'])
+def test_stock_maintenance_refuses_changed_source_or_repository(tmp_path, change):
+    from candidate_git_maintenance import metadata
+    parent, env, cwd, owned_root = maintenance_fixture(tmp_path)
+    root = Path(cwd)
+    if change in {'caller', 'line'}:
+        parent['candidate_registration']['source_binding'][{'line': 'caller_line'}.get(change, change)] = 'foreign'
+    elif change == 'argv':
+        parent['argv'][-1] = 'foreign'
+    elif change == 'cwd':
+        parent['cwd'] = '/foreign'
+    elif change == 'parent_env':
+        parent['environment']['GIT_CONFIG_GLOBAL'] = '/foreign'
+    elif change == 'env':
+        env['GIT_AUTHOR_DATE'] = '@1 +0000'
+    elif change == 'config':
+        with (root / '.git/config').open('a') as stream:
+            stream.write('[core]\nhooksPath=/foreign\n')
+    elif change == 'head':
+        (root / '.git/HEAD').write_text('ref: refs/heads/other\n')
+    elif change == 'ref':
+        (root / '.git/refs/heads/main').write_text('not-an-oid\n')
+    elif change == 'object':
+        oid = (root / '.git/refs/heads/main').read_text().strip()
+        (root / '.git/objects' / oid[:2] / oid[2:]).write_bytes(b'not-zlib')
+    else:
+        (root / '.git').rename(root / 'elsewhere')
+        (root / '.git').symlink_to(root / 'elsewhere', target_is_directory=True)
+    try:
+        accepted = metadata(parent, env, cwd, owned_root)
+    except (ValueError, OSError, __import__('configparser').Error, __import__('zlib').error):
+        accepted = False
+    assert not accepted
+
+
+@pytest.mark.parametrize('caller,line,message', [('repo', 41, 'base'), ('repo', 46, 'candidate'),
+    ('test_unsupported_tree_entries', 402, 'unsupported'),
+    ('test_executable_tracked_file_and_nested_extra', 454, 'executable')])
+def test_four_original_commit_sites_keep_their_own_metadata(tmp_path, caller, line, message):
+    import zlib
+    from candidate_git_maintenance import metadata
+    parent, env, cwd, owned_root = maintenance_fixture(tmp_path)
+    git_dir = Path(cwd) / '.git'
+    old_oid = (git_dir / 'refs/heads/main').read_text().strip()
+    old = zlib.decompress((git_dir / 'objects' / old_oid[:2] / old_oid[2:]).read_bytes()).split(b'\0', 1)[1]
+    body = old.removesuffix(b'base\n') + message.encode() + b'\n'
+    raw = b'commit ' + str(len(body)).encode() + b'\0' + body
+    oid = hashlib.sha1(raw).hexdigest()
+    directory = git_dir / 'objects' / oid[:2]
+    directory.mkdir(exist_ok=True)
+    (directory / oid[2:]).write_bytes(zlib.compress(raw))
+    (git_dir / 'refs/heads/main').write_text(oid + '\n')
+    parent['argv'][-1] = message
+    parent['candidate_registration']['source_binding'].update(caller=caller, caller_line=line)
+    if caller != 'repo':
+        parent['candidate_registration']['case'] = SOURCE + '::' + caller + ('[100644]' if line == 402 else '')
+    assert metadata(parent, env, cwd, owned_root)
+    parent['candidate_registration']['source_binding']['caller_line'] += 1
+    assert not metadata(parent, env, cwd, owned_root)

@@ -876,3 +876,15 @@ The native join consumes the serialized admission event, which omits the templat
 remain mandatory; a supplied foreign Python marker is refused. Ordinary imported
 product methods are compared with ordinary compiled source code; pytest assertion
 rewriting applies only to the original test owners that actually use it.
+
+Candidate commits retain stock Git's observed auto-maintenance child instead of
+changing repository configuration to suppress it. This separate fallback admits
+only `/usr/lib/git-core/git maintenance run --auto --no-quiet`, once per actual
+byte-pinned candidate fixture commit parent at one of its four original source
+callsites. The parent must retain its consumed native launch and current birth;
+the stopped child must match cwd, image pin and exact stock-derived environment.
+Current bounded, nonsymlink metadata must identify the tiny fixture repository,
+its ordinary core/user configuration, main ref and SHA1-verified loose commit
+with the original fixed author, committer, dates and source-bound message. Extra
+config, changed metadata or descendants receive no authority. The unchanged
+kernel trace retains actual native parent waits; no provider permission follows.
