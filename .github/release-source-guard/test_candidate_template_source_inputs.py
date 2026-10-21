@@ -29,6 +29,9 @@ def test_exact_compatibility_inputs_change_only_three_pins():
     manifest = baseline()
     expected = deepcopy(manifest)
     expected['product_pins'].update(patch.POST)
+    for row in expected['anchor_inventory']:
+        if row['path'] == patch.SOURCE:
+            row['source_sha256'] = patch.POST[patch.SOURCE]
     patch.admit(manifest, ROOT, lambda root, name: (root / name).read_bytes())
     assert manifest == expected
 
@@ -77,3 +80,22 @@ def test_product_delta_keeps_original_native_git_owner():
     assert hashlib.sha256(ast.dump(method, include_attributes=False).encode()).hexdigest() == 'cef37191574dcc383fc345438ac524c94c13cba166cb6bdd9314b0df6a4bfa8e'
     assert method.lineno == 147
     assert next(n for n in ast.walk(method) if isinstance(n, ast.Call) and ast.unparse(n.func) == 'subprocess.Popen').lineno == 151
+
+
+@pytest.mark.parametrize('change', ['missing', 'duplicate', 'count', 'source_sha256', 'line', 'owner', 'route', 'family', 'expression_ast_sha256'])
+def test_anchor_membership_or_identity_drift_never_changes_manifest(change):
+    require_inputs()
+    manifest = baseline()
+    row = next(v for v in manifest['anchor_inventory'] if v['path'] == patch.SOURCE)
+    if change == 'missing':
+        manifest['anchor_inventory'].remove(row)
+    elif change == 'duplicate':
+        manifest['anchor_inventory'].append(deepcopy(row))
+    elif change == 'count':
+        manifest['anchor_inventory'].pop(0)
+    else:
+        row[change] = 'foreign'
+    before = deepcopy(manifest)
+    with pytest.raises(RuntimeError, match='candidate_template_anchor_preimage'):
+        patch.admit(manifest, ROOT, lambda root, name: (root / name).read_bytes())
+    assert manifest == before

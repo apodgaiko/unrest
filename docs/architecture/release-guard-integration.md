@@ -902,3 +902,9 @@ all three exact postimages through the existing read-only descriptor acquisition
 Only after every input matches does it update those three pins. This does not
 admit a changed native Git owner, command, provider or arbitrary source drift;
 the seven new source cases join the full unexcluded collection.
+
+That transition also updates the one existing candidate Git passive observation's
+source file hash. All 176 observations remain present. Its owner AST, exact
+Popen expression AST, line151, route and family must match the original record;
+only the file hash may become the exact repaired postimage. Unknown membership,
+owner, expression, route or line drift refuses before any pin changes.
