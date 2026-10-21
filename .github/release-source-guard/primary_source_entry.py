@@ -109,6 +109,7 @@ def activate(profile, event, arguments):
     plugin.pytest_collection_modifyitems.__func__.pytest_impl = {'wrapper': True, 'tryfirst': True}
     plugin.pytest_configure.__func__.pytest_impl = {'tryfirst': True}
     plugin.pytest_runtest_setup.__func__.pytest_impl = {'tryfirst': True}
+    plugin.pytest_runtest_call.__func__.pytest_impl = {'tryfirst': True}
     assert pytest.console_main is not None
 
 
@@ -137,6 +138,8 @@ class Observer:
         self.snapshot_rpc_started = {}
         self.snapshot_rpc_counts = {}
         self.negative_startup = None
+        self.startup_stall_timer = None
+        self.startup_stall_token = None
         guard._STATE['primary_snapshot_observer'] = self.observe_snapshot_rpc
 
     def observe_snapshot_rpc(self, frame, event, value):
@@ -238,6 +241,55 @@ class Observer:
                     self.guard.refuse('primary_source_custodian_not_ready')
                 time.sleep(.01)
 
+    def pytest_runtest_call(self, item):
+        prefix = 'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup['
+        if not item.nodeid.startswith(prefix):
+            return
+        import asyncio
+        loop = next((v for v in item.funcargs.values()
+                     if isinstance(v, asyncio.AbstractEventLoop)), None)
+        token = object()
+        self.startup_stall_token = token
+        self.startup_stall_timer = threading.Timer(
+            60, lambda: self.retain_startup_stall(token, item.nodeid, loop))
+        self.startup_stall_timer.daemon = True
+        self.startup_stall_timer.start()
+
+    def retain_startup_stall(self, token, case, loop):
+        if self.startup_stall_token is not token or self.guard._STATE.get('case') != case:
+            return
+        try:
+            import asyncio
+            def location(frame):
+                return [frame.f_code.co_filename, frame.f_code.co_name, frame.f_lineno]
+            threads = []
+            for frame in list(sys._current_frames().values())[:64]:
+                stack = []
+                while frame is not None and len(stack) < 24:
+                    stack.append(location(frame))
+                    frame = frame.f_back
+                threads.append(stack)
+            tasks = []
+            if loop is not None:
+                for task in list(asyncio.all_tasks(loop))[:64]:
+                    coroutine, stack, seen = task.get_coro(), [], set()
+                    while coroutine is not None and id(coroutine) not in seen and len(stack) < 24:
+                        seen.add(id(coroutine))
+                        frame = getattr(coroutine, 'cr_frame', None) or getattr(coroutine, 'gi_frame', None)
+                        if frame is not None:
+                            stack.append(location(frame))
+                        coroutine = (getattr(coroutine, 'cr_await', None)
+                                     or getattr(coroutine, 'gi_yieldfrom', None))
+                    tasks.append({'done': task.done(), 'cancelling': task.cancelling(), 'stack': stack})
+            body = canonical({'case': case, 'threads': threads, 'tasks': tasks})[:65536].decode(
+                'utf-8', errors='ignore')
+            if self.startup_stall_token is token:
+                sys.__stderr__.write('\n[retained startup stall]\n' + body + '\n')
+                sys.__stderr__.flush()
+        except (OSError, AttributeError, RuntimeError, UnicodeError):
+            # Private stack diagnostics cannot change a test or its deadline.
+            pass
+
     def pytest_assertrepr_compare(self, config, op, left, right):
         case = 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
         if (self.guard._STATE.get('case') != case or op != '=='
@@ -293,6 +345,10 @@ class Observer:
             pass
 
     def pytest_runtest_logreport(self, report):
+        if report.when == 'teardown' and self.startup_stall_timer is not None:
+            self.startup_stall_token = None
+            self.startup_stall_timer.cancel()
+            self.startup_stall_timer = None
         self.retain_failure(report)
         self.guard.append({'kind': 'test_outcome', 'nodeid': report.nodeid,
                            'phase': report.when, 'outcome': report.outcome})
@@ -305,6 +361,9 @@ class Observer:
             if status:
                 self.guard.refuse('primary_source_custodian_status')
     def pytest_sessionfinish(self, session, exitstatus):
+        self.startup_stall_token = None
+        if self.startup_stall_timer is not None:
+            self.startup_stall_timer.cancel()
         if self.collection_timer is not None:
             self.collection_timer.cancel()
         timer = threading.Timer(self.profile['source_budget']['drain_seconds'], lambda: os._exit(88))

@@ -88,3 +88,56 @@ def test_utf8_truncation_retains_a_valid_bounded_prefix(monkeypatch):
     body = sink.getvalue().split(']\n', 1)[1].removesuffix('\n')
     assert len(body.encode()) <= 65536
     assert report.longreprtext.startswith(body)
+
+
+def test_stall_snapshot_reads_live_tasks_without_resuming_or_cancelling(monkeypatch):
+    import asyncio
+    import json
+    value, events = observer()
+    case = 'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-validate]'
+    value.guard._STATE['case'] = case
+    token = value.startup_stall_token = object()
+    sink = StringIO()
+    monkeypatch.setattr(sys, '__stderr__', sink)
+    loop = asyncio.new_event_loop()
+    async def suspended():
+        await asyncio.Event().wait()
+    task = loop.create_task(suspended(), name='do-not-save-private-task-name')
+    try:
+        before = (task.done(), task.cancelling(), task.get_coro().cr_frame.f_lineno)
+        value.retain_startup_stall(token, case, loop)
+        assert (task.done(), task.cancelling(), task.get_coro().cr_frame.f_lineno) == before
+        body = sink.getvalue().split('[retained startup stall]\n')[1]
+        recorded = json.loads(body)
+        assert recorded['case'] == case and len(recorded['tasks']) == 1
+        assert recorded['tasks'][0]['done'] is False
+        assert recorded['tasks'][0]['cancelling'] == 0
+        assert len(recorded['threads']) <= 64
+        assert 'do-not-save-private-task-name' not in body and events == []
+    finally:
+        task.cancel()
+        loop.run_until_complete(asyncio.gather(task, return_exceptions=True))
+        loop.close()
+
+
+def test_teardown_disarms_stale_timer_without_altering_original_result(monkeypatch):
+    value, events = observer()
+    value.guard._STATE['case'] = 'original-case'
+    token = value.startup_stall_token = object()
+    cancelled = []
+    value.startup_stall_timer = SimpleNamespace(cancel=lambda: cancelled.append(True))
+    sink = StringIO()
+    monkeypatch.setattr(sys, '__stderr__', sink)
+    report = SimpleNamespace(failed=False, nodeid='original-case', when='teardown', outcome='passed')
+    value.pytest_runtest_logreport(report)
+    value.retain_startup_stall(token, 'original-case', None)
+    assert cancelled == [True] and value.startup_stall_timer is None
+    assert not sink.getvalue() and events[0]['outcome'] == 'passed'
+
+
+def test_diagnostic_timer_does_not_apply_to_unrelated_cases(monkeypatch):
+    import primary_source_entry
+    value, _ = observer()
+    monkeypatch.setattr(primary_source_entry.threading, 'Timer', lambda *a: pytest.fail('unrelated timer'))
+    value.pytest_runtest_call(SimpleNamespace(nodeid='other-case'))
+    assert value.startup_stall_timer is None

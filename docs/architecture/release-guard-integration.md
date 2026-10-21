@@ -605,3 +605,11 @@ outer collection/certificate observer twice. Root collection, XML and result
 accounting remain attached only to the original full suite; child admission and
 cleanup checks remain active in both scopes. Unknown nested invocations retain
 the strict outer observer and cannot acquire this exception.
+
+A single delayed diagnostic for each original startup-cleanup case records only
+thread and coroutine code locations and cancellation counts in the existing
+private encrypted stderr capture. It reads no source bodies, saves no locals or
+task names, adds no public event or archive member, and cannot alter a test,
+signal, wait, result or deadline. Teardown cancels the observer. This retains
+evidence for the observed cancellation hang without declaring it a product or
+guard defect before the suspended task is identified.
