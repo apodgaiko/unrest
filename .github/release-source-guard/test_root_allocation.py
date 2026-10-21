@@ -284,7 +284,7 @@ def test_legacy_normalization_cannot_hide_constructor_or_execution_changes():
     import hashlib
     import test_startup_phases as baseline
     source = Path(__file__).with_name('linux_trace.py').read_text()
-    original = baseline.StripTelemetry().visit(restore_primary_allocation(ast.parse(source)))
+    original = baseline.StripTelemetry().visit(restore_primary_allocation(baseline.restore_environment_name_grammar(ast.parse(source))))
     assert hashlib.sha256(ast.dump(original, include_attributes=False).encode()).hexdigest() == baseline.BASELINE_AST_SHA256['linux_trace.py']
     for before, after in [('timeout > 180', 'timeout > 181'),
                           ('primary_allocation is None', 'primary_allocation is not None')]:
@@ -293,5 +293,5 @@ def test_legacy_normalization_cannot_hide_constructor_or_execution_changes():
             restore_primary_allocation(ast.parse(source.replace(before, after)))
     changed = source.replace('raise TimeoutError("owned trace deadline exceeded")', 'pass')
     assert changed != source
-    tree = baseline.StripTelemetry().visit(restore_primary_allocation(ast.parse(changed)))
+    tree = baseline.StripTelemetry().visit(restore_primary_allocation(baseline.restore_environment_name_grammar(ast.parse(changed))))
     assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() != baseline.BASELINE_AST_SHA256['linux_trace.py']

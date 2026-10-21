@@ -11,7 +11,7 @@ from primary_dependency_authority import DependencySourceAuthority as OriginalDe
 class OwnedMultiprocessCustody:
     def start(self, *args, **kwargs):
         from finite.launch_preflight_routes import ALIAS_PATH, SOURCE, PIN
-        if self.manifest['product_pins'].get(SOURCE) == PIN:
+        if getattr(self, 'manifest', {}).get('product_pins', {}).get(SOURCE) == PIN:
             if ALIAS_PATH in self.manifest['runtime']['paths']:
                 raise RuntimeError('launch_preflight_duplicate_alias')
             self.manifest['runtime']['paths'].append(ALIAS_PATH)

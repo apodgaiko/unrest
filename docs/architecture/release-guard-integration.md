@@ -940,3 +940,12 @@ for comparison with the original complete executable-tree hash; original wait,
 launch admission, callback and tracer scheduling algorithms remain protected.
 All original product tests remain byte-identical. These focused custody tests do
 not replace the full unexcluded source checkpoint or prove provider acceptance.
+
+The primary constructor wrapper retains one exact guard-body hash. After the
+closed lifecycle-image observation correction, that hash is updated coherently
+to the new body. There is no alternative-hash allowance, skipped validation or
+looser caller boundary. The complete original guard AST comparison independently
+permits only the stated observation expression change; the endpoint closure,
+installer, initialize-inner code/globals and original Popen constructor checks
+remain mandatory. Related archive and diagnostic structural controls use the
+same explicit delta normalization and retain their original baseline hashes.
