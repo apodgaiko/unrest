@@ -32,6 +32,9 @@ TEST_STARTUP_CASES = tuple(
     'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[' + failure + '-' + role + ']'
     for failure in ('exit', 'deadline', 'cancel')
     for role in ('work', 'validate', 'terminal_reviewer'))
+TEST_READINESS_CASES = tuple(
+    'tests/test_acp_runner.py::test_readiness_attributes_local_child_and_drains[' + mode + ']'
+    for mode in ('early_exit', 'never_ready', 'ready', 'cancel'))
 TEST_CLEANUP_CASES = (
     'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-work]',
     'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-validate]',
@@ -85,7 +88,7 @@ TEST_CLEANUP_CASES = (
     'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False]',
     'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[True]',
 )
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES)
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 

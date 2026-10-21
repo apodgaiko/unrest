@@ -697,3 +697,11 @@ its current await-chain link, so task enumeration alone cannot establish its
 active producer. A real async control exercises this boundary without launching
 a child or executing the original product fixture. References are cleared after
 each finite re-resolution; source, vector and caller checks remain unchanged.
+
+The two frozen ACP readiness modes that intentionally launch a child without a
+listener bind their port-1 negative probe through the existing plan RPC. The
+plan requires the original live owner/exercise, exact source and vector, case
+and launch token. It grants no listener or connection: unchanged supervisor
+policy requires the admitted child token/vector and current kernel identity,
+then returns the existing pending-listener refusal without a connect syscall.
+Original 50-ms timeout and cancellation assertions remain intact.

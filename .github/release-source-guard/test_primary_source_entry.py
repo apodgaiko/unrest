@@ -183,7 +183,7 @@ def test_exact_startup_diagnosis_is_bounded_and_cannot_certify_full():
 
 def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     import yaml
-    from primary_policy import TEST_CLEANUP_CASES
+    from primary_policy import TEST_READINESS_CASES
     path = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
     document = yaml.safe_load(path.read_text())
     job = document['jobs']['startup-cancellation-diagnosis']
@@ -192,7 +192,7 @@ def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
     steps = job['steps']
     call = next(step for step in steps if step.get('shell'))
-    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_CLEANUP_CASES)
+    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_READINESS_CASES)
     assert call['shell'] == 'python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}'
     assert steps[-1]['if'] == 'always()'
 
@@ -208,3 +208,22 @@ def test_complete_cleanup_diagnosis_uses_existing_ten_minute_bound_only():
     assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
     with pytest.raises(RuntimeError):
         plan(script, text, value)
+
+
+def test_exact_readiness_diagnosis_retains_all_original_modes_and_no_full_certificate():
+    from primary_policy import TEST_READINESS_CASES, root_seconds
+    text, value = inputs()
+    prefix = 'tests/test_acp_runner.py::test_readiness_attributes_local_child_and_drains['
+    assert TEST_READINESS_CASES == tuple(prefix + mode + ']' for mode in (
+        'early_exit', 'never_ready', 'ready', 'cancel'))
+    script = (COMMAND + ' ' + ' '.join(TEST_READINESS_CASES)).encode()
+    result = make_test_plan(script, text, 'TEST-positive')
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    assert root_seconds(result) == result['timeout_seconds'] == 180
+    with pytest.raises(RuntimeError):
+        plan(script, text, value)
+    for altered in [script + b' --maxfail=1',
+                    (COMMAND + ' ' + ' '.join(TEST_READINESS_CASES[:-1])).encode(),
+                    script.replace(b'[never_ready]', b'[foreign]')]:
+        with pytest.raises(RuntimeError):
+            make_test_plan(altered, text, 'TEST-positive')

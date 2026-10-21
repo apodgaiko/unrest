@@ -99,6 +99,10 @@ def fixture_context(guard, payload):
 
 
 def plan(guard, payload, request):
+    if payload.get('class') == 'source-cohort2:tests/test_acp_runner.py:70':
+        support = Path(guard._STATE['guard']).with_name('negative_readiness.py')
+        return guard.checked_source(
+            support, guard._STATE['direct_support']['files'][str(support)])['plan'](guard, payload, request)
     if payload.get('class') not in {'inline:test_acp_cleanup.py:50', 'inline:test_acp_cleanup.py:51'}:
         return
     if not owned_case(guard._STATE):
