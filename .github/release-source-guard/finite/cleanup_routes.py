@@ -43,6 +43,15 @@ def task_frames():
     return list(result.values())
 
 
+def inflight_frames(state):
+    """Running await chains are on the native stack until their first yield."""
+    support = Path(state['guard']).with_name('fallback_binding.py')
+    guard = sys.modules['runtime_guard']
+    active = guard.checked_source(
+        support, state['direct_support']['files'][str(support)])['active_frames']()
+    return list({id(frame): frame for frame in [*active, *task_frames()]}.values())
+
+
 def scenario_value(owner, parameter, role, temporary):
     if owner not in PARAMETERS or role not in ('work', 'validate', 'terminal_reviewer'):
         raise ValueError('cleanup_parameter_drift')
@@ -70,7 +79,7 @@ def admit(argv, cwd, env, state, append, refuse):
         if selected_case.startswith('tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory['):
             support = Path(state['guard']).with_name('inflight_cleanup.py')
             guard = sys.modules['runtime_guard']
-            frames = task_frames()
+            frames = inflight_frames(state)
             try:
                 return guard.checked_source(support, state['direct_support']['files'][str(support)])['admit'](
                     argv, cwd, env, state, frames, refuse)

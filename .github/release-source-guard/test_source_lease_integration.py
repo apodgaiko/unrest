@@ -489,7 +489,7 @@ def test_inflight_activation_rechecks_live_binding_and_keeps_actual_anchor(tmp_p
     def support(path, digest):
         if Path(path).name == 'cleanup_routes.py':
             assert digest == pin(Path(path))
-            return {'task_frames': lambda: frames}
+            return {'inflight_frames': lambda state: frames}
         if Path(path).name == 'inflight_cleanup.py':
             assert digest == pin(Path(path))
             return {'admit': resolve}

@@ -67,7 +67,7 @@ def create(state, emit, refuse, ready):
                         or caller.f_locals.get('registration') is not registration
                         or caller.f_locals.get('guard') is not guard):
                     self.refuse('source_inflight_activation_caller_drift')
-                frames = checked('cleanup_routes.py')['task_frames']()
+                frames = checked('cleanup_routes.py')['inflight_frames'](state)
                 try:
                     actual = checked('inflight_cleanup.py')['admit'](
                         argv, cwd, environment, state, frames, self.refuse)

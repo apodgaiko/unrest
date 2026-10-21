@@ -690,3 +690,10 @@ compilation from the event-loop spawn path without extending test deadlines.
 The paused spawn alias is anchored to the frozen original await expression at
 line 437. A source-AST control distinguishes it from the unrelated line-434
 cleanup-method assignment; synthetic frame metadata alone is insufficient.
+
+Both inflight admission and activation combine the pinned original native-stack
+walker with suspended task chains. A running coroutine has not yet installed
+its current await-chain link, so task enumeration alone cannot establish its
+active producer. A real async control exercises this boundary without launching
+a child or executing the original product fixture. References are cleared after
+each finite re-resolution; source, vector and caller checks remain unchanged.
