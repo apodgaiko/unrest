@@ -735,3 +735,11 @@ addition. The native exec environment, original role arguments, inherited
 inventory pipe, source bindings, nonce, process birth, and actual parent wait
 remain exact. A missing or duplicated startup consumption, different owner,
 case, environment, source, bootstrap or flags does not gain this mapping.
+
+A raced whole-process socket census is discarded and reacquired at most three
+times through the unchanged supervisor observation method. Each attempt checks
+the registered process birth again and reads a complete fresh descriptor/table/
+descriptor snapshot. Neither a partial inventory nor a previous successful
+observation supplies authority. All other observation errors fail immediately;
+three consecutive census races still fail closed. The original listener, peer,
+cookie, address, ownership and payload checks run on the resulting fresh rows.

@@ -12,6 +12,8 @@ import socket
 import struct
 from typing import Any
 
+from finite.linux_identity import identity
+
 
 def duplicate_descriptor(pid: int, descriptor: int) -> int:
     if type(pid) is not int or pid <= 0 or type(descriptor) is not int or descriptor < 0:
@@ -134,7 +136,7 @@ def socket_fds(pid: int) -> dict[int, int]:
     return result
 
 
-def sockets(pid: int) -> list[dict[str, Any]]:
+def _socket_snapshot(pid: int) -> list[dict[str, Any]]:
     before = socket_fds(pid)
     table = tcp_table()
     result = [{"pid": pid, "fd": fd, **table[inode]}
@@ -142,6 +144,27 @@ def sockets(pid: int) -> list[dict[str, Any]]:
     if socket_fds(pid) != before:
         raise RuntimeError("owned descriptor binding changed during socket observation")
     return result
+
+
+def sockets(pid: int) -> list[dict[str, Any]]:
+    """Discard raced censuses; accept only a fresh, complete, stable kernel view."""
+    birth = identity(pid)
+    for attempt in range(3):
+        if identity(pid) != birth:
+            raise RuntimeError('stale_or_reused_ownership')
+        try:
+            rows = _socket_snapshot(pid)
+        except RuntimeError as error:
+            if (str(error) not in {
+                    'owned descriptor observation raced',
+                    'owned descriptor binding changed during socket observation'}
+                    or attempt == 2):
+                raise
+        else:
+            if identity(pid) != birth:
+                raise RuntimeError('stale_or_reused_ownership')
+            return rows
+    raise RuntimeError('owned socket observation retry exhausted')
 
 
 def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
