@@ -143,8 +143,7 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
     source_root.layout(source)
     # Preserve required public Git semantics without copying runner metadata.
     from public_git_snapshot import prepare as prepare_public_git
-    git_projection = prepare_public_git(REPOSITORY, source, os.environ['GITHUB_SHA'])
-    (raw / 'public-git-projection.json').write_bytes(canonical(git_projection))
+    prepare_public_git(REPOSITORY, source, os.environ['GITHUB_SHA'])
     git_root = source / '.git'
     # The readonly bind must have the real source UID, rather than bypassing
     # Git's repository-ownership safety check with configuration overrides.

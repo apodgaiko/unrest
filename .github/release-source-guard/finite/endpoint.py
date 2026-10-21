@@ -486,6 +486,9 @@ def attach(guard):
         text = original_bootstrap(*args, **kwargs)
         payload = args[4]
         vector = payload.get("orig_argv", [])
+        support = Path(guard._STATE['guard']).with_name('negative_startup.py')
+        guard.checked_source(support, guard._STATE['direct_support']['files'][str(support)])[
+            'plan'](guard, payload, request)
         if "--host" in vector and "--port" in vector:
             host = vector[vector.index("--host") + 1]
             port = int(vector[vector.index("--port") + 1])

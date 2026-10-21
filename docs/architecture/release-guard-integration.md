@@ -507,3 +507,25 @@ stays nonexecutable, and the kernel/finite guards grant no native adapter launch
 This preserves early launch-error checks while allowing tests of a later startup
 failure to reach their original mocked child. Metadata presence remains distinct
 from transport selection and genuine native-provider acceptance.
+
+For the nine unchanged ordinary cleanup startup negatives, the original nested
+mock supplies an inline child without a `--port` argument. Its exact frozen
+caller, parameter, body, runtime, and source binding join the live `mcp_port`
+argument to the existing child-token endpoint plan. This supplies no listener or
+connection permission: the supervisor still requires an actual owned listener
+for a connection and returns a genuine refusal while the planned child has none.
+The source observer completes endpoint authentication at the original guarded
+constructor return, within that constructor's existing five-second READY budget,
+before the original half-second readiness probe starts. The child birth,
+parent, UID, boot, session, token, nonce, manifest and guard pins must match.
+No original test, probe deadline, process status, wait assertion, provider
+selection, or review decision changes.
+
+Terminal locale normalization consumes the actual admitted event, rather than a
+registry declaration. It joins the original synthetic two-key environment to the
+same consumed token, parent, transformed argv, bootstrap, runtime, source pin and
+checkout before describing stock CPython's post-init `LC_CTYPE` addition. Exec
+still receives the exact original environment. Public Git metadata remains
+covered by source custody; no extra raw archive member is emitted and the strict
+evidence consumer continues to reject unknown members. Earlier invalid archives
+and failed outcomes remain failures.

@@ -70,7 +70,7 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     image coerces its absent C locale before exposing os.environ. Exec and
     post-init environments remain independently exact; this grants no launch.
     """
-    if registration['class'] == 'source-lease-owned-child' and lease_context is None:
+    if registration['class'] in {'source-lease-owned-child', 'reference-descendant:terminal-redaction'} and lease_context is None:
         lease_context = lease_profile_context(environment, registration, flags)
     controlled = {
         'canonical-backend': ('/source/tests/fixtures/experimental_session_app_server.py',
@@ -81,19 +81,7 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     binding = registration['source_binding']
     exact_controlled = (controlled is not None and flags == [0, 0, 0]
                         and binding == {'path': controlled[0], 'line': 1, 'sha256': controlled[1]})
-    # This already-admitted literal prints a synthetic credential locally.
-    # Stock CPython coerces its two-key environment before the Python audit
-    # boundary. Keep exec bytes exact and describe only that post-init state.
-    exact_terminal = (flags == [0, 0, 0] and registration == {
-        'class': 'reference-descendant:terminal-redaction', 'python': True,
-        'argv': ['-c', "import os; print(os.environ['ZAI_API_KEY'])"],
-        'checkout_cwd': True, 'caller_bindings': [],
-        'source_binding': {'path': '/source/tests/test_capability_policy.py', 'line': 549,
-                           'sha256': 'ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'},
-    } and set(environment) == {'PATH', 'ZAI_API_KEY'}
-        and isinstance(environment['PATH'], str) and bool(environment['PATH'])
-        and isinstance(environment['ZAI_API_KEY'], str)
-        and sha(environment['ZAI_API_KEY'].encode()) == 'cff06f8f3a6f4faf5b5da8f3500efc21bdf18e2522e178b8a43f27739ba5d45a')
+    exact_terminal = exact_terminal_environment(environment, registration, flags, lease_context)
     isolated = (registration['class'] == 'isolated-role-startup'
                 and binding['path'] == '/source/tests/test_stdio_startup.py' and flags[0] == 1)
     if ((isolated or exact_controlled or exact_terminal or exact_lease_environment(
@@ -101,6 +89,37 @@ def python_environment(environment, registration, flags, *, lease_context=None):
             and not any(key in environment for key in ('LC_CTYPE', 'LC_ALL', 'LANG'))):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     return dict(environment)
+
+
+def exact_terminal_environment(environment, registration, flags, context):
+    """Bind locale coercion to the actual admitted event and consumed exec."""
+    from primary_policy import PYTHON
+    binding = {'path': '/source/tests/test_capability_policy.py', 'line': 549,
+               'sha256': 'ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'}
+    if (registration.get('kind') != 'admitted'
+            or registration['class'] != 'reference-descendant:terminal-redaction'
+            or registration['source_binding'] != binding or flags != [0, 0, 0]
+            or context is None or set(environment) != {'PATH', 'ZAI_API_KEY'}
+            or type(environment['PATH']) is not str or not environment['PATH']
+            or type(environment['ZAI_API_KEY']) is not str
+            or sha(environment['ZAI_API_KEY'].encode()) !=
+            'cff06f8f3a6f4faf5b5da8f3500efc21bdf18e2522e178b8a43f27739ba5d45a'):
+        return False
+    selected, manifest, vector = context['selected'], context['manifest'], context['vector']
+    runtime = manifest['runtime']
+    return (manifest['checkout'] == '/source' and manifest['owned_root'] == '/work/owned'
+            and runtime['realpath'] == PYTHON and len(vector) == 3 and vector[1] == '-c'
+            and vector[0] in runtime['paths'] and context['cwd'] == selected['cwd'] == '/source'
+            and selected['registration'] is registration
+            and selected['owner_pid'] == registration['owner_pid'] == context['parent']
+            and selected['token'] == registration['token']
+            and selected['case'] == registration['case']
+            and selected['transformed_argv_sha256'] == sha(json.dumps(vector).encode())
+            and selected['bootstrap_sha256'] == sha(vector[2].encode())
+            and selected['environment_sha256'] == sha(json.dumps(environment, sort_keys=True).encode())
+            and registration['argv_sha256'] == sha(json.dumps([
+                vector[0], '-c', "import os; print(os.environ['ZAI_API_KEY'])"]).encode())
+            and manifest['product_pins']['tests/test_capability_policy.py'] == binding['sha256'])
 
 
 def exact_lease_environment(environment, registration, flags, context):

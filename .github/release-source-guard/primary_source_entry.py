@@ -126,9 +126,17 @@ class Observer:
         self.failure_reports = 0
         self.snapshot_rpc_started = {}
         self.snapshot_rpc_counts = {}
+        self.negative_startup = None
         guard._STATE['primary_snapshot_observer'] = self.observe_snapshot_rpc
 
     def observe_snapshot_rpc(self, frame, event, value):
+        if (self.guard._STATE.get('case') or '').startswith(
+                'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup['):
+            if self.negative_startup is None:
+                support = Path(self.guard._STATE['guard']).with_name('negative_startup.py')
+                self.negative_startup = self.guard.checked_source(
+                    support, self.guard._STATE['direct_support']['files'][str(support)])['observe']
+            self.negative_startup(self.guard, self.endpoint.STATE, frame, event, value)
         if (self.guard._STATE.get('case') != 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct'
                 or frame.f_code.co_filename != '/source/tests/test_server.py'
                 or frame.f_code.co_name != '_call_process_mcp'
