@@ -686,3 +686,7 @@ census, cache header, source/image binding and final byte recheck still runs
 on every consumption. No stat-only cache, prior verification result, launch
 permission or mutable namespace is reused. This removes repeated synchronous
 compilation from the event-loop spawn path without extending test deadlines.
+
+The paused spawn alias is anchored to the frozen original await expression at
+line 437. A source-AST control distinguishes it from the unrelated line-434
+cleanup-method assignment; synthetic frame metadata alone is insufficient.

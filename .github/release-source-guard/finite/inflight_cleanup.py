@@ -59,7 +59,7 @@ def admit(argv, cwd, environment, state, frames, refuse):
         product = root / 'src/unrest_harness/acp_runner.py'
         call = next((f for f in frames if f.f_code.co_filename == str(product)
                      and f.f_code.co_name == '_handle_terminal_create'), None)
-        if paused is None or paused.f_lineno != 434 or call is None:
+        if paused is None or paused.f_lineno != 437 or call is None:
             refuse('inflight_terminal_chain')
         product_pin = hashlib.sha256(product.read_bytes()).hexdigest()
         product_module = sys.modules.get(call.f_globals.get('__name__'))

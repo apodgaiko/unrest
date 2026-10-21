@@ -91,7 +91,7 @@ def test_third_child_requires_original_paused_producer_and_product_frame(model, 
     m.frame.f_lineno = 472
     m.frame.f_locals.update(client=client, children=children)
     paused = SimpleNamespace(f_code=named(m.code, 'paused_spawn'), f_globals=m.frame.f_globals,
-        f_lineno=434, f_locals={'spawn': asyncio.subprocess.create_subprocess_exec,
+        f_lineno=437, f_locals={'spawn': asyncio.subprocess.create_subprocess_exec,
             'args': tuple(m.argv), 'kwargs': {'cwd': str(m.temporary), 'env': {}}})
     product = SimpleNamespace(f_code=named(code, '_handle_terminal_create'), f_globals=vars(module),
         f_lineno=1034, f_locals={'self': client})
@@ -101,3 +101,18 @@ def test_third_child_requires_original_paused_producer_and_product_frame(model, 
     product.f_locals['self'] = object()
     with pytest.raises(RuntimeError, match='terminal_context'):
         route.admit(m.argv, str(m.temporary), {}, m.state, [m.frame, paused, product], m.refuse)
+
+
+def test_paused_spawn_anchor_is_the_original_await_expression():
+    import ast
+    tree = ast.parse((ROOT / route.SOURCE).read_bytes())
+    owner = next(node for node in tree.body if isinstance(node, ast.AsyncFunctionDef)
+                 and node.name == route.OWNER)
+    paused = next(node for node in owner.body if isinstance(node, ast.AsyncFunctionDef)
+                  and node.name == 'paused_spawn')
+    calls = [node for node in ast.walk(paused) if isinstance(node, ast.Await)
+             and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+             and node.value.func.id == 'spawn']
+    assert len(calls) == 1 and calls[0].lineno == 437
+    wrong = next(node for node in owner.body if node.lineno == 434)
+    assert isinstance(wrong, ast.Assign) and ast.unparse(wrong.value) == 'a._close_subprocess'
