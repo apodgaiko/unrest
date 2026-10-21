@@ -10,6 +10,11 @@ from primary_dependency_authority import DependencySourceAuthority as OriginalDe
 
 class OwnedMultiprocessCustody:
     def start(self, *args, **kwargs):
+        from finite.launch_preflight_routes import ALIAS_PATH, SOURCE, PIN
+        if self.manifest['product_pins'].get(SOURCE) == PIN:
+            if ALIAS_PATH in self.manifest['runtime']['paths']:
+                raise RuntimeError('launch_preflight_duplicate_alias')
+            self.manifest['runtime']['paths'].append(ALIAS_PATH)
         result = super().start(*args, **kwargs)
         from journal_supervisor import JournalSupervisor
         JournalSupervisor.adopt(self.supervisor)
@@ -49,7 +54,10 @@ class OwnedMultiprocessCustody:
         if invalid_resolve(self, trace, pid, path, vector, environment, cwd):
             return True
         from registry_native_custody import resolve as registry_resolve
-        return registry_resolve(self, trace, pid, path, vector, environment, cwd)
+        if registry_resolve(self, trace, pid, path, vector, environment, cwd):
+            return True
+        from launch_preflight_custody import resolve as plan_resolve
+        return plan_resolve(self, trace, pid, path, vector, environment, cwd)
 
     def exec_descriptors(self, trace, pid, vector, environment, cwd):
         if self.bound.get(pid, {}).get('registration', {}).get('class') == 'source-cohort2:invalid-format':

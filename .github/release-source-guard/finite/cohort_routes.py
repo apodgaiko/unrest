@@ -14,6 +14,7 @@ import types
 from typing import Any
 
 SITES = {
+    "tests/test_launch_preflight.py": {293},
     "src/unrest_harness/server.py": {266},
     "tests/test_acp_runner.py": {70, 214, 413, 465, 544, 632, 1079, 1380, 1840, 2206, 2265},
     "tests/test_completion_setup.py": {131, 132},
@@ -54,6 +55,12 @@ def bound_code(state: dict[str, Any], source: Path) -> Any:
 def select(
     argv: list[str], cwd: Any, env: Any, state: dict[str, Any], append: Any, refuse: Any
 ) -> Any:
+    route = Path(state["guard"]).with_name("launch_preflight_routes.py")
+    selected = sys.modules["runtime_guard"].checked_source(
+        route, state["direct_support"]["files"][str(route)]
+    )["select"](argv, cwd, env, state, append, refuse)
+    if selected is not None:
+        return selected
     frame = inspect.currentframe()
     try:
         while frame:

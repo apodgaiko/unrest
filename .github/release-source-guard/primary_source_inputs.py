@@ -77,6 +77,13 @@ def python_environment(environment, registration, flags, *, lease_context=None):
             and (environment.get('LANG') == 'C' or registration.get('case', '').startswith(
                 'tests/test_acp_runner.py::test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained['))) and lease_context is None:
         lease_context = lease_profile_context(environment, registration, flags)
+    from finite.launch_preflight_routes import ALIAS_CLASS, ALIAS_PATH, PIN, SOURCE
+    from pathlib import PurePosixPath
+    if (registration['class'] == ALIAS_CLASS and flags == [0, 0, 0]
+            and registration.get('case') == SOURCE + '::test_real_spawn_preserves_exact_plan_fields'
+            and registration['source_binding'] == {'path': '/source/' + SOURCE, 'line': 293, 'sha256': PIN}
+            and environment == {'PATH': str(PurePosixPath(ALIAS_PATH).parent), 'MARKER': 'exact'}):
+        return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     controlled = {
         'canonical-backend': ('/source/tests/fixtures/experimental_session_app_server.py',
                               'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53'),

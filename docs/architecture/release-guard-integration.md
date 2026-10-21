@@ -918,3 +918,25 @@ argument, foreign case or changed parent remains refused. The focused diagnostic
 also runs the original separate mock-agent case, so the unchanged probe reducer
 observes a genuine Python bootstrap rather than receiving a synthetic bridge.
 This focused result carries no full-source or provider-acceptance certification.
+
+The original LaunchPlan fixture slice retains actual shell scripts, relative and
+empty PATH entries, direct argv0 spellings, PATH obstruction probes, immutable
+plan fields, the Python symlink alias, legal empty environment names and genuine
+ENOEXEC. Only its nine unchanged source call sites receive fixture registrations;
+unknown owners, source/code changes, bodies, arguments, environments or roots fail
+closed. The alias remains an actual PATH-resolved symlink to the pinned runtime,
+confined to its one deterministic owned pytest directory. It is not translated to
+a different executable. Native script and alias image custody checks the actual
+exec stop before the first instruction, image bytes, argv, environment, cwd,
+credentials, parent birth and absence of surviving extra descriptors. Directory
+probes retain the actual EACCES; malformed files retain ENOEXEC.
+
+Two observation defects are corrected without new launch authority. Lifecycle
+image hashing uses the child's cwd for relative executable and PATH entries. Raw
+exec environment parsing accepts a legal empty name and preserves equals signs
+in the value, while duplicate names and malformed rows remain refused. The
+structural proof requires those two exact AST changes and restores them solely
+for comparison with the original complete executable-tree hash; original wait,
+launch admission, callback and tracer scheduling algorithms remain protected.
+All original product tests remain byte-identical. These focused custody tests do
+not replace the full unexcluded source checkpoint or prove provider acceptance.

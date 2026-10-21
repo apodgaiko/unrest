@@ -1357,13 +1357,10 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
                 "token": launch_token,
                 "start_new_session": kwargs.get("start_new_session", False),
                 "executable_sha256": digest(
-                    shutil.which(
-                        argv[0],
-                        path=dict(os.environ if kwargs.get("env") is None else kwargs["env"]).get(
-                            "PATH"
-                        ),
-                    )
-                    or argv[0]
+                    checked_source(
+                        Path(state["guard"]).with_name("launch_image.py"),
+                        state["direct_support"]["files"][str(Path(state["guard"]).with_name("launch_image.py"))],
+                    )["resolve"](argv[0], kwargs.get("cwd"), kwargs.get("env"))
                 ),
             }
         )

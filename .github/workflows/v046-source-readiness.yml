@@ -161,8 +161,8 @@ jobs:
           enable-cache: false
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Original candidate manifest oracle
-        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params0] tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params1]
+      - name: Original LaunchPlan custody cases
+        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/test_launch_preflight.py::test_relative_and_empty_path_entries_use_launch_cwd[tools] tests/test_launch_preflight.py::test_relative_and_empty_path_entries_use_launch_cwd[] tests/test_launch_preflight.py::test_real_direct_launch_preserves_original_argv0[relative] tests/test_launch_preflight.py::test_real_direct_launch_preserves_original_argv0[absolute] tests/test_launch_preflight.py::test_real_bare_launch_uses_later_valid_path_candidate tests/test_launch_preflight.py::test_real_spawn_preserves_exact_plan_fields tests/test_launch_preflight.py::test_direct_plan_copies_mutable_inputs_before_real_spawn tests/test_launch_preflight.py::test_plan_preserves_legal_empty_environment_name_and_equals_value tests/test_launch_preflight.py::test_real_invalid_format_is_distinct_safe_startup_failure
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: Preserve encrypted diagnostic evidence
         if: always()

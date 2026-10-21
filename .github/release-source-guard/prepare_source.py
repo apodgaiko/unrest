@@ -154,7 +154,7 @@ def main():
                            'files': {str(p): sha(p) for p in sorted(SUPPORT.glob('*.py'))}},
         'git_maintenance_sha256': sha('/usr/lib/git-core/git'),
         'copy_git': {p: sha(p) for p in ['/usr/bin/git', '/bin/git']},
-        'console_routes': [], 'copied_console_pins': {}, 'cohort_native_pins': {p: sha(p) for p in ['/usr/bin/git','/bin/git','/usr/bin/ps','/bin/ps','/usr/bin/sleep','/bin/sleep']},
+        'console_routes': [], 'copied_console_pins': {}, 'cohort_native_pins': {p: sha(p) for p in ['/usr/bin/git','/bin/git','/usr/bin/ps','/bin/ps','/usr/bin/sleep','/bin/sleep','/bin/sh','/usr/bin/true']},
         'copy_console': [], 'native_sysctl_offsets': {'system': 'Linux', 'abi': 'proc-stat-start-ticks'},
         'linux_profile_gate': {'path': '/opt/source-guard/profile_gate.so',
                                'sha256': sha('/opt/source-guard/profile_gate.so'),

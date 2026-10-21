@@ -110,7 +110,8 @@ TEST_NATIVE_TERMINAL_CASES = (
     'tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params0]',
     'tests/test_acp_runner.py::test_terminal_create_optional_nulls_use_omission_defaults[params1]',
 )
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES, TEST_CANDIDATE_FIXTURE_CASES, TEST_CANDIDATE_ORACLE_CASES, TEST_NATIVE_TERMINAL_CASES)
+TEST_LAUNCH_PLAN_CASES = ('tests/test_acp_runner.py::test_run_node_with_mock_agent', 'tests/test_launch_preflight.py::test_relative_and_empty_path_entries_use_launch_cwd[tools]', 'tests/test_launch_preflight.py::test_relative_and_empty_path_entries_use_launch_cwd[]', 'tests/test_launch_preflight.py::test_real_direct_launch_preserves_original_argv0[relative]', 'tests/test_launch_preflight.py::test_real_direct_launch_preserves_original_argv0[absolute]', 'tests/test_launch_preflight.py::test_real_bare_launch_uses_later_valid_path_candidate', 'tests/test_launch_preflight.py::test_real_spawn_preserves_exact_plan_fields', 'tests/test_launch_preflight.py::test_direct_plan_copies_mutable_inputs_before_real_spawn', 'tests/test_launch_preflight.py::test_plan_preserves_legal_empty_environment_name_and_equals_value', 'tests/test_launch_preflight.py::test_real_invalid_format_is_distinct_safe_startup_failure')
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES, TEST_CANDIDATE_FIXTURE_CASES, TEST_CANDIDATE_ORACLE_CASES, TEST_NATIVE_TERMINAL_CASES, TEST_LAUNCH_PLAN_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 

@@ -232,7 +232,7 @@ class OwnedTrace:
         environment = {}
         for row in environment_rows:
             key, separator, content = row.partition("=")
-            if not separator or not key or key in environment:
+            if not separator or key in environment:
                 raise RuntimeError("invalid or duplicate exec environment entry")
             environment[key] = content
         cwd = os.readlink(f"/proc/{pid}/cwd")

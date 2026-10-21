@@ -88,18 +88,46 @@ def restore_response_channel(tree):
     return tree
 
 
+def restore_environment_name_grammar(tree):
+    """Normalize only the explicit legal-empty-name parser correction."""
+    function = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                    and n.name == 'admit_exec')
+    matches = [n for n in ast.walk(function) if isinstance(n, ast.If)
+               and ast.unparse(n.test) == 'not separator or key in environment']
+    assert len(matches) == 1
+    assert ast.unparse(matches[0]) == (
+        "if not separator or key in environment:\n"
+        "    raise RuntimeError('invalid or duplicate exec environment entry')")
+    matches[0].test = ast.parse('not separator or not key or key in environment', mode='eval').body
+    return tree
+
+
+def restore_launch_image_observation(tree):
+    """Require the exact cwd-aware image observation; preserve the original AST."""
+    expected = ast.parse('checked_source(\n                        Path(state["guard"]).with_name("launch_image.py"),\n                        state["direct_support"]["files"][str(Path(state["guard"]).with_name("launch_image.py"))],\n                    )["resolve"](argv[0], kwargs.get("cwd"), kwargs.get("env"))', mode='eval').body
+    matches = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+               and isinstance(n.func, ast.Name) and n.func.id == 'digest'
+               and len(n.args) == 1
+               and ast.dump(n.args[0], include_attributes=False) == ast.dump(expected, include_attributes=False)]
+    assert len(matches) == 1
+    matches[0].args[0] = ast.parse("shutil.which(argv[0], path=dict(os.environ if kwargs.get('env') is None else kwargs['env']).get('PATH')) or argv[0]", mode='eval').body
+    return tree
+
+
 BASELINE_AST_SHA256 = {'finite/source_operations.py': 'a5d9f2958f8aa4dd57922407f3112d6917544cc87b22942febe254172bd50209', 'finite/runtime_guard.py': '3b26232fb8c8d033a984e5c0ba0fa1760600cb7b846af728b2fbbeb39ccd6fa4', 'finite/source_activation.py': 'fd49c0f30096da8163142b0f8f884d56a80dbf9f5b38b757f22486ec1f5efab7', 'linux_supervisor.py': '2fb9fb8012c9161fe64ad70dca851abdd65a2e86dca48701d3f5b2d2fabef99f', 'linux_trace.py': '344558174ec335476ac8f76fa0afdf4ee667a497825150e4388fdb8ca95f5b9c', 'primary_source_authority.py': 'b36a24d13b548d143379dacd844680f089a41e5f2666c9a9944eeb29607a1540'}
 
 
 def test_only_closed_telemetry_changes_original_executable_trees():
     for name, expected in BASELINE_AST_SHA256.items():
         tree = ast.parse((ROOT / name).read_bytes())
+        if name == 'finite/runtime_guard.py':
+            tree = restore_launch_image_observation(tree)
         if name == 'finite/source_operations.py':
             tree = restore_dependency_diagnostic(restore_query_route(tree))
         if name == 'linux_supervisor.py':
             tree = restore_response_channel(tree)
         if name == 'linux_trace.py':
-            tree = restore_primary_allocation(tree)
+            tree = restore_primary_allocation(restore_environment_name_grammar(tree))
         if name == 'primary_source_authority.py':
             tree = restore_bootstrap_cache(restore_producer_profile(tree))
         if name == 'finite/source_activation.py':
@@ -183,7 +211,7 @@ def test_ast_proof_rejects_original_wait_or_admission_mutation():
                            'os.waitpid(candidate, os.WNOHANG)'),
                           ('accepted = len(matches) == 1', 'accepted = True')]:
         assert before in original
-        tree = StripTelemetry().visit(restore_primary_allocation(ast.parse(original.replace(before, after))))
+        tree = StripTelemetry().visit(restore_primary_allocation(restore_environment_name_grammar(ast.parse(original.replace(before, after)))))
         assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() != BASELINE_AST_SHA256['linux_trace.py']
 
 
