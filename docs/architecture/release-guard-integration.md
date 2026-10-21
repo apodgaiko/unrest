@@ -1001,3 +1001,20 @@ UID and birth before allowing only filesystem socket creation. It registers no
 listener, connection or payload rights. The original test then moves that real
 socket into the unsafe carrier and retains every outside-effect assertion.
 The alias shares the existing owned tmpfs, preserving the original same-filesystem rename into the lock carrier.
+
+Controlled approval process admission covers the original nine scenario values
+and the seven exact durable-run boundaries, deriving the expected mode from the
+original case. Scenario file names, trace destinations, environment mode and
+byte-pinned Python adapter/relay/backend identities remain mandatory. Unknown
+scenarios and executor modules remain refused. The one additional RunControl
+executor reference is the pinned disposable approval fixture, bound to the
+original test function, control object, owned project root, seven exact fixture
+environment values and actual controlled-backend bytes. Ordinary product and
+script functions are compiled ordinarily; only the actual pytest test module
+uses assertion rewriting. No provider executable is substituted or admitted.
+
+The closed 33-case approval diagnostic uses the existing finite 600-second
+aggregate assignment budget, matching the existing cleanup/seam diagnostic
+mechanism. Every original per-case assertion and 2/15/25-second deadline remains
+unchanged; the command stays an exact source-only TEST selection with no release
+checkpoint authority. Altered or shortened selections retain refusal.

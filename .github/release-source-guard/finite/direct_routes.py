@@ -476,6 +476,11 @@ def admit(argv, cwd, env, state, append, refuse):
                 != state["product_pins"]["src/unrest_harness/runtime_executor.py"]
             ):
                 refuse("runtime_executor_drift")
+        elif control.executor_ref == 'tests.fixtures.approval_run_executor:execute':
+            carrier = Path(__file__).with_name('approval_run_owner.py')
+            namespace = {'__file__': str(carrier)}
+            exec(support_code(carrier, state), namespace)
+            namespace['validate'](control, environment, state, refuse)
         else:
             refuse("run_worker_executor_unknown")
         return result("source-run-worker", B["worker"], argv, directory, environment, append)

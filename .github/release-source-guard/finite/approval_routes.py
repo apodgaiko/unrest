@@ -11,6 +11,23 @@ import sys
 import stat
 
 CASE = "tests/test_approval_recovery.py::test_actual_acp_owner_native_subprocess_order_and_cleanup[success]"
+PREFIX = 'tests/test_approval_recovery.py::test_actual_acp_owner_native_subprocess_order_and_cleanup'
+MODES = ('success', 'delayed_interrupt', 'drop_ack', 're_denied', 'multiple',
+         'failed_interrupt', 'outstanding', 'late_ack', 'crash_after_send')
+
+
+DURABLE_PREFIX = 'tests/test_approval_recovery.py::test_durable_run_owner_and_restart_never_revives'
+DURABLE_MODES = {'success': 'success', 'cancel': 'success', 'crash': 'success',
+                 'cancel_after_send': 'drop_ack', 'crash_after_send': 'drop_ack',
+                 'cancel_after_continue': 'continuation_hold', 'crash_after_continue': 'continuation_hold'}
+
+
+def selected_mode(case):
+    if type(case) is not str:
+        return None
+    ordinary = next((mode for mode in MODES if case == PREFIX + '[' + mode + ']'), None)
+    return ordinary or next((mode for boundary, mode in DURABLE_MODES.items()
+                             if case == DURABLE_PREFIX + '[' + boundary + ']'), None)
 
 
 def sha(path):
@@ -18,7 +35,8 @@ def sha(path):
 
 
 def select(argv, cwd, env, state, append, refuse):
-    if state.get("case") != CASE:
+    mode = selected_mode(state.get('case'))
+    if mode is None:
         return None
     root = Path(state["checkout"])
     out = Path(state["guard"]).parent
@@ -43,8 +61,9 @@ def select(argv, cwd, env, state, append, refuse):
             if (
                 function.__globals__ is not frame.f_globals
                 or function.__code__ is not frame.f_code
-                or frame.f_code
-                != state["isolated_named"](state["isolated_source_code"](source), name)
+                or frame.f_code != state["isolated_named"](
+                    state["isolated_source_code"](source) if source == root / 'tests/test_approval_recovery.py'
+                    else compile(source.read_bytes(), str(source), 'exec', dont_inherit=True), name)
                 or sys.modules.get(function.__module__) is None
                 or vars(sys.modules[function.__module__]) is not frame.f_globals
             ):
@@ -130,26 +149,29 @@ def select(argv, cwd, env, state, append, refuse):
         if spawn is not None and len(argv) == 3 and argv[:2] == [sys.executable, str(fixture)]:
             checked(spawn, spawn.f_globals["spawn_launch"], acp, "spawn_launch")
             owner_path = pinned("tests/test_approval_recovery.py")
-            module = sys.modules.get("tests.test_approval_recovery")
+            durable = state['case'].startswith(DURABLE_PREFIX + '[')
+            module = sys.modules.get('tests.fixtures.approval_run_executor' if durable else 'tests.test_approval_recovery')
             if module is None:
                 return None
-            function = module.test_actual_acp_owner_native_subprocess_order_and_cleanup
-            if (
-                function.__globals__ is not vars(module)
-                or function.__code__
-                != state["isolated_named"](
-                    state["isolated_source_code"](owner_path), function.__name__
-                )
-                or module.FIXTURES != root / "tests/fixtures"
-            ):
-                refuse("approval_original_owner_drift")
+            if durable:
+                owner_path = pinned('tests/fixtures/approval_run_executor.py')
+                function = module.execute
+                expected_owner = compile(owner_path.read_bytes(), str(owner_path), 'exec', dont_inherit=True)
+            else:
+                function = module.test_actual_acp_owner_native_subprocess_order_and_cleanup
+                expected_owner = state['isolated_source_code'](owner_path)
+            if (function.__globals__ is not vars(module)
+                    or function.__code__ != state['isolated_named'](expected_owner, function.__name__)
+                    or not durable and module.FIXTURES != root / 'tests/fixtures'
+                    or durable and state['class'] != 'source-run-worker'):
+                refuse('approval_original_owner_drift')
             scenario = Path(argv[2])
             plan = spawn.f_locals["plan"]
             scenario_body = json.loads(scenario.read_bytes())
-            expected_prefix = {"mode": "success", "trace": str(scenario.parent / "trace.jsonl")}
+            expected_prefix = {'mode': mode, 'trace': str(scenario.parent / ('run-methods.jsonl' if durable else 'trace.jsonl'))}
             handoff = Path(scenario_body.get("handoff", ""))
             if (
-                scenario.name != "scenario.json"
+                scenario.name != ('run-scenario.json' if durable else 'scenario.json')
                 or not scenario.resolve().is_relative_to(owned)
                 or set(scenario_body) != {"mode", "trace", "handoff"}
                 or any(scenario_body[k] != v for k, v in expected_prefix.items())
@@ -207,7 +229,7 @@ def select(argv, cwd, env, state, append, refuse):
                 or backend_path.name != "controlled-backend"
                 or backend_path.read_bytes() != backend_body
                 or sha(backend_path) != digest
-                or scenario["mode"] != "success"
+                or scenario["mode"] != mode
                 or env["CONTROLLED_APPROVAL_TRACE"] != scenario["trace"]
             ):
                 refuse("approval_relay_identity_drift")
@@ -234,7 +256,7 @@ def select(argv, cwd, env, state, append, refuse):
                 or backend.resolve() != backend
                 or backend.read_bytes() != body
                 or sha(backend) != local["backend_digest"]
-                or env["CONTROLLED_APPROVAL_MODE"] != "success"
+                or env["CONTROLLED_APPROVAL_MODE"] != mode
             ):
                 refuse("approval_backend_identity_drift")
             return registration(

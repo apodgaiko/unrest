@@ -6,7 +6,7 @@ import json
 import re
 import shlex
 
-from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
+from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
 
 
 def require_full_input(value, script, workflow):
@@ -38,7 +38,7 @@ def test_plan(script, workflow, mode):
     if script not in allowed:
         raise RuntimeError('primary_source_test_script')
     seam_scripts = {('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
-                    for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES)}
+                    for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES)}
     return {'schema': 'unrest.v046.primary-script-plan.v1',
             'duty': 'TEST-source-' + mode.removeprefix('TEST-'),
             'script_sha256': sha(script), 'workflow_sha256': sha(workflow.encode()),
