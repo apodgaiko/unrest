@@ -949,3 +949,11 @@ permits only the stated observation expression change; the endpoint closure,
 installer, initialize-inner code/globals and original Popen constructor checks
 remain mandatory. Related archive and diagnostic structural controls use the
 same explicit delta normalization and retain their original baseline hashes.
+
+The exact guard update propagates through the journal loader, package loader and
+child-relative constructor binding. All three retain a single strict operations
+hash. The historical constructor-domain control now enumerates the already
+existing dependency-verification override as well as rows and admit, and pins
+that override's original AST. It continues to forbid a constructor override.
+The finite native/grammar/LaunchPlan regression controls run inside the Linux
+compartment control suite as well as locally.

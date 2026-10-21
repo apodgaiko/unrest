@@ -122,7 +122,7 @@ def test_exact_version_transition_keeps_historical_template_and_core():
                if pin != original['product_pins'][name]) == set(release_source_inputs.POST)
     assert template['product_pins'] | release_source_inputs.PRE == original['product_pins']
     for name, pin in {
-        'finite/runtime_guard.py': '475f460e197fa896a7a8ef59ca48f986445e7749ba7efd09137d9cc480f5686e',
+        'finite/runtime_guard.py': '68abd1e8ca8b2fed37a2fd2298dc39c1e8d822fa3c4065ceb53bc6a54e0684eb',
         'primary_source_authority.py': 'ac7de9fabf159b37517a8acfba9eea9b3d903750c05f8509e8b80627b8371abc',
     }.items():
         assert hashlib.sha256((ROOT / '.github/release-source-guard' / name).read_bytes()).hexdigest() == pin

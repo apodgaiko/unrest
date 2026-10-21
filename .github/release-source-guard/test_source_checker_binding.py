@@ -106,7 +106,9 @@ def test_primary_specialization_pins_and_preserves_original_constructor_domain()
                   if isinstance(n, ast.Constant) and isinstance(n.value, str) and len(n.value) == 64)
     assert hashlib.sha256((support / 'primary_operations.py').read_bytes()).hexdigest() == digest
     cls = next(n for n in wrapper.body if isinstance(n, ast.ClassDef))
-    assert [n.name for n in cls.body if isinstance(n, ast.FunctionDef)] == ['rows', 'admit']
+    assert [n.name for n in cls.body if isinstance(n, ast.FunctionDef)] == ['dependency', 'rows', 'admit']
+    dependency = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'dependency')
+    assert hashlib.sha256(ast.dump(dependency, include_attributes=False).encode()).hexdigest() == '1af30a5615d7d797916b8194491f1eecacba337b1354725579f810bcccf46842'
     assert cls.bases[0].id == '_PrimaryOperations'
     original = ast.parse((support / 'primary_operations.py').read_bytes())
     assert len([n for n in original.body if isinstance(n, ast.ClassDef)]) == 1

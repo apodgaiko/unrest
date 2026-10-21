@@ -322,7 +322,7 @@ def install(state, activation, emit, refuse, checked):
     # The journal specialization inherits this exact constructor and native
     # route. Its selection does not make any new constructor acceptable.
     operations_source = Path('/guard/primary_operations.py')
-    if guard.digest(operations_source) != 'd09b313bd7587996e3b5e9380732db624623cd8723ec0d4ed89ddd2ebd325470':
+    if guard.digest(operations_source) != '6b0c993facb604cbb0978e0bea20c14b02493654e07bb4331604ac536e8d26be':
         refuse('child_relative_operation_constructor_source')
     operations_code = compile(operations_source.read_bytes(), str(operations_source),
                               'exec', dont_inherit=True)
