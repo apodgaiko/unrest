@@ -845,3 +845,9 @@ events, change any current-byte verification, admit a child or alter a timer.
 The original differential profile and constructor-return controls remain
 required, with native-mode, exception, unrelated-observer and thread identity
 controls alongside them. Compiler/runtime/source/module pins remain exact.
+
+A native observer callback failure follows `sys.setprofile`'s ordinary error
+semantics: remove the current thread's observer before unwinding, preserve the
+original exception object and traceback, and do not emit a second constructor
+return callback with None. Other threads retain their configured observer.
+The original constructor-refusal control checks this without alteration.

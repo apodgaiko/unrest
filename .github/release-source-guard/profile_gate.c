@@ -102,6 +102,19 @@ static PyObject *gate_forward(Gate *self, PyFrameObject *frame, PyObject *event,
     return PyObject_CallFunctionObjArgs(self->callback, (PyObject *)frame, event, value, NULL);
 }
 
+static int gate_failed(void) {
+    /* Match sys.setprofile's trampoline: a failed callback is removed before
+     * unwinding can emit another return event. Keep the original exception. */
+    PyObject *error = PyErr_GetRaisedException();
+    if (!error) {
+        PyErr_SetString(PyExc_RuntimeError, "native profile callback failed without an exception");
+        error = PyErr_GetRaisedException();
+    }
+    PyEval_SetProfile(NULL, NULL);
+    PyErr_SetRaisedException(error);
+    return -1;
+}
+
 static int gate_profile(PyObject *object, PyFrameObject *frame, int what, PyObject *value) {
     /* PyEval's native hook keeps this exact Gate as c_profileobj, so
      * sys.getprofile(), restoration and thread inheritance keep their identity.
@@ -110,12 +123,12 @@ static int gate_profile(PyObject *object, PyFrameObject *frame, int what, PyObje
     Gate *self = (Gate *)object;
     if (what < 0 || what >= 7 || !self->events[what]) {
         PyErr_SetString(PyExc_RuntimeError, "unsupported native profile event");
-        return -1;
+        return gate_failed();
     }
     PyObject *event = Py_NewRef(self->events[what]);
     PyObject *result = gate_forward((Gate *)object, frame, event, value ? value : Py_None);
     Py_DECREF(event);
-    if (!result) return -1;
+    if (!result) return gate_failed();
     Py_DECREF(result);
     return 0;
 }

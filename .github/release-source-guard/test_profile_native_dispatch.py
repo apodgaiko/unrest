@@ -110,5 +110,6 @@ def test_native_selected_callback_failure_propagates_original_exception(native_g
         with pytest.raises(RuntimeError) as caught:
             selected()
         assert caught.value is cause
+        assert sys.getprofile() is None  # Same single-error behavior as sys.setprofile.
     finally:
         sys.setprofile(before)
