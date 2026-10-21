@@ -1,48 +1,124 @@
-"""Observer-only JSON decoding reuse after complete current-byte reads.
-
-No stat/mtime shortcut and no stale fallback: every acquisition reads every
-current journal. Public consumers receive fresh JSON objects. No policy result or parsed mutable object is retained between consumers.
-"""
+"""Current-byte journal snapshots; only immutable parsing metadata crosses reads."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 import json
 from pathlib import Path
+
+TIMED = frozenset({'admitted', 'actual_launch_binding', 'ready', 'source_entry',
+                   'test_outcome', 'actual_parent_preexit_drain',
+                   'custody_IPC_listener_ready', 'custodian_stage'})
+MARKER = ('owner_pid', 'kind', 'token', 'pid', 'phase', 'outcome', 'class')
+
+
+def descriptor(row):
+    """Index original refresh's existing no-effect predicates, never an admission."""
+    try:
+        kind = row['kind']
+        hash(kind)
+        marker = tuple(row.get(key) for key in MARKER) if kind in TIMED else None
+        if marker is not None:
+            hash(marker)
+        enabled = kind == 'registered' and bool(row.get('python', True))
+        pid = row['pid'] if enabled else None
+        hash(pid)
+        return kind, marker, pid, enabled
+    except (KeyError, TypeError):
+        # Let the complete original loop establish error order and side effects.
+        return None
+
+
+class JournalSnapshot(Sequence):
+    """One current acquisition; mutable JSON values never cross snapshots."""
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self.count = sum(len(chunk[1]) for chunk in chunks)
+        self.parsed = {}
+        self.full = None
+
+    def __len__(self):
+        return self.count
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return self.materialize()[index]
+        if index < 0:
+            index += self.count
+        if not 0 <= index < self.count:
+            raise IndexError(index)
+        if self.full is not None:
+            return self.full[index]
+        if index not in self.parsed:
+            offset = index
+            for chunk in self.chunks:
+                if offset < len(chunk[1]):
+                    self.parsed[index] = json.loads(chunk[1][offset])
+                    break
+                offset -= len(chunk[1])
+        return self.parsed[index]
+
+    def __iter__(self):
+        return iter(self.materialize())
+
+    def materialize(self):
+        if self.full is None:
+            rows = []
+            for chunk in self.chunks:
+                try:
+                    current = json.loads(chunk[2])
+                except RecursionError:
+                    current = [json.loads(line) for line in chunk[1]]
+                rows.extend(current)
+            for index, row in self.parsed.items():
+                rows[index] = row
+            self.full = rows
+        return self.full
+
+    def census(self, registered, timed):
+        """Keep every effectful original refresh row and its lifecycle witnesses."""
+        selected, lifecycles, pending = [], [], False
+        index = 0
+        for chunk in self.chunks:
+            for item in chunk[3]:
+                if item is None:
+                    return self.materialize()
+                kind, marker, pid, enabled = item
+                unresolved = enabled and pid not in registered
+                if kind == 'forbidden' or unresolved or marker is not None and marker not in timed:
+                    selected.append(index)
+                if unresolved:
+                    pending = True
+                if kind == 'launch_lifecycle_binding':
+                    lifecycles.append(index)
+                index += 1
+        if pending:
+            selected = sorted(set(selected) | set(lifecycles))
+        return [self[index] for index in selected]
 
 
 class EventJournal:
     def __init__(self):
         self._snapshots = {}
 
-    def _current(self, directory):
-        current = []
-        retained = {}
+    def snapshot(self, directory):
+        current, retained = [], {}
         for path in sorted(Path(directory).glob('*.jsonl')):
             body = path.read_bytes()
-            snapshot = self._snapshots.get(path)
-            if snapshot is None or snapshot[0] != body:
-                text = body.decode('utf-8')
-                lines = []
-                for line in text.splitlines():
+            chunk = self._snapshots.get(path)
+            if chunk is None or chunk[0] != body:
+                lines, metadata = [], []
+                for line in body.decode('utf-8').splitlines():
                     try:
-                        json.loads(line)
+                        row = json.loads(line)
                     except json.JSONDecodeError:
                         continue
                     lines.append(line)
-                snapshot = (body, lines, '[' + ','.join(lines) + ']')
-            retained[path] = snapshot
-            current.append(snapshot)
+                    metadata.append(descriptor(row))
+                chunk = (body, tuple(lines), '[' + ','.join(lines) + ']', tuple(metadata))
+            retained[path] = chunk
+            current.append(chunk)
         self._snapshots = retained
-        return current
+        return JournalSnapshot(tuple(current))
 
     def events(self, directory):
-        """Current values with fresh mutable identities, as before caching."""
-        result = []
-        for snapshot in self._current(directory):
-            try:
-                rows = json.loads(snapshot[2])
-            except RecursionError:
-                # The array envelope adds one level; retain the original
-                # per-line semantics for a current record near that limit.
-                rows = [json.loads(line) for line in snapshot[1]]
-            result.extend(rows)
-        return result
+        return self.snapshot(directory).materialize()

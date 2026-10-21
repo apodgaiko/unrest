@@ -30,6 +30,19 @@ TMPFS = {'/work': 'rw,nosuid,nodev,size=512m,uid=20000,gid=20000,mode=0711',
          **source_root.OVERLAYS,
          '/receipts': 'rw,nosuid,nodev,noexec,size=32m,uid=20001,gid=20001,mode=0755'}
 
+
+def resources(spec=None):
+    """Only the exact full source command receives its finite workspace budget."""
+    mounts, memory = dict(TMPFS), 1073741824
+    if spec is not None and (spec.get('duty') == 'v0.4.7 source suite'
+                             or spec.get('source_mode') == 'SOURCE'):
+        if (spec.get('duty') != 'v0.4.7 source suite' or spec.get('source_mode') != 'SOURCE'
+                or spec.get('commands') != [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']]):
+            raise RuntimeError('primary_source_resource_scope')
+        mounts['/work'] = 'rw,nosuid,nodev,size=2g,uid=20000,gid=20000,mode=0711'
+        memory = 3221225472
+    return mounts, memory
+
 KINDS = {name: phase.output for name, phase in catalog().items()}
 KINDS.update({'TEST-source-positive': 'primary-source-positive',
               'TEST-source-poison': 'primary-source-poison'})
@@ -63,11 +76,12 @@ def retain_phase(custody, spec, records, source_pins):
     return 0, hashlib.sha256(canonical(phase)).hexdigest()
 
 
-def validate(config, image, mounts):
+def validate(config, image, mounts, spec=None):
+    tmpfs, memory = resources(spec)
     host = config['HostConfig']
     expected = {'ReadonlyRootfs': True, 'Privileged': False, 'NetworkMode': 'none',
                 'PidMode': '', 'IpcMode': 'private', 'CgroupnsMode': 'private',
-                'PidsLimit': 128, 'Memory': 1073741824, 'Tmpfs': TMPFS,
+                'PidsLimit': 128, 'Memory': memory, 'Tmpfs': tmpfs,
                 'SecurityOpt': ['no-new-privileges'], 'CapDrop': ['ALL']}
     caps = host['CapAdd']
     if (any(host.get(key) != value for key, value in expected.items()) or len(caps) != 5
@@ -193,12 +207,13 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
             raise RuntimeError('primary_package_current_input')
         (inputs / 'package-input.json').write_bytes(canonical(descriptor))
         mounts['/package-input'] = str(root / 'package-input')
+    tmpfs, memory = resources(spec)
     container = 'primary-script-' + spec['script_sha256'][:24]
     argv = ['docker', 'create', '--name', container, '--read-only', '--network=none',
             '--ipc=private', '--cgroupns=private', '--cap-drop=ALL', '--cap-add=SETUID',
             '--cap-add=SETGID', '--cap-add=SETPCAP', '--cap-add=SYS_PTRACE', '--cap-add=DAC_READ_SEARCH',
-            '--security-opt=no-new-privileges', '--pids-limit=128', '--memory=1g',
-            *['--tmpfs=' + path + ':' + options for path, options in TMPFS.items()],
+            '--security-opt=no-new-privileges', '--pids-limit=128', '--memory=' + str(memory),
+            *['--tmpfs=' + path + ':' + options for path, options in tmpfs.items()],
             *['--mount=type=bind,src=' + origin + ',dst=' + target + ',readonly' for target, origin in mounts.items()],
             '--entrypoint=/usr/local/bin/python', image, '-B', '/guard/primary_compartment.py']
     STAGE = 'identity'
@@ -209,7 +224,7 @@ def prepare_capsule(spec, script, expected, source_input, test_mode, package_tes
     return {'root': root, 'raw': raw, 'log': log, 'control': control,
             'custody': custody, 'image': image, 'source_pins': source_pins,
             'container': container, 'identity': identity,
-            'source_invocation': source_invocation, 'inputs': inputs, 'argv': argv, 'mounts': mounts}
+            'source_invocation': source_invocation, 'inputs': inputs, 'argv': argv, 'mounts': mounts, 'spec': spec}
 
 
 def create_capsule(prepared):
@@ -220,7 +235,7 @@ def create_capsule(prepared):
     (prepared['raw'] / 'container-inspect.json').write_bytes(inspected)
     config = json.loads(inspected)[0]
     source_root.bind_capsule(config)
-    validate(config, prepared['image'], prepared['mounts'])
+    validate(config, prepared['image'], prepared['mounts'], prepared.get('spec'))
     source_root.verify(Path(prepared['mounts']['/source']),
                        json.loads((prepared['inputs'] / 'source-custody.json').read_bytes()))
 

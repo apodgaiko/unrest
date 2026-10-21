@@ -553,14 +553,39 @@ launch plan argv and environment all remain required. The same existing local
 adapter class is reused; no provider, generic Python, Git or class-prefix route
 is added. Original assertions, process waits and deadlines remain unchanged.
 
-The source-authority extension composes a parsing-only journal reader after the
-original supervisor constructor. The original instance, sockets, callback
-references and state remain intact. The base supervisor's complete executable
-AST remains unchanged; policy, authentication, refresh, tick and kernel ownership
-methods are inherited without overrides. Every event acquisition rereads all
-current bytes, with no size/mtime trust or stale fallback. Decoding validation may
-be reused only for identical bytes; every consumer receives fresh ordinary JSON
-objects. No mutable parsed rows or policy verdicts are cached. Append, prefix
-replacement, truncation, deletion, unreadable data and malformed-line handling
-retain the original reader behavior. This removes redundant per-line decoder
-calls without pausing a test clock or increasing any deadline.
+The source-authority extension preserves the original supervisor instance,
+sockets and callback references. Its base executable AST remains unchanged.
+Every census rereads all current journal bytes; only immutable line metadata
+is reused for identical bytes. No size/mtime trust, stale fallback, mutable
+parsed-row cache or cached authorization verdict is permitted.
+
+The original refresh loop receives every forbidden row, every unresolved Python
+registration, every newly observed timing marker, and all lifecycle witnesses
+when a registration remains unresolved. It still performs the original kernel
+identity and ownership decisions. Only rows for which that same loop has no
+effect under its current deduplication state are omitted from this census.
+Malformed metadata falls back to the complete original loop, preserving error
+and effect order. Differential controls compare state, kernel calls, repeated
+poison effects and errors against the unchanged original implementation across
+append, replacement, truncation and deduplication-state changes.
+
+The tick retains a snapshot of the complete current byte acquisition. The
+original policy handler always receives its entire ordinary JSON list;
+materialization preserves per-snapshot object identities but shares no mutable
+JSON values with another acquisition. Authentication, native ownership,
+receipt decisions, clocks, waits and deadlines remain original. Census
+telemetry includes byte acquisition, indexing and the original refresh work;
+it cannot conceal the observer's own cost. Idle census controls establish no
+old-row decoding without treating these controls as source certification or
+native provider acceptance.
+
+Negative startup planning applies only to its nine exact original probe cases.
+Another cleanup test using the same frozen inline literal retains the original
+launch decision and receives no negative-probe plan or network permission.
+
+The full unexcluded source command alone has a finite 2 GiB disposable `/work`
+and 3 GiB container memory budget. This replaces the observed exhausted 512 MiB
+workspace, without changing test assertions or deadlines. Other duties retain
+their previous limits. Inspected capacity, paths, ownership, read-only source,
+network isolation and capabilities must still match the exact selected plan;
+no additional mount, executable or native/provider authority follows.

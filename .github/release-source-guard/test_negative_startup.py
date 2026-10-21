@@ -49,7 +49,8 @@ def test_kernel_birth_mutations_refuse(field):
 def guard():
     def refuse(reason):
         raise RuntimeError(reason)
-    return SimpleNamespace(_STATE={}, refuse=refuse)
+    return SimpleNamespace(_STATE={'case': next(iter(negative.CASES)), 'class': 'pytest-root',
+                                  'token': 'root', 'checkout': '/source'}, refuse=refuse)
 
 
 def test_existing_plan_rpc_has_no_listener_or_connection_grant(monkeypatch):

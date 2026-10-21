@@ -101,6 +101,8 @@ def fixture_context(guard, payload):
 def plan(guard, payload, request):
     if payload.get('class') not in {'inline:test_acp_cleanup.py:50', 'inline:test_acp_cleanup.py:51'}:
         return
+    if not owned_case(guard._STATE):
+        return
     context = fixture_context(guard, payload)
     if context is None:
         guard.refuse('negative_startup_unbound_inline')

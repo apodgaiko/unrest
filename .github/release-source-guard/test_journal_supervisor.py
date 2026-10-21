@@ -10,16 +10,16 @@ from linux_supervisor import Supervisor
 from owned_multiprocess_authority import OwnedMultiprocessCustody
 
 
-def test_only_event_reader_is_overridden():
+def test_authority_methods_remain_original_with_closed_census_and_list_adapters():
     original_methods = {name: value for name, value in vars(Supervisor).items()
                         if callable(value)}
     assert 'events' in original_methods and len(original_methods) > 10
     for name, method in original_methods.items():
-        if name != 'events':
+        if name not in {'events', 'refresh', 'handle'}:
             assert getattr(JournalSupervisor, name) is method, name
     assert set(vars(JournalSupervisor)) - {
         '__module__', '__doc__', '__firstlineno__', '__static_attributes__',
-        'adopt', 'events'} == set()
+        'adopt', 'events', 'journal', 'refresh', 'handle'} == set()
 
 
 def test_adoption_preserves_instance_state_and_existing_references():
