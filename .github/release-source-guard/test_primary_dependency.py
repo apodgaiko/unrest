@@ -371,9 +371,13 @@ def test_consumer_reacquires_complete_file_bytes(consumer_site):
     'capture_response_bytes', 'capture_response_route', 'capture_response_owner',
     'capture_response_links', 'capture_response_mode', 'capture_exit', 'capture_late',
     'wheel_route', 'retained_wheel_bytes', 'retained_wheel_mode', 'retained_wheel_replacement'])
-def test_consumer_default_denies_drift_and_foreign_lineage(consumer_site, change):
+@pytest.mark.parametrize('memoized', [False, True])
+def test_consumer_default_denies_drift_and_foreign_lineage(consumer_site, change, memoized):
     fixture = consumer_site
     site, support = fixture.site, dict(fixture.support)
+    comparisons = {} if memoized else None
+    if memoized:
+        dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
     if change == 'unknown_file':
         (site / 'unknown.txt').write_bytes(b'unknown')
     elif change == 'missing_file':
@@ -470,16 +474,20 @@ def test_consumer_default_denies_drift_and_foreign_lineage(consumer_site, change
             fixture.value['bootstrap_captures'][1]['wheel']['path'] = '/foreign/' + dependency.WHEEL_NAME
         support = fixture.publish()
     with pytest.raises((RuntimeError, FileNotFoundError)):
-        dependency.verify(site, support)
+        dependency.verify(site, support, comparisons=comparisons)
 
 
 @pytest.mark.parametrize('change', ['none', 'magic', 'header', 'code', 'mode', 'hardlink'])
-def test_consumer_requires_exact_current_source_cache(consumer_site, change):
+@pytest.mark.parametrize('memoized', [False, True])
+def test_consumer_requires_exact_current_source_cache(consumer_site, change, memoized):
     import marshal
     fixture = consumer_site
     cache = Path(py_compile.compile(str(fixture.source), doraise=True))
     cache.chmod(0o644)
     body = cache.read_bytes()
+    comparisons = {} if memoized else None
+    if memoized:
+        dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
     if change == 'magic':
         cache.write_bytes(b'BAD!' + body[4:])
     elif change == 'header':
@@ -492,17 +500,21 @@ def test_consumer_requires_exact_current_source_cache(consumer_site, change):
     elif change == 'hardlink':
         os.link(cache, fixture.site.parent / 'foreign-cache-alias')
     if change == 'none':
-        result = dependency.verify(fixture.site, fixture.support)
+        result = dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
         assert result['source_bound_caches'] == 1
     else:
         with pytest.raises(RuntimeError):
-            dependency.verify(fixture.site, fixture.support)
+            dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
 
 
 @pytest.mark.parametrize('phase', ['before_full_read', 'after_full_read', 'late_membership'])
-def test_consumer_refuses_mutation_before_consumption(consumer_site, monkeypatch, phase):
+@pytest.mark.parametrize('memoized', [False, True])
+def test_consumer_refuses_mutation_before_consumption(consumer_site, monkeypatch, phase, memoized):
     fixture = consumer_site
     original = fixture.read
+    comparisons = {} if memoized else None
+    if memoized:
+        dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
     calls = 0
     def racing(path, uid, gid=None):
         nonlocal calls
@@ -519,7 +531,7 @@ def test_consumer_refuses_mutation_before_consumption(consumer_site, monkeypatch
         return result
     monkeypatch.setattr(dependency, 'read', racing)
     with pytest.raises(RuntimeError):
-        dependency.verify(fixture.site, fixture.support)
+        dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
 
 
 def test_declaration_duplicate_fields_refused():

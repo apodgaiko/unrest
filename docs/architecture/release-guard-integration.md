@@ -677,3 +677,12 @@ live-owner resolver after the original guard consumes the launch token. Its
 ordinary startup seal retains the actual alias/product source anchor rather
 than substituting the registry's unrelated line-51 call site. Foreign cases,
 changed vectors and calls outside the original activation frame still refuse.
+
+The PRIMARY integration retains pure dependency comparison derivations across
+launches: compiled comparison-only code is keyed by complete source bytes,
+filename and compilation options, and immutable code identities by complete
+marshaled code bytes. Every dependency read, custody/race check, directory
+census, cache header, source/image binding and final byte recheck still runs
+on every consumption. No stat-only cache, prior verification result, launch
+permission or mutable namespace is reused. This removes repeated synchronous
+compilation from the event-loop spawn path without extending test deadlines.

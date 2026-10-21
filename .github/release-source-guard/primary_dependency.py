@@ -590,13 +590,43 @@ def immutable_cache(namespace, name, source_name, optimize, expected_source):
     else:
         raise RuntimeError('primary_dependency_cache_immutable_flags')
     code = marshal.loads(payload[16:])
-    compiled = compile(source, str(SITE / source_name), 'exec', dont_inherit=True, optimize=optimize)
+    compiled = namespace.get('compile', compile)(
+        source, str(SITE / source_name), 'exec', dont_inherit=True, optimize=optimize)
     if namespace['code_identity'](code) != namespace['code_identity'](compiled):
         raise RuntimeError('primary_dependency_cache_immutable_code')
     return current
 
 
-def verify(site, support):
+def comparison_functions(namespace, cache):
+    """Reuse only pure immutable derivations of complete current input bytes."""
+    import marshal
+    import types
+    compiled, identities = cache.setdefault('compiled', {}), cache.setdefault('identities', {})
+    original = namespace['code_identity']
+    globals_copy = dict(original.__globals__)
+    original = types.FunctionType(original.__code__, globals_copy)
+    globals_copy['code_identity'] = original
+    def freeze(value):
+        if type(value) is dict:
+            return ('dict', tuple((key, freeze(item)) for key, item in sorted(value.items())))
+        if type(value) in (list, tuple):
+            return (type(value).__name__, tuple(freeze(item) for item in value))
+        return value
+    def current_compile(body, filename, mode, *, dont_inherit, optimize):
+        key = (body, filename, mode, dont_inherit, optimize)
+        if key not in compiled:
+            compiled[key] = compile(body, filename, mode, dont_inherit=dont_inherit, optimize=optimize)
+        return compiled[key]
+    def current_identity(code):
+        key = marshal.dumps(code)
+        if key not in identities:
+            identities[key] = freeze(original(code))
+        return identities[key]
+    namespace['compile'] = current_compile
+    namespace['code_identity'] = current_identity
+
+
+def verify(site, support, *, comparisons=None):
     """Consume only the observer-pinned PRIMARY domain; no path-prefix fallback."""
     if (Path(site) != SITE or set(support) != {'path', 'sha256', 'activation_sha256'}
             or support['path'] != str(RECEIPTS / 'primary-dependency.json')):
@@ -623,6 +653,8 @@ def verify(site, support):
         raise RuntimeError('primary_dependency_cache_verifier')
     namespace = {'__file__': str(source), '__name__': 'primary_dependency_activation'}
     exec(compile(source_body, str(source), 'exec', dont_inherit=True), namespace)
+    if comparisons is not None:
+        comparison_functions(namespace, comparisons)
     first, directories = site_metadata()
     source_map = cache_sources(first, value['files'])
     wanted_directories = {'.'}
