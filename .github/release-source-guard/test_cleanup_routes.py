@@ -283,3 +283,19 @@ def test_setup_commit_disables_only_incidental_housekeeping(model, mutation):
         result = routes.admit(argv, m.workspace, None, m.state, m.events.append, m.refuse)
         assert result['class'] == 'source-cleanup-git:124'
         assert result['python'] is False
+
+
+def test_all_active_cleanup_fixture_bindings_use_the_exact_approved_source():
+    import ast
+    from finite import negative_startup
+    from release_source_inputs import POST
+    expected = hashlib.sha256((ROOT / 'tests/test_acp_cleanup.py').read_bytes()).hexdigest()
+    assert expected == POST['tests/test_acp_cleanup.py'] == negative_startup.PIN
+    registry = ast.literal_eval(ast.parse((Path(__file__).parent / 'finite/registry.py').read_bytes()).body[1].value)
+    entries = [row for row in registry if row['source_binding']['path'] == '/source/tests/test_acp_cleanup.py']
+    assert [(row['class'], row['source_binding']['line']) for row in entries] == [
+        ('inline:test_acp_cleanup.py:50', 50), ('inline:test_acp_cleanup.py:51', 51)]
+    assert all(row['source_binding']['sha256'] == expected for row in entries)
+    assert [row['argv'] for row in entries] == [
+        ['-c', "import sys; print('private-startup-body',file=sys.stderr); sys.exit(23)"],
+        ['-c', 'import time; time.sleep(30)']]

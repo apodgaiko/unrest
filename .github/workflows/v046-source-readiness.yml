@@ -161,8 +161,8 @@ jobs:
           enable-cache: false
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Original recorded completion and cleanup timing cases
-        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/test_acp_cleanup.py::test_recorded_transport_failures[success-work] tests/test_acp_cleanup.py::test_recorded_transport_failures[success-validate] tests/test_acp_cleanup.py::test_recorded_transport_failures[success-terminal_reviewer]
+      - name: Original startup and inflight cleanup fixture cases
+        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-work] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-validate] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[exit-terminal_reviewer] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-work] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-validate] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[deadline-terminal_reviewer] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-work] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-validate] tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup[cancel-terminal_reviewer] tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False] tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[True]
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: Preserve encrypted diagnostic evidence
         if: always()

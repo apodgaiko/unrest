@@ -183,7 +183,7 @@ def test_exact_startup_diagnosis_is_bounded_and_cannot_certify_full():
 
 def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     import yaml
-    from primary_policy import TEST_CLEANUP_SUCCESS_CASES
+    from primary_policy import TEST_CLEANUP_FIXTURE_CASES
     path = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
     document = yaml.safe_load(path.read_text())
     job = document['jobs']['startup-cancellation-diagnosis']
@@ -192,7 +192,7 @@ def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
     steps = job['steps']
     call = next(step for step in steps if step.get('shell'))
-    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_CLEANUP_SUCCESS_CASES)
+    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_CLEANUP_FIXTURE_CASES)
     assert call['shell'] == 'python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}'
     assert steps[-1]['if'] == 'always()'
 
@@ -279,3 +279,22 @@ def test_cleanup_success_diagnosis_is_exact_and_keeps_source_deadlines():
     assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
     with pytest.raises(RuntimeError):
         plan(script, text, value)
+
+
+def test_exact_cleanup_fixture_diagnosis_retains_all_startup_and_inflight_cases():
+    from primary_policy import TEST_CLEANUP_FIXTURE_CASES, TEST_STARTUP_CASES, root_seconds
+    text, value = inputs()
+    assert TEST_CLEANUP_FIXTURE_CASES[:9] == TEST_STARTUP_CASES
+    assert TEST_CLEANUP_FIXTURE_CASES[9:] == (
+        'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[False]',
+        'tests/test_acp_cleanup.py::test_inflight_terminal_registration_before_inventory[True]')
+    script = (COMMAND + ' ' + ' '.join(TEST_CLEANUP_FIXTURE_CASES)).encode()
+    result = make_test_plan(script, text, 'TEST-positive')
+    assert result['timeout_seconds'] == root_seconds(result) == 180
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    with pytest.raises(RuntimeError):
+        plan(script, text, value)
+    with pytest.raises(RuntimeError):
+        make_test_plan(script + b' --maxfail=1', text, 'TEST-positive')
+    with pytest.raises(RuntimeError):
+        make_test_plan((COMMAND + ' ' + ' '.join(TEST_CLEANUP_FIXTURE_CASES[:-1])).encode(), text, 'TEST-positive')

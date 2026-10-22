@@ -224,7 +224,7 @@ def exact_inflight_environment(environment, registration, flags, context):
                 vector[0], '-c', 'import time; time.sleep(30)']).encode())
             and manifest['product_pins']['src/unrest_harness/acp_runner.py'] == binding['sha256']
             and manifest['product_pins']['tests/test_acp_cleanup.py'] ==
-                '564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8')
+                'f63f37e40e925d409c4f8203ebabe85dcc0bc5d7e9c77feb267c485eacfce321')
 
 
 def exact_terminal_environment(environment, registration, flags, context):

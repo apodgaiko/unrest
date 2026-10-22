@@ -1261,3 +1261,10 @@ exec decisions, child changes, poison, readable receipt channels and pending
 receipt clients force the original immediate service. Adoptive-wait collection
 and pre-wait identity acquisition remain outside this idle scheduling decision.
 No test deadline, original parent wait, source selection or review policy changes.
+
+The cleanup fixture's empty setup commit disables automatic Git maintenance and
+GC through command-local settings. It does not need a housekeeping child or a
+new native route. A reviewed fixture edit must update every current file-pin
+consumer together: product inputs, passive call-site anchors, inline registry,
+startup ownership and the exact in-flight locale predicate. Historical template
+preimages remain fixed; current source/owner/line/vector checks stay exact.

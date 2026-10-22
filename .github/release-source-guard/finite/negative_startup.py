@@ -15,7 +15,7 @@ import time
 import types
 
 SOURCE = 'tests/test_acp_cleanup.py'
-PIN = '564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8'
+PIN = 'f63f37e40e925d409c4f8203ebabe85dcc0bc5d7e9c77feb267c485eacfce321'
 OWNER = 'test_startup_failure_attribution_and_owned_cleanup'
 CASES = frozenset(SOURCE + '::' + OWNER + '[' + failure + '-' + role + ']'
                   for failure in ('exit', 'deadline', 'cancel')

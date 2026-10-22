@@ -25,7 +25,7 @@ def fixture():
         'manifest': {'checkout': '/source', 'owned_root': '/work/owned',
             'runtime': {'realpath': PYTHON, 'paths': [vector[0]]}, 'product_pins': {
                 'src/unrest_harness/acp_runner.py': binding['sha256'],
-                'tests/test_acp_cleanup.py': '564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8'}}}
+                'tests/test_acp_cleanup.py': 'f63f37e40e925d409c4f8203ebabe85dcc0bc5d7e9c77feb267c485eacfce321'}}}
     return registration, context
 
 
@@ -64,3 +64,10 @@ def test_no_context_or_foreign_env_or_flags_preserves_original_environment():
     assert inputs.python_environment({}, registration, [0, 0, 0]) == {}
     for env, flags in [({'X': 'foreign'}, [0, 0, 0]), ({}, [1, 0, 0])]:
         assert inputs.python_environment(env, registration, flags, lease_context=context) == env
+
+
+def test_historical_fixture_hash_cannot_gain_current_locale_mapping():
+    registration, context = fixture()
+    context['manifest']['product_pins']['tests/test_acp_cleanup.py'] = (
+        '564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8')
+    assert not inputs.exact_inflight_environment({}, registration, [0, 0, 0], context)
