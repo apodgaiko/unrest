@@ -307,8 +307,8 @@ class Observer:
                     os._exit(89)
         else:
             callback = self.finish_startup_stall if startup else self.retain_stall_snapshot
-            from primary_policy import TEST_GIT_OVERHEAD_CASES
-            if finite_diagnostic and item.nodeid in TEST_GIT_OVERHEAD_CASES:
+            if (finite_diagnostic and item.nodeid ==
+                    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]'):
                 self.overhead_thread = threading.get_ident()
                 callback = self.retain_guard_overhead
         self.startup_stall_timer = threading.Timer(

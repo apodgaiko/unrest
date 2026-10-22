@@ -469,3 +469,13 @@ def test_overhead_sampler_arms_only_exact_diagnostic_case(monkeypatch, mode, arm
     if armed:
         timers[0].callback()
         assert seen == [(obj.startup_stall_token, case, None)]
+
+
+def test_overhead_sampler_needs_no_host_policy_import_inside_compartment():
+    import ast
+    tree = ast.parse((Path(__file__).parent / 'primary_source_entry.py').read_bytes())
+    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'Observer')
+    call = next(node for node in cls.body if isinstance(node, ast.FunctionDef)
+                and node.name == 'pytest_runtest_call')
+    assert not any(isinstance(node, ast.ImportFrom) and node.module == 'primary_policy'
+                   for node in ast.walk(call))
