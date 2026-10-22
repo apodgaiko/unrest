@@ -476,3 +476,59 @@ def test_orphan_supervisor_delegates_actual_snapshot_without_mutating_birth(monk
     assert selected.registered[54]['identity'] == current and delegated['identity'] == current
     assert actual_events is events and supervisor.registered[54]['identity'] == birth
     assert request['identity'] == birth
+
+
+def exit_observer():
+    from types import SimpleNamespace
+    from approval_exit_observation import CASES
+    case = sorted(CASES)[0]
+    authority = SimpleNamespace(
+        bound={54: {'registration': {'class': 'source-approval-adapter'}}}, pipe_records=[],
+        supervisor=SimpleNamespace(events=lambda: [
+            {'kind': 'registered', 'pid': 54, 'case': case}]))
+    trace = SimpleNamespace(records=[{'kind': 'kernel_exit', 'pid': 54, 'raw': 15},
+                                    {'kind': 'tracer_terminal_wait', 'pid': 54, 'raw': 15}])
+    return authority, trace
+
+
+def test_exit_observation_separates_kernel_exit_from_actual_numeric_wait(monkeypatch):
+    import approval_exit_observation as observation
+    authority, trace = exit_observer()
+    monkeypatch.setattr(observation, 'snapshot', lambda pid: {'pid': pid, 'ppid': 1})
+    monkeypatch.setattr(observation, 'process_absent', lambda pid: True)
+    original = [dict(row) for row in trace.records]
+    observation.collect(authority, trace)
+    assert trace.records == original
+    before, after = authority.pipe_records
+    assert before['numeric_wait_observed'] is False and before['current_identity']['ppid'] == 1
+    assert after['numeric_wait_observed'] is True and after['raw'] == 15
+    assert after['process_absent_after_actual_wait'] is True
+    assert all(row['eligible_certificate'] is False for row in authority.pipe_records)
+    observation.collect(authority, trace)
+    assert len(authority.pipe_records) == 2
+
+
+def test_absent_process_does_not_fabricate_a_wait_or_remove_trace_failure(monkeypatch):
+    import approval_exit_observation as observation
+    authority, trace = exit_observer()
+    trace.records.pop()
+    def missing(pid):
+        raise FileNotFoundError('private message')
+    monkeypatch.setattr(observation, 'snapshot', missing)
+    observation.collect(authority, trace)
+    assert len(authority.pipe_records) == 1
+    record = authority.pipe_records[0]
+    assert record['numeric_wait_observed'] is False
+    assert record['unavailable'] == 'FileNotFoundError' and 'private message' not in str(record)
+    assert 'current_identity' not in record and 'process_absent_after_actual_wait' not in record
+
+
+def test_foreign_or_unregistered_exit_has_no_controlled_proof(monkeypatch):
+    import approval_exit_observation as observation
+    authority, trace = exit_observer()
+    authority.bound[54]['registration']['class'] = 'foreign'
+    observation.collect(authority, trace)
+    assert authority.pipe_records == []
+    trace.records.clear()
+    with pytest.raises(RuntimeError, match='trace_rewound'):
+        observation.collect(authority, trace)

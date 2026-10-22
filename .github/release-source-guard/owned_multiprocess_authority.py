@@ -25,6 +25,9 @@ class OwnedMultiprocessCustody:
         return result
 
     def tick(self, trace):
+        from approval_exit_observation import collect
+        if getattr(self, 'supervisor', None) is not None:
+            collect(self, trace)
         if getattr(self, 'supervisor', None) is None:
             return super().tick(trace)
         from trace_tick_schedule import TickSchedule

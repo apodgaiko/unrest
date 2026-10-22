@@ -1112,3 +1112,9 @@ RunControl's admitted session setup. Parent birth is therefore joined by PID,
 original PPID, boot/start clock and all four UIDs, with matching actual exit and
 terminal status. The surviving child's full current identity must still equal
 its authenticated READY identity except for its independently proved PPID.
+
+The source callback can separately observe the exact controlled approval child
+at a kernel exit and after the tracer's actual terminal wait. These read-only
+records bind their raw trace row, current identity (when still available),
+observer PID/UID and post-wait process absence. They neither alter the trace
+nor replace an original-parent wait, grant an effect, or certify a checkpoint.
