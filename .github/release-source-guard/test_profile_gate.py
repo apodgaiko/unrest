@@ -145,3 +145,25 @@ def test_pinned_operation_observer_keeps_all_actual_effects_and_event_arguments(
     assert collected == expected
     assert len(collected) == 6
     assert {row[1].co_filename for row in collected} == sources
+
+
+def test_metadata_cpu_diagnostic_keeps_native_gate_and_selected_events():
+    from guard_cost_profile import CostProfile
+    chosen = function('read', '/guard-proof/selected.py', 'return len((1, 2))')
+    records = []
+    state = {'isolated_composition': types.SimpleNamespace(codes=None)}
+    native = gate.make(lambda frame, event, value: records.append(event), state,
+                       {'/guard-proof/selected.py'})
+    previous = sys.getprofile()
+    try:
+        sys.setprofile(native)
+        monitor = CostProfile('/guard-proof')
+        assert monitor.start()
+        assert chosen() == 2
+        report = monitor.stop()
+        assert sys.getprofile() is native
+        assert report['complete'] and report['existing_profile_identity_retained']
+        assert report['rows'][0]['calls'] == 1
+        assert records == ['call', 'c_call', 'c_return', 'return']
+    finally:
+        sys.setprofile(previous)

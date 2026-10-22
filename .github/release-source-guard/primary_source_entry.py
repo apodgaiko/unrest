@@ -310,6 +310,12 @@ class Observer:
             if (finite_diagnostic and item.nodeid ==
                     'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]'):
                 self.overhead_thread = threading.get_ident()
+                support = '/guard/guard_cost_profile.py'
+                profiler = load('guard_cost_profile', support,
+                                self.manifest['direct_support']['files'][support])
+                self.metadata_monitor = profiler.CostProfile('/guard')
+                self.metadata_monitor.start()
+                self.metadata_case = item.nodeid
                 callback = self.retain_guard_overhead
         self.startup_stall_timer = threading.Timer(
             approval_seconds if approval_seconds is not None else 60 if startup else 10,
@@ -503,6 +509,11 @@ class Observer:
         return None
 
     def pytest_runtest_logreport(self, report):
+        if report.when == 'call' and report.nodeid == getattr(self, 'metadata_case', None):
+            result = self.metadata_monitor.stop()
+            self.metadata_case = None
+            sys.__stderr__.write('\n[retained guard CPU attribution]\n' + canonical(result).decode() + '\n')
+            sys.__stderr__.flush()
         if (report.when == 'teardown' or report.when == 'call'
                 and self.approval_stall_case != report.nodeid) and self.startup_stall_timer is not None:
             self.startup_stall_token = None

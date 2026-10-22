@@ -1388,3 +1388,12 @@ and static owner binding computes its three literal path strings once per call.
 These changes cache no file facts, move no admission checks and grant no routes.
 The deep-stack reproduction proves complete-row equivalence; only the unchanged
 original Linux case can demonstrate completion within its real deadline.
+
+
+The exact single-case TEST can additionally attribute instrumented main-thread
+CPU time to bounded metadata functions using a vacant CPython monitoring tool.
+It leaves the existing process and thread profile guards installed, never
+restarts other tools' events, and releases only its own callbacks and local
+flags after the original call report. It records names, counts and CPU totals,
+not values or bodies. This optional diagnosis is absent from SOURCE and other
+cases; its timings cannot certify performance or change any test deadline.

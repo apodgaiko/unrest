@@ -460,7 +460,9 @@ def test_overhead_sampler_arms_only_exact_diagnostic_case(monkeypatch, mode, arm
     obj = object.__new__(entry.Observer)
     obj.profile = {'source_mode': mode}
     path = '/guard/finite/orders_git_data.py'
-    obj.manifest = {'direct_support': {'files': {path: 'exact-pin'}}}
+    obj.manifest = {'direct_support': {'files': {path: 'exact-pin', '/guard/guard_cost_profile.py': 'profile-pin'}}}
+    monkeypatch.setattr(entry, 'load', lambda *args: SimpleNamespace(
+        CostProfile=lambda prefix: SimpleNamespace(start=lambda: True)))
     obj.guard = SimpleNamespace(checked_source=lambda actual, pin: {'CASES': {case: 'cohort'}})
     seen = []
     obj.retain_guard_overhead = lambda *args: seen.append(args)
