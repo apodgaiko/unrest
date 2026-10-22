@@ -13,6 +13,34 @@ PIN = '8141170328ff5fc28acf10dfd70bbf22f4062cceb1b2de8b8ea11ab0c17a48b6'
 CLASSES = frozenset({'source-cohort2:mock-agent', 'source-cohort3:mock-agent',
                      'reference-descendant:ordinary-mock-acp'})
 
+ACP = 'tests/fixtures/controlled_python_acp.py'
+ACP_PIN = 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'
+BACKEND = 'tests/fixtures/experimental_session_app_server.py'
+BACKEND_PIN = 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53'
+BARRIER_PIN = '1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1'
+SESSION = 'src/unrest_harness/experimental_session.py'
+SESSION_PIN = '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2'
+JSON_LEAVES = frozenset({'controlled-acp', 'canonical-backend',
+                         'source-controlled-backend-postimage'})
+
+
+def selected_script(state, payload):
+    kind, root = state.get('class'), Path(state['checkout'])
+    if kind in CLASSES:
+        return str(root / SCRIPT), PIN
+    if kind == 'controlled-acp':
+        return str(root / ACP), ACP_PIN
+    if kind in {'canonical-backend', 'source-controlled-backend-postimage'}:
+        target = payload.get('target')
+        if type(target) is not str or type(state.get('owned_root')) is not str:
+            return None
+        path = Path(target)
+        if (not path.is_absolute() or '..' in path.parts or path.name != 'fake-app-server'
+                or not path.is_relative_to(Path(state['owned_root']))):
+            return None
+        return target, BACKEND_PIN if kind == 'canonical-backend' else BARRIER_PIN
+    return None
+
 
 def named(code, name):
     matches = [value for value in code.co_consts if type(value) is types.CodeType and value.co_name == name]
@@ -22,12 +50,15 @@ def named(code, name):
 
 
 def eligible(state, endpoint, payload):
-    if (type(state.get('class')) is not str or state.get('class') not in CLASSES
+    if (type(state.get('class')) is not str or state.get('class') not in CLASSES | JSON_LEAVES
             or type(state.get('token')) is not str or not state['token']
             or state.get('setup_mode') not in {None, 'source'}
             or state.get('phase') != 'READY' or type(payload) is not dict):
         return False
-    script = str(Path(state['checkout']) / SCRIPT)
+    selected = selected_script(state, payload)
+    if selected is None:
+        return False
+    script, _ = selected
     vector = payload.get('orig_argv')
     arguments = payload.get('sys_argv')
     if (payload.get('class') != state['class'] or payload.get('mode') != 'script'
@@ -53,6 +84,17 @@ def eligible(state, endpoint, payload):
     path = Path(source['path'])
     if not path.is_relative_to(Path(state['checkout'])) or '..' in path.parts:
         return False
+    kind = state['class']
+    if kind in JSON_LEAVES:
+        source_name, line, pin = ((ACP, 1, ACP_PIN) if kind == 'controlled-acp'
+                             else (BACKEND, 1, BACKEND_PIN) if kind == 'canonical-backend'
+                             else (SESSION, 506, SESSION_PIN))
+        expected_binding = {'path': str(Path(state['checkout']) / source_name),
+                            'line': line, 'sha256': pin}
+        if kind == 'source-controlled-backend-postimage':
+            expected_binding['function'] = '_open_role_owned'
+        if payload['source_binding'] != expected_binding:
+            return False
     expected = state['product_pins'].get(path.relative_to(state['checkout']).as_posix())
     return (expected is not None and source.get('sha256') == expected
             and type(source.get('line')) is int and source['line'] > 0)
@@ -60,7 +102,7 @@ def eligible(state, endpoint, payload):
 
 def select(guard, endpoint):
     state = guard._STATE
-    if state.get('class') not in CLASSES or state.get('setup_mode') not in {None, 'source'}:
+    if state.get('class') not in CLASSES | JSON_LEAVES or state.get('setup_mode') not in {None, 'source'}:
         return None
     current = inspect.currentframe()
     caller = current.f_back if current else None
@@ -86,11 +128,23 @@ def select(guard, endpoint):
                 or child.f_code != named(compile(guard_body, str(guard_path), 'exec', dont_inherit=True), 'child')
                 or caller.f_code != named(named(compile(endpoint_body, str(endpoint_path), 'exec', dont_inherit=True), 'attach'), 'install')):
             return None
+        _, script_pin = selected_script(state, payload)
+        if state['class'] == 'source-controlled-backend-postimage':
+            catalog_path = Path(state['guard']).with_name('backend_postimage_catalog.py')
+            catalog = guard.checked_source(catalog_path,
+                state['direct_support']['files'][str(catalog_path)])
+            row = catalog['CASES'].get(state.get('case'))
+            if (row is None or row['script_sha256'] != BARRIER_PIN
+                    or row['filename'] != 'fake-app-server'
+                    or any(state['product_pins'].get(name) != pin
+                           or hashlib.sha256((Path(state['checkout']) / name).read_bytes()).hexdigest() != pin
+                           for name, pin in row['sources'].items())):
+                return None
         script = Path(payload['target'])
         binding = Path(payload['source_binding']['path'])
         runtime = Path(payload['orig_argv'][0])
         if (script.resolve(strict=True) != script or script.is_symlink()
-                or hashlib.sha256(script.read_bytes()).hexdigest() != PIN
+                or hashlib.sha256(script.read_bytes()).hexdigest() != script_pin
                 or hashlib.sha256(binding.read_bytes()).hexdigest() != payload['source_binding']['sha256']
                 or str(runtime.resolve(strict=True)) != state['runtime']['realpath']
                 or hashlib.sha256(runtime.read_bytes()).hexdigest() != state['runtime']['sha256']):
@@ -98,7 +152,7 @@ def select(guard, endpoint):
         guard.require_ready(state['token'])
         return {'kind': 'dependency_configuration_not_applicable',
                 'component': 'FastMCP', 'reason': 'pinned_json_only_mock_backend',
-                'script_sha256': PIN, 'class': state['class'], 'token': state['token'],
+                'script_sha256': script_pin, 'class': state['class'], 'token': state['token'],
                 'shared_startup_checks_retained': True}
     finally:
         del current, caller, child

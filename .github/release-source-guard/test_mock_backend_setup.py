@@ -99,3 +99,71 @@ def test_unknown_contexts_and_all_negative_controls_retain_original_setup_body()
     assert install.body.index(gate) < install.body.index(lifetime)
     assert 'descriptor_lifetime.py' in ast.unparse(lifetime)
     assert 'endpoint_install_complete' in ast.unparse(install.body[-1])
+
+
+def leaf_context(kind):
+    state, endpoint, payload = context()
+    state['class'] = payload['class'] = kind
+    state['owned_root'] = '/work/owned'
+    if kind == 'controlled-acp':
+        source, line, pin = setup.ACP, 1, setup.ACP_PIN
+        target, argument = '/source/' + setup.ACP, '--controlled-local-acp-v1'
+    elif kind == 'canonical-backend':
+        source, line, pin = setup.BACKEND, 1, setup.BACKEND_PIN
+        target, argument = '/work/owned/lane/fake-app-server', 'app-server'
+    else:
+        source, line, pin = setup.SESSION, 506, setup.SESSION_PIN
+        target, argument = '/work/owned/lane/fake-app-server', 'app-server'
+    state['product_pins'][source] = pin
+    payload.update(target=target, path0=str(Path(target).parent),
+                   orig_argv=[state['runtime']['paths'][0], target, argument],
+                   sys_argv=[target, argument],
+                   source_binding={'path': '/source/' + source, 'line': line, 'sha256': pin})
+    if kind == 'source-controlled-backend-postimage':
+        payload['source_binding']['function'] = '_open_role_owned'
+    return state, endpoint, payload
+
+
+@pytest.mark.parametrize('kind', sorted(setup.JSON_LEAVES))
+def test_exact_controlled_stdlib_leaf_metadata_has_no_launch_grant(kind):
+    state, endpoint, payload = leaf_context(kind)
+    assert setup.eligible(state, endpoint, payload)
+    assert setup.select(SimpleNamespace(_STATE=state), endpoint) is None
+    for name in ['token', 'case', 'path0']:
+        changed = deepcopy(payload)
+        changed[name] = 'foreign'
+        assert not setup.eligible(state, endpoint, changed)
+    changed = deepcopy(payload)
+    changed['source_binding']['line'] += 1
+    assert not setup.eligible(state, endpoint, changed)
+    for mode in ['dependency-source-negative', 'dependency-launch-negative', 'profile-timing']:
+        assert not setup.eligible({**state, 'setup_mode': mode}, endpoint, payload)
+
+
+@pytest.mark.parametrize('kind', ['canonical-backend', 'source-controlled-backend-postimage'])
+@pytest.mark.parametrize('target', ['/foreign/fake-app-server', '/work/owned/not-the-script',
+                                    '/work/owned/../foreign/fake-app-server', 'fake-app-server'])
+def test_generated_leaf_does_not_select_unknown_script_locations(kind, target):
+    state, endpoint, payload = leaf_context(kind)
+    payload['target'] = payload['sys_argv'][0] = payload['orig_argv'][1] = target
+    payload['path0'] = str(Path(target).parent)
+    assert not setup.eligible(state, endpoint, payload)
+
+
+@pytest.mark.parametrize(('source', 'pin', 'imports'), [
+    (setup.ACP, setup.ACP_PIN, {'asyncio', 'json', 'os', 'sys'}),
+    (setup.BACKEND, setup.BACKEND_PIN,
+     {'copy', 'json', 'os', 'pathlib', 'sys', 'signal', 'secrets', 'time', 'tomllib', 'urllib.request'}),
+])
+def test_controlled_leaf_source_is_exact_stdlib_only(source, pin, imports):
+    path = ROOT.parent.parent / source
+    if not path.is_file():
+        pytest.skip('original source is intentionally absent from control compartment')
+    body = path.read_bytes()
+    assert hashlib.sha256(body).hexdigest() == pin
+    tree = ast.parse(body)
+    actual = {name.name for node in ast.walk(tree) if isinstance(node, ast.Import) for name in node.names}
+    actual |= {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
+    assert actual == imports
+    assert not any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                   and node.func.id in {'eval', 'exec', '__import__'} for node in ast.walk(tree))

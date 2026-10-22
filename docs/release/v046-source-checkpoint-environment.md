@@ -1425,3 +1425,13 @@ other values retain the original JSON decoder. Changed decoder policy or a narro
 recursion margin also selects that original path. Partial appends, rewrites,
 truncation and new forbidden rows remain visible before the original authority and
 cleanup checks. Local parsing measurements are not source or release certification.
+
+FastMCP-only configuration is inapplicable to the exact controlled ACP script,
+canonical standard-library app-server, and the pinned receipt-barrier app-server
+postimage. The existing selector still requires the actual installation/child
+frames and byte-current code, caller, interpreter, READY and process identity.
+The generated postimage additionally requires its closed catalog case and source
+pins. This omits an unrelated eager import; it grants no process or network effect.
+All later endpoint enforcement, original protocol exchanges, numeric waits,
+completion/cleanup assertions and deadlines remain unchanged. Unknown classes,
+changed scripts and dependency-window negative controls keep the original setup.
