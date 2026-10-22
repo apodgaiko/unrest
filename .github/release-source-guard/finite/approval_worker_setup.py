@@ -94,6 +94,10 @@ def select(guard, endpoint):
                           'scope': 'controlled_run_executor', 'code': 'runtime_or_cwd'})
             return None
         guard.require_ready(state['token'])
+        diagnostic = Path(state['guard']).with_name('approval_cleanup_diagnostic.py')
+        if '_approval_cleanup_diagnostic' not in state:
+            state['_approval_cleanup_diagnostic'] = guard.checked_source(
+                diagnostic, state['direct_support']['files'][str(diagnostic)])['install'](guard)
         return {'kind': 'dependency_configuration_not_applicable', 'component': 'FastMCP',
                 'reason': 'pinned_controlled_run_executor', 'class': state['class'],
                 'executor': EXECUTOR, 'token': state['token'],

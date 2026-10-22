@@ -770,3 +770,25 @@ def test_appended_regression_updates_only_exact_existing_anchor_file_pin():
         changed[key]=value
         with pytest.raises(RuntimeError,match='original_anchor_drift'):
             transition.admit_test_anchor({'anchor_inventory':[changed]})
+
+
+def test_cleanup_diagnostic_is_passive_bounded_and_composes_prior_observer():
+    from types import SimpleNamespace
+    from finite.approval_cleanup_diagnostic import install
+    rows, prior = [], []
+    guard=SimpleNamespace(_STATE={'primary_snapshot_observer':lambda *args:prior.append(args)},append=rows.append)
+    observe=install(guard)
+    def frame(path,name):
+        return SimpleNamespace(f_code=SimpleNamespace(co_filename=path,co_name=name),f_lineno=1)
+    inactive=frame('/source/src/unrest_harness/run_worker.py','other')
+    observe(inactive,'call',None)
+    assert not rows and len(prior)==1
+    selected=frame('/source/src/unrest_harness/run_worker.py','_cancel')
+    observe(selected,'call',None)
+    observe(selected,'call',None)
+    assert len(rows)==1 and rows[0]['eligible_certificate'] is False
+    assert rows[0]['trigger']==['/source/src/unrest_harness/run_worker.py','_cancel',1]
+    for index in range(40):
+        observe(frame('/synthetic/'+str(index),'close'),'call',None)
+    assert len(rows)==16
+    assert all(set(r)=={'kind','trigger','threads','tasks','diagnostic_only','eligible_certificate'} for r in rows)

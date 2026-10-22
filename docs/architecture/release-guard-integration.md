@@ -1203,3 +1203,9 @@ report; final certification still requires passed setup, call and teardown.
 The live response distinguishes `actual_adoptive_parent_wait` from a missing
 `original_parent_wait`, preserves the retained descriptor/cookie and READY
 checks, and waits rather than admitting a peer without real numeric evidence.
+
+Authenticated controlled approval workers can retain at most sixteen passive
+cleanup task/thread snapshots through the existing profile observer. Observation
+starts only at cancellation or owned cleanup and records code locations and task
+states, never locals or source bodies. It composes a prior observer, creates no
+thread/process/timer, changes no deadline or result and cannot certify a run.
