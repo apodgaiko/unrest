@@ -281,3 +281,31 @@ def test_current_json_script_and_generated_bytes_match_without_server_import(tmp
     assert setup.script_identity(state, payload) is not None
     state['product_pins']['src/unrest_harness/approval_native.py'] = 'foreign'
     assert setup.script_identity(state, payload) is None
+
+
+def test_stall_snapshot_uses_original_output_descriptor_not_pytest_capture(monkeypatch):
+    from primary_source_entry import Observer, diagnostic_output_identity
+    from types import SimpleNamespace
+    import tempfile
+    import sys
+    token, case = object(), routes.PREFIX + '[success]'
+    with tempfile.TemporaryFile() as output:
+        owner = SimpleNamespace(startup_stall_token=token, guard=SimpleNamespace(_STATE={'case': case}),
+                                stack_output_fd=output.fileno(),
+                                stack_output_identity=diagnostic_output_identity(output.fileno()))
+        monkeypatch.setattr(sys, '__stderr__', SimpleNamespace(write=lambda value: pytest.fail('captured stderr used')))
+        assert Observer.retain_stall_snapshot(owner, token, case, None)
+        output.seek(0)
+        assert b'[retained task snapshot]' in output.read()
+
+
+def test_stall_snapshot_does_not_write_reused_descriptor(monkeypatch):
+    from primary_source_entry import Observer
+    from types import SimpleNamespace
+    import tempfile
+    token, case = object(), routes.PREFIX + '[success]'
+    with tempfile.TemporaryFile() as output:
+        owner = SimpleNamespace(startup_stall_token=token, guard=SimpleNamespace(_STATE={'case': case}),
+                                stack_output_fd=output.fileno(), stack_output_identity=('foreign',))
+        assert not Observer.retain_stall_snapshot(owner, token, case, None)
+        assert output.tell() == 0

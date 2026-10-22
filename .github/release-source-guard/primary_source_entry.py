@@ -26,6 +26,13 @@ def load(name, path, pin):
     return module
 
 
+def diagnostic_output_identity(fd):
+    import fcntl
+    info = os.fstat(fd)
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_uid,
+            fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE)
+
+
 def activate(profile, event, arguments):
     path = profile['manifest']
     body = Path(path).read_bytes()
@@ -142,6 +149,23 @@ class Observer:
         self.startup_stall_timer = None
         self.startup_stall_token = None
         self.approval_stall_case = None
+        self.stack_output_fd = None
+        self.stack_output_identity = None
+        if profile.get('source_mode') == 'TEST-positive':
+            support = '/guard/finite/approval_stall_diagnostic.py'
+            diagnostic = load('approval_stall_diagnostic', support,
+                              manifest['direct_support']['files'][support])
+            if diagnostic.case_seconds(profile, diagnostic.PREFIX + '[success]') is not None:
+                import stat
+                original = diagnostic_output_identity(2)
+                if not stat.S_ISFIFO(original[2]) or original[4] != os.O_WRONLY:
+                    raise RuntimeError('approval_diagnostic_original_output_pipe')
+                fd = os.dup(2)
+                os.set_inheritable(fd, False)
+                if diagnostic_output_identity(fd) != original:
+                    os.close(fd)
+                    raise RuntimeError('approval_diagnostic_output_identity')
+                self.stack_output_fd, self.stack_output_identity = fd, original
         guard._STATE['primary_snapshot_observer'] = self.observe_snapshot_rpc
 
     def observe_snapshot_rpc(self, frame, event, value):
@@ -320,8 +344,21 @@ class Observer:
             body = canonical({'case': case, 'threads': threads, 'tasks': tasks})[:65536].decode(
                 'utf-8', errors='ignore')
             if self.startup_stall_token is token:
-                sys.__stderr__.write('\n[retained task snapshot]\n' + body + '\n')
-                sys.__stderr__.flush()
+                text = '\n[retained task snapshot]\n' + body + '\n'
+                fd = getattr(self, 'stack_output_fd', None)
+                if fd is None:
+                    sys.__stderr__.write(text)
+                    sys.__stderr__.flush()
+                else:
+                    if (diagnostic_output_identity(fd) != self.stack_output_identity
+                            or os.get_inheritable(fd)):
+                        return False
+                    view = memoryview(text.encode())
+                    while view:
+                        count = os.write(fd, view)
+                        if count <= 0:
+                            return False
+                        view = view[count:]
                 return True
         except (OSError, AttributeError, RuntimeError, UnicodeError):
             # Private stack diagnostics cannot change a test or its deadline.
@@ -477,3 +514,8 @@ class Observer:
             Path('/work/source-provenance.json').write_bytes(canonical(provenance))
         finally:
             timer.cancel()
+            fd = getattr(self, 'stack_output_fd', None)
+            if fd is not None:
+                if diagnostic_output_identity(fd) == self.stack_output_identity:
+                    os.close(fd)
+                self.stack_output_fd = None

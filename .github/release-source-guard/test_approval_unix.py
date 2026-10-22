@@ -253,3 +253,54 @@ def test_successful_kernel_receipt_replaces_recycled_descriptor_cache(monkeypatc
     monkeypatch.setattr(client.os, 'fstat', lambda fd: SimpleNamespace(st_dev=1, st_ino=3))
     stream.getpeername = lambda: address
     assert client.bound(stream, state) is None
+
+
+def terminal_peer_fixture():
+    from types import SimpleNamespace
+    peer = {'pid': 55, 'ppid': 54, 'pgid': 9, 'sid': 9, 'start_ticks': 100,
+            'boot_id': 'original-boot', 'clock_ticks_per_second': 100, 'uid': 20000}
+    birth = {k: v for k, v in peer.items() if k != 'uid'}
+    birth['uids'] = [20000] * 4
+    rows = [{'kind': 'kernel_child', 'child': 55, 'identity': dict(birth)},
+            {'kind': 'kernel_exit', 'pid': 55, 'raw': 256},
+            {'kind': 'tracer_terminal_wait', 'pid': 55, 'identity': dict(birth), 'raw': 256, 'normalized': 1},
+            {'kind': 'original_parent_wait4', 'child': 55, 'parent_tgid': 54, 'raw': 256, 'normalized': 1}]
+    return SimpleNamespace(owned_trace=SimpleNamespace(records=rows)), peer, rows
+
+
+def test_terminal_peer_requires_actual_original_parent_wait():
+    from approval_terminal_peer import settled
+    supervisor, peer, rows = terminal_peer_fixture()
+    proof = settled(supervisor, peer)
+    assert proof['original_parent_wait'] == rows[-1]
+    assert proof['terminal_wait']['normalized'] == 1
+
+
+@pytest.mark.parametrize('mutation', ['birth', 'terminal_birth', 'uid', 'exit_status', 'wait_status',
+                                      'normalization', 'parent', 'missing_wait', 'missing_terminal', 'duplicate'])
+def test_terminal_peer_cannot_invent_birth_parent_status_or_wait(mutation):
+    from approval_terminal_peer import settled
+    from linux_supervisor import AwaitOwnedPeer
+    supervisor, peer, rows = terminal_peer_fixture()
+    if mutation == 'birth':
+        rows[0]['identity']['start_ticks'] += 1
+    elif mutation == 'terminal_birth':
+        rows[2]['identity']['start_ticks'] += 1
+    elif mutation == 'uid':
+        rows[0]['identity']['uids'] = [0] * 4
+    elif mutation == 'exit_status':
+        rows[1]['raw'] = 0
+    elif mutation == 'wait_status':
+        rows[3]['raw'] = 0
+    elif mutation == 'normalization':
+        rows[3]['normalized'] = 0
+    elif mutation == 'parent':
+        rows[3]['parent_tgid'] += 1
+    elif mutation == 'missing_wait':
+        rows.pop()
+    elif mutation == 'missing_terminal':
+        rows.pop(2)
+    else:
+        rows.append(dict(rows[-1]))
+    with pytest.raises((RuntimeError, AwaitOwnedPeer)):
+        settled(supervisor, peer)

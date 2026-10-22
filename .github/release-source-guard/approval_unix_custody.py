@@ -57,10 +57,13 @@ def handle(supervisor, request, events):
     supervisor.approval_unix_sessions = sessions
     retained = sessions.get(key)
     if operation == 'payload' and retained is not None:
+        terminal_peer = None
         try:
             peer_now = identity(retained['peer_identity']['pid'])
-        except OSError as error:
-            raise RuntimeError('approval_unix_retained_peer_unavailable') from error
+        except FileNotFoundError:
+            from approval_terminal_peer import settled
+            terminal_peer = settled(supervisor, retained['peer_identity'])
+            peer_now = retained['peer_identity']
         if (retained['address'] != address or retained['case'] != case
                 or retained['socket'] != observed
                 or supervisor.registered.get(retained['peer_identity']['pid'], {}).get('identity') != retained['peer_identity']
@@ -83,7 +86,8 @@ def handle(supervisor, request, events):
             raise RuntimeError('approval_unix_final_owner_drift')
         return {'approval_unix': operation, 'kernel_fd': observed,
                 'listener_owner': listener['owner'], 'peer_identity': retained['peer_identity'],
-                'retained_connection': True, 'listener_path_present': present}
+                'retained_connection': True, 'listener_path_present': present,
+                'terminal_peer_actual_wait': terminal_peer}
     if not owned_address(address, manifest['owned_root'], saved['uid']):
         raise RuntimeError('approval_unix_source_scope')
 

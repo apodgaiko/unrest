@@ -1062,3 +1062,18 @@ approval MCP server and RunControl worker retain eager server configuration;
 all unknown contexts and negative dependency controls retain the original
 setup body. No product deadline, native/provider gate, audit hook, descriptor
 check or launch permission changes.
+
+An established Unix socket can also retain EOF or buffered bytes after its
+peer exits. A missing peer is accepted only with its previously authenticated
+socket cookie/identity plus current kernel records for the same process birth,
+terminal status and actual original-parent wait. Pending waits use the existing
+bounded receipt queue; missing, mismatched, duplicate or adopted-parent-only
+records cannot establish that proof. This creates no wait exception or new
+connection authority, and all original parent-wait assertions remain required.
+
+For that diagnostic TEST only, the observer duplicates its original private
+output pipe before pytest redirects descriptors for capture. The duplicate is
+non-inheritable and rechecked by device/inode/mode/owner/access before a bounded
+stack write, so an aborted teardown cannot discard the private snapshot. It is
+closed at session finish only if its identity still matches. SOURCE and other
+selections acquire no descriptor; snapshots remain encrypted opaque output.
