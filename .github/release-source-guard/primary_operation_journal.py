@@ -41,9 +41,14 @@ class Operations(_PrimaryOperations):
 
 
     def rows(self):
-        from journal_decode import JournalDecoder
         if not hasattr(self, '_row_decoder'):
-            self._row_decoder = JournalDecoder()
+            path = Path(__file__).with_name('journal_decode.py')
+            body = path.read_bytes()
+            if hashlib.sha256(body).hexdigest() != '0c5b90ad9ef52e88771caba513c9199d5b71e60da72de275090b8bcc9c9621f6':
+                self.refuse('operation_journal_decoder_source_drift')
+            namespace = {'__file__': str(path), '__name__': '_operation_journal_decode'}
+            exec(compile(body, str(path), 'exec'), namespace)
+            self._row_decoder = namespace['JournalDecoder']()
         rows = []
         for path in sorted(Path(self.state['events']).glob('*.jsonl')):
             data = path.read_bytes()

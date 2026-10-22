@@ -97,7 +97,7 @@ def operation_rows():
     tree = ast.parse(Path(__file__).with_name('primary_operation_journal.py').read_bytes())
     owner = next(node for node in tree.body if isinstance(node, ast.ClassDef))
     method = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == 'rows')
-    namespace = {'Path': Path, 'json': json}
+    namespace = {'Path': Path, 'json': json, '__file__': str(Path(__file__).with_name('primary_operation_journal.py')), 'hashlib': __import__('hashlib')}
     exec(compile(ast.Module(body=[method], type_ignores=[]), '<actual operation rows>', 'exec'), namespace)
     return namespace['rows'], types.SimpleNamespace
 
@@ -133,6 +133,8 @@ def test_actual_endpoint_wait_keeps_numeric_result_and_current_child_binding(tmp
     module.STATE = {'spec': {'nonce': 'bound-nonce'}, 'identity': {'birth': 'bound'}}
     numeric = (123, 23 << 8)
     monkeypatch.setattr(os, 'waitpid', lambda pid, options: numeric)
+    import sys
+    monkeypatch.setattr(sys, 'path', [item for item in sys.path if item != str(path.parent.parent)])
     module.attach(guard)
     journal = tmp_path / (str(os.getpid()) + '.jsonl')
     def write(token):
@@ -150,3 +152,19 @@ def test_actual_endpoint_wait_keeps_numeric_result_and_current_child_binding(tmp
     with pytest.raises(json.JSONDecodeError):
         os.waitpid(123, 0)
     assert len(events) == 2
+
+
+def test_actual_operation_refuses_changed_decoder_bytes_before_use(tmp_path, monkeypatch):
+    from pathlib import Path
+    rows, owner = operation_rows()
+    def refuse(code):
+        raise RuntimeError(code)
+    value = owner(state={'events': str(tmp_path)}, refuse=refuse)
+    original = Path.read_bytes
+    def changed(path):
+        body = original(path)
+        return body + b'\n# changed' if path.name == 'journal_decode.py' else body
+    monkeypatch.setattr(Path, 'read_bytes', changed)
+    with pytest.raises(RuntimeError, match='operation_journal_decoder_source_drift'):
+        rows(value)
+    assert not hasattr(value, '_row_decoder')
