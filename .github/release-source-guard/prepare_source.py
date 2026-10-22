@@ -108,7 +108,7 @@ def main():
     manifest = json.loads((SUPPORT / 'source-template.json').read_bytes())
     admit_clock(manifest)
     release_body = CLOCK_READER(Path('/guard'), 'release_source_inputs.py')
-    if hashlib.sha256(release_body).hexdigest() != 'ce4fb6922fa8ad5427e664c791880f21e56a5d22fbbe50fad529d0745901c4d9':
+    if hashlib.sha256(release_body).hexdigest() != '9c4e9b50e8fd60ef68dbf9e2b04de54e734abf707f889320e14b1aeb2d21d68d':
         raise RuntimeError('release_identity_support_drift')
     release = {'__name__': 'release_source_inputs'}
     exec(compile(release_body, '/guard/release_source_inputs.py', 'exec', dont_inherit=True), release)

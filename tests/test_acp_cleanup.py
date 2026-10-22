@@ -122,7 +122,7 @@ async def test_recorded_transport_failures(tmp_path, monkeypatch, role, case):
     ws = store.workspace_dir('project')
     subprocess.run(['git', 'init', '-q', str(ws)], check=True)
     subprocess.run(['git', '-c', 'user.name=Controlled', '-c',
-                    'user.email=controlled@example.invalid', 'commit', '--allow-empty',
+                    'user.email=controlled@example.invalid', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit', '--allow-empty',
                     '-qm', 'Controlled'], cwd=ws, check=True)
     scenario = tmp_path / 'scenario.json'
     scenario.write_text(json.dumps({'raw': malformed(case), 'role': role,

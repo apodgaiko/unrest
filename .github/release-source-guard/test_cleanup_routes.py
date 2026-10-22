@@ -253,3 +253,33 @@ def test_saved_observer_never_receives_git_authority(observer_model):
     assert routes.admit(['git', 'rev-parse', 'HEAD'], m.workspace, None,
                         m.state, m.events.append, m.refuse) is None
     assert m.events == []
+
+
+@pytest.mark.parametrize('mutation', [None, 'maintenance', 'gc', 'omit'])
+def test_setup_commit_disables_only_incidental_housekeeping(model, mutation):
+    m = model
+    owner = 'test_recorded_transport_failures'
+    code = compile(m.source.read_bytes(), str(m.source), 'exec', dont_inherit=True)
+    function = FunctionType(named(code, owner), vars(m.module))
+    setattr(m.module, owner, function)
+    m.frame.f_code = function.__code__
+    m.frame.f_lineno = 124
+    m.frame.f_locals.update(case='success', role='work', ws=m.workspace)
+    m.state['case'] = routes.CASE + '[success-work]'
+    argv = ['git', '-c', 'user.name=Controlled', '-c',
+            'user.email=controlled@example.invalid', '-c', 'maintenance.auto=false',
+            '-c', 'gc.auto=0', 'commit', '--allow-empty', '-qm', 'Controlled']
+    if mutation == 'maintenance':
+        argv[6] = 'maintenance.auto=true'
+    elif mutation == 'gc':
+        argv[8] = 'gc.auto=1'
+    elif mutation == 'omit':
+        del argv[5:9]
+    if mutation is not None:
+        with pytest.raises(RuntimeError, match='cleanup_git_vector_drift'):
+            routes.admit(argv, m.workspace, None, m.state, m.events.append, m.refuse)
+        assert m.events == []
+    else:
+        result = routes.admit(argv, m.workspace, None, m.state, m.events.append, m.refuse)
+        assert result['class'] == 'source-cleanup-git:124'
+        assert result['python'] is False
