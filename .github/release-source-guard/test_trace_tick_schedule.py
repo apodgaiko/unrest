@@ -139,3 +139,43 @@ def test_idle_callback_completion_follows_full_acquisition_and_propagates_failur
     finally:
         first.close()
         second.close()
+
+
+
+def test_actual_failed_root_enters_existing_failure_drain_without_mutating_records():
+    from types import SimpleNamespace
+    from source_failure_drain import check
+    rows = [{'kind': 'tracer_terminal_wait', 'pid': 9, 'raw': 256, 'normalized': 1}]
+    active = {27, 29, 32}
+    trace = SimpleNamespace(child=9, root_parent_wait=256, active=active, records=rows)
+    with pytest.raises(RuntimeError, match='failed_source_root_has_live_owned_descendants'):
+        check(trace)
+    assert trace.records is rows and rows == [
+        {'kind': 'tracer_terminal_wait', 'pid': 9, 'raw': 256, 'normalized': 1}]
+    assert trace.active is active and active == {27, 29, 32}
+
+
+@pytest.mark.parametrize('root, active', [(None, {27}), (0, {27}), (256, set())])
+def test_live_passing_or_already_finished_root_keeps_original_path(root, active):
+    from types import SimpleNamespace
+    from source_failure_drain import check
+    assert check(SimpleNamespace(root_parent_wait=root, active=active)) is None
+
+
+@pytest.mark.parametrize('drift', ['missing', 'foreign_pid', 'raw', 'normalized', 'duplicate'])
+def test_failed_root_drain_requires_its_actual_unique_matching_numeric_wait(drift):
+    from types import SimpleNamespace
+    from source_failure_drain import check
+    rows = [{'kind': 'tracer_terminal_wait', 'pid': 9, 'raw': 256, 'normalized': 1}]
+    if drift == 'missing':
+        rows.clear()
+    elif drift == 'foreign_pid':
+        rows[0]['pid'] = 10
+    elif drift == 'raw':
+        rows[0]['raw'] = 9
+    elif drift == 'normalized':
+        rows[0]['normalized'] = 0
+    else:
+        rows.append(dict(rows[0]))
+    with pytest.raises(RuntimeError, match='failed_source_root_wait_binding'):
+        check(SimpleNamespace(child=9, root_parent_wait=256, active={27}, records=rows))

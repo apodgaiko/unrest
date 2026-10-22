@@ -25,6 +25,8 @@ class OwnedMultiprocessCustody:
         return result
 
     def tick(self, trace):
+        from source_failure_drain import check
+        check(trace)
         from approval_exit_observation import collect
         if getattr(self, 'supervisor', None) is not None:
             collect(self, trace)

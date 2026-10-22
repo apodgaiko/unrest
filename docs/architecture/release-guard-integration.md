@@ -1126,3 +1126,11 @@ including recursive repeated traversal of fixed tuple-of-name fields. Compile
 keys, current complete file reads, immutable-image source checks, cache headers,
 UID/link/census checks and every comparison result remain unchanged. No
 authentication result, file observation or mutable input is memoized.
+
+When the actual source root has a matching nonzero kernel terminal wait and
+owned descendants remain, the source callback immediately enters OwnedTrace's
+existing failure drain. It preserves the failed root and actual child kill/wait
+records instead of spending the remaining healthy-root budget polling a failed
+assignment. A live root, zero root status or a finished trace takes the unchanged
+path. The original tracer, kill/reap algorithm, source deadlines, statuses and
+release predicates remain byte-identical.
