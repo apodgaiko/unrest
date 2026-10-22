@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from finite.orders_git import CLASS, ENVIRONMENT, PRODUCT, ORDERS, repository_profile
+from finite.orders_git import CLASS, ENVIRONMENT, PRODUCT, repository_profile
 from finite.linux_identity import identity
 
 
@@ -21,13 +21,12 @@ def eligible(selected, vector, environment, cwd, manifest, checkout='/source'):
         return False
     root = Path(checkout)
     data = literals(Path(__file__).parent / 'finite/orders_git_data.py')
-    catalog = literals(Path(__file__).parent / 'finite/backend_postimage_catalog.py')
     binding = registration.get('source_binding', {})
     caller = registration.get('caller_binding')
     if type(caller) is not dict:
         return False
     case = registration.get('case')
-    if (case not in catalog['CASES'] or case.split('::')[0] != ORDERS
+    if (case not in data['CASES']
             or any(manifest['product_pins'].get(n) != pin or hashlib.sha256((root / n).read_bytes()).hexdigest() != pin
                    for n, pin in data['PINS'].items())
             or binding != {'path': str(root / PRODUCT), 'line': 38,
@@ -41,7 +40,7 @@ def eligible(selected, vector, environment, cwd, manifest, checkout='/source'):
             or selected.get('transformed_argv_sha256') != hashlib.sha256(json.dumps(vector).encode()).hexdigest()
             or selected.get('environment_sha256') != hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest()):
         return False
-    return repository_profile(vector, cwd, manifest['owned_root'], caller)
+    return repository_profile(vector, cwd, manifest['owned_root'], caller, data['CASES'][case])
 
 
 

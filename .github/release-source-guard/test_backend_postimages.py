@@ -163,7 +163,7 @@ def test_exact_pending_selection(tmp_path, change):
 
 
 def test_catalog_closes_original_sources_without_native_or_parking_negatives():
-    assert len(catalog.CASES) == 80
+    assert len(catalog.CASES) == 130
     assert len({r["script_sha256"] for r in catalog.CASES.values()}) == 26
     for case, row in catalog.CASES.items():
         assert case.split("::")[0] in row["sources"]
@@ -263,9 +263,9 @@ def test_diagnostic_groups_are_closed_and_do_not_certify_source():
     import primary_source_inputs as inputs
 
     groups = policy.TEST_BACKEND_POSTIMAGE_GROUPS
-    assert [len(g) for g in groups] == [20, 15, 15, 10, 10, 10]
-    assert set(c for g in groups for c in g) == set(catalog.CASES)
-    assert len([c for g in groups for c in g]) == 80
+    assert [len(g) for g in groups] == [20, 15, 15, 10, 10, 10] + [10] * 8 + [8]
+    assert set(c for g in groups for c in g) == set(catalog.CASES) | set(policy._SETUP_CASES)
+    assert len([c for g in groups for c in g]) == 168
     for group in groups:
         script = ("env -u CODEX_PATH uv run pytest -q " + " ".join(group)).encode()
         plan = inputs.test_plan(script, "diagnostic", "TEST-positive")
@@ -319,6 +319,7 @@ def test_policy_loading_never_imports_or_caches_source_only_catalog(tmp_path):
         support / "finite/backend_postimage_catalog.py",
         copied / "finite/backend_postimage_catalog.py",
     )
+    shutil.copyfile(support / "finite/orders_git_data.py", copied / "finite/orders_git_data.py")
     code = (
         "import json,sys; import primary_policy as p; "
         "print(json.dumps({'cases':sum(map(len,p.TEST_BACKEND_POSTIMAGE_GROUPS)),"
@@ -338,6 +339,6 @@ def test_policy_loading_never_imports_or_caches_source_only_catalog(tmp_path):
         timeout=15,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"cases": 80, "imported": False}
+    assert json.loads(result.stdout) == {"cases": 168, "imported": False}
     assert not list((copied / "finite").rglob("*.pyc"))
     assert list((copied / "__pycache__").glob("primary_policy.*.pyc"))

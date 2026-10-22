@@ -9,10 +9,51 @@ import re
 from pathlib import Path
 import shutil
 import types
+import __future__
+import stat
+import sys
 
 
 def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+
+
+def current_code(path, pin, state, *, inherit=True):
+    """Cache compilation alone, after a fresh stable byte-and-identity check."""
+    path = Path(path)
+    def fields(info):
+        return (info.st_dev, info.st_ino, info.st_uid, info.st_gid, info.st_mode,
+                info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        raise RuntimeError('git_current_code_nonregular')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        opened = os.fstat(fd)
+        with os.fdopen(fd, 'rb', closefd=False) as stream:
+            body = stream.read()
+        after = os.fstat(fd)
+    finally:
+        os.close(fd)
+    if (fields(before) != fields(opened) or fields(before) != fields(after)
+            or fields(before) != fields(path.lstat()) or hashlib.sha256(body).hexdigest() != pin):
+        raise RuntimeError('git_current_code_drift')
+    flags = (sys._getframe().f_code.co_flags & __future__.annotations.compiler_flag) if inherit else 0
+    key = (str(path), flags, sys.flags.optimize)
+    binding = (fields(before), pin, body)
+    cache = state.setdefault('git_compiled_current_code', {})
+    metrics = state.setdefault('git_current_code_metrics', {'reads': 0, 'compiles': 0})
+    metrics['reads'] += 1
+    previous = cache.get(key)
+    if previous is not None:
+        if previous[0] != binding:
+            raise RuntimeError('git_cached_current_code_drift')
+        return previous[1]
+    code = compile(body, str(path), 'exec', flags=flags, dont_inherit=True, optimize=sys.flags.optimize)
+    cache[key] = (binding, code)
+    metrics['compiles'] += 1
+    return code
 
 
 def foundation(argv, cwd, env, state, append, refuse):
@@ -211,7 +252,7 @@ def admit(argv, cwd, env, state, append, refuse):
         if sha(current) != state['direct_support']['files'][str(current)]:
             refuse('current_binding_support_drift')
         namespace = {'__file__': str(current)}
-        exec(compile(current.read_bytes(), str(current), 'exec'), namespace)
+        exec(current_code(current, state["direct_support"]["files"][str(current)], state), namespace)
         selected = namespace['admit'](argv, cwd, env, state, append, refuse)
         if selected is not None:
             return selected
@@ -220,13 +261,13 @@ def admit(argv, cwd, env, state, append, refuse):
         if sha(orders) != state["direct_support"]["files"][str(orders)]:
             refuse("orders_git_support_drift")
         namespace = {"__file__": str(orders)}
-        exec(compile(orders.read_bytes(), str(orders), "exec"), namespace)
+        exec(current_code(orders, state["direct_support"]["files"][str(orders)], state), namespace)
         selected = namespace["admit"](argv, cwd, env, state, append, refuse)
         if selected is not None:
             return selected
     crash = Path(state["guard"]).with_name("crash_route.py")
     namespace = {"__file__": str(crash)}
-    exec(compile(crash.read_bytes(), str(crash), "exec"), namespace)
+    exec(current_code(crash, state["direct_support"]["files"][str(crash)], state), namespace)
     selected = namespace["native"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
@@ -234,7 +275,7 @@ def admit(argv, cwd, env, state, append, refuse):
     if sha(source_git) != state["direct_support"]["files"][str(source_git)]:
         refuse("source_git_support_drift")
     namespace = {}
-    exec(compile(source_git.read_bytes(), str(source_git), "exec"), namespace)
+    exec(current_code(source_git, state["direct_support"]["files"][str(source_git)], state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
@@ -242,7 +283,7 @@ def admit(argv, cwd, env, state, append, refuse):
     if sha(cleanup) != state["direct_support"]["files"][str(cleanup)]:
         refuse("cleanup_support_drift")
     namespace = {}
-    exec(compile(cleanup.read_bytes(), str(cleanup), "exec"), namespace)
+    exec(current_code(cleanup, state["direct_support"]["files"][str(cleanup)], state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
@@ -251,7 +292,7 @@ def admit(argv, cwd, env, state, append, refuse):
     if sha(historical_path) != historical_pin:
         refuse("historical_git_support_drift")
     namespace = {"__file__": str(historical_path), "__name__": "_finite_historical_git"}
-    exec(compile(historical_path.read_bytes(), str(historical_path), "exec"), namespace)
+    exec(current_code(historical_path, state["direct_support"]["files"][str(historical_path)], state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
@@ -259,7 +300,7 @@ def admit(argv, cwd, env, state, append, refuse):
     if sha(candidate) != state["direct_support"]["files"][str(candidate)]:
         refuse("candidate_git_support_drift")
     namespace = {"__file__": str(candidate)}
-    exec(compile(candidate.read_bytes(), str(candidate), "exec"), namespace)
+    exec(current_code(candidate, state["direct_support"]["files"][str(candidate)], state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
@@ -329,7 +370,7 @@ def admit(argv, cwd, env, state, append, refuse):
                     ):
                         local = frame.f_locals
                         method = type(local['self']).git
-                        codes = compile(source.read_bytes(), str(source), 'exec', dont_inherit=True)
+                        codes = current_code(source, pin, state, inherit=False)
                         class_code = state['isolated_named'](codes, '_Observation')
                         if (not isinstance(method, types.FunctionType)
                                 or method.__globals__ is not frame.f_globals

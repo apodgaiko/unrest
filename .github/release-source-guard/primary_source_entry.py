@@ -282,7 +282,13 @@ class Observer:
             diagnostic = load('approval_stall_diagnostic', support,
                               self.manifest['direct_support']['files'][support])
             approval_seconds = diagnostic.case_seconds(self.profile, item.nodeid)
-        if not startup and not cleanup and approval_seconds is None:
+        finite_diagnostic = False
+        if self.profile.get('source_mode') == 'TEST-positive':
+            support = '/guard/finite/orders_git_data.py'
+            roster = self.guard.checked_source(
+                support, self.manifest['direct_support']['files'][support])
+            finite_diagnostic = item.nodeid in roster['CASES']
+        if not startup and not cleanup and approval_seconds is None and not finite_diagnostic:
             return
         import asyncio
         loops = [v if isinstance(v, asyncio.AbstractEventLoop)

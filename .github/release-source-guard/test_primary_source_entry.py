@@ -328,3 +328,63 @@ def test_completion_pipe_diagnostic_is_exact_and_never_certifies_source():
     for changed in (TEST_COMPLETION_PIPE_CASES[:-1], (*TEST_COMPLETION_PIPE_CASES, 'foreign')):
         with pytest.raises(RuntimeError):
             make_test_plan((COMMAND + ' ' + ' '.join(changed)).encode(), 'workflow', 'TEST-positive')
+
+
+@pytest.mark.parametrize(
+    "mode,case,armed",
+    [
+        ("TEST-positive", "exact-finite-case", True),
+        ("TEST-positive", "foreign-case", False),
+        ("SOURCE", "exact-finite-case", False),
+    ],
+)
+def test_finite_stall_snapshot_is_diagnostic_only_and_never_forces_exit(
+    monkeypatch, mode, case, armed
+):
+    import primary_source_entry as entry
+    from types import SimpleNamespace
+
+    timers = []
+
+    class Timer:
+        def __init__(self, seconds, callback):
+            self.seconds, self.callback = seconds, callback
+            timers.append(self)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(entry.threading, "Timer", Timer)
+    observed = []
+    obj = object.__new__(entry.Observer)
+    obj.profile = {"source_mode": mode}
+    path = "/guard/finite/orders_git_data.py"
+    obj.manifest = {"direct_support": {"files": {path: "exact-pin"}}}
+
+    def checked(actual, pin):
+        assert (actual, pin) == (path, "exact-pin")
+        return {"CASES": {"exact-finite-case": "cohort"}}
+
+    obj.guard = SimpleNamespace(checked_source=checked)
+    obj.retain_stall_snapshot = lambda *args: observed.append(args)
+    obj.pytest_runtest_call(SimpleNamespace(nodeid=case, funcargs={}))
+    assert bool(timers) is armed
+    if armed:
+        assert timers[0].seconds == 10
+        timers[0].callback()
+        assert observed == [(obj.startup_stall_token, case, None)]
+
+
+def test_git_overhead_reproduction_runs_one_original_case_without_deadline_change():
+    import yaml
+    from primary_policy import TEST_GIT_OVERHEAD_CASES, root_seconds
+    from primary_source_inputs import test_plan
+    case='tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]'
+    assert TEST_GIT_OVERHEAD_CASES == (case,)
+    script=(COMMAND+' '+case).encode()
+    plan=test_plan(script,'diagnostic','TEST-positive')
+    assert plan['timeout_seconds']==root_seconds(plan)==600
+    assert plan['source_checkpoint_ready'] is False
+    workflow=yaml.safe_load((Path(__file__).parent.parent/'workflows/v046-source-readiness.yml').read_text())
+    assert workflow['jobs']['controlled-backend-postimage-diagnosis']['strategy']['matrix']['include']==[
+        {'group':'postimages-1','cases':case}]

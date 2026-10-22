@@ -19,10 +19,10 @@ ENVIRONMENT = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_CONFIG_NOSYSTEM': '1
                'GIT_COMMITTER_DATE': '2000-01-01T00:00:00+0000'}
 
 
-def repository_profile(argv, cwd, owned_root, caller):
+def repository_profile(argv, cwd, owned_root, caller, root_name='cohort'):
     path = Path(cwd)
     if (path.resolve() != path or not path.is_relative_to(Path(owned_root) / 'pytest')
-            or path.parent.name != 'cohort' or argv[:2] != ['/usr/bin/git', '--no-replace-objects']):
+            or root_name not in ('cohort', 'combined') or path.parent.name != root_name or argv[:2] != ['/usr/bin/git', '--no-replace-objects']):
         return False
     arguments = argv[2:]
     owner = caller['function']
@@ -77,7 +77,7 @@ def repository_profile(argv, cwd, owned_root, caller):
 
 
 def matches(argv, cwd, environment, state, frames, data, cases):
-    if state.get('case') not in cases or state['case'].split('::')[0] != ORDERS:
+    if state.get('case') not in cases:
         return None
     root = Path(state['checkout'])
     if any(state['product_pins'].get(n) != pin or hashlib.sha256((root / n).read_bytes()).hexdigest() != pin
@@ -133,7 +133,7 @@ def matches(argv, cwd, environment, state, frames, data, cases):
     if (environment != ENVIRONMENT or cwd != directory or helper.f_locals.get('root') != directory
             or helper.f_locals.get('arguments') != tuple(arguments)
             or argv != ['/usr/bin/git', '--no-replace-objects', *arguments]
-            or not repository_profile(argv, str(cwd), state['owned_root'], binding)):
+            or not repository_profile(argv, str(cwd), state['owned_root'], binding, cases[state['case']])):
         return None
     return {'class': CLASS, 'python': False, 'case': state['case'],
             'source_binding': {'path': str(root / PRODUCT), 'line': 38,
@@ -146,11 +146,10 @@ def admit(argv, cwd, environment, state, append, refuse):
     support = state['direct_support']['files']
     base = Path(__file__).parent
     data = guard.checked_source(base / 'orders_git_data.py', support[str(base / 'orders_git_data.py')])
-    catalog = guard.checked_source(base / 'backend_postimage_catalog.py', support[str(base / 'backend_postimage_catalog.py')])
     fallback = guard.checked_source(base / 'fallback_binding.py', support[str(base / 'fallback_binding.py')])
     frames = fallback['active_frames']()
     try:
-        registration = matches(argv, cwd, environment, state, frames, data, catalog['CASES'])
+        registration = matches(argv, cwd, environment, state, frames, data, data['CASES'])
         if registration is None:
             return None
         # Authenticate all original subprocess keywords as well as caller argv.

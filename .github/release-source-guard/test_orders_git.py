@@ -18,7 +18,7 @@ ROOT = SUPPORT.parent.parent
 sys.path.insert(0, str(SUPPORT))
 from finite import orders_git as route  # noqa: E402
 import orders_git_custody as native  # noqa: E402
-from finite.orders_git_data import PINS, SITES  # noqa: E402
+from finite.orders_git_data import PINS, SITES, CASES as SETUP_CASES  # noqa: E402
 from finite.backend_postimage_catalog import CASES  # noqa: E402
 
 CASE = next(c for c in CASES if c.startswith(route.ORDERS + "::"))
@@ -308,7 +308,7 @@ def test_python_admission_joins_real_source_code_and_call_arguments(tmp_path, ch
         cwd = str(directory.parent)
     elif change == "missing-frame":
         frames = []
-    result = route.matches(vector, Path(cwd), env, state, frames, data, CASES)
+    result = route.matches(vector, Path(cwd), env, state, frames, data, SETUP_CASES)
     assert (result is not None) is (change is None)
     if result:
         assert result["caller_binding"] == selection["registration"]["caller_binding"]
@@ -500,3 +500,39 @@ def test_housekeeping_other_vectors_do_not_consult_or_grant_authority():
             )
             is False
         )
+
+
+@pytest.mark.parametrize("case", sorted(SETUP_CASES))
+def test_original_setup_cases_have_only_their_exact_owned_root(tmp_path, case):
+    selection, argv, env, cwd, manifest = selected(tmp_path)
+    selection["registration"]["case"] = case
+    root_name = SETUP_CASES[case]
+    directory = Path(cwd).parent.with_name(root_name) / "base"
+    directory.mkdir(parents=True, exist_ok=True)
+    selection["cwd"] = str(directory)
+    assert native.eligible(selection, argv, env, str(directory), manifest, str(ROOT))
+    foreign = directory.parent.with_name("combined" if root_name == "cohort" else "cohort") / "base"
+    foreign.mkdir(parents=True, exist_ok=True)
+    selection["cwd"] = str(foreign)
+    assert not native.eligible(selection, argv, env, str(foreign), manifest, str(ROOT))
+
+
+def test_closed_shared_setup_inventory_preserves_negative_cases():
+    from collections import Counter
+
+    counts = Counter(c.split("::")[0].split("/")[-1] for c in SETUP_CASES)
+    assert counts == {
+        "test_experimental_finite_orders.py": 30,
+        "test_experimental_finite_priority.py": 25,
+        "test_experimental_finite_stops.py": 12,
+        "test_experimental_finite_ttl.py": 3,
+        "test_experimental_first_halt.py": 15,
+        "test_experimental_drain_retirement.py": 13,
+        "test_experimental_ack_durability.py": 20,
+    }
+    assert all(
+        SETUP_CASES[c] == ("combined" if "finite_priority.py::" in c else "cohort")
+        for c in SETUP_CASES
+    )
+    assert not any("parking_admission" in c for c in SETUP_CASES)
+    assert not any("PRIORITY-66" in c for c in SETUP_CASES)

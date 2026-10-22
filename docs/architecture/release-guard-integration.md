@@ -1355,3 +1355,18 @@ birth. The current main reference must identify an actual bounded commit object
 whose digest, author, timestamp and message match that site. Other Git commands,
 provider launches and wait-status exceptions remain refused. All original
 numeric waits, cleanup and scheduler assertions remain required.
+
+The same shared finite-setup helper has a closed roster of 118 original cases.
+Only the 25 priority pairs use the `combined` root; the remaining 93 use
+`cohort`. Fifty additional barrier callers reuse the existing pinned backend
+postimage. The diagnostic policy inventories all 168 affected original cases;
+a single original capacity case with read-only task snapshots isolates the
+remaining overhead before broader proof. Snapshots never end the test or alter
+its deadlines, and are disabled for the full source checkpoint.
+
+Git admission caches only immutable compilation after every original fresh
+carrier read and hash. File identity, bytes, pin and compilation flags must
+still match on every use; resolvers execute in fresh namespaces. Live source
+frames, argv, environment, native process custody and numeric waits remain
+unchanged. The pure compilation reproduction does not establish end-to-end
+deadline improvement or a release certificate.
