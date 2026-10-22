@@ -50,6 +50,8 @@ def test_v045_release_identity_scope_and_predecessor() -> None:
     assert "pending external gates" in manifest["status"]
     assert "not benchmark certified or release eligible" in manifest["status"]
     assert set(manifest["source"]) == {"binding_algorithm", "final_product_package_test"}
+    # The historical manifest does not own today's citation date.
+
 
 
 def test_v045_ci_archive_contract_and_required_gates() -> None:

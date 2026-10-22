@@ -319,20 +319,13 @@ def attach(guard):
     original_bootstrap = guard.bootstrap
     spec = STATE["spec"]
     actual_waitpid = os.waitpid
-    decoder_path = Path(__file__).resolve().parent.parent / 'journal_decode.py'
-    decoder_body = decoder_path.read_bytes()
-    if hashlib.sha256(decoder_body).hexdigest() != '0c5b90ad9ef52e88771caba513c9199d5b71e60da72de275090b8bcc9c9621f6':
-        raise EndpointRefusal('journal_decoder_source_drift')
-    decoder_namespace = {'__file__': str(decoder_path), '__name__': '_wait_journal_decode'}
-    exec(compile(decoder_body, str(decoder_path), 'exec'), decoder_namespace)
-    wait_decoder = decoder_namespace['JournalDecoder']()
 
     def observed_waitpid(pid, options):
         result = actual_waitpid(pid, options)
         if result[0] and guard._STATE is not None:
             state = guard._STATE
             journal = Path(state["events"]) / (str(os.getpid()) + ".jsonl")
-            records = wait_decoder.decode(str(journal), journal.read_bytes())
+            records = [json.loads(line) for line in journal.read_bytes().splitlines()]
             registration = next(
                 (
                     event

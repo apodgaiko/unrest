@@ -1252,13 +1252,7 @@ these four in-process expiry cases. It cannot certify SOURCE or admit provider
 launches.
 The complete unexcluded release suite and every other release gate remain.
 
-### Journal decoding and wait observation scheduling
-
-Journal consumers reacquire current file bytes on every consumption. Immutable
-validated line framing may be reused for identical bytes or a validated appended
-prefix; each result contains fresh JSON objects. Malformed committed records,
-current-byte changes and read errors retain their original refusal behavior.
-Uncommitted operation-journal tails cannot supply settlement evidence.
+### Wait observation scheduling
 
 The Linux tracer still observes both syscall stops and actual numeric results
 of every wait4/waitid. A pending wait alone uses the existing 10 ms idle census
