@@ -124,8 +124,11 @@ def verify(kernel, pid, *, require_outcomes=True):
                      and r['pid'] == pid and r['phase'] == 'kernel_exit'])
     waited = unique([r for r in pipes if r['kind'] == 'approval_exit_observation'
                      and r['pid'] == pid and r['phase'] == 'tracer_terminal_wait'])
-    current = exited['current_identity']
-    valid = (parent_exit_index < child_exit_index and parent_terminal_index < terminal_index
+    pre_wait = waited.get('identity_before_actual_wait')
+    current = pre_wait if pre_wait is not None else exited['current_identity']
+    causal = (waited.get('pre_wait_trace_index') == terminal_index
+              and parent_exit_index < terminal_index) if pre_wait is not None else parent_exit_index < child_exit_index
+    valid = (causal and parent_terminal_index < terminal_index
              and exited['numeric_wait_observed'] is False
              and type(exited['raw']) is int and exited['raw'] == child_exit['raw']
              and type(waited['raw']) is int and waited['raw'] == terminal['raw']

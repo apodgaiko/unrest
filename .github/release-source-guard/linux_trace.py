@@ -362,6 +362,8 @@ class OwnedTrace:
                               if value > last_waited), 0)
                 pid, raw = 0, 0
                 for candidate in known[pivot:] + known[:pivot]:
+                    if getattr(self, 'before_numeric_wait', None) is not None:
+                        self.before_numeric_wait(self, candidate)
                     pid, raw = os.waitpid(candidate, os.WNOHANG | 0x40000000)
                     if pid:
                         last_waited = pid

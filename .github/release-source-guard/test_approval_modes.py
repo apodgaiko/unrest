@@ -792,3 +792,57 @@ def test_cleanup_diagnostic_is_passive_bounded_and_composes_prior_observer():
         observe(frame('/synthetic/'+str(index),'close'),'call',None)
     assert len(rows)==16
     assert all(set(r)=={'kind','trigger','threads','tasks','diagnostic_only','eligible_certificate'} for r in rows)
+
+
+def test_pending_adoption_retries_kernel_parenthood_without_fabricated_trace_progress(monkeypatch):
+    adoption,authority,trace,birth,current,calls=adoptive_context(monkeypatch)
+    now=[0.0]
+    monkeypatch.setattr(adoption.time,'monotonic',lambda:now[0])
+    current['ppid']=49
+    adoption.reap(authority,trace)
+    assert calls==[]
+    original=[dict(row) for row in trace.records]
+    current['ppid']=adoption.os.getpid()
+    now[0]=0.01
+    adoption.reap(authority,trace)
+    assert calls==[]
+    now[0]=0.03
+    adoption.reap(authority,trace)
+    assert calls==[(54,adoption.os.WNOHANG)] and trace.records==original
+    adoption.reap(authority,trace)
+    assert len(calls)==1
+
+
+def test_pre_wait_observation_preserves_the_entire_original_tracer_algorithm():
+    import hashlib
+    hook=ast.parse("if getattr(self, 'before_numeric_wait', None) is not None:\n    self.before_numeric_wait(self, candidate)").body[0]
+    expected=ast.dump(hook,include_attributes=False)
+    removed=[]
+    class Strip(ast.NodeTransformer):
+        def visit_If(self,node):
+            if ast.dump(node,include_attributes=False)==expected:
+                removed.append(node)
+                return None
+            return self.generic_visit(node)
+    original=Strip().visit(ast.parse((Path(__file__).parent/'linux_trace.py').read_bytes()))
+    assert len(removed)==1
+    assert hashlib.sha256(ast.dump(original,include_attributes=False).encode()).hexdigest()=='207f3b1427331f5f71829aeb61b3c6e86deb1df08776d03d85fafef012c16035'
+
+
+def test_pre_wait_snapshot_is_bound_to_known_exited_controlled_child(monkeypatch):
+    from types import SimpleNamespace
+    import approval_exit_observation as observation
+    case=next(iter(observation.CASES))
+    rows=[{'kind':'registered','pid':54,'case':case}]
+    current={'pid':54,'ppid':1,'uids':[20000]*4}
+    authority=SimpleNamespace(_approval_exited={54},bound={54:{'registration':{'class':'source-approval-adapter'}}},
+                              supervisor=SimpleNamespace(events=lambda:rows))
+    trace=SimpleNamespace(records=[{'kind':'observed'}])
+    monkeypatch.setattr(observation,'snapshot',lambda pid:dict(current))
+    observation.before_wait(authority,trace,54)
+    assert authority._approval_pre_wait[54]=={'identity':current,'trace_record_count':1}
+    current['ppid']=49
+    observation.before_wait(authority,trace,54)
+    assert authority._approval_pre_wait[54]['identity']['ppid']==49
+    observation.before_wait(authority,trace,55)
+    assert 55 not in authority._approval_pre_wait

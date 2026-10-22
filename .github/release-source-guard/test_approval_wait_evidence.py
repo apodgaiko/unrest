@@ -303,3 +303,20 @@ def test_live_terminal_connection_never_treats_absence_as_adoption():
     )
     with pytest.raises(AwaitOwnedPeer):
         settled(host, saved)
+
+
+@pytest.mark.parametrize("drift", [None, "index", "parent", "birth"])
+def test_parenthood_immediately_before_actual_wait_is_bound_to_that_numeric_wait(drift):
+    k, s = fixture()
+    exited, waited = k["source_pipe_records"]
+    exited["current_identity"]["ppid"] = 10
+    assert unresolved(k) == [20]
+    waited["identity_before_actual_wait"] = {**exited["current_identity"], "ppid": 1}
+    waited["pre_wait_trace_index"] = 5
+    if drift == "index":
+        waited["pre_wait_trace_index"] = 4
+    elif drift == "parent":
+        waited["identity_before_actual_wait"]["ppid"] = 10
+    elif drift == "birth":
+        waited["identity_before_actual_wait"]["start_ticks"] += 1
+    assert summary_closed(s, k) is (drift is None)

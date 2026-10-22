@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 
 from approval_orphan_custody import CLASSES, proof
@@ -18,8 +19,12 @@ def zombie(pid):
 def reap(authority, trace):
     start = getattr(authority, '_adoptive_record_count', 0)
     end = len(trace.records)
-    if start == end:
+    if start == end and not getattr(authority, '_adoptive_pending', {}):
         return
+    now = time.monotonic()
+    if start == end and now < getattr(authority, '_adoptive_retry_at', 0):
+        return
+    authority._adoptive_retry_at = now + 0.02
     if start > end:
         raise RuntimeError('approval_adoptive_trace_rewound')
     pending = getattr(authority, '_adoptive_pending', {})

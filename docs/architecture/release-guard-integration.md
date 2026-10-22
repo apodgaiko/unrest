@@ -1163,7 +1163,7 @@ PID/raw status must match the tracer's earlier terminal record. This separate
 `actual_adoptive_parent_wait4` record never impersonates an original-parent wait
 and does not by itself activate a checkpoint or satisfy a wait gate.
 A living original parent retains its wait authority; absence alone creates no
-wait record. The original tracer and its raw records remain unchanged.
+wait record. The tracer's numeric wait algorithm and raw records remain unchanged.
 
 
 ### Actual legal-parent waits after controlled owner death
@@ -1209,3 +1209,15 @@ cleanup task/thread snapshots through the existing profile observer. Observation
 starts only at cancellation or owned cleanup and records code locations and task
 states, never locals or source bodies. It composes a prior observer, creates no
 thread/process/timer, changes no deadline or result and cannot certify a run.
+
+A read-only hook immediately before a known candidate's original numeric wait
+can retain its current kernel identity. The following terminal observation
+accepts that snapshot only at the exact next trace-record index for the same
+PID. This distinguishes parenthood at exit-stop from parenthood at the later
+reaping wait without altering wait flags, statuses, fairness or failure drain.
+The former exit snapshot remains valid where already sufficient; raw records
+and original missing-parent inventories stay intact. Pending controlled zombie
+reaping retries current parenthood at a bounded 20ms interval even without new
+trace rows, since reparenting can finish between observer notifications. Every
+retry repeats current birth/UID/zombie/parent-death checks and only an actual
+matching numeric wait can close it. Absence or an empty poll creates no status.

@@ -33,6 +33,10 @@ def collect(authority, trace):
         if row['kind'] not in {'kernel_exit', 'tracer_terminal_wait'}:
             continue
         pid = row['pid']
+        if row['kind'] == 'kernel_exit':
+            if not hasattr(authority, '_approval_exited'):
+                authority._approval_exited = set()
+            authority._approval_exited.add(pid)
         selected = getattr(authority, 'bound', {}).get(pid)
         if selected is None or selected['registration'].get('class') not in CLASSES:
             continue
@@ -54,6 +58,32 @@ def collect(authority, trace):
             except (OSError, ValueError, RuntimeError) as error:
                 evidence['unavailable'] = type(error).__name__
         else:
+            prior = getattr(authority, '_approval_pre_wait', {}).pop(pid, None)
+            if prior is not None and prior['trace_record_count'] == index:
+                evidence['identity_before_actual_wait'] = prior['identity']
+                evidence['pre_wait_trace_index'] = prior['trace_record_count']
             evidence['process_absent_after_actual_wait'] = process_absent(pid)
         authority.pipe_records.append(evidence)
     authority._approval_exit_observation_index = end
+
+
+def before_wait(authority, trace, pid):
+    # Observing a known exited child does not consume its wait or change the
+    # tracer's original numeric wait, fairness, signal or failure-drain path.
+    if pid not in getattr(authority, '_approval_exited', ()):
+        return
+    selected = getattr(authority, 'bound', {}).get(pid)
+    if selected is None or selected['registration'].get('class') not in CLASSES:
+        return
+    registrations = [row for row in authority.supervisor.events()
+                     if row['kind'] == 'registered' and row['pid'] == pid]
+    if len(registrations) != 1 or registrations[0].get('case') not in CASES:
+        return
+    if not hasattr(authority, '_approval_pre_wait'):
+        authority._approval_pre_wait = {}
+    authority._approval_pre_wait.pop(pid, None)
+    try:
+        current = snapshot(pid)
+    except (OSError, ValueError, RuntimeError):
+        return
+    authority._approval_pre_wait[pid] = {'identity': current, 'trace_record_count': len(trace.records)}
