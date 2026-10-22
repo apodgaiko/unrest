@@ -43,7 +43,7 @@ def original_missing(kernel):
         and row['parent_tgid'] == birth['identity']['ppid']]) != 1)
 
 
-def verify(kernel, pid):
+def verify(kernel, pid, *, require_outcomes=True):
     rows, events = kernel['records'], kernel['source_events']
     if any(row['kind'] in {'original_parent_wait4', 'original_parent_waitid'}
            and row.get('child') == pid for row in rows):
@@ -66,7 +66,7 @@ def verify(kernel, pid):
             and all(saved[key] == birth[key] for key in IMMUTABLE)
             and saved['uid'] == 20000 and birth['uids'] == [20000] * 4):
         return None
-    for phase in ('setup', 'call', 'teardown'):
+    for phase in (('setup', 'call', 'teardown') if require_outcomes else ()):
         outcome = unique([r for r in events if r['kind'] == 'test_outcome'
                           and r['nodeid'] == case and r['phase'] == phase])
         if outcome['outcome'] != 'passed':

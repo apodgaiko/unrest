@@ -264,3 +264,42 @@ def test_host_reducer_has_no_runtime_guard_imports():
         for alias in node.names
     )
     assert imported == {"__future__", "hashlib", "json", "os"}
+
+
+@pytest.mark.parametrize("second", [False, True])
+def test_live_terminal_connection_uses_actual_adoptive_wait_before_teardown(second):
+    from types import SimpleNamespace
+    from approval_terminal_peer import settled
+
+    k, s = fixture(second)
+    k["source_events"] = [r for r in k["source_events"] if r["kind"] != "test_outcome"]
+    saved = next(
+        r["identity"] for r in k["source_events"] if r["kind"] == "endpoint_install_complete"
+    )
+    host = SimpleNamespace(
+        owned_trace=SimpleNamespace(records=k["records"]),
+        approval_pipe_records=k["source_pipe_records"],
+        events=lambda: k["source_events"],
+    )
+    result = settled(host, saved)
+    assert result["original_parent_wait"] is None
+    assert result["actual_adoptive_parent_wait"]["raw"] == 15
+    assert not summary_closed(s, k)  # Final certification still requires original teardown.
+
+
+def test_live_terminal_connection_never_treats_absence_as_adoption():
+    from types import SimpleNamespace
+    from approval_terminal_peer import settled
+    from linux_supervisor import AwaitOwnedPeer
+
+    k, _ = fixture()
+    saved = next(
+        r["identity"] for r in k["source_events"] if r["kind"] == "endpoint_install_complete"
+    )
+    host = SimpleNamespace(
+        owned_trace=SimpleNamespace(records=k["records"]),
+        approval_pipe_records=[],
+        events=lambda: k["source_events"],
+    )
+    with pytest.raises(AwaitOwnedPeer):
+        settled(host, saved)

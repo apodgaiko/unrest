@@ -1196,3 +1196,10 @@ and extracted persistence checks, installed lifecycle, desktop and CI duties
 remain required. No new launch, provider approval, native review recovery,
 status substitution or native timing claim follows from this rule. Native
 approval/reuse/final timing remain UNVERIFIED.
+
+The retained-connection cleanup check uses that same exact evidence for a dead
+adopted peer. Live cleanup does not require the current test's future teardown
+report; final certification still requires passed setup, call and teardown.
+The live response distinguishes `actual_adoptive_parent_wait` from a missing
+`original_parent_wait`, preserves the retained descriptor/cookie and READY
+checks, and waits rather than admitting a peer without real numeric evidence.
