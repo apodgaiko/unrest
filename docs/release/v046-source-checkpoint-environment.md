@@ -1398,3 +1398,12 @@ child's completed endpoint installation, including its authenticated observer
 identity and nonce. The earlier core READY occurs before endpoint authentication;
 it cannot release a parent that may immediately exercise a sticky refusal control.
 A failed earlier execution remains failed, including its actual tracker exit status.
+
+Actual-parent wait observation rereads the complete current owner journal after
+`os.waitpid` returns. It may reuse JSON syntax validation for an exact previously
+validated LF-terminated byte prefix; changed prefixes, truncation and incomplete
+last lines receive full validation. Every new row is validated before lookup,
+including rows preceding the matching registration. The registration itself is
+selected afresh from the current bytes, newest first. This optimization caches no
+process identity, registration, child token, wait status or filesystem metadata.
+The recorded actual numeric wait and the independent cleanup checks are unchanged.

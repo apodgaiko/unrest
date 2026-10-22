@@ -314,27 +314,38 @@ def early(spec):
     socket.socket.recv_into = recv_into
 
 
+
+def latest_wait_registration(data, owner_pid, child_pid, validated_prefix=b""):
+    """Reuse syntax validation only; select registration from current bytes."""
+    tail = data[len(validated_prefix):] if data.startswith(validated_prefix) else data
+    # Validate every new row before searching, including rows older than a match.
+    # Only a complete LF-terminated byte prefix can be reused after an append.
+    for line in tail.splitlines():
+        json.loads(line)
+    registration = next(
+        (event for event in (json.loads(line) for line in reversed(data.splitlines()))
+         if event["kind"] == "registered"
+         and event["owner_pid"] == owner_pid and event["pid"] == child_pid),
+        None,
+    )
+    return registration, data if data.endswith(b"\n") else b""
+
+
 def attach(guard):
     original_install = guard.install
     original_bootstrap = guard.bootstrap
     spec = STATE["spec"]
     actual_waitpid = os.waitpid
+    validated_wait_prefix = b""
 
     def observed_waitpid(pid, options):
+        nonlocal validated_wait_prefix
         result = actual_waitpid(pid, options)
         if result[0] and guard._STATE is not None:
             state = guard._STATE
             journal = Path(state["events"]) / (str(os.getpid()) + ".jsonl")
-            records = [json.loads(line) for line in journal.read_bytes().splitlines()]
-            registration = next(
-                (
-                    event
-                    for event in reversed(records)
-                    if event["kind"] == "registered"
-                    and event["owner_pid"] == os.getpid()
-                    and event["pid"] == result[0]
-                ),
-                None,
+            registration, validated_wait_prefix = latest_wait_registration(
+                journal.read_bytes(), os.getpid(), result[0], validated_wait_prefix
             )
             guard.append(
                 {
