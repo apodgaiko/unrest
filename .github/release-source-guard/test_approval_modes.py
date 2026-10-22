@@ -77,9 +77,12 @@ def approval_pipe_fixture(monkeypatch):
     from types import SimpleNamespace
     import copy
     original_read = Path.read_bytes
-    checkout = Path(__file__).resolve().parents[2]
-    monkeypatch.setattr(Path, 'read_bytes', lambda p: original_read(checkout / p.relative_to('/source'))
-                        if p.is_relative_to('/source') else original_read(p))
+    import hashlib
+    bodies = {Path('/source', pipe.SOURCE): b'synthetic original ACP caller',
+              Path('/source', pipe.TEST): b'synthetic original approval cases'}
+    monkeypatch.setattr(pipe, 'PIN', hashlib.sha256(bodies[Path('/source', pipe.SOURCE)]).hexdigest())
+    monkeypatch.setattr(pipe, 'TEST_PIN', hashlib.sha256(bodies[Path('/source', pipe.TEST)]).hexdigest())
+    monkeypatch.setattr(Path, 'read_bytes', lambda p: bodies[p] if p in bodies else original_read(p))
     monkeypatch.setattr(pipe, 'identity', lambda pid: {'ppid': 7})
     row = {'kind': 'exact_controlled_approval_registration', 'owner_pid': 7,
            'class': 'source-approval-mcp', 'source_binding': {'path': '/source/' + pipe.SOURCE,
