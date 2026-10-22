@@ -34,12 +34,6 @@ def setup(root, ledger, names, *, capacity=1, parking=4, reuse=False):
     original = root / 'base'
     original.mkdir()
     git(original, 'init', '--initial-branch=main', '--object-format=sha1')
-    # These tiny owned repositories test custody, not background housekeeping.
-    # Copies retain the settings; original Git commands and waits stay real.
-    config = original / '.git/config'
-    assert not config.is_symlink() and config.stat().st_nlink == 1
-    with config.open('a') as stream:
-        stream.write('\n[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n')
     for name in ('a', 'b'):
         (original / name).write_bytes(b'base\n')
     git(original, 'add', '.')

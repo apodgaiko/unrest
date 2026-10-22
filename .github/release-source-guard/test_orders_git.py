@@ -138,7 +138,6 @@ def config(root):
     path.parent.mkdir()
     path.write_text(
         "[core]\nrepositoryformatversion = 0\nfilemode = true\nbare = false\nlogallrefupdates = true\n"
-        "[maintenance]\nauto = false\n[gc]\nauto = 0\n"
     )
     return path
 
@@ -146,7 +145,7 @@ def config(root):
 @pytest.mark.parametrize(
     "change", [None, "maintenance", "gc", "extra-section", "symlink", "hardlink", "argv", "site"]
 )
-def test_commits_keep_housekeeping_disabled_without_admitting_a_child(tmp_path, change):
+def test_commits_require_the_unchanged_core_metadata_grammar(tmp_path, change):
     directory = tmp_path / "pytest/case/cohort/z-first-candidate"
     directory.mkdir(parents=True)
     path = config(directory)
@@ -160,9 +159,9 @@ def test_commits_keep_housekeeping_disabled_without_admitting_a_child(tmp_path, 
     ]
     caller = {"function": "seal", "line": 197}
     if change == "maintenance":
-        path.write_text(path.read_text().replace("auto = false", "auto = true"))
+        path.write_text(path.read_text() + "[maintenance]\nauto = true\n")
     elif change == "gc":
-        path.write_text(path.read_text().replace("auto = 0", "auto = 1"))
+        path.write_text(path.read_text() + "[gc]\nauto = 1\n")
     elif change == "extra-section":
         path.write_text(path.read_text() + "[credential]\nhelper = foreign\n")
     elif change == "symlink":
@@ -213,7 +212,6 @@ def test_changed_fixture_pins_preserve_the_historical_template(monkeypatch):
     }
     assert changed == {
         "tests/test_experimental_notifications.py",
-        "tests/test_experimental_finite_priority.py",
     }
     assert template["anchor_inventory"] == before["anchor_inventory"]
     for name in changed:
@@ -317,41 +315,65 @@ def test_python_admission_joins_real_source_code_and_call_arguments(tmp_path, ch
         assert result["source_binding"] == selection["registration"]["source_binding"]
 
 
-@pytest.mark.parametrize('change', [None, 'missing-launch', 'duplicate-launch',
-    'missing-caller', 'duplicate-caller', 'old-window', 'after-launch', 'owner',
-    'case', 'class', 'python', 'cwd', 'argv', 'source', 'launch-env', 'caller-drift'])
+@pytest.mark.parametrize(
+    "change",
+    [
+        None,
+        "missing-launch",
+        "duplicate-launch",
+        "missing-caller",
+        "duplicate-caller",
+        "old-window",
+        "after-launch",
+        "owner",
+        "case",
+        "class",
+        "python",
+        "cwd",
+        "argv",
+        "source",
+        "launch-env",
+        "caller-drift",
+    ],
+)
 def test_stopped_image_joins_actual_admitted_shape_to_exact_caller_window(tmp_path, change):
     selection, vector, env, cwd, manifest = selected(tmp_path)
-    full = selection['registration']
-    concrete = {'kind': 'concrete_orders_custody_git', **full,
-                'argv_sha256': selection['transformed_argv_sha256'], 'cwd': cwd}
-    concrete.pop('token')
+    full = selection["registration"]
+    concrete = {
+        "kind": "concrete_orders_custody_git",
+        **full,
+        "argv_sha256": selection["transformed_argv_sha256"],
+        "cwd": cwd,
+    }
+    concrete.pop("token")
     # runtime_guard's admitted event carries neither python nor caller_binding.
-    admitted = {k: v for k, v in full.items() if k not in ('python', 'caller_binding')}
-    admitted['argv_sha256'] = selection['transformed_argv_sha256']
-    selection = {**selection, 'registration': admitted}
-    launch = {k: v for k, v in selection.items() if k != 'registration'}
-    launch['kind'] = 'actual_launch_binding'
+    admitted = {k: v for k, v in full.items() if k not in ("python", "caller_binding")}
+    admitted["argv_sha256"] = selection["transformed_argv_sha256"]
+    selection = {**selection, "registration": admitted}
+    launch = {k: v for k, v in selection.items() if k != "registration"}
+    launch["kind"] = "actual_launch_binding"
     events = [concrete, launch]
-    if change == 'missing-launch':
+    if change == "missing-launch":
         events.pop()
-    elif change == 'duplicate-launch':
+    elif change == "duplicate-launch":
         events.append(dict(launch))
-    elif change == 'missing-caller':
+    elif change == "missing-caller":
         events.pop(0)
-    elif change == 'duplicate-caller':
+    elif change == "duplicate-caller":
         events.insert(0, dict(concrete))
-    elif change == 'old-window':
-        events.insert(1, {**launch, 'token': 'previous'})
-    elif change == 'after-launch':
+    elif change == "old-window":
+        events.insert(1, {**launch, "token": "previous"})
+    elif change == "after-launch":
         events.reverse()
-    elif change in ('owner', 'case', 'class', 'python', 'cwd', 'argv', 'source'):
-        name = {'owner': 'owner_pid', 'argv': 'argv_sha256', 'source': 'source_binding'}.get(change, change)
-        concrete[name] = 'foreign'
-    elif change == 'launch-env':
-        launch['environment_sha256'] = 'foreign'
-    elif change == 'caller-drift':
-        concrete['caller_binding'] = {**concrete['caller_binding'], 'line': 46}
+    elif change in ("owner", "case", "class", "python", "cwd", "argv", "source"):
+        name = {"owner": "owner_pid", "argv": "argv_sha256", "source": "source_binding"}.get(
+            change, change
+        )
+        concrete[name] = "foreign"
+    elif change == "launch-env":
+        launch["environment_sha256"] = "foreign"
+    elif change == "caller-drift":
+        concrete["caller_binding"] = {**concrete["caller_binding"], "line": 46}
     snapshot = json.dumps(selection, sort_keys=True)
     joined = native.join_registration(selection, events)
     accepted = joined is not None and native.eligible(joined, vector, env, cwd, manifest, str(ROOT))
@@ -360,11 +382,121 @@ def test_stopped_image_joins_actual_admitted_shape_to_exact_caller_window(tmp_pa
 
 
 def test_admitted_record_has_the_original_frozen_projection():
-    tree = ast.parse((SUPPORT / 'finite/runtime_guard.py').read_bytes())
-    records = [node for node in ast.walk(tree) if isinstance(node, ast.Dict)
-               and any(isinstance(k, ast.Constant) and k.value == 'kind'
-                       and isinstance(v, ast.Constant) and v.value == 'admitted'
-                       for k, v in zip(node.keys, node.values))]
+    tree = ast.parse((SUPPORT / "finite/runtime_guard.py").read_bytes())
+    records = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Dict)
+        and any(
+            isinstance(k, ast.Constant)
+            and k.value == "kind"
+            and isinstance(v, ast.Constant)
+            and v.value == "admitted"
+            for k, v in zip(node.keys, node.values)
+        )
+    ]
     assert len(records) == 1
     assert {k.value for k in records[0].keys} == {
-        'kind', 'token', 'class', 'argv_sha256', 'source_binding'}
+        "kind",
+        "token",
+        "class",
+        "argv_sha256",
+        "source_binding",
+    }
+
+
+@pytest.mark.parametrize(
+    "site,message,args",
+    [
+        (("setup", 40), "finite fixture", ["commit", "-m", "finite fixture"]),
+        (("seal", 197), "sealed candidate", ["commit", "--allow-empty", "-m", "sealed candidate"]),
+        (
+            ("integrate", 239),
+            "authored lane integration",
+            ["commit", "--allow-empty", "-m", "authored lane integration"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "change",
+    [
+        None,
+        "site",
+        "argv",
+        "cwd",
+        "parent-env",
+        "child-env",
+        "head",
+        "object",
+        "author",
+        "message",
+        "extra-zlib",
+    ],
+)
+def test_stock_housekeeping_requires_the_exact_original_commit(
+    tmp_path, site, message, args, change
+):
+    import zlib
+    import orders_git_maintenance as maintenance
+
+    root = tmp_path / "repository"
+    git = root / ".git"
+    (git / "refs/heads").mkdir(parents=True)
+    (git / "HEAD").write_text("ref: refs/heads/main\n")
+    body = (
+        b"tree " + b"0" * 40 + b"\nauthor Fixture <fixture@example.invalid> 946684800 +0000\n"
+        b"committer Fixture <fixture@example.invalid> 946684800 +0000\n\n"
+        + message.encode()
+        + b"\n"
+    )
+    if change == "author":
+        body = body.replace(b"author Fixture", b"author Foreign")
+    elif change == "message":
+        body += b"foreign\n"
+    raw = b"commit " + str(len(body)).encode() + b"\0" + body
+    oid = hashlib.sha1(raw).hexdigest()
+    path = git / "objects" / oid[:2] / oid[2:]
+    path.parent.mkdir(parents=True)
+    path.write_bytes(zlib.compress(raw) + (b"foreign" if change == "extra-zlib" else b""))
+    (git / "refs/heads/main").write_text(oid + "\n")
+    parent = {
+        "argv": ["/usr/bin/git", "--no-replace-objects", *args],
+        "cwd": str(root),
+        "environment": dict(route.ENVIRONMENT),
+        "orders_registration": {"caller_binding": {"function": site[0], "line": site[1]}},
+    }
+    env = {
+        **route.ENVIRONMENT,
+        "PATH": "/usr/lib/git-core:/usr/bin:/bin",
+        "GIT_EXEC_PATH": "/usr/lib/git-core",
+        "GIT_PREFIX": "",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_AUTHOR_DATE": "@946684800 +0000",
+    }
+    if change == "site":
+        parent["orders_registration"]["caller_binding"]["line"] = 38
+    elif change == "argv":
+        parent["argv"].append("foreign")
+    elif change == "cwd":
+        parent["cwd"] = str(tmp_path)
+    elif change == "parent-env":
+        parent["environment"]["GIT_CONFIG_GLOBAL"] = "/foreign"
+    elif change == "child-env":
+        env["GIT_CONFIG_GLOBAL"] = "/foreign"
+    elif change == "head":
+        (git / "HEAD").write_text("ref: refs/heads/foreign\n")
+    elif change == "object":
+        path.write_bytes(zlib.compress(raw + b"foreign"))
+    assert maintenance.metadata(parent, env, str(root)) is (change is None)
+
+
+def test_housekeeping_other_vectors_do_not_consult_or_grant_authority():
+    import orders_git_maintenance as maintenance
+
+    for vector in ([], ["/usr/bin/git", "maintenance"], maintenance.VECTOR + ["foreign"]):
+        assert (
+            maintenance.resolve(
+                None, None, 123, vector[0] if vector else "", vector, {}, "/foreign"
+            )
+            is False
+        )

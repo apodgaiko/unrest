@@ -28,8 +28,8 @@ def repository_profile(argv, cwd, owned_root, caller):
     owner = caller['function']
     prefixes = {
         ('setup', 36): ['init', '--initial-branch=main', '--object-format=sha1'],
-        ('setup', 45): ['add', '.'], ('setup', 46): ['commit', '-m', 'finite fixture'],
-        ('setup', 47): ['rev-parse', 'HEAD'], ('seal', 193): ['add', '--'],
+        ('setup', 39): ['add', '.'], ('setup', 40): ['commit', '-m', 'finite fixture'],
+        ('setup', 41): ['rev-parse', 'HEAD'], ('seal', 193): ['add', '--'],
         ('seal', 194): ['diff', '--cached', '--name-only'],
         ('seal', 197): ['commit', '--allow-empty', '-m', 'sealed candidate'],
         ('seal', 198): ['rev-parse', 'HEAD'], ('integrate', 235): ['add', '--'],
@@ -71,10 +71,9 @@ def repository_profile(argv, cwd, owned_root, caller):
         return False
     parsed = configparser.RawConfigParser(strict=True)
     parsed.read_string(config.read_text())
-    return (not parsed.defaults() and set(parsed.sections()) == {'core', 'maintenance', 'gc'}
+    return (not parsed.defaults() and set(parsed.sections()) == {'core'}
             and dict(parsed['core']) == {'repositoryformatversion': '0', 'filemode': 'true',
-                'bare': 'false', 'logallrefupdates': 'true'}
-            and dict(parsed['maintenance']) == {'auto': 'false'} and dict(parsed['gc']) == {'auto': '0'})
+                'bare': 'false', 'logallrefupdates': 'true'})
 
 
 def matches(argv, cwd, environment, state, frames, data, cases):

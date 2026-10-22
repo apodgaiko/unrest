@@ -1344,11 +1344,14 @@ or accept a guard exception as product evidence. Open/disabled sessions retain
 the real HTTP rejection; grants, candidate bytes, no-send/no-ack, privacy and all
 numeric child-returncode assertions remain.
 
-Finite-order fixture repositories disable automatic maintenance and GC before
-their original setup commit; copied candidates and integration retain those
-settings. This avoids incidental background children without admitting them.
-The thirty original finite-order cases admit only twelve original custody Git
-call sites, exact helper code/argv/environment and canonical owned repositories.
-A stopped-image check independently joins the launch token, caller binding,
-parent birth and native Git image before execution. No maintenance, arbitrary Git
-command, provider launch or wait-status exception is added.
+The thirty original finite-order cases retain their original fixture and strict
+candidate metadata grammar. They admit only twelve original custody Git call
+sites, exact helper code/argv/environment and canonical owned repositories.
+A stopped-image check joins the launch token to the sole concrete caller in its
+original journal window, then checks parent birth and the native Git image.
+Each of the three original commit sites can own one stock Git auto-maintenance
+child with its exact image, argv, transformed environment and current process
+birth. The current main reference must identify an actual bounded commit object
+whose digest, author, timestamp and message match that site. Other Git commands,
+provider launches and wait-status exceptions remain refused. All original
+numeric waits, cleanup and scheduler assertions remain required.

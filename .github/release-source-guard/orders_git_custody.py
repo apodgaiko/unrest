@@ -84,7 +84,10 @@ def join_registration(selected, events):
 
 
 def resolve(authority, trace, pid, path, vector, environment, cwd):
-    if path != '/usr/bin/git' or vector[:2] != [path, '--no-replace-objects']:
+    if path != '/usr/bin/git':
+        from orders_git_maintenance import resolve as maintenance
+        return maintenance(authority, trace, pid, path, vector, environment, cwd)
+    if vector[:2] != [path, '--no-replace-objects']:
         return False
     selected = authority.bound.get(pid)
     if selected is None:
@@ -99,7 +102,8 @@ def resolve(authority, trace, pid, path, vector, environment, cwd):
             or Path('/proc/' + str(pid) + '/cwd').resolve() != Path(cwd)):
         return False
     authority.contexts[pid] = {'role': 'source-native', 'identity': identity(pid)}
-    authority.native_context[pid] = {'path': path, 'argv': vector, 'cwd': cwd, 'environment': environment}
+    authority.native_context[pid] = {'path': path, 'argv': vector, 'cwd': cwd, 'environment': environment,
+                                     'orders_registration': selected['registration']}
     authority.pipe_records.append({'kind': 'orders_git_stopped_image', 'pid': pid,
                                    'token': selected['token'], 'identity': identity(pid),
                                    'executable_sha256': authority.manifest['copy_git'][path]})

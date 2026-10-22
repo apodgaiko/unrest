@@ -103,7 +103,7 @@ def admit_approval_imports(manifest):
 
 def admit_controlled_fixture_cleanup(manifest):
     """Exact reviewed test postimages; historical fixture/source anchors remain fixed."""
-    changes = {'tests/test_experimental_notifications.py': ('911e6a90664f2b583690fa6319ce0e57ee6aeb3eeef55adbd192527a3dcdb6e8', '5a1aea6102ae089fb8d5ad82496562a020def6ce1f4ece95b8ef84dadb22cf00'), 'tests/test_experimental_finite_priority.py': ('05ac2bda998c5bb8043d2e090741dca9046b055b3e123d5c1abc248e87b5111b', '2cd7d1ab8b6280bc615d01e419572a9a0a71ae7a1d31e976e5426ee7416b71c9')}
+    changes = {'tests/test_experimental_notifications.py': ('911e6a90664f2b583690fa6319ce0e57ee6aeb3eeef55adbd192527a3dcdb6e8', '5a1aea6102ae089fb8d5ad82496562a020def6ce1f4ece95b8ef84dadb22cf00')}
     for name, (before, after) in changes.items():
         if (manifest['product_pins'].get(name) != before
                 or sha(ROOT / name) != after
