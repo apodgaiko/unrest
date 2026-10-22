@@ -10,7 +10,7 @@ import stat
 import sys
 
 PINS = {
-    'tests/test_approval_recovery.py': '5f594cd2b8921e01cbb6e1d3aa11ed3cb84d5a9e7d07843b9e2c7a34fc36798c',
+    'tests/test_approval_recovery.py': '6f10eb2f69b9ab6f01c53308505fff06dc1f957c21ebb01cb72ecadb026fffa2',
     'src/unrest_harness/approval_recovery.py': '8a378de950500f2bb6e4b6bbcf55392343d0127aa68716671208b82c27e5533f',
     'src/unrest_harness/approval_relay.py': 'efaba9521aa12d6fbdb228f05da210a4027675c79830d1a5ca93627faa80da44',
 }

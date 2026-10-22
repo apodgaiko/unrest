@@ -1207,13 +1207,43 @@ async def test_host_waits_for_submission_receipt(tmp_path):
 
 
 async def test_real_deadline_expires_during_settlement_handshake(tmp_path, monkeypatch):
-    read = recovery.read_frame
+    owner, _, _ = setup_owner(tmp_path)
+    received, expired = asyncio.Event(), asyncio.Event()
+    read, write = recovery.read_frame, write_frame
 
-    async def delayed_settlement(reader, limit):
+    async def held_settlement(reader, limit):
         message = await read(reader, limit)
         if message.get("event") == "settled":
-            await asyncio.sleep(0.3)
+            received.set()
+            await expired.wait()
         return message
 
-    monkeypatch.setattr(recovery, "read_frame", delayed_settlement)
-    await asyncio.wait_for(test_real_deadline_timer_erases_memory_and_cleans_reader(tmp_path), 1)
+    async def expire_before_settlement(writer, message, limit):
+        await write(writer, message, limit)
+        if message.get("event") == "settled":
+            await received.wait()
+            owner.expiry = recovery.time.monotonic() + 0.02
+            await owner._expire()
+            expired.set()
+
+    monkeypatch.setattr(recovery, "read_frame", held_settlement)
+    monkeypatch.setitem(globals(), "write_frame", expire_before_settlement)
+    writer = pending = None
+    try:
+        reader, writer, pending = await asyncio.wait_for(install_pending(owner), 2)
+        assert received.is_set() and expired.is_set()
+        assert not owner.settled.is_set()
+        assert await asyncio.wait_for(pending, 1) is False
+        assert owner.event is None
+        assert not owner.submit_requested
+    finally:
+        expired.set()
+        try:
+            if pending is not None:
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+            if writer is not None:
+                writer.close()
+                await writer.wait_closed()
+        finally:
+            await owner.close()

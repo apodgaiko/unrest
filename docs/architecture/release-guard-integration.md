@@ -1226,8 +1226,10 @@ The controlled approval test setup bounds its settlement wait by the owner's
 existing remaining expiry. If real expiry erases the denial before settlement,
 the helper returns the ordinary unavailable review task instead of awaiting a
 settlement event that can no longer arrive. The original 200ms real-deadline
-case and every assertion remain unchanged. A delayed-settlement regression runs
-that same oracle, without advancing a fake clock or extending the deadline.
+case and every assertion remain unchanged. A separate regression synchronizes the actual settlement read, then allows
+the real expiry timer to erase the denial before processing that message. It
+asserts both synchronization points and the original expiry outcomes, without
+advancing a fake clock or extending the original real-deadline test.
 The exact diagnostic approval selection can capture this case's task stack and
 end its failed TEST root after 20 seconds; SOURCE budgets and verdicts are
 unchanged, and diagnostic output cannot certify the release.

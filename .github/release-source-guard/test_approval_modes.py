@@ -853,9 +853,17 @@ def test_pre_wait_normalization_rejects_callback_or_wait_mutation(before,after):
         restore_before_numeric_wait(ast.parse(source.replace(before,after)))
 
 
-def test_expiry_fixture_delta_preserves_all_previous_test_bytes():
+def test_expiry_fixture_delta_preserves_all_previous_test_bytes(monkeypatch):
+    import hashlib
     import approval_import_source_inputs as transition
-    body = (Path(__file__).parents[2] / 'tests/test_approval_recovery.py').read_bytes()
+    before = (b'async def install_pending(owner):\n' + transition.SETTLEMENT_BEFORE
+              + b'    assert owner.event is None\n'
+              + b'    deadline=time.monotonic() + 0.2\n')
+    body = before.replace(transition.SETTLEMENT_BEFORE, transition.SETTLEMENT_AFTER)
+    pin = hashlib.sha256(before).hexdigest()
+    monkeypatch.setattr(transition, 'TEST_BASE_SIZE', len(before))
+    monkeypatch.setattr(transition, 'TEST_BASE_SHA256', pin)
+    monkeypatch.setattr(transition, 'PRE', {'tests/test_approval_recovery.py': pin})
     transition.verify_test(body)
     for changed in (body.replace(b'owner.remaining()', b'30', 1),
                     body.replace(b'assert owner.event is None', b'assert True', 1),
