@@ -246,3 +246,21 @@ def test_receipt_retains_original_gaps_with_separate_numeric_waits(drift):
     else:
         with pytest.raises(RuntimeError):
             receipt.validate(body, artifact, run, jobs, expected)
+
+
+def test_host_reducer_has_no_runtime_guard_imports():
+    import ast
+    from pathlib import Path
+    from approval_orphan_custody import CASES, CLASSES
+    import approval_wait_evidence as rule
+
+    assert rule.CASES == CASES and rule.CLASSES == CLASSES
+    tree = ast.parse(Path(rule.__file__).read_bytes())
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
+    imported.update(
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    )
+    assert imported == {"__future__", "hashlib", "json", "os"}

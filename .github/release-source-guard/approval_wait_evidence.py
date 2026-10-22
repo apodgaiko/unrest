@@ -9,7 +9,14 @@ import hashlib
 import json
 import os
 
-from approval_orphan_custody import CASES, CLASSES
+# This reducer also runs on the host before the source-only capsule starts.
+# Import no runtime guard/finite modules here: their bytecode cache would poison
+# the later source-only support mount. Controls bind these literals to policy.
+CLASSES = frozenset({'source-approval-adapter', 'source-approval-relay',
+                     'source-approval-python-backend', 'source-approval-mcp'})
+CASES = frozenset('tests/test_approval_recovery.py::test_durable_run_owner_and_restart_never_revives[' + mode + ']'
+                  for mode in ('cancel', 'crash', 'cancel_after_send', 'crash_after_send',
+                               'cancel_after_continue', 'crash_after_continue'))
 
 
 IMMUTABLE = ('pid', 'start_ticks', 'boot_id', 'clock_ticks_per_second')
