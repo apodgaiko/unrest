@@ -363,7 +363,9 @@ def orphan_owner(monkeypatch):
               {'kind': 'ready', 'owner_pid': 54, 'token': 'owned'},
               {'kind': 'registered', 'pid': 49, 'class': 'source-run-worker', 'case': case}]
     rows = [{'kind': 'tracer_terminal_wait', 'pid': 49, 'raw': 9, 'normalized': -9,
-             'identity': {**parent, 'uids': [20000] * 4}},
+             'identity': {key: value for key, value in
+                          {**parent, 'pgid': 9, 'sid': 9, 'uids': [20000] * 4}.items()
+                          if key != 'uid'}},
             {'kind': 'kernel_exit', 'pid': 49, 'raw': 9}]
     pin = hashlib.sha256(b'original source').hexdigest()
     monkeypatch.setattr(custody, 'PINS', {'original.py': pin})

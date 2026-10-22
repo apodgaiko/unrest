@@ -59,7 +59,9 @@ def proof(owner, pid, birth, current, method):
     identity = terminal['identity']
     if (not os.WIFSIGNALED(raw) or os.WTERMSIG(raw) not in (9, 15)
             or exits[0]['raw'] != raw or terminal['normalized'] != os.waitstatus_to_exitcode(raw)
-            or any(identity.get(key) != value for key, value in parent_saved['identity'].items())):
+            or any(identity.get(key) != parent_saved['identity'][key]
+                   for key in ('pid', 'ppid', 'start_ticks', 'boot_id', 'clock_ticks_per_second'))
+            or identity.get('uids') != [parent_saved['identity']['uid']] * 4):
         return None
     parents = [row for row in events if row['kind'] == 'registered' and row['pid'] == parent]
     if len(parents) != 1 or parents[0].get('case') != case:

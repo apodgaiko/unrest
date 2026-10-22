@@ -1106,3 +1106,9 @@ peer, nonce, one-shot ID, READY pins and established descriptor custody. This
 permits no new launch, connection, listener, socket pair or READY registration.
 Original-parent wait gaps remain recorded and continue to fail certification;
 a reparenting proof is not a replacement numeric wait.
+
+The dead parent's fork record retains its original process group/session before
+RunControl's admitted session setup. Parent birth is therefore joined by PID,
+original PPID, boot/start clock and all four UIDs, with matching actual exit and
+terminal status. The surviving child's full current identity must still equal
+its authenticated READY identity except for its independently proved PPID.
