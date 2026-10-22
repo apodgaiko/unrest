@@ -1172,3 +1172,31 @@ async def test_host_disconnect_during_form_never_submits(tmp_path):
         writer.close()
         await writer.wait_closed()
         await owner.close()
+
+
+async def test_host_waits_for_submission_receipt(tmp_path):
+    """An intermediate submitting state is not a completed host response."""
+    owner, _, _ = setup_owner(tmp_path)
+    reader, writer, pending = await install_pending(owner)
+    review = asyncio.create_task(mcp_review(owner, content={"confirm_one_submission": True}))
+    submission = None
+    try:
+        assert await asyncio.wait_for(pending, 2)
+        submission = asyncio.create_task(owner.submit())
+        assert await read_frame(reader, 32768) == {"command": "submit", "id": 1}
+        assert owner.phase == "submitting"
+        await asyncio.sleep(0.08)
+        assert not review.done()
+        await write_frame(writer, {"id": 1, "result": "queued"}, 32768)
+        assert await asyncio.wait_for(submission, 2)
+        assert (await asyncio.wait_for(review, 2))["disposition"] == "queued"
+        assert await owner.submit() is False
+    finally:
+        review.cancel()
+        if submission is not None:
+            submission.cancel()
+        await asyncio.gather(review, *([submission] if submission is not None else []),
+                             return_exceptions=True)
+        writer.close()
+        await writer.wait_closed()
+        await owner.close()

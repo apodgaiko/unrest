@@ -364,7 +364,7 @@ class ApprovalOwner:
                 self.submit_requested = True
                 self.decision.set()
                 # The runner owns the completion fence and the native operation.
-                while self.phase == "reviewing":
+                while self.phase in {"reviewing", "submitting"}:
                     if self.remaining() <= 0:
                         raise ApprovalUnavailable()
                     await asyncio.sleep(min(0.02, self.remaining()))

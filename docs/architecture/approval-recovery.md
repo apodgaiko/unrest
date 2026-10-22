@@ -231,3 +231,15 @@ server still imports and initializes FastMCP and provides the real host context.
 The controlled durable-run executor constructs the same explicit HarnessConfig
 without importing another test module or its unrelated MCP client imports.
 Provider selection, policy, review routing, deadlines and cleanup are unchanged.
+
+
+## Submission response ordering
+
+The host connection remains pending throughout both reviewing and submitting.
+Only a settled continuation or a terminal failure can produce its response;
+`submitting` is an internal intermediate phase, never a completed disposition.
+The submission future and native receipt remain authoritative, the same stable
+completion fence and deadlines remain in force, and the receipt is consumed
+before a write so an ambiguous result still cannot be retried. A delayed
+controlled receipt regression exercises the real MCP host path without launching
+a backend or claiming native/provider acceptance.

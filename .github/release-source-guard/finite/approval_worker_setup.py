@@ -13,7 +13,7 @@ PREFIX = 'tests/test_approval_recovery.py::test_durable_run_owner_and_restart_ne
 CASES = frozenset(PREFIX + '[' + value + ']' for value in
                   ('success', 'cancel', 'crash', 'cancel_after_send', 'crash_after_send',
                    'cancel_after_continue', 'crash_after_continue'))
-PINS = {'src/unrest_harness/run_worker.py': 'bef584879b0c8da5e9db56321864dee1075b9bfeb00c0192712206efa1740e3d', 'src/unrest_harness/run_control.py': '61e11d65da2ee52735a45d38c87594ec68784b43ddca8abc3dc6c084ab00480f', 'src/unrest_harness/approval_recovery.py': 'eaabfef1b30b99ab5ee3cb0c24dac00786e966ba9a97893b1a6af5994104107f', 'tests/fixtures/approval_run_executor.py': 'f6e24716d1b9103035fe99fe2af9f00bf42544d31086caa94486f3e8259a4d33'}
+PINS = {'src/unrest_harness/run_worker.py': 'bef584879b0c8da5e9db56321864dee1075b9bfeb00c0192712206efa1740e3d', 'src/unrest_harness/run_control.py': '61e11d65da2ee52735a45d38c87594ec68784b43ddca8abc3dc6c084ab00480f', 'src/unrest_harness/approval_recovery.py': '8a378de950500f2bb6e4b6bbcf55392343d0127aa68716671208b82c27e5533f', 'tests/fixtures/approval_run_executor.py': 'f6e24716d1b9103035fe99fe2af9f00bf42544d31086caa94486f3e8259a4d33'}
 BINDING = {'path': '/source/src/unrest_harness/run_control.py', 'line': 1123,
            'sha256': PINS['src/unrest_harness/run_control.py'], 'function': '_spawn',
            'function_ast_sha256': 'f1677ea4b75d0195e779761d4cbf2d27cc3c87f4627eb41e53e9cd2e14fc4d43'}
