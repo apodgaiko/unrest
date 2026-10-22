@@ -11,7 +11,7 @@ import sys
 import types
 
 SOURCE = 'tests/test_acp_runner.py'
-PIN = 'b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0'
+PIN = '0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561'
 PRODUCT = 'src/unrest_harness/acp_runner.py'
 PRODUCT_PIN = '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f'
 OWNER = 'test_mcp_role_child_oversized_streams_are_bounded_and_singly_drained'

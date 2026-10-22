@@ -1408,17 +1408,10 @@ selected afresh from the current bytes, newest first. This optimization caches n
 process identity, registration, child token, wait status or filesystem metadata.
 The recorded actual numeric wait and the independent cleanup checks are unchanged.
 
-The two original ACP startup-concurrency cases also finish guard setup before
-returning the admitted mock-agent constructor. This fence requires the original
-core READY and endpoint-installation records, exact token/nonce/input pins and a
-fresh matching Linux child birth owned by the actual parent. Its five-second
-setup bound ends before ACP initialize/session traffic; it never waits for a
-protocol response or supplies one. The original one-second session rendezvous,
-concurrent-session assertions, successful handoffs and cleanup checks remain
-unchanged. Other cases, argv and process classes keep their original constructor.
-A failed fence settles only a child whose current identity is still proven; an
-uncertain or replaced PID is never signalled or waited, remains explicitly
-UNVERIFIED and causes sticky refusal. No missing wait becomes a successful result.
-The fence uses the existing observer for the byte-bound original constructor's
-normal return. It is selected only during those two pytest items. Exception
-unwinding is left alone; no Popen class, initializer or caller stack is wrapped.
+The controlled ACP sibling-startup fixture uses a bounded two-party initialization
+rendezvous before its original prompt-overlap check. Synchronous guarded process
+setup must not consume the sibling prompt rendezvous deadline. Both original
+initialization requests still execute, the one-second prompt rendezvous remains,
+and the test retains serialized MCP startup, two active sessions, empty drains,
+ordered successful handoffs and completion assertions. Missing initialization
+fails within ten seconds; serialized prompts still fail the original overlap check.

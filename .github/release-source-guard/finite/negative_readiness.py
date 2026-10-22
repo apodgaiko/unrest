@@ -9,7 +9,7 @@ import sys
 import types
 
 SOURCE = 'tests/test_acp_runner.py'
-PIN = 'b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0'
+PIN = '0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561'
 OWNER = 'test_readiness_attributes_local_child_and_drains'
 CLASS = 'source-cohort2:tests/test_acp_runner.py:70'
 BODY = "import time; print('started',flush=True); time.sleep(30)"

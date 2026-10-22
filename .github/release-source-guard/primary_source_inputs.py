@@ -196,7 +196,7 @@ def exact_inventory_environment(environment, registration, flags, context):
             and consumed[0].get('shared_startup_seal') is True
             and manifest['product_pins']['src/unrest_harness/acp_runner.py'] == binding['sha256']
             and manifest['product_pins']['tests/test_acp_runner.py'] ==
-                'b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0')
+                '0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561')
 
 
 def exact_inflight_environment(environment, registration, flags, context):

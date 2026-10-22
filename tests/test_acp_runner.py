@@ -1065,6 +1065,7 @@ def test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success(
     active_sessions = 0
     maximum_active_sessions = 0
     both_sessions_started = asyncio.Event()
+    initialization_barrier = asyncio.Barrier(2)
     next_port = 41000
 
     def _next_port() -> int:
@@ -1094,6 +1095,8 @@ def test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success(
 
     async def _send_request_fixture(self, method, params):
         nonlocal active_sessions, maximum_active_sessions
+        if method == "initialize":
+            await asyncio.wait_for(initialization_barrier.wait(), timeout=10)
         if method != "session/prompt":
             return await original_send_request(self, method, params)
         active_sessions += 1

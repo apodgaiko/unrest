@@ -403,7 +403,7 @@
       "owner": "exercise",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "674ea3804dc6ef13bca62f482aa205495caf2abc52b9cc58c7d4733fe0d76b1d",
@@ -412,7 +412,7 @@
       "owner": "test_real_mcp_inventory_fd_redacts_before_crash_and_restart",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "8d8867ae8f81b0c02ca34a3214c9966d6481b92f662d665de1f609521761e920",
@@ -421,7 +421,7 @@
       "owner": "test_adapter_stderr_and_log_sink_redact_before_emission",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "394d87e8ca25620276e0caba8997c1789121ac29a8ab29aa72c4dfadb44cbb53",
@@ -430,7 +430,7 @@
       "owner": "_no_op_server",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "a22c33f02667995785a46d889fee7ddca460e65ec37989310ed77168e6a8b1ad",
@@ -439,7 +439,7 @@
       "owner": "_no_op_server",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "a22c33f02667995785a46d889fee7ddca460e65ec37989310ed77168e6a8b1ad",
@@ -448,52 +448,52 @@
       "owner": "_no_op_server",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "f05a2bc349f8b757c45fbce9dbf74620d29bc4a895bfdbba17d37a734528e33a",
       "family": "ordinary-acp-and-role-helper",
-      "line": 1079,
+      "line": 1080,
       "owner": "_start_fixture",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "f05a2bc349f8b757c45fbce9dbf74620d29bc4a895bfdbba17d37a734528e33a",
       "family": "ordinary-acp-and-role-helper",
-      "line": 1380,
+      "line": 1383,
       "owner": "_start_fixture",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "a22c33f02667995785a46d889fee7ddca460e65ec37989310ed77168e6a8b1ad",
       "family": "ordinary-acp-and-role-helper",
-      "line": 1840,
+      "line": 1843,
       "owner": "no_op_server",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "a22c33f02667995785a46d889fee7ddca460e65ec37989310ed77168e6a8b1ad",
       "family": "ordinary-acp-and-role-helper",
-      "line": 2206,
+      "line": 2209,
       "owner": "no_op_server",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "a22c33f02667995785a46d889fee7ddca460e65ec37989310ed77168e6a8b1ad",
       "family": "ordinary-acp-and-role-helper",
-      "line": 2265,
+      "line": 2268,
       "owner": "no_op_server",
       "path": "tests/test_acp_runner.py",
       "route": "asyncio.create_subprocess_exec",
-      "source_sha256": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0"
+      "source_sha256": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561"
     },
     {
       "expression_ast_sha256": "5027cbfb4f2643c90da6375a4cb84a5ec2044ed2b1eb4100c08fbb59c3f20be2",
@@ -2220,7 +2220,7 @@
     "tests/multiprocess_lifetime.py": "e992a1dd5575250cea540ccb52c42f54dca28ec87cf2843e13c11237d9a291d3",
     "tests/session_lifetime.py": "00348bf7b41df3f512d171c9f515e99e3dbf52ca7803f6a6d17843d18c4a95af",
     "tests/test_acp_cleanup.py": "564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8",
-    "tests/test_acp_runner.py": "b6f1c200a94c1107d6059baae0eb646dd5a113cc304d7062b29aec8263dd52d0",
+    "tests/test_acp_runner.py": "0edac8224b6b1760230026567fb1c3a1d591dc70d0b70e9990b0b52d68a71561",
     "tests/test_acp_sandbox.py": "816d7296082e9fbed62a98a16ed46b59fc6ab05abe8d0a8127b7691c4dbf1a23",
     "tests/test_approval_recovery.py": "f886178539296b984f19db2814bc53817133b214632146843b6934abb69bb80a",
     "tests/test_assets.py": "9a631fb19d44d8a71be1dccc206f691548cda0559e886e65add01bab127f0de2",

@@ -16,7 +16,7 @@ from typing import Any
 SITES = {
     "tests/test_launch_preflight.py": {293},
     "src/unrest_harness/server.py": {266},
-    "tests/test_acp_runner.py": {70, 214, 413, 465, 544, 632, 1079, 1380, 1840, 2206, 2265},
+    "tests/test_acp_runner.py": {70, 214, 413, 465, 544, 632, 1080, 1383, 1843, 2209, 2268},
     "tests/test_completion_setup.py": {131, 132},
     "tests/test_completion_ownership.py": {33, 34, 99, 108, 134, 135},
     "tests/test_coordinator.py": {214, 1046, 1047, 1448},

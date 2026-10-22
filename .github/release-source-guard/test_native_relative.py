@@ -185,7 +185,7 @@ def test_seven_site_diagnosis_is_closed_and_noncertifying():
     from primary_policy import TEST_NATIVE_SLEEP_CASES, plan
     from primary_source_inputs import test_plan as make_test_plan
     from test_primary_source_entry import inputs, COMMAND
-    assert set(native.SITES) == {544, 632, 1079, 1380, 1840, 2206, 2265}
+    assert set(native.SITES) == {544, 632, 1080, 1383, 1843, 2209, 2268}
     assert len(native.ALL_CASES) == 17
     assert set(TEST_NATIVE_SLEEP_CASES) == native.ALL_CASES
     text, source = inputs()
