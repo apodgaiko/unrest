@@ -1086,3 +1086,12 @@ canonical directory identity, UID and 0700 ownership, original source sites,
 kernel listener/peer checks and exact generated launcher bytes remain required.
 Other cases retain the existing owned temporary root. No worker environment,
 mount, generic `/tmp` execution authority or native/provider grant is added.
+
+After the first 20 original approval cases pass with sealed kernel evidence,
+a second closed diagnostic selection contains the shared mock plus the seven
+durable cases and six remaining API cases. It retains the existing 600-second
+aggregate budget and approval teardown diagnostics, and cannot certify SOURCE.
+The 33-case selection and full unexcluded source command remain available.
+Only exception class, errno and hashed traceback locations are recorded for
+an exact controlled approval child constructor failure; its original exception
+is re-raised without message/body capture or retry.

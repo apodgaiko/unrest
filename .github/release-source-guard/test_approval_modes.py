@@ -309,3 +309,42 @@ def test_stall_snapshot_does_not_write_reused_descriptor(monkeypatch):
                                 stack_output_fd=output.fileno(), stack_output_identity=('foreign',))
         assert not Observer.retain_stall_snapshot(owner, token, case, None)
         assert output.tell() == 0
+
+
+def test_remaining_original_approval_cases_reuse_sealed_prefix_without_source_certificate():
+    from primary_policy import TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, root_seconds
+    from primary_source_inputs import test_plan as make_plan
+    from test_primary_source_entry import inputs, COMMAND
+    from finite.approval_stall_diagnostic import case_seconds
+    text, _ = inputs()
+    assert TEST_APPROVAL_REMAINING_CASES == (TEST_APPROVAL_CLOSURE_CASES[0], *TEST_APPROVAL_CLOSURE_CASES[20:])
+    plan = make_plan((COMMAND + ' ' + ' '.join(TEST_APPROVAL_REMAINING_CASES)).encode(), text, 'TEST-positive')
+    assert not plan['source_checkpoint_ready'] and root_seconds(plan) == 600
+    profile = {'source_mode': 'TEST-positive', 'orig_argv': ['python', 'pytest', '-q', *TEST_APPROVAL_REMAINING_CASES]}
+    assert case_seconds(profile, routes.DURABLE_PREFIX + '[success]') == 120
+    assert case_seconds(profile, routes.PREFIX + '[success]') is None
+
+
+def test_constructor_diagnostic_does_not_capture_message_or_change_exception():
+    import hashlib
+    import json
+    path = Path(__file__).parent / 'finite/child_relative.py'
+    tree = ast.parse(path.read_bytes())
+    handlers = [node for node in ast.walk(tree) if isinstance(node, ast.ExceptHandler)
+                and node.name == 'error' and 'approval_owned_cwd_constructor_error' in ast.unparse(node)]
+    assert len(handlers) == 1
+    function = ast.parse('def handler(error, emit, token, registration):\n    pass').body[0]
+    function.body = handlers[0].body
+    namespace = {'hashlib': hashlib}
+    exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])), '<diagnostic-control>', 'exec'), namespace)
+    records = []
+    try:
+        exec(compile('raise ValueError("PRIVATE-BODY-CANARY")', 'PRIVATE-PATH-CANARY', 'exec'))
+    except ValueError as original:
+        with pytest.raises(ValueError) as caught:
+            namespace['handler'](original, records.append, 'actual-token', {'class': 'source-approval-relay'})
+        assert caught.value is original
+    body = json.dumps(records)
+    assert 'PRIVATE-BODY-CANARY' not in body and 'PRIVATE-PATH-CANARY' not in body
+    assert records[0]['error_class'] == 'ValueError' and records[0]['errno'] is None
+    assert records[0]['frames']

@@ -479,14 +479,29 @@ def install(state, activation, emit, refuse, checked):
                 refuse('approval_owned_cwd_constructor_binding')
                 raise RuntimeError('refusal callback returned')
             if owned:
-                if (hashlib.sha256(source.read_bytes()).hexdigest() != STDLIB
-                        or not stock_matches(stock, stock_code, defaults, keyword_defaults)
-                        or subprocess.Popen._execute_child is not execute
-                        or execute.__code__ not in execute_codes
-                        or execute.__globals__ is not vars(subprocess)
-                        or subprocess._fork_exec is not fork_exec):
-                    refuse('approval_owned_cwd_stock_constructor_drift')
-                return stock(handle, args, **{**kwargs, 'cwd': '.'})
+                try:
+                    if (hashlib.sha256(source.read_bytes()).hexdigest() != STDLIB
+                            or not stock_matches(stock, stock_code, defaults, keyword_defaults)
+                            or subprocess.Popen._execute_child is not execute
+                            or execute.__code__ not in execute_codes
+                            or execute.__globals__ is not vars(subprocess)
+                            or subprocess._fork_exec is not fork_exec):
+                        refuse('approval_owned_cwd_stock_constructor_drift')
+                    return stock(handle, args, **{**kwargs, 'cwd': '.'})
+                except BaseException as error:
+                    trace, frames = error.__traceback__, []
+                    while trace is not None and len(frames) < 8:
+                        frames.append({'file_sha256': hashlib.sha256(trace.tb_frame.f_code.co_filename.encode()).hexdigest(),
+                                       'line': trace.tb_lineno})
+                        trace = trace.tb_next
+                    name = type(error).__name__
+                    number = getattr(error, 'errno', None)
+                    emit({'kind': 'approval_owned_cwd_constructor_error', 'token': token,
+                          'class': registration['class'], 'frames': frames,
+                          'error_class': name if name in {'OSError', 'PermissionError', 'FileNotFoundError',
+                              'TypeError', 'ValueError', 'RuntimeError', 'AssertionError', 'GuardRefusal', 'KeyError'} else 'other',
+                          'errno': number if type(number) is int and -4095 <= number <= 4095 else None})
+                    raise
         saved = contexts.pop(token, None)
         if saved is None:
             refuse('child_relative_missing_context')
