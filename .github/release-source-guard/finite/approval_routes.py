@@ -198,11 +198,15 @@ def select(argv, cwd, env, state, append, refuse):
             checked(child, child.f_globals["main"], fixture, "main")
             scenario = child.f_locals["scenario"]
             launcher = Path(child.f_locals["environment"]["CODEX_PATH"])
+            staging = Path(state['guard']).with_name('approval_private_staging.py')
+            guard = sys.modules['runtime_guard']
+            private = guard.checked_source(staging, state['direct_support']['files'][str(staging)])
+            private_root = private['control_address'](state, launcher.parent / 'control')
             if (
                 argv != [str(launcher), "app-server"]
                 or cwd is not None
                 or env != child.f_locals["environment"]
-                or not launcher.resolve().is_relative_to(owned)
+                or not (launcher.resolve().is_relative_to(owned) or private_root)
                 or launcher.resolve() != launcher
                 or launcher.name != "backend"
                 or not launcher.parent.name.startswith("unrest-approval-")

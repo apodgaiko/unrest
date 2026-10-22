@@ -25,15 +25,25 @@ SITES = {
 }
 
 
-def owned_address(address, root, uid):
+DURABLE = frozenset(TEST + '::test_durable_run_owner_and_restart_never_revives[' + value + ']'
+                    for value in ('success', 'cancel', 'crash', 'cancel_after_send', 'crash_after_send',
+                                  'cancel_after_continue', 'crash_after_continue'))
+
+
+def staging_parent(parent, root, case):
+    return parent == Path(root) / 'tmp' or (parent == Path('/tmp') and case in DURABLE)
+
+
+def owned_address(address, root, uid, case=None):
     if type(address) is not str or '\0' in address:
         return False
     path = Path(address)
     parent = path.parent
     if (not path.is_absolute() or '..' in path.parts or path.name != 'control'
-            or parent.parent != Path(root) / 'tmp'
+            or not staging_parent(parent.parent, root, case)
             or re.fullmatch(r'unrest-approval-(?:test-)?[a-z0-9_]{8}', parent.name) is None
-            or parent.resolve() != parent):
+            or parent.resolve() != parent
+            or parent.parent == Path('/tmp') and parent.name.startswith('unrest-approval-test-')):
         return False
     try:
         info = parent.lstat()
@@ -50,7 +60,7 @@ def scope(state):
 
 
 def authorize(event, stream, address, state, endpoint, guard):
-    if not scope(state) or not owned_address(address, state['owned_root'], os.getuid()):
+    if not scope(state) or not owned_address(address, state['owned_root'], os.getuid(), state.get('case')):
         return False
     if stream.family != socket.AF_UNIX or stream.type != socket.SOCK_STREAM:
         return False
@@ -109,7 +119,7 @@ def bound(stream, state):
             address = getattr(stream, method)()
         except OSError:
             continue
-        if owned_address(address, state['owned_root'], os.getuid()):
+        if owned_address(address, state['owned_root'], os.getuid(), state.get('case')):
             return address
     return None
 

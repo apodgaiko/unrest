@@ -1077,3 +1077,12 @@ non-inheritable and rechecked by device/inode/mode/owner/access before a bounded
 stack write, so an aborted teardown cannot discard the private snapshot. It is
 closed at session finish only if its identity still matches. SOURCE and other
 selections acquire no descriptor; snapshots remain encrypted opaque output.
+
+The seven original durable RunControl fixtures deliberately use the production
+minimal worker environment, which omits TMPDIR. Their private approval roots
+therefore use the isolated container's native `/tmp`. Only those seven exact
+cases may bind the original `unrest-approval-<8 chars>/control` under that root;
+canonical directory identity, UID and 0700 ownership, original source sites,
+kernel listener/peer checks and exact generated launcher bytes remain required.
+Other cases retain the existing owned temporary root. No worker environment,
+mount, generic `/tmp` execution authority or native/provider grant is added.

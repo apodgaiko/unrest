@@ -88,11 +88,11 @@ def handle(supervisor, request, events):
                 'listener_owner': listener['owner'], 'peer_identity': retained['peer_identity'],
                 'retained_connection': True, 'listener_path_present': present,
                 'terminal_peer_actual_wait': terminal_peer}
-    if not owned_address(address, manifest['owned_root'], saved['uid']):
+    if not owned_address(address, manifest['owned_root'], saved['uid'], case):
         raise RuntimeError('approval_unix_source_scope')
 
     def answer(**values):
-        if identity(pid) != saved or not owned_address(address, manifest['owned_root'], saved['uid']):
+        if identity(pid) != saved or not owned_address(address, manifest['owned_root'], saved['uid'], case):
             raise RuntimeError('approval_unix_final_owner_drift')
         return values
 

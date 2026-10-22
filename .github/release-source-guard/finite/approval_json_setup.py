@@ -78,7 +78,13 @@ def script_identity(state, payload):
         if scenario.resolve(strict=True) != scenario or not scenario.is_relative_to(owned):
             return None
     else:
-        if not script.is_relative_to(owned) or payload['sys_argv'][1] != 'app-server':
+        private_root = False
+        if state['class'] == 'source-approval-relay' and not script.is_relative_to(owned):
+            staging = Path(state['guard']).with_name('approval_private_staging.py')
+            guard = sys.modules['runtime_guard']
+            private = guard.checked_source(staging, state['direct_support']['files'][str(staging)])
+            private_root = private['control_address'](state, script.parent / 'control')
+        if not (script.is_relative_to(owned) or private_root) or payload['sys_argv'][1] != 'app-server':
             return None
         backend_body = f'#!{sys.executable}\n'.encode() + (root / 'tests/fixtures/approval_native_backend.py').read_bytes()
         if state['class'] == 'source-approval-python-backend':

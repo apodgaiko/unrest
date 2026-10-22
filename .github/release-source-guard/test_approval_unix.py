@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 import os
 from types import SimpleNamespace
 
@@ -108,7 +109,7 @@ def host_context(monkeypatch):
             raise RuntimeError('closed original fd')
         return deepcopy(snapshots[fd])
     monkeypatch.setattr(host, 'observe', observe)
-    monkeypatch.setattr(host, 'owned_address', lambda address, root, uid: True)
+    monkeypatch.setattr(host, 'owned_address', lambda *args: True)
     monkeypatch.setattr(host, 'Path', lambda path: SimpleNamespace(exists=lambda: False, lstat=lambda: carrier))
     return supervisor, request, current, carrier
 
@@ -304,3 +305,15 @@ def test_terminal_peer_cannot_invent_birth_parent_status_or_wait(mutation):
         rows.append(dict(rows[-1]))
     with pytest.raises((RuntimeError, AwaitOwnedPeer)):
         settled(supervisor, peer)
+
+
+def test_minimal_runcontrol_environment_keeps_only_exact_native_tmp_staging():
+    from finite.approval_run_owner import PREFIX, BOUNDARIES
+    for boundary in BOUNDARIES:
+        case = PREFIX + '[' + boundary + ']'
+        assert client.staging_parent(Path('/tmp'), '/work/owned', case)
+        assert not client.staging_parent(Path('/foreign'), '/work/owned', case)
+        assert not client.staging_parent(Path('/tmp'), '/work/owned', case + '-foreign')
+    for case in [None, 'foreign', client.TEST + '::test_actual_mcp_accept_single_submit_and_receipt']:
+        assert not client.staging_parent(Path('/tmp'), '/work/owned', case)
+        assert client.staging_parent(Path('/work/owned/tmp'), '/work/owned', case)
