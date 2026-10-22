@@ -77,6 +77,8 @@ def _pairs_to_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _validate_string(value: str, path: str) -> None:
+    if type(value) is str and value.isascii():
+        return
     if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
         _fail("invalid_unicode", path)
     if unicodedata.normalize("NFC", value) != value:

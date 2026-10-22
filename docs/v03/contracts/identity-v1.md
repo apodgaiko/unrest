@@ -77,6 +77,10 @@ used as sets must first be represented as sorted arrays under their schema.
 4. Content fields are represented only by a typed content digest and declared
    media type/size when required. Do not copy content into the identity.
 
+Exact built-in ASCII strings already satisfy the scalar Unicode and NFC checks;
+implementations may recognize that fact without a per-character scan. Non-ASCII
+strings retain both checks, and overridden string methods cannot attest validity.
+
 ### Encoding
 
 After validation:

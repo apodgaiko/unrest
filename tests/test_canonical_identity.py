@@ -140,3 +140,23 @@ def test_identity_domain_separation_and_digest_mutation() -> None:
         verify_identity("base", payload, identity_digest("base", payload))
     changed = construct_identity("artifact", {"public_id": "artifact:one", "schema_version": 1, "artifact_digest": "sha256:" + "2" * 64})
     assert changed.digest != artifact
+
+
+def test_all_ascii_characters_keep_exact_canonical_escapes_and_round_trip() -> None:
+    value = ''.join(chr(codepoint) for codepoint in range(128))
+    expected = ('{"value":' + json.dumps(value, ensure_ascii=False) + '}\n').encode()
+    encoded = canonical_json_bytes({'value': value})
+    assert encoded == expected
+    assert verify_canonical_json_bytes(encoded) == {'value': value}
+
+
+@pytest.mark.parametrize(('text', 'code'), [('\ud800', 'invalid_unicode'),
+                                           ('e\u0301', 'non_nfc')])
+def test_string_subclass_cannot_attest_its_own_unicode_validity(text: str, code: str) -> None:
+    class ClaimsAscii(str):
+        def isascii(self) -> bool:
+            return True
+    with pytest.raises(FoundationValidationError) as caught:
+        canonical_json_bytes({'value': ClaimsAscii(text)})
+    assert caught.value.code == code
+    assert caught.value.path == '$.value'
