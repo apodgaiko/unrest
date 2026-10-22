@@ -1095,3 +1095,14 @@ The 33-case selection and full unexcluded source command remain available.
 Only exception class, errno and hashed traceback locations are recorded for
 an exact controlled approval child constructor failure; its original exception
 is re-raised without message/body capture or retry.
+
+A controlled durable cancellation or intentional owner crash can reparent an
+already READY child. Existing payload/drain receipts retain the original birth
+and token, while a separate current kernel identity must differ only in PPID.
+The observer must have the original parent's actual matching signaled terminal
+wait and kernel exit, the exact original case and byte-pinned source. The
+unchanged receipt admission and policy handlers still check the actual Unix
+peer, nonce, one-shot ID, READY pins and established descriptor custody. This
+permits no new launch, connection, listener, socket pair or READY registration.
+Original-parent wait gaps remain recorded and continue to fail certification;
+a reparenting proof is not a replacement numeric wait.

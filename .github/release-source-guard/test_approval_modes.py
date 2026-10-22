@@ -348,3 +348,129 @@ def test_constructor_diagnostic_does_not_capture_message_or_change_exception():
     assert 'PRIVATE-BODY-CANARY' not in body and 'PRIVATE-PATH-CANARY' not in body
     assert records[0]['error_class'] == 'ValueError' and records[0]['errno'] is None
     assert records[0]['frames']
+
+
+def orphan_owner(monkeypatch):
+    from types import SimpleNamespace
+    import approval_orphan_custody as custody
+    import hashlib
+    birth = {'pid': 54, 'ppid': 49, 'pgid': 49, 'sid': 49, 'uid': 20000,
+             'start_ticks': 28529, 'boot_id': 'original', 'clock_ticks_per_second': 100}
+    parent = {**birth, 'pid': 49, 'ppid': 22, 'start_ticks': 27655}
+    case = custody.DURABLE_PREFIX + '[crash]'
+    events = [{'kind': 'registered', 'pid': 54, 'owner_pid': 49,
+               'class': 'source-approval-adapter', 'case': case, 'token': 'owned'},
+              {'kind': 'ready', 'owner_pid': 54, 'token': 'owned'},
+              {'kind': 'registered', 'pid': 49, 'class': 'source-run-worker', 'case': case}]
+    rows = [{'kind': 'tracer_terminal_wait', 'pid': 49, 'raw': 9, 'normalized': -9,
+             'identity': {**parent, 'uids': [20000] * 4}},
+            {'kind': 'kernel_exit', 'pid': 49, 'raw': 9}]
+    pin = hashlib.sha256(b'original source').hexdigest()
+    monkeypatch.setattr(custody, 'PINS', {'original.py': pin})
+    monkeypatch.setattr(custody.Path, 'read_bytes', lambda self: b'original source')
+    owner = SimpleNamespace(events=lambda: events,
+                            registered={54: {'identity': birth, 'token': 'owned'},
+                                        49: {'identity': parent, 'token': 'parent'}},
+                            owned_trace=SimpleNamespace(records=rows),
+                            manifest={'product_pins': {'original.py': pin}})
+    return custody, owner, birth, {**birth, 'ppid': custody.os.getpid()}, events, rows
+
+
+def test_reparenting_proof_retains_original_birth_and_actual_parent_status(monkeypatch):
+    custody, owner, birth, current, events, rows = orphan_owner(monkeypatch)
+    result = custody.proof(owner, 54, birth, current, 'payload')
+    assert result['original_birth'] == birth and result['current_identity'] == current
+    assert result['parent_terminal'] is rows[0] and result['parent_kernel_exit'] is rows[1]
+    assert result['new_effect_authority'] is False
+    assert owner.registered[54]['identity'] == birth
+    assert custody.proof(owner, 54, birth, birth, 'payload') is None
+
+
+@pytest.mark.parametrize('drift', ['birth', 'uid', 'group', 'parent', 'case', 'class',
+                                 'ready', 'token', 'pin', 'missing_exit', 'missing_wait',
+                                 'status', 'normal_exit', 'parent_birth', 'duplicate',
+                                 'connect', 'listen', 'pair', 'ready_method', 'plan'])
+def test_unknown_or_new_effects_never_gain_reparented_cleanup(monkeypatch, drift):
+    custody, owner, birth, current, events, rows = orphan_owner(monkeypatch)
+    method = 'payload'
+    if drift in ('birth', 'uid', 'group', 'parent'):
+        key = {'birth': 'start_ticks', 'uid': 'uid', 'group': 'pgid', 'parent': 'ppid'}[drift]
+        current[key] = -1
+    elif drift in ('case', 'class', 'token'):
+        events[0][drift] = 'foreign'
+    elif drift == 'ready':
+        events.pop(1)
+    elif drift == 'pin':
+        owner.manifest['product_pins']['original.py'] = 'foreign'
+    elif drift == 'missing_exit':
+        rows.pop(1)
+    elif drift == 'missing_wait':
+        rows.pop(0)
+    elif drift == 'status':
+        rows[1]['raw'] = 15
+    elif drift == 'normal_exit':
+        rows[0].update(raw=0, normalized=0)
+        rows[1]['raw'] = 0
+    elif drift == 'parent_birth':
+        rows[0]['identity']['start_ticks'] = -1
+    elif drift == 'duplicate':
+        rows.append(dict(rows[0]))
+    else:
+        method = {'ready_method': 'ready', 'pair': 'pair'}.get(drift, drift)
+    assert custody.proof(owner, 54, birth, current, method) is None
+
+
+def test_reparented_ledger_still_runs_original_peer_nonce_token_and_replay_checks(monkeypatch):
+    from types import SimpleNamespace
+    import socket
+    custody, owner, birth, current, events, rows = orphan_owner(monkeypatch)
+    ledger = custody.ApprovalLedger('a' * 64, 20000)
+    ledger.supervisor = owner
+    ledger.registered[54] = ('b' * 32, birth)
+    monkeypatch.setattr(custody.receipts._identity, 'identity', lambda pid: current)
+    monkeypatch.setattr(socket, 'SO_PEERCRED', 17, raising=False)
+    stream = SimpleNamespace(family=socket.AF_UNIX,
+                             getsockopt=lambda *args: custody.receipts.struct.pack('3i', 54, 20000, 20000))
+    request = {'pid': 54, 'identity': birth, 'token': 'b' * 32,
+               'nonce': 'a' * 64, 'id': 'c' * 32, 'kind': 'payload'}
+    result = ledger.admit(stream, request)
+    assert result['birth'] == birth and result['reparented_cleanup']['current_identity'] == current
+    assert ledger.registered[54][1] == birth and request['identity'] == birth
+    with pytest.raises(custody.receipts.ReceiptRefused, match='replay'):
+        ledger.admit(stream, request)
+
+
+@pytest.mark.parametrize('field', ['nonce', 'token', 'pid', 'identity', 'id'])
+def test_reparenting_does_not_bypass_original_receipt_identity_checks(monkeypatch, field):
+    from types import SimpleNamespace
+    import socket
+    custody, owner, birth, current, events, rows = orphan_owner(monkeypatch)
+    ledger = custody.ApprovalLedger('a' * 64, 20000)
+    ledger.supervisor = owner
+    ledger.registered[54] = ('b' * 32, birth)
+    monkeypatch.setattr(custody.receipts._identity, 'identity', lambda pid: current)
+    monkeypatch.setattr(socket, 'SO_PEERCRED', 17, raising=False)
+    stream = SimpleNamespace(family=socket.AF_UNIX,
+                             getsockopt=lambda *args: custody.receipts.struct.pack('3i', 54, 20000, 20000))
+    request = {'pid': 54, 'identity': birth, 'token': 'b' * 32,
+               'nonce': 'a' * 64, 'id': 'c' * 32, 'kind': 'payload'}
+    request[field] = {'pid': 55, 'identity': {**birth, 'start_ticks': -1}}.get(field, 'foreign')
+    with pytest.raises(custody.receipts.ReceiptRefused):
+        ledger.admit(stream, request)
+    assert ledger.poison and not ledger.seen and ledger.registered[54][1] == birth
+
+
+def test_orphan_supervisor_delegates_actual_snapshot_without_mutating_birth(monkeypatch):
+    custody, owner, birth, current, events, rows = orphan_owner(monkeypatch)
+    supervisor = custody.ApprovalSupervisor.__new__(custody.ApprovalSupervisor)
+    supervisor.__dict__.update(vars(owner))
+    calls = []
+    monkeypatch.setattr(custody.kernel, 'identity', lambda pid: current)
+    monkeypatch.setattr(custody.Supervisor, 'authenticate',
+                        lambda owner, request, events: calls.append((owner, request, events)) or 'checked')
+    request = {'pid': 54, 'identity': birth, 'kind': 'payload'}
+    assert supervisor.authenticate(request, events) == 'checked'
+    selected, delegated, actual_events = calls[0]
+    assert selected.registered[54]['identity'] == current and delegated['identity'] == current
+    assert actual_events is events and supervisor.registered[54]['identity'] == birth
+    assert request['identity'] == birth
