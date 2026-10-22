@@ -310,7 +310,7 @@ class Observer:
             if (finite_diagnostic and item.nodeid ==
                     'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]'):
                 self.overhead_thread = threading.get_ident()
-                support = '/guard/guard_cost_profile.py'
+                support = '/guard/finite/guard_cost_profile.py'
                 profiler = load('guard_cost_profile', support,
                                 self.manifest['direct_support']['files'][support])
                 self.metadata_monitor = profiler.CostProfile('/guard')

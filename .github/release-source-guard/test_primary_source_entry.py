@@ -460,7 +460,7 @@ def test_overhead_sampler_arms_only_exact_diagnostic_case(monkeypatch, mode, arm
     obj = object.__new__(entry.Observer)
     obj.profile = {'source_mode': mode}
     path = '/guard/finite/orders_git_data.py'
-    obj.manifest = {'direct_support': {'files': {path: 'exact-pin', '/guard/guard_cost_profile.py': 'profile-pin'}}}
+    obj.manifest = {'direct_support': {'files': {path: 'exact-pin', '/guard/finite/guard_cost_profile.py': 'profile-pin'}}}
     monkeypatch.setattr(entry, 'load', lambda *args: SimpleNamespace(
         CostProfile=lambda prefix: SimpleNamespace(start=lambda: True)))
     obj.guard = SimpleNamespace(checked_source=lambda actual, pin: {'CASES': {case: 'cohort'}})
@@ -481,3 +481,45 @@ def test_overhead_sampler_needs_no_host_policy_import_inside_compartment():
                 and node.name == 'pytest_runtest_call')
     assert not any(isinstance(node, ast.ImportFrom) and node.module == 'primary_policy'
                    for node in ast.walk(call))
+
+
+def test_cost_diagnostic_loads_real_helper_from_declared_finite_manifest(monkeypatch):
+    import hashlib
+    import primary_source_entry as entry
+    from primary_policy import TEST_GIT_OVERHEAD_CASES
+    from types import SimpleNamespace
+    finite = Path(__file__).parent / 'finite'
+    declared = {'/guard/finite/' + p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in finite.glob('*.py')}
+    case, = TEST_GIT_OVERHEAD_CASES
+    obj = object.__new__(entry.Observer)
+    obj.profile = {'source_mode': 'TEST-positive'}
+    obj.manifest = {'direct_support': {'files': declared}}
+    obj.guard = SimpleNamespace(checked_source=lambda actual, pin: {'CASES': {case: 'cohort'}})
+    loaded = []
+
+    def load(name, path, pin):
+        assert path in declared and pin == declared[path]
+        source = finite / Path(path).name
+        assert source.is_file() and hashlib.sha256(source.read_bytes()).hexdigest() == pin
+        namespace = {'__file__': path, '__name__': name}
+        exec(compile(source.read_bytes(), path, 'exec', dont_inherit=True), namespace)
+        loaded.append(path)
+        return SimpleNamespace(**namespace)
+
+    class Timer:
+        def __init__(self, *args):
+            pass
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(entry, 'load', load)
+    monkeypatch.setattr(entry.threading, 'Timer', Timer)
+    try:
+        obj.pytest_runtest_call(SimpleNamespace(nodeid=case, funcargs={}))
+        assert loaded == ['/guard/finite/guard_cost_profile.py']
+    finally:
+        if hasattr(obj, 'metadata_monitor'):
+            report = obj.metadata_monitor.stop()
+            assert report['complete'] and report['existing_profile_identity_retained']

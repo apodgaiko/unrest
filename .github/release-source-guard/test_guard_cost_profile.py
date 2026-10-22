@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from guard_cost_profile import CostProfile, TOOL
+from finite.guard_cost_profile import CostProfile, TOOL
 
 
 def target(source, body):

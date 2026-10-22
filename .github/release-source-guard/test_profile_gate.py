@@ -148,7 +148,7 @@ def test_pinned_operation_observer_keeps_all_actual_effects_and_event_arguments(
 
 
 def test_metadata_cpu_diagnostic_keeps_native_gate_and_selected_events():
-    from guard_cost_profile import CostProfile
+    from finite.guard_cost_profile import CostProfile
     chosen = function('read', '/guard-proof/selected.py', 'return len((1, 2))')
     records = []
     state = {'isolated_composition': types.SimpleNamespace(codes=None)}
