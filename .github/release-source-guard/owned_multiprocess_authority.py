@@ -19,9 +19,9 @@ class OwnedMultiprocessCustody:
         from journal_supervisor import JournalSupervisor
         JournalSupervisor.adopt(self.supervisor)
         self.supervisor.owned_trace = kwargs.get('trace')
-        self.supervisor.approval_pipe_records = self.pipe_records
         from approval_orphan_custody import install
         if hasattr(self.supervisor, 'ledger'):
+            self.supervisor.approval_pipe_records = self.pipe_records
             install(self.supervisor)
         return result
 
