@@ -45,6 +45,28 @@ CLEANUP_ANCHORS = [{'expression_ast_sha256': 'c1572b86e076e92120cdd0aeb361561b10
   'source_sha256': '564d5ec1b8c24680137d0d283f91c38a8ceff6d79b5a25f409edce775ec2aba8'}]
 CLEANUP_COMMIT_AST = '7180bf0c5f7475f393aeaa0c349c8d1317084adb46782db07ddb4f9f3c29230e'
 
+HISTORICAL_RECORD_ANCHORS = [{'expression_ast_sha256': '42169d2a6290bee6b44927ef7f4c0311771c6f159d0dae51b2f5be0e2a2430ba',
+  'family': 'cli-git-and-inline-test-helper',
+  'line': 130,
+  'owner': 'test_v040_release_carriers_remain_exact_tag_bytes',
+  'path': 'tests/test_v045_release_records.py',
+  'route': 'subprocess.run',
+  'source_sha256': '0147b67ca6386282d79dfc988e55120141c46e76a095dec3bab46dda2ef5aef6'},
+ {'expression_ast_sha256': 'afa7cb439d40158b3f8b03054c8c279925b18645e350f1752d3501cd7c09b408',
+  'family': 'cli-git-and-inline-test-helper',
+  'line': 172,
+  'owner': 'test_binding_cli_accepts_active_manifest_and_refuses_wrong_digest',
+  'path': 'tests/test_v045_release_records.py',
+  'route': 'subprocess.run',
+  'source_sha256': '0147b67ca6386282d79dfc988e55120141c46e76a095dec3bab46dda2ef5aef6'},
+ {'expression_ast_sha256': '93213b3ef0fe9a53cd4f12be307f79e22a7a786c600216cb5dd19e28e294a2f5',
+  'family': 'cli-git-and-inline-test-helper',
+  'line': 186,
+  'owner': 'test_binding_cli_accepts_active_manifest_and_refuses_wrong_digest',
+  'path': 'tests/test_v045_release_records.py',
+  'route': 'subprocess.run',
+  'source_sha256': '0147b67ca6386282d79dfc988e55120141c46e76a095dec3bab46dda2ef5aef6'}]
+
 def admit(manifest, root, read):
     if set(PRE) != set(POST):
         raise RuntimeError('release_identity_membership')
@@ -68,4 +90,10 @@ def admit(manifest, root, read):
         row['source_sha256'] = POST['tests/test_acp_cleanup.py']
         if row['line'] == 124:
             row['expression_ast_sha256'] = CLEANUP_COMMIT_AST
+    records = [row for row in manifest['anchor_inventory']
+               if row['path'] == 'tests/test_v045_release_records.py']
+    if records != HISTORICAL_RECORD_ANCHORS:
+        raise RuntimeError('release_records_anchor_preimage')
+    for row in records:
+        row['source_sha256'] = POST['tests/test_v045_release_records.py']
     manifest['product_pins'].update(POST)

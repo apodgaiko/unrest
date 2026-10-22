@@ -1,6 +1,7 @@
 """Composition controls; Linux ownership/transport proof remains separate."""
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
 import json
@@ -117,8 +118,8 @@ def test_exact_version_transition_keeps_historical_template_and_core():
     template = json.loads((ROOT / '.github/release-source-guard/finite/source-template.json').read_bytes())
     original = copy.deepcopy(template)
     release_source_inputs.admit(template, ROOT, lambda root, name: (root / name).read_bytes())
-    untouched = [row for row in template['anchor_inventory'] if row['path'] != 'tests/test_acp_cleanup.py']
-    assert untouched == [row for row in original['anchor_inventory'] if row['path'] != 'tests/test_acp_cleanup.py']
+    untouched = [row for row in template['anchor_inventory'] if row['path'] not in {'tests/test_acp_cleanup.py', 'tests/test_v045_release_records.py'}]
+    assert untouched == [row for row in original['anchor_inventory'] if row['path'] not in {'tests/test_acp_cleanup.py', 'tests/test_v045_release_records.py'}]
     changed = [row for row in template['anchor_inventory'] if row['path'] == 'tests/test_acp_cleanup.py']
     expected = copy.deepcopy(release_source_inputs.CLEANUP_ANCHORS)
     for row in expected:
@@ -217,3 +218,95 @@ def test_cleanup_setup_transition_refuses_every_anchor_binding_drift(field):
     row[field] = 999 if field == 'line' else 'foreign'
     with pytest.raises(RuntimeError, match='cleanup_setup_anchor_preimage'):
         release_source_inputs.admit(template, ROOT, lambda root, name: (root / name).read_bytes())
+
+
+@pytest.mark.parametrize('field', ['line', 'owner', 'route', 'source_sha256', 'expression_ast_sha256'])
+def test_release_records_transition_refuses_every_original_anchor_drift(field):
+    template = json.loads((ROOT / '.github/release-source-guard/finite/source-template.json').read_bytes())
+    row = next(row for row in template['anchor_inventory'] if row['path'] == 'tests/test_v045_release_records.py')
+    row[field] = 999 if field == 'line' else 'foreign'
+    with pytest.raises(RuntimeError, match='release_records_anchor_preimage'):
+        release_source_inputs.admit(template, ROOT, lambda root, name: (root / name).read_bytes())
+
+
+def test_every_anchor_in_released_files_matches_current_pinned_source_and_expression():
+    template = json.loads((ROOT / '.github/release-source-guard/finite/source-template.json').read_bytes())
+    original = copy.deepcopy(template)
+    release_source_inputs.admit(template, ROOT, lambda root, name: (root / name).read_bytes())
+    for before, row in zip(original['anchor_inventory'], template['anchor_inventory'], strict=True):
+        if row['path'] not in release_source_inputs.POST:
+            assert row == before
+            continue
+        body = (ROOT / row['path']).read_bytes()
+        assert row['source_sha256'] == hashlib.sha256(body).hexdigest() == release_source_inputs.POST[row['path']]
+        calls = [n for n in ast.walk(ast.parse(body)) if isinstance(n, ast.Call)
+                 and n.lineno == row['line']
+                 and hashlib.sha256(ast.dump(n, include_attributes=False).encode()).hexdigest() == row['expression_ast_sha256']]
+        assert len(calls) == 1
+        assert {k: v for k, v in row.items() if k not in {'source_sha256', 'expression_ast_sha256'}} == {
+            k: v for k, v in before.items() if k not in {'source_sha256', 'expression_ast_sha256'}}
+
+
+def test_all_prepared_passive_anchors_match_current_source_bytes_and_expressions(monkeypatch):
+    # Pure preparation control; Linux read-only custody is proved separately.
+    import clock_source_inputs
+    import candidate_template_source_inputs
+    import approval_import_source_inputs
+    import prepare_source
+    template = json.loads((ROOT / '.github/release-source-guard/finite/source-template.json').read_bytes())
+    def read(root, name):
+        assert root in {ROOT, Path('/guard')}
+        assert '..' not in Path(name).parts and not Path(name).is_absolute()
+        base = ROOT / '.github/release-source-guard' if root == Path('/guard') else root
+        return (base / name).read_bytes()
+    monkeypatch.setattr(clock_source_inputs, 'read', read)
+    clock_source_inputs.admit(template, ROOT)
+    release_source_inputs.admit(template, ROOT, read)
+    monkeypatch.setattr(prepare_source, 'ROOT', ROOT)
+    monkeypatch.setattr(prepare_source, 'CLOCK_READER', read, raising=False)
+    prepare_source.admit_ownership_document(template)
+    prepare_source.admit_tracker_acquisition(template)
+    candidate_template_source_inputs.admit(template, ROOT, read)
+    approval_import_source_inputs.admit(template, ROOT, read)
+    assert len(template['anchor_inventory']) == 176
+    for row in template['anchor_inventory']:
+        body = (ROOT / row['path']).read_bytes()
+        assert row['source_sha256'] == hashlib.sha256(body).hexdigest(), row['path']
+        calls = [n for n in ast.walk(ast.parse(body)) if isinstance(n, ast.Call)
+                 and n.lineno == row['line']
+                 and hashlib.sha256(ast.dump(n, include_attributes=False).encode()).hexdigest() == row['expression_ast_sha256']]
+        assert len(calls) == 1, (row['path'], row['line'])
+
+
+def test_actual_release_record_owner_has_current_passive_binding_before_any_native_launch(monkeypatch):
+    import runpy
+    import subprocess
+    from finite.anchor_probe import observe
+    template = json.loads((ROOT / '.github/release-source-guard/finite/source-template.json').read_bytes())
+    release_source_inputs.admit(template, ROOT, lambda root, name: (root / name).read_bytes())
+    state = {'checkout': str(ROOT), 'anchor_inventory': template['anchor_inventory']}
+    module = runpy.run_path(str(ROOT / 'tests/test_v045_release_records.py'))
+    captured = []
+    class Observed(BaseException):
+        pass
+    def before_native(*args, **kwargs):
+        captured.extend(observe(state, ROOT))
+        raise Observed()
+    monkeypatch.setattr(subprocess, 'run', before_native)
+    with pytest.raises(Observed):
+        module['test_v040_release_carriers_remain_exact_tag_bytes']()
+    assert len(captured) == 1
+    row = captured[0]
+    assert row['path'] == 'tests/test_v045_release_records.py' and row['line'] == 130
+    assert row['function'] == row['owner'] == 'test_v040_release_carriers_remain_exact_tag_bytes'
+    assert row['source_sha256'] == release_source_inputs.POST[row['path']]
+
+
+def test_every_finite_registry_source_binding_matches_current_file_bytes():
+    rows = ast.literal_eval(ast.parse((ROOT / '.github/release-source-guard/finite/registry.py').read_bytes()).body[1].value)
+    assert rows
+    for row in rows:
+        binding = row['source_binding']
+        source = ROOT / Path(binding['path']).relative_to('/source')
+        assert source.is_file(), binding['path']
+        assert hashlib.sha256(source.read_bytes()).hexdigest() == binding['sha256'], row['class']
