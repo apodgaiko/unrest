@@ -317,7 +317,6 @@ def early(spec):
 def attach(guard):
     original_install = guard.install
     original_bootstrap = guard.bootstrap
-    original_child = guard.child
     spec = STATE["spec"]
     actual_waitpid = os.waitpid
 
@@ -571,24 +570,5 @@ def attach(guard):
         )
         return prefix + text.replace(marker, "_ep.attach(g);g.child(")
 
-    def child(*args, **kwargs):
-        primary = False
-        try:
-            return original_child(*args, **kwargs)
-        except BaseException:
-            primary = True
-            raise
-        finally:
-            drain = STATE.get("completion_exit_drain")
-            if drain is not None:
-                try:
-                    drain()
-                except BaseException:
-                    STATE["poison"] = True
-                    guard.append({"kind": "forbidden", "reason": "completion_exit_drain_failed"})
-                    if not primary:
-                        raise
-
-    guard.child = child
     guard.install = install
     guard.bootstrap = bootstrap

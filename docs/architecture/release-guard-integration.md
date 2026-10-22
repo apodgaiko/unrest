@@ -1288,25 +1288,31 @@ bound to the admitted event. This grants no provider launch or general terminal
 Python permission. The filtered diagnostic selection contains those twelve cases
 and the six original approval cleanup cases; it cannot certify the release.
 
-### Completion helper self-pipe receipt lifetime
+### SOURCE self-pipe identity enforcement
 
-For the twelve original first-completion contention cases, the pinned completion
-helper serializes observer receipt acquisition against close of the exact
-CPython asyncio self-pipe objects. Registration follows a successful ordinary
-socketpair receipt from the authenticated `_make_self_pipe` caller. Object,
-original descriptor and kernel file identity remain bound. The lock ends before
-native send/recv, so closing a loop does not wait for blocking payload I/O.
-An already closed registered object retains native EBADF; detach, descriptor
-reuse and unknown objects retain the unchanged observer checks and poison.
-This grants no network or process authority and changes no completion assertion,
-cleanup assertion, deadline, full-source command or release gate. The closed
-twelve-case diagnostic is supporting evidence, never a source certificate.
+Within existing authenticated SOURCE processes, the pinned guard retains the original observer socketpair admission from the authenticated
+CPython `_make_self_pipe` caller. Before either object is exposed, both remote
+rows must match native local FD, inode, socket cookie, UID, stream type and the
+opposite peer inode. Each subsequent payload on those exact socket objects checks
+fresh native FD/device/inode/type/cookie/owner-UID identity, AF_UNIX domain,
+anonymous peer and creator credentials. Every local witness also preserves the
+observer authentication: fresh Linux process identity equals its admitted birth,
+current token/phase claims match, and the exact durable READY row remains in the
+original owned journal. Uncertain or changed authentication falls back to the
+original observer, including its existing exact orphan-recovery proof. The local
+path never grants recovery. Non-SOURCE modes retain their original method. Reconnect is refused before a native effect. A durable
+local record joins the fresh identity to the authenticated pair receipt before
+unchanged native I/O; journal failure prevents I/O. The identity lock never covers
+blocking I/O. Unknown objects, detach, reinitialization and identity drift retain
+the original observer checks and poison. Closed exact objects retain native
+behavior with no effect or new receipt connection.
 
-The selected child's admitted body also drains its control RPCs before returning
-to interpreter shutdown. A four-second drain bound fails certification on expiry;
-it does not extend any product/test deadline. RPC locking precedes object locking.
-At body exit, exact owned self-pipes close after outstanding receipts finish, so
-late daemon wakeups cannot leave a partially framed receipt behind. Unknown late
-requests retain durable forbidden records and local poison without recursively
-opening another control RPC. Primary body exceptions remain primary if drain
-also fails. The observer's incomplete-channel refusal is unchanged.
+This replaces redundant per-wakeup control IPC for this already admitted anonymous
+self-pipe. The original MCP cleanup can force-kill the owned server; local identity
+checks leave no partial control frame on that boundary. This enforcement does
+not depend on normal interpreter shutdown. Original
+numeric wait statuses remain evidence, including SIGKILL where observed. The
+observer's incomplete-channel refusal, every real completion/cleanup assertion,
+all deadlines, the full-source command and release gates are unchanged. The exact
+sixteen-case completion/cleanup diagnostic is supporting evidence, never a source certificate. No
+network, generic interpreter, provider, or process-launch authority is added.

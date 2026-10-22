@@ -317,7 +317,7 @@ def test_terminal_order_diagnostic_is_closed_and_never_source_certification():
 def test_completion_pipe_diagnostic_is_exact_and_never_certifies_source():
     from primary_policy import TEST_COMPLETION_PIPE_CASES, root_seconds, SOURCE_BUDGET
     from primary_source_inputs import test_plan as make_test_plan
-    assert len(TEST_COMPLETION_PIPE_CASES) == len(set(TEST_COMPLETION_PIPE_CASES)) == 12
+    assert len(TEST_COMPLETION_PIPE_CASES) == len(set(TEST_COMPLETION_PIPE_CASES)) == 16
     script = (COMMAND + ' ' + ' '.join(TEST_COMPLETION_PIPE_CASES)).encode()
     result = make_test_plan(script, 'workflow', 'TEST-positive')
     assert result['timeout_seconds'] == root_seconds(result) == 600
