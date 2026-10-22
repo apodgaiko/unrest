@@ -22,9 +22,11 @@ class OwnedMultiprocessCustody:
         from approval_orphan_custody import install
         if hasattr(self.supervisor, 'ledger'):
             self.supervisor.approval_pipe_records = self.pipe_records
+            from approval_wait_order import defer
             from approval_exit_observation import before_wait
             trace = kwargs.get('trace')
             if trace is not None:
+                trace.defer_numeric_wait = lambda actual, pid: defer(self, actual, pid)
                 trace.before_numeric_wait = lambda actual, pid: before_wait(self, actual, pid)
             install(self.supervisor)
         return result

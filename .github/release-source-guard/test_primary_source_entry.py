@@ -183,7 +183,7 @@ def test_exact_startup_diagnosis_is_bounded_and_cannot_certify_full():
 
 def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     import yaml
-    from primary_policy import TEST_CLEANUP_FIXTURE_CASES
+    from primary_policy import TEST_TERMINAL_ORDER_CASES
     path = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
     document = yaml.safe_load(path.read_text())
     job = document['jobs']['startup-cancellation-diagnosis']
@@ -192,7 +192,7 @@ def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
     steps = job['steps']
     call = next(step for step in steps if step.get('shell'))
-    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_CLEANUP_FIXTURE_CASES)
+    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_TERMINAL_ORDER_CASES)
     assert call['shell'] == 'python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}'
     assert steps[-1]['if'] == 'always()'
 
@@ -298,3 +298,17 @@ def test_exact_cleanup_fixture_diagnosis_retains_all_startup_and_inflight_cases(
         make_test_plan(script + b' --maxfail=1', text, 'TEST-positive')
     with pytest.raises(RuntimeError):
         make_test_plan((COMMAND + ' ' + ' '.join(TEST_CLEANUP_FIXTURE_CASES[:-1])).encode(), text, 'TEST-positive')
+
+
+def test_terminal_order_diagnostic_is_closed_and_never_source_certification():
+    from primary_policy import TEST_TERMINAL_ORDER_CASES, root_seconds, SOURCE_BUDGET
+    text, value = inputs()
+    assert len(TEST_TERMINAL_ORDER_CASES) == len(set(TEST_TERMINAL_ORDER_CASES)) == 18
+    script = (COMMAND + ' ' + ' '.join(TEST_TERMINAL_ORDER_CASES)).encode()
+    plan = make_test_plan(script, text, 'TEST-positive')
+    assert plan['source_checkpoint_ready'] is False and plan['selected_carrier'] is None
+    assert plan['source_budget'] == SOURCE_BUDGET
+    assert plan['timeout_seconds'] == root_seconds(plan) == 600
+    for changed in (TEST_TERMINAL_ORDER_CASES[:-1], (*TEST_TERMINAL_ORDER_CASES,'foreign')):
+        with pytest.raises(RuntimeError):
+            make_test_plan((COMMAND + ' ' + ' '.join(changed)).encode(),text,'TEST-positive')

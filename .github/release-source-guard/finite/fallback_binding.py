@@ -72,7 +72,7 @@ def matches(registration, argv, cwd, environment, state):
                 return None
         except (OSError, KeyError, AttributeError, TypeError, ValueError):
             return None
-    if registration['class'] == 'reference-descendant:terminal-redaction':
+    if registration['class'] in {'reference-descendant:terminal-redaction', 'reference-descendant:terminal-environment'}:
         path = Path(state['guard']).with_name('indirect_terminal_binding.py')
         try:
             guard = sys.modules['runtime_guard']

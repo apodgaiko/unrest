@@ -2069,4 +2069,5 @@ COMMANDS = [
             }
         ],
     },
+    {'class': 'reference-descendant:terminal-environment', 'python': True, 'argv': ['-c', "import json, os; names = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CODEX_API_KEY', 'GLM_API_KEY', 'OPENAI_API_KEY', 'ZAI_API_KEY', 'UNRELATED_ALIAS_0', 'UNRELATED_ALIAS_1', 'UNRELATED_ALIAS_2', 'UNRELATED_ALIAS_3', 'UNRELATED_ALIAS_4', 'UNRELATED_ALIAS_5', 'HOME', 'TEMP', 'SSL_CERT_DIR', 'NO_PROXY', 'TMP'); print(json.dumps({name: os.environ.get(name) for name in names}))"], 'checkout_cwd': True, 'source_binding': {'path': '/source/tests/test_capability_policy.py', 'line': 628, 'sha256': 'ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'}, 'caller_bindings': []},
 ]

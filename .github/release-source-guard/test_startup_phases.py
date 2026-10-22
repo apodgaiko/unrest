@@ -84,6 +84,11 @@ def restore_before_numeric_wait(tree):
     expected = ast.parse("if getattr(self, 'before_numeric_wait', None) is not None:\n    self.before_numeric_wait(self, candidate)").body[0]
     loop = next(n for n in ast.walk(tree) if isinstance(n, ast.For)
                 and ast.unparse(n.target) == 'candidate')
+    ordered = ast.parse("if (getattr(self, 'defer_numeric_wait', None) is not None\n        and self.defer_numeric_wait(self, candidate)):\n    continue").body[0]
+    assert ast.dump(loop.body[0], include_attributes=False) == ast.dump(ordered, include_attributes=False)
+    references = [n for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr == 'defer_numeric_wait']
+    assert len(references) == 1
+    loop.body.pop(0)
     assert ast.dump(loop.body[0], include_attributes=False) == ast.dump(expected, include_attributes=False)
     assert ast.unparse(loop.body[1]) == 'pid, raw = os.waitpid(candidate, os.WNOHANG | 1073741824)'
     references = [n for n in ast.walk(tree) if isinstance(n, ast.Attribute)

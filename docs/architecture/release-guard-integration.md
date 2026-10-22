@@ -1268,3 +1268,22 @@ new native route. A reviewed fixture edit must update every current file-pin
 consumer together: product inputs, passive call-site anchors, inline registry,
 startup ownership and the exact in-flight locale predicate. Historical template
 preimages remain fixed; current source/owner/line/vector checks stay exact.
+
+
+A controlled approval child whose own exit and original parent's exit have
+already been observed may be adopted before either numeric terminal wait is
+collected. For the existing six cancel/crash cases only, the tracer defers that
+child's wait until the original parent's actual terminal wait is collected.
+Registration, READY, case, token, source pins and immutable birth identities
+must agree, and a fresh snapshot must prove adoption by this observer. The
+ordinary round-robin scan continues serving other tasks under the same deadline.
+No persisted record is reordered and absence never supplies a status. The
+independent evidence verifier and original cleanup assertions remain unchanged.
+
+The existing twelve terminal environment-transform cases admit only their exact
+Python inspection program through the original ACP handler, with authenticated
+original test code, live parameter values, policy, request, owned cwd and exact
+credential-free environment. Its consumed-exec locale mapping is independently
+bound to the admitted event. This grants no provider launch or general terminal
+Python permission. The filtered diagnostic selection contains those twelve cases
+and the six original approval cleanup cases; it cannot certify the release.

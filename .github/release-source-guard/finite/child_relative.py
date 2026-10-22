@@ -55,6 +55,7 @@ APPLICABLE = frozenset({
     'reference-descendant:status-cli:observe-project:--help',
     'reference-descendant:stderr-redaction',
     'reference-descendant:terminal-redaction',
+    'reference-descendant:terminal-environment',
     'reference-integrity:test_fails',
     'reference-integrity:test_passes',
     'reference-integrity:test_skips',

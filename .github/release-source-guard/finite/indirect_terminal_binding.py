@@ -16,6 +16,18 @@ NESTED_MODULES = frozenset({
     'tests/contracts/test_retained_boundaries.py',
 })
 OWNER = CASE.split('::')[1]
+ENV_OWNER = 'test_real_terminal_create_excludes_raw_wrappers_and_preserves_transform'
+ENV_CASE = 'tests/test_capability_policy.py::' + ENV_OWNER
+ENV_NAMES = ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CODEX_API_KEY', 'GLM_API_KEY',
+             'OPENAI_API_KEY', 'ZAI_API_KEY', *(f'UNRELATED_ALIAS_{i}' for i in range(6)),
+             'HOME', 'TEMP', 'SSL_CERT_DIR', 'NO_PROXY', 'TMP')
+ENV_SCRIPT = (f'import json, os; names = {ENV_NAMES!r}; '
+              'print(json.dumps({name: os.environ.get(name) for name in names}))')
+ENV_VECTOR = ['-c', ENV_SCRIPT]
+ENV_CASES = frozenset(ENV_CASE + '[' + profile + '-' + role + '-' + provider + ']'
+    for profile in ('safe', 'unsafe-development-unrestricted')
+    for role in ('worker', 'validator', 'terminal_reviewer') for provider in ('claude', 'codex'))
+
 VECTOR = ['-c', "import os; print(os.environ['ZAI_API_KEY'])"]
 
 
@@ -31,22 +43,29 @@ def authenticated_frame(frames, source, module, function, expected, line):
 
 
 def matches(registration, argv, cwd, environment, state, frames):
-    # This adds no registry entry and grants no permission to arbitrary ACP calls.
+    # Only these original literal requests may reach the actual ACP handler.
     guard = sys.modules['runtime_guard']
     root = Path(state['checkout'])
     original = root / 'tests/test_capability_policy.py'
     product = root / 'src/unrest_harness/acp_runner.py'
     bound = registration['source_binding']
-    if (registration['class'] != 'reference-descendant:terminal-redaction'
-            or registration['argv'] != VECTOR or registration['python'] is not True
+    transform = registration['class'] == 'reference-descendant:terminal-environment'
+    vector = ENV_VECTOR if transform else VECTOR
+    owner = ENV_OWNER if transform else OWNER
+    owner_line, binding_line = (625, 628) if transform else (546, 549)
+    case_matches = state.get('case') in ENV_CASES if transform else state.get('case') == CASE
+    if (registration['class'] not in {'reference-descendant:terminal-redaction', 'reference-descendant:terminal-environment'}
+            or registration['argv'] != vector or registration['python'] is not True
             or registration['caller_bindings'] != []
-            or bound != {'path': str(original), 'line': 549,
+            or bound != {'path': str(original), 'line': binding_line,
                          'sha256': state['product_pins'].get('tests/test_capability_policy.py')}
             or state.get('phase') != 'READY' or not state.get('token')
             or os.getcwd() != str(root)):
         return None
     guard.require_ready(state['token'])
-    if state.get('case') != CASE:
+    if not case_matches:
+        if transform:
+            return None
         outer_module = state.get('case', '').split('::', 1)[0]
         if (outer_module not in NESTED_MODULES
                 or state.get('class') != 'reference:' + outer_module):
@@ -74,7 +93,7 @@ def matches(registration, argv, cwd, environment, state, frames):
     if owner_module is None:
         return None
     named = state['isolated_named']
-    owner_code = named(state['isolated_source_code'](original), OWNER)
+    owner_code = named(state['isolated_source_code'](original), owner)
     # Product modules are not pytest-rewritten. Compile with the same loader
     # discipline as fallback_binding, including the supported beartype loader.
     loader = module.__loader__
@@ -92,7 +111,7 @@ def matches(registration, argv, cwd, environment, state, frames):
                 optimize=sys.flags.optimize))
     handler = module.ACPClient.__dict__.get('_handle_terminal_create')
     call = authenticated_frame(frames, original, owner_module,
-                               getattr(owner_module, OWNER, None), owner_code, 546)
+                               getattr(owner_module, owner, None), owner_code, owner_line)
     launch = authenticated_frame(frames, product, module, handler,
                                  named(named(code, 'ACPClient'), '_handle_terminal_create'), 1034)
     if call is None or launch is None:
@@ -100,16 +119,17 @@ def matches(registration, argv, cwd, environment, state, frames):
     # The request literal is the only accepted indirect syntax. The registry's
     # line points inside it; it is not a direct subprocess call at that line.
     syntax = ast.parse(original.read_bytes())
-    calls = [n for n in ast.walk(syntax) if isinstance(n, ast.Call) and n.lineno == 546
+    calls = [n for n in ast.walk(syntax) if isinstance(n, ast.Call) and n.lineno == owner_line
              and ast.unparse(n.func) == 'client._handle_terminal_create']
+    expected_syntax = ("{'command': sys.executable, 'args': ['-c', script]}" if transform else
+                       "{'command': sys.executable, 'args': ['-c', \"import os; print(os.environ['ZAI_API_KEY'])\"]}")
     if (len(calls) != 1 or len(calls[0].args) != 1 or calls[0].keywords
-            or ast.unparse(calls[0].args[0]) !=
-            "{'command': sys.executable, 'args': ['-c', \"import os; print(os.environ['ZAI_API_KEY'])\"]}"):
+            or ast.unparse(calls[0].args[0]) != expected_syntax):
         return None
     local = launch.f_locals
     client = call.f_locals.get('client')
     request = local.get('params')
-    expected = {'command': sys.executable, 'args': VECTOR}
+    expected = {'command': sys.executable, 'args': vector}
     if (type(client) is not module.ACPClient or local.get('self') is not client
             or getattr(client._handle_terminal_create, '__func__', None) is not handler
             or type(request) is not dict or request != expected
@@ -121,15 +141,25 @@ def matches(registration, argv, cwd, environment, state, frames):
             or environment != call.f_locals.get('terminal_environment')
             or client._terminal_environment != environment
             or client._policy is not call.f_locals.get('policy')
-            or client._policy.role != 'worker' or not client._policy.process.enabled
+            or (not transform and client._policy.role != 'worker') or not client._policy.process.enabled
             or cwd != str(local.get('cwd')) or cwd != client._working_dir
             or Path(cwd) != Path(call.f_locals['tmp_path']) / 'workspace'
             or not Path(cwd).resolve().is_relative_to(Path(state['owned_root']).resolve())
-            or argv != [sys.executable, *VECTOR]
+            or argv != [sys.executable, *vector]
             or argv[0] not in state['runtime']['paths']
             or str(Path(argv[0]).resolve()) != state['runtime']['realpath']
             or hashlib.sha256(Path(argv[0]).read_bytes()).hexdigest() != state['runtime']['sha256']):
         return None
-    return {'source': str(original), 'line': 546, 'function': OWNER,
+    if transform:
+        values = call.f_locals
+        if (state['case'] != ENV_CASE + '[' + values['profile'] + '-' + values['role'] + '-' + values['provider_name'] + ']'
+                or values['script'] != ENV_SCRIPT or tuple(values['observed_names']) != ENV_NAMES
+                or client._policy.role != values['role'] or client._policy.profile != values['profile']
+                or client._policy.provider != values['provider_name']
+                or environment != {'PATH': os.environ['PATH'], 'SSL_CERT_DIR': 'MONKEY',
+                                   'NO_PROXY': 'ordinary-equal-free-value',
+                                   'TMP': 'dGVybWluYWwtc2VudGluZWwtMS1hbnRocm9waWNfYXV0aF90b2tlbg=='}):
+            return None
+    return {'source': str(original), 'line': owner_line, 'function': owner,
             'globals_module': owner_module.__name__, 'handler_source': str(product),
             'handler_line': 1034, 'token': state['token']}

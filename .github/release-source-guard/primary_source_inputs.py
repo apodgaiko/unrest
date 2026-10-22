@@ -6,7 +6,7 @@ import json
 import re
 import shlex
 
-from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
+from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
 
 
 def require_full_input(value, script, workflow):
@@ -38,7 +38,7 @@ def test_plan(script, workflow, mode):
     if script not in allowed:
         raise RuntimeError('primary_source_test_script')
     seam_scripts = {('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
-                    for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES)}
+                    for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES)}
     return {'schema': 'unrest.v046.primary-script-plan.v1',
             'duty': 'TEST-source-' + mode.removeprefix('TEST-'),
             'script_sha256': sha(script), 'workflow_sha256': sha(workflow.encode()),
@@ -71,7 +71,8 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     image coerces its absent C locale before exposing os.environ. Exec and
     post-init environments remain independently exact; this grants no launch.
     """
-    if (registration['class'] in {'source-lease-owned-child', 'reference-descendant:terminal-redaction'}
+    if (registration['class'] in {'source-lease-owned-child', 'reference-descendant:terminal-redaction',
+                                    'reference-descendant:terminal-environment'}
             or registration['class'] == 'inline:test_acp_cleanup.py:51' and environment == {}
             or registration['class'] in {'source-owned-role:worker', 'source-owned-role:terminal-reviewer'}
             and (environment.get('LANG') == 'C' or registration.get('case', '').startswith(
@@ -231,16 +232,23 @@ def exact_terminal_environment(environment, registration, flags, context):
     """Bind locale coercion to the actual admitted event and consumed exec."""
     from primary_policy import PYTHON
     from pathlib import PurePosixPath
-    binding = {'path': '/source/tests/test_capability_policy.py', 'line': 549,
+    transform = registration['class'] == 'reference-descendant:terminal-environment'
+    from finite.indirect_terminal_binding import ENV_CASES, ENV_SCRIPT
+    binding = {'path': '/source/tests/test_capability_policy.py', 'line': 628 if transform else 549,
                'sha256': 'ed83ec28c4830354cd4ab0876d6832a0187d211982964d2cf80f449992b46bb6'}
     if (registration.get('kind') != 'admitted'
-            or registration['class'] != 'reference-descendant:terminal-redaction'
+            or registration['class'] not in {'reference-descendant:terminal-redaction', 'reference-descendant:terminal-environment'}
             or registration['source_binding'] != binding or flags != [0, 0, 0]
-            or context is None or set(environment) != {'PATH', 'ZAI_API_KEY'}
+            or context is None or (transform and (registration.get('case') not in ENV_CASES
+                or set(environment) != {'PATH', 'SSL_CERT_DIR', 'NO_PROXY', 'TMP'}
+                or environment['SSL_CERT_DIR'] != 'MONKEY'
+                or environment['NO_PROXY'] != 'ordinary-equal-free-value'
+                or environment['TMP'] != 'dGVybWluYWwtc2VudGluZWwtMS1hbnRocm9waWNfYXV0aF90b2tlbg=='))
+            or (not transform and set(environment) != {'PATH', 'ZAI_API_KEY'})
             or type(environment['PATH']) is not str or not environment['PATH']
-            or type(environment['ZAI_API_KEY']) is not str
-            or sha(environment['ZAI_API_KEY'].encode()) !=
-            'cff06f8f3a6f4faf5b5da8f3500efc21bdf18e2522e178b8a43f27739ba5d45a'):
+            or (not transform and (type(environment['ZAI_API_KEY']) is not str
+                or sha(environment['ZAI_API_KEY'].encode()) !=
+                'cff06f8f3a6f4faf5b5da8f3500efc21bdf18e2522e178b8a43f27739ba5d45a'))):
         return False
     selected, manifest, vector = context['selected'], context['manifest'], context['vector']
     runtime = manifest['runtime']
@@ -258,7 +266,7 @@ def exact_terminal_environment(environment, registration, flags, context):
             and selected['bootstrap_sha256'] == sha(vector[2].encode())
             and selected['environment_sha256'] == sha(json.dumps(environment, sort_keys=True).encode())
             and registration['argv_sha256'] == sha(json.dumps([
-                vector[0], '-c', "import os; print(os.environ['ZAI_API_KEY'])"]).encode())
+                vector[0], '-c', ENV_SCRIPT if transform else "import os; print(os.environ['ZAI_API_KEY'])"]).encode())
             and manifest['product_pins']['tests/test_capability_policy.py'] == binding['sha256'])
 
 
