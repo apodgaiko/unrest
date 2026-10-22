@@ -473,7 +473,12 @@ def install(state, activation, emit, refuse, checked):
         if registration['class'] in {'source-approval-relay', 'source-approval-python-backend'}:
             approval = checked('approval_routes.py')
             owned_cwd = checked('approval_owned_cwd.py')
-            if owned_cwd['prepare'](launch, kwargs, state, approval['selected_mode'](state.get('case')), emit):
+            try:
+                owned = owned_cwd['prepare'](launch, kwargs, state, approval['selected_mode'](state.get('case')), emit)
+            except (OSError, RuntimeError, KeyError, ValueError, TypeError):
+                refuse('approval_owned_cwd_constructor_binding')
+                raise RuntimeError('refusal callback returned')
+            if owned:
                 if (hashlib.sha256(source.read_bytes()).hexdigest() != STDLIB
                         or not stock_matches(stock, stock_code, defaults, keyword_defaults)
                         or subprocess.Popen._execute_child is not execute
