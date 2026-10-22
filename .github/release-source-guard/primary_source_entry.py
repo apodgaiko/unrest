@@ -146,6 +146,7 @@ class Observer:
         self.snapshot_rpc_started = {}
         self.snapshot_rpc_counts = {}
         self.negative_startup = None
+        self.cohort_startup = None
         self.startup_stall_timer = None
         self.startup_stall_token = None
         self.approval_stall_case = None
@@ -169,6 +170,8 @@ class Observer:
         guard._STATE['primary_snapshot_observer'] = self.observe_snapshot_rpc
 
     def observe_snapshot_rpc(self, frame, event, value):
+        if getattr(self, 'cohort_startup', None) is not None:
+            self.cohort_startup(self.guard, self.endpoint, frame, event, value)
         if (self.guard._STATE.get('case') or '').startswith(
                 'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup['):
             if self.negative_startup is None:
@@ -259,6 +262,13 @@ class Observer:
 
     def pytest_runtest_setup(self, item):
         self.guard._STATE['case'] = item.nodeid
+        self.cohort_startup = None
+        if item.nodeid in (
+                'tests/test_acp_runner.py::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success[claude]',
+                'tests/test_acp_runner.py::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success[codex]'):
+            support = Path(self.guard._STATE['guard']).with_name('cohort_startup.py')
+            self.cohort_startup = self.guard.checked_source(
+                support, self.guard._STATE['direct_support']['files'][str(support)])['observe']
         if item.nodeid == 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct':
             self.custodian = sys.modules['restart_custody'].start_custodian(
                 Path(self.manifest['owned_root']))

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dis
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -117,53 +119,50 @@ def wait_ready(guard, endpoint, handle, registration, identity):
         failed_setup(guard, endpoint, handle, identity, birth, reason)
 
 
-def install(guard, endpoint):
+def observe(guard, endpoint, frame, event, value):
     state = guard._STATE
-    if state["class"] != "pytest-root":
+    if (
+        event != "return"
+        or state.get("case") not in CASES
+        or state.get("class") != "pytest-root"
+        or frame.f_globals is not vars(guard)
+        or frame.f_code.co_filename != state["guard"]
+        or frame.f_code.co_name != "initialize_inner"
+    ):
         return
-    if "_cohort_startup_hook" in state:
-        if subprocess.Popen.__init__ is not state["_cohort_startup_hook"]:
-            endpoint.refuse("cohort_startup_hook_drift")
+    # Profile return events also report exception unwinding. Preserve the
+    # original exception; only the unchanged constructor's normal return joins.
+    if dis.opname[frame.f_code.co_code[frame.f_lasti]] not in {"RETURN_VALUE", "RETURN_CONST"}:
         return
-    path = Path(state["guard"]).with_name("linux_identity.py")
+    local = frame.f_locals
+    registration = local.get("registration")
+    if type(registration) is not dict or registration.get("class") != CLASS:
+        return
+    source = Path(state["guard"])
+    body = source.read_bytes()
+    expected = state["isolated_named"](
+        compile(body, str(source), "exec", dont_inherit=True), "initialize_inner"
+    )
+    vector = local.get("argv")
+    handle = local.get("handle")
+    token = local.get("launch_token")
+    if (
+        hashlib.sha256(body).hexdigest() != state["guard_sha256"]
+        or frame.f_code != expected
+        or local.get("state") is not state
+        or registration.get("python") is not True
+        or type(vector) is not list
+        or len(vector) != 2
+        or vector[0] not in state["runtime"]["paths"]
+        or vector[1] != state["checkout"] + "/tests/mock_acp_agent.py"
+        or type(token) is not str
+        or len(token) != 32
+        or any(c not in "0123456789abcdef" for c in token)
+        or handle is None
+        or type(handle.pid) is not int
+        or handle.pid <= 0
+    ):
+        endpoint.refuse("cohort_startup_constructor_context")
+    path = source.with_name("linux_identity.py")
     identity = guard.checked_source(path, state["direct_support"]["files"][str(path)])["identity"]
-    original = subprocess.Popen.__init__
-    validated_prefix = b""
-
-    def initialize(handle, *args, **kwargs):
-        nonlocal validated_prefix
-        result = original(handle, *args, **kwargs)
-        if state.get("case") not in CASES:
-            return result
-        vector = args[0] if args else kwargs.get("args")
-        if (
-            type(vector) not in (list, tuple)
-            or len(vector) != 2
-            or vector[0] not in state["runtime"]["paths"]
-            or vector[1] != state["checkout"] + "/tests/mock_acp_agent.py"
-        ):
-            return result
-        journal = Path(state["events"]) / (str(os.getpid()) + ".jsonl")
-        try:
-            registration, validated_prefix = endpoint.latest_wait_registration(
-                journal.read_bytes(), os.getpid(), handle.pid, validated_prefix
-            )
-        except (OSError, ValueError, KeyError, TypeError):
-            failed_setup(
-                guard, endpoint, handle, identity, None, "cohort_startup_registration_invalid"
-            )
-        if registration is None:
-            failed_setup(
-                guard, endpoint, handle, identity, None, "cohort_startup_registration_missing"
-            )
-        if registration["class"] != CLASS:
-            return result
-        if registration.get("python") is not True or registration.get("case") != state["case"]:
-            failed_setup(
-                guard, endpoint, handle, identity, None, "cohort_startup_registration_drift"
-            )
-        wait_ready(guard, endpoint, handle, registration, identity)
-        return result
-
-    state["_cohort_startup_hook"] = initialize
-    subprocess.Popen.__init__ = initialize
+    wait_ready(guard, endpoint, handle, {**registration, "token": token}, identity)

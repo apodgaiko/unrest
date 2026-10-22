@@ -3,6 +3,7 @@
 from copy import deepcopy
 import json
 import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -152,54 +153,6 @@ def test_birth_replacement_refuses_even_with_complete_records(tmp_path):
     assert not events[-1]["cleanup_verified"] and "UNVERIFIED" in events[-1]["custody"]
 
 
-def test_original_constructor_and_handle_are_retained(tmp_path, monkeypatch):
-    g, e, b, r, c, registration, events = context(tmp_path)
-    calls = []
-
-    class Popen:
-        def __init__(self, *args, **kwargs):
-            self.pid = 123
-            calls.append((self, args, kwargs))
-
-        def poll(self):
-            return None
-
-    monkeypatch.setattr(hook.subprocess, "Popen", Popen)
-    journal(tmp_path, os.getpid(), [registration])
-    journal(tmp_path, 123, [r, c])
-    hook.install(g, e)
-    h = Popen(["/python", "/source/tests/mock_acp_agent.py"], cwd="original-cwd")
-    assert calls == [
-        (h, (["/python", "/source/tests/mock_acp_agent.py"],), {"cwd": "original-cwd"})
-    ]
-    assert len(events) == 1
-    hook.install(g, e)  # Idempotent, never stacks wrappers.
-    g._STATE["case"] = "foreign"
-    Popen(["unchanged"])
-    assert len(events) == 1 and len(calls) == 2
-
-
-def test_original_constructor_failure_is_not_caught_or_retried(tmp_path, monkeypatch):
-    g, e, *_ = context(tmp_path)
-
-    class Popen:
-        def __init__(self, *args, **kwargs):
-            raise OSError("original")
-
-    monkeypatch.setattr(hook.subprocess, "Popen", Popen)
-    hook.install(g, e)
-    with pytest.raises(OSError, match="original"):
-        Popen(["original"])
-
-
-def test_foreign_process_class_keeps_original_constructor(tmp_path, monkeypatch):
-    g, e, *_ = context(tmp_path)
-    g._STATE["class"] = "source-cohort2:mock-agent"
-    original = hook.subprocess.Popen.__init__
-    hook.install(g, e)
-    assert hook.subprocess.Popen.__init__ is original
-
-
 def test_malformed_child_journal_settles_only_proven_child(tmp_path):
     g, e, b, r, c, registration, events = context(tmp_path)
     (tmp_path / "123.jsonl").write_bytes(b"invalid\n")
@@ -261,42 +214,109 @@ def test_changed_core_ready_cannot_release_parent(tmp_path, field):
     assert events[-1]["observed_handle_returncode"] == 7
 
 
-def test_constructor_hook_replacement_is_refused(tmp_path, monkeypatch):
-    g, e, *_ = context(tmp_path)
+def constructor_frame(tmp_path):
+    import dis
+    import hashlib
+    import types
 
-    class Popen:
-        def __init__(self, *args, **kwargs):
-            pass
-
-    monkeypatch.setattr(hook.subprocess, "Popen", Popen)
-    hook.install(g, e)
-    monkeypatch.setattr(Popen, "__init__", lambda *args: None)
-    with pytest.raises(Refusal, match="hook_drift"):
-        hook.install(g, e)
-
-
-@pytest.mark.parametrize("field", ["python", "case", "malformed"])
-def test_outer_registration_failure_is_sticky_and_explicitly_unverified(
-    tmp_path, monkeypatch, field
-):
     g, e, b, r, c, registration, events = context(tmp_path)
+    source = tmp_path / "runtime_guard.py"
+    source.write_text(
+        "def install():\n def initialize_inner():\n  return None\n return initialize_inner\n"
+    )
+    code = compile(source.read_bytes(), str(source), "exec", dont_inherit=True)
 
-    class Popen:
-        def __init__(self, *args, **kwargs):
-            self.pid = 123
+    def named(code, name):
+        for value in code.co_consts:
+            if isinstance(value, types.CodeType):
+                if value.co_name == name:
+                    return value
+                found = named(value, name)
+                if found is not None:
+                    return found
 
-        def poll(self):
-            pytest.fail("uncertain child must not be reaped")
+    selected = named(code, "initialize_inner")
+    g._STATE["guard_sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
+    g._STATE["isolated_named"] = named
+    local = dict(
+        state=g._STATE,
+        handle=handle(),
+        registration={"class": hook.CLASS, "python": True},
+        argv=["/python", "/source/tests/mock_acp_agent.py"],
+        launch_token="a" * 32,
+    )
+    frame = SimpleNamespace(
+        f_code=selected,
+        f_globals=vars(g),
+        f_locals=local,
+        f_lasti=next(
+            i.offset for i in dis.get_instructions(selected) if i.opname.startswith("RETURN")
+        ),
+    )
+    return g, e, frame
 
-        def kill(self):
-            pytest.fail("uncertain child must not be signalled")
 
-    monkeypatch.setattr(hook.subprocess, "Popen", Popen)
-    registration[field] = "foreign"
-    journal(tmp_path, os.getpid(), [registration])
-    if field == "malformed":
-        (tmp_path / (str(os.getpid()) + ".jsonl")).write_bytes(b"invalid\n")
-    hook.install(g, e)
-    with pytest.raises(Refusal):
-        Popen(["/python", "/source/tests/mock_acp_agent.py"])
-    assert not events[-1]["cleanup_verified"] and "UNVERIFIED" in events[-1]["custody"]
+def test_normal_original_constructor_return_preserves_handle_and_token(tmp_path, monkeypatch):
+    g, e, frame = constructor_frame(tmp_path)
+    calls = []
+    monkeypatch.setattr(hook, "wait_ready", lambda *args: calls.append(args))
+    original = hook.subprocess.Popen.__init__
+    hook.observe(g, e, frame, "return", None)
+    assert len(calls) == 1 and calls[0][2] is frame.f_locals["handle"]
+    assert calls[0][3] == {"class": hook.CLASS, "python": True, "token": "a" * 32}
+    assert hook.subprocess.Popen.__init__ is original
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["event", "case", "root-class", "globals", "path", "name", "unwind", "registration-class"],
+)
+def test_unrelated_events_and_original_exception_unwind_are_not_changed(
+    tmp_path, monkeypatch, change
+):
+    g, e, frame = constructor_frame(tmp_path)
+    event = "return"
+    monkeypatch.setattr(hook, "wait_ready", lambda *args: pytest.fail("unbound wait"))
+    if change == "event":
+        event = "call"
+    elif change == "case":
+        g._STATE["case"] = "foreign"
+    elif change == "root-class":
+        g._STATE["class"] = "foreign"
+    elif change == "globals":
+        frame.f_globals = dict(frame.f_globals)
+    elif change == "path":
+        frame.f_code = frame.f_code.replace(co_filename="/foreign")
+    elif change == "name":
+        frame.f_code = frame.f_code.replace(co_name="foreign")
+    elif change == "unwind":
+        frame.f_lasti = 0
+    else:
+        frame.f_locals["registration"]["class"] = "foreign"
+    hook.observe(g, e, frame, event, None)
+
+
+@pytest.mark.parametrize(
+    "change", ["source-bytes", "code", "state", "python", "argv", "runtime", "token", "handle"]
+)
+def test_changed_bound_constructor_context_is_refused(tmp_path, monkeypatch, change):
+    g, e, frame = constructor_frame(tmp_path)
+    monkeypatch.setattr(hook, "wait_ready", lambda *args: pytest.fail("unbound wait"))
+    if change == "source-bytes":
+        Path(g._STATE["guard"]).write_text("def install():\n def initialize_inner():\n  return 9\n")
+    elif change == "code":
+        frame.f_code = frame.f_code.replace(co_firstlineno=999)
+    elif change == "state":
+        frame.f_locals["state"] = dict(g._STATE)
+    elif change == "python":
+        frame.f_locals["registration"]["python"] = False
+    elif change == "argv":
+        frame.f_locals["argv"].append("foreign")
+    elif change == "runtime":
+        frame.f_locals["argv"][0] = "/foreign"
+    elif change == "token":
+        frame.f_locals["launch_token"] = "foreign"
+    else:
+        frame.f_locals["handle"] = None
+    with pytest.raises(Refusal, match="constructor_context"):
+        hook.observe(g, e, frame, "return", None)
