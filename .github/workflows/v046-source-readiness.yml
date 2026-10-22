@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   compartment-controls:
-    if: ${{ github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-startup-cancel-20261021' && github.ref != 'refs/heads/codex/source-guard-structured-20261018-postimages-20261022' }}
+    if: ${{ github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-startup-cancel-20261021' && github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-postimages-20261022' }}
     name: Linux compartment controls (not a source checkpoint)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -179,7 +179,7 @@ jobs:
 
   controlled-backend-postimage-diagnosis:
     name: Bounded original backend variants (${{ matrix.group }})
-    if: ${{ github.ref == 'refs/heads/codex/source-guard-structured-20261018-postimages-20261022' }}
+    if: ${{ github.ref == 'refs/heads/codex/source-guard-structured-20261018-source-composition-postimages-20261022' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:

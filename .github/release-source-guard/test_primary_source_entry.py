@@ -189,7 +189,9 @@ def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     job = document['jobs']['startup-cancellation-diagnosis']
     ref = 'refs/heads/codex/source-guard-structured-20261018-source-composition-startup-cancel-20261021'
     assert job['if'] == "${{ github.ref == '" + ref + "' }}"
-    assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
+    postimage_ref = 'refs/heads/codex/source-guard-structured-20261018-source-composition-postimages-20261022'
+    assert document['jobs']['compartment-controls']['if'] == (
+        "${{ github.ref != '" + ref + "' && github.ref != '" + postimage_ref + "' }}")
     steps = job['steps']
     call = next(step for step in steps if step.get('shell'))
     assert call['run'] == COMMAND + ' ' + ' '.join(TEST_COMPLETION_PIPE_CASES)

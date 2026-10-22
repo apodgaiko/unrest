@@ -276,3 +276,28 @@ def test_diagnostic_groups_are_closed_and_do_not_certify_source():
         "collection_seconds": 300,
         "drain_seconds": 60,
     }
+
+
+def test_diagnostic_destination_uses_existing_supported_workflow_namespace():
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/v046-source-readiness.yml").read_text())
+    job = workflow["jobs"]["controlled-backend-postimage-diagnosis"]
+    ref = "refs/heads/codex/source-guard-structured-20261018-source-composition-postimages-20261022"
+    assert job["if"] == "${{ github.ref == '" + ref + "' }}"
+    syntax = ast.parse(Path(__file__).with_name("ci_shell.py").read_bytes())
+    existing = [
+        n.args[0]
+        for n in ast.walk(syntax)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "startswith"
+        and n.args
+        and isinstance(n.args[0], ast.Tuple)
+    ]
+    assert any(
+        any(ref.startswith(prefix) for prefix in ast.literal_eval(node)) for node in existing
+    )
+    assert all(
+        ref != "refs/heads/" + name for name in ("main", "codex/release-v047-direct-20261020")
+    )
