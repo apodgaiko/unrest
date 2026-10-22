@@ -122,3 +122,46 @@ def test_approval_pipe_registration_mutations_refuse(monkeypatch, mutation):
             row[key] = value
     with pytest.raises(RuntimeError):
         pipe.binding(authority, 42)
+
+
+def test_approval_stall_capture_is_diagnostic_only_and_exact_selection():
+    from approval_stall_diagnostic import case_seconds
+    from primary_policy import TEST_APPROVAL_CLOSURE_CASES
+    profile = {'source_mode': 'TEST-positive',
+               'orig_argv': ['python', 'pytest', '-q', *TEST_APPROVAL_CLOSURE_CASES]}
+    case = routes.PREFIX + '[success]'
+    assert case_seconds(profile, case) == 60
+    assert case_seconds(profile, routes.DURABLE_PREFIX + '[crash]') == 120
+    assert case_seconds({**profile, 'source_mode': 'SOURCE'}, case) is None
+    assert case_seconds({**profile, 'source_mode': 'TEST-poison'}, case) is None
+    assert case_seconds({**profile, 'orig_argv': profile['orig_argv'][:-1]}, case) is None
+    assert case_seconds(profile, 'foreign') is None
+
+
+@pytest.mark.parametrize('kind, mode', [('foreign', 'success'), ('source-approval-relay', None)])
+def test_owned_cwd_grants_nothing_to_foreign_case_or_class(kind, mode):
+    from finite.approval_owned_cwd import prepare
+    assert not prepare({'registration': {'class': kind}}, {}, {}, mode, None)
+
+
+def test_owned_cwd_rejects_outside_or_non_workspace_directories(tmp_path):
+    from finite.approval_owned_cwd import directory
+    for path in (tmp_path, tmp_path / 'pytest', tmp_path / 'pytest/case/other'):
+        path.mkdir(parents=True, exist_ok=True)
+        with pytest.raises(RuntimeError):
+            directory(path, tmp_path)
+
+
+def test_missing_owned_cwd_kernel_record_poison_is_retained(monkeypatch):
+    import approval_owned_cwd_custody as host
+    from types import SimpleNamespace
+    monkeypatch.setattr(host, 'identity', lambda pid: {'ppid': 7})
+    poison = []
+    authority = SimpleNamespace(bound={42: {'registration': {'class': 'source-approval-relay'},
+                                              'token': 'owned'}},
+                                supervisor=SimpleNamespace(registered={7: {'identity': {}}},
+                                    events=lambda: [], poison=poison.append))
+    trace = SimpleNamespace(poison=[])
+    with pytest.raises(RuntimeError, match='cardinality'):
+        host.check(authority, trace, 42, [])
+    assert trace.poison == poison == ['approval_owned_cwd_kernel_binding']

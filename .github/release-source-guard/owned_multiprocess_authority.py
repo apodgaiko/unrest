@@ -71,6 +71,8 @@ class OwnedMultiprocessCustody:
             trace.poison.append('invalid_format_unexpected_successful_exec')
             self.supervisor.poison('invalid_format_unexpected_successful_exec')
             raise RuntimeError('invalid_format_unexpected_successful_exec')
+        from approval_owned_cwd_custody import check as approval_cwd_check
+        approval_cwd_check(self, trace, pid, vector)
         child_relative_check(self, trace, pid, vector)
         registration = self.bound.get(pid, {}).get("registration", {})
         if registration.get("class") not in {

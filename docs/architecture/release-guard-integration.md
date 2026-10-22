@@ -1025,3 +1025,19 @@ the exact approval case, argv and original ACP caller. The existing ordinary
 pipe custody then observes pre-exec and successful-exec descriptor inventories,
 UID, access mode, process birth, credentials and complete argv/environment. No
 extra descriptor is omitted or accepted, and unrelated classes gain no pipe.
+
+The closed 33-case approval diagnostic retains root thread and asyncio task
+stacks after a single controlled ACP case exceeds 60 seconds, or a durable
+crash/cancel case exceeds 120 seconds. It then ends that failed isolated TEST
+root with status 89. This never certifies a checkpoint, changes a product-test
+deadline, supplies missing results/waits, or applies to SOURCE/poison/foreign
+selections. The original 25-second ACP and durable boundary assertions remain.
+
+The original controlled approval adapter and relay inherit the already-owned
+workspace directory. Their two exact child classes retain stock fork/exec with
+`cwd="."`, preserving that directory rather than attempting the denied spawn
+API. Source case/class/body/vector bindings and a single-use constructor token
+remain required. The observer joins the original directory's device/inode,
+UID/mode, parent birth and complete vector to the stopped child. The unchanged
+native startup profile checks the actual child cwd before body execution.
+This grants no general mutable-cwd or native provider route.

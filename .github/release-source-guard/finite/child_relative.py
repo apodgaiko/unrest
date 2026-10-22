@@ -470,6 +470,18 @@ def install(state, activation, emit, refuse, checked):
             return stock(handle, args, **kwargs)
         token, registration = consume(launch, handle, args, kwargs, activation, constructor,
                                       used, refuse)
+        if registration['class'] in {'source-approval-relay', 'source-approval-python-backend'}:
+            approval = checked('approval_routes.py')
+            owned_cwd = checked('approval_owned_cwd.py')
+            if owned_cwd['prepare'](launch, kwargs, state, approval['selected_mode'](state.get('case')), emit):
+                if (hashlib.sha256(source.read_bytes()).hexdigest() != STDLIB
+                        or not stock_matches(stock, stock_code, defaults, keyword_defaults)
+                        or subprocess.Popen._execute_child is not execute
+                        or execute.__code__ not in execute_codes
+                        or execute.__globals__ is not vars(subprocess)
+                        or subprocess._fork_exec is not fork_exec):
+                    refuse('approval_owned_cwd_stock_constructor_drift')
+                return stock(handle, args, **{**kwargs, 'cwd': '.'})
         saved = contexts.pop(token, None)
         if saved is None:
             refuse('child_relative_missing_context')

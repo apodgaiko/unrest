@@ -251,7 +251,9 @@ class Observer:
         cleanup = item.nodeid.startswith(tuple('tests/test_acp_cleanup.py::' + owner + '[' for owner in (
             'test_recorded_transport_failures', 'test_cleanup_faults_and_repeated_cancellation',
             'test_saved_review_observer_compatibility')))
-        if not startup and not cleanup:
+        from approval_stall_diagnostic import case_seconds
+        approval_seconds = case_seconds(self.profile, item.nodeid)
+        if not startup and not cleanup and approval_seconds is None:
             return
         import asyncio
         loops = [v if isinstance(v, asyncio.AbstractEventLoop)
@@ -260,9 +262,18 @@ class Observer:
         loop = next((v for v in loops if isinstance(v, asyncio.AbstractEventLoop)), None)
         token = object()
         self.startup_stall_token = token
-        callback = self.finish_startup_stall if startup else self.retain_stall_snapshot
+        if approval_seconds is not None:
+            def callback(token, case, loop):
+                captured = self.retain_stall_snapshot(token, case, loop)
+                if (captured and self.startup_stall_token is token
+                        and self.guard._STATE.get('case') == case):
+                    # Diagnostic TEST only: a failed isolated root, never a pass.
+                    os._exit(89)
+        else:
+            callback = self.finish_startup_stall if startup else self.retain_stall_snapshot
         self.startup_stall_timer = threading.Timer(
-            60 if startup else 10, lambda: callback(token, item.nodeid, loop))
+            approval_seconds if approval_seconds is not None else 60 if startup else 10,
+            lambda: callback(token, item.nodeid, loop))
         self.startup_stall_timer.daemon = True
         self.startup_stall_timer.start()
 
