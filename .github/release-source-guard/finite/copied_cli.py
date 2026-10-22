@@ -19,6 +19,13 @@ def translate(argv, cwd, env, state, append, refuse):
     frame = inspect.currentframe()
     try:
         while frame:
+            # Both existing consumers require one of these exact function names.
+            # Normalize only frames that can reach their unchanged predicates.
+            if frame.f_code.co_name not in {
+                "_run_repository_cli", "test_registered_command_launches_from_another_workspace"
+            }:
+                frame = frame.f_back
+                continue
             source = Path(frame.f_code.co_filename).resolve()
             if (
                 source == checkout / "tests/test_repository_contract.py"

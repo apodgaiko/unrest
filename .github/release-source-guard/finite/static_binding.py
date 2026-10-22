@@ -15,13 +15,15 @@ POINTS = (
 
 def check(state, append, refuse):
     root = Path(state["checkout"])
+    points = tuple((str(root / relative), relative, line, name, owner)
+                   for relative, line, name, owner in POINTS)
     frame = inspect.currentframe()
     try:
         while frame:
-            for relative, line, name, owner in POINTS:
-                source = root / relative
-                if frame.f_code.co_filename != str(source) or frame.f_code.co_name != name:
+            for filename, relative, line, name, owner in points:
+                if frame.f_code.co_filename != filename or frame.f_code.co_name != name:
                     continue
+                source = Path(filename)
                 call = next(
                     n
                     for n in ast.walk(ast.parse(source.read_bytes()))

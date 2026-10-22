@@ -1378,3 +1378,13 @@ at the original case boundary, and never selects, admits, interrupts or extends
 work. Sampling is absent from SOURCE and all other TEST selections. A local
 profiler-delivery experiment alone is insufficient evidence to change the guard
 or launch another full source checkpoint.
+
+
+Guard stack bookkeeping uses the same fresh `realpath` result with a canonical
+root boundary and a per-call anchor index. Only matching anchors construct file
+objects; their current source hash, AST pin and complete observation rows remain
+required. CLI translation normalizes only the two pre-existing consumer names,
+and static owner binding computes its three literal path strings once per call.
+These changes cache no file facts, move no admission checks and grant no routes.
+The deep-stack reproduction proves complete-row equivalence; only the unchanged
+original Linux case can demonstrate completion within its real deadline.

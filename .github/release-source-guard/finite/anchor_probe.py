@@ -3,6 +3,7 @@
 import ast
 import hashlib
 import inspect
+import os
 import sys
 from pathlib import Path
 
@@ -33,21 +34,24 @@ def observe(state, directory):
                     coroutine, "gi_yieldfrom", None
                 )
         rows = []
-        checkout = Path(state["checkout"])
+        checkout = str(Path(state["checkout"]))
+        prefix = checkout.rstrip("/") + "/"
+        inventory = {}
+        for anchor in state["anchor_inventory"]:
+            inventory.setdefault(anchor["path"], []).append(anchor)
+        copied = str(directory / "src/unrest_harness/repository_contract.py")
         for frame in frames:
-            source = Path(frame.f_code.co_filename).resolve()
-            if source.is_relative_to(checkout):
-                relative = str(source.relative_to(checkout))
-            elif (
-                state.get("class") == "source-copied-repository-cli"
-                and source == directory / "src/unrest_harness/repository_contract.py"
-            ):
+            pathname = os.path.realpath(frame.f_code.co_filename)
+            if pathname.startswith(prefix):
+                relative = pathname[len(prefix):]
+            elif state.get("class") == "source-copied-repository-cli" and pathname == copied:
                 relative = "src/unrest_harness/repository_contract.py"
             else:
                 continue
-            matching = [a for a in state["anchor_inventory"] if a["path"] == relative]
+            matching = inventory.get(relative)
             if not matching:
                 continue
+            source = Path(pathname)
             body = source.read_bytes()
             pin = hashlib.sha256(body).hexdigest()
             if any(a["source_sha256"] != pin for a in matching):
