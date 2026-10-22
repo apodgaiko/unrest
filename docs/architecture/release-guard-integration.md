@@ -1233,3 +1233,9 @@ advancing a fake clock or extending the original real-deadline test.
 The exact diagnostic approval selection can capture this case's task stack and
 end its failed TEST root after 20 seconds; SOURCE budgets and verdicts are
 unchanged, and diagnostic output cannot certify the release.
+
+The source preparer also pins the exact approval-composition helper before
+executing it. Its support pin must change with a reviewed helper byte change;
+a changed helper without that matching pin refuses before any source test runs.
+A control exercises the real preparer function against the current helper and
+an altered helper, independently of a checkout being mounted in the control tree.

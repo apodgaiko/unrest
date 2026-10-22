@@ -885,3 +885,20 @@ def test_real_expiry_stall_probe_keeps_source_deadline_and_exact_diagnostic_scop
     assert case_seconds({**profile, 'source_mode': 'SOURCE'}, case) is None
     assert case_seconds({**profile, 'orig_argv': profile['orig_argv'][:-1]}, case) is None
     assert case_seconds(profile, case + '-foreign') is None
+
+
+def test_approval_preparer_binds_current_helper_before_exec():
+    import hashlib
+    folder = Path(__file__).parent
+    source = folder.joinpath('prepare_source.py').read_bytes()
+    function = next(node for node in ast.parse(source).body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'admit_approval_imports')
+    body = folder.joinpath('approval_import_source_inputs.py').read_bytes()
+    namespace = {'CLOCK_READER': lambda *args: body, 'Path': Path,
+                 'ROOT': Path('/source'), 'hashlib': hashlib}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), '/guard/prepare_source.py', 'exec'), namespace)
+    with pytest.raises(RuntimeError, match='approval_import_preimage'):
+        namespace['admit_approval_imports']({'product_pins': {}, 'anchor_inventory': []})
+    namespace['CLOCK_READER'] = lambda *args: body + b'\n'
+    with pytest.raises(RuntimeError, match='approval_import_support_drift'):
+        namespace['admit_approval_imports']({'product_pins': {}, 'anchor_inventory': []})
