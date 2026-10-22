@@ -1239,3 +1239,15 @@ executing it. Its support pin must change with a reviewed helper byte change;
 a changed helper without that matching pin refuses before any source test runs.
 A control exercises the real preparer function against the current helper and
 an altered helper, independently of a checkout being mounted in the control tree.
+
+Expiry closes the owned control transport. Linux can report a peer reset when
+that closure races an unread settlement frame; the expiry cleanup test handles
+only that ConnectionResetError and always closes the owner. It still requires
+the unchanged 200ms cutoff, erased denial memory and no submission, and now also
+requires no owned tasks, writers or temporary endpoint root. Separate injected
+reset and unrelated-error cases verify that cleanup always runs and unrelated
+errors propagate. Their exact TEST selection retains the existing controlled mock-agent case
+to prove the unchanged native Python bridge and numeric child-wait floor, plus
+these four in-process expiry cases. It cannot certify SOURCE or admit provider
+launches.
+The complete unexcluded release suite and every other release gate remain.

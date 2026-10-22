@@ -1055,8 +1055,15 @@ async def test_real_deadline_timer_erases_memory_and_cleans_reader(tmp_path):
         assert not owner.submit_requested
     finally:
         writer.close()
-        await writer.wait_closed()
-        await owner.close()
+        try:
+            await writer.wait_closed()
+        except ConnectionResetError:
+            pass  # Expiry may close the peer with an unread settlement frame.
+        finally:
+            await owner.close()
+        assert not owner.tasks
+        assert not owner.writers
+        assert owner.root is not None and not owner.root.exists()
 
 
 async def test_pending_inspection_reference_is_read_only(tmp_path):
@@ -1246,4 +1253,43 @@ async def test_real_deadline_expires_during_settlement_handshake(tmp_path, monke
                 writer.close()
                 await writer.wait_closed()
         finally:
+            await owner.close()
+
+
+@pytest.mark.parametrize("error", ("reset", "other"))
+async def test_expiry_cleanup_closes_owner_after_writer_error(tmp_path, monkeypatch, error):
+    original = install_pending
+    owners, observed = [], []
+
+    async def capture_owner(owner):
+        owners.append(owner)
+        reader, writer, pending = await original(owner)
+        close = writer.wait_closed
+
+        async def failed_close():
+            try:
+                await close()
+            except ConnectionResetError:
+                pass
+            observed.append(error)
+            if error == "reset":
+                raise ConnectionResetError("controlled peer reset")
+            raise OSError("controlled unrelated close failure")
+
+        writer.wait_closed = failed_close
+        return reader, writer, pending
+
+    monkeypatch.setitem(globals(), "install_pending", capture_owner)
+    try:
+        if error == "reset":
+            await test_real_deadline_timer_erases_memory_and_cleans_reader(tmp_path)
+        else:
+            with pytest.raises(OSError, match="controlled unrelated close failure"):
+                await test_real_deadline_timer_erases_memory_and_cleans_reader(tmp_path)
+        assert observed == [error]
+        assert len(owners) == 1
+        assert not owners[0].tasks and not owners[0].writers
+        assert owners[0].root is not None and not owners[0].root.exists()
+    finally:
+        for owner in owners:
             await owner.close()

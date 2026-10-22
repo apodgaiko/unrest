@@ -5,7 +5,7 @@ import hashlib
 import json
 
 PRE = {'tests/test_approval_recovery.py': 'f886178539296b984f19db2814bc53817133b214632146843b6934abb69bb80a', 'src/unrest_harness/approval_recovery.py': '48a4c68fdff042b49f37cc3edf30e240cdb5ae69aa1da8a6e0280d19ec364ff4', 'tests/fixtures/approval_run_executor.py': 'e6074a2e44506fa275bac0a696046e28f8597579775a64e5ddc209c3456a040d', 'docs/architecture/approval-recovery.md': 'ae323b5296003ccd1de850df0c43334c3843b6282cf703cd9fee799b257338a4'}
-POST = {'tests/test_approval_recovery.py': '6f10eb2f69b9ab6f01c53308505fff06dc1f957c21ebb01cb72ecadb026fffa2', 'src/unrest_harness/approval_recovery.py': '8a378de950500f2bb6e4b6bbcf55392343d0127aa68716671208b82c27e5533f', 'tests/fixtures/approval_run_executor.py': 'f6e24716d1b9103035fe99fe2af9f00bf42544d31086caa94486f3e8259a4d33', 'docs/architecture/approval-recovery.md': '622c17d22e82bcbf6e79e27c8c17f59da05eed02ac1d8adc590a22f38ee53496'}
+POST = {'tests/test_approval_recovery.py': '59f3eb0a28b856081bfd32173e6259f7f916eda711e3911d2ab76843c695efcb', 'src/unrest_harness/approval_recovery.py': '8a378de950500f2bb6e4b6bbcf55392343d0127aa68716671208b82c27e5533f', 'tests/fixtures/approval_run_executor.py': 'f6e24716d1b9103035fe99fe2af9f00bf42544d31086caa94486f3e8259a4d33', 'docs/architecture/approval-recovery.md': '622c17d22e82bcbf6e79e27c8c17f59da05eed02ac1d8adc590a22f38ee53496'}
 SOURCE_AST = '525d30f9054c9fa087c89382521b8fcc88425450e74c1541489d5abd4e3cb800'
 FIXTURE_AST = 'a6c6850031a606eef726455996ebb93fc37b049495f06b9798ceef1063301f8f'
 DEFINITION_LINES = '0338a1a6184b61cfd17c992f8a6702697f4188ffa7b957179dfd26a8938ee517'
@@ -100,7 +100,14 @@ TEST_BASE_SHA256 = 'ac7ac78e3547a29694971aa7cbe858465243a135d0ab1f30ef4f51502f6b
 def verify_test(body):
     if body.count(SETTLEMENT_AFTER) != 1:
         raise RuntimeError('approval_expiry_handshake_scope')
+    if body.count(EXPIRY_CLOSE_AFTER) != 1:
+        raise RuntimeError('approval_expiry_cleanup_scope')
     restored = body.replace(SETTLEMENT_AFTER, SETTLEMENT_BEFORE, 1)
+    restored = restored.replace(EXPIRY_CLOSE_AFTER, EXPIRY_CLOSE_BEFORE, 1)
     if (digest(restored[:TEST_BASE_SIZE]) != TEST_BASE_SHA256
             or digest(restored[:46347]) != PRE['tests/test_approval_recovery.py']):
         raise RuntimeError('approval_submission_original_tests_drift')
+
+
+EXPIRY_CLOSE_BEFORE = b'async def test_real_deadline_timer_erases_memory_and_cleans_reader(tmp_path):\n    import time\n\n    owner, _, _ = setup_owner(tmp_path, deadline=time.monotonic() + 0.2)\n    reader, writer, pending = await install_pending(owner)\n    try:\n        assert await asyncio.wait_for(pending, 1) is False\n        assert owner.event is None\n        assert not owner.submit_requested\n    finally:\n        writer.close()\n        await writer.wait_closed()\n        await owner.close()'
+EXPIRY_CLOSE_AFTER = b'async def test_real_deadline_timer_erases_memory_and_cleans_reader(tmp_path):\n    import time\n\n    owner, _, _ = setup_owner(tmp_path, deadline=time.monotonic() + 0.2)\n    reader, writer, pending = await install_pending(owner)\n    try:\n        assert await asyncio.wait_for(pending, 1) is False\n        assert owner.event is None\n        assert not owner.submit_requested\n    finally:\n        writer.close()\n        try:\n            await writer.wait_closed()\n        except ConnectionResetError:\n            pass  # Expiry may close the peer with an unread settlement frame.\n        finally:\n            await owner.close()\n        assert not owner.tasks\n        assert not owner.writers\n        assert owner.root is not None and not owner.root.exists()'

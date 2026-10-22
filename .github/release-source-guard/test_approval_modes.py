@@ -864,6 +864,8 @@ def test_expiry_fixture_delta_preserves_all_previous_test_bytes(monkeypatch):
     monkeypatch.setattr(transition, 'TEST_BASE_SIZE', len(before))
     monkeypatch.setattr(transition, 'TEST_BASE_SHA256', pin)
     monkeypatch.setattr(transition, 'PRE', {'tests/test_approval_recovery.py': pin})
+    monkeypatch.setattr(transition, 'EXPIRY_CLOSE_AFTER', b'assert owner.event is None')
+    monkeypatch.setattr(transition, 'EXPIRY_CLOSE_BEFORE', b'assert owner.event is None')
     transition.verify_test(body)
     for changed in (body.replace(b'owner.remaining()', b'30', 1),
                     body.replace(b'assert owner.event is None', b'assert True', 1),
@@ -902,3 +904,26 @@ def test_approval_preparer_binds_current_helper_before_exec():
     namespace['CLOCK_READER'] = lambda *args: body + b'\n'
     with pytest.raises(RuntimeError, match='approval_import_support_drift'):
         namespace['admit_approval_imports']({'product_pins': {}, 'anchor_inventory': []})
+
+
+def test_expiry_diagnostic_is_exact_in_process_subset_and_never_source():
+    from primary_policy import TEST_APPROVAL_EXPIRY_CASES
+    from primary_source_inputs import test_plan as make_plan
+    from test_primary_source_entry import COMMAND, inputs
+    from finite.approval_stall_diagnostic import case_seconds
+    text, _ = inputs()
+    script = (COMMAND + ' ' + ' '.join(TEST_APPROVAL_EXPIRY_CASES)).encode()
+    plan = make_plan(script, text, 'TEST-positive')
+    assert len(TEST_APPROVAL_EXPIRY_CASES) == 5
+    assert TEST_APPROVAL_EXPIRY_CASES[0] == 'tests/test_acp_runner.py::test_run_node_with_mock_agent'
+    assert plan['source_checkpoint_ready'] is False and plan['selected_carrier'] is None
+    assert plan['timeout_seconds'] == 180
+    profile = {'source_mode': 'TEST-positive',
+               'orig_argv': ['python', 'pytest', '-q', *TEST_APPROVAL_EXPIRY_CASES]}
+    for case in TEST_APPROVAL_EXPIRY_CASES[1:]:
+        assert case_seconds(profile, case) == 20
+        assert case_seconds({**profile, 'source_mode': 'SOURCE'}, case) is None
+    for changed in (TEST_APPROVAL_EXPIRY_CASES[:-1], tuple(reversed(TEST_APPROVAL_EXPIRY_CASES)),
+                    (*TEST_APPROVAL_EXPIRY_CASES, 'tests/foreign.py::test_extra')):
+        with pytest.raises(RuntimeError):
+            make_plan((COMMAND + ' ' + ' '.join(changed)).encode(), text, 'TEST-positive')

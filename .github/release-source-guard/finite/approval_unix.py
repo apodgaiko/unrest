@@ -10,12 +10,12 @@ import stat
 import sys
 
 PINS = {
-    'tests/test_approval_recovery.py': '6f10eb2f69b9ab6f01c53308505fff06dc1f957c21ebb01cb72ecadb026fffa2',
+    'tests/test_approval_recovery.py': '59f3eb0a28b856081bfd32173e6259f7f916eda711e3911d2ab76843c695efcb',
     'src/unrest_harness/approval_recovery.py': '8a378de950500f2bb6e4b6bbcf55392343d0127aa68716671208b82c27e5533f',
     'src/unrest_harness/approval_relay.py': 'efaba9521aa12d6fbdb228f05da210a4027675c79830d1a5ca93627faa80da44',
 }
 TEST = 'tests/test_approval_recovery.py'
-OWNERS = frozenset(['test_exact_supported_backend_admission', 'test_credentials_refuse_before_actual_mcp_form', 'test_selection_rechecks_unsafe_display_without_opening_form', 'test_actual_mcp_nonconsent_never_submits', 'test_actual_mcp_accept_single_submit_and_receipt', 'test_expiry_cancel_commit_and_wrong_id_refuse', 'test_actual_acp_owner_native_subprocess_order_and_cleanup', 'test_unmodified_pinned_adapter_owned_relay', 'test_durable_run_owner_and_restart_never_revives', 'test_duplicate_review_does_not_open_or_clobber_first_form', 'test_exact_expiry_boundary_and_fixed_retention', 'test_real_deadline_timer_erases_memory_and_cleans_reader', 'test_pending_inspection_reference_is_read_only', 'test_completion_commits_during_human_response_before_submit', 'test_cleanup_failure_preserves_first_and_exhausts_owned_paths', 'test_host_disconnect_during_form_never_submits', 'test_host_waits_for_submission_receipt', 'test_real_deadline_expires_during_settlement_handshake'])
+OWNERS = frozenset(['test_exact_supported_backend_admission', 'test_credentials_refuse_before_actual_mcp_form', 'test_selection_rechecks_unsafe_display_without_opening_form', 'test_actual_mcp_nonconsent_never_submits', 'test_actual_mcp_accept_single_submit_and_receipt', 'test_expiry_cancel_commit_and_wrong_id_refuse', 'test_actual_acp_owner_native_subprocess_order_and_cleanup', 'test_unmodified_pinned_adapter_owned_relay', 'test_durable_run_owner_and_restart_never_revives', 'test_duplicate_review_does_not_open_or_clobber_first_form', 'test_exact_expiry_boundary_and_fixed_retention', 'test_real_deadline_timer_erases_memory_and_cleans_reader', 'test_pending_inspection_reference_is_read_only', 'test_completion_commits_during_human_response_before_submit', 'test_cleanup_failure_preserves_first_and_exhausts_owned_paths', 'test_host_disconnect_during_form_never_submits', 'test_host_waits_for_submission_receipt', 'test_real_deadline_expires_during_settlement_handshake', 'test_expiry_cleanup_closes_owner_after_writer_error'])
 SITES = {
     ('socket.bind', 'src/unrest_harness/approval_recovery.py', 'launch_environment'): (215, 'self'),
     ('socket.bind', TEST, 'install_pending'): (321, 'owner'),
