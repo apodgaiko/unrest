@@ -35,13 +35,15 @@ def named(code, qualname):
     return None
 
 
-def bridge(endpoint, pipe, pipe_globals, pair_code, payload_code):
+def bridge(endpoint, pipe, pipe_globals, pair_code, payload_code, refuse):
     """Install receipt/close ordering; registration still requires the real RPC."""
     original_request = endpoint.request
     original_close = socket.socket.close
     fileno = socket.socket.fileno
     bindings = weakref.WeakKeyDictionary()
     registry_lock = threading.RLock()
+    rpc_lock = threading.RLock()
+    closing = [False]
 
     def identity(stream):
         fd = fileno(stream)
@@ -49,11 +51,12 @@ def bridge(endpoint, pipe, pipe_globals, pair_code, payload_code):
         return fd, info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode)
 
     def bound(stream):
+        if type(stream) is not socket.socket:
+            return None
         with registry_lock:
             return bindings.get(stream)
 
-    def request(kind, **values):
-        caller = sys._getframe(1)
+    def receipt(kind, values, caller):
         if (kind == 'socketpair' and caller.f_code == pair_code
                 and caller.f_globals is vars(endpoint)):
             parent = caller.f_back
@@ -62,6 +65,8 @@ def bridge(endpoint, pipe, pipe_globals, pair_code, payload_code):
                 left, right = caller.f_locals['left'], caller.f_locals['right']
                 if (type(left) is socket.socket and type(right) is socket.socket
                         and values == {'fds': [fileno(left), fileno(right)]}):
+                    if closing[0]:
+                        refuse('completion_exit_late_request')
                     answer = original_request(kind, **values)
                     # Still in _make_self_pipe, before either object is exposed
                     # to the loop or another thread. No local receipt substitute.
@@ -87,10 +92,21 @@ def bridge(endpoint, pipe, pipe_globals, pair_code, payload_code):
                     except OSError:
                         current = None
                     if current == snapshot and values == {'fd': snapshot[0]}:
+                        if closing[0]:
+                            original_close(stream)
+                            entry[2] = fileno(stream) == -1
+                            return None
                         return original_request(kind, **values)
                     # detach, reinitialization, raw close/reuse and drift retain
                     # the original supervisor's refusal, including global poison.
+        if closing[0]:
+            refuse('completion_exit_late_request')
         return original_request(kind, **values)
+
+    def request(kind, **values):
+        caller = sys._getframe(1)
+        with rpc_lock:
+            return receipt(kind, values, caller)
 
     def close(stream):
         entry = bound(stream)
@@ -101,8 +117,30 @@ def bridge(endpoint, pipe, pipe_globals, pair_code, payload_code):
             entry[2] = fileno(stream) == -1
             return result
 
+    def finish():
+        # The admitted body has returned. Daemon wakeups must not start a new
+        # control connection while interpreter shutdown discards their threads.
+        closing[0] = True
+        if not rpc_lock.acquire(timeout=4):
+            refuse('completion_exit_receipt_drain_timeout')
+        try:
+            with registry_lock:
+                rows = list(bindings.items())
+            for stream, entry in rows:
+                with entry[0]:
+                    if entry[2] and fileno(stream) == -1:
+                        continue
+                    if identity(stream) != entry[1]:
+                        refuse('completion_exit_self_pipe_identity_drift')
+                    original_close(stream)
+                    entry[2] = fileno(stream) == -1
+            return len(rows)
+        finally:
+            rpc_lock.release()
+
     endpoint.request = request
     socket.socket.close = close
+    return finish
 
 
 def install(guard, endpoint):
@@ -132,6 +170,18 @@ def install(guard, endpoint):
             or endpoint.request.__code__ != request_code
             or endpoint.request.__globals__ is not vars(endpoint)):
         guard.refuse('self_pipe_original_code_drift')
-    bridge(endpoint, pipe, vars(selectors), pair_code, payload_code)
+    def late_refusal(reason):
+        # guard.refuse would recursively open another poison RPC after closing.
+        # The durable forbidden record is read by the unchanged observer census;
+        # local poison prevents a caller from catching this and issuing effects.
+        endpoint.STATE['poison'] = True
+        guard.append({'kind': 'forbidden', 'reason': reason})
+        raise guard.GuardRefusal('finite source guard: ' + reason)
+    finish = bridge(endpoint, pipe, vars(selectors), pair_code, payload_code, late_refusal)
+    def drain():
+        count = finish()
+        guard.append({'kind': 'completion_exit_receipts_drained',
+                      'self_pipe_objects': count, 'new_control_connections_closed': True})
+    endpoint.STATE['completion_exit_drain'] = drain
     guard.append({'kind': 'self_pipe_receipt_lifetime', 'scope': CLASS,
                   'authority_changed': False, 'lock_scope': 'receipt acquisition only'})

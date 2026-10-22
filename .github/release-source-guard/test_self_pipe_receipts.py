@@ -72,9 +72,12 @@ def rig(tmp_path, monkeypatch):
         # Actual endpoint closures and actual CPython self-pipe caller. Only
         # the observer transport is substituted in these deterministic controls.
         pipe = selector_events.BaseSelectorEventLoop._make_self_pipe
-        helper.bridge(endpoint, pipe, vars(selector_events), socket.socketpair.__code__,
+        def refuse(reason):
+            endpoint.STATE['poison'] = True
+            raise endpoint.EndpointRefusal(reason)
+        return helper.bridge(endpoint, pipe, vars(selector_events), socket.socketpair.__code__,
                       helper.named(compile(Path(endpoint.__file__).read_bytes(), endpoint.__file__,
-                                           'exec', dont_inherit=True), 'early.<locals>.payload'))
+                                           'exec', dont_inherit=True), 'early.<locals>.payload'), refuse)
     yield endpoint, install, records, gate
     gate['release'].set()
 
@@ -247,10 +250,10 @@ def test_selected_install_authenticates_live_code_and_current_pins(rig, monkeypa
     calls = []
     def refuse(reason):
         raise RuntimeError(reason)
-    guard = SimpleNamespace(_STATE=state, refuse=refuse,
+    guard = SimpleNamespace(_STATE=state, refuse=refuse, GuardRefusal=RuntimeError,
                             require_ready=lambda token: calls.append(('ready', token)),
                             append=lambda row: calls.append(('append', row)))
-    monkeypatch.setattr(helper, 'bridge', lambda *args: calls.append(('install', args)))
+    monkeypatch.setattr(helper, 'bridge', lambda *args: (calls.append(('install', args)), lambda: 0)[1])
     if drift == 'pin':
         state['product_pins'][helper.SOURCE] = '0' * 64
     elif drift == 'endpoint':
@@ -265,3 +268,180 @@ def test_selected_install_authenticates_live_code_and_current_pins(rig, monkeypa
         helper.install(guard, endpoint)
         assert [kind for kind, _ in calls] == ['ready', 'install', 'append']
         assert calls[0][1] == state['token']
+
+
+@pytest.mark.parametrize('fixed', [False, True])
+def test_body_exit_drains_rpc_before_daemon_thread_is_discarded(rig, fixed):
+    endpoint, install, records, gate = rig
+    finish = install()
+    loop = asyncio.new_event_loop()
+    stream = loop._csock
+    errors = []
+    gate['active'] = True
+    def write():
+        try:
+            loop._write_to_self()
+        except BaseException as error:
+            errors.append(error)
+    writer = threading.Thread(target=write, daemon=True)
+    writer.start()
+    assert gate['entered'].wait(2)
+    drained = threading.Event()
+    closer = threading.Thread(target=lambda: (finish() if fixed else None, drained.set()))
+    closer.start()
+    if fixed:
+        assert not drained.wait(0.05)
+    else:
+        assert drained.wait(2) and writer.is_alive()
+        assert gate['entered'].is_set() and not gate['release'].is_set()
+    gate['release'].set()
+    writer.join(2)
+    closer.join(2)
+    assert drained.is_set() and not writer.is_alive() and not errors
+    if not fixed:
+        finish()
+    before = list(records)
+    with pytest.raises(OSError) as error:
+        stream.send(b'x')
+    assert error.value.errno == errno.EBADF and records == before
+    assert not endpoint.STATE['poison']
+    # finish owns the abandoned process's pipe. Keep this in-process model's
+    # loop selector cleanup valid after its two sockets have been closed.
+    loop._ssock = loop._csock = None
+    loop._internal_fds = 0
+    loop._selector.close()
+    loop._selector = None
+    loop._closed = True
+
+
+def test_unknown_late_request_keeps_fail_closed_poison(rig):
+    endpoint, install, records, _ = rig
+    finish = install()
+    finish()
+    before = list(records)
+    with pytest.raises(endpoint.EndpointRefusal, match='completion_exit_late_request'):
+        endpoint.request('connect', fd=999, host='127.0.0.1', port=1)
+    assert records == before and endpoint.STATE['poison']
+
+
+def test_unhashable_socket_subclass_close_is_unchanged(rig):
+    _, install, _, _ = rig
+    install()
+    class UnhashableSocket(socket.socket):
+        __hash__ = None
+    stream = UnhashableSocket()
+    stream.close()
+    assert stream.fileno() == -1
+
+
+def test_caught_late_request_keeps_durable_poison_without_recursive_rpc(rig, monkeypatch):
+    endpoint, _, _, _ = rig
+    helper = sys.modules['self_pipe_control_hook']
+    from types import SimpleNamespace
+    import hashlib
+    endpoint.request = endpoint._control_original_request
+    root = SUPPORT.parent.parent
+    state = {'class': helper.CLASS, 'case': sorted(helper.CASES)[0], 'checkout': str(root),
+             'token': 'current', 'product_pins': {helper.SOURCE: helper.SOURCE_PIN},
+             'direct_support': {'files': {endpoint.__file__: hashlib.sha256(
+                 Path(endpoint.__file__).read_bytes()).hexdigest()}}}
+    captured = []
+    def bridge(*args):
+        captured.append(args[-1])
+        return lambda: 0
+    monkeypatch.setattr(helper, 'bridge', bridge)
+    rows = []
+    def recursive_refuse(reason):
+        pytest.fail('closed refusal must not call recursive guard.refuse')
+    guard = SimpleNamespace(_STATE=state, require_ready=lambda token: None,
+                            refuse=recursive_refuse, GuardRefusal=RuntimeError, append=rows.append)
+    helper.install(guard, endpoint)
+    with pytest.raises(RuntimeError, match='finite source guard: late_control'):
+        captured[0]('late_control')
+    assert endpoint.STATE['poison']
+    assert rows[-1] == {'kind': 'forbidden', 'reason': 'late_control'}
+    with pytest.raises(endpoint.EndpointRefusal, match='global_poison_retained'):
+        endpoint.check()
+
+
+@pytest.mark.parametrize('body_fails', [False, True])
+@pytest.mark.parametrize('drain_fails', [False, True])
+@pytest.mark.parametrize('outer_exception', [False, True])
+def test_child_wrapper_drains_current_invocation_and_preserves_primary(rig, monkeypatch, body_fails, drain_fails, outer_exception):
+    endpoint, _, _, _ = rig
+    from types import SimpleNamespace
+    rows = []
+    order = []
+    primary = ValueError('original body failure')
+    cleanup = RuntimeError('drain failed')
+    def drain():
+        order.append('drain')
+        if drain_fails:
+            raise cleanup
+    def body():
+        order.append('body')
+        # Set during the current original child invocation, as install does.
+        endpoint.STATE['completion_exit_drain'] = drain
+        if body_fails:
+            raise primary
+        return 7
+    guard = SimpleNamespace(install=lambda: None, bootstrap=lambda: None, child=body,
+                            _STATE=None, append=rows.append)
+    monkeypatch.setattr(os, 'waitpid', os.waitpid)
+    endpoint.attach(guard)
+    def invoke():
+        if body_fails or drain_fails:
+            with pytest.raises((ValueError, RuntimeError)) as error:
+                guard.child()
+            assert error.value is (primary if body_fails else cleanup)
+        else:
+            assert guard.child() == 7
+    if outer_exception:
+        try:
+            raise KeyError('unrelated caller context')
+        except KeyError:
+            invoke()
+    else:
+        invoke()
+    assert order == ['body', 'drain']
+    assert endpoint.STATE['poison'] is drain_fails
+    assert bool(rows) is drain_fails
+
+
+def test_queued_payload_does_not_open_rpc_after_exit_fence(rig):
+    endpoint, install, records, gate = rig
+    finish = install()
+    loop = asyncio.new_event_loop()
+    errors = []
+    def write():
+        try:
+            loop._write_to_self()
+        except BaseException as error:
+            errors.append(error)
+    gate['active'] = True
+    first = threading.Thread(target=write)
+    second = threading.Thread(target=write)
+    first.start()
+    assert gate['entered'].wait(2)
+    second.start()
+    closer = threading.Thread(target=finish)
+    closer.start()
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        frame = sys._current_frames().get(closer.ident)
+        if frame is not None and frame.f_code.co_name == 'finish':
+            break
+        time.sleep(0.001)
+    else:
+        pytest.fail('finish did not enter the bounded RPC drain')
+    gate['release'].set()
+    for thread in (first, second, closer):
+        thread.join(2)
+        assert not thread.is_alive()
+    assert not errors and not endpoint.STATE['poison']
+    assert [kind for kind, _ in records] == ['socketpair', 'payload']
+    loop._ssock = loop._csock = None
+    loop._internal_fds = 0
+    loop._selector.close()
+    loop._selector = None
+    loop._closed = True

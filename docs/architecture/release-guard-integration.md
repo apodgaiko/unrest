@@ -1301,3 +1301,12 @@ reuse and unknown objects retain the unchanged observer checks and poison.
 This grants no network or process authority and changes no completion assertion,
 cleanup assertion, deadline, full-source command or release gate. The closed
 twelve-case diagnostic is supporting evidence, never a source certificate.
+
+The selected child's admitted body also drains its control RPCs before returning
+to interpreter shutdown. A four-second drain bound fails certification on expiry;
+it does not extend any product/test deadline. RPC locking precedes object locking.
+At body exit, exact owned self-pipes close after outstanding receipts finish, so
+late daemon wakeups cannot leave a partially framed receipt behind. Unknown late
+requests retain durable forbidden records and local poison without recursively
+opening another control RPC. Primary body exceptions remain primary if drain
+also fails. The observer's incomplete-channel refusal is unchanged.
