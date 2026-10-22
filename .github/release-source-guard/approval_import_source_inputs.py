@@ -60,6 +60,18 @@ def verify_fixture(body):
         raise RuntimeError('approval_import_fixture_behavior_drift')
 
 
+TEST_ANCHOR = {'expression_ast_sha256': '5027cbfb4f2643c90da6375a4cb84a5ec2044ed2b1eb4100c08fbb59c3f20be2', 'family': 'ordinary-acp-and-role-helper', 'line': 730, 'owner': 'test_unmodified_pinned_adapter_owned_relay', 'path': 'tests/test_approval_recovery.py', 'route': 'asyncio.create_subprocess_exec', 'source_sha256': 'f886178539296b984f19db2814bc53817133b214632146843b6934abb69bb80a'}
+
+
+def admit_test_anchor(manifest):
+    rows = [row for row in manifest['anchor_inventory'] if row['path'] == TEST_ANCHOR['path']]
+    if rows != [TEST_ANCHOR]:
+        raise RuntimeError('approval_submission_original_anchor_drift')
+    # The entire old test file is a verified unchanged prefix. Only its file
+    # digest changes when appending the new zero-child regression.
+    rows[0]['source_sha256'] = POST[TEST_ANCHOR['path']]
+
+
 def admit(manifest, root, read):
     pins = manifest['product_pins']
     if any(pins.get(name) != pin for name, pin in PRE.items()):
@@ -77,4 +89,5 @@ def admit(manifest, root, read):
             or any(row['path'] in PRE and row['path'] != 'tests/test_approval_recovery.py'
                    for row in manifest['anchor_inventory'])):
         raise RuntimeError('approval_import_anchor_inventory')
+    admit_test_anchor(manifest)
     pins.update(POST)

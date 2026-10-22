@@ -755,3 +755,18 @@ def test_adoptive_wait_status_drift_remains_a_recorded_failure(monkeypatch):
         adoption.reap(authority,trace)
     assert authority.pipe_records[0]['raw']==9
     assert authority.pipe_records[0]['source_checkpoint_ready'] is False
+
+
+def test_appended_regression_updates_only_exact_existing_anchor_file_pin():
+    from copy import deepcopy
+    import approval_import_source_inputs as transition
+    row=deepcopy(transition.TEST_ANCHOR)
+    manifest={'anchor_inventory':[row]}
+    transition.admit_test_anchor(manifest)
+    assert row == {**transition.TEST_ANCHOR, 'source_sha256':transition.POST[row['path']]}
+    for key,value in [('line',731),('route','subprocess.Popen'),('owner','another'),
+                      ('expression_ast_sha256','0'*64),('source_sha256','0'*64)]:
+        changed=deepcopy(transition.TEST_ANCHOR)
+        changed[key]=value
+        with pytest.raises(RuntimeError,match='original_anchor_drift'):
+            transition.admit_test_anchor({'anchor_inventory':[changed]})

@@ -93,7 +93,7 @@ def admit_candidate_template(manifest):
 
 def admit_approval_imports(manifest):
     body = CLOCK_READER(Path('/guard'), 'approval_import_source_inputs.py')
-    if hashlib.sha256(body).hexdigest() != '2fe5a7322068f173308d6aff19a4cb6ae66727b0e6e18c5492ff4e911c0b9c46':
+    if hashlib.sha256(body).hexdigest() != '5b1df88bce7403aac4598405f854a78e0a9803c210ef2d1b3f422e4bd2ba9aa0':
         raise RuntimeError('approval_import_support_drift')
     namespace = {'__name__': 'approval_import_source_inputs'}
     exec(compile(body, '/guard/approval_import_source_inputs.py', 'exec', dont_inherit=True), namespace)
