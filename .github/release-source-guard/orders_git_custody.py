@@ -23,7 +23,9 @@ def eligible(selected, vector, environment, cwd, manifest, checkout='/source'):
     data = literals(Path(__file__).parent / 'finite/orders_git_data.py')
     catalog = literals(Path(__file__).parent / 'finite/backend_postimage_catalog.py')
     binding = registration.get('source_binding', {})
-    caller = registration.get('caller_binding', {})
+    caller = registration.get('caller_binding')
+    if type(caller) is not dict:
+        return False
     case = registration.get('case')
     if (case not in catalog['CASES'] or case.split('::')[0] != ORDERS
             or any(manifest['product_pins'].get(n) != pin or hashlib.sha256((root / n).read_bytes()).hexdigest() != pin
@@ -42,10 +44,52 @@ def eligible(selected, vector, environment, cwd, manifest, checkout='/source'):
     return repository_profile(vector, cwd, manifest['owned_root'], caller)
 
 
+
+def join_registration(selected, events):
+    """Consume the concrete caller from this launch's preceding journal window."""
+    admitted = selected.get('registration', {})
+    if admitted.get('class') != CLASS:
+        return None
+    launches = [i for i, row in enumerate(events)
+                if row.get('kind') == 'actual_launch_binding'
+                and row.get('owner_pid') == selected.get('owner_pid')
+                and row.get('token') == selected.get('token')]
+    if len(launches) != 1:
+        return None
+    index = launches[0]
+    if any(events[index].get(n) != selected.get(n) for n in (
+            'owner_pid', 'token', 'cwd', 'bootstrap_sha256',
+            'transformed_argv_sha256', 'environment_sha256')):
+        return None
+    start = max((i + 1 for i, row in enumerate(events[:index])
+                 if row.get('kind') == 'actual_launch_binding'
+                 and row.get('owner_pid') == selected.get('owner_pid')), default=0)
+    concrete = [row for row in events[start:index]
+                if row.get('kind') == 'concrete_orders_custody_git'
+                and row.get('owner_pid') == selected.get('owner_pid')]
+    if len(concrete) != 1:
+        return None
+    row = concrete[0]
+    if (row.get('class') != CLASS or row.get('python') is not False
+            or row.get('case') != admitted.get('case')
+            or row.get('source_binding') != admitted.get('source_binding')
+            or row.get('cwd') != selected.get('cwd')
+            or row.get('argv_sha256') != selected.get('transformed_argv_sha256')
+            or row.get('argv_sha256') != admitted.get('argv_sha256')):
+        return None
+    # The original admitted record intentionally omits route-specific fields.
+    # Keep it unchanged and join only the authenticated concrete caller here.
+    return {**selected, 'registration': {**admitted, 'python': False,
+                                        'caller_binding': row.get('caller_binding')}}
+
+
 def resolve(authority, trace, pid, path, vector, environment, cwd):
     if path != '/usr/bin/git' or vector[:2] != [path, '--no-replace-objects']:
         return False
     selected = authority.bound.get(pid)
+    if selected is None:
+        return False
+    selected = join_registration(selected, authority.supervisor.events())
     if selected is None or not eligible(selected, vector, environment, cwd, authority.manifest):
         return False
     parent = trace.identities[pid]['ppid']

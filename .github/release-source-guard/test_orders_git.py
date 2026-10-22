@@ -315,3 +315,56 @@ def test_python_admission_joins_real_source_code_and_call_arguments(tmp_path, ch
     if result:
         assert result["caller_binding"] == selection["registration"]["caller_binding"]
         assert result["source_binding"] == selection["registration"]["source_binding"]
+
+
+@pytest.mark.parametrize('change', [None, 'missing-launch', 'duplicate-launch',
+    'missing-caller', 'duplicate-caller', 'old-window', 'after-launch', 'owner',
+    'case', 'class', 'python', 'cwd', 'argv', 'source', 'launch-env', 'caller-drift'])
+def test_stopped_image_joins_actual_admitted_shape_to_exact_caller_window(tmp_path, change):
+    selection, vector, env, cwd, manifest = selected(tmp_path)
+    full = selection['registration']
+    concrete = {'kind': 'concrete_orders_custody_git', **full,
+                'argv_sha256': selection['transformed_argv_sha256'], 'cwd': cwd}
+    concrete.pop('token')
+    # runtime_guard's admitted event carries neither python nor caller_binding.
+    admitted = {k: v for k, v in full.items() if k not in ('python', 'caller_binding')}
+    admitted['argv_sha256'] = selection['transformed_argv_sha256']
+    selection = {**selection, 'registration': admitted}
+    launch = {k: v for k, v in selection.items() if k != 'registration'}
+    launch['kind'] = 'actual_launch_binding'
+    events = [concrete, launch]
+    if change == 'missing-launch':
+        events.pop()
+    elif change == 'duplicate-launch':
+        events.append(dict(launch))
+    elif change == 'missing-caller':
+        events.pop(0)
+    elif change == 'duplicate-caller':
+        events.insert(0, dict(concrete))
+    elif change == 'old-window':
+        events.insert(1, {**launch, 'token': 'previous'})
+    elif change == 'after-launch':
+        events.reverse()
+    elif change in ('owner', 'case', 'class', 'python', 'cwd', 'argv', 'source'):
+        name = {'owner': 'owner_pid', 'argv': 'argv_sha256', 'source': 'source_binding'}.get(change, change)
+        concrete[name] = 'foreign'
+    elif change == 'launch-env':
+        launch['environment_sha256'] = 'foreign'
+    elif change == 'caller-drift':
+        concrete['caller_binding'] = {**concrete['caller_binding'], 'line': 46}
+    snapshot = json.dumps(selection, sort_keys=True)
+    joined = native.join_registration(selection, events)
+    accepted = joined is not None and native.eligible(joined, vector, env, cwd, manifest, str(ROOT))
+    assert accepted is (change is None)
+    assert json.dumps(selection, sort_keys=True) == snapshot
+
+
+def test_admitted_record_has_the_original_frozen_projection():
+    tree = ast.parse((SUPPORT / 'finite/runtime_guard.py').read_bytes())
+    records = [node for node in ast.walk(tree) if isinstance(node, ast.Dict)
+               and any(isinstance(k, ast.Constant) and k.value == 'kind'
+                       and isinstance(v, ast.Constant) and v.value == 'admitted'
+                       for k, v in zip(node.keys, node.values))]
+    assert len(records) == 1
+    assert {k.value for k in records[0].keys} == {
+        'kind', 'token', 'class', 'argv_sha256', 'source_binding'}
