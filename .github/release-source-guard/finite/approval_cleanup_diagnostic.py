@@ -33,7 +33,7 @@ def install(guard):
         seen.add(marker)
         try:
             threads = []
-            for current in list(sys._current_frames().values())[:16]:
+            for _, current in sorted(sys._current_frames().items())[:16]:
                 stack = []
                 while current is not None and len(stack) < 24:
                     stack.append(location(current))
@@ -45,7 +45,7 @@ def install(guard):
             except RuntimeError:
                 loop = None
             if loop is not None:
-                for task in list(asyncio.all_tasks(loop))[:32]:
+                for task in sorted(asyncio.all_tasks(loop), key=lambda item: item.get_name())[:32]:
                     coroutine, stack, visited = task.get_coro(), [], set()
                     while coroutine is not None and id(coroutine) not in visited and len(stack) < 24:
                         visited.add(id(coroutine))
