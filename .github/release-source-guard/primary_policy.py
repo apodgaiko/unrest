@@ -1,8 +1,7 @@
 """Primary script authority, distinct from source-fixture UV registrations."""
 from __future__ import annotations
 
-from finite.backend_postimage_catalog import CASES as _BACKEND_POSTIMAGES
-
+import ast
 import hashlib
 import json
 from pathlib import Path
@@ -141,6 +140,10 @@ TEST_COMPLETION_PIPE_CASES = tuple(
     for role, targets in (('work', '0'), ('work', '1'), ('validate', '2'))) + TEST_CLEANUP_SUCCESS_CASES
 
 
+# Read literal diagnostic data without importing source-only guard code. Native
+# import machinery would create a cache that the unchanged READY guard refuses.
+_BACKEND_POSTIMAGES = ast.literal_eval(ast.parse(
+    (Path(__file__).parent / 'finite/backend_postimage_catalog.py').read_bytes()).body[2].value)
 _BACKEND_MISC = tuple(c for c in _BACKEND_POSTIMAGES if 'finite_orders.py::' not in c)
 _BACKEND_ORDERS = tuple(c for c in _BACKEND_POSTIMAGES if 'finite_orders.py::' in c)
 TEST_BACKEND_POSTIMAGE_GROUPS = (

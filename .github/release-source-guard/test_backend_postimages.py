@@ -301,3 +301,43 @@ def test_diagnostic_destination_uses_existing_supported_workflow_namespace():
     assert all(
         ref != "refs/heads/" + name for name in ("main", "codex/release-v047-direct-20261020")
     )
+
+
+def test_policy_loading_never_imports_or_caches_source_only_catalog(tmp_path):
+    import json
+    import os
+    import subprocess
+    import shutil
+
+    support = Path(__file__).parent
+    copied = tmp_path / "support"
+    copied.mkdir()
+    (copied / "finite").mkdir()
+    for name in ("primary_policy.py", "ci_commands.py", "preflight_policy.py", "phase_catalog.py"):
+        shutil.copyfile(support / name, copied / name)
+    shutil.copyfile(
+        support / "finite/backend_postimage_catalog.py",
+        copied / "finite/backend_postimage_catalog.py",
+    )
+    code = (
+        "import json,sys; import primary_policy as p; "
+        "print(json.dumps({'cases':sum(map(len,p.TEST_BACKEND_POSTIMAGE_GROUPS)),"
+        "'imported':any(n=='finite' or n.startswith('finite.') for n in sys.modules)}))"
+    )
+    # Bytecode remains enabled: this reproduces the diagnostic host's import
+    # path rather than hiding the defect with -B or environment changes.
+    environment = {
+        k: v for k, v in os.environ.items() if k not in ("PYTHONDONTWRITEBYTECODE", "PYTHONPATH")
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=copied,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"cases": 80, "imported": False}
+    assert not list((copied / "finite").rglob("*.pyc"))
+    assert list((copied / "__pycache__").glob("primary_policy.*.pyc"))
