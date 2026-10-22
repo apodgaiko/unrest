@@ -6,7 +6,7 @@ import json
 import re
 import shlex
 
-from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
+from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_BACKEND_POSTIMAGE_GROUPS, TEST_SEAM_ROOT_SECONDS, canonical, sha)
 
 
 def require_full_input(value, script, workflow):
@@ -38,7 +38,7 @@ def test_plan(script, workflow, mode):
     if script not in allowed:
         raise RuntimeError('primary_source_test_script')
     seam_scripts = {('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
-                    for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES)}
+                    for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, *TEST_BACKEND_POSTIMAGE_GROUPS)}
     return {'schema': 'unrest.v046.primary-script-plan.v1',
             'duty': 'TEST-source-' + mode.removeprefix('TEST-'),
             'script_sha256': sha(script), 'workflow_sha256': sha(workflow.encode()),
@@ -94,6 +94,11 @@ def python_environment(environment, registration, flags, *, lease_context=None):
     binding = registration['source_binding']
     exact_controlled = (controlled is not None and flags == [0, 0, 0]
                         and binding == {'path': controlled[0], 'line': 1, 'sha256': controlled[1]})
+    exact_controlled = exact_controlled or (
+        registration['class'] == 'source-controlled-backend-postimage' and flags == [0, 0, 0]
+        and binding == {'path': '/source/src/unrest_harness/experimental_session.py',
+                        'line': 506, 'sha256': '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2',
+                        'function': '_open_role_owned'})
     if exact_stream_environment(environment, registration, flags, lease_context):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     if exact_inventory_environment(environment, registration, flags, lease_context):

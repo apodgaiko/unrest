@@ -26,7 +26,7 @@ CONSUMERS = frozenset(
 # These are existing resolver outputs, not executable or class-prefix grants.
 # Each still needs its original resolver and the live guard consumption frame.
 ORDINARY_DIRECT = frozenset({
-    "canonical-backend", "source-cleanup-adapter", "source-crash-controller",
+    "canonical-backend", "source-controlled-backend-postimage", "source-cleanup-adapter", "source-crash-controller",
     "source-session-child", "source-session-helper:timeout",
     "source-isolated-precaptured-refusal", "source-seeded-environment-helper",
     "source-owned-role:worker", "source-owned-role:validator",

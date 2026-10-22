@@ -177,6 +177,13 @@ def admit(argv, cwd, env, state, append, refuse):
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
+    postimage = Path(__file__).with_name("backend_postimage_route.py")
+    if str(postimage) in state["direct_support"]["files"]:
+        namespace = {"__file__": str(postimage)}
+        exec(support_code(postimage, state), namespace)
+        selected = namespace["admit"](argv, cwd, env, state, append, refuse)
+        if selected is not None:
+            return selected
     configured = Path(__file__).with_name("configured_backend.py")
     if str(configured) in state["direct_support"]["files"]:
         namespace = {}

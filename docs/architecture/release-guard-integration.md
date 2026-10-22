@@ -1316,3 +1316,22 @@ observer's incomplete-channel refusal, every real completion/cleanup assertion,
 all deadlines, the full-source command and release gates are unchanged. The exact
 sixteen-case completion/cleanup diagnostic is supporting evidence, never a source certificate. No
 network, generic interpreter, provider, or process-launch authority is added.
+
+### Original controlled backend postimages
+
+The source suite intentionally modifies its local backend fixture to exercise
+pending cancellation, malformed warning privacy, notification revocation, large
+configuration frames, admission bounds, receipt-controlled completion ordering,
+and teardown. The guard admits only the closed eighty original case/parameter
+identities and their twenty-six exact script digests, with byte-current outer and
+inner test sources. A mutable `FIXTURE_SHA256` value alone supplies no authority.
+
+Admission requires the original `_open_role_owned` code/globals and subprocess
+call, explicit pinned `ControlledTransport`, the original backend bytes, owned
+worker/validator roots, and the full unchanged argv/environment. Configured
+variants additionally retain the original configuration renderer and input seal.
+The child startup path re-resolves these checks before consuming its launch.
+Native pin-refusal and parking-admission negative cases are excluded. Six finite
+supporting diagnostic groups retain the existing 600-second root bound; original
+test deadlines, assertions, full unexcluded source command, and release gates do
+not change. These controlled proofs do not establish native-provider acceptance.
