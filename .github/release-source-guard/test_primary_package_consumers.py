@@ -339,7 +339,8 @@ def test_real_owned_loop_collects_terminal_status_after_exit_stop_esrch(pending_
 
 def test_package_loop_preserves_original_trace_algorithm_outside_terminal_boundary():
     import copy
-    original = ast.parse((ROOT / 'linux_trace.py').read_bytes())
+    from test_startup_phases import restore_before_numeric_wait
+    original = restore_before_numeric_wait(ast.parse((ROOT / 'linux_trace.py').read_bytes()))
     package = ast.parse((ROOT / 'primary_package_trace.py').read_bytes())
     def run(tree, name):
         owner = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == name)

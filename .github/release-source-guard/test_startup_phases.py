@@ -79,6 +79,20 @@ class StripTelemetry(ast.NodeTransformer):
         node.keys, node.values = [k for k, v in retained], [v for k, v in retained]
         return self.generic_visit(node)
 
+def restore_before_numeric_wait(tree):
+    """Remove exactly the approved observation immediately before numeric wait."""
+    expected = ast.parse("if getattr(self, 'before_numeric_wait', None) is not None:\n    self.before_numeric_wait(self, candidate)").body[0]
+    loop = next(n for n in ast.walk(tree) if isinstance(n, ast.For)
+                and ast.unparse(n.target) == 'candidate')
+    assert ast.dump(loop.body[0], include_attributes=False) == ast.dump(expected, include_attributes=False)
+    assert ast.unparse(loop.body[1]) == 'pid, raw = os.waitpid(candidate, os.WNOHANG | 1073741824)'
+    references = [n for n in ast.walk(tree) if isinstance(n, ast.Attribute)
+                  and n.attr == 'before_numeric_wait']
+    assert len(references) == 1
+    loop.body.pop(0)
+    return tree
+
+
 def restore_response_channel(tree):
     handle = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'handle')
     nodes = [n for n in handle.body if isinstance(n, ast.If) and ast.unparse(n.test) == "kind == 'source_response_output'"]
@@ -127,7 +141,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
         if name == 'linux_supervisor.py':
             tree = restore_response_channel(tree)
         if name == 'linux_trace.py':
-            tree = restore_primary_allocation(restore_environment_name_grammar(tree))
+            tree = restore_before_numeric_wait(restore_primary_allocation(restore_environment_name_grammar(tree)))
         if name == 'primary_source_authority.py':
             tree = restore_bootstrap_cache(restore_producer_profile(tree))
         if name == 'finite/source_activation.py':

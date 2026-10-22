@@ -815,17 +815,8 @@ def test_pending_adoption_retries_kernel_parenthood_without_fabricated_trace_pro
 
 def test_pre_wait_observation_preserves_the_entire_original_tracer_algorithm():
     import hashlib
-    hook=ast.parse("if getattr(self, 'before_numeric_wait', None) is not None:\n    self.before_numeric_wait(self, candidate)").body[0]
-    expected=ast.dump(hook,include_attributes=False)
-    removed=[]
-    class Strip(ast.NodeTransformer):
-        def visit_If(self,node):
-            if ast.dump(node,include_attributes=False)==expected:
-                removed.append(node)
-                return None
-            return self.generic_visit(node)
-    original=Strip().visit(ast.parse((Path(__file__).parent/'linux_trace.py').read_bytes()))
-    assert len(removed)==1
+    from test_startup_phases import restore_before_numeric_wait
+    original=restore_before_numeric_wait(ast.parse((Path(__file__).parent/'linux_trace.py').read_bytes()))
     assert hashlib.sha256(ast.dump(original,include_attributes=False).encode()).hexdigest()=='207f3b1427331f5f71829aeb61b3c6e86deb1df08776d03d85fafef012c16035'
 
 
@@ -846,3 +837,17 @@ def test_pre_wait_snapshot_is_bound_to_known_exited_controlled_child(monkeypatch
     assert authority._approval_pre_wait[54]['identity']['ppid']==49
     observation.before_wait(authority,trace,55)
     assert 55 not in authority._approval_pre_wait
+
+
+@pytest.mark.parametrize('before,after', [
+    ('self.before_numeric_wait(self, candidate)', 'self.before_numeric_wait(self, self.child)'),
+    ('self.before_numeric_wait(self, candidate)', 'self.before_numeric_wait(self, candidate); self.active.clear()'),
+    ('os.waitpid(candidate, os.WNOHANG | 0x40000000)', 'os.waitpid(candidate, 0)'),
+    ("if getattr(self, 'before_numeric_wait', None) is not None:", "if getattr(self, 'before_numeric_wait', None) is None:"),
+])
+def test_pre_wait_normalization_rejects_callback_or_wait_mutation(before,after):
+    from test_startup_phases import restore_before_numeric_wait
+    source=(Path(__file__).parent/'linux_trace.py').read_text()
+    assert before in source
+    with pytest.raises(AssertionError):
+        restore_before_numeric_wait(ast.parse(source.replace(before,after)))
