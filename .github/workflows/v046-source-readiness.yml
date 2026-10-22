@@ -187,7 +187,7 @@ jobs:
       matrix:
         include:
           - group: postimages-1
-            cases: tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]
+            cases: tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1] tests/test_acp_runner.py::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success[claude] tests/test_acp_runner.py::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success[codex]
     steps:
       - uses: actions/checkout@v7.0.1
         with:

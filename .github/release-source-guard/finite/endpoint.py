@@ -536,6 +536,9 @@ def attach(guard):
         sys.modules["preexit_drain"] = drain
         exec(compile(drain_path.read_bytes(), str(drain_path), "exec"), drain.__dict__)
         drain.install(guard, sys.modules[__name__])
+        cohort = Path(__file__).with_name('cohort_startup.py')
+        guard.checked_source(cohort, guard._STATE['direct_support']['files'][str(cohort)])[
+            'install'](guard, sys.modules[__name__])
         # The core READY record precedes endpoint authentication and setup.
         # Parents may proceed only after this child has completed both.
         guard.append({

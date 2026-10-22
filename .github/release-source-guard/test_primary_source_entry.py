@@ -375,9 +375,9 @@ def test_finite_stall_snapshot_is_diagnostic_only_and_never_forces_exit(
         assert observed == [(obj.startup_stall_token, case, None)]
 
 
-def test_git_overhead_reproduction_runs_one_original_case_without_deadline_change():
+def test_startup_reproduction_retains_original_capacity_case_and_deadlines():
     import yaml
-    from primary_policy import TEST_GIT_OVERHEAD_CASES, root_seconds
+    from primary_policy import TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, root_seconds
     from primary_source_inputs import test_plan
     case='tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]'
     assert TEST_GIT_OVERHEAD_CASES == (case,)
@@ -387,7 +387,15 @@ def test_git_overhead_reproduction_runs_one_original_case_without_deadline_chang
     assert plan['source_checkpoint_ready'] is False
     workflow=yaml.safe_load((Path(__file__).parent.parent/'workflows/v046-source-readiness.yml').read_text())
     assert workflow['jobs']['controlled-backend-postimage-diagnosis']['strategy']['matrix']['include']==[
-        {'group':'postimages-1','cases':case}]
+        {'group':'postimages-1','cases':' '.join(TEST_COHORT_STARTUP_CASES)}]
+    assert TEST_COHORT_STARTUP_CASES == (case,
+        'tests/test_acp_runner.py::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success[claude]',
+        'tests/test_acp_runner.py::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success[codex]')
+    selected = (COMMAND + ' ' + ' '.join(TEST_COHORT_STARTUP_CASES)).encode()
+    narrowed = test_plan(selected, 'diagnostic', 'TEST-positive')
+    assert root_seconds(narrowed) == narrowed['timeout_seconds'] == 600
+    with pytest.raises(RuntimeError):
+        test_plan(selected + b' --maxfail=1', 'diagnostic', 'TEST-positive')
 
 
 def test_guard_overhead_sampling_is_bounded_passive_and_contains_no_locals(monkeypatch):
