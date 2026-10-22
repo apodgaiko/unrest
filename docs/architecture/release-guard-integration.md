@@ -1370,3 +1370,11 @@ still match on every use; resolvers execute in fresh namespaces. Live source
 frames, argv, environment, native process custody and numeric waits remain
 unchanged. The pure compilation reproduction does not establish end-to-end
 deadline improvement or a release certificate.
+
+That single TEST diagnostic can sample its original main-thread stack at most
+400 times after the existing ten-second snapshot, retaining only the forty most
+frequent bounded location stacks. It records no locals or source bodies, stops
+at the original case boundary, and never selects, admits, interrupts or extends
+work. Sampling is absent from SOURCE and all other TEST selections. A local
+profiler-delivery experiment alone is insufficient evidence to change the guard
+or launch another full source checkpoint.

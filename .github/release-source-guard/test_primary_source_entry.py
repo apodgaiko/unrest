@@ -388,3 +388,84 @@ def test_git_overhead_reproduction_runs_one_original_case_without_deadline_chang
     workflow=yaml.safe_load((Path(__file__).parent.parent/'workflows/v046-source-readiness.yml').read_text())
     assert workflow['jobs']['controlled-backend-postimage-diagnosis']['strategy']['matrix']['include']==[
         {'group':'postimages-1','cases':case}]
+
+
+def test_guard_overhead_sampling_is_bounded_passive_and_contains_no_locals(monkeypatch):
+    import json
+    import sys
+    from types import SimpleNamespace
+    import primary_source_entry as entry
+
+    import io
+    output = io.StringIO()
+    monkeypatch.setattr(entry.sys, "__stderr__", output)
+    obj = object.__new__(entry.Observer)
+    token, case = object(), 'exact-diagnostic'
+    obj.startup_stall_token, obj.overhead_thread = token, 13
+    obj.guard = SimpleNamespace(_STATE={'case': case})
+    snapshots, pauses = [], []
+    obj.retain_stall_snapshot = lambda *args: snapshots.append(args)
+    secret = 'private-locals-must-not-be-retained'
+    frame = sys._getframe()
+    monkeypatch.setattr(entry.sys, '_current_frames', lambda: {13: frame})
+    monkeypatch.setattr(entry.time, 'sleep', lambda seconds: pauses.append(seconds))
+    obj.retain_guard_overhead(token, case, None)
+    assert snapshots == [(token, case, None)]
+    assert pauses == [.01] * 400
+    text = output.getvalue()
+    assert secret not in text
+    data = json.loads(text.split('[retained guard overhead]\n', 1)[1])
+    assert data['samples'] == 400 and data['passive_only'] is True
+    assert data['test_deadlines_unchanged'] is True
+    assert len(data['top_stacks']) == 1 and data['top_stacks'][0]['count'] == 400
+    assert len(data['top_stacks'][0]['stack']) <= 24
+    assert all(len(location) == 3 for location in data['top_stacks'][0]['stack'])
+
+
+def test_guard_overhead_sampling_stops_at_case_boundary(monkeypatch):
+    from types import SimpleNamespace
+    import primary_source_entry as entry
+
+    import io
+    output = io.StringIO()
+    monkeypatch.setattr(entry.sys, "__stderr__", output)
+    obj = object.__new__(entry.Observer)
+    obj.startup_stall_token = object()
+    obj.guard = SimpleNamespace(_STATE={'case': 'next-case'})
+    obj.retain_stall_snapshot = lambda *args: None
+    monkeypatch.setattr(entry.sys, '_current_frames', lambda: pytest.fail('stale sampling'))
+    monkeypatch.setattr(entry.time, 'sleep', lambda seconds: pytest.fail('stale waiting'))
+    obj.retain_guard_overhead(object(), 'old-case', None)
+    assert '"samples":0' in output.getvalue()
+
+
+@pytest.mark.parametrize('mode,armed', [('TEST-positive', True), ('SOURCE', False)])
+def test_overhead_sampler_arms_only_exact_diagnostic_case(monkeypatch, mode, armed):
+    import primary_source_entry as entry
+    from primary_policy import TEST_GIT_OVERHEAD_CASES
+    from types import SimpleNamespace
+    case, = TEST_GIT_OVERHEAD_CASES
+    timers = []
+
+    class Timer:
+        def __init__(self, seconds, callback):
+            assert seconds == 10
+            self.callback = callback
+            timers.append(self)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(entry.threading, 'Timer', Timer)
+    obj = object.__new__(entry.Observer)
+    obj.profile = {'source_mode': mode}
+    path = '/guard/finite/orders_git_data.py'
+    obj.manifest = {'direct_support': {'files': {path: 'exact-pin'}}}
+    obj.guard = SimpleNamespace(checked_source=lambda actual, pin: {'CASES': {case: 'cohort'}})
+    seen = []
+    obj.retain_guard_overhead = lambda *args: seen.append(args)
+    obj.pytest_runtest_call(SimpleNamespace(nodeid=case, funcargs={}))
+    assert bool(timers) is armed
+    if armed:
+        timers[0].callback()
+        assert seen == [(obj.startup_stall_token, case, None)]

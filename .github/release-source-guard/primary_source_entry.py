@@ -307,11 +307,46 @@ class Observer:
                     os._exit(89)
         else:
             callback = self.finish_startup_stall if startup else self.retain_stall_snapshot
+            from primary_policy import TEST_GIT_OVERHEAD_CASES
+            if finite_diagnostic and item.nodeid in TEST_GIT_OVERHEAD_CASES:
+                self.overhead_thread = threading.get_ident()
+                callback = self.retain_guard_overhead
         self.startup_stall_timer = threading.Timer(
             approval_seconds if approval_seconds is not None else 60 if startup else 10,
             lambda: callback(token, item.nodeid, loop))
         self.startup_stall_timer.daemon = True
         self.startup_stall_timer.start()
+
+    def retain_guard_overhead(self, token, case, loop):
+        """Bounded passive TEST sampling; never changes admission or deadlines."""
+        self.retain_stall_snapshot(token, case, loop)
+        counts = {}
+        sampled = 0
+        try:
+            for _ in range(400):
+                if (self.startup_stall_token is not token
+                        or self.guard._STATE.get('case') != case):
+                    break
+                frame = sys._current_frames().get(self.overhead_thread)
+                stack = []
+                while frame is not None and len(stack) < 24:
+                    stack.append((frame.f_code.co_filename, frame.f_code.co_name, frame.f_lineno))
+                    frame = frame.f_back
+                if stack:
+                    # Top location is exclusive; the bounded stack distinguishes
+                    # guard metadata work from actual product/cleanup waits.
+                    key = tuple(stack)
+                    counts[key] = counts.get(key, 0) + 1
+                    sampled += 1
+                time.sleep(.01)
+            rows = [{'count': count, 'stack': list(stack)}
+                    for stack, count in sorted(counts.items(), key=lambda row: (-row[1], row[0]))[:40]]
+            sys.__stderr__.write('\n[retained guard overhead]\n' + canonical(
+                {'case': case, 'samples': sampled, 'top_stacks': rows,
+                 'passive_only': True, 'test_deadlines_unchanged': True}).decode() + '\n')
+            sys.__stderr__.flush()
+        except (OSError, AttributeError, RuntimeError, UnicodeError):
+            pass
 
     def finish_startup_stall(self, token, case, loop):
         captured = self.retain_stall_snapshot(token, case, loop)
