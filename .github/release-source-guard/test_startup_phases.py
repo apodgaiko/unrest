@@ -133,6 +133,25 @@ def restore_launch_image_observation(tree):
     return tree
 
 
+
+def restore_controlled_postimage_class(tree):
+    """Normalize only the exact reviewed original-fixture resolver output."""
+    assignments = [n for n in tree.body if isinstance(n, ast.Assign)
+                   and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                   and n.targets[0].id == 'ORDINARY_DIRECT']
+    assert len(assignments) == 1
+    value = assignments[0].value
+    assert isinstance(value, ast.Call) and ast.unparse(value.func) == 'frozenset'
+    assert len(value.args) == 1 and not value.keywords and isinstance(value.args[0], ast.Set)
+    members = value.args[0].elts
+    assert isinstance(members[0], ast.Constant) and members[0].value == 'canonical-backend'
+    assert isinstance(members[1], ast.Constant) and members[1].value == 'source-controlled-backend-postimage'
+    assert sum(isinstance(n, ast.Constant) and n.value == 'source-controlled-backend-postimage'
+               for n in ast.walk(tree)) == 1
+    members.pop(1)
+    return tree
+
+
 BASELINE_AST_SHA256 = {'finite/source_operations.py': 'a5d9f2958f8aa4dd57922407f3112d6917544cc87b22942febe254172bd50209', 'finite/runtime_guard.py': '3b26232fb8c8d033a984e5c0ba0fa1760600cb7b846af728b2fbbeb39ccd6fa4', 'finite/source_activation.py': 'fd49c0f30096da8163142b0f8f884d56a80dbf9f5b38b757f22486ec1f5efab7', 'linux_supervisor.py': '2fb9fb8012c9161fe64ad70dca851abdd65a2e86dca48701d3f5b2d2fabef99f', 'linux_trace.py': '344558174ec335476ac8f76fa0afdf4ee667a497825150e4388fdb8ca95f5b9c', 'primary_source_authority.py': 'b36a24d13b548d143379dacd844680f089a41e5f2666c9a9944eeb29607a1540'}
 
 
@@ -150,7 +169,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
         if name == 'primary_source_authority.py':
             tree = restore_bootstrap_cache(restore_producer_profile(tree))
         if name == 'finite/source_activation.py':
-            tree = restore_primary_cache(tree)
+            tree = restore_controlled_postimage_class(restore_primary_cache(tree))
         tree = StripTelemetry().visit(tree)
         assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() == expected
 
