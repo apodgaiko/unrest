@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import os
+import types
 from pathlib import Path
 
 from finite.approval_routes import DURABLE_PREFIX
@@ -122,6 +123,21 @@ class ApprovalSupervisor(JournalSupervisor):
 def install(owner):
     if type(owner) is not JournalSupervisor or type(owner.ledger) is not receipts.ReceiptLedger:
         raise RuntimeError('approval_orphan_original_owner_required')
+    original_authenticate = owner.authenticate
+    if not isinstance(original_authenticate, types.MethodType) or original_authenticate.__self__ is not owner:
+        raise RuntimeError('approval_orphan_authentication_owner_required')
+    def authenticate(actual_owner, request, events):
+        if actual_owner is not owner or original_authenticate.__self__ is not owner:
+            raise RuntimeError('approval_orphan_authentication_binding')
+        saved = owner.registered.get(request.get('pid'))
+        if saved is not None:
+            current = kernel.identity(request['pid'])
+            evidence = proof(owner, request['pid'], saved['identity'], current, request.get('kind'))
+            if evidence is not None and request.get('identity') == saved['identity']:
+                return ApprovalSupervisor.authenticate(owner, request, events)
+        # Preserve the previously installed READY snapshot wrapper verbatim.
+        return original_authenticate(request, events)
+    owner.authenticate = types.MethodType(authenticate, owner)
     owner.__class__ = ApprovalSupervisor
     owner.ledger.__class__ = ApprovalLedger
     owner.ledger.supervisor = owner

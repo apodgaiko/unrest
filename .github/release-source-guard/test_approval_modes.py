@@ -663,3 +663,95 @@ def test_transition_refuses_wrong_preimage_before_read_or_partial_mutation():
     with pytest.raises(RuntimeError,match='preimage'):
         transition.admit(manifest,None,lambda *args:pytest.fail('source must not be read'))
     assert manifest==before
+
+
+def test_orphan_install_composes_existing_instance_ready_hook(monkeypatch):
+    from types import MethodType
+    custody, source, birth, current, events, rows = orphan_owner(monkeypatch)
+    owner = custody.JournalSupervisor.__new__(custody.JournalSupervisor)
+    owner.__dict__.update(vars(source))
+    owner.ledger = custody.receipts.ReceiptLedger('a' * 64, 20000)
+    ordinary = []
+    def ready_snapshot(actual, request, events):
+        assert actual is owner
+        ordinary.append(request)
+        return 'original READY wrapper'
+    owner.authenticate = MethodType(ready_snapshot, owner)
+    custody.install(owner)
+    monkeypatch.setattr(custody.kernel, 'identity', lambda pid: current)
+    authenticated = []
+    monkeypatch.setattr(custody.Supervisor, 'authenticate', lambda actual, request, events:
+                        authenticated.append((actual,request,events)) or 'actual original authentication')
+    request = {'pid':54,'identity':birth,'kind':'payload'}
+    assert owner.authenticate(request, events) == 'actual original authentication'
+    assert ordinary == [] and authenticated[0][1]['identity'] == current
+    assert owner.registered[54]['identity'] == birth and request['identity'] == birth
+    assert owner.authenticate({**request,'kind':'connect'}, events) == 'original READY wrapper'
+    assert len(ordinary) == 1
+    monkeypatch.setattr(custody.kernel, 'identity', lambda pid: birth)
+    assert owner.authenticate(request, events) == 'original READY wrapper'
+    assert len(ordinary) == 2
+
+
+def adoptive_context(monkeypatch):
+    from types import SimpleNamespace
+    import approval_adoptive_reap as adoption
+    birth = {'pid':54,'ppid':49,'uid':20000,'start_ticks':10}
+    current = {**birth,'ppid':adoption.os.getpid()}
+    authority = SimpleNamespace(bound={54:{'registration':{'class':'source-approval-adapter'}}},
+                                pipe_records=[],supervisor=SimpleNamespace(
+                                    registered={54:{'identity':birth,'token':'owned'}}))
+    trace = SimpleNamespace(active=set(), records=[
+        {'kind':'tracer_terminal_wait','pid':49,'raw':9,'normalized':-9},
+        {'kind':'tracer_terminal_wait','pid':54,'raw':256,'normalized':1}])
+    monkeypatch.setattr(adoption,'identity',lambda pid:current)
+    monkeypatch.setattr(adoption,'proof',lambda *args:{'case':'exact controlled case'})
+    monkeypatch.setattr(adoption,'zombie',lambda pid:True)
+    calls=[]
+    monkeypatch.setattr(adoption.os,'waitpid',lambda pid,flags:calls.append((pid,flags)) or (pid,256))
+    return adoption,authority,trace,birth,current,calls
+
+
+def test_adoptive_cleanup_records_only_a_real_matching_nonblocking_parent_wait(monkeypatch):
+    adoption,authority,trace,birth,current,calls=adoptive_context(monkeypatch)
+    original=[dict(row) for row in trace.records]
+    adoption.reap(authority,trace)
+    assert calls==[(54,adoption.os.WNOHANG)] and trace.records==original
+    record=authority.pipe_records[0]
+    assert record['pid']==54 and record['raw']==256 and record['normalized']==1
+    assert record['original_birth']==birth and record['current_identity']==current
+    assert record['source_checkpoint_ready'] is False
+    adoption.reap(authority,trace)
+    assert len(calls)==1 and len(authority.pipe_records)==1
+
+
+@pytest.mark.parametrize('drift',['original_parent_alive','active','missing_parent_terminal',
+                                 'foreign_class','birth_proof','not_zombie','pending_wait'])
+def test_unproved_or_still_owned_children_gain_no_adoptive_wait(monkeypatch,drift):
+    adoption,authority,trace,birth,current,calls=adoptive_context(monkeypatch)
+    if drift=='original_parent_alive':
+        current['ppid']=49
+    elif drift=='active':
+        trace.active.add(54)
+    elif drift=='missing_parent_terminal':
+        trace.records.pop(0)
+    elif drift=='foreign_class':
+        authority.bound[54]['registration']['class']='foreign'
+    elif drift=='birth_proof':
+        monkeypatch.setattr(adoption,'proof',lambda *args:None)
+    elif drift=='not_zombie':
+        monkeypatch.setattr(adoption,'zombie',lambda pid:False)
+    else:
+        monkeypatch.setattr(adoption.os,'waitpid',lambda pid,flags:calls.append((pid,flags)) or (0,0))
+    adoption.reap(authority,trace)
+    assert authority.pipe_records==[]
+    assert calls==([] if drift!='pending_wait' else [(54,adoption.os.WNOHANG)])
+
+
+def test_adoptive_wait_status_drift_remains_a_recorded_failure(monkeypatch):
+    adoption,authority,trace,birth,current,calls=adoptive_context(monkeypatch)
+    monkeypatch.setattr(adoption.os,'waitpid',lambda pid,flags:(pid,9))
+    with pytest.raises(RuntimeError,match='actual_wait_status_drift'):
+        adoption.reap(authority,trace)
+    assert authority.pipe_records[0]['raw']==9
+    assert authority.pipe_records[0]['source_checkpoint_ready'] is False

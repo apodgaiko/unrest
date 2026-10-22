@@ -1146,3 +1146,21 @@ transition restores the entire old approval runtime AST except its type-only
 import, preserves every function/class line and restores the complete old
 fixture AST after substituting the identical explicit configuration constructor.
 No original test case, parameter, assertion, native review or timeout changes.
+
+The controlled reparenting composition preserves the already installed READY
+snapshot callback for every ordinary request. Only an independently proved
+reparented cleanup request enters the narrow current-identity authentication
+path. This composes the existing instance callback with the specialized class;
+class adoption alone cannot replace a callback already bound on the instance.
+All nonce/token/READY and live socket checks remain required.
+
+A controlled child can remain a zombie when its original parent dies after the
+tracer's first terminal notification. For the same closed cancellation/crash
+cases, the observer may perform a nonblocking wait only after its actual kernel
+parenthood, unchanged child birth, zombie UID/state and the original parent's
+matching signaled terminal status are independently proved. The real returned
+PID/raw status must match the tracer's earlier terminal record. This separate
+`actual_adoptive_parent_wait4` record never impersonates an original-parent wait
+and does not activate a checkpoint or waive any original missing-wait gate.
+A living original parent retains its wait authority; absence alone creates no
+wait record. The original tracer and its raw records remain unchanged.
