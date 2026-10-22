@@ -532,3 +532,134 @@ def test_foreign_or_unregistered_exit_has_no_controlled_proof(monkeypatch):
     trace.records.clear()
     with pytest.raises(RuntimeError, match='trace_rewound'):
         observation.collect(authority, trace)
+
+
+
+def worker_setup_context():
+    from finite import approval_worker_setup as setup
+    import os
+    vector = ['/source/.venv/bin/python', '-m', setup.MODULE,
+              '--project-root', '/work/owned/run-home', '--run-id', 'run-original',
+              '--executor', setup.EXECUTOR, '--custody-root-id', 'owned-original', '--generation', '1']
+    state = {'class': 'source-run-worker', 'source_selection': 'primary-source',
+             'setup_mode': 'source', 'phase': 'READY', 'case': sorted(setup.CASES)[0],
+             'token': 'owned', 'runtime': {'paths': [vector[0]]}, 'owned_root': '/work/owned'}
+    endpoint = {'token': 'owned', 'identity': {'pid': os.getpid()}}
+    payload = {'class': state['class'], 'mode': 'module', 'target': setup.MODULE,
+               'case': state['case'], 'token': 'owned', 'source_binding': dict(setup.BINDING),
+               'orig_argv': vector, 'sys_argv': [setup.MODULE, *vector[3:]],
+               'path0': vector[4], 'isolated': False}
+    return setup, state, endpoint, payload
+
+
+def test_only_exact_controlled_worker_delegates_sdk_setup_to_actual_mcp_child():
+    setup, state, endpoint, payload = worker_setup_context()
+    for case in setup.CASES:
+        state['case'] = payload['case'] = case
+        assert setup.eligible(state, endpoint, payload)
+    assert setup.select(type('Guard', (), {'_STATE': state})(), endpoint) is None
+
+
+@pytest.mark.parametrize('drift', ['class', 'selection', 'case', 'phase', 'mode', 'target',
+                                 'token', 'endpoint_token', 'peer', 'binding', 'runtime',
+                                 'executor', 'flags', 'generation', 'sys_argv', 'cwd',
+                                 'isolated', 'profile-timing', 'dependency-source-negative',
+                                 'dependency-launch-negative'])
+def test_other_workers_or_changed_entry_keep_original_sdk_setup(drift):
+    setup, state, endpoint, payload = worker_setup_context()
+    if drift == 'class':
+        state['class'] = payload['class'] = 'source-approval-mcp'
+    elif drift == 'selection':
+        state['source_selection'] = 'foreign'
+    elif drift in ('case', 'phase'):
+        state[drift] = 'foreign'
+    elif drift in ('mode', 'target', 'token', 'sys_argv', 'isolated'):
+        payload[drift] = 'foreign'
+    elif drift == 'endpoint_token':
+        endpoint['token'] = 'foreign'
+    elif drift == 'peer':
+        endpoint['identity']['pid'] += 1
+    elif drift == 'binding':
+        payload['source_binding']['sha256'] = 'foreign'
+    elif drift == 'runtime':
+        payload['orig_argv'][0] = '/foreign/python'
+    elif drift == 'executor':
+        payload['orig_argv'][8] = 'foreign:execute'
+    elif drift == 'flags':
+        payload['orig_argv'][7] = '--foreign'
+    elif drift == 'generation':
+        payload['orig_argv'][12] = '0'
+    elif drift == 'cwd':
+        payload['orig_argv'][4] = payload['path0'] = '/foreign'
+        payload['sys_argv'] = [setup.MODULE, *payload['orig_argv'][3:]]
+    else:
+        state['setup_mode'] = drift
+    assert not setup.eligible(state, endpoint, payload)
+
+
+def test_exact_worker_configuration_matches_original_helper_without_launch(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    root = Path(__file__).parent.parent.parent
+    if not (root / 'tests/fixtures/approval_run_executor.py').is_file():
+        pytest.skip('product source is exercised by the real controlled worker lane')
+    monkeypatch.syspath_prepend(str(root))
+    import tests.fixtures.approval_run_executor as executor
+    from tests.test_provider_review import config_at
+    actual = []
+    class StopBeforeEffects(Exception):
+        pass
+    def capture(config):
+        actual.append(config)
+        raise StopBeforeEffects()
+    monkeypatch.setattr(executor, 'ProjectStore', capture)
+    monkeypatch.setenv('CONTROLLED_RUN_ROOT', str(tmp_path))
+    context = SimpleNamespace(run_id='run', control=SimpleNamespace(
+        inspect_run=lambda run_id: SimpleNamespace(state='running')))
+    with pytest.raises(StopBeforeEffects):
+        executor.execute('advance_project', {}, context)
+    assert len(actual) == 1 and actual[0] == config_at(tmp_path)
+
+
+def test_type_only_transition_keeps_every_other_runtime_statement_and_line(monkeypatch):
+    import hashlib
+    import json
+    import approval_import_source_inputs as transition
+    before = 'from typing import Any\nfrom fastmcp import Context\n\ndef work(ctx: Context):\n    return True\n'
+    after = 'from typing import TYPE_CHECKING, Any\n# type-only context\n\ndef work(ctx: Context):\n    return True\n\nif TYPE_CHECKING:\n    from fastmcp import Context\n'
+    tree = ast.parse(before)
+    monkeypatch.setattr(transition, 'SOURCE_AST', hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest())
+    lines = [(type(node).__name__,node.name,node.lineno) for node in ast.walk(tree)
+             if isinstance(node,(ast.ClassDef,ast.FunctionDef,ast.AsyncFunctionDef))]
+    monkeypatch.setattr(transition, 'DEFINITION_LINES',hashlib.sha256(json.dumps(lines).encode()).hexdigest())
+    transition.verify_source(after)
+    for changed in (after.replace('return True','return False'),
+                    after.replace('TYPE_CHECKING, Any','TYPE_CHECKING as other, Any'),
+                    after.replace('def work','\ndef work')):
+        with pytest.raises(RuntimeError):
+            transition.verify_source(changed)
+
+
+def test_fixture_transition_does_not_change_assertions_or_executor_behavior(monkeypatch):
+    import hashlib
+    import approval_import_source_inputs as transition
+    before = 'from tests.test_provider_review import config_at\ndef execute(root):\n    assert root\n    store = ProjectStore(config_at(root))\n    return store\n'
+    after = 'from unrest_harness.config import HarnessConfig\ndef execute(root):\n    assert root\n    store = ProjectStore(HarnessConfig(root=root))\n    return store\n'
+    monkeypatch.setattr(transition,'FIXTURE_AST',hashlib.sha256(ast.dump(ast.parse(before),include_attributes=False).encode()).hexdigest())
+    monkeypatch.setattr(transition,'CONSTRUCTOR',ast.dump(ast.parse('HarnessConfig(root=root)',mode='eval').body,include_attributes=False))
+    transition.verify_fixture(after)
+    for changed in (after.replace('assert root','assert True'),
+                    after.replace('root=root','root=None'),
+                    after.replace('return store','return None')):
+        with pytest.raises(RuntimeError):
+            transition.verify_fixture(changed)
+
+
+def test_transition_refuses_wrong_preimage_before_read_or_partial_mutation():
+    from copy import deepcopy
+    import approval_import_source_inputs as transition
+    manifest = {'product_pins':dict(transition.PRE),'anchor_inventory':[]}
+    manifest['product_pins']['src/unrest_harness/approval_recovery.py']='foreign'
+    before=deepcopy(manifest)
+    with pytest.raises(RuntimeError,match='preimage'):
+        transition.admit(manifest,None,lambda *args:pytest.fail('source must not be read'))
+    assert manifest==before

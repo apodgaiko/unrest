@@ -18,9 +18,9 @@ import stat
 import sys
 import tempfile
 import time
-from typing import Any, AsyncIterator, Awaitable, Callable, cast
+from typing import TYPE_CHECKING, Any, AsyncIterator, Awaitable, Callable, cast
 
-from fastmcp import Context
+# The owned MCP server supplies Context; ownership does not load the SDK for typing.
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from .approval_native import ApprovalUnavailable, human_display, serialized
@@ -683,3 +683,7 @@ def run_owned_mcp(parent_pid: int) -> None:
     threading.Thread(target=watch_parent, daemon=True).start()
     sys.argv[0] = "unrest_harness"
     runpy.run_module("unrest_harness", run_name="__main__")
+
+
+if TYPE_CHECKING:
+    from fastmcp import Context

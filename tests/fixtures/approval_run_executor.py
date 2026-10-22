@@ -11,7 +11,7 @@ import unrest_harness.approval_recovery as recovery
 import unrest_harness.acp_runner as acp
 from unrest_harness.assets import AssetLoader
 from unrest_harness.models import Task
-from tests.test_provider_review import config_at
+from unrest_harness.config import HarnessConfig
 from unrest_harness.storage import ProjectStore
 
 
@@ -19,7 +19,13 @@ def execute(operation, arguments, context):
     assert operation == "advance_project"
     assert context.run_id and context.control.inspect_run(context.run_id).state == "running"
     root = Path(os.environ["CONTROLLED_RUN_ROOT"])
-    store = ProjectStore(config_at(root))
+    store = ProjectStore(HarnessConfig(
+        bundled_dir=Path(__file__).parents[2] / "src/unrest_harness/bundled",
+        harness_home=root / "home", projects_dir=root / "home/projects",
+        orchestrator_provider_name="codex", worker_provider_name="codex",
+        worker_acp_command=None, validator_provider_name=None, validator_acp_command=None,
+        terminal_reviewer_provider_name=None, terminal_reviewer_acp_command=None,
+    ))
     native = Path(os.environ["CONTROLLED_RUN_NATIVE"])
     assert native.name == "controlled-backend"
     recovery.BACKEND_PINS = frozenset({hashlib.sha256(native.read_bytes()).hexdigest()})

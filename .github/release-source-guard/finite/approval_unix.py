@@ -11,7 +11,7 @@ import sys
 
 PINS = {
     'tests/test_approval_recovery.py': 'f886178539296b984f19db2814bc53817133b214632146843b6934abb69bb80a',
-    'src/unrest_harness/approval_recovery.py': '48a4c68fdff042b49f37cc3edf30e240cdb5ae69aa1da8a6e0280d19ec364ff4',
+    'src/unrest_harness/approval_recovery.py': 'eaabfef1b30b99ab5ee3cb0c24dac00786e966ba9a97893b1a6af5994104107f',
     'src/unrest_harness/approval_relay.py': 'efaba9521aa12d6fbdb228f05da210a4027675c79830d1a5ca93627faa80da44',
 }
 TEST = 'tests/test_approval_recovery.py'

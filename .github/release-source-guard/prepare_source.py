@@ -91,6 +91,15 @@ def admit_candidate_template(manifest):
     namespace['admit'](manifest, ROOT, CLOCK_READER)
 
 
+def admit_approval_imports(manifest):
+    body = CLOCK_READER(Path('/guard'), 'approval_import_source_inputs.py')
+    if hashlib.sha256(body).hexdigest() != 'bfa804de6aea1fca1e7df5aa794b86ac6434d4edb6095993c0373e32da98c5d2':
+        raise RuntimeError('approval_import_support_drift')
+    namespace = {'__name__': 'approval_import_source_inputs'}
+    exec(compile(body, '/guard/approval_import_source_inputs.py', 'exec', dont_inherit=True), namespace)
+    namespace['admit'](manifest, ROOT, CLOCK_READER)
+
+
 def main():
     nonce, selection = sys.argv[1:]
     case = CASES[selection]
@@ -107,6 +116,7 @@ def main():
     admit_ownership_document(manifest)
     admit_tracker_acquisition(manifest)
     admit_candidate_template(manifest)
+    admit_approval_imports(manifest)
     for name, pin in manifest['product_pins'].items():
         observed = sha(ROOT / name)
         if observed != pin:

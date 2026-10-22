@@ -1134,3 +1134,15 @@ records instead of spending the remaining healthy-root budget polling a failed
 assignment. A live root, zero root status or a finished trace takes the unchanged
 path. The original tracer, kill/reap algorithm, source deadlines, statuses and
 release predicates remain byte-identical.
+
+The seven exact controlled durable-run executors can defer unused FastMCP
+configuration to their actual MCP child. Admission binds the real guarded
+module entry, executor argv, original spawn owner, runtime bytes, case/token,
+canonical owned cwd and complete worker/fixture/approval source bytes. Other
+executors and diagnostic negative modes retain the original eager setup body.
+The actual MCP child still performs that setup. Full fresh dependency-site,
+READY, descriptor and launch checks remain unchanged. The source-input
+transition restores the entire old approval runtime AST except its type-only
+import, preserves every function/class line and restores the complete old
+fixture AST after substituting the identical explicit configuration constructor.
+No original test case, parameter, assertion, native review or timeout changes.

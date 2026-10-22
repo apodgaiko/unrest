@@ -383,6 +383,11 @@ def attach(guard):
             approval = guard.checked_source(approval_path,
                 guard._STATE['direct_support']['files'][str(approval_path)])
             inapplicable = approval['select'](guard, STATE)
+        if inapplicable is None and guard._STATE.get('class') == 'source-run-worker':
+            worker_path = Path(guard._STATE['guard']).with_name('approval_worker_setup.py')
+            worker = guard.checked_source(worker_path,
+                guard._STATE['direct_support']['files'][str(worker_path)])
+            inapplicable = worker['select'](guard, STATE)
         if inapplicable is not None:
             guard.append(inapplicable)
         else:

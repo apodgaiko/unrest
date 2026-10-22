@@ -222,3 +222,12 @@ candidate. The new imports, catalog bytes and opt-in launch path require an
 independent final applicability disposition; no unchanged-timing claim is made.
 Keep the frozen full source-suite release checkpoint reserved. Separate genuine
 host/provider validation and release approval gates remain pending.
+
+## Worker startup imports
+
+Approval ownership uses FastMCP Context only as a deferred type annotation;
+it does not import the SDK to create or retain an owner. The actual owned MCP
+server still imports and initializes FastMCP and provides the real host context.
+The controlled durable-run executor constructs the same explicit HarnessConfig
+without importing another test module or its unrelated MCP client imports.
+Provider selection, policy, review routing, deadlines and cleanup are unchanged.
