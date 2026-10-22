@@ -319,13 +319,15 @@ def attach(guard):
     original_bootstrap = guard.bootstrap
     spec = STATE["spec"]
     actual_waitpid = os.waitpid
+    from journal_decode import JournalDecoder
+    wait_decoder = JournalDecoder()
 
     def observed_waitpid(pid, options):
         result = actual_waitpid(pid, options)
         if result[0] and guard._STATE is not None:
             state = guard._STATE
             journal = Path(state["events"]) / (str(os.getpid()) + ".jsonl")
-            records = [json.loads(line) for line in journal.read_bytes().splitlines()]
+            records = wait_decoder.decode(str(journal), journal.read_bytes())
             registration = next(
                 (
                     event

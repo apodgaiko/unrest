@@ -183,7 +183,7 @@ def test_exact_startup_diagnosis_is_bounded_and_cannot_certify_full():
 
 def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     import yaml
-    from primary_policy import TEST_APPROVAL_EXPIRY_CASES
+    from primary_policy import TEST_CLEANUP_SUCCESS_CASES
     path = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
     document = yaml.safe_load(path.read_text())
     job = document['jobs']['startup-cancellation-diagnosis']
@@ -192,7 +192,7 @@ def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
     steps = job['steps']
     call = next(step for step in steps if step.get('shell'))
-    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_APPROVAL_EXPIRY_CASES)
+    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_CLEANUP_SUCCESS_CASES)
     assert call['shell'] == 'python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}'
     assert steps[-1]['if'] == 'always()'
 
@@ -263,3 +263,19 @@ def test_exact_stream_diagnosis_keeps_both_original_modes_and_cannot_certify_ful
                     script.replace(b'[worker]', b'[foreign]')]:
         with pytest.raises(RuntimeError):
             make_test_plan(altered, text, 'TEST-positive')
+
+
+def test_cleanup_success_diagnosis_is_exact_and_keeps_source_deadlines():
+    from primary_policy import TEST_CLEANUP_SUCCESS_CASES, root_seconds
+    text, value = inputs()
+    assert len(TEST_CLEANUP_SUCCESS_CASES) == 4
+    assert TEST_CLEANUP_SUCCESS_CASES[0] == 'tests/test_acp_runner.py::test_run_node_with_mock_agent'
+    assert TEST_CLEANUP_SUCCESS_CASES[1:] == tuple(
+        'tests/test_acp_cleanup.py::test_recorded_transport_failures[success-' + role + ']'
+        for role in ('work', 'validate', 'terminal_reviewer'))
+    script = (COMMAND + ' ' + ' '.join(TEST_CLEANUP_SUCCESS_CASES)).encode()
+    result = make_test_plan(script, text, 'TEST-positive')
+    assert result['timeout_seconds'] == root_seconds(result) == 180
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    with pytest.raises(RuntimeError):
+        plan(script, text, value)

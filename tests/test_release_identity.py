@@ -5,7 +5,9 @@ from __future__ import annotations
 from importlib.metadata import version as installed_version
 from pathlib import Path
 import tomllib
+import sys
 
+import pytest
 import yaml
 
 from unrest_harness import __version__
@@ -36,11 +38,61 @@ def test_public_release_identity_is_consistent() -> None:
     assert "unrest_harness-0.2.0" not in ci
 
 
-def test_acp_handshakes_derive_the_public_runtime_version() -> None:
-    source = (ROOT / "src/unrest_harness/acp_runner.py").read_text(encoding="utf-8")
+@pytest.mark.parametrize("role", ["work", "validate", "terminal_reviewer"])
+async def test_acp_handshakes_derive_the_public_runtime_version(tmp_path, monkeypatch, role):
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
 
-    assert source.count('"clientInfo": {"name": "unrest", "version": __version__}') == 2
-    assert '"version": "0.1.0"' not in source
+    from unrest_harness import acp_runner
+    from unrest_harness.assets import AssetLoader
+    from unrest_harness.models import Task
+    from tests.test_provider_review import controller_fixture
+
+    _, store, _ = controller_fixture(tmp_path)
+    config = replace(store.config, worker_acp_command=sys.executable,
+                     validator_acp_command=sys.executable,
+                     terminal_reviewer_acp_command=sys.executable)
+    runner = acp_runner.ACPNodeRunner(config, AssetLoader(config))
+    process = SimpleNamespace(returncode=0, stdin=None, stderr=None,
+                              wait=AsyncMock(return_value=0))
+    requests = []
+
+    class HandshakeObserved(BaseException):
+        pass
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def start(self):
+            pass
+
+        async def send_request(self, method, params):
+            requests.append((method, params))
+            raise HandshakeObserved
+
+        async def cleanup(self, **kwargs):
+            pass
+
+    monkeypatch.setattr(runner, "_start_worker_mcp_server", AsyncMock(return_value=process))
+    monkeypatch.setattr(runner, "_start_terminal_reviewer_mcp", AsyncMock(return_value=process))
+    monkeypatch.setattr(runner, "_find_free_port", lambda: 43210)
+    monkeypatch.setattr(runner, "_wait_for_server_ready", AsyncMock())
+    monkeypatch.setattr(acp_runner, "spawn_launch", AsyncMock(return_value=process))
+    monkeypatch.setattr(acp_runner, "ACPClient", Client)
+    monkeypatch.setattr(acp_runner, "__version__", "runtime-version-sentinel")
+    with pytest.raises(HandshakeObserved):
+        if role == "terminal_reviewer":
+            await runner.run_terminal_review("project", "mission-001", "attempt-1", store)
+        else:
+            await runner.run_node("project", "mission-001", Task(
+                id="w1", type=role, body="identity probe", targets=[], skill="s"),
+                "attempt-1", store)
+    assert len(requests) == 1
+    method, params = requests[0]
+    assert method == "initialize"
+    assert params["clientInfo"] == {"name": "unrest", "version": "runtime-version-sentinel"}
 
 
 def test_development_identity_comes_from_this_checkout() -> None:

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 import sys
 from typing import Any
@@ -42,12 +41,16 @@ class Operations(_PrimaryOperations):
 
 
     def rows(self):
+        from journal_decode import JournalDecoder
+        if not hasattr(self, '_row_decoder'):
+            self._row_decoder = JournalDecoder()
         rows = []
         for path in sorted(Path(self.state['events']).glob('*.jsonl')):
             data = path.read_bytes()
             committed = data[:data.rfind(b'\n') + 1]
             # A live owner's unfinished write cannot supply settlement evidence.
-            rows.extend(json.loads(line) for line in committed.decode('utf-8').split('\n')[:-1])
+            rows.extend(self._row_decoder.decode(str(path), committed.decode('utf-8'),
+                                                 literal_newlines=True))
         return rows
 
     def admit(self, argv, cwd, env):

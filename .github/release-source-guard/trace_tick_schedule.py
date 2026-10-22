@@ -8,7 +8,14 @@ IDLE_SECONDS = 0.010
 
 
 def progress(trace):
-    return (len(trace.records), frozenset(trace.active), frozenset(trace.pending), tuple(trace.poison))
+    # The tracer still observes both stops and the actual result of every wait.
+    # Merely entering/leaving wait4 or waitid grants no launch authority. A
+    # recorded result, exec, receipt, child change or poison remains immediate;
+    # otherwise use the existing ten-millisecond idle acquisition bound.
+    pending = frozenset(pid for pid, row in trace.pending.items()
+                        if type(row) is not dict or type(row.get('syscall')) is not int
+                        or row['syscall'] not in (61, 247))
+    return (len(trace.records), frozenset(trace.active), pending, tuple(trace.poison))
 
 
 class TickSchedule:

@@ -161,8 +161,8 @@ jobs:
           enable-cache: false
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
-      - name: Real expiry and settlement cleanup cases
-        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/test_approval_recovery.py::test_real_deadline_timer_erases_memory_and_cleans_reader tests/test_approval_recovery.py::test_real_deadline_expires_during_settlement_handshake tests/test_approval_recovery.py::test_expiry_cleanup_closes_owner_after_writer_error[reset] tests/test_approval_recovery.py::test_expiry_cleanup_closes_owner_after_writer_error[other]
+      - name: Original recorded completion and cleanup timing cases
+        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/test_acp_cleanup.py::test_recorded_transport_failures[success-work] tests/test_acp_cleanup.py::test_recorded_transport_failures[success-validate] tests/test_acp_cleanup.py::test_recorded_transport_failures[success-terminal_reviewer]
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: Preserve encrypted diagnostic evidence
         if: always()

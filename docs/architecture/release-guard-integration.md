@@ -1251,3 +1251,19 @@ to prove the unchanged native Python bridge and numeric child-wait floor, plus
 these four in-process expiry cases. It cannot certify SOURCE or admit provider
 launches.
 The complete unexcluded release suite and every other release gate remain.
+
+### Journal decoding and wait observation scheduling
+
+Journal consumers reacquire current file bytes on every consumption. Immutable
+validated line framing may be reused for identical bytes or a validated appended
+prefix; each result contains fresh JSON objects. Malformed committed records,
+current-byte changes and read errors retain their original refusal behavior.
+Uncommitted operation-journal tails cannot supply settlement evidence.
+
+The Linux tracer still observes both syscall stops and actual numeric results
+of every wait4/waitid. A pending wait alone uses the existing 10 ms idle census
+bound rather than forcing a complete census at both stops. Recorded results,
+exec decisions, child changes, poison, readable receipt channels and pending
+receipt clients force the original immediate service. Adoptive-wait collection
+and pre-wait identity acquisition remain outside this idle scheduling decision.
+No test deadline, original parent wait, source selection or review policy changes.

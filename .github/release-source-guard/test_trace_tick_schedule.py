@@ -179,3 +179,56 @@ def test_failed_root_drain_requires_its_actual_unique_matching_numeric_wait(drif
         rows.append(dict(rows[0]))
     with pytest.raises(RuntimeError, match='failed_source_root_wait_binding'):
         check(SimpleNamespace(child=9, root_parent_wait=256, active={27}, records=rows))
+
+
+@pytest.mark.parametrize('number', [61, 247])
+def test_wait_entry_and_empty_exit_do_not_amplify_idle_census(monkeypatch, number):
+    now = [100.0]
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: now[0])
+    first, second, trace, supervisor = objects()
+    try:
+        service = scheduling.TickSchedule()
+        service.complete(trace)
+        for _ in range(1000):
+            trace.pending[1] = {'syscall': number, 'status_address': 123}
+            assert not service.due(trace, supervisor)
+            trace.pending.pop(1)
+            assert not service.due(trace, supervisor)
+        now[0] += .011
+        assert service.due(trace, supervisor)
+        service.complete(trace)
+        trace.records.append({'kind': 'original_parent_wait4', 'child': 2, 'raw': 0})
+        assert service.due(trace, supervisor)
+    finally:
+        first.close()
+        second.close()
+
+
+@pytest.mark.parametrize('row', [{'syscall': 59}, {'syscall': 322}, {'syscall': 999},
+                               {'syscall': '61'}, {'syscall': True}, {}, None])
+def test_exec_unknown_and_malformed_pending_keep_immediate_acquisition(monkeypatch, row):
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: 100.0)
+    first, second, trace, supervisor = objects()
+    try:
+        service = scheduling.TickSchedule()
+        service.complete(trace)
+        trace.pending[1] = row
+        assert service.due(trace, supervisor)
+    finally:
+        first.close()
+        second.close()
+
+
+def test_receipt_wakes_service_during_an_inflight_wait(monkeypatch):
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: 100.0)
+    first, second, trace, supervisor = objects()
+    try:
+        trace.pending[1] = {'syscall': 61}
+        service = scheduling.TickSchedule()
+        service.complete(trace)
+        second.sendall(b'original receipt bytes')
+        assert service.due(trace, supervisor)
+        assert first.recv(100) == b'original receipt bytes'
+    finally:
+        first.close()
+        second.close()
