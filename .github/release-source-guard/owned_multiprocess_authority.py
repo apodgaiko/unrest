@@ -67,6 +67,9 @@ class OwnedMultiprocessCustody:
         from candidate_git_custody import resolve as candidate_resolve
         if candidate_resolve(self, trace, pid, path, vector, environment, cwd):
             return True
+        from orders_git_custody import resolve as orders_resolve
+        if orders_resolve(self, trace, pid, path, vector, environment, cwd):
+            return True
         from invalid_format_custody import resolve as invalid_resolve
         if invalid_resolve(self, trace, pid, path, vector, environment, cwd):
             return True

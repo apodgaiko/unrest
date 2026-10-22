@@ -215,6 +215,15 @@ def admit(argv, cwd, env, state, append, refuse):
         selected = namespace['admit'](argv, cwd, env, state, append, refuse)
         if selected is not None:
             return selected
+    orders = Path(state["guard"]).with_name("orders_git.py")
+    if str(orders) in state["direct_support"]["files"]:
+        if sha(orders) != state["direct_support"]["files"][str(orders)]:
+            refuse("orders_git_support_drift")
+        namespace = {"__file__": str(orders)}
+        exec(compile(orders.read_bytes(), str(orders), "exec"), namespace)
+        selected = namespace["admit"](argv, cwd, env, state, append, refuse)
+        if selected is not None:
+            return selected
     crash = Path(state["guard"]).with_name("crash_route.py")
     namespace = {"__file__": str(crash)}
     exec(compile(crash.read_bytes(), str(crash), "exec"), namespace)

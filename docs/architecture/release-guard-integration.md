@@ -1335,3 +1335,20 @@ Native pin-refusal and parking-admission negative cases are excluded. Six finite
 supporting diagnostic groups retain the existing 600-second root bound; original
 test deadlines, assertions, full unexcluded source command, and release gates do
 not change. These controlled proofs do not establish native-provider acceptance.
+
+The revocation fixture distinguishes an open service's real HTTP stale-capability
+rejection from automatic shutdown. After a failed turn has already closed the
+owner, it now requires the original listener FD to be closed and the original
+server task to have completed normally. It does not reconnect to a dead endpoint
+or accept a guard exception as product evidence. Open/disabled sessions retain
+the real HTTP rejection; grants, candidate bytes, no-send/no-ack, privacy and all
+numeric child-returncode assertions remain.
+
+Finite-order fixture repositories disable automatic maintenance and GC before
+their original setup commit; copied candidates and integration retain those
+settings. This avoids incidental background children without admitting them.
+The thirty original finite-order cases admit only twelve original custody Git
+call sites, exact helper code/argv/environment and canonical owned repositories.
+A stopped-image check independently joins the launch token, caller binding,
+parent birth and native Git image before execution. No maintenance, arbitrary Git
+command, provider launch or wait-status exception is added.

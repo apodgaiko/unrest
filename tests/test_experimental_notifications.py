@@ -307,15 +307,13 @@ async def test_controlled_process_http_revocation_and_warning_privacy(tmp_path, 
             assert d['failure'] == owner.startup_diagnostics['worker'].snapshot()['failure']
             if grants:
                 identity, token = grants[-1]
-                try:
-                    async with asyncio.timeout(2):
-                        async with Client(owner.url, auth=owner._connection) as client:
-                            response = await client.call_tool('replace_file', {
-                                'turn': asdict(identity), 'capability': token,
-                                'name': 'a', 'content': CANARY}, raise_on_error=False)
-                            assert response.is_error
-                except (OSError, RuntimeError, TimeoutError):
-                    pass  # Closed owned HTTP transport is also a concrete refusal.
+                # The failed turn already awaits automatic shutdown. Prove that
+                # native closure directly; a guard/network error is not product
+                # evidence that a stale capability was rejected over HTTP.
+                assert owner._listener is not None and owner._listener.fileno() == -1
+                assert owner._server_task is not None and owner._server_task.done()
+                assert not owner._server_task.cancelled()
+                assert owner._server_task.exception() is None
                 assert (candidate / 'a').read_text() == 'base\n'
     finally:
         with contextlib.suppress(LeaseRefused):
