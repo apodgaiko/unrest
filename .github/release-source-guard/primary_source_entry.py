@@ -251,8 +251,12 @@ class Observer:
         cleanup = item.nodeid.startswith(tuple('tests/test_acp_cleanup.py::' + owner + '[' for owner in (
             'test_recorded_transport_failures', 'test_cleanup_faults_and_repeated_cancellation',
             'test_saved_review_observer_compatibility')))
-        from approval_stall_diagnostic import case_seconds
-        approval_seconds = case_seconds(self.profile, item.nodeid)
+        approval_seconds = None
+        if item.nodeid.startswith('tests/test_approval_recovery.py::'):
+            support = '/guard/finite/approval_stall_diagnostic.py'
+            diagnostic = load('approval_stall_diagnostic', support,
+                              self.manifest['direct_support']['files'][support])
+            approval_seconds = diagnostic.case_seconds(self.profile, item.nodeid)
         if not startup and not cleanup and approval_seconds is None:
             return
         import asyncio

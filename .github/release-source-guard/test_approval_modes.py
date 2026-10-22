@@ -125,7 +125,7 @@ def test_approval_pipe_registration_mutations_refuse(monkeypatch, mutation):
 
 
 def test_approval_stall_capture_is_diagnostic_only_and_exact_selection():
-    from approval_stall_diagnostic import case_seconds
+    from finite.approval_stall_diagnostic import case_seconds
     from primary_policy import TEST_APPROVAL_CLOSURE_CASES
     profile = {'source_mode': 'TEST-positive',
                'orig_argv': ['python', 'pytest', '-q', *TEST_APPROVAL_CLOSURE_CASES]}
@@ -165,3 +165,14 @@ def test_missing_owned_cwd_kernel_record_poison_is_retained(monkeypatch):
     with pytest.raises(RuntimeError, match='cardinality'):
         host.check(authority, trace, 42, [])
     assert trace.poison == poison == ['approval_owned_cwd_kernel_binding']
+
+
+def test_approval_diagnostic_has_no_checkout_only_imports():
+    from finite import approval_stall_diagnostic as diagnostic
+    from primary_policy import TEST_APPROVAL_CLOSURE_CASES
+    import hashlib
+    import json
+    assert diagnostic.SELECTION_SHA256 == hashlib.sha256(json.dumps(['-q', *TEST_APPROVAL_CLOSURE_CASES]).encode()).hexdigest()
+    tree = ast.parse(Path(diagnostic.__file__).read_bytes())
+    assert all(n.module == '__future__' for n in ast.walk(tree) if isinstance(n, ast.ImportFrom))
+    assert {alias.name for n in ast.walk(tree) if isinstance(n, ast.Import) for alias in n.names} == {'hashlib', 'json'}
