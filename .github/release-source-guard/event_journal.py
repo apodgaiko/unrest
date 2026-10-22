@@ -4,6 +4,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 import json
 import math
+import marshal
+import sys
 from pathlib import Path
 
 TIMED = frozenset({'admitted', 'actual_launch_binding', 'ready', 'source_entry',
@@ -30,6 +32,71 @@ def descriptor(row):
     except (KeyError, TypeError):
         # Let the complete original loop establish error order and side effects.
         return None
+
+
+_JSON_LOADS = json.loads
+_JSON_DECODER = json._default_decoder
+_JSON_POLICY = vars(_JSON_DECODER).copy()
+BLOCK = 64
+
+
+def shallow_json(value):
+    """Only decoder-policy-independent scalar ranges and shallow containers."""
+    pending = [(value, 0)]
+    while pending:
+        item, depth = pending.pop()
+        if depth > 16:
+            return False
+        if type(item) is dict:
+            pending.extend((child, depth + 1) for child in item.values())
+        elif type(item) is list:
+            pending.extend((child, depth + 1) for child in item)
+        elif type(item) is int:
+            if item.bit_length() > 64:
+                return False
+        elif type(item) is float:
+            if not math.isfinite(item):
+                return False
+        elif type(item) not in (str, bool, type(None)):
+            return False
+    return True
+
+
+class ParseBlocks:
+    """Immutable encodings of bounded JSON parsing, never retained authority."""
+    def __init__(self, previous=None):
+        self.blocks = previous.blocks if previous is not None else ()
+
+    def materialize(self, chunk):
+        frame, depth = sys._getframe(), 0
+        while frame is not None:
+            depth += 1
+            frame = frame.f_back
+        if (sys.getrecursionlimit() - depth < 128 or json.loads is not _JSON_LOADS
+                or json._default_decoder is not _JSON_DECODER
+                or vars(_JSON_DECODER) != _JSON_POLICY):
+            return None
+        lines = chunk[1]
+        rows, retained = [], []
+        for offset in range(0, len(lines), BLOCK):
+            part = lines[offset:offset + BLOCK]
+            index = offset // BLOCK
+            old = self.blocks[index] if index < len(self.blocks) else None
+            if old is not None and old[0] == part:
+                current = marshal.loads(old[1])
+                encoded = old[1]
+            else:
+                try:
+                    current = json.loads('[' + ','.join(part) + ']')
+                except RecursionError:
+                    return None
+                if not shallow_json(current):
+                    return None
+                encoded = marshal.dumps(current)
+            retained.append((part, encoded))
+            rows.extend(current)
+        self.blocks = tuple(retained)
+        return rows
 
 
 class JournalSnapshot(Sequence):
@@ -69,10 +136,12 @@ class JournalSnapshot(Sequence):
         if self.full is None:
             rows = []
             for chunk in self.chunks:
-                try:
-                    current = json.loads(chunk[2])
-                except RecursionError:
-                    current = [json.loads(line) for line in chunk[1]]
+                current = chunk[6].materialize(chunk)
+                if current is None:
+                    try:
+                        current = json.loads(chunk[2])
+                    except RecursionError:
+                        current = [json.loads(line) for line in chunk[1]]
                 rows.extend(current)
             for index, row in self.parsed.items():
                 rows[index] = row
@@ -150,8 +219,9 @@ class EventJournal:
                     if index < len(pieces) - 1:
                         stable_count = len(lines)
                 stable_bytes = body[:len(body) - len(pieces[-1].encode('utf-8'))] if pieces else body
+                parsed = ParseBlocks(chunk[6] if chunk is not None else None)
                 chunk = (body, tuple(lines), '[' + ','.join(lines) + ']', tuple(metadata),
-                         stable_bytes, stable_count)
+                         stable_bytes, stable_count, parsed)
             retained[path] = chunk
             current.append(chunk)
         self._snapshots = retained

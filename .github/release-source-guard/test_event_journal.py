@@ -154,3 +154,80 @@ def test_array_envelope_keeps_original_deep_record_boundary(tmp_path):
             assert type(row) is list and len(row) == 1
             row = row[0]
         assert row == 0
+
+
+def test_append_reuses_only_complete_matching_blocks_and_fresh_values(tmp_path):
+    path = tmp_path / '1.jsonl'
+    path.write_text(''.join(json.dumps({'kind': 'ready', 'n': n, 'nested': [n]}) + '\n'
+                            for n in range(module.BLOCK * 3)))
+    reader = module.EventJournal()
+    first = reader.snapshot(tmp_path)
+    rows = first.materialize()
+    blocks = first.chunks[0][6].blocks
+    assert len(blocks) == 3 and all(type(row[1]) is bytes for row in blocks)
+    rows[0]['nested'].append('mutated')
+    with path.open('a') as stream:
+        stream.write('{"kind":"forbidden","reason":"new-current-row"}\n')
+    second = reader.snapshot(tmp_path)
+    assert second.materialize() == original(tmp_path)
+    assert len(second.chunks[0][6].blocks) == 4
+    assert all(a[1] is b[1] for a, b in zip(blocks, second.chunks[0][6].blocks))
+    path.write_text('{"kind":"forbidden","reason":"rewrite"}\n')
+    assert reader.events(tmp_path) == original(tmp_path)
+
+
+def test_changed_integer_decoder_limit_still_raises_after_warm_read(tmp_path):
+    path = tmp_path / '1.jsonl'
+    previous = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(0)
+        path.write_text('{"kind":"ready","value":' + '9' * 700 + '}\n')
+        reader = module.EventJournal()
+        assert reader.events(tmp_path) == original(tmp_path)
+        sys.set_int_max_str_digits(640)
+        with pytest.raises(ValueError):
+            reader.events(tmp_path)
+        with pytest.raises(ValueError):
+            original(tmp_path)
+    finally:
+        sys.set_int_max_str_digits(previous)
+
+
+@pytest.mark.parametrize('literal', ['NaN', 'Infinity', '-Infinity'])
+def test_nonfinite_decoder_constants_never_cross_the_parse_cache(tmp_path, literal):
+    path = tmp_path / '1.jsonl'
+    path.write_text('{"kind":"ready","value":' + literal + '}\n')
+    reader = module.EventJournal()
+    first, second = reader.events(tmp_path), reader.events(tmp_path)
+    assert first == second == original(tmp_path)
+    assert first[0]['value'] is second[0]['value']
+    assert reader.snapshot(tmp_path).chunks[0][6].blocks == ()
+
+
+def test_narrow_recursion_margin_uses_original_decoder(tmp_path, monkeypatch):
+    path = tmp_path / '1.jsonl'
+    path.write_text('{"kind":"ready","nested":[1]}\n')
+    reader = module.EventJournal()
+    assert reader.events(tmp_path) == original(tmp_path)
+    def forbidden(*a):
+        raise AssertionError('no parse-cache replay near recursion boundary')
+    monkeypatch.setattr(module.marshal, 'loads', forbidden)
+    monkeypatch.setattr(module.sys, 'getrecursionlimit', lambda: 100)
+    assert reader.events(tmp_path) == original(tmp_path)
+
+
+@pytest.mark.parametrize('change', ['decoder', 'policy'])
+def test_changed_decoder_policy_uses_current_original_parser(tmp_path, monkeypatch, change):
+    path = tmp_path / '1.jsonl'
+    path.write_text('{"kind":"ready","nested":[1]}\n')
+    reader = module.EventJournal()
+    assert reader.events(tmp_path) == original(tmp_path)
+    def forbidden(*a):
+        raise AssertionError('changed JSON policy must not replay an encoding')
+    monkeypatch.setattr(module.marshal, 'loads', forbidden)
+    if change == 'decoder':
+        monkeypatch.setattr(module.json, '_default_decoder', json.JSONDecoder(
+            object_hook=lambda value: {**value, 'decoder_marker': True}))
+    else:
+        monkeypatch.setattr(module.json._default_decoder, 'strict', False)
+    assert reader.events(tmp_path) == original(tmp_path)

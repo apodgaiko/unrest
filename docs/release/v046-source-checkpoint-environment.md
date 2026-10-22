@@ -1415,3 +1415,13 @@ initialization requests still execute, the one-second prompt rendezvous remains,
 and the test retains serialized MCP startup, two active sessions, empty drains,
 ordered successful handoffs and completion assertions. Missing initialization
 fails within ten seconds; serialized prompts still fail the original overlap check.
+
+Observer journal materialization may reuse immutable parsing encodings for exact
+unchanged blocks of at most 64 JSON rows. Each snapshot still reads every current
+journal byte, and each handler receives the complete current list with fresh
+mutable objects. No admission result or live kernel identity observation is reused.
+Only shallow containers, finite floats and integers within 64 bits use this path;
+other values retain the original JSON decoder. Changed decoder policy or a narrow
+recursion margin also selects that original path. Partial appends, rewrites,
+truncation and new forbidden rows remain visible before the original authority and
+cleanup checks. Local parsing measurements are not source or release certification.
