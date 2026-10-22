@@ -10,7 +10,7 @@ from finite.linux_identity import identity
 SOURCE = 'src/unrest_harness/acp_runner.py'
 PIN = '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f'
 TEST = 'tests/test_approval_recovery.py'
-TEST_PIN = 'ac7ac78e3547a29694971aa7cbe858465243a135d0ab1f30ef4f51502f6b586c'
+TEST_PIN = '5f594cd2b8921e01cbb6e1d3aa11ed3cb84d5a9e7d07843b9e2c7a34fc36798c'
 
 
 def binding(authority, pid):

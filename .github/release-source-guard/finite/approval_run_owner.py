@@ -13,7 +13,7 @@ BOUNDARIES = ('success', 'cancel', 'crash', 'cancel_after_send', 'crash_after_se
               'cancel_after_continue', 'crash_after_continue')
 EXECUTOR = 'tests.fixtures.approval_run_executor:execute'
 FILES = {
-    TEST: 'ac7ac78e3547a29694971aa7cbe858465243a135d0ab1f30ef4f51502f6b586c',
+    TEST: '5f594cd2b8921e01cbb6e1d3aa11ed3cb84d5a9e7d07843b9e2c7a34fc36798c',
     'tests/fixtures/approval_run_executor.py': 'f6e24716d1b9103035fe99fe2af9f00bf42544d31086caa94486f3e8259a4d33',
     'tests/fixtures/approval_recovery_acp.py': '1813512c5ad2177af6738fbfb99e9d43f6884394878e1034d3956ca5f0f31d46',
     'tests/fixtures/approval_native_backend.py': 'a18a3a8c87c86b5629304e99c6667b8c6accd31b72ded5885ffe386a6e803ba3',

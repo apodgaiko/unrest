@@ -14,6 +14,8 @@ def case_seconds(profile, case):
             or hashlib.sha256(json.dumps(profile.get('orig_argv', [])[2:]).encode()).hexdigest() not in SELECTIONS
             or case not in profile['orig_argv'][3:]):
         return None
+    if case == 'tests/test_approval_recovery.py::test_real_deadline_timer_erases_memory_and_cleans_reader':
+        return 20
     if case.startswith(PREFIX + '['):
         return 60
     if case.startswith(DURABLE_PREFIX + '['):

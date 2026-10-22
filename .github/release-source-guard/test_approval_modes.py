@@ -763,7 +763,7 @@ def test_appended_regression_updates_only_exact_existing_anchor_file_pin():
     row=deepcopy(transition.TEST_ANCHOR)
     manifest={'anchor_inventory':[row]}
     transition.admit_test_anchor(manifest)
-    assert row == {**transition.TEST_ANCHOR, 'source_sha256':transition.POST[row['path']]}
+    assert row == {**transition.TEST_ANCHOR, 'source_sha256':transition.POST[row['path']], 'line':734}
     for key,value in [('line',731),('route','subprocess.Popen'),('owner','another'),
                       ('expression_ast_sha256','0'*64),('source_sha256','0'*64)]:
         changed=deepcopy(transition.TEST_ANCHOR)
@@ -851,3 +851,29 @@ def test_pre_wait_normalization_rejects_callback_or_wait_mutation(before,after):
     assert before in source
     with pytest.raises(AssertionError):
         restore_before_numeric_wait(ast.parse(source.replace(before,after)))
+
+
+def test_expiry_fixture_delta_preserves_all_previous_test_bytes():
+    import approval_import_source_inputs as transition
+    body = (Path(__file__).parents[2] / 'tests/test_approval_recovery.py').read_bytes()
+    transition.verify_test(body)
+    for changed in (body.replace(b'owner.remaining()', b'30', 1),
+                    body.replace(b'assert owner.event is None', b'assert True', 1),
+                    body.replace(b'deadline=time.monotonic() + 0.2',
+                                 b'deadline=time.monotonic() + 20', 1),
+                    body.replace(transition.SETTLEMENT_AFTER,
+                                 transition.SETTLEMENT_AFTER + b'    pass\n', 1)):
+        with pytest.raises(RuntimeError):
+            transition.verify_test(changed)
+
+
+def test_real_expiry_stall_probe_keeps_source_deadline_and_exact_diagnostic_scope():
+    from finite.approval_stall_diagnostic import case_seconds
+    from primary_policy import TEST_APPROVAL_REMAINING_CASES
+    profile = {'source_mode': 'TEST-positive',
+               'orig_argv': ['python', 'pytest', '-q', *TEST_APPROVAL_REMAINING_CASES]}
+    case = 'tests/test_approval_recovery.py::test_real_deadline_timer_erases_memory_and_cleans_reader'
+    assert case_seconds(profile, case) == 20
+    assert case_seconds({**profile, 'source_mode': 'SOURCE'}, case) is None
+    assert case_seconds({**profile, 'orig_argv': profile['orig_argv'][:-1]}, case) is None
+    assert case_seconds(profile, case + '-foreign') is None

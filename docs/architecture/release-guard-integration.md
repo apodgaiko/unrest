@@ -1221,3 +1221,13 @@ reaping retries current parenthood at a bounded 20ms interval even without new
 trace rows, since reparenting can finish between observer notifications. Every
 retry repeats current birth/UID/zombie/parent-death checks and only an actual
 matching numeric wait can close it. Absence or an empty poll creates no status.
+
+The controlled approval test setup bounds its settlement wait by the owner's
+existing remaining expiry. If real expiry erases the denial before settlement,
+the helper returns the ordinary unavailable review task instead of awaiting a
+settlement event that can no longer arrive. The original 200ms real-deadline
+case and every assertion remain unchanged. A delayed-settlement regression runs
+that same oracle, without advancing a fake clock or extending the deadline.
+The exact diagnostic approval selection can capture this case's task stack and
+end its failed TEST root after 20 seconds; SOURCE budgets and verdicts are
+unchanged, and diagnostic output cannot certify the release.

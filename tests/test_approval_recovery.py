@@ -335,7 +335,11 @@ async def install_pending(owner, *, raw=None):
     await write_frame(
         writer, {"event": "settled", "thread_id": "thread-1", "turn_id": "turn-1"}, 32768
     )
-    await owner.settled.wait()
+    try:
+        await asyncio.wait_for(owner.settled.wait(), owner.remaining())
+    except TimeoutError:
+        # Expiry can close the relay before this setup handshake settles.
+        return reader, writer, asyncio.create_task(owner.wait_for_review())
     store = owner.store
     store.begin_provider_review(*owner.binding, "thread-1")
     store.save_provider_review(
@@ -1200,3 +1204,16 @@ async def test_host_waits_for_submission_receipt(tmp_path):
         writer.close()
         await writer.wait_closed()
         await owner.close()
+
+
+async def test_real_deadline_expires_during_settlement_handshake(tmp_path, monkeypatch):
+    read = recovery.read_frame
+
+    async def delayed_settlement(reader, limit):
+        message = await read(reader, limit)
+        if message.get("event") == "settled":
+            await asyncio.sleep(0.3)
+        return message
+
+    monkeypatch.setattr(recovery, "read_frame", delayed_settlement)
+    await asyncio.wait_for(test_real_deadline_timer_erases_memory_and_cleans_reader(tmp_path), 1)
