@@ -146,13 +146,15 @@ _BACKEND_POSTIMAGES = ast.literal_eval(ast.parse(
     (Path(__file__).parent / 'finite/backend_postimage_catalog.py').read_bytes()).body[2].value)
 _SETUP_CASES = ast.literal_eval(ast.parse(
     (Path(__file__).parent / 'finite/orders_git_data.py').read_bytes()).body[3].value)
-_BACKEND_MISC = tuple(c for c in _BACKEND_POSTIMAGES if c not in _SETUP_CASES)
+_BACKEND_CONFIG = tuple(c for c, row in _BACKEND_POSTIMAGES.items()
+                        if row['script_sha256'] == 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53')
+_BACKEND_MISC = tuple(c for c in _BACKEND_POSTIMAGES if c not in _SETUP_CASES and c not in _BACKEND_CONFIG)
 _BACKEND_ORDERS = tuple(c for c in _BACKEND_POSTIMAGES if 'finite_orders.py::' in c)
 _SETUP_ADDITIONAL = tuple(c for c in _SETUP_CASES if 'finite_orders.py::' not in c)
 TEST_BACKEND_POSTIMAGE_GROUPS = (
     _BACKEND_MISC[:20], _BACKEND_MISC[20:35], _BACKEND_MISC[35:],
     _BACKEND_ORDERS[:10], _BACKEND_ORDERS[10:20], _BACKEND_ORDERS[20:],
-) + tuple(_SETUP_ADDITIONAL[i:i + 10] for i in range(0, len(_SETUP_ADDITIONAL), 10))
+) + tuple(_SETUP_ADDITIONAL[i:i + 10] for i in range(0, len(_SETUP_ADDITIONAL), 10)) + (_BACKEND_CONFIG[:4], _BACKEND_CONFIG[4:])
 
 TEST_GIT_OVERHEAD_CASES = (_BACKEND_ORDERS[0],)
 TEST_COHORT_STARTUP_CASES = TEST_GIT_OVERHEAD_CASES + tuple(

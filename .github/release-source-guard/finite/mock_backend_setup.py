@@ -22,6 +22,12 @@ SESSION = 'src/unrest_harness/experimental_session.py'
 SESSION_PIN = '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2'
 JSON_LEAVES = frozenset({'controlled-acp', 'canonical-backend',
                          'source-controlled-backend-postimage'})
+CONFIGURATION_CASES = frozenset(
+    prefix + '[' + skills + '-' + context + ']'
+    for prefix in (
+        'tests/test_controlled_acp_warnings.py::test_original_private_configuration',
+        'tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter')
+    for skills in ('False', 'True') for context in ('False', 'True'))
 
 
 def selected_script(state, payload):
@@ -38,7 +44,8 @@ def selected_script(state, payload):
         if (not path.is_absolute() or '..' in path.parts or path.name != 'fake-app-server'
                 or not path.is_relative_to(Path(state['owned_root']))):
             return None
-        return target, BACKEND_PIN if kind == 'canonical-backend' else BARRIER_PIN
+        return target, (BACKEND_PIN if kind == 'canonical-backend'
+                        or state.get('case') in CONFIGURATION_CASES else BARRIER_PIN)
     return None
 
 
@@ -134,7 +141,7 @@ def select(guard, endpoint):
             catalog = guard.checked_source(catalog_path,
                 state['direct_support']['files'][str(catalog_path)])
             row = catalog['CASES'].get(state.get('case'))
-            if (row is None or row['script_sha256'] != BARRIER_PIN
+            if (row is None or row['script_sha256'] != script_pin
                     or row['filename'] != 'fake-app-server'
                     or any(state['product_pins'].get(name) != pin
                            or hashlib.sha256((Path(state['checkout']) / name).read_bytes()).hexdigest() != pin

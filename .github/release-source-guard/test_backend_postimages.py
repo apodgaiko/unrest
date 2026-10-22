@@ -163,8 +163,8 @@ def test_exact_pending_selection(tmp_path, change):
 
 
 def test_catalog_closes_original_sources_without_native_or_parking_negatives():
-    assert len(catalog.CASES) == 130
-    assert len({r["script_sha256"] for r in catalog.CASES.values()}) == 26
+    assert len(catalog.CASES) == 138
+    assert len({r["script_sha256"] for r in catalog.CASES.values()}) == 27
     for case, row in catalog.CASES.items():
         assert case.split("::")[0] in row["sources"]
         assert "parking_admission" not in case and "runtime_pin" not in case
@@ -185,10 +185,12 @@ def test_configuration_function_authentication_rejects_substitution():
     assert not route.original_function(config, lambda: None, path, state)
 
 
+@pytest.mark.parametrize("case", [CASE, *[c for c, row in catalog.CASES.items()
+    if row["script_sha256"] == catalog.PINS["tests/fixtures/experimental_session_app_server.py"]]])
 @pytest.mark.parametrize(
     "change", [None, "override-argv", "override-inputs", "foreign-config-root", "extra-argument"]
 )
-def test_configured_pending_vector_retains_exact_rendering(tmp_path, change):
+def test_configured_pending_vector_retains_exact_rendering(tmp_path, change, case):
     from unrest_harness import experimental_provider_config as config_module
 
     root = tmp_path / "pending-owner"
@@ -204,6 +206,8 @@ def test_configured_pending_vector_retains_exact_rendering(tmp_path, change):
         )
         .encode()
     )
+    if case != CASE:
+        body = (ROOT / "tests/fixtures/experimental_session_app_server.py").read_bytes()
     launcher = root / "fake-app-server"
     launcher.write_bytes(body)
     config = config_module.ProviderConfig(
@@ -239,8 +243,8 @@ def test_configured_pending_vector_retains_exact_rendering(tmp_path, change):
     state = {
         "checkout": str(ROOT),
         "owned_root": str(tmp_path),
-        "case": CASE,
-        "product_pins": {**catalog.PINS, **catalog.CASES[CASE]["sources"]},
+        "case": case,
+        "product_pins": {**catalog.PINS, **catalog.CASES[case]["sources"]},
         "runtime": {"realpath": argv[0]},
         "isolated_named": named,
     }
@@ -263,9 +267,9 @@ def test_diagnostic_groups_are_closed_and_do_not_certify_source():
     import primary_source_inputs as inputs
 
     groups = policy.TEST_BACKEND_POSTIMAGE_GROUPS
-    assert [len(g) for g in groups] == [20, 15, 15, 10, 10, 10] + [10] * 8 + [8]
+    assert [len(g) for g in groups] == [20, 15, 15, 10, 10, 10] + [10] * 8 + [8, 4, 4]
     assert set(c for g in groups for c in g) == set(catalog.CASES) | set(policy._SETUP_CASES)
-    assert len([c for g in groups for c in g]) == 168
+    assert len([c for g in groups for c in g]) == 176
     for group in groups:
         script = ("env -u CODEX_PATH uv run pytest -q " + " ".join(group)).encode()
         plan = inputs.test_plan(script, "diagnostic", "TEST-positive")
@@ -339,6 +343,6 @@ def test_policy_loading_never_imports_or_caches_source_only_catalog(tmp_path):
         timeout=15,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"cases": 168, "imported": False}
+    assert json.loads(result.stdout) == {"cases": 176, "imported": False}
     assert not list((copied / "finite").rglob("*.pyc"))
     assert list((copied / "__pycache__").glob("primary_policy.*.pyc"))

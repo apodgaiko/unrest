@@ -1397,3 +1397,14 @@ restarts other tools' events, and releases only its own callbacks and local
 flags after the original call report. It records names, counts and CPU totals,
 not values or bodies. This optional diagnosis is absent from SOURCE and other
 cases; its timings cannot certify performance or change any test deadline.
+
+
+The eight original private-configuration cases (four Boolean pairs each in the
+original function and its warning wrapper) also bind the unmodified backend
+bytes through the same closed postimage route. Both test sources, original
+configuration renderer, current caller code/globals, exact argv/environment and
+owned paths remain required. Only those exact cases reuse the existing stdlib
+backend setup omission; unknown cases and changed bytes retain ordinary setup
+and fail closed. The two four-case diagnostics preserve every original privacy,
+completion, account, context-revocation and child-cleanup assertion. Original
+failed custody and missing waits remain failures, not repaired evidence.

@@ -167,3 +167,16 @@ def test_controlled_leaf_source_is_exact_stdlib_only(source, pin, imports):
     assert actual == imports
     assert not any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                    and node.func.id in {'eval', 'exec', '__import__'} for node in ast.walk(tree))
+
+
+@pytest.mark.parametrize('case', sorted(setup.CONFIGURATION_CASES))
+def test_only_exact_original_configuration_cases_select_canonical_postimage(case):
+    from finite import backend_postimage_catalog as catalog
+    state, endpoint, payload = leaf_context('source-controlled-backend-postimage')
+    state['case'] = payload['case'] = case
+    assert catalog.CASES[case]['script_sha256'] == setup.BACKEND_PIN
+    assert setup.selected_script(state, payload) == (payload['target'], setup.BACKEND_PIN)
+    assert setup.eligible(state, endpoint, payload)
+    assert setup.select(SimpleNamespace(_STATE=state), endpoint) is None
+    state['case'] = payload['case'] = case + '-foreign'
+    assert setup.selected_script(state, payload)[1] == setup.BARRIER_PIN
