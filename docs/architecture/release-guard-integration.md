@@ -1053,3 +1053,12 @@ local/remote endpoints, UID, owner birth and live peer credentials/birth. A
 replacement path, changed descriptor or peer refuses; new connect/listen needs
 the original live listener and path. Listener unlink supplies no new authority.
 Global poison and original-parent wait requirements remain unchanged.
+
+The three byte-pinned controlled JSON approval fixture actors do not use
+FastMCP. They omit only the guard's unrelated FastMCP update-check configuration
+when the original guard-child/endpoint-install frames, exact case/class/token,
+source/body bytes, generated launcher and interpreter all match. The actual
+approval MCP server and RunControl worker retain eager server configuration;
+all unknown contexts and negative dependency controls retain the original
+setup body. No product deadline, native/provider gate, audit hook, descriptor
+check or launch permission changes.

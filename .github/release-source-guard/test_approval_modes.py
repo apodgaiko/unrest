@@ -206,3 +206,78 @@ def test_unrelated_watchdog_keeps_original_call_cancellation():
                             guard=SimpleNamespace(append=lambda row: None), session=None, custodian=None)
     Observer.pytest_runtest_logreport(owner, SimpleNamespace(when='call', nodeid='original', failed=False, outcome='passed'))
     assert calls == ['cancel'] and owner.startup_stall_timer is None
+
+
+def test_actual_mcp_and_foreign_callers_cannot_omit_server_configuration():
+    from finite import approval_json_setup as setup
+    from types import SimpleNamespace
+    for kind in ['source-approval-mcp', 'source-run-worker', 'foreign', 'source-approval-adapter']:
+        assert setup.select(SimpleNamespace(_STATE={'class': kind}), {}) is None
+
+
+@pytest.mark.parametrize('change', ['class', 'case', 'token', 'argv', 'binding', 'mode', 'phase', 'setup'])
+def test_json_approval_setup_selection_refuses_context_mutations(change):
+    from finite import approval_json_setup as setup
+    import os
+    kind = 'source-approval-adapter'
+    source, line, pin = setup.BINDINGS[kind]
+    target = '/source/tests/fixtures/approval_recovery_acp.py'
+    case = routes.PREFIX + '[drop_ack]'
+    state = {'class': kind, 'case': case, 'token': 'exact', 'phase': 'READY', 'checkout': '/source',
+             'runtime': {'paths': ['python']}, 'product_pins': {source: pin}}
+    endpoint = {'token': 'exact', 'identity': {'pid': os.getpid()}}
+    payload = {'class': kind, 'case': case, 'token': 'exact', 'mode': 'script', 'target': target,
+               'path0': '/source/tests/fixtures', 'orig_argv': ['python', target, '/work/scenario'],
+               'sys_argv': [target, '/work/scenario'], 'isolated': False,
+               'source_binding': {'path': '/source/' + source, 'line': line, 'sha256': pin}}
+    assert setup.eligible(state, endpoint, payload, 'drop_ack')
+    if change in {'class', 'case', 'token', 'mode'}:
+        payload[change] = 'foreign'
+    elif change == 'argv':
+        payload['orig_argv'].append('foreign')
+    elif change == 'binding':
+        payload['source_binding']['line'] += 1
+    elif change == 'phase':
+        state['phase'] = 'INSTALLING'
+    else:
+        state['setup_mode'] = 'dependency-source-negative'
+    assert not setup.eligible(state, endpoint, payload, 'drop_ack')
+
+
+def test_json_setup_keeps_original_mock_fallback_and_dependency_body():
+    from test_mock_backend_setup import test_unknown_contexts_and_all_negative_controls_retain_original_setup_body
+    test_unknown_contexts_and_all_negative_controls_retain_original_setup_body()
+
+
+@pytest.mark.parametrize('kind', ['source-approval-adapter', 'source-approval-relay', 'source-approval-python-backend'])
+def test_current_json_script_and_generated_bytes_match_without_server_import(tmp_path, kind):
+    from finite import approval_json_setup as setup
+    import sys
+    root = Path(__file__).resolve().parent
+    if root.name == 'release-source-guard':
+        root = root.parent.parent
+    else:
+        pytest.skip('original product source is absent from the synthetic control compartment')
+    assert (root / 'tests/fixtures/approval_recovery_acp.py').is_file()
+    native = tmp_path / 'controlled-backend'
+    native.write_bytes(f'#!{sys.executable}\n'.encode() + (root / 'tests/fixtures/approval_native_backend.py').read_bytes())
+    if kind == 'source-approval-adapter':
+        target = root / 'tests/fixtures/approval_recovery_acp.py'
+        argument = tmp_path / 'scenario.json'
+        argument.write_text('{}')
+    elif kind == 'source-approval-python-backend':
+        target, argument = native, 'app-server'
+    else:
+        directory = tmp_path / 'unrest-approval-abcdefgh'
+        directory.mkdir()
+        target, argument = directory / 'backend', 'app-server'
+        import hashlib
+        digest = hashlib.sha256(native.read_bytes()).hexdigest()
+        target.write_text(f'#!{sys.executable}\nimport sys\nsys.path.insert(0, {str(root / "src")!r})\n'
+                          'from unrest_harness.approval_relay import main\n'
+                          f'main({str(directory / "control")!r}, {"a" * 64!r}, {str(native)!r}, {digest!r})\n')
+    state = {'class': kind, 'checkout': str(root), 'owned_root': str(tmp_path), 'product_pins': dict(setup.PURE)}
+    payload = {'target': str(target), 'sys_argv': [str(target), str(argument)]}
+    assert setup.script_identity(state, payload) is not None
+    state['product_pins']['src/unrest_harness/approval_native.py'] = 'foreign'
+    assert setup.script_identity(state, payload) is None

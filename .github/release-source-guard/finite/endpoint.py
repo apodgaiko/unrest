@@ -377,6 +377,12 @@ def attach(guard):
         setup_path = Path(guard._STATE['guard']).with_name('mock_backend_setup.py')
         setup = guard.checked_source(setup_path, guard._STATE['direct_support']['files'][str(setup_path)])
         inapplicable = setup['select'](guard, STATE)
+        if inapplicable is None and guard._STATE.get('class') in {
+                'source-approval-adapter', 'source-approval-relay', 'source-approval-python-backend'}:
+            approval_path = Path(guard._STATE['guard']).with_name('approval_json_setup.py')
+            approval = guard.checked_source(approval_path,
+                guard._STATE['direct_support']['files'][str(approval_path)])
+            inapplicable = approval['select'](guard, STATE)
         if inapplicable is not None:
             guard.append(inapplicable)
         else:

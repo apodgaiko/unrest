@@ -232,3 +232,24 @@ def test_retained_socket_does_not_infer_missing_peer_birth(monkeypatch):
     monkeypatch.setattr(host, 'identity', identity)
     with pytest.raises(RuntimeError, match='retained_peer_unavailable'):
         host.handle(supervisor, request, [])
+
+
+def test_successful_kernel_receipt_replaces_recycled_descriptor_cache(monkeypatch):
+    import socket
+    address = '/work/owned/tmp/unrest-approval-abcdefgh/control'
+    state = {'case': client.TEST + '::test_actual_mcp_accept_single_submit_and_receipt',
+             'product_pins': dict(client.PINS), 'owned_root': '/work/owned',
+             'approval_unix_fds': {8: {'address': 'old', 'device': 1, 'inode': 1}}}
+    stream = SimpleNamespace(family=socket.AF_UNIX, type=socket.SOCK_STREAM,
+                             fileno=lambda: 8, getsockname=lambda: address)
+    monkeypatch.setattr(client.os, 'fstat', lambda fd: SimpleNamespace(st_dev=1, st_ino=2))
+    monkeypatch.setattr(client, 'owned_address', lambda *args: True)
+    calls = []
+    endpoint = SimpleNamespace(request=lambda *args, **kwargs: calls.append((args, kwargs)))
+    assert client.receipt('payload', stream, state, endpoint)
+    assert len(calls) == 1 and state['approval_unix_fds'][8]['inode'] == 2
+    monkeypatch.setattr(client, 'owned_address', lambda *args: False)
+    assert client.bound(stream, state) == address
+    monkeypatch.setattr(client.os, 'fstat', lambda fd: SimpleNamespace(st_dev=1, st_ino=3))
+    stream.getpeername = lambda: address
+    assert client.bound(stream, state) is None

@@ -123,6 +123,8 @@ def receipt(operation, stream, state, endpoint):
     endpoint.request('approval_unix', operation=operation, fd=stream.fileno(),
                      address=address, case=state['case'])
     info = os.fstat(stream.fileno())
-    state.setdefault('approval_unix_fds', {}).setdefault(stream.fileno(), {
-        'address': address, 'device': info.st_dev, 'inode': info.st_ino})
+    records = state.setdefault('approval_unix_fds', {})
+    previous = records.get(stream.fileno())
+    if previous is None or (previous['device'], previous['inode']) != (info.st_dev, info.st_ino):
+        records[stream.fileno()] = {'address': address, 'device': info.st_dev, 'inode': info.st_ino}
     return True
