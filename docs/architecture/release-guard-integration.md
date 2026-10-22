@@ -1118,3 +1118,11 @@ at a kernel exit and after the tracer's actual terminal wait. These read-only
 records bind their raw trace row, current identity (when still available),
 observer PID/UID and post-wait process absence. They neither alter the trace
 nor replace an original-parent wait, grant an effect, or certify a checkpoint.
+
+Dependency-cache code comparison constructs the exact same immutable
+`freeze(original_code_identity(code))` tuple directly from all original code
+fields and typed constants. This removes an intermediate dictionary/list walk,
+including recursive repeated traversal of fixed tuple-of-name fields. Compile
+keys, current complete file reads, immutable-image source checks, cache headers,
+UID/link/census checks and every comparison result remain unchanged. No
+authentication result, file observation or mutable input is memoized.

@@ -84,3 +84,63 @@ def test_journal_dependency_reuses_only_pure_state_after_current_support_checks(
     with pytest.raises(RuntimeError, match='primary_dependency_support_drift'):
         value.dependency('/source/.venv/lib/python3.13/site-packages')
     assert len(events) == 2 and value._dependency_comparisons == {'visits': 2}
+
+
+def reference_freeze(value):
+    if type(value) is dict:
+        return ('dict', tuple((key, reference_freeze(item)) for key, item in sorted(value.items())))
+    if type(value) in (list, tuple):
+        return (type(value).__name__, tuple(reference_freeze(item) for item in value))
+    return value
+
+
+@pytest.mark.parametrize('optimize', [0, 1, 2])
+def test_direct_projection_is_exact_original_value_for_nested_code_and_constants(optimize):
+    value, cache = namespace(), {}
+    original = namespace()['code_identity']
+    comparison_functions(value, cache)
+    program = '''"module docs"
+VALUES = (None, True, False, 1, -0.0, 2j, b"bytes", "text", ..., (1, "nested"))
+def outer(arg, /, *args, named=1, **kwargs):
+    captured = named
+    def inner(value):
+        assert value
+        try:
+            return captured, {value for value in ("a", "b") if value in {"a", "b"}}
+        except Exception:
+            raise
+    return inner
+async def iterate(source):
+    async for item in source:
+        yield item
+'''
+    root = compile(program, '/exact.py', 'exec', dont_inherit=True, optimize=optimize)
+    pending = [root]
+    while pending:
+        code = pending.pop()
+        assert value['code_identity'](code) == reference_freeze(original(code))
+        pending.extend(item for item in code.co_consts if type(item) is types.CodeType)
+
+
+@pytest.mark.parametrize('field, replacement', [
+    ('co_argcount', 0), ('co_posonlyargcount', 0), ('co_kwonlyargcount', 0),
+    ('co_stacksize', 100), ('co_flags', 0), ('co_filename', '/foreign.py'),
+    ('co_name', 'foreign'), ('co_qualname', 'foreign.qualified'), ('co_firstlineno', 100),
+    ('co_names', ('foreign',)), ('co_varnames', ('foreign', 'named')),
+    ('co_freevars', ('foreign',)), ('co_cellvars', ('foreign',)),
+    ('co_linetable', b''), ('co_exceptiontable', b''), ('co_consts', (None, 42)),
+])
+def test_every_original_projected_field_keeps_the_original_comparison(field, replacement):
+    value, cache = namespace(), {}
+    original = namespace()['code_identity']
+    comparison_functions(value, cache)
+    module = compile('def call(arg, /, *, named):\n try:\n  return target(arg, named)\n except Exception:\n  raise\n',
+                     '/same.py', 'exec')
+    code = next(item for item in module.co_consts if type(item) is types.CodeType)
+    changes = {field: replacement}
+    if field == 'co_argcount':
+        changes['co_posonlyargcount'] = 0  # Keep the mutated CodeType internally valid.
+    changed = code.replace(**changes)
+    assert value['code_identity'](changed) == reference_freeze(original(changed))
+    assert ((value['code_identity'](code) == value['code_identity'](changed))
+            is (original(code) == original(changed)))

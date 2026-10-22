@@ -623,6 +623,45 @@ def comparison_functions(namespace, cache):
         if type(value) in (list, tuple):
             return (type(value).__name__, tuple(freeze(item) for item in value))
         return value
+    def raw_constant(value):
+        if isinstance(value, types.CodeType):
+            return original(value)
+        if isinstance(value, tuple):
+            return ['tuple', [raw_constant(item) for item in value]]
+        if isinstance(value, frozenset):
+            return ['frozenset', sorted(raw_constant(item) for item in value)]
+        return [type(value).__name__, repr(value)]
+    def constant(value):
+        if isinstance(value, types.CodeType):
+            return full_identity(value)
+        if isinstance(value, tuple):
+            return ('list', ('tuple', ('list', tuple(map(constant, value)))))
+        if isinstance(value, frozenset):
+            return freeze(['frozenset', sorted(raw_constant(item) for item in value)])
+        return ('list', (type(value).__name__, repr(value)))
+    def full_identity(code):
+        # Exactly freeze(original(code)), without constructing and recursively
+        # walking an intermediate dict/list tree for every immutable code field.
+        return ('dict', (
+            ('co_argcount', code.co_argcount),
+            ('co_cellvars', ('tuple', code.co_cellvars)),
+            ('co_filename', code.co_filename),
+            ('co_firstlineno', code.co_firstlineno),
+            ('co_flags', code.co_flags),
+            ('co_freevars', ('tuple', code.co_freevars)),
+            ('co_kwonlyargcount', code.co_kwonlyargcount),
+            ('co_name', code.co_name),
+            ('co_names', ('tuple', code.co_names)),
+            ('co_nlocals', code.co_nlocals),
+            ('co_posonlyargcount', code.co_posonlyargcount),
+            ('co_qualname', code.co_qualname),
+            ('co_stacksize', code.co_stacksize),
+            ('co_varnames', ('tuple', code.co_varnames)),
+            ('code', code.co_code.hex()),
+            ('constants', ('list', tuple(map(constant, code.co_consts)))),
+            ('exceptions', code.co_exceptiontable.hex()),
+            ('lines', code.co_linetable.hex()),
+        ))
     def current_compile(body, filename, mode, *, dont_inherit, optimize):
         key = (body, filename, mode, dont_inherit, optimize)
         if key not in compiled:
@@ -631,7 +670,7 @@ def comparison_functions(namespace, cache):
     def current_identity(code):
         key = marshal.dumps(code)
         if key not in identities:
-            identities[key] = freeze(original(code))
+            identities[key] = full_identity(code)
         return identities[key]
     namespace['compile'] = current_compile
     namespace['code_identity'] = current_identity
