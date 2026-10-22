@@ -117,7 +117,15 @@ def test_exact_version_transition_keeps_historical_template_and_core():
     template = json.loads((ROOT / '.github/release-source-guard/finite/source-template.json').read_bytes())
     original = copy.deepcopy(template)
     release_source_inputs.admit(template, ROOT, lambda root, name: (root / name).read_bytes())
-    assert template['anchor_inventory'] == original['anchor_inventory']
+    untouched = [row for row in template['anchor_inventory'] if row['path'] != 'tests/test_acp_cleanup.py']
+    assert untouched == [row for row in original['anchor_inventory'] if row['path'] != 'tests/test_acp_cleanup.py']
+    changed = [row for row in template['anchor_inventory'] if row['path'] == 'tests/test_acp_cleanup.py']
+    expected = copy.deepcopy(release_source_inputs.CLEANUP_ANCHORS)
+    for row in expected:
+        row['source_sha256'] = release_source_inputs.POST['tests/test_acp_cleanup.py']
+        if row['line'] == 124:
+            row['expression_ast_sha256'] = release_source_inputs.CLEANUP_COMMIT_AST
+    assert changed == expected and len(changed) == 5
     assert set(name for name, pin in template['product_pins'].items()
                if pin != original['product_pins'][name]) == set(release_source_inputs.POST)
     assert template['product_pins'] | release_source_inputs.PRE == original['product_pins']
@@ -200,3 +208,12 @@ from test_lease_probe_lifetime import (  # noqa: F401, E402
     test_unsettled_stream_is_retained_without_closing_a_reused_number,
     test_closed_stream_number_reuse_is_not_closed_by_later_cleanup,
 )
+
+
+@pytest.mark.parametrize('field', ['line', 'owner', 'route', 'source_sha256', 'expression_ast_sha256'])
+def test_cleanup_setup_transition_refuses_every_anchor_binding_drift(field):
+    template = json.loads((ROOT / '.github/release-source-guard/finite/source-template.json').read_bytes())
+    row = next(row for row in template['anchor_inventory'] if row['path'] == 'tests/test_acp_cleanup.py')
+    row[field] = 999 if field == 'line' else 'foreign'
+    with pytest.raises(RuntimeError, match='cleanup_setup_anchor_preimage'):
+        release_source_inputs.admit(template, ROOT, lambda root, name: (root / name).read_bytes())
