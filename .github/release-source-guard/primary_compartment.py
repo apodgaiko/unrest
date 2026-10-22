@@ -1,6 +1,8 @@
 """Execute the actual GitHub script under a separate finite primary authority."""
 from __future__ import annotations
 
+from approval_wait_evidence import unresolved, summary_closed
+
 import hashlib
 import json
 import os
@@ -65,7 +67,7 @@ def trace_failure_status(error):
 def status_guard_success(result):
     return (result['root_parent_wait_raw'] == 0 and not result['poison']
             and not result['primary_denials'] and result['failure_code'] is None
-            and not result['missing_parent_waits'] and not result['native_preinit_refusal']
+            and not unresolved(result) and not result['native_preinit_refusal']
             and result['all_commands_dispatched'] and not result.get('guard_poison', True)
             and not result.get('receipt_ledger_poison'))
 
@@ -338,13 +340,13 @@ def main():
                 records[name] = path.read_bytes()
         # A successful pytest return cannot erase a caught guard refusal.
         summary = json.loads(Path('/work/summary.json').read_bytes()) if Path('/work/summary.json').is_file() else None
-        if (summary is None or not summary['ready'] or summary['failures']
+        if (summary is None or not summary_closed(summary, result)
                 or result['guard_poison'] or result['receipt_ledger_poison']):
             failure = 'source_guard_refused'
         result['failure_code'] = failure
     status = 0 if (result['root_parent_wait_raw'] == 0 and not result['poison']
                    and not authority.denials and not native_failure and not failure
-                   and not children - waits and result['all_commands_dispatched']) else 2
+                   and not unresolved(result) and result['all_commands_dispatched']) else 2
     source_root.retain_proof(result, root_identity, runtime)
     records['kernel-source.json'] = json.dumps(result, sort_keys=True, separators=(',', ':')).encode()
     emit_source(records, result, transport_identity['identity'], transport_identity['invocation_sha256'], status)

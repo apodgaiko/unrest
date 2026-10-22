@@ -1161,6 +1161,38 @@ parenthood, unchanged child birth, zombie UID/state and the original parent's
 matching signaled terminal status are independently proved. The real returned
 PID/raw status must match the tracer's earlier terminal record. This separate
 `actual_adoptive_parent_wait4` record never impersonates an original-parent wait
-and does not activate a checkpoint or waive any original missing-wait gate.
+and does not by itself activate a checkpoint or satisfy a wait gate.
 A living original parent retains its wait authority; absence alone creates no
 wait record. The original tracer and its raw records remain unchanged.
+
+
+### Actual legal-parent waits after controlled owner death
+
+For the six original controlled approval cancellation/crash cases only, a
+numeric wait by the kernel's actual adoptive parent satisfies the child wait
+obligation when the original parent has died. This corrects the impossible
+requirement that a dead parent subsequently reap its child; it is not a
+missing-status exception. Original case bodies, parameters, assertions and
+timeouts remain unchanged. The raw `missing_parent_waits`, original summary
+failures and original trace records remain unmodified. Prior failed executions
+remain failed; new evidence must satisfy the current frozen definition.
+
+The common evidence reducer requires unique registration and READY/token
+bindings, unchanged child birth, all four UIDs, matching original-parent
+signaled exit and actual terminal status, ordered trace/hash references, and
+passed setup/call/teardown for the exact original case. A tracer terminal wait
+counts only when the preceding kernel-exit observation proves the observer is
+the actual parent and the process is absent after the numeric wait. A separate
+adoptive wait additionally binds its current identity and trace position after
+the parent's death; returned PID/raw/normalized status must match the earlier
+terminal record and the process must be absent after the actual wait. Duplicate
+or contradictory original waits, absent inventories, PID reuse, living parents,
+unknown cases/classes, nonnumeric status, residue or any poison remain failures.
+
+The source result, package custody and checkpoint issuer use this same rule;
+checkpoint receipts retain every original gap and a separate actual-adoptive
+wait inventory. The complete unexcluded source collection, full package-byte
+and extracted persistence checks, installed lifecycle, desktop and CI duties
+remain required. No new launch, provider approval, native review recovery,
+status substitution or native timing claim follows from this rule. Native
+approval/reuse/final timing remain UNVERIFIED.

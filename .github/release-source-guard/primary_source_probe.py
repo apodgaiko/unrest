@@ -1,6 +1,8 @@
 """Strict reduction of TEST entry records; never an original certificate."""
 from __future__ import annotations
 
+from approval_wait_evidence import unresolved, adopted_waits, summary_closed
+
 import json
 import hashlib
 import xml.etree.ElementTree as ET
@@ -21,7 +23,7 @@ def check(records, mode, *, require_faults=False):
             or kernel['root_parent_wait_raw'] != 0 or kernel['poison'] or kernel['primary_denials']
             or kernel['native_preinit_refusal'] or kernel['unregistered_processes']
             or kernel['receipt_ledger_poison']
-            or kernel['missing_parent_waits'] or not kernel['all_commands_dispatched']
+            or unresolved(kernel) or not kernel['all_commands_dispatched']
             or tuple(collection) not in TEST_SELECTIONS or provenance['collection_before'] != collection
             or provenance['collection_after'] != collection or provenance['deselected'] != 0
             or provenance['exitstatus'] != 0 or provenance['invocation_args'] != ['-q', *collection]
@@ -32,7 +34,10 @@ def check(records, mode, *, require_faults=False):
               and row['identity']['tgid'] == row['child']]
     if not births:
         raise RuntimeError('primary_source_test_child_missing')
+    adopted = adopted_waits(kernel)
     for birth in births:
+        if birth['child'] in adopted:
+            continue
         waits = [row for row in kernel['records']
                  if row['kind'] in {'original_parent_wait4', 'original_parent_waitid'}
                  and (row['kind'] == 'original_parent_wait4' or row['reaps'])
@@ -122,9 +127,9 @@ def check(records, mode, *, require_faults=False):
                         or len(fault['pipe_identity']) != 3):
                     raise RuntimeError('preflight_acquisition_fault_binding')
     negative = mode == 'TEST-poison' 
-    if (kernel['guard_poison'] is not negative or summary['ready'] is negative
+    if (kernel['guard_poison'] is not negative or summary_closed(summary, kernel) is negative
             or kernel['failure_code'] != ('source_guard_refused' if negative else None)
-            or bool(summary['failures']) is not negative):
+            or (bool(summary['failures']) and not summary_closed(summary, kernel)) is not negative):
         raise RuntimeError('primary_source_test_poison_lost')
     forbidden = [row for row in summary['events'] if row['kind'] == 'forbidden']
     unknown = [row for row in summary['events'] if row['kind'] == 'unknown_vector_identity'

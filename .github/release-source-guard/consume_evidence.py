@@ -5,6 +5,8 @@ numeric/hash/enum projection; caught exceptions never contribute text.
 """
 from __future__ import annotations
 
+from approval_wait_evidence import unresolved
+
 import argparse
 import json
 import os
@@ -183,7 +185,7 @@ def verify(root, run, artifact, members, key, support):
                                                       for row in kernel['primary_records']),
                           actual_script_sha256=kernel['actual_script_sha256'])
         if (metadata['source_exit_code'] != 0 or kernel['root_parent_wait_raw'] != 0
-                or kernel['poison'] or denials or missing or kernel['native_preinit_refusal']
+                or kernel['poison'] or denials or unresolved(kernel) or kernel['native_preinit_refusal']
                 or kernel['failure_code'] is not None or not kernel['all_commands_dispatched']):
             projection['error_code'] = 'primary_execution_failed'
         else:

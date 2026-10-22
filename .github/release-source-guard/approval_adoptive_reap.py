@@ -62,6 +62,7 @@ def reap(authority, trace):
                   'raw': raw, 'normalized': os.waitstatus_to_exitcode(raw),
                   'current_identity': current, 'original_birth': saved['identity'],
                   'parent_death': evidence, 'tracer_wait_index': index,
+                  'trace_record_count_at_actual_wait': end,
                   'tracer_wait_sha256': hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest(),
                   'process_absent_after_actual_wait': not Path('/proc', str(pid)).exists(),
                   'source_checkpoint_ready': False}

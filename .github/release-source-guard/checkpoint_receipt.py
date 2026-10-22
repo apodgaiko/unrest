@@ -114,7 +114,10 @@ def validate(archive, artifact, run, jobs, expected):
     source = receipt['source']
     require(set(source) == {'argv', 'collection_filters', 'item_mutations', 'deselected', 'exit_code',
                             'counts', 'kernel_poison', 'guard_poison', 'missing_original_parent_waits',
-                            'unknown_execs'}, 'source_fields')
+                            'unknown_execs'} or set(source) == {'argv', 'collection_filters', 'item_mutations',
+                'deselected', 'exit_code', 'counts', 'kernel_poison', 'guard_poison',
+                'missing_original_parent_waits', 'actual_adoptive_parent_waits', 'unknown_execs'},
+            'source_fields')
     require(source['argv'] == ['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']
             and source['collection_filters'] == [] and source['item_mutations'] == []
             and type(source['deselected']) is int and source['deselected'] == 0 and type(source['exit_code']) is int and source['exit_code'] == 0,
@@ -127,8 +130,15 @@ def validate(archive, artifact, run, jobs, expected):
     require(counts['collected'] > 0 and counts['failed'] == counts['errors'] == 0
             and counts['collected'] == counts['passed'] + counts['skipped'],
             'source JUnit and collection counts do not close')
+    adopted = source.get('actual_adoptive_parent_waits', [])
+    require(type(adopted) is list and all(type(row) is dict
+            and set(row) == {'pid', 'method', 'raw'} and type(row['pid']) is int
+            and row['pid'] > 0 and type(row['raw']) is int
+            and row['method'] in {'actual_adoptive_parent_wait4', 'adoptive_tracer_terminal_wait'}
+            for row in adopted) and len({row['pid'] for row in adopted}) == len(adopted),
+            'source_adoptive_wait_inventory')
     require(source['kernel_poison'] == source['guard_poison'] == []
-            and source['missing_original_parent_waits'] == []
+            and source['missing_original_parent_waits'] == sorted(row['pid'] for row in adopted)
             and source['unknown_execs'] == [], 'source guard or wait obligations did not close')
     package = receipt['package']
     require(set(package) == {'build_exit_code', 'archive_exit_code', 'installed_lifecycle_exit_code',

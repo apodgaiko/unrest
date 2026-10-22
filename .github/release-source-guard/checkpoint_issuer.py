@@ -7,6 +7,8 @@ the existing receipt consumer checks that external execution chain.
 """
 from __future__ import annotations
 
+from approval_wait_evidence import adopted_waits, original_missing, summary_closed
+
 import base64
 import io
 from pathlib import PurePosixPath
@@ -40,13 +42,14 @@ def source_result(data, kernel):
             and type(provenance['deselected']) is int and provenance['deselected'] == 0
             and type(provenance['exitstatus']) is int and provenance['exitstatus'] == 0,
             'issuer_unexcluded_source')
-    require(summary['ready'] is True and summary['failures'] == []
+    require(summary_closed(summary, kernel)
             and kernel['guard_poison'] is False and kernel['receipt_ledger_poison'] == [],
             'issuer_source_guard')
     roots = [event for event in summary['events'] if event['kind'] == 'ready' and event['token'] == 'root']
     require(len(roots) == 1 and sha(canonical(roots[0])) == provenance['root_ready_sha256'],
             'issuer_source_ready_binding')
-    require(all(row['wait_status'] == 'actually_waited' for row in summary['descendants']),
+    require(all(row['wait_status'] == 'actually_waited' or row.get('pid') is not None and row['pid'] in adopted_waits(kernel)
+                for row in summary['descendants']),
             'issuer_guard_parent_waits')
     document = ET.fromstring(data['source.xml'])
     cases = list(document.iter('testcase'))
@@ -77,7 +80,8 @@ def source_result(data, kernel):
     return {'argv': COMMAND.split(), 'collection_filters': [], 'item_mutations': [],
             'deselected': provenance['deselected'], 'exit_code': provenance['exitstatus'],
             'counts': counts, 'kernel_poison': [], 'guard_poison': [],
-            'missing_original_parent_waits': [], 'unknown_execs': []}
+            'missing_original_parent_waits': original_missing(kernel),
+            'actual_adoptive_parent_waits': list(adopted_waits(kernel).values()), 'unknown_execs': []}
 
 
 def package_result(phases, source_pins):

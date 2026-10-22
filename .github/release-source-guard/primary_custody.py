@@ -7,6 +7,8 @@ an output of this channel.
 """
 from __future__ import annotations
 
+from approval_wait_evidence import unresolved, adopted_waits
+
 from dataclasses import dataclass
 import base64
 import hashlib
@@ -90,13 +92,16 @@ def kernel_success(records, script_sha256):
             and kernel.get('all_commands_dispatched') is True
             and kernel.get('actual_script_sha256') == script_sha256
             and kernel.get('unregistered_processes') == []
-            and kernel.get('missing_parent_waits') == [], 'custody_kernel_result')
+            and not unresolved(kernel), 'custody_kernel_result')
     identity = kernel['source_preexec_identity']
     require(identity['uids'] == [20000] * 4 and not any(identity['capabilities'].values())
             and identity['no_new_privs'] == 1, 'custody_source_identity')
     births = [row for row in kernel['records'] if row['kind'] == 'kernel_child'
               and row['identity']['tgid'] == row['child']]
+    adopted = adopted_waits(kernel)
     for birth in births:
+        if birth['child'] in adopted:
+            continue
         waits = [row for row in kernel['records']
                  if row['kind'] in {'original_parent_wait4', 'original_parent_waitid'}
                  and (row['kind'] == 'original_parent_wait4' or row['reaps'])

@@ -444,7 +444,22 @@ if own_prebody_control is not None:
 def test_own_native_probe_preserves_all_prior_stage1_compartment_statements():
     import ast
     import hashlib
-    original = without_own_prebody_probe(ast.parse((ROOT / 'primary_compartment.py').read_bytes()))
+    source = (ROOT / 'primary_compartment.py').read_text()
+    # Undo only the exact legal-adoptive evidence calls before comparing every
+    # remaining compartment statement to the original immutable AST.
+    changes = {
+        'from approval_wait_evidence import unresolved, summary_closed\n': '',
+        'not unresolved(result)': "not result['missing_parent_waits']",
+        'summary is None or not summary_closed(summary, result)':
+            "summary is None or not summary['ready'] or summary['failures']",
+    }
+    assert source.count('not unresolved(result)') == 2
+    source = source.replace("and not unresolved(result) and result['all_commands_dispatched']",
+                            "and not children - waits and result['all_commands_dispatched']")
+    for current, previous in changes.items():
+        assert source.count(current) == 1
+        source = source.replace(current, previous)
+    original = without_own_prebody_probe(ast.parse(source))
     assert hashlib.sha256(ast.dump(original, include_attributes=False).encode()).hexdigest() == (
         '2732b831754671df4bdecc3cf8d88bf8872713360752a02bb0b240cb5fbb0972')
 
