@@ -1287,3 +1287,17 @@ credential-free environment. Its consumed-exec locale mapping is independently
 bound to the admitted event. This grants no provider launch or general terminal
 Python permission. The filtered diagnostic selection contains those twelve cases
 and the six original approval cleanup cases; it cannot certify the release.
+
+### Completion helper self-pipe receipt lifetime
+
+For the twelve original first-completion contention cases, the pinned completion
+helper serializes observer receipt acquisition against close of the exact
+CPython asyncio self-pipe objects. Registration follows a successful ordinary
+socketpair receipt from the authenticated `_make_self_pipe` caller. Object,
+original descriptor and kernel file identity remain bound. The lock ends before
+native send/recv, so closing a loop does not wait for blocking payload I/O.
+An already closed registered object retains native EBADF; detach, descriptor
+reuse and unknown objects retain the unchanged observer checks and poison.
+This grants no network or process authority and changes no completion assertion,
+cleanup assertion, deadline, full-source command or release gate. The closed
+twelve-case diagnostic is supporting evidence, never a source certificate.

@@ -183,7 +183,7 @@ def test_exact_startup_diagnosis_is_bounded_and_cannot_certify_full():
 
 def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     import yaml
-    from primary_policy import TEST_TERMINAL_ORDER_CASES
+    from primary_policy import TEST_COMPLETION_PIPE_CASES
     path = Path(__file__).parent.parent / 'workflows/v046-source-readiness.yml'
     document = yaml.safe_load(path.read_text())
     job = document['jobs']['startup-cancellation-diagnosis']
@@ -192,7 +192,7 @@ def test_diagnostic_workflow_leaves_primary_release_workflow_unchanged():
     assert document['jobs']['compartment-controls']['if'] == "${{ github.ref != '" + ref + "' }}"
     steps = job['steps']
     call = next(step for step in steps if step.get('shell'))
-    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_TERMINAL_ORDER_CASES)
+    assert call['run'] == COMMAND + ' ' + ' '.join(TEST_COMPLETION_PIPE_CASES)
     assert call['shell'] == 'python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}'
     assert steps[-1]['if'] == 'always()'
 
@@ -312,3 +312,17 @@ def test_terminal_order_diagnostic_is_closed_and_never_source_certification():
     for changed in (TEST_TERMINAL_ORDER_CASES[:-1], (*TEST_TERMINAL_ORDER_CASES,'foreign')):
         with pytest.raises(RuntimeError):
             make_test_plan((COMMAND + ' ' + ' '.join(changed)).encode(),text,'TEST-positive')
+
+
+def test_completion_pipe_diagnostic_is_exact_and_never_certifies_source():
+    from primary_policy import TEST_COMPLETION_PIPE_CASES, root_seconds, SOURCE_BUDGET
+    from primary_source_inputs import test_plan as make_test_plan
+    assert len(TEST_COMPLETION_PIPE_CASES) == len(set(TEST_COMPLETION_PIPE_CASES)) == 12
+    script = (COMMAND + ' ' + ' '.join(TEST_COMPLETION_PIPE_CASES)).encode()
+    result = make_test_plan(script, 'workflow', 'TEST-positive')
+    assert result['timeout_seconds'] == root_seconds(result) == 600
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    assert SOURCE_BUDGET == {'root_seconds': 7200, 'collection_seconds': 300, 'drain_seconds': 60}
+    for changed in (TEST_COMPLETION_PIPE_CASES[:-1], (*TEST_COMPLETION_PIPE_CASES, 'foreign')):
+        with pytest.raises(RuntimeError):
+            make_test_plan((COMMAND + ' ' + ' '.join(changed)).encode(), 'workflow', 'TEST-positive')

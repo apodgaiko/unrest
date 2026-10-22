@@ -133,7 +133,12 @@ TEST_TERMINAL_ORDER_CASES = tuple(
     'tests/test_approval_recovery.py::test_durable_run_owner_and_restart_never_revives[' + mode + ']'
     for mode in ('cancel', 'crash', 'cancel_after_send', 'crash_after_send', 'cancel_after_continue', 'crash_after_continue'))
 
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES, TEST_CANDIDATE_FIXTURE_CASES, TEST_CANDIDATE_ORACLE_CASES, TEST_NATIVE_TERMINAL_CASES, TEST_LAUNCH_PLAN_CASES, TEST_APPROVAL_UNIX_CASES, TEST_SOCKET_CARRIER_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_APPROVAL_EXPIRY_CASES, TEST_CLEANUP_SUCCESS_CASES, TEST_CLEANUP_FIXTURE_CASES, TEST_TERMINAL_ORDER_CASES)
+TEST_COMPLETION_PIPE_CASES = tuple(
+    'tests/test_completion_setup.py::test_real_roles_first_use[' + scenario + '-' + role + '-targets' + targets + ']'
+    for scenario in ('invalid-invalid', 'valid-invalid', 'valid-valid', 'distinct')
+    for role, targets in (('work', '0'), ('work', '1'), ('validate', '2')))
+
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES, TEST_CANDIDATE_FIXTURE_CASES, TEST_CANDIDATE_ORACLE_CASES, TEST_NATIVE_TERMINAL_CASES, TEST_LAUNCH_PLAN_CASES, TEST_APPROVAL_UNIX_CASES, TEST_SOCKET_CARRIER_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_APPROVAL_EXPIRY_CASES, TEST_CLEANUP_SUCCESS_CASES, TEST_CLEANUP_FIXTURE_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES)
 TEST_SEAM_ROOT_SECONDS = 600
 
 
@@ -296,7 +301,7 @@ def root_seconds(spec):
         return SOURCE_BUDGET['root_seconds']
     if mode in {'TEST-positive', 'TEST-poison'}:
         scripts = {('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
-                   for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES)}
+                   for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES)}
         for script in scripts:
             if (spec['commands'] == [shlex.split(script.decode())]
                     and spec['script_sha256'] == sha(script)

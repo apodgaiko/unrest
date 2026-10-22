@@ -490,6 +490,9 @@ def attach(guard):
         STATE["failed_loop_release"] = release
         guard.append({"kind": "descriptor_lifetime_binding", "support_sha256": lifetime_pin,
                       "runtime_sources": pins, "ownership": "unreturned default loop only"})
+        pipe_hook = Path(__file__).with_name("self_pipe_receipts.py")
+        pipe_pin = guard._STATE["direct_support"]["files"][str(pipe_hook)]
+        guard.checked_source(pipe_hook, pipe_pin)["install"](guard, sys.modules[__name__])
         STATE["ready"] = True
         if "inventory_image" in guard._STATE:
             image_hook = Path(__file__).with_name("inventory_image.py")
