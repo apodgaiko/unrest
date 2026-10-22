@@ -47,12 +47,46 @@ def handle(supervisor, request, events):
             or type(case) is not str or not case.startswith(TEST + '::')
             or case.removeprefix(TEST + '::').split('[')[0] not in OWNERS
             or any(manifest['product_pins'].get(name) != pin for name, pin in PINS.items())
-            or identity(pid) != saved or saved['uid'] != 20000
-            or not owned_address(address, manifest['owned_root'], saved['uid'])):
+            or identity(pid) != saved or saved['uid'] != 20000):
         raise RuntimeError('approval_unix_source_scope')
     observed = observe(pid, fd)
     if observed['uid'] != saved['uid'] or observed['owner_identity'] != saved:
         raise RuntimeError('approval_unix_descriptor_uid')
+    key = (pid, fd, observed['inode'], observed['cookie'])
+    sessions = getattr(supervisor, 'approval_unix_sessions', {})
+    supervisor.approval_unix_sessions = sessions
+    retained = sessions.get(key)
+    if operation == 'payload' and retained is not None:
+        try:
+            peer_now = identity(retained['peer_identity']['pid'])
+        except OSError as error:
+            raise RuntimeError('approval_unix_retained_peer_unavailable') from error
+        if (retained['address'] != address or retained['case'] != case
+                or retained['socket'] != observed
+                or supervisor.registered.get(retained['peer_identity']['pid'], {}).get('identity') != retained['peer_identity']
+                or peer_now != retained['peer_identity']):
+            raise RuntimeError('approval_unix_retained_connection_drift')
+        listener = supervisor.approval_unix_listeners.get(address)
+        if listener != retained['listener']:
+            raise RuntimeError('approval_unix_retained_listener_drift')
+        try:
+            carrier = Path(address).lstat()
+        except FileNotFoundError:
+            present = False
+        else:
+            present = True
+            if (not stat.S_ISSOCK(carrier.st_mode) or stat.S_IMODE(carrier.st_mode) != 0o600
+                    or carrier.st_uid != saved['uid']
+                    or (carrier.st_dev, carrier.st_ino) != (listener['path_device'], listener['path_inode'])):
+                raise RuntimeError('approval_unix_retained_path_replaced')
+        if identity(pid) != saved:
+            raise RuntimeError('approval_unix_final_owner_drift')
+        return {'approval_unix': operation, 'kernel_fd': observed,
+                'listener_owner': listener['owner'], 'peer_identity': retained['peer_identity'],
+                'retained_connection': True, 'listener_path_present': present}
+    if not owned_address(address, manifest['owned_root'], saved['uid']):
+        raise RuntimeError('approval_unix_source_scope')
+
     def answer(**values):
         if identity(pid) != saved or not owned_address(address, manifest['owned_root'], saved['uid']):
             raise RuntimeError('approval_unix_final_owner_drift')
@@ -122,5 +156,7 @@ def handle(supervisor, request, events):
             raise RuntimeError('approval_unix_client_binding')
     elif observed['local'] != address or pid != owner['pid']:
         raise RuntimeError('approval_unix_accepted_binding')
+    sessions[key] = {'address': address, 'case': case, 'socket': observed,
+                     'peer_identity': registered_peer['identity'], 'listener': dict(listener)}
     return answer(approval_unix=operation, kernel_fd=observed, listener_owner=owner,
                   peer_identity=registered_peer['identity'])

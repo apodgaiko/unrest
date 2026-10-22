@@ -176,3 +176,33 @@ def test_approval_diagnostic_has_no_checkout_only_imports():
     tree = ast.parse(Path(diagnostic.__file__).read_bytes())
     assert all(n.module == '__future__' for n in ast.walk(tree) if isinstance(n, ast.ImportFrom))
     assert {alias.name for n in ast.walk(tree) if isinstance(n, ast.Import) for alias in n.names} == {'hashlib', 'json'}
+
+
+def test_exact_approval_watchdog_survives_call_and_closes_after_teardown():
+    from primary_source_entry import Observer
+    from types import SimpleNamespace
+    calls = []
+    case = routes.PREFIX + '[success]'
+    owner = SimpleNamespace(startup_stall_timer=SimpleNamespace(cancel=lambda: calls.append('cancel')),
+                            startup_stall_token=object(), approval_stall_case=case,
+                            retain_failure=lambda report: None,
+                            guard=SimpleNamespace(append=lambda row: calls.append(row['phase'])),
+                            session=None, custodian=None)
+    report = SimpleNamespace(when='call', nodeid=case, failed=False, outcome='passed')
+    Observer.pytest_runtest_logreport(owner, report)
+    assert calls == ['call'] and owner.startup_stall_timer is not None
+    report.when = 'teardown'
+    Observer.pytest_runtest_logreport(owner, report)
+    assert calls == ['call', 'cancel', 'teardown'] and owner.startup_stall_timer is None
+
+
+def test_unrelated_watchdog_keeps_original_call_cancellation():
+    from primary_source_entry import Observer
+    from types import SimpleNamespace
+    calls = []
+    owner = SimpleNamespace(startup_stall_timer=SimpleNamespace(cancel=lambda: calls.append('cancel')),
+                            startup_stall_token=object(), approval_stall_case=None,
+                            retain_failure=lambda report: None,
+                            guard=SimpleNamespace(append=lambda row: None), session=None, custodian=None)
+    Observer.pytest_runtest_logreport(owner, SimpleNamespace(when='call', nodeid='original', failed=False, outcome='passed'))
+    assert calls == ['cancel'] and owner.startup_stall_timer is None

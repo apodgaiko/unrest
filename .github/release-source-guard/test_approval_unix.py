@@ -173,3 +173,62 @@ def test_connect_requires_a_registered_same_case_listener_before_effect(monkeypa
     with pytest.raises(RuntimeError, match='unknown_listener'):
         host.handle(supervisor, connect, [])
     assert not supervisor.approval_unix_plans
+
+
+def connected_context(monkeypatch):
+    supervisor, request, current, carrier = host_context(monkeypatch)
+    host.handle(supervisor, request, [])
+    current.update(local=request['address'], listening=True)
+    host.handle(supervisor, {**request, 'operation': 'listen'}, [])
+    current.update(fd=5, inode=101, cookie=1001, local='', listening=False)
+    connect = {**request, 'fd': 5, 'operation': 'connect',
+               'source_binding': {'path': '/source/' + client.TEST, 'line': 325, 'sha256': client.PINS[client.TEST]}}
+    host.handle(supervisor, connect, [])
+    current.update(remote=request['address'], peer={'pid': 20, 'uid': 20000, 'gid': 20000})
+    host.handle(supervisor, {**connect, 'operation': 'connected'}, [])
+    return supervisor, {**connect, 'operation': 'payload'}, current, carrier
+
+
+def test_existing_kernel_connection_survives_listener_unlink_only(monkeypatch):
+    supervisor, request, _, _ = connected_context(monkeypatch)
+    def missing():
+        raise FileNotFoundError('unlinked original Unix listener')
+    monkeypatch.setattr(host, 'Path', lambda path: SimpleNamespace(lstat=missing))
+    monkeypatch.setattr(host, 'owned_address', lambda *args: False)
+    result = host.handle(supervisor, request, [])
+    assert result['retained_connection'] and not result['listener_path_present']
+    with pytest.raises(RuntimeError, match='source_scope'):
+        host.handle(supervisor, {**request, 'operation': 'connect'}, [])
+
+
+@pytest.mark.parametrize('change', ['cookie', 'inode', 'peer_uid', 'peer_pid', 'case', 'address',
+                                    'replacement', 'peer_birth', 'owner_birth'])
+def test_unlinked_connection_proof_never_covers_identity_or_path_replacement(monkeypatch, change):
+    supervisor, request, current, carrier = connected_context(monkeypatch)
+    if change in {'cookie', 'inode'}:
+        current[change] += 1
+    elif change.startswith('peer_') and change != 'peer_birth':
+        current['peer'][change.removeprefix('peer_')] += 1
+    elif change == 'replacement':
+        carrier.st_ino += 1
+    elif change in {'peer_birth', 'owner_birth'}:
+        monkeypatch.setattr(host, 'identity', lambda pid: {'pid': pid, 'uid': 20000, 'start_ticks': 999})
+    else:
+        request[change] += '-foreign'
+    with pytest.raises(RuntimeError):
+        host.handle(supervisor, request, [])
+
+
+def test_retained_socket_does_not_infer_missing_peer_birth(monkeypatch):
+    supervisor, request, _, _ = connected_context(monkeypatch)
+    old = host.identity
+    count = 0
+    def identity(pid):
+        nonlocal count
+        count += 1
+        if count >= 2:
+            raise FileNotFoundError('peer gone')
+        return old(pid)
+    monkeypatch.setattr(host, 'identity', identity)
+    with pytest.raises(RuntimeError, match='retained_peer_unavailable'):
+        host.handle(supervisor, request, [])

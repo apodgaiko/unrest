@@ -141,6 +141,7 @@ class Observer:
         self.negative_startup = None
         self.startup_stall_timer = None
         self.startup_stall_token = None
+        self.approval_stall_case = None
         guard._STATE['primary_snapshot_observer'] = self.observe_snapshot_rpc
 
     def observe_snapshot_rpc(self, frame, event, value):
@@ -266,6 +267,7 @@ class Observer:
         loop = next((v for v in loops if isinstance(v, asyncio.AbstractEventLoop)), None)
         token = object()
         self.startup_stall_token = token
+        self.approval_stall_case = item.nodeid if approval_seconds is not None else None
         if approval_seconds is not None:
             def callback(token, case, loop):
                 captured = self.retain_stall_snapshot(token, case, loop)
@@ -423,7 +425,8 @@ class Observer:
         return None
 
     def pytest_runtest_logreport(self, report):
-        if report.when in {'call', 'teardown'} and self.startup_stall_timer is not None:
+        if (report.when == 'teardown' or report.when == 'call'
+                and self.approval_stall_case != report.nodeid) and self.startup_stall_timer is not None:
             self.startup_stall_token = None
             self.startup_stall_timer.cancel()
             self.startup_stall_timer = None

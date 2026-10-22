@@ -1041,3 +1041,15 @@ remain required. The observer joins the original directory's device/inode,
 UID/mode, parent birth and complete vector to the stopped child. The unchanged
 native startup profile checks the actual child cwd before body execution.
 This grants no general mutable-cwd or native provider route.
+
+The approval-only diagnostic timer remains armed through pytest fixture
+teardown. A call report cannot cancel the teardown diagnostic; the original
+case's teardown report closes it. All other watchdog lifetimes are unchanged.
+
+An established private Unix connection may outlive unlink of its listener path.
+Only a previously authenticated same-case connection can retain that binding.
+Every payload still reobserves the actual FD inode/device/kernel socket cookie,
+local/remote endpoints, UID, owner birth and live peer credentials/birth. A
+replacement path, changed descriptor or peer refuses; new connect/listen needs
+the original live listener and path. Listener unlink supplies no new authority.
+Global poison and original-parent wait requirements remain unchanged.
