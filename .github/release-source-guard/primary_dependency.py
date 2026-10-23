@@ -676,11 +676,36 @@ def comparison_functions(namespace, cache):
     namespace['code_identity'] = current_identity
 
 
+COST_CASE = 'tests/test_approval_recovery.py::test_durable_run_owner_and_restart_never_revives[success]'
+COST_PHASES = frozenset({'enter', 'receipt', 'source', 'activation', 'census', 'caches', 'immutable', 'files', 'final'})
+
+
+def cost_phase(phase):
+    """Nine body-free first-consumption clocks for one unchanged local case."""
+    if phase not in COST_PHASES:
+        raise ValueError('unknown dependency cost phase')
+    guard = sys.modules.get('runtime_guard')
+    state = getattr(guard, '_STATE', None)
+    if type(state) is not dict or state.get('case') != COST_CASE:
+        return
+    seen = state.setdefault('_dependency_cost_phases', set())
+    if phase in seen:
+        return
+    seen.add(phase)
+    import time
+    import threading
+    guard.append({'kind': 'primary_dependency_cost_phase', 'phase': phase,
+                  'monotonic_ns': time.monotonic_ns(), 'thread_cpu_ns': time.thread_time_ns(),
+                  'thread_id': threading.get_ident(),
+                  'diagnostic_only': True, 'eligible_certificate': False})
+
+
 def verify(site, support, *, comparisons=None):
     """Consume only the observer-pinned PRIMARY domain; no path-prefix fallback."""
     if (Path(site) != SITE or set(support) != {'path', 'sha256', 'activation_sha256'}
             or support['path'] != str(RECEIPTS / 'primary-dependency.json')):
         raise RuntimeError('primary_dependency_consumer_domain')
+    cost_phase('enter')
     body, receipt = read(support['path'], 20001)
     if (receipt['sha256'] != support['sha256'] or receipt['identity'][5] != 1
             or stat.S_IMODE(receipt['identity'][2]) != 0o444):
@@ -693,10 +718,12 @@ def verify(site, support, *, comparisons=None):
             or value['site'] != str(SITE) or value['source_checkpoint_ready'] is not False
             or value['selected_carrier'] is not None):
         raise RuntimeError('primary_dependency_schema')
+    cost_phase('receipt')
     validate_bootstrap(value)
     verify_source_inputs(value['source_files'], value['source_custody'])
     if read(value['wheel']['path'], 20001)[1] != value['wheel']:
         raise RuntimeError('primary_dependency_current_original_wheel_drift')
+    cost_phase('source')
     source = Path('/guard/finite/operation_activation.py')
     source_body = source.read_bytes()
     if sha(source_body) != support['activation_sha256']:
@@ -705,6 +732,7 @@ def verify(site, support, *, comparisons=None):
     exec(compile(source_body, str(source), 'exec', dont_inherit=True), namespace)
     if comparisons is not None:
         comparison_functions(namespace, comparisons)
+    cost_phase('activation')
     first, directories = site_metadata()
     source_map = cache_sources(first, value['files'])
     wanted_directories = {'.'}
@@ -718,7 +746,9 @@ def verify(site, support, *, comparisons=None):
     if any(name not in directories or directories[name]['identity'] != row['identity']
            for name, row in value['directories'].items()):
         raise RuntimeError('primary_dependency_current_directory_drift')
+    cost_phase('census')
     caches = namespace['verify_caches'](SITE)
+    cost_phase('caches')
     checked = {Path(row['cache']['path']).relative_to(SITE).as_posix(): row for row in caches}
     if len(checked) != len(caches) or set(checked) != set(source_map):
         raise RuntimeError('primary_dependency_cache_membership')
@@ -734,6 +764,7 @@ def verify(site, support, *, comparisons=None):
         if current['identity'] != first[name]:
             raise RuntimeError('primary_dependency_current_cache_drift')
         current_caches[name] = current
+    cost_phase('immutable')
     # Stat rows never replace a byte check: every ordinary file is fully read
     # here, after discovery/cache comparison and immediately before consumption.
     for name in sorted(value['files']):
@@ -752,8 +783,10 @@ def verify(site, support, *, comparisons=None):
     for name, expected in current_caches.items():
         if read(str(SITE) + '/' + name, 20000)[1] != expected:
             raise RuntimeError('primary_dependency_late_cache_drift')
+    cost_phase('files')
     final, final_directories = site_metadata()
     if final != first or final_directories != directories:
         raise RuntimeError('primary_dependency_late_census_drift')
+    cost_phase('final')
     return {'kind': 'primary_dependency_consumption', 'files': len(value['files']),
             'source_bound_caches': len(caches), 'declaration_sha256': support['sha256']}

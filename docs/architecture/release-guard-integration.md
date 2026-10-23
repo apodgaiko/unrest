@@ -1408,3 +1408,10 @@ backend setup omission; unknown cases and changed bytes retain ordinary setup
 and fail closed. The two four-case diagnostics preserve every original privacy,
 completion, account, context-revocation and child-cleanup assertion. Original
 failed custody and missing waits remain failures, not repaired evidence.
+
+
+The unchanged controlled durable-success test can retain nine first-consumption
+CPU/wall phase clocks across dependency receipt, source, cache and file checks.
+The closed case and phases emit no source bodies or values, do not admit work or
+change deadlines, and are explicitly diagnostic rather than certificates. Every
+original acquisition, comparison, cleanup assertion and release gate remains.

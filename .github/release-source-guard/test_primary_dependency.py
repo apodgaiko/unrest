@@ -675,3 +675,32 @@ def test_unknown_uv_cache_key_never_falls_back_to_observation(source_inputs):
     fixture.custody[str(fixture.project)] = dependency.key(info)
     with pytest.raises(RuntimeError, match='custom_cache_keys'):
         dependency.source_cache_info(fixture.files, fixture.custody)
+
+
+def test_dependency_cost_clocks_are_closed_and_observation_only(monkeypatch):
+    rows = []
+    state = {'case': dependency.COST_CASE}
+    guard = SimpleNamespace(_STATE=state, append=rows.append)
+    monkeypatch.setitem(sys.modules, 'runtime_guard', guard)
+    for _ in range(2):
+        for phase in sorted(dependency.COST_PHASES):
+            dependency.cost_phase(phase)
+    assert len(rows) == 9
+    assert all(set(row) == {'kind', 'phase', 'monotonic_ns', 'thread_cpu_ns',
+                            'thread_id', 'diagnostic_only', 'eligible_certificate'} for row in rows)
+    assert all(row['diagnostic_only'] is True and row['eligible_certificate'] is False for row in rows)
+    state['case'] += '-foreign'
+    dependency.cost_phase('enter')
+    assert len(rows) == 9
+    with pytest.raises(ValueError, match='unknown dependency cost phase'):
+        dependency.cost_phase('foreign')
+
+
+def test_dependency_cost_clocks_preserve_all_original_verifier_statements():
+    tree = ast.parse((ROOT / 'primary_dependency.py').read_bytes())
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                    and node.name == 'verify')
+    function.body = [node for node in function.body if not (isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == 'cost_phase')]
+    assert hashlib.sha256(ast.dump(function, include_attributes=False).encode()).hexdigest() == '02e8ee572256143c6e5da7c1996e136ef7222d12f3e3d8e7a16cb5d51c7d6596'

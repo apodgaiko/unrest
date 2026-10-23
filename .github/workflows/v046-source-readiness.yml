@@ -187,9 +187,7 @@ jobs:
       matrix:
         include:
           - group: postimages-1
-            cases: tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-False] tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-True] tests/test_controlled_acp_warnings.py::test_original_private_configuration[True-False] tests/test_controlled_acp_warnings.py::test_original_private_configuration[True-True]
-          - group: postimages-2
-            cases: tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[False-False] tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[False-True] tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[True-False] tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[True-True]
+            cases: tests/test_approval_recovery.py::test_durable_run_owner_and_restart_never_revives[success]
     steps:
       - uses: actions/checkout@v7.0.1
         with:
