@@ -27,14 +27,19 @@ def case_seconds(profile, case):
 
 REGISTRATION_CASE = 'tests/test_controlled_python_acp.py::test_actual_registration[late-2]'
 REGISTRATION_SELECTION_SHA256 = '9d84ea3ef8211e7591a9c2b8cc19afc947e1de7fd9c8d3b5fc1f9cfa31058446'
+INITIALIZATION_CASE = 'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]'
+INITIALIZATION_SELECTION_SHA256 = '0f41f8db4e9a9642078b60759950135502d3e977551c8e0c0eb593685edf8a54'
 
 def registration_seconds(profile, case):
     """Passive stack capture only; never a test deadline or exit watchdog."""
     argv = profile.get('orig_argv')
     if (profile.get('source_mode') != 'TEST-positive'
             or type(argv) is not list or any(type(value) is not str for value in argv)
-            or type(case) is not str or case != REGISTRATION_CASE
-            or hashlib.sha256(json.dumps(argv[2:]).encode()).hexdigest() != REGISTRATION_SELECTION_SHA256):
+            or type(case) is not str):
+        return None
+    expected = {REGISTRATION_CASE: REGISTRATION_SELECTION_SHA256,
+                INITIALIZATION_CASE: INITIALIZATION_SELECTION_SHA256}.get(case)
+    if expected is None or hashlib.sha256(json.dumps(argv[2:]).encode()).hexdigest() != expected:
         return None
     return 2.0
 

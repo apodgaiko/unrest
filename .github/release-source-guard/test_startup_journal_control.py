@@ -124,3 +124,16 @@ def test_capacity_capture_has_fixed_paths_bounded_reads_and_numeric_allowlist(mo
     content['cpu.stat'] = b'usage_usec -1\n'
     content['memory.events'] = b'oom -1\n'
     assert diagnostic.capacity() == {}
+
+
+def test_initialization_passive_capture_is_independently_bound_and_never_full():
+    import hashlib
+    from primary_policy import TEST_INITIALIZATION_CASES
+    from finite import approval_stall_diagnostic as diagnostic
+    expected = ['-q', *TEST_INITIALIZATION_CASES]
+    assert diagnostic.INITIALIZATION_SELECTION_SHA256 == hashlib.sha256(json.dumps(expected).encode()).hexdigest()
+    profile = {'source_mode': 'TEST-positive', 'orig_argv': ['/python', '/pytest', *expected]}
+    assert diagnostic.registration_seconds(profile, diagnostic.INITIALIZATION_CASE) == 2.0
+    assert diagnostic.registration_seconds(profile, diagnostic.REGISTRATION_CASE) is None
+    assert diagnostic.registration_seconds(dict(profile, source_mode='SOURCE'), diagnostic.INITIALIZATION_CASE) is None
+    assert diagnostic.registration_seconds(dict(profile, orig_argv=profile['orig_argv'][:-1]), diagnostic.INITIALIZATION_CASE) is None

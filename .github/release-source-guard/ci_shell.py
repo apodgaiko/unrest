@@ -49,7 +49,11 @@ def resources(spec=None):
             raise RuntimeError('primary_source_fixture_mount_scope')
         mounts['/work'] = mounts['/work'].replace('rw,', 'rw,exec,', 1)
         from startup_journal_control import selected
-        if selected(spec):
+        from primary_policy import TEST_INITIALIZATION_CASES
+        initialization = ['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *TEST_INITIALIZATION_CASES]
+        if selected(spec) or (spec.get('commands') == [initialization]
+                and spec.get('script_sha256') == hashlib.sha256(' '.join(initialization).encode()).hexdigest()
+                and spec.get('source_checkpoint_ready') is False and spec.get('selected_carrier') is None):
             # The full-sized journal reproduction uses the existing full-source
             # memory cap, while retaining its smaller workspace and time budget.
             memory = 3221225472

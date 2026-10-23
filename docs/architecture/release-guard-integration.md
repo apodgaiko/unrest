@@ -1586,3 +1586,10 @@ broad configured-backend route is not reactivated. A finite ten-case TEST group
 also retains the broker-before-launch failure and both native pin no-launch
 negatives. Prior postimage entries and diagnostic groups remain unchanged; this
 slice never carries a source or release certificate.
+
+The exact ten-case initialization diagnostic also uses the existing 3 GiB
+full-source memory cap, with its original 180-second root, smaller workspace,
+three-second timeout case and every protocol/cleanup assertion unchanged.
+Its timeout case receives the same passive two-second private stack/capacity
+snapshot as the journal reproduction. Both selections are independently bound
+to complete argv hashes; FULL and all other selections remain unarmed.

@@ -156,7 +156,8 @@ class Observer:
             diagnostic = load('approval_stall_diagnostic', support,
                               manifest['direct_support']['files'][support])
             if (diagnostic.case_seconds(profile, diagnostic.PREFIX + '[success]') is not None
-                    or diagnostic.registration_seconds(profile, diagnostic.REGISTRATION_CASE) is not None):
+                    or diagnostic.registration_seconds(profile, diagnostic.REGISTRATION_CASE) is not None
+                    or diagnostic.registration_seconds(profile, diagnostic.INITIALIZATION_CASE) is not None):
                 import stat
                 original = diagnostic_output_identity(2)
                 if not stat.S_ISFIFO(original[2]) or original[4] != os.O_WRONLY:
@@ -284,8 +285,9 @@ class Observer:
                               self.manifest['direct_support']['files'][support])
             approval_seconds = diagnostic.case_seconds(self.profile, item.nodeid)
         registration_seconds = None
-        if (self.profile.get('source_mode') == 'TEST-positive' and item.nodeid ==
-                'tests/test_controlled_python_acp.py::test_actual_registration[late-2]'):
+        if (self.profile.get('source_mode') == 'TEST-positive' and item.nodeid in {
+                'tests/test_controlled_python_acp.py::test_actual_registration[late-2]',
+                'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]'}):
             support = '/guard/finite/approval_stall_diagnostic.py'
             diagnostic = load('approval_stall_diagnostic', support,
                               self.manifest['direct_support']['files'][support])

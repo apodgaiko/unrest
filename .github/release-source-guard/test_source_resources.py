@@ -92,3 +92,23 @@ def test_only_exact_full_sized_journal_diagnostic_matches_source_memory_cap():
         assert ci_shell.resources(changed)[1] == 1073741824
         with pytest.raises(RuntimeError, match='configuration'):
             ci_shell.validate(current, 'sha256:owned', origins, changed)
+
+
+def test_exact_initialization_probe_matches_full_memory_without_other_scope_changes():
+    from primary_policy import TEST_INITIALIZATION_CASES
+    from primary_source_inputs import test_plan
+    script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_INITIALIZATION_CASES)).encode()
+    value = test_plan(script, 'diagnostic', 'TEST-positive')
+    mounts, memory = ci_shell.resources(value)
+    assert memory == 3 * 1024 ** 3 and value['timeout_seconds'] == 180
+    assert mounts['/work'] == ci_shell.TMPFS['/work'].replace('rw,', 'rw,exec,', 1)
+    current, origins = config()
+    current['HostConfig'].update(Tmpfs=mounts, Memory=memory)
+    ci_shell.validate(current, 'sha256:owned', origins, value)
+    for key, drift in [('script_sha256', '0' * 64), ('source_checkpoint_ready', True),
+                       ('selected_carrier', 'foreign')]:
+        changed = deepcopy(value)
+        changed[key] = drift
+        assert ci_shell.resources(changed)[1] == 1073741824
+        with pytest.raises(RuntimeError, match='configuration'):
+            ci_shell.validate(current, 'sha256:owned', origins, changed)
