@@ -70,3 +70,25 @@ def test_only_closed_positive_source_fixtures_receive_executable_mount():
             ci_shell.resources(changed)
     mounts, _ = ci_shell.resources({'source_mode': 'TEST-poison'})
     assert mounts == ci_shell.TMPFS
+
+
+def test_only_exact_full_sized_journal_diagnostic_matches_source_memory_cap():
+    from startup_journal_control import TEST_JOURNAL_CONTEXT_CASES, selected
+    from primary_source_inputs import test_plan
+    script = 'env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_JOURNAL_CONTEXT_CASES)
+    value = test_plan(script.encode(), 'diagnostic', 'TEST-positive')
+    assert selected(value)
+    mounts, memory = ci_shell.resources(value)
+    assert memory == ci_shell.resources(spec())[1] == 3 * 1024 ** 3
+    assert mounts['/work'] == ci_shell.TMPFS['/work'].replace('rw,', 'rw,exec,', 1)
+    current, origins = config()
+    current['HostConfig'].update(Tmpfs=mounts, Memory=memory)
+    ci_shell.validate(current, 'sha256:owned', origins, value)
+    for key in ('script_sha256', 'source_checkpoint_ready', 'selected_carrier'):
+        changed = deepcopy(value)
+        changed[key] = {'script_sha256': '0' * 64, 'source_checkpoint_ready': True,
+                        'selected_carrier': 'foreign'}[key]
+        assert not selected(changed)
+        assert ci_shell.resources(changed)[1] == 1073741824
+        with pytest.raises(RuntimeError, match='configuration'):
+            ci_shell.validate(current, 'sha256:owned', origins, changed)

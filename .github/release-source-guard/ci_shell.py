@@ -32,7 +32,7 @@ TMPFS = {'/work': 'rw,nosuid,nodev,size=512m,uid=20000,gid=20000,mode=0711',
 
 
 def resources(spec=None):
-    """Only the exact full source command receives its finite workspace budget."""
+    """Bind workspace capacity and the full-sized diagnostic memory cap exactly."""
     mounts, memory = dict(TMPFS), 1073741824
     if spec is not None and (spec.get('duty') == 'v0.4.7 source suite'
                              or spec.get('source_mode') == 'SOURCE'):
@@ -48,6 +48,11 @@ def resources(spec=None):
         if spec.get('duty') != 'TEST-source-positive' or spec.get('commands') not in [[c] for c in commands]:
             raise RuntimeError('primary_source_fixture_mount_scope')
         mounts['/work'] = mounts['/work'].replace('rw,', 'rw,exec,', 1)
+        from startup_journal_control import selected
+        if selected(spec):
+            # The full-sized journal reproduction uses the existing full-source
+            # memory cap, while retaining its smaller workspace and time budget.
+            memory = 3221225472
     return mounts, memory
 
 KINDS = {name: phase.output for name, phase in catalog().items()}

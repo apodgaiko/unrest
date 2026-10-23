@@ -290,6 +290,7 @@ class Observer:
             diagnostic = load('approval_stall_diagnostic', support,
                               self.manifest['direct_support']['files'][support])
             registration_seconds = diagnostic.registration_seconds(self.profile, item.nodeid)
+        self.registration_capacity_reader = diagnostic.capacity if registration_seconds is not None else None
         finite_diagnostic = False
         if self.profile.get('source_mode') == 'TEST-positive':
             support = '/guard/finite/orders_git_data.py'
@@ -398,7 +399,11 @@ class Observer:
                         coroutine = (getattr(coroutine, 'cr_await', None)
                                      or getattr(coroutine, 'gi_yieldfrom', None))
                     tasks.append({'done': task.done(), 'cancelling': task.cancelling(), 'stack': stack})
-            body = canonical({'case': case, 'threads': threads, 'tasks': tasks})[:65536].decode(
+            snapshot = {'case': case, 'threads': threads, 'tasks': tasks}
+            capacity = getattr(self, 'registration_capacity_reader', None)
+            if capacity is not None:
+                snapshot['capacity'] = capacity()
+            body = canonical(snapshot)[:65536].decode(
                 'utf-8', errors='ignore')
             if self.startup_stall_token is token:
                 text = '\n[retained task snapshot]\n' + body + '\n'

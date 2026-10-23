@@ -96,3 +96,31 @@ def test_passive_registration_timer_uses_existing_snapshot_without_exit_or_timeo
     assert len(timers) == 1 and timers[0].seconds == 2.0
     timers[0].callback()
     assert captured == [(owner.startup_stall_token, diagnostic.REGISTRATION_CASE, None)]
+
+
+def test_capacity_capture_has_fixed_paths_bounded_reads_and_numeric_allowlist(monkeypatch):
+    import io
+    from pathlib import Path
+    from finite import approval_stall_diagnostic as diagnostic
+    names = []
+    content = {'memory.current': b'123\n', 'memory.max': b'3221225472\n',
+               'memory.peak': b'777\n', 'cpu.max': b'max 100000\n',
+               'cpu.stat': b'usage_usec 12\nsecret 44\nnr_throttled 2\n',
+               'memory.events': b'oom 0\nhigh 3\n'}
+    def read(path, mode):
+        path = Path(path)
+        assert str(path.parent) == '/sys/fs/cgroup' and mode == 'rb'
+        names.append(path.name)
+        return io.BytesIO(content[path.name])
+    monkeypatch.setattr(diagnostic, 'open', read, raising=False)
+    assert diagnostic.capacity() == {
+        'memory.current': 123, 'memory.max': 3221225472, 'memory.peak': 777,
+        'cpu.max': [None, 100000], 'cpu.stat': {'usage_usec': 12, 'nr_throttled': 2},
+        'memory.events': {'oom': 0, 'high': 3}}
+    assert set(names) == set(content)
+    content.update({name: b'x' * 4097 for name in content})
+    assert diagnostic.capacity() == {}
+    content.update({name: b'-1\n' for name in content})
+    content['cpu.stat'] = b'usage_usec -1\n'
+    content['memory.events'] = b'oom -1\n'
+    assert diagnostic.capacity() == {}

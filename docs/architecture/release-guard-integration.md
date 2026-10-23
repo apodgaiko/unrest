@@ -1566,3 +1566,12 @@ and private encrypted output. Capture reads frame locations and task state, not
 locals or message bodies; it cannot cancel work, call the exit watchdog, change
 any assertion/deadline or issue a certificate. The original five-second test
 remains authoritative; other selections and FULL do not arm this capture.
+
+The exact five-case large-journal TEST reproduction uses the existing full-source
+3 GiB memory cap. Its workspace, 180-second root bound, original five-second
+registration deadline and all launch/review restrictions remain unchanged. Other
+TEST selections retain 1 GiB. Container construction and inspection use the same
+closed selection predicate. Its passive private snapshot also retains bounded,
+whitelisted numeric current-container CPU and memory counters; unavailable or
+malformed diagnostics do not change test results. The earlier 1 GiB failure is
+retained. This capacity alignment is not a performance or release certificate.

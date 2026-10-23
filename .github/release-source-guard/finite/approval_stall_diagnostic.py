@@ -37,3 +37,37 @@ def registration_seconds(profile, case):
             or hashlib.sha256(json.dumps(argv[2:]).encode()).hexdigest() != REGISTRATION_SELECTION_SHA256):
         return None
     return 2.0
+
+
+def capacity():
+    """Bounded current-container counters; private and never an acceptance fact."""
+    tables = {'cpu.stat': frozenset({'usage_usec', 'user_usec', 'system_usec',
+              'nr_periods', 'nr_throttled', 'throttled_usec'}),
+              'memory.events': frozenset({'low', 'high', 'max', 'oom',
+                                         'oom_kill', 'oom_group_kill'})}
+    result = {}
+    for name in ('memory.current', 'memory.max', 'memory.peak', 'cpu.max', *tables):
+        try:
+            with open('/sys/fs/cgroup/' + name, 'rb') as stream:
+                raw = stream.read(4097)
+            if len(raw) > 4096:
+                continue
+            fields = raw.decode('ascii').split()
+            def number(value):
+                if not value.isascii() or not value.isdecimal() or len(value) > 30:
+                    raise ValueError('counter')
+                return int(value)
+            if name in tables:
+                if len(fields) % 2:
+                    continue
+                pairs = list(zip(fields[::2], fields[1::2]))
+                if len({key for key, _ in pairs}) != len(pairs):
+                    continue
+                result[name] = {key: number(value) for key, value in pairs if key in tables[name]}
+            elif name == 'cpu.max' and len(fields) == 2:
+                result[name] = [None if fields[0] == 'max' else number(fields[0]), number(fields[1])]
+            elif len(fields) == 1:
+                result[name] = None if fields[0] == 'max' else number(fields[0])
+        except (OSError, ValueError, UnicodeError):
+            pass
+    return result
