@@ -1,7 +1,9 @@
 """Closed lease/environment composition around the unchanged SOURCE activation."""
 from __future__ import annotations
 
+import hashlib
 import inspect
+import json
 from pathlib import Path
 import sys
 import subprocess
@@ -35,6 +37,29 @@ def create(state, emit, refuse, ready):
                 self.emit({'kind': 'source_nested_execution_owner',
                            'custody_case': state['case'], 'execution_owner': owner,
                            'launch_token': launch['launch_token']})
+            if registration['class'] == 'source-canonical-stdlib-backend':
+                caller = inspect.currentframe().f_back
+                if (caller.f_code is not original.before_python.__code__
+                        or caller.f_globals is not original.before_python.__globals__
+                        or caller.f_locals.get('self') is not self
+                        or caller.f_locals.get('launch') is not launch
+                        or caller.f_locals.get('registration') is not registration
+                        or caller.f_locals.get('guard') is not guard):
+                    self.refuse('stdlib_backend_activation_caller')
+                actual = checked('stdlib_backend.py')['select'](
+                    launch['args'], cwd, environment, state, self.emit, self.refuse)
+                if actual != (registration, argv):
+                    self.refuse('stdlib_backend_activation_registration')
+                checked('stdlib_backend.py')['shared'](self)
+                self.emit({'kind': 'source_stdlib_backend_startup_consumption',
+                           'launch_token': launch['launch_token'],
+                           'source_binding': registration['source_binding'],
+                           'original_argv_sha256': hashlib.sha256(json.dumps(list(launch['args'])).encode()).hexdigest(),
+                           'isolated_argv_sha256': hashlib.sha256(json.dumps(list(argv)).encode()).hexdigest(),
+                           'translation_flags': ['-I', '-S'],
+                           'third_party_execution': 'refused',
+                           'current_shared_startup_checks': True})
+                return
             if registration['class'] in {'source-execution-owner-probe', 'source-execution-owner-leaf', 'source-child-relative-probe'}:
                 caller = inspect.currentframe().f_back
                 if (caller.f_code is not original.before_python.__code__

@@ -21,7 +21,7 @@ BARRIER_PIN = '1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1'
 SESSION = 'src/unrest_harness/experimental_session.py'
 SESSION_PIN = '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2'
 JSON_LEAVES = frozenset({'controlled-acp', 'canonical-backend',
-                         'source-controlled-backend-postimage'})
+                         'source-controlled-backend-postimage', 'source-canonical-stdlib-backend'})
 CONFIGURATION_CASES = frozenset(
     prefix + '[' + skills + '-' + context + ']'
     for prefix in (
@@ -42,11 +42,13 @@ INITIALIZATION_CASES = frozenset((
 
 def selected_script(state, payload):
     kind, root = state.get('class'), Path(state['checkout'])
+    if kind == 'source-canonical-stdlib-backend' and state.get('case') not in INITIALIZATION_CASES:
+        return None
     if kind in CLASSES:
         return str(root / SCRIPT), PIN
     if kind == 'controlled-acp':
         return str(root / ACP), ACP_PIN
-    if kind in {'canonical-backend', 'source-controlled-backend-postimage'}:
+    if kind in {'canonical-backend', 'source-controlled-backend-postimage', 'source-canonical-stdlib-backend'}:
         target = payload.get('target')
         if type(target) is not str or type(state.get('owned_root')) is not str:
             return None
@@ -95,6 +97,8 @@ def eligible(state, endpoint, payload):
             or type(payload.get('isolated')) is not bool
             or payload['isolated'] != ('-I' in vector[1:index])):
         return False
+    if state['class'] == 'source-canonical-stdlib-backend' and vector[1:index] != ['-I', '-S']:
+        return False
     source = payload.get('source_binding')
     if type(source) is not dict or type(source.get('path')) is not str:
         return False
@@ -108,7 +112,7 @@ def eligible(state, endpoint, payload):
                              else (SESSION, 506, SESSION_PIN))
         expected_binding = {'path': str(Path(state['checkout']) / source_name),
                             'line': line, 'sha256': pin}
-        if kind == 'source-controlled-backend-postimage':
+        if kind in {'source-controlled-backend-postimage', 'source-canonical-stdlib-backend'}:
             expected_binding['function'] = '_open_role_owned'
         if payload['source_binding'] != expected_binding:
             return False
@@ -146,7 +150,7 @@ def select(guard, endpoint):
                 or caller.f_code != named(named(compile(endpoint_body, str(endpoint_path), 'exec', dont_inherit=True), 'attach'), 'install')):
             return None
         _, script_pin = selected_script(state, payload)
-        if state['class'] == 'source-controlled-backend-postimage':
+        if state['class'] in {'source-controlled-backend-postimage', 'source-canonical-stdlib-backend'}:
             catalog_path = Path(state['guard']).with_name('backend_postimage_catalog.py')
             catalog = guard.checked_source(catalog_path,
                 state['direct_support']['files'][str(catalog_path)])

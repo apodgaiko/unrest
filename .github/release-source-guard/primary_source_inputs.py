@@ -6,7 +6,7 @@ import json
 import re
 import shlex
 
-from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_BACKEND_POSTIMAGE_GROUPS, TEST_SEAM_ROOT_SECONDS, canonical, sha)
+from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_BACKEND_POSTIMAGE_GROUPS, INITIALIZATION_POSTIMAGE_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
 
 
 def require_full_input(value, script, workflow):
@@ -96,6 +96,12 @@ def python_environment(environment, registration, flags, *, lease_context=None):
                         and binding == {'path': controlled[0], 'line': 1, 'sha256': controlled[1]})
     exact_controlled = exact_controlled or (
         registration['class'] == 'source-controlled-backend-postimage' and flags == [0, 0, 0]
+        and binding == {'path': '/source/src/unrest_harness/experimental_session.py',
+                        'line': 506, 'sha256': '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2',
+                        'function': '_open_role_owned'})
+    exact_controlled = exact_controlled or (
+        registration['class'] == 'source-canonical-stdlib-backend' and flags == [1, 1, 0]
+        and registration.get('case') in INITIALIZATION_POSTIMAGE_CASES
         and binding == {'path': '/source/src/unrest_harness/experimental_session.py',
                         'line': 506, 'sha256': '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2',
                         'function': '_open_role_owned'})

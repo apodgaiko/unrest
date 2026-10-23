@@ -124,7 +124,7 @@ def leaf_context(kind):
     return state, endpoint, payload
 
 
-@pytest.mark.parametrize('kind', sorted(setup.JSON_LEAVES))
+@pytest.mark.parametrize('kind', sorted(setup.JSON_LEAVES - {'source-canonical-stdlib-backend'}))
 def test_exact_controlled_stdlib_leaf_metadata_has_no_launch_grant(kind):
     state, endpoint, payload = leaf_context(kind)
     assert setup.eligible(state, endpoint, payload)
@@ -204,4 +204,10 @@ def test_initialization_canonical_backend_uses_existing_stdlib_setup_gate(case):
 def test_initialization_setup_repair_preserves_entire_original_selector():
     tree = ast.parse((ROOT / 'finite/mock_backend_setup.py').read_bytes())
     selector = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'select')
+    gates = [n for n in ast.walk(selector) if isinstance(n, ast.Compare)
+             and ast.unparse(n) == "state['class'] in {'source-controlled-backend-postimage', 'source-canonical-stdlib-backend'}"]
+    assert len(gates) == 1
+    gate = gates[0]
+    gate.ops = [ast.Eq()]
+    gate.comparators = [ast.Constant(value='source-controlled-backend-postimage')]
     assert hashlib.sha256(ast.dump(selector, include_attributes=False).encode()).hexdigest() == '89c1817868b35b4b38a191ca68b5dc4764bfec2bdcb046c8b8064a04e860b9f1'

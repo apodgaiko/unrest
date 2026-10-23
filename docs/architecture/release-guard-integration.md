@@ -1613,3 +1613,25 @@ configuration. Only init, add, commit `base` and HEAD lookup are applicable.
 Existing stopped-image, owner birth, launch token, argv/environment and actual
 wait checks remain required. Stock maintenance consumes only that exact base
 commit and its object bytes; no other campaign episode or Git family is added.
+
+### Canonical initialization backend domain
+
+The seven original initialization cases can execute their unchanged, byte-pinned
+standard-library app-server fixture with an exact `-I -S` translation. The
+original live owner, renderer, vector, environment, script and call expression
+are authenticated before translation and again at activation. Other cases and
+all adapter launches retain their complete ordinary dependency consumption.
+
+This backend consumes all current shared files, the complete standard-library
+inventory, absent startup paths and interpreter link. After authenticated
+endpoint setup it seals the module closure: no new import (including extension
+initialization), changed module identity, changed search path or unknown Python
+execution is admitted. The only subsequent module-body executions are the
+single exact fixture dispatch through original `runpy` and current pinned guard
+support through original `checked_source`, with its original compilation flags
+and fresh destination namespace. The native pre-body profile still binds the
+actual translated vector, flags, process birth and environment. This execution
+domain excludes third-party packages rather than treating their mutable bytes
+as verified. It is test setup, not OS confinement or native provider acceptance.
+The original initialization deadline, completion and cleanup assertions remain
+unchanged; bounded controls confer no release certification.
