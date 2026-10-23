@@ -163,7 +163,7 @@ def test_exact_pending_selection(tmp_path, change):
 
 
 def test_catalog_closes_original_sources_without_native_or_parking_negatives():
-    assert len(catalog.CASES) == 138
+    assert len(catalog.CASES) == 145
     assert len({r["script_sha256"] for r in catalog.CASES.values()}) == 27
     for case, row in catalog.CASES.items():
         assert case.split("::")[0] in row["sources"]
@@ -268,7 +268,7 @@ def test_diagnostic_groups_are_closed_and_do_not_certify_source():
 
     groups = policy.TEST_BACKEND_POSTIMAGE_GROUPS
     assert [len(g) for g in groups] == [20, 15, 15, 10, 10, 10] + [10] * 8 + [8, 4, 4]
-    assert set(c for g in groups for c in g) == set(catalog.CASES) | set(policy._SETUP_CASES)
+    assert set(c for g in groups for c in g) == (set(catalog.CASES) - set(policy.INITIALIZATION_POSTIMAGE_CASES)) | set(policy._SETUP_CASES)
     assert len([c for g in groups for c in g]) == 176
     for group in groups:
         script = ("env -u CODEX_PATH uv run pytest -q " + " ".join(group)).encode()
@@ -346,3 +346,33 @@ def test_policy_loading_never_imports_or_caches_source_only_catalog(tmp_path):
     assert json.loads(result.stdout) == {"cases": 176, "imported": False}
     assert not list((copied / "finite").rglob("*.pyc"))
     assert list((copied / "__pycache__").glob("primary_policy.*.pyc"))
+
+
+def test_initialization_closure_preserves_every_prior_entry_and_no_launch_negatives():
+    import json
+    import primary_policy as policy
+    from primary_source_inputs import test_plan
+    cases = policy.INITIALIZATION_POSTIMAGE_CASES
+    assert len(cases) == len(set(cases)) == 7
+    prior = {name: value for name, value in catalog.CASES.items() if name not in cases}
+    assert len(prior) == 138
+    assert hashlib.sha256(json.dumps(prior, sort_keys=True, separators=(',', ':')).encode()).hexdigest() == (
+        '8f3a9de9c8cbdff997a6bf3b0d6c57874c90f049bbc820b0519e9d0d3af09684')
+    canonical = catalog.PINS['tests/fixtures/experimental_session_app_server.py']
+    for case in cases:
+        row = catalog.CASES[case]
+        assert row['script_sha256'] == canonical and row['filename'] == 'fake-app-server'
+        assert {'tests/test_experimental_startup_diagnostics.py', 'tools/probe_v046_startup.py',
+                case.split('::')[0]} <= row['sources'].keys()
+    negative = policy.TEST_INITIALIZATION_CASES[len(cases):]
+    assert len(negative) == 3 and not set(negative) & catalog.CASES.keys()
+    assert negative[0].endswith('::test_broker_start_preserves_primary_over_cleanup')
+    assert negative[1:] == tuple('tests/test_controlled_python_acp.py::test_native_pin_refusal_stays_native['
+                                 + mode + ']' for mode in ('launcher', 'runtime'))
+    script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(policy.TEST_INITIALIZATION_CASES)).encode()
+    plan = test_plan(script, 'diagnostic', 'TEST-positive')
+    assert plan['timeout_seconds'] == 180
+    assert plan['source_checkpoint_ready'] is False and plan['selected_carrier'] is None
+    for suffix in (b' --maxfail=1', b' -k initialized'):
+        with pytest.raises(RuntimeError, match='test_script'):
+            test_plan(script + suffix, 'diagnostic', 'TEST-positive')

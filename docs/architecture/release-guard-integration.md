@@ -1575,3 +1575,14 @@ closed selection predicate. Its passive private snapshot also retains bounded,
 whitelisted numeric current-container CPU and memory counters; unavailable or
 malformed diagnostics do not change test results. The earlier 1 GiB failure is
 retained. This capacity alignment is not a performance or release certificate.
+
+Seven exact original initialization/preflight cases select the existing canonical
+controlled backend through the current postimage route. Their outer test,
+configuration-wrapper and probe-tool bytes are pinned; the coordinator cleanup
+case additionally pins its cohort source and retains its unconfigured path.
+The existing line-506 caller, exact transport/runtime, configuration rendering,
+environment, script and owned-root checks remain authoritative. The obsolete
+broad configured-backend route is not reactivated. A finite ten-case TEST group
+also retains the broker-before-launch failure and both native pin no-launch
+negatives. Prior postimage entries and diagnostic groups remain unchanged; this
+slice never carries a source or release certificate.
