@@ -1675,3 +1675,8 @@ is not the unexcluded source checkpoint and cannot issue a release certificate.
 Host fixture controls suppress bytecode writes so importing source-only guard
 support cannot create a later forbidden cache in the mounted support tree.
 The runtime cache refusal is unchanged.
+
+Host unit fixture controls normalize interpreter search-path aliases only after
+ordered physical equality with the same three stdlib paths and absent zip is
+proved. Foreign, reordered or missing entries fail with layout diagnostics.
+Production native sealing retains exact path strings and does not normalize.

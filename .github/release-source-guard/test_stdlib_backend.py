@@ -87,12 +87,16 @@ from multiprocessing import util
 assert sys.modules['__mp_main__'] is sys.modules['__main__']
 assert sys.flags.isolated and sys.flags.no_site and sys.version_info[:2]==(3,13)
 expected=[str(root.parent/'python313.zip'),str(root),str(root/'lib-dynload')]
-# uv's macOS runtime keeps an alias in its extension-module search path.
-# This local-only control normalizes the physically identical alias. The Linux
-# production seal requires exact paths and has no alias normalization.
-if sys.platform=='darwin':
- assert [Path(p).resolve() for p in sys.path]==[Path(p).resolve() for p in expected]
- sys.path[:]=expected
+# Unit controls accept only ordered aliases of the exact three stdlib paths.
+# The production native seal still requires exact strings and performs no repair.
+if mode=='initial-path':sys.path.append('/foreign')
+if mode=='initial-order':sys.path[:]=list(reversed(sys.path))
+if mode=='initial-missing':sys.path.pop()
+layout={'actual':list(sys.path),'expected':expected,'base_prefix':sys.base_prefix,
+        'zip_exists':Path(expected[0]).exists(),'zip_symlink':Path(expected[0]).is_symlink()}
+assert [Path(p).resolve() for p in sys.path]==[Path(p).resolve() for p in expected], ('unit_stdlib_path_layout',layout)
+assert not layout['zip_exists'] and not layout['zip_symlink'], ('unit_stdlib_zip_present',layout)
+sys.path[:]=expected
 if sys.platform=='linux':
  # Unit controls do not fabricate the privileged native-startup receipt. Their
  # direct barrier omits the native bootstrap module, which it never loaded.
@@ -267,3 +271,12 @@ def test_new_class_consumes_original_five_second_core_ready_handshake(change, ki
         with pytest.raises(RuntimeError, match='controlled_startup_not_READY'):
             exec(code, environment)
         assert not emitted
+
+
+@pytest.mark.parametrize('mode', ['initial-path','initial-order','initial-missing'])
+def test_unit_path_normalization_rejects_foreign_order_or_members(tmp_path,mode):
+    script=tmp_path/'unit-path-control.py'
+    script.write_text(RUNNER)
+    result=subprocess.run([sys.executable,'-I','-S',str(script),str(ROOT),mode],
+                          cwd=tmp_path,text=True,capture_output=True,timeout=15)
+    assert result.returncode != 0 and 'unit_stdlib_path_layout' in result.stderr
