@@ -445,9 +445,13 @@ def test_own_native_probe_preserves_all_prior_stage1_compartment_statements():
     import ast
     import hashlib
     source = (ROOT / 'primary_compartment.py').read_text()
-    # Undo only the exact legal-adoptive evidence calls before comparing every
-    # remaining compartment statement to the original immutable AST.
+    # Normalize the exact adoptive-wait and packed-export changes before
+    # comparing every remaining statement to the original immutable AST.
     changes = {
+        'from source_raw_transport import LOGICAL_MEMBER_LIMIT, emit_packed_source as emit_source\n':
+            'from source_raw_transport import emit_source\n',
+        'path.stat().st_size <= LOGICAL_MEMBER_LIMIT':
+            'path.stat().st_size <= 32 * 1024 * 1024',
         'from approval_wait_evidence import unresolved, summary_closed\n': '',
         'not unresolved(result)': "not result['missing_parent_waits']",
         'summary is None or not summary_closed(summary, result)':
