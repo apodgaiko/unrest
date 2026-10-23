@@ -144,3 +144,79 @@ def test_every_original_projected_field_keeps_the_original_comparison(field, rep
     assert value['code_identity'](changed) == reference_freeze(original(changed))
     assert ((value['code_identity'](code) == value['code_identity'](changed))
             is (original(code) == original(changed)))
+
+
+@pytest.mark.parametrize('field, replacement', [
+    ('co_argcount', 0), ('co_posonlyargcount', 0), ('co_kwonlyargcount', 0),
+    ('co_stacksize', 100), ('co_flags', 0), ('co_filename', '/foreign.py'),
+    ('co_name', 'foreign'), ('co_qualname', 'foreign.qualified'), ('co_firstlineno', 100),
+    ('co_names', ('foreign',)), ('co_varnames', ('foreign', 'named')),
+    ('co_freevars', ('foreign',)), ('co_cellvars', ('foreign',)),
+    ('co_linetable', b''), ('co_exceptiontable', b''), ('co_consts', (None, 42)),
+])
+def test_sealed_reference_preserves_every_original_nested_code_field(field, replacement):
+    import primary_dependency as dependency
+    body = b'def call(arg, /, *, named):\n try:\n  return target(arg, named)\n except Exception:\n  raise\n'
+    path = str(dependency.SITE / 'data.py')
+    original = namespace()['code_identity']
+    references = dependency.compiled_references({'data.py': body})
+    value = namespace()
+    comparison_functions(value, {}, references)
+    expected = value['compile'](body, path, 'exec', dont_inherit=True, optimize=0)
+    assert not isinstance(expected, types.CodeType)
+    with pytest.raises(TypeError):
+        exec(expected, {})
+    actual = compile(body, path, 'exec', dont_inherit=True, optimize=0)
+    assert value['code_identity'](actual) == value['code_identity'](expected)
+    inner = next(item for item in actual.co_consts if type(item) is types.CodeType)
+    changes = {field: replacement}
+    if field == 'co_argcount':
+        changes['co_posonlyargcount'] = 0
+    changed_inner = inner.replace(**changes)
+    changed = actual.replace(co_consts=tuple(changed_inner if item is inner else item for item in actual.co_consts))
+    assert ((value['code_identity'](changed) == value['code_identity'](expected))
+            is (original(changed) == original(actual)))
+    assert original(changed) != original(actual)
+
+
+def test_reference_reuses_only_matching_complete_current_bytes_and_compilation_options(monkeypatch):
+    import primary_dependency as dependency
+    body = b'answer = 1\n'
+    path = str(dependency.SITE / 'data.py')
+    references = dependency.compiled_references({'data.py': body, 'unused.py': b'broken syntax!'})
+    assert set(references) == {'data.py'}
+    calls = []
+    actual_compile = compile
+    def counted(*args, **kwargs):
+        calls.append((args, kwargs))
+        return actual_compile(*args, **kwargs)
+    monkeypatch.setattr(dependency, 'compile', counted, raising=False)
+    value = namespace()
+    comparison_functions(value, {}, references)
+    value['compile'](body, path, 'exec', dont_inherit=True, optimize=0)
+    assert not calls
+    for current, filename, inherit, optimize in [(b'answer = 2\n', path, True, 0),
+            (body, str(dependency.SITE / 'other.py'), True, 0),
+            (body, '/foreign/data.py', True, 0), (body, path, False, 0),
+            (body, path, True, 1), (body, path, True, 2)]:
+        assert isinstance(value['compile'](current, filename, 'exec',
+                          dont_inherit=inherit, optimize=optimize), types.CodeType)
+    assert len(calls) == 6
+
+
+def test_same_pure_cache_cannot_carry_a_reference_verdict_across_modes_or_changes():
+    import primary_dependency as dependency
+    body = b'answer = 1\n'
+    path = str(dependency.SITE / 'data.py')
+    refs = dependency.compiled_references({'data.py': body})
+    changed = {'data.py': {**refs['data.py'], 'identity_sha256': 'a' * 64}}
+    cache = {}
+    actual = compile(body, path, 'exec', dont_inherit=True, optimize=0)
+    for references in (None, refs, None, changed, {}, refs, None):
+        value = namespace()
+        comparison_functions(value, cache, references)
+        expected = value['compile'](body, path, 'exec', dont_inherit=True, optimize=0)
+        same = value['code_identity'](actual) == value['code_identity'](expected)
+        assert same is (references is not changed)
+        assert (type(value['code_identity'](actual)) is tuple) is (references is None)
+    assert all(type(code) is types.CodeType for code in cache['compiled'].values())

@@ -1415,3 +1415,22 @@ CPU/wall phase clocks across dependency receipt, source, cache and file checks.
 The closed case and phases emit no source bodies or values, do not admit work or
 change deadlines, and are explicitly diagnostic rather than certificates. Every
 original acquisition, comparison, cleanup assertion and release gate remains.
+
+The observer-owned primary dependency declaration uses
+`unrest.v047.primary-dependency-output.v2`. After the existing image/wheel
+projection and complete installed-byte checks, it seals a source SHA and digest
+of the original complete compiled-code identity for each compilable Python
+member, at the exact consumer filename with `exec`, `dont_inherit=True` and
+optimization zero. This pure derivation runs once before test dispatch.
+
+Consumers authenticate the complete declaration and join reference source SHAs
+to its original file roster. They still acquire and check every current source
+and cache byte, header, process/file identity and membership. Only an exact
+current-body, canonical filename and compilation-option match can reuse the
+expected comparison digest. Actual cache code still undergoes the original
+complete identity comparison. Missing references or different inputs use the
+real compiler. References are non-executable comparison data, never dispatch
+inputs; the shared compile cache contains only real code objects, and digest
+identities use a separate namespace. No launch, wait, cleanup or deadline
+requirement changes. Pure comparison speedups exclude the separately measured
+observer preparation cost and cannot certify original-test completion.

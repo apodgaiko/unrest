@@ -382,6 +382,44 @@ def image_projection():
     return expected, modes, omitted, script_outputs
 
 
+def comparison_digest(value):
+    return sha(json.dumps(value, separators=(',', ':')).encode())
+
+
+def compiled_references(expected):
+    """Pure source derivations, sealed by the observer before test dispatch."""
+    from finite.operation_activation import code_identity
+    namespace = {'code_identity': code_identity}
+    comparison_functions(namespace, {})
+    references = {}
+    for name, body in sorted(expected.items()):
+        if not name.endswith('.py'):
+            continue
+        try:
+            code = compile(body, str(SITE / name), 'exec', dont_inherit=True, optimize=0)
+        except (SyntaxError, ValueError, OverflowError, RecursionError):
+            # An unused .py data member need not compile. A later real cache
+            # still takes the original compiler path; absence grants nothing.
+            continue
+        references[name] = {'source_sha256': sha(body),
+                            'identity_sha256': comparison_digest(namespace['code_identity'](code))}
+    return references
+
+
+def verify_references(value):
+    references = value['compiled_references']
+    if type(references) is not dict:
+        raise RuntimeError('primary_dependency_reference_schema')
+    for name, reference in references.items():
+        if (type(name) is not str or name not in value['files'] or not name.endswith('.py')
+                or type(reference) is not dict or set(reference) != {'source_sha256', 'identity_sha256'}
+                or reference['source_sha256'] != value['files'][name]['sha256']
+                or any(type(pin) is not str or len(pin) != 64 or set(pin) - set('0123456789abcdef')
+                       for pin in reference.values())):
+            raise RuntimeError('primary_dependency_reference_schema')
+    return references
+
+
 def seal(owner, bootstrap):
     """Join provisional original outputs to actual waits, then derive every byte."""
     from producer_setup import write
@@ -475,8 +513,9 @@ def seal(owner, bootstrap):
         if actual != wanted or stat.S_IMODE(file['identity'][2]) != mode:
             raise RuntimeError('primary_dependency_projected_script')
         scripts[name] = file
-    declaration = {'schema': 'unrest.v046.primary-dependency-output.v1', 'site': str(SITE),
-                   'files': observed, 'bootstrap': bootstrap['producers'],
+    declaration = {'schema': 'unrest.v047.primary-dependency-output.v2', 'site': str(SITE),
+                   'files': observed, 'compiled_references': compiled_references(expected),
+                   'bootstrap': bootstrap['producers'],
                    'bootstrap_captures': [captures[pid] for pid in sorted(captures)],
                    'directories': directories, 'scripts': scripts,
                    'omitted_backend_members': len(omitted), 'initial_source_bound_caches': len(caches),
@@ -608,11 +647,16 @@ def immutable_cache(namespace, name, source_name, optimize, expected_source):
     return current
 
 
-def comparison_functions(namespace, cache):
+def comparison_functions(namespace, cache, references=None):
     """Reuse only pure immutable derivations of complete current input bytes."""
     import marshal
     import types
-    compiled, identities = cache.setdefault('compiled', {}), cache.setdefault('identities', {})
+    compiled = cache.setdefault('compiled', {})
+    identities = cache.setdefault('identities' if references is None else 'reference_identities', {})
+    class CompiledReference:
+        __slots__ = ('digest',)
+        def __init__(self, digest):
+            self.digest = digest
     original = namespace['code_identity']
     globals_copy = dict(original.__globals__)
     original = types.FunctionType(original.__code__, globals_copy)
@@ -663,14 +707,28 @@ def comparison_functions(namespace, cache):
             ('lines', code.co_linetable.hex()),
         ))
     def current_compile(body, filename, mode, *, dont_inherit, optimize):
+        prefix = str(SITE) + '/'
+        if (references is not None and type(body) is bytes and type(filename) is str
+                and filename.startswith(prefix) and mode == 'exec'
+                and dont_inherit is True and type(optimize) is int and optimize == 0):
+            name = filename[len(prefix):]
+            reference = references.get(name)
+            if (reference is not None and '..' not in Path(name).parts
+                    and str(SITE / name) == filename and sha(body) == reference['source_sha256']):
+                # This object is comparison data, never executable code. The
+                # reference is authenticated in the observer-owned declaration.
+                return CompiledReference(reference['identity_sha256'])
         key = (body, filename, mode, dont_inherit, optimize)
         if key not in compiled:
             compiled[key] = compile(body, filename, mode, dont_inherit=dont_inherit, optimize=optimize)
         return compiled[key]
     def current_identity(code):
+        if type(code) is CompiledReference:
+            return code.digest
         key = marshal.dumps(code)
         if key not in identities:
-            identities[key] = full_identity(code)
+            value = full_identity(code)
+            identities[key] = value if references is None else comparison_digest(value)
         return identities[key]
     namespace['compile'] = current_compile
     namespace['code_identity'] = current_identity
@@ -711,14 +769,15 @@ def verify(site, support, *, comparisons=None):
             or stat.S_IMODE(receipt['identity'][2]) != 0o444):
         raise RuntimeError('primary_dependency_receipt')
     value = decode(body)
-    if (set(value) != {'schema', 'site', 'files', 'directories', 'scripts', 'bootstrap', 'bootstrap_captures', 'omitted_backend_members',
+    if (set(value) != {'schema', 'site', 'files', 'compiled_references', 'directories', 'scripts', 'bootstrap', 'bootstrap_captures', 'omitted_backend_members',
                        'initial_source_bound_caches', 'wheel', 'source_files', 'source_custody',
                        'source_checkpoint_ready', 'selected_carrier'}
-            or value['schema'] != 'unrest.v046.primary-dependency-output.v1'
+            or value['schema'] != 'unrest.v047.primary-dependency-output.v2'
             or value['site'] != str(SITE) or value['source_checkpoint_ready'] is not False
             or value['selected_carrier'] is not None):
         raise RuntimeError('primary_dependency_schema')
     cost_phase('receipt')
+    references = verify_references(value)
     validate_bootstrap(value)
     verify_source_inputs(value['source_files'], value['source_custody'])
     if read(value['wheel']['path'], 20001)[1] != value['wheel']:
@@ -730,8 +789,7 @@ def verify(site, support, *, comparisons=None):
         raise RuntimeError('primary_dependency_cache_verifier')
     namespace = {'__file__': str(source), '__name__': 'primary_dependency_activation'}
     exec(compile(source_body, str(source), 'exec', dont_inherit=True), namespace)
-    if comparisons is not None:
-        comparison_functions(namespace, comparisons)
+    comparison_functions(namespace, {} if comparisons is None else comparisons, references)
     cost_phase('activation')
     first, directories = site_metadata()
     source_map = cache_sources(first, value['files'])

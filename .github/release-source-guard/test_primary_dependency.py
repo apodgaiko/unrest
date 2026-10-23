@@ -337,8 +337,9 @@ def consumer_site(tmp_path, monkeypatch):
                                          len(b'original fixture archive'), 10, 10],
                             'sha256': retained_file['sha256']}
         captures.append(row)
-    value = {'schema': 'unrest.v046.primary-dependency-output.v1', 'site': str(site),
+    value = {'schema': 'unrest.v047.primary-dependency-output.v2', 'site': str(site),
              'files': {'data.py': fixture_read(source, 20000)[1]},
+             'compiled_references': dependency.compiled_references({'data.py': source.read_bytes()}),
              'directories': directories({'data.py'}), 'scripts': {}, 'bootstrap': producers,
              'bootstrap_captures': captures,
              'omitted_backend_members': 346, 'initial_source_bound_caches': 0,
@@ -703,4 +704,90 @@ def test_dependency_cost_clocks_preserve_all_original_verifier_statements():
     function.body = [node for node in function.body if not (isinstance(node, ast.Expr)
         and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
         and node.value.func.id == 'cost_phase')]
+    # Normalize only the explicit v2 reference-cache additions, retaining the
+    # original verifier oracle and every pre-existing acquisition/check.
+    assert sum(isinstance(node, ast.Assign) and ast.unparse(node) ==
+               'references = verify_references(value)' for node in function.body) == 1
+    assert sum(isinstance(node, ast.Expr) and ast.unparse(node) ==
+               'comparison_functions(namespace, {} if comparisons is None else comparisons, references)'
+               for node in function.body) == 1
+    function.body = [node for node in function.body if not (isinstance(node, ast.Assign)
+        and ast.unparse(node) == 'references = verify_references(value)')]
+    for index, node in enumerate(function.body):
+        if isinstance(node, ast.Expr) and ast.unparse(node) == (
+                'comparison_functions(namespace, {} if comparisons is None else comparisons, references)'):
+            function.body[index] = ast.parse('if comparisons is not None:\n    comparison_functions(namespace, comparisons)').body[0]
+    class OriginalSchema(ast.NodeTransformer):
+        def visit_Constant(self, node):
+            if node.value == 'unrest.v047.primary-dependency-output.v2':
+                return ast.Constant(value='unrest.v046.primary-dependency-output.v1')
+            return node
+        def visit_Set(self, node):
+            node.elts = [item for item in node.elts if not (isinstance(item, ast.Constant)
+                         and item.value == 'compiled_references')]
+            return self.generic_visit(node)
+    function = OriginalSchema().visit(function)
     assert hashlib.sha256(ast.dump(function, include_attributes=False).encode()).hexdigest() == '02e8ee572256143c6e5da7c1996e136ef7222d12f3e3d8e7a16cb5d51c7d6596'
+
+
+
+@pytest.mark.parametrize('change', ['not-table', 'unknown-source', 'not-python', 'not-entry',
+    'missing-field', 'extra-field', 'source-digest', 'identity-length', 'identity-alphabet'])
+@pytest.mark.parametrize('memoized', [False, True])
+def test_consumer_rejects_invalid_sealed_compilation_reference(consumer_site, change, memoized):
+    fixture = consumer_site
+    comparisons = {} if memoized else None
+    if memoized:
+        dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
+    table = fixture.value['compiled_references']
+    if change == 'not-table':
+        fixture.value['compiled_references'] = []
+    elif change == 'unknown-source':
+        table['unknown.py'] = table['data.py']
+    elif change == 'not-python':
+        table['data.txt'] = table.pop('data.py')
+    elif change == 'not-entry':
+        table['data.py'] = []
+    elif change == 'missing-field':
+        del table['data.py']['identity_sha256']
+    elif change == 'extra-field':
+        table['data.py']['execute'] = True
+    elif change == 'source-digest':
+        table['data.py']['source_sha256'] = 'a' * 64
+    elif change == 'identity-length':
+        table['data.py']['identity_sha256'] = 'a'
+    else:
+        table['data.py']['identity_sha256'] = 'z' * 64
+    support = fixture.publish()
+    with pytest.raises(RuntimeError, match='reference_schema'):
+        dependency.verify(fixture.site, support, comparisons=comparisons)
+
+
+def test_missing_reference_falls_back_without_skipping_real_cache_or_file_checks(consumer_site, monkeypatch):
+    fixture = consumer_site
+    py_compile.compile(str(fixture.source), doraise=True)
+    fixture.value['compiled_references'] = {}
+    support = fixture.publish()
+    calls = []
+    actual_compile = compile
+    def counted(*args, **kwargs):
+        calls.append((args, kwargs))
+        return actual_compile(*args, **kwargs)
+    monkeypatch.setattr(dependency, 'compile', counted, raising=False)
+    assert dependency.verify(fixture.site, support)['source_bound_caches'] == 1
+    assert calls
+    fixture.source.write_bytes(b'VALUE = 2\n')
+    with pytest.raises(RuntimeError):
+        dependency.verify(fixture.site, support)
+
+
+@pytest.mark.parametrize('memoized', [False, True])
+def test_used_reference_digest_change_never_reuses_a_prior_pass(consumer_site, memoized):
+    fixture = consumer_site
+    py_compile.compile(str(fixture.source), doraise=True)
+    comparisons = {} if memoized else None
+    dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
+    fixture.value['compiled_references']['data.py']['identity_sha256'] = 'a' * 64
+    support = fixture.publish()
+    with pytest.raises(RuntimeError, match='cache_source_code_drift'):
+        dependency.verify(fixture.site, support, comparisons=comparisons)
