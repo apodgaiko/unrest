@@ -141,6 +141,7 @@ TEST_COMPLETION_PIPE_CASES = tuple(
 
 
 INITIALIZATION_POSTIMAGE_CASES = ('tests/test_controlled_python_acp.py::test_programmatic_private_preflight', 'tests/test_experimental_startup_diagnostics.py::test_initialization_probe_real_controlled_path_no_prompt', 'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[refusal]', 'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]', 'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[permission]', 'tests/test_experimental_startup_diagnostics.py::test_initialized_owner_has_no_http_mutation_authority', 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure')
+CANCELLATION_POSTIMAGE_CASES = tuple('tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[' + stage + ']' for stage in ('backend_registered', 'adapter_registered', 'auth', 'forwarding'))
 TEST_INITIALIZATION_CASES = INITIALIZATION_POSTIMAGE_CASES + ('tests/test_experimental_startup_diagnostics.py::test_broker_start_preserves_primary_over_cleanup', 'tests/test_controlled_python_acp.py::test_native_pin_refusal_stays_native[launcher]', 'tests/test_controlled_python_acp.py::test_native_pin_refusal_stays_native[runtime]')
 
 # Read literal diagnostic data without importing source-only guard code. Native
@@ -150,8 +151,8 @@ _BACKEND_POSTIMAGES = ast.literal_eval(ast.parse(
 _SETUP_CASES = ast.literal_eval(ast.parse(
     (Path(__file__).parent / 'finite/orders_git_data.py').read_bytes()).body[3].value)
 _BACKEND_CONFIG = tuple(c for c, row in _BACKEND_POSTIMAGES.items()
-                        if c not in INITIALIZATION_POSTIMAGE_CASES and row['script_sha256'] == 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53')
-_BACKEND_MISC = tuple(c for c in _BACKEND_POSTIMAGES if c not in _SETUP_CASES and c not in _BACKEND_CONFIG and c not in INITIALIZATION_POSTIMAGE_CASES)
+                        if c not in INITIALIZATION_POSTIMAGE_CASES + CANCELLATION_POSTIMAGE_CASES and row['script_sha256'] == 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53')
+_BACKEND_MISC = tuple(c for c in _BACKEND_POSTIMAGES if c not in _SETUP_CASES and c not in _BACKEND_CONFIG and c not in INITIALIZATION_POSTIMAGE_CASES + CANCELLATION_POSTIMAGE_CASES)
 _BACKEND_ORDERS = tuple(c for c in _BACKEND_POSTIMAGES if 'finite_orders.py::' in c)
 _SETUP_ADDITIONAL = tuple(c for c in _SETUP_CASES if 'finite_orders.py::' not in c
                           and c not in INITIALIZATION_POSTIMAGE_CASES)

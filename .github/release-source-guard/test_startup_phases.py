@@ -166,6 +166,22 @@ def restore_controlled_postimage_class(tree):
     return tree
 
 
+
+def restore_stdlib_ready_class(tree):
+    constants = [n for n in ast.walk(tree) if isinstance(n, ast.Constant)
+                 and n.value == 'source-canonical-stdlib-backend']
+    assert len(constants) == 1
+    tuples = [n for n in ast.walk(tree) if isinstance(n, ast.Tuple)
+              and constants[0] in n.elts]
+    assert len(tuples) == 1
+    members = tuples[0].elts
+    assert ast.literal_eval(members[0]) == 'canonical-backend'
+    assert members[1] is constants[0]
+    assert ast.literal_eval(members[2]) == 'controlled-acp'
+    members.pop(1)
+    return tree
+
+
 BASELINE_AST_SHA256 = {'finite/source_operations.py': 'a5d9f2958f8aa4dd57922407f3112d6917544cc87b22942febe254172bd50209', 'finite/runtime_guard.py': '3b26232fb8c8d033a984e5c0ba0fa1760600cb7b846af728b2fbbeb39ccd6fa4', 'finite/source_activation.py': 'fd49c0f30096da8163142b0f8f884d56a80dbf9f5b38b757f22486ec1f5efab7', 'linux_supervisor.py': '2fb9fb8012c9161fe64ad70dca851abdd65a2e86dca48701d3f5b2d2fabef99f', 'linux_trace.py': '344558174ec335476ac8f76fa0afdf4ee667a497825150e4388fdb8ca95f5b9c', 'primary_source_authority.py': 'b36a24d13b548d143379dacd844680f089a41e5f2666c9a9944eeb29607a1540'}
 
 
@@ -173,7 +189,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
     for name, expected in BASELINE_AST_SHA256.items():
         tree = ast.parse((ROOT / name).read_bytes())
         if name == 'finite/runtime_guard.py':
-            tree = restore_launch_image_observation(tree)
+            tree = restore_stdlib_ready_class(restore_launch_image_observation(tree))
         if name == 'finite/source_operations.py':
             tree = restore_dependency_diagnostic(restore_query_route(tree))
         if name == 'linux_supervisor.py':

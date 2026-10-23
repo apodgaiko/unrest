@@ -1635,3 +1635,13 @@ domain excludes third-party packages rather than treating their mutable bytes
 as verified. It is test setup, not OS confinement or native provider acceptance.
 The original initialization deadline, completion and cleanup assertions remain
 unchanged; bounded controls confer no release certification.
+
+The same domain also covers the four original controlled cancellation boundaries
+(`backend_registered`, `adapter_registered`, `auth`, and `forwarding`). These
+have separate exact case and delegated-source pins; the seven initialization
+cases remain unchanged. Only the canonical backend changes execution domain;
+the ACP transport keeps ordinary checks. The new backend class also consumes
+the existing five-second, token/PID/parent/manifest/guard/registry/interpreter-bound
+core READY handshake before its constructor returns. Core READY does not claim
+completed endpoint setup or a sealed payload. Original cancellation deadlines,
+assertions, numeric waits and intentional early termination remain distinct.

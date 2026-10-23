@@ -1382,6 +1382,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
             or registration["class"]
             in (
                 "canonical-backend",
+                "source-canonical-stdlib-backend",
                 "controlled-acp",
                 "source-foreign-journal-owner",
                 "source-benchmark-five-run",

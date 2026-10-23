@@ -134,7 +134,12 @@ def test_exact_version_transition_keeps_historical_template_and_core():
         'finite/runtime_guard.py': '68abd1e8ca8b2fed37a2fd2298dc39c1e8d822fa3c4065ceb53bc6a54e0684eb',
         'primary_source_authority.py': 'ac7de9fabf159b37517a8acfba9eea9b3d903750c05f8509e8b80627b8371abc',
     }.items():
-        assert hashlib.sha256((ROOT / '.github/release-source-guard' / name).read_bytes()).hexdigest() == pin
+        body = (ROOT / '.github/release-source-guard' / name).read_bytes()
+        if name == 'finite/runtime_guard.py':
+            delta = b'                "canonical-backend",\n                "source-canonical-stdlib-backend",\n'
+            assert body.count(delta) == 1
+            body = body.replace(delta, b'                "canonical-backend",\n', 1)
+        assert hashlib.sha256(body).hexdigest() == pin
 
 
 @pytest.mark.parametrize('mutation', ['preimage', 'postimage'])

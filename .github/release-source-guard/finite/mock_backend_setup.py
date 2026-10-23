@@ -40,9 +40,11 @@ INITIALIZATION_CASES = frozenset((
     'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure',
 ))
 
+CANCELLATION_CASES = frozenset(('tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[backend_registered]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[adapter_registered]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[auth]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[forwarding]'))
+
 def selected_script(state, payload):
     kind, root = state.get('class'), Path(state['checkout'])
-    if kind == 'source-canonical-stdlib-backend' and state.get('case') not in INITIALIZATION_CASES:
+    if kind == 'source-canonical-stdlib-backend' and state.get('case') not in INITIALIZATION_CASES | CANCELLATION_CASES:
         return None
     if kind in CLASSES:
         return str(root / SCRIPT), PIN
@@ -57,7 +59,7 @@ def selected_script(state, payload):
                 or not path.is_relative_to(Path(state['owned_root']))):
             return None
         return target, (BACKEND_PIN if kind == 'canonical-backend'
-                        or state.get('case') in CONFIGURATION_CASES | INITIALIZATION_CASES else BARRIER_PIN)
+                        or state.get('case') in CONFIGURATION_CASES | INITIALIZATION_CASES | CANCELLATION_CASES else BARRIER_PIN)
     return None
 
 

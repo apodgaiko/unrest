@@ -16,7 +16,7 @@ from finite import mock_backend_setup as setup, stdlib_backend as domain
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('case', sorted(setup.INITIALIZATION_CASES))
+@pytest.mark.parametrize('case', sorted(setup.INITIALIZATION_CASES | setup.CANCELLATION_CASES))
 @pytest.mark.parametrize('vector_type', [list, tuple])
 @pytest.mark.parametrize('change', [None, 'case', 'original-refusal', 'class', 'script'])
 def test_translation_follows_unchanged_original_admission(monkeypatch, case, vector_type, change):
@@ -201,3 +201,68 @@ def test_native_environment_projection_is_exact_initialization_domain(change):
     environment = {'CODEX_HOME': '/owned/home'}
     assert python_environment(environment, row, flags) == (
         {**environment, 'LC_CTYPE': 'C.UTF-8'} if change is None else environment)
+
+
+@pytest.mark.parametrize('case', sorted(setup.CANCELLATION_CASES))
+def test_cancellation_domain_uses_same_exact_backend_setup(case):
+    from test_mock_backend_setup import leaf_context
+    state, endpoint, payload = leaf_context(domain.ORIGINAL)
+    state['class'] = payload['class'] = domain.CLASS
+    state['case'] = payload['case'] = case
+    payload['orig_argv'][1:1] = ['-I', '-S']
+    payload['isolated'] = True
+    assert setup.selected_script(state,payload) == (payload['target'], setup.BACKEND_PIN)
+    assert setup.eligible(state,endpoint,payload)
+    assert setup.INITIALIZATION_CASES.isdisjoint(setup.CANCELLATION_CASES)
+    state['case'] = payload['case'] = case + '-foreign'
+    assert not setup.eligible(state,endpoint,payload)
+
+
+@pytest.mark.parametrize('change', [None, 'token', 'guard', 'manifest', 'registry', 'runtime', 'pid', 'parent'])
+def test_new_class_consumes_original_five_second_core_ready_handshake(change):
+    from types import SimpleNamespace
+    source = (Path(domain.__file__).with_name('runtime_guard.py')).read_bytes()
+    tree = ast.parse(source)
+    blocks = [node for node in ast.walk(tree) if isinstance(node, ast.If)
+              and 'source-canonical-stdlib-backend' in ast.unparse(node.test)
+              and 'bounded_controlled_READY_handshake' in ast.unparse(node)]
+    assert len(blocks) == 1
+    emitted = []
+    state = {'events': '/unit/events', 'guard_sha256': 'guard',
+             'registry': {'sha256': 'registry'}, 'runtime': {'sha256': 'runtime'}}
+    ready = {'kind': 'ready', 'token': 'actual-token', 'class': domain.CLASS,
+             'owner_pid': 123, 'parent_pid': os.getpid(),
+             'guard_sha256': 'guard', 'manifest_sha256': 'manifest',
+             'registry_sha256': 'registry', 'runtime_sha256': 'runtime'}
+    fields = {'token': 'token', 'guard': 'guard_sha256', 'manifest': 'manifest_sha256',
+              'registry': 'registry_sha256', 'runtime': 'runtime_sha256',
+              'pid': 'owner_pid', 'parent': 'parent_pid'}
+    if change is not None:
+        ready[fields[change]] = 'foreign'
+    class Journal:
+        def __truediv__(self, name):
+            assert name == '123.jsonl'
+            return self
+        def exists(self):
+            return True
+        def read_text(self):
+            return json.dumps(ready) + '\n'
+    handle = SimpleNamespace(pid=123, poll=lambda: 0, wait=lambda **kw: 0)
+    def refuse(reason):
+        raise RuntimeError(reason)
+    environment = {'registration': {'class': domain.CLASS, 'python': True},
+                   'state': state, 'handle': handle, 'launch_token': 'actual-token',
+                   'pin': 'manifest', 'time': SimpleNamespace(monotonic=lambda: 0),
+                   'Path': lambda value: Journal(), 'json': json, 'os': os,
+                   'append': emitted.append, 'refuse': refuse}
+    code = compile(ast.Module(body=[blocks[0]], type_ignores=[]), '/unit/ready-control', 'exec')
+    if change is None:
+        exec(code, environment)
+        assert len(emitted) == 1
+        assert emitted[0]['kind'] == 'bounded_controlled_READY_handshake'
+        assert emitted[0]['deadline_seconds'] == 5
+        assert emitted[0]['original_probe_deadline_changed'] is False
+    else:
+        with pytest.raises(RuntimeError, match='controlled_startup_not_READY'):
+            exec(code, environment)
+        assert not emitted
