@@ -17,7 +17,7 @@ STDLIB = 'e4049ed91ed101b09b0dc96bbf234f646c1728090d643a474b024276cc2a028c'
 NATIVE = '925e5f643c0c5f9d5e897d6faca9af7d9f7dbe624b7d31cab4d97dde15a748af'
 LIBRARY = '9dfc25c8ade9fb31dbeb1f5e79ac693d588245e2dbb8fa7ebd939db6231fe06d'
 APPLICABLE = frozenset({
-    'canonical-backend', "source-controlled-backend-postimage", 'source-canonical-stdlib-backend',
+    'canonical-backend', "source-controlled-backend-postimage", 'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp',
     'composed-http-role:orchestrator',
     'composed-http-role:terminal-reviewer',
     'composed-http-role:validator',
@@ -323,7 +323,7 @@ def install(state, activation, emit, refuse, checked):
     # The journal specialization inherits this exact constructor and native
     # route. Its selection does not make any new constructor acceptable.
     operations_source = Path('/guard/primary_operations.py')
-    if guard.digest(operations_source) != '7a8e664e4d4fc090ef00a0aab389c413e488a32cd5973d07ad6450d5d48d18ce':
+    if guard.digest(operations_source) != '48cbc783566db5528a487b9b6f41c924f0ea385662be0149ec2c60804d296135':
         refuse('child_relative_operation_constructor_source')
     operations_code = compile(operations_source.read_bytes(), str(operations_source),
                               'exec', dont_inherit=True)

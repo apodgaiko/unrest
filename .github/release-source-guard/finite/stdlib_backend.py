@@ -31,7 +31,7 @@ def select(argv, cwd, environment, state, emit, refuse):
         return None
     argv = list(argv)
     setup = support(state, 'mock_backend_setup.py')
-    if state.get('case') not in setup['INITIALIZATION_CASES'] | setup['CANCELLATION_CASES']:
+    if state.get('case') not in setup['INITIALIZATION_CASES'] | setup['CANCELLATION_CASES'] | setup['REGISTRATION_CASES']:
         return None
     # The unchanged resolver authenticates the original live owner, exact
     # config renderer, script digest, interpreter, streams and call expression.
@@ -79,7 +79,7 @@ def seal(guard, endpoint):
     child = caller.f_back
     payload = child.f_locals.get('payload') if child is not None else None
     setup = support(state, 'mock_backend_setup.py')
-    if (state.get('class') != CLASS or caller.f_globals is not vars(endpoint)
+    if (state.get('class') not in {CLASS, 'source-canonical-stdlib-acp'} or caller.f_globals is not vars(endpoint)
             or caller.f_code is not guard.install.__code__
             or child is None or child.f_globals is not vars(guard)
             or child.f_code is not guard.child.__code__
@@ -100,9 +100,9 @@ def seal(guard, endpoint):
     import urllib.request  # noqa: F401
     import zipimport  # noqa: F401
     install_barrier(state, guard, payload)
-    guard.append({'kind': 'stdlib_backend_execution_sealed', 'class': CLASS,
+    guard.append({'kind': 'stdlib_backend_execution_sealed', 'class': state['class'],
                   'token': state['token'], 'case': state['case'],
-                  'script_sha256': PIN, 'isolated_flags': [1, 1],
+                  'script_sha256': (setup['ACP_PIN'] if state['class'] == 'source-canonical-stdlib-acp' else PIN), 'isolated_flags': [1, 1],
                   'third_party_execution': 'refused',
                   'native_provider_acceptance': 'UNVERIFIED'})
 
@@ -124,7 +124,9 @@ def install_barrier(state, guard, payload):
     endpoint_path = str(Path(state['guard']).with_name('endpoint.py'))
     pins[endpoint_path] = state['endpoint']['sha256']
     target = payload['target']
-    pins[target] = PIN
+    payload_pin = (support(state, 'mock_backend_setup.py')['ACP_PIN']
+                   if state.get('class') == 'source-canonical-stdlib-acp' else PIN)
+    pins[target] = payload_pin
     guard_paths = set(state['direct_support']['files']) | {state['guard'], endpoint_path}
     if sys.platform == 'linux':
         # This profile was consumed by the native pre-body hook. Reacquire its

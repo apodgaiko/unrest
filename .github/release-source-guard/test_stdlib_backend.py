@@ -218,8 +218,9 @@ def test_cancellation_domain_uses_same_exact_backend_setup(case):
     assert not setup.eligible(state,endpoint,payload)
 
 
+@pytest.mark.parametrize('kind', [domain.CLASS, 'source-canonical-stdlib-acp'])
 @pytest.mark.parametrize('change', [None, 'token', 'guard', 'manifest', 'registry', 'runtime', 'pid', 'parent'])
-def test_new_class_consumes_original_five_second_core_ready_handshake(change):
+def test_new_class_consumes_original_five_second_core_ready_handshake(change, kind):
     from types import SimpleNamespace
     source = (Path(domain.__file__).with_name('runtime_guard.py')).read_bytes()
     tree = ast.parse(source)
@@ -230,7 +231,7 @@ def test_new_class_consumes_original_five_second_core_ready_handshake(change):
     emitted = []
     state = {'events': '/unit/events', 'guard_sha256': 'guard',
              'registry': {'sha256': 'registry'}, 'runtime': {'sha256': 'runtime'}}
-    ready = {'kind': 'ready', 'token': 'actual-token', 'class': domain.CLASS,
+    ready = {'kind': 'ready', 'token': 'actual-token', 'class': kind,
              'owner_pid': 123, 'parent_pid': os.getpid(),
              'guard_sha256': 'guard', 'manifest_sha256': 'manifest',
              'registry_sha256': 'registry', 'runtime_sha256': 'runtime'}
@@ -250,7 +251,7 @@ def test_new_class_consumes_original_five_second_core_ready_handshake(change):
     handle = SimpleNamespace(pid=123, poll=lambda: 0, wait=lambda **kw: 0)
     def refuse(reason):
         raise RuntimeError(reason)
-    environment = {'registration': {'class': domain.CLASS, 'python': True},
+    environment = {'registration': {'class': kind, 'python': True},
                    'state': state, 'handle': handle, 'launch_token': 'actual-token',
                    'pin': 'manifest', 'time': SimpleNamespace(monotonic=lambda: 0),
                    'Path': lambda value: Journal(), 'json': json, 'os': os,

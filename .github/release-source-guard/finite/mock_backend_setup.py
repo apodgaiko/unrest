@@ -21,7 +21,7 @@ BARRIER_PIN = '1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1'
 SESSION = 'src/unrest_harness/experimental_session.py'
 SESSION_PIN = '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2'
 JSON_LEAVES = frozenset({'controlled-acp', 'canonical-backend',
-                         'source-controlled-backend-postimage', 'source-canonical-stdlib-backend'})
+                         'source-controlled-backend-postimage', 'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp'})
 CONFIGURATION_CASES = frozenset(
     prefix + '[' + skills + '-' + context + ']'
     for prefix in (
@@ -42,13 +42,18 @@ INITIALIZATION_CASES = frozenset((
 
 CANCELLATION_CASES = frozenset(('tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[backend_registered]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[adapter_registered]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[auth]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[forwarding]'))
 
+REGISTRATION_CASES = frozenset(('tests/test_controlled_python_acp.py::test_actual_registration[delayed-1]', 'tests/test_controlled_python_acp.py::test_actual_registration[delayed-2]', 'tests/test_controlled_python_acp.py::test_actual_registration[late-1]', 'tests/test_controlled_python_acp.py::test_actual_registration[late-2]'))
+ACP_ISOLATED_CASES = REGISTRATION_CASES | frozenset({'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]'})
+
 def selected_script(state, payload):
     kind, root = state.get('class'), Path(state['checkout'])
-    if kind == 'source-canonical-stdlib-backend' and state.get('case') not in INITIALIZATION_CASES | CANCELLATION_CASES:
+    if kind == 'source-canonical-stdlib-backend' and state.get('case') not in INITIALIZATION_CASES | CANCELLATION_CASES | REGISTRATION_CASES:
         return None
     if kind in CLASSES:
         return str(root / SCRIPT), PIN
-    if kind == 'controlled-acp':
+    if kind == 'source-canonical-stdlib-acp' and state.get('case') not in ACP_ISOLATED_CASES:
+        return None
+    if kind in {'controlled-acp', 'source-canonical-stdlib-acp'}:
         return str(root / ACP), ACP_PIN
     if kind in {'canonical-backend', 'source-controlled-backend-postimage', 'source-canonical-stdlib-backend'}:
         target = payload.get('target')
@@ -59,7 +64,7 @@ def selected_script(state, payload):
                 or not path.is_relative_to(Path(state['owned_root']))):
             return None
         return target, (BACKEND_PIN if kind == 'canonical-backend'
-                        or state.get('case') in CONFIGURATION_CASES | INITIALIZATION_CASES | CANCELLATION_CASES else BARRIER_PIN)
+                        or state.get('case') in CONFIGURATION_CASES | INITIALIZATION_CASES | CANCELLATION_CASES | REGISTRATION_CASES else BARRIER_PIN)
     return None
 
 
@@ -99,7 +104,7 @@ def eligible(state, endpoint, payload):
             or type(payload.get('isolated')) is not bool
             or payload['isolated'] != ('-I' in vector[1:index])):
         return False
-    if state['class'] == 'source-canonical-stdlib-backend' and vector[1:index] != ['-I', '-S']:
+    if state['class'] in {'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp'} and vector[1:index] != ['-I', '-S']:
         return False
     source = payload.get('source_binding')
     if type(source) is not dict or type(source.get('path')) is not str:
@@ -109,7 +114,7 @@ def eligible(state, endpoint, payload):
         return False
     kind = state['class']
     if kind in JSON_LEAVES:
-        source_name, line, pin = ((ACP, 1, ACP_PIN) if kind == 'controlled-acp'
+        source_name, line, pin = ((ACP, 1, ACP_PIN) if kind in {'controlled-acp', 'source-canonical-stdlib-acp'}
                              else (BACKEND, 1, BACKEND_PIN) if kind == 'canonical-backend'
                              else (SESSION, 506, SESSION_PIN))
         expected_binding = {'path': str(Path(state['checkout']) / source_name),

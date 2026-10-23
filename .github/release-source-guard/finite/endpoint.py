@@ -536,7 +536,7 @@ def attach(guard):
         sys.modules["preexit_drain"] = drain
         exec(compile(drain_path.read_bytes(), str(drain_path), "exec"), drain.__dict__)
         drain.install(guard, sys.modules[__name__])
-        if guard._STATE['class'] == 'source-canonical-stdlib-backend':
+        if guard._STATE['class'] in {'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp'}:
             domain = Path(guard._STATE['guard']).with_name('stdlib_backend.py')
             guard.checked_source(domain, guard._STATE['direct_support']['files'][str(domain)])[
                 'seal'](guard, sys.modules[__name__])

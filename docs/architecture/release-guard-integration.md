@@ -1651,3 +1651,17 @@ current digest must also be consumed by the journal specialization, package
 specialization and child-relative constructor binding. The compartment controls
 check this entire startup pin chain before any original test is launched.
 Each consumer retains one exact current digest and its original drift refusal.
+
+The exact controlled ACP fixture has a separate isolated stdlib class for the
+four existing registration parameters and the original initialization-timeout
+case only. Translation follows the complete original registry and source-call
+admission; activation rechecks that original binding before consuming current
+shared startup bytes. The original fixture, real ACP/Bridge behavior, deadlines,
+assertions and numeric process waits are unchanged. Both authenticated sockets,
+stdin pipe, initialize/session/prompt/cancel and shutdown are exercised under the
+same sealed execution barrier. Native evidence must join original/translated
+argv hashes, token-bound consumption, core READY and endpoint/payload seals;
+local controls do not claim native acceptance or a source checkpoint.
+The four registration backend entries use their exact original canonical bytes
+and source/delegated-test pins. All prior catalog rows and diagnostic ordering
+are retained; no generic Python or provider authority follows from this domain.

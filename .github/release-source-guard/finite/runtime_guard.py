@@ -552,6 +552,12 @@ def admit(argv, cwd, environment=None):
                 "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest(),
             }
         )
+        if registration['class'] == 'controlled-acp':
+            path = Path(state['guard']).with_name('stdlib_acp.py')
+            selected = checked_source(path, state['direct_support']['files'][str(path)])[
+                'after_admission'](registration, argv, cwd, environment, state, append, refuse)
+            if selected is not None:
+                return selected
         return registration, argv
     frame = inspect.currentframe().f_back
     append(
@@ -1382,7 +1388,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
             or registration["class"]
             in (
                 "canonical-backend",
-                "source-canonical-stdlib-backend",
+                "source-canonical-stdlib-backend", "source-canonical-stdlib-acp",
                 "controlled-acp",
                 "source-foreign-journal-owner",
                 "source-benchmark-five-run",

@@ -6,7 +6,7 @@ import json
 import re
 import shlex
 
-from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_BACKEND_POSTIMAGE_GROUPS, INITIALIZATION_POSTIMAGE_CASES, TEST_CONTROLLED_CANCEL_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
+from primary_policy import (SHELL, SHELL_FLAGS, SOURCE_BUDGET, TEST_SELECTIONS, TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_BACKEND_POSTIMAGE_GROUPS, INITIALIZATION_POSTIMAGE_CASES, TEST_CONTROLLED_CANCEL_CASES, TEST_CONTROLLED_REGISTRATION_CASES, TEST_SEAM_ROOT_SECONDS, canonical, sha)
 
 
 def require_full_input(value, script, workflow):
@@ -101,10 +101,16 @@ def python_environment(environment, registration, flags, *, lease_context=None):
                         'function': '_open_role_owned'})
     exact_controlled = exact_controlled or (
         registration['class'] == 'source-canonical-stdlib-backend' and flags == [1, 1, 0]
-        and registration.get('case') in INITIALIZATION_POSTIMAGE_CASES + TEST_CONTROLLED_CANCEL_CASES
+        and registration.get('case') in INITIALIZATION_POSTIMAGE_CASES + TEST_CONTROLLED_CANCEL_CASES + TEST_CONTROLLED_REGISTRATION_CASES
         and binding == {'path': '/source/src/unrest_harness/experimental_session.py',
                         'line': 506, 'sha256': '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2',
                         'function': '_open_role_owned'})
+    exact_controlled = exact_controlled or (
+        registration['class'] == 'source-canonical-stdlib-acp' and flags == [1, 1, 0]
+        and registration.get('case') in TEST_CONTROLLED_REGISTRATION_CASES + (
+            'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]',)
+        and binding == {'path': '/source/tests/fixtures/controlled_python_acp.py',
+                        'line': 1, 'sha256': 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'})
     if exact_stream_environment(environment, registration, flags, lease_context):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     if exact_inventory_environment(environment, registration, flags, lease_context):

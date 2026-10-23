@@ -124,7 +124,7 @@ def leaf_context(kind):
     return state, endpoint, payload
 
 
-@pytest.mark.parametrize('kind', sorted(setup.JSON_LEAVES - {'source-canonical-stdlib-backend'}))
+@pytest.mark.parametrize('kind', sorted(setup.JSON_LEAVES - {'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp'}))
 def test_exact_controlled_stdlib_leaf_metadata_has_no_launch_grant(kind):
     state, endpoint, payload = leaf_context(kind)
     assert setup.eligible(state, endpoint, payload)

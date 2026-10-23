@@ -163,7 +163,7 @@ def test_exact_pending_selection(tmp_path, change):
 
 
 def test_catalog_closes_original_sources_without_native_or_parking_negatives():
-    assert len(catalog.CASES) == 149
+    assert len(catalog.CASES) == 153
     assert len({r["script_sha256"] for r in catalog.CASES.values()}) == 27
     for case, row in catalog.CASES.items():
         assert case.split("::")[0] in row["sources"]
@@ -268,7 +268,7 @@ def test_diagnostic_groups_are_closed_and_do_not_certify_source():
 
     groups = policy.TEST_BACKEND_POSTIMAGE_GROUPS
     assert [len(g) for g in groups] == [20, 15, 15, 10, 10, 10] + [10] * 8 + [8, 4, 4]
-    assert set(c for g in groups for c in g) == (set(catalog.CASES) | set(policy._SETUP_CASES)) - set(policy.INITIALIZATION_POSTIMAGE_CASES) - set(policy.CANCELLATION_POSTIMAGE_CASES)
+    assert set(c for g in groups for c in g) == (set(catalog.CASES) | set(policy._SETUP_CASES)) - set(policy.INITIALIZATION_POSTIMAGE_CASES) - set(policy.CANCELLATION_POSTIMAGE_CASES) - set(policy.TEST_CONTROLLED_REGISTRATION_CASES)
     assert len([c for g in groups for c in g]) == 176
     for group in groups:
         script = ("env -u CODEX_PATH uv run pytest -q " + " ".join(group)).encode()
@@ -354,7 +354,7 @@ def test_initialization_closure_preserves_every_prior_entry_and_no_launch_negati
     from primary_source_inputs import test_plan
     cases = policy.INITIALIZATION_POSTIMAGE_CASES
     assert len(cases) == len(set(cases)) == 7
-    prior = {name: value for name, value in catalog.CASES.items() if name not in cases and name not in policy.TEST_CONTROLLED_CANCEL_CASES}
+    prior = {name: value for name, value in catalog.CASES.items() if name not in cases and name not in policy.TEST_CONTROLLED_CANCEL_CASES and name not in policy.TEST_CONTROLLED_REGISTRATION_CASES}
     assert len(prior) == 138
     assert hashlib.sha256(json.dumps(prior, sort_keys=True, separators=(',', ':')).encode()).hexdigest() == (
         '8f3a9de9c8cbdff997a6bf3b0d6c57874c90f049bbc820b0519e9d0d3af09684')
@@ -383,7 +383,7 @@ def test_cancellation_domain_preserves_all_prior_catalog_entries():
     import primary_policy as policy
     from finite import mock_backend_setup as setup
     assert setup.CANCELLATION_CASES == frozenset(policy.TEST_CONTROLLED_CANCEL_CASES) == frozenset(policy.CANCELLATION_POSTIMAGE_CASES)
-    prior = {case: row for case, row in catalog.CASES.items() if case not in setup.CANCELLATION_CASES}
+    prior = {case: row for case, row in catalog.CASES.items() if case not in setup.CANCELLATION_CASES | setup.REGISTRATION_CASES}
     assert len(prior) == 145
     assert hashlib.sha256(json.dumps(prior, sort_keys=True, separators=(',', ':')).encode()).hexdigest() == '3b77272a6e20aa7c7fef840a983d92078aacd478c5ebbfe0613970cfab12ea4b'
     for case in setup.CANCELLATION_CASES:

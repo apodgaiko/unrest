@@ -167,7 +167,33 @@ def restore_controlled_postimage_class(tree):
 
 
 
+ACP_POST_ADMISSION_HOOK = b"        if registration['class'] == 'controlled-acp':\n            path = Path(state['guard']).with_name('stdlib_acp.py')\n            selected = checked_source(path, state['direct_support']['files'][str(path)])[\n                'after_admission'](registration, argv, cwd, environment, state, append, refuse)\n            if selected is not None:\n                return selected\n"
+
+def restore_stdlib_acp_bytes(body):
+    assert body.count(ACP_POST_ADMISSION_HOOK) == 1
+    body = body.replace(ACP_POST_ADMISSION_HOOK, b'', 1)
+    new = b'                "source-canonical-stdlib-backend", "source-canonical-stdlib-acp",\n'
+    old = b'                "source-canonical-stdlib-backend",\n'
+    assert body.count(new) == 1
+    return body.replace(new, old, 1)
+
+
 def restore_stdlib_ready_class(tree):
+    import textwrap
+    expected = ast.parse(textwrap.dedent(ACP_POST_ADMISSION_HOOK.decode())).body[0]
+    parents = [(node, i, child) for node in ast.walk(tree)
+               for field, value in ast.iter_fields(node) if field == 'body' and isinstance(value, list)
+               for i, child in enumerate(value)
+               if ast.dump(child, include_attributes=False) == ast.dump(expected, include_attributes=False)]
+    assert len(parents) == 1
+    parent, index, _ = parents[0]
+    parent.body.pop(index)
+    acp = [n for n in ast.walk(tree) if isinstance(n, ast.Constant)
+           and n.value == 'source-canonical-stdlib-acp']
+    assert len(acp) == 1
+    tuples = [n for n in ast.walk(tree) if isinstance(n, ast.Tuple) and acp[0] in n.elts]
+    assert len(tuples) == 1 and tuples[0].elts.index(acp[0]) == 2
+    tuples[0].elts.remove(acp[0])
     constants = [n for n in ast.walk(tree) if isinstance(n, ast.Constant)
                  and n.value == 'source-canonical-stdlib-backend']
     assert len(constants) == 1

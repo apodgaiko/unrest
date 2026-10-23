@@ -136,6 +136,8 @@ def test_exact_version_transition_keeps_historical_template_and_core():
     }.items():
         body = (ROOT / '.github/release-source-guard' / name).read_bytes()
         if name == 'finite/runtime_guard.py':
+            from test_startup_phases import restore_stdlib_acp_bytes
+            body = restore_stdlib_acp_bytes(body)
             delta = b'                "canonical-backend",\n                "source-canonical-stdlib-backend",\n'
             assert body.count(delta) == 1
             body = body.replace(delta, b'                "canonical-backend",\n', 1)

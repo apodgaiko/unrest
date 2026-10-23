@@ -96,6 +96,8 @@ def test_package_archive_entry_binds_case_without_changing_original_guard():
     assert {keyword.arg: ast.unparse(keyword.value) for keyword in call.keywords} == {
         'command_class': "'source-checker'", 'case': "manifest['source_case']"}
     body = (ROOT / 'finite/runtime_guard.py').read_bytes()
+    from test_startup_phases import restore_stdlib_acp_bytes
+    body = restore_stdlib_acp_bytes(body)
     delta = b'                "canonical-backend",\n                "source-canonical-stdlib-backend",\n'
     assert body.count(delta) == 1
     body = body.replace(delta, b'                "canonical-backend",\n', 1)

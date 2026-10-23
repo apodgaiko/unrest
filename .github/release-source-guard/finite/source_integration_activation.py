@@ -37,6 +37,27 @@ def create(state, emit, refuse, ready):
                 self.emit({'kind': 'source_nested_execution_owner',
                            'custody_case': state['case'], 'execution_owner': owner,
                            'launch_token': launch['launch_token']})
+            if registration['class'] == 'source-canonical-stdlib-acp':
+                caller = inspect.currentframe().f_back
+                if (caller.f_code is not original.before_python.__code__
+                        or caller.f_globals is not original.before_python.__globals__
+                        or caller.f_locals.get('self') is not self
+                        or caller.f_locals.get('launch') is not launch
+                        or caller.f_locals.get('registration') is not registration
+                        or caller.f_locals.get('guard') is not guard):
+                    self.refuse('stdlib_acp_activation_caller')
+                checked('stdlib_acp.py')['activation'](
+                    registration, argv, launch, cwd, environment, state, self.refuse)
+                checked('stdlib_backend.py')['shared'](self)
+                self.emit({'kind': 'source_stdlib_acp_startup_consumption',
+                           'launch_token': launch['launch_token'],
+                           'original_argv_sha256': hashlib.sha256(json.dumps(list(launch['args'])).encode()).hexdigest(),
+                           'isolated_argv_sha256': hashlib.sha256(json.dumps(list(argv)).encode()).hexdigest(),
+                           'source_binding': registration['source_binding'],
+                           'translation_flags': ['-I', '-S'],
+                           'third_party_execution': 'refused',
+                           'current_shared_startup_checks': True})
+                return
             if registration['class'] == 'source-canonical-stdlib-backend':
                 caller = inspect.currentframe().f_back
                 if (caller.f_code is not original.before_python.__code__
