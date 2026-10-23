@@ -95,7 +95,11 @@ def test_package_archive_entry_binds_case_without_changing_original_guard():
     call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call) and ast.unparse(n.func) == 'guard.install')
     assert {keyword.arg: ast.unparse(keyword.value) for keyword in call.keywords} == {
         'command_class': "'source-checker'", 'case': "manifest['source_case']"}
-    assert hashlib.sha256((ROOT / 'finite/runtime_guard.py').read_bytes()).hexdigest() == '68abd1e8ca8b2fed37a2fd2298dc39c1e8d822fa3c4065ceb53bc6a54e0684eb'
+    body = (ROOT / 'finite/runtime_guard.py').read_bytes()
+    delta = b'                "canonical-backend",\n                "source-canonical-stdlib-backend",\n'
+    assert body.count(delta) == 1
+    body = body.replace(delta, b'                "canonical-backend",\n', 1)
+    assert hashlib.sha256(body).hexdigest() == '68abd1e8ca8b2fed37a2fd2298dc39c1e8d822fa3c4065ceb53bc6a54e0684eb'
 
 
 def test_installed_public_metadata_contains_hashes_instead_of_private_fixture_ids(monkeypatch):

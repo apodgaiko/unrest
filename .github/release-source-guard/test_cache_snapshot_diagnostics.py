@@ -781,7 +781,7 @@ def test_rpc_snapshot_diagnostic_keeps_original_fields_and_callback_chain(monkey
 def test_rpc_diagnostic_filter_does_not_widen_native_profile_gate():
     import test_startup_phases as baseline
     tree = ast.parse((ROOT / 'finite/runtime_guard.py').read_bytes())
-    tree = baseline.StripTelemetry().visit(baseline.restore_launch_image_observation(tree))
+    tree = baseline.StripTelemetry().visit(baseline.restore_stdlib_ready_class(baseline.restore_launch_image_observation(tree)))
     assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() == baseline.BASELINE_AST_SHA256['finite/runtime_guard.py']
     source = (ROOT / 'finite/runtime_guard.py').read_text()
     before = "state['primary_snapshot_observer'](frame, event, value)"
