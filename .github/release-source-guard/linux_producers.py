@@ -60,6 +60,8 @@ class NativeProducers:
         self.cache_names = {}
         self.cache_external = set()
         self.cache_completed = set()
+        from producer_event_filter import load as load_event_rows
+        self.event_rows = load_event_rows()
         if common.get('primary_producer') is not None:
             prior = common['primary_producer']['bootstrap_cache']
             bootstrap = self.interface.protected_json(prior['path'], prior['sha256'])
@@ -456,7 +458,9 @@ class NativeProducers:
                              'parent_wait_raw': event['raw'], 'member_sha256': receipt['member_sha256']})
 
     def tick(self, trace):
-        for event in trace.records:
+        select = getattr(self, 'event_rows', None)
+        rows = trace.records if select is None else select(trace.records, self)
+        for event in rows:
             self.completed_response(event, trace)
             self.completed_cache(event, trace)
             if (event['kind'] == 'kernel_exit' and event['pid'] in self.children

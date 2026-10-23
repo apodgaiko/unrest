@@ -1516,3 +1516,21 @@ string allocation is removed. No policy value, predicate result, frame, owner or
 code object is memoized. Property errors, observer exceptions, constructor return
 binding and garbage collection retain their original behavior. The inverse
 source control preserves the complete original C predicate and all branches.
+
+Producer tick dispatch filters only current trace-row candidates in the existing
+byte-pinned native module. The iterator reads every current row and live owner
+map again on each traversal. It retains original-parent wait4 rows for current
+native children and kernel-exit rows for current native children or UV contexts;
+unknown row or owner shapes take the original callback path. It does not cache
+eligibility, advance an event cursor, remove records or retire earlier rows.
+Later registration and ownership changes can make an earlier row relevant.
+
+The original response, cache-completion and poison handlers retain their bodies,
+order and current checks. The iterator retains original list-iterator behavior,
+row references, mutation visibility and error ordering. The profile observer's
+existing predicate is unchanged. Module/source/compiler/runtime/ABI binding
+remains mandatory; loading the metadata selector grants no process or network
+authority. Current journal-byte acquisition, authentication, kernel observations,
+original numeric waits, source cases and deadlines are unchanged. Four original
+controlled registration cases are also available as one exact bounded diagnostic
+selection; it cannot issue a full-source certificate.

@@ -133,7 +133,144 @@ static PyObject *make_gate(PyObject *module, PyObject *args) {
     return (PyObject *)gate;
 }
 
+/* Iterate current trace rows without repeating no-effect producer callbacks.
+ * Map membership is read again after every yield; no eligibility is retained. */
+typedef struct {
+    PyObject_HEAD
+    PyObject *iterator;
+    PyObject *owner;
+    PyObject *keys[8];
+} ProducerEvents;
+
+static int producer_events_traverse(ProducerEvents *self, visitproc visit, void *arg) {
+    Py_VISIT(self->iterator);
+    Py_VISIT(self->owner);
+    for (int i = 0; i < 8; i++) Py_VISIT(self->keys[i]);
+    return 0;
+}
+
+static int producer_events_clear(ProducerEvents *self) {
+    Py_CLEAR(self->iterator);
+    Py_CLEAR(self->owner);
+    for (int i = 0; i < 8; i++) Py_CLEAR(self->keys[i]);
+    return 0;
+}
+
+static void producer_events_dealloc(ProducerEvents *self) {
+    PyObject_GC_UnTrack(self);
+    producer_events_clear(self);
+    PyObject_GC_Del(self);
+}
+
+static int producer_events_plain_keys(PyObject *mapping, int integers) {
+    Py_ssize_t position = 0;
+    PyObject *key, *value;
+    while (PyDict_Next(mapping, &position, &key, &value)) {
+        if (integers ? !PyLong_CheckExact(key) : !PyUnicode_CheckExact(key)) return 0;
+    }
+    return 1;
+}
+
+static PyObject *producer_events_next(ProducerEvents *self) {
+    if (!self->iterator || !self->owner) return NULL;
+    PyObject *state = PyObject_GenericGetDict(self->owner, NULL);
+    if (!state) {
+        PyErr_Clear();
+        return PyIter_Next(self->iterator);
+    }
+    PyObject *common = PyDict_CheckExact(state) && producer_events_plain_keys(state, 0) ? PyDict_GetItem(state, self->keys[0]) : NULL;
+    PyObject *cache = common ? PyDict_GetItem(state, self->keys[2]) : NULL;
+    PyObject *children = common ? PyDict_GetItem(state, self->keys[3]) : NULL;
+    PyObject *uv = common ? PyDict_GetItem(state, self->keys[4]) : NULL;
+    PyObject *primary = common && PyDict_CheckExact(common) && producer_events_plain_keys(common, 0)
+        ? PyDict_GetItem(common, self->keys[1]) : NULL;
+    if (!common || !PyDict_CheckExact(common) || !producer_events_plain_keys(common, 0)
+            || !cache || !children || !PyDict_CheckExact(children)
+            || !producer_events_plain_keys(children, 1)
+            || !uv || !PyDict_CheckExact(uv) || !producer_events_plain_keys(uv, 1)
+            || (primary && primary != Py_None && !PyBool_Check(primary) && !PyDict_CheckExact(primary))) {
+        Py_DECREF(state);
+        return PyIter_Next(self->iterator);
+    }
+    PyObject *row;
+    while ((row = PyIter_Next(self->iterator))) {
+        PyObject *kind = PyDict_CheckExact(row) && producer_events_plain_keys(row, 0)
+            ? PyDict_GetItem(row, self->keys[5]) : NULL;
+        int retain = 1;
+        if (kind && PyUnicode_CheckExact(kind)) {
+            if (PyUnicode_CompareWithASCIIString(kind, "original_parent_wait4") == 0) {
+                PyObject *child = PyDict_GetItem(row, self->keys[6]);
+                if (!primary || primary == Py_None || primary == Py_False
+                        || (PyDict_CheckExact(primary) && PyDict_Size(primary) == 0)) {
+                    retain = 0;
+                } else if (child && PyLong_CheckExact(child)) {
+                    retain = PyDict_Contains(children, child);
+                }
+            } else if (PyUnicode_CompareWithASCIIString(kind, "kernel_exit") == 0) {
+                PyObject *pid = PyDict_GetItem(row, self->keys[7]);
+                if (pid && PyLong_CheckExact(pid)) {
+                    retain = PyDict_Contains(children, pid);
+                    if (retain == 0) retain = PyDict_Contains(uv, pid);
+                }
+            } else {
+                retain = 0;
+            }
+        }
+        if (retain < 0 || PyErr_Occurred()) {
+            Py_DECREF(row);
+            Py_DECREF(state);
+            return NULL;
+        }
+        if (retain) {
+            Py_DECREF(state);
+            return row;
+        }
+        Py_DECREF(row);
+    }
+    Py_DECREF(state);
+    return NULL;
+}
+
+static PyTypeObject ProducerEventsType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "profile_gate.ProducerEvents",
+    .tp_basicsize = sizeof(ProducerEvents),
+    .tp_dealloc = (destructor)producer_events_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_traverse = (traverseproc)producer_events_traverse,
+    .tp_clear = (inquiry)producer_events_clear,
+    .tp_iter = PyObject_SelfIter,
+    .tp_iternext = (iternextfunc)producer_events_next,
+};
+
+static PyObject *producer_events(PyObject *module, PyObject *args) {
+    (void)module;
+    PyObject *rows, *owner;
+    if (!PyArg_ParseTuple(args, "OO", &rows, &owner)) return NULL;
+    if (!PyList_CheckExact(rows)) return Py_NewRef(rows);
+    ProducerEvents *value = PyObject_GC_New(ProducerEvents, &ProducerEventsType);
+    if (!value) return NULL;
+    value->iterator = PyObject_GetIter(rows);
+    value->owner = Py_NewRef(owner);
+    for (int i = 0; i < 8; i++) value->keys[i] = NULL;
+    if (!value->iterator) {
+        Py_DECREF(value);
+        return NULL;
+    }
+    const char *names[8] = {"common", "primary_producer", "cache_current", "children", "uv", "kind", "child", "pid"};
+    for (int i = 0; i < 8; i++) {
+        value->keys[i] = PyUnicode_InternFromString(names[i]);
+        if (!value->keys[i]) {
+            Py_DECREF(value);
+            return NULL;
+        }
+    }
+    PyObject_GC_Track(value);
+    return (PyObject *)value;
+}
+
 static PyMethodDef methods[] = {
+    {"producer_events", producer_events, METH_VARARGS, "Read current producer-relevant trace rows."},
     {"make", make_gate, METH_VARARGS, "Forward selected source events and the bound guard constructor return."},
     {NULL, NULL, 0, NULL}
 };
@@ -142,5 +279,6 @@ static struct PyModuleDef definition = {
 };
 PyMODINIT_FUNC PyInit_profile_gate(void) {
     if (PyType_Ready(&GateType) < 0) return NULL;
+    if (PyType_Ready(&ProducerEventsType) < 0) return NULL;
     return PyModule_Create(&definition);
 }

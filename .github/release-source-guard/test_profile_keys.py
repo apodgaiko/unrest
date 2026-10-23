@@ -15,7 +15,8 @@ KEYS = ('operations', 'operation_profile_sources', 'isolated_composition', 'code
 
 
 def test_complete_native_predicate_normalizes_only_constant_key_storage():
-    body = (ROOT / 'profile_gate.c').read_text()
+    from test_producer_event_filter import normalize_native_filter
+    body = normalize_native_filter((ROOT / 'profile_gate.c').read_text())
     additions = [
         '    PyObject *keys[6];\n',
         '    for (int i = 0; i < 6; i++) Py_VISIT(self->keys[i]);\n',

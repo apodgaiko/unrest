@@ -76,3 +76,26 @@ def test_public_evidence_never_carries_actual_script_argv_or_arbitrary_fields():
     spec['script_sha256'] = 'PRIVATE-CANARY-PRIMARY-HASH'
     with pytest.raises(RuntimeError):
         public_plan(spec)
+
+
+def test_registration_diagnosis_selects_only_four_original_cases_and_no_full_authority():
+    import primary_policy as policy
+    cases = policy.TEST_CONTROLLED_REGISTRATION_CASES
+    assert cases == tuple('tests/test_controlled_python_acp.py::test_actual_registration['
+                         + name + '-' + str(number) + ']'
+                         for name in ('delayed', 'late') for number in (1, 2))
+    assert cases in policy.TEST_SELECTIONS
+    assert len(set(cases)) == 4
+    assert policy.SOURCE_BUDGET == {'root_seconds': 7200, 'collection_seconds': 300, 'drain_seconds': 60}
+    from primary_source_inputs import test_plan as make_test_plan
+    text = workflow(json.loads(REGISTRY.read_bytes()))
+    script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
+    result = make_test_plan(script, text, 'TEST-positive')
+    assert result['timeout_seconds'] == policy.root_seconds(result) == 180
+    assert result['source_checkpoint_ready'] is False and result['selected_carrier'] is None
+    assert result['source_mode'] == 'TEST-positive'
+    for changed in (script.replace(b'[late-2]', b'[foreign-2]'), script + b' -k late'):
+        with pytest.raises(RuntimeError, match='primary_source_test_script'):
+            make_test_plan(changed, text, 'TEST-positive')
+    with pytest.raises(RuntimeError):
+        plan(script, text)
