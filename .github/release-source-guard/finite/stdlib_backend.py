@@ -112,7 +112,10 @@ def install_barrier(state, guard, payload):
     paths = [str(root.parent / 'python313.zip'), str(root), str(root / 'lib-dynload')]
     if list(sys.path) != paths or Path(paths[0]).exists() or Path(paths[0]).is_symlink():
         guard.refuse('stdlib_backend_import_path')
-    rows = state['activation_spec']['shared_trees'].get(str(root))
+    execution = support(state, 'isolated_activation.py')['read_spec'](state)
+    if execution != state['operation_activation'].spec:
+        guard.refuse('stdlib_backend_execution_spec_drift')
+    rows = execution['shared_trees'].get(str(root))
     if rows is None:
         guard.refuse('stdlib_backend_missing_stdlib_inventory')
     pins = {row['path']: row['sha256'] for row in rows if 'sha256' in row}

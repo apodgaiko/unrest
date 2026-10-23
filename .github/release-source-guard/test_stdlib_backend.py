@@ -64,7 +64,7 @@ RUNNER = r'''
 from pathlib import Path
 import hashlib,json,os,runpy,sys,types
 source=Path(sys.argv[1]); mode=sys.argv[2]; base=source/'.github/release-source-guard/finite'
-for name in ('runtime_guard','stdlib_backend'):
+for name in ('runtime_guard','operation_activation','isolated_inputs','stdlib_backend'):
  p=base/(name+'.py'); m=types.ModuleType(name); m.__file__=str(p); sys.modules[name]=m
  exec(compile(p.read_bytes(),str(p),'exec'),vars(m))
 guard=sys.modules['runtime_guard']; domain=sys.modules['stdlib_backend']
@@ -73,8 +73,12 @@ rows=[{'path':str(p),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
       for p in root.rglob('*') if p.is_file() and not p.is_symlink()]
 files={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in base.glob('*.py')}
 payload={'target':str(source/domain.SCRIPT)}
+execution={'shared_trees':{str(root):rows}}
+p=Path.cwd()/'execution.json';data=json.dumps(execution).encode();p.write_bytes(data)
 state={'guard':str(base/'runtime_guard.py'),'guard_sha256':files[str(base/'runtime_guard.py')],
-       'direct_support':{'files':files},'activation_spec':{'shared_trees':{str(root):rows}},
+       'direct_support':{'files':files},'activation_spec':{'general_record_not_the_execution_spec':True},
+       'isolated_support':{'spec_path':str(p),'spec_sha256':hashlib.sha256(data).hexdigest()},
+       'operation_activation':types.SimpleNamespace(spec=execution),
        'endpoint':{'sha256':files[str(base/'endpoint.py')]}}
 def refuse(reason):raise RuntimeError(reason)
 guard.refuse=refuse
@@ -94,6 +98,8 @@ if sys.platform=='linux':
  # direct barrier omits the native bootstrap module, which it never loaded.
  state['manifest_path']='unit-no-native-bootstrap'
  original_platform=sys.platform;sys.platform='unit-stdlib-control'
+if mode=='execution-spec':state['operation_activation'].spec={}
+if mode=='execution-bytes':p.write_bytes(data+b' ')
 try:domain.install_barrier(state,guard,payload)
 finally:
  if 'original_platform' in globals():sys.platform=original_platform
@@ -121,6 +127,7 @@ else:
 
 @pytest.mark.parametrize(('mode', 'expected'), [
     ('original', None), ('checked-support', None),
+    ('execution-spec', 'execution_spec_drift'), ('execution-bytes', 'isolated_profile_source_drift'),
     ('path', 'import_path_drift'), ('exec', 'unknown_exec'),
     ('forged', 'payload_dispatch'), ('module', 'new_module'),
     ('new-module', 'new_module'), ('support', 'support_exec'),
@@ -143,7 +150,8 @@ def test_real_isolated_interpreter_execution_barrier(tmp_path, mode, expected):
             assert result.stdout.strip() == 'checked-support-complete'
     else:
         assert result.returncode != 0
-        assert 'stdlib_backend_' + expected in result.stderr, result.stderr
+        assert (expected if expected == 'isolated_profile_source_drift'
+                else 'stdlib_backend_' + expected) in result.stderr, result.stderr
 
 
 def test_original_fixture_bytes_and_no_product_test_change():
