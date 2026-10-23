@@ -12,6 +12,7 @@ typedef struct {
     PyObject *state;
     PyObject *sources;
     PyObject *runner_suffix;
+    PyObject *keys[6];
 } Gate;
 
 static int gate_traverse(Gate *self, visitproc visit, void *arg) {
@@ -19,6 +20,7 @@ static int gate_traverse(Gate *self, visitproc visit, void *arg) {
     Py_VISIT(self->state);
     Py_VISIT(self->sources);
     Py_VISIT(self->runner_suffix);
+    for (int i = 0; i < 6; i++) Py_VISIT(self->keys[i]);
     return 0;
 }
 
@@ -27,6 +29,7 @@ static int gate_clear(Gate *self) {
     Py_CLEAR(self->state);
     Py_CLEAR(self->sources);
     Py_CLEAR(self->runner_suffix);
+    for (int i = 0; i < 6; i++) Py_CLEAR(self->keys[i]);
     return 0;
 }
 
@@ -47,8 +50,8 @@ static PyObject *gate_call(PyObject *object, PyObject *args, PyObject *kwargs) {
         PyErr_SetString(PyExc_TypeError, "profile frame and event required");
         return NULL;
     }
-    PyObject *operations = PyDict_GetItemString(self->state, "operations");
-    PyObject *operation_sources = PyDict_GetItemString(self->state, "operation_profile_sources");
+    PyObject *operations = PyDict_GetItem(self->state, self->keys[0]);
+    PyObject *operation_sources = PyDict_GetItem(self->state, self->keys[1]);
     if (operations && operations != Py_None && (!operation_sources || !PyFrozenSet_Check(operation_sources)))
         return PyObject_CallObject(self->callback, args);
     PyCodeObject *code = PyFrame_GetCode((PyFrameObject *)frame);
@@ -58,12 +61,12 @@ static PyObject *gate_call(PyObject *object, PyObject *args, PyObject *kwargs) {
         selected = PyUnicode_Tailmatch(code->co_filename, self->runner_suffix, 0, PY_SSIZE_T_MAX, 1);
     }
     if (selected == 0) {
-        PyObject *composition = PyDict_GetItemString(self->state, "isolated_composition");
+        PyObject *composition = PyDict_GetItem(self->state, self->keys[2]);
         if (!composition) {
             Py_DECREF(code);
             return PyObject_CallObject(self->callback, args);
         }
-        PyObject *codes = PyObject_GetAttrString(composition, "codes");
+        PyObject *codes = PyObject_GetAttr(composition, self->keys[3]);
         if (!codes) {
             Py_DECREF(code);
             return NULL;
@@ -77,8 +80,8 @@ static PyObject *gate_call(PyObject *object, PyObject *args, PyObject *kwargs) {
      * early and grants no execution, endpoint, or deadline authority. */
     if (selected == 0 && PyUnicode_CompareWithASCIIString(event, "return") == 0
             && PyUnicode_CompareWithASCIIString(code->co_name, "initialize_inner") == 0) {
-        PyObject *observer = PyDict_GetItemString(self->state, "primary_snapshot_observer");
-        PyObject *guard = PyDict_GetItemString(self->state, "guard");
+        PyObject *observer = PyDict_GetItem(self->state, self->keys[4]);
+        PyObject *guard = PyDict_GetItem(self->state, self->keys[5]);
         if (observer && PyCallable_Check(observer) && guard && PyUnicode_Check(guard))
             selected = PyObject_RichCompareBool(code->co_filename, guard, Py_EQ);
     }
@@ -112,10 +115,19 @@ static PyObject *make_gate(PyObject *module, PyObject *args) {
     gate->callback = Py_NewRef(callback);
     gate->state = Py_NewRef(state);
     gate->sources = Py_NewRef(sources);
+    for (int i = 0; i < 6; i++) gate->keys[i] = NULL;
     gate->runner_suffix = PyUnicode_FromString("/_pytest/runner.py");
     if (!gate->runner_suffix) {
         Py_DECREF(gate);
         return NULL;
+    }
+    const char *names[6] = {"operations", "operation_profile_sources", "isolated_composition", "codes", "primary_snapshot_observer", "guard"};
+    for (int i = 0; i < 6; i++) {
+        gate->keys[i] = PyUnicode_InternFromString(names[i]);
+        if (!gate->keys[i]) {
+            Py_DECREF(gate);
+            return NULL;
+        }
     }
     PyObject_GC_Track(gate);
     return (PyObject *)gate;

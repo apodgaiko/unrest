@@ -1503,3 +1503,13 @@ FD identity, census and final read remain unchanged. References contain no
 ownership, admission, wait or cleanup verdict. All original completion, cleanup
 and deadline assertions remain required. Local comparison speedups cannot certify
 native completion or release acceptance.
+
+### Native profile lookup spellings
+
+The native profile gate owns six immutable Unicode lookup names for its lifetime.
+It still reads the actual state dictionary, composition attribute, source set,
+observer and guard value on every event, in the original order. Only repeated
+string allocation is removed. No policy value, predicate result, frame, owner or
+code object is memoized. Property errors, observer exceptions, constructor return
+binding and garbage collection retain their original behavior. The inverse
+source control preserves the complete original C predicate and all branches.
