@@ -13,7 +13,8 @@ from journal_supervisor import JournalSupervisor
 import linux_supervisor as original
 
 ROOT = Path(__file__).parent
-KINDS = ('payload', 'socketpair', 'listen', 'connected')
+KINDS = ('payload', 'socketpair', 'listen', 'connected',
+         'ready', 'poison', 'source_response_output')
 PINS = dict(manifest_sha256='a' * 64, guard_sha256='b' * 64,
             registry_sha256='c' * 64, runtime_sha256='d' * 64)
 IDENTITY = {'pid': 20, 'uid': 20000, 'start': 123}
@@ -31,6 +32,7 @@ def make_owner(composed):
                       'registry': {'sha256': PINS['registry_sha256']},
                       'runtime': {'sha256': PINS['runtime_sha256']}}
     owner.registered = {20: {'identity': IDENTITY, 'token': 'owned'}}
+    owner.source_response_output = lambda request: {'pid': request['pid'], 'observed': True}
     owner.poisoned = False
     owner.plans, owner.listeners, owner.connections = {}, {}, set()
     owner.pairs = {(20, (6, 7)): [{'fd': 6}, {'fd': 7}]}
@@ -75,7 +77,7 @@ def test_original_handler_results_errors_and_kernel_calls_match(tmp_path, monkey
     rows.insert(70, ready())
     request = {'kind': kind, 'pid': 20, 'token': 'owned', 'nonce': 'n',
                'fd': 6 if kind in {'payload', 'connected'} else 8,
-               'fds': [6, 7], 'host': '127.0.0.1', 'port': 1001}
+               'fds': [6, 7], 'host': '127.0.0.1', 'port': 1001, 'reason': 'controlled-poison'}
     if mutation == 'missing':
         rows.pop(70)
     elif mutation == 'pins':
@@ -255,3 +257,95 @@ def test_repeated_projection_does_not_decode_or_expand_unrelated_rows(tmp_path, 
         assert snapshot.authentication_events()[0] is first[0]
     fresh = reader.snapshot(tmp_path)
     assert fresh.authentication_events()[0] is not first[0]
+
+
+@pytest.mark.parametrize('change', ['none', 'no-plan', 'missing-admitted', 'wrong-token',
+    'wrong-argv', 'wrong-owner', 'missing-child', 'stale-child', 'foreign-host',
+    'missing-port', 'malformed-before', 'malformed-after', 'malformed-admitted',
+    'pins', 'nonce', 'poison', 'current-listener', 'changed-listener'])
+def test_connect_keeps_original_ready_admission_listener_and_error_order(tmp_path, monkeypatch, change):
+    rows = [{'kind': 'unrelated', 'value': [n]} for n in range(150)]
+    rows.insert(40, ready())
+    admitted = {'kind': 'admitted', 'owner_pid': 20, 'token': 'child', 'argv_sha256': 'argv'}
+    rows.insert(80, admitted)
+    request = {'kind': 'connect', 'pid': 20, 'token': 'owned', 'nonce': 'n',
+               'host': '127.0.0.1', 'port': 1001, 'fd': 6}
+    if change == 'missing-admitted':
+        rows.remove(admitted)
+    elif change == 'wrong-token':
+        admitted['token'] = 'foreign'
+    elif change == 'wrong-argv':
+        admitted['argv_sha256'] = 'foreign'
+    elif change == 'wrong-owner':
+        admitted['owner_pid'] = 99
+    elif change == 'foreign-host':
+        request['host'] = 'outside'
+    elif change == 'missing-port':
+        del request['port']
+    elif change == 'malformed-before':
+        rows.insert(0, {})
+    elif change == 'malformed-after':
+        rows.append(None)
+    elif change == 'malformed-admitted':
+        del admitted['owner_pid']
+    elif change == 'pins':
+        rows[40]['guard_sha256'] = 'foreign'
+    elif change == 'nonce':
+        request['nonce'] = 'foreign'
+    (tmp_path / '20.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    left, right = make_owner(False), make_owner(True)
+    for owner in (left, right):
+        owner.poisoned = change == 'poison'
+        owner.plans = {} if change == 'no-plan' else {1001: {
+            'pid': 20, 'child_token': 'child', 'argv_sha256': 'argv'}}
+        if change != 'missing-child':
+            owner.registered[21] = {'token': 'child', 'identity': (
+                {'wrong': True} if change == 'stale-child' else IDENTITY)}
+        if change in {'current-listener', 'changed-listener'}:
+            owner.listeners[1001] = {'pid': 20, 'fd': 8, 'local_host': '127.0.0.1',
+                'local_port': 1001, 'state': 10 if change == 'current-listener' else 1}
+    snapshot = journal.EventJournal().snapshot(tmp_path)
+    assert execute(left, deepcopy(request), deepcopy(rows), monkeypatch) == execute(
+        right, deepcopy(request), snapshot, monkeypatch)
+    assert (left.plans, left.registered, left.connect_admissions) == (
+        right.plans, right.registered, right.connect_admissions)
+
+
+@pytest.mark.parametrize('first,second', [(False, True), (True, False)])
+def test_switching_projection_retains_mutable_exposed_values(tmp_path, first, second):
+    (tmp_path / '20.jsonl').write_text(json.dumps(ready()) + '\n'
+        + '{"kind":"admitted","owner_pid":20,"token":"child"}\n')
+    snapshot = journal.EventJournal().snapshot(tmp_path)
+    exposed = snapshot.authentication_events(include_admitted=first)
+    assert snapshot.full is None
+    exposed[-1]['kind'] = 'ready' if first else 'admitted'
+    result = snapshot.authentication_events(include_admitted=second)
+    assert result is snapshot.full and result[len(exposed) - 1] is exposed[-1]
+
+
+def test_connect_projection_rechecks_current_bytes_and_current_mutations(tmp_path):
+    path = tmp_path / '20.jsonl'
+    rows = [ready(), {'kind': 'admitted', 'owner_pid': 20, 'token': 'child'}]
+    path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    reader = journal.EventJournal()
+    first = reader.snapshot(tmp_path)
+    exposed = first.authentication_events(include_admitted=True)
+    exposed[1]['token'] = 'mutated'
+    assert first.authentication_events(include_admitted=True)[1] is exposed[1]
+    assert first.materialize()[1]['token'] == 'mutated'
+    assert reader.snapshot(tmp_path).authentication_events(include_admitted=True)[1]['token'] == 'child'
+    rows[1]['token'] = 'replacement'
+    path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    assert reader.snapshot(tmp_path).authentication_events(include_admitted=True)[1]['token'] == 'replacement'
+
+
+def test_projection_selection_is_a_closed_boolean(tmp_path):
+    snapshot = journal.EventJournal().snapshot(tmp_path)
+    with pytest.raises(TypeError, match='closed authentication projection'):
+        snapshot.authentication_events(include_admitted=1)
+
+
+def test_connect_keeps_the_complete_original_policy_body():
+    tree = ast.parse((ROOT / 'linux_supervisor.py').read_text())
+    handle = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'handle')
+    assert hashlib.sha256(ast.dump(handle, include_attributes=False).encode()).hexdigest() == '6fbeb95db17f96646b92c9ca1ae86e858f072e26084b6dd0fc38ea021b0f479e'

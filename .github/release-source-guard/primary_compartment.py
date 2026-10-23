@@ -146,6 +146,9 @@ def main():
                 source_cleanup(own_prebody_control)
             for name in ('home', 'tmp', 'events', 'owned'):
                 (Path('/work') / name).mkdir(mode=0o700)
+            if spec.get('source_mode') == 'TEST-positive':
+                from startup_journal_control import seed
+                seed(spec, Path('/work/events'))
             if spec.get('source_mode') or package_build:
                 producer_setup.source_child_setup(primary=True)
             shutil.copytree('/opt/primary-cache', '/work/cache', symlinks=True)

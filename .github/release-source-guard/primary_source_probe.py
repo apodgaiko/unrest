@@ -7,7 +7,7 @@ import json
 import hashlib
 import xml.etree.ElementTree as ET
 
-from primary_policy import TEST_SELECTIONS, TEST_SEAM_CASES
+from primary_policy import TEST_SELECTIONS, TEST_SEAM_CASES, TEST_JOURNAL_CONTEXT_CASES
 from preflight_policy import CASES as PREFLIGHT_CASES
 
 
@@ -30,6 +30,18 @@ def check(records, mode, *, require_faults=False):
             or len(cases) != len(collection) or any(list(case) for case in cases)
             or not any(row['kind'] == 'ready' and row['token'] == 'root' for row in summary['events'])):
         raise RuntimeError('primary_source_test_original_case_not_proved')
+    if tuple(collection) == TEST_JOURNAL_CONTEXT_CASES:
+        from startup_journal_control import FILES, ROWS_PER_FILE, KIND
+        load = [row for row in summary['events'] if row['kind'] == KIND]
+        if (len(load) != FILES * ROWS_PER_FILE
+                or any(type(row.get('ordinal')) is not int for row in load)
+                or sorted(row.get('ordinal', -1) for row in load) != list(range(FILES * ROWS_PER_FILE))
+                or any(set(row) != {'kind', 'ordinal', 'diagnostic_only', 'eligible_certificate', 'padding', 'values'}
+                       or row['diagnostic_only'] is not True or row['eligible_certificate'] is not False
+                       or row['padding'] != 'x' * 256 or type(row['values']) is not list
+                       or any(type(value) is not int for value in row['values'])
+                       or row['values'] != list(range(16)) for row in load)):
+            raise RuntimeError('finite_startup_journal_load_missing_or_changed')
     births = [row for row in kernel['records'] if row['kind'] == 'kernel_child'
               and row['identity']['tgid'] == row['child']]
     if not births:

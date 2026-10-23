@@ -136,3 +136,14 @@ def test_no_wait_or_unsupported_authority_leaves_old_cache_unchanged(monkeypatch
     else:
         assert value.handle(request, events)['network_admitted'] is False
     assert value.listeners == {12345: entry}
+
+
+def test_snapshot_plan_retains_raw_wait_for_actual_listener_retirement(tmp_path, monkeypatch):
+    import json
+    from event_journal import EventJournal
+    value, entry, events, request = model(monkeypatch)
+    (tmp_path / '20.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in events))
+    snapshot = EventJournal().snapshot(tmp_path)
+    assert value.handle(request, snapshot) == {'plan_recorded': True, 'network_admitted': False}
+    assert value.listeners == {} and value.plans[12345] is request
+    assert snapshot.full == events

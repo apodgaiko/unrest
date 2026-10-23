@@ -200,6 +200,8 @@ jobs:
             cases: tests/test_acp_cleanup.py::test_recorded_transport_failures[success-work] tests/test_acp_cleanup.py::test_recorded_transport_failures[success-validate] tests/test_acp_cleanup.py::test_recorded_transport_failures[success-terminal_reviewer]
           - group: postimages-7
             cases: tests/test_controlled_python_acp.py::test_actual_registration[delayed-1] tests/test_controlled_python_acp.py::test_actual_registration[delayed-2] tests/test_controlled_python_acp.py::test_actual_registration[late-1] tests/test_controlled_python_acp.py::test_actual_registration[late-2]
+          - group: postimages-8
+            cases: tests/test_controlled_python_acp.py::test_actual_registration[delayed-1] tests/test_controlled_python_acp.py::test_actual_registration[delayed-2] tests/test_controlled_python_acp.py::test_actual_registration[late-1] tests/test_controlled_python_acp.py::test_actual_registration[late-2] tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[forwarding]
     steps:
       - uses: actions/checkout@v7.0.1
         with:

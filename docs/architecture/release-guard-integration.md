@@ -578,7 +578,8 @@ append, replacement, truncation and deduplication-state changes.
 
 The tick retains a snapshot of the complete current byte acquisition. The
 original policy handler receives its entire ordinary JSON list except for the
-four `payload`, `socketpair`, `listen` and `connected` branches: their sole
+`payload`, `socketpair`, `listen`, `connected`, `ready`, `poison` and
+`source_response_output` branches: their sole
 journal read is the unchanged authentication predicate. Those branches may
 receive all current READY rows in their original order, with fresh mutable
 values, while the original predicate still chooses and verifies the first
@@ -590,7 +591,12 @@ within one acquisition reuses that acquisition's mutable READY objects, includin
 any intervening mutations, without expanding unrelated journal rows. A later
 acquisition still reads every current byte and creates distinct mutable objects. Every current byte is still read; the original
 refresh loop still applies all poison and registration effects. Every other
-handler, including planning, connect, custody and drain, keeps the full list.
+handler keeps the full list, except `connect`, whose original journal reads
+inspect READY and admitted rows. Its projection includes both kinds in original
+order; the original handler still performs admission, identity and listener
+checks. Switching projection kinds after mutable rows have been exposed falls
+back to the complete current list. Planning, custody and drain retain the full list; planning also passes it to
+the unchanged birth-bound listener retirement predicate.
 Materialization preserves per-snapshot object identities but shares no mutable
 JSON values with another acquisition. Authentication, native ownership,
 receipt decisions, clocks, waits and deadlines remain original. Census
@@ -1534,3 +1540,13 @@ authority. Current journal-byte acquisition, authentication, kernel observations
 original numeric waits, source cases and deadlines are unchanged. Four original
 controlled registration cases are also available as one exact bounded diagnostic
 selection; it cannot issue a full-source certificate.
+
+The finite diagnostic selection consisting of the four original controlled
+registration parameters followed by forwarding cancellation runs with 512
+bootstrap-created journals containing 40,960 inert JSON rows. These rows have
+no PID, token, READY, admission or wait authority. The unchanged test deadlines
+and original completion, quarantine and cleanup assertions still apply. Only
+that exact TEST-positive script receives this load; FULL, poison and other
+selections do not. Its reducer requires every inert row and still returns no
+release certificate. This bounded reproduction tests journal-size sensitivity
+before another full source checkpoint. It does not substitute for that checkpoint.

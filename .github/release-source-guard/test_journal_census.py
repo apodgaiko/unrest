@@ -162,7 +162,7 @@ def test_lazy_snapshot_retains_its_exact_acquisition_and_policy_gets_complete_pl
         seen.append(events)
         return request
     monkeypatch.setattr(original.Supervisor, 'handle', handle)
-    request = {'kind': 'ready'}
+    request = {'kind': 'custody_peer'}
     assert value.handle(request, snapshot) is request
     assert seen == [records()]
     assert value.events() == []

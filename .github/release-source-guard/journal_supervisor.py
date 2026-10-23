@@ -50,13 +50,17 @@ class JournalSupervisor(Supervisor):
         return snapshot
 
     def handle(self, request, events):
-        # These four original branches read events only in authenticate(). All
-        # other handlers retain the complete current ordinary JSON list.
+        # These closed branches read events only in authenticate(). Connect also
+        # reads admitted rows; other handlers keep the complete current list.
         if type(events) is JournalSnapshot:
             if (type(request) is dict and type(request.get('kind')) is str
                     and request['kind'] in {
-                    'payload', 'socketpair', 'listen', 'connected'}):
+                    'payload', 'socketpair', 'listen', 'connected',
+                    'ready', 'poison', 'source_response_output'}):
                 events = events.authentication_events()
+            elif (type(request) is dict and type(request.get('kind')) is str
+                    and request['kind'] == 'connect'):
+                events = events.authentication_events(include_admitted=True)
             else:
                 events = events.materialize()
         if request.get('kind') in {'approval_unix', 'fixture_unix_bind'}:

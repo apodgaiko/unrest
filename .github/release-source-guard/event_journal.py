@@ -108,6 +108,7 @@ class JournalSnapshot(Sequence):
         self.parsed = {}
         self.full = None
         self.authentication_indices = frozenset()
+        self.authentication_projection = None
 
     def __len__(self):
         return self.count
@@ -149,19 +150,23 @@ class JournalSnapshot(Sequence):
             self.full = rows
         return self.full
 
-    def authentication_events(self):
-        """Fresh READY rows for handlers whose sole journal read authenticates.
+    def authentication_events(self, *, include_admitted=False):
+        """Fresh READY rows, plus admitted rows only for the connect predicate.
 
         Every journal byte was acquired for this snapshot. Unknown row shapes,
         changed decoder policy and exposed values outside the READY projection
         retain the complete original list. Repeated authentication shares only
         this acquisition's READY objects, preserving their current mutations.
         """
+        if type(include_admitted) is not bool:
+            raise TypeError('closed authentication projection required')
         frame, depth = sys._getframe(), 0
         while frame is not None:
             depth += 1
             frame = frame.f_back
-        if (self.full is not None or not self.parsed.keys() <= self.authentication_indices
+        if (self.full is not None
+                or self.authentication_projection is not None and self.authentication_projection != include_admitted
+                or not self.parsed.keys() <= self.authentication_indices
                 or sys.getrecursionlimit() - depth < 128 or json.loads is not _JSON_LOADS
                 or json._default_decoder is not _JSON_DECODER
                 or vars(_JSON_DECODER) != _JSON_POLICY
@@ -171,13 +176,14 @@ class JournalSnapshot(Sequence):
         rows, offset = [], 0
         for chunk in self.chunks:
             for index, item in enumerate(chunk[3]):
-                if item[0] == 'ready':
+                if item[0] == 'ready' or include_admitted and item[0] == 'admitted':
                     position = offset + index
                     if position not in self.parsed:
                         self.parsed[position] = json.loads(chunk[1][index])
                     rows.append(self.parsed[position])
             offset += len(chunk[1])
         self.authentication_indices = frozenset(self.parsed)
+        self.authentication_projection = include_admitted
         return rows
 
     def census(self, registered, timed):
