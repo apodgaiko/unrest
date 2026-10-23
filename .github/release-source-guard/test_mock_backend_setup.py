@@ -180,3 +180,28 @@ def test_only_exact_original_configuration_cases_select_canonical_postimage(case
     assert setup.select(SimpleNamespace(_STATE=state), endpoint) is None
     state['case'] = payload['case'] = case + '-foreign'
     assert setup.selected_script(state, payload)[1] == setup.BARRIER_PIN
+
+
+@pytest.mark.parametrize('case', sorted(setup.INITIALIZATION_CASES))
+def test_initialization_canonical_backend_uses_existing_stdlib_setup_gate(case):
+    from primary_policy import INITIALIZATION_POSTIMAGE_CASES
+    from finite import backend_postimage_catalog as catalog
+    assert setup.INITIALIZATION_CASES == frozenset(INITIALIZATION_POSTIMAGE_CASES)
+    state, endpoint, payload = leaf_context('source-controlled-backend-postimage')
+    state['case'] = payload['case'] = case
+    row = catalog.CASES[case]
+    assert row['script_sha256'] == setup.BACKEND_PIN
+    assert row['filename'] == 'fake-app-server'
+    assert setup.selected_script(state, payload) == (payload['target'], setup.BACKEND_PIN)
+    assert setup.eligible(state, endpoint, payload)
+    # A case/pin match is setup classification, never the actual caller proof.
+    assert setup.select(SimpleNamespace(_STATE=state), endpoint) is None
+    state['case'] = payload['case'] = case + '-foreign'
+    assert setup.selected_script(state, payload)[1] == setup.BARRIER_PIN
+    assert not (setup.INITIALIZATION_CASES & setup.CONFIGURATION_CASES)
+
+
+def test_initialization_setup_repair_preserves_entire_original_selector():
+    tree = ast.parse((ROOT / 'finite/mock_backend_setup.py').read_bytes())
+    selector = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'select')
+    assert hashlib.sha256(ast.dump(selector, include_attributes=False).encode()).hexdigest() == '89c1817868b35b4b38a191ca68b5dc4764bfec2bdcb046c8b8064a04e860b9f1'

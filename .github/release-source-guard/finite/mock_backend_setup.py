@@ -30,6 +30,16 @@ CONFIGURATION_CASES = frozenset(
     for skills in ('False', 'True') for context in ('False', 'True'))
 
 
+INITIALIZATION_CASES = frozenset((
+    'tests/test_controlled_python_acp.py::test_programmatic_private_preflight',
+    'tests/test_experimental_startup_diagnostics.py::test_initialization_probe_real_controlled_path_no_prompt',
+    'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[refusal]',
+    'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]',
+    'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[permission]',
+    'tests/test_experimental_startup_diagnostics.py::test_initialized_owner_has_no_http_mutation_authority',
+    'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure',
+))
+
 def selected_script(state, payload):
     kind, root = state.get('class'), Path(state['checkout'])
     if kind in CLASSES:
@@ -45,7 +55,7 @@ def selected_script(state, payload):
                 or not path.is_relative_to(Path(state['owned_root']))):
             return None
         return target, (BACKEND_PIN if kind == 'canonical-backend'
-                        or state.get('case') in CONFIGURATION_CASES else BARRIER_PIN)
+                        or state.get('case') in CONFIGURATION_CASES | INITIALIZATION_CASES else BARRIER_PIN)
     return None
 
 

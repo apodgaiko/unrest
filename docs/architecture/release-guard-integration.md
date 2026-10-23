@@ -1593,3 +1593,13 @@ three-second timeout case and every protocol/cleanup assertion unchanged.
 Its timeout case receives the same passive two-second private stack/capacity
 snapshot as the journal reproduction. Both selections are independently bound
 to complete argv hashes; FULL and all other selections remain unarmed.
+
+The seven exact initialization catalog cases use the same canonical stdlib-only
+backend hash as the existing configuration cases. The optional FastMCP setup
+classifier joins those seven case identities to that hash instead of choosing
+the unrelated barrier postimage. The existing selector still independently
+checks the actual child/install frames, current catalog and script bytes,
+source/code/globals, runtime, payload, owned root, token and authenticated READY.
+Only unused FastMCP configuration is inapplicable; parent shared/dependency
+checks, original argv, interpreter flags, body, deadlines, protocol and cleanup
+assertions are unchanged. Unknown cases retain the preceding classification.
