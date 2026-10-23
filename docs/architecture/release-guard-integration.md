@@ -1665,3 +1665,13 @@ local controls do not claim native acceptance or a source checkpoint.
 The four registration backend entries use their exact original canonical bytes
 and source/delegated-test pins. All prior catalog rows and diagnostic ordering
 are retained; no generic Python or provider authority follows from this domain.
+
+Source-bound stdlib fixture controls run as an explicit trusted-host CI step on
+both bounded diagnoses and the release lane. They need the original public test
+fixtures and source-call binder. The source-free compartment deliberately has
+no checkout mount and retains all its existing kernel and guard controls; these
+source-dependent controls must not be placed in that compartment. Running them
+is not the unexcluded source checkpoint and cannot issue a release certificate.
+Host fixture controls suppress bytecode writes so importing source-only guard
+support cannot create a later forbidden cache in the mounted support tree.
+The runtime cache refusal is unchanged.
