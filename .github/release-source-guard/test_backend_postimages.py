@@ -268,7 +268,7 @@ def test_diagnostic_groups_are_closed_and_do_not_certify_source():
 
     groups = policy.TEST_BACKEND_POSTIMAGE_GROUPS
     assert [len(g) for g in groups] == [20, 15, 15, 10, 10, 10] + [10] * 8 + [8, 4, 4]
-    assert set(c for g in groups for c in g) == (set(catalog.CASES) - set(policy.INITIALIZATION_POSTIMAGE_CASES)) | set(policy._SETUP_CASES)
+    assert set(c for g in groups for c in g) == (set(catalog.CASES) | set(policy._SETUP_CASES)) - set(policy.INITIALIZATION_POSTIMAGE_CASES)
     assert len([c for g in groups for c in g]) == 176
     for group in groups:
         script = ("env -u CODEX_PATH uv run pytest -q " + " ".join(group)).encode()

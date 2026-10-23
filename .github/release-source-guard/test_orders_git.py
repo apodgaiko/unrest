@@ -179,7 +179,8 @@ def test_commits_require_the_unchanged_core_metadata_grammar(tmp_path, change):
 
 
 def test_twelve_original_calls_and_thirty_cases_are_closed():
-    assert len(SITES) == 12
+    assert len(SITES) == 16
+    assert len([s for s, owner in SITES.items() if owner != "campaign"]) == 12
     assert len([c for c in CASES if c.split("::")[0] == route.ORDERS]) == 30
     for (source, line), owner in SITES.items():
         body = (ROOT / source).read_bytes()
@@ -192,7 +193,7 @@ def test_twelve_original_calls_and_thirty_cases_are_closed():
             and isinstance(n.func, ast.Name)
             and n.func.id == "git"
         ]
-        assert len(calls) == 1 and owner in ("setup", "seal", "integrate")
+        assert len(calls) == 1 and owner in ("setup", "seal", "integrate", "campaign")
 
 
 def test_changed_fixture_pins_preserve_the_historical_template(monkeypatch):
@@ -409,6 +410,7 @@ def test_admitted_record_has_the_original_frozen_projection():
     "site,message,args",
     [
         (("setup", 40), "finite fixture", ["commit", "-m", "finite fixture"]),
+        (("campaign", 571), "base", ["commit", "-m", "base"]),
         (("seal", 197), "sealed candidate", ["commit", "--allow-empty", "-m", "sealed candidate"]),
         (
             ("integrate", 239),
@@ -502,7 +504,7 @@ def test_housekeeping_other_vectors_do_not_consult_or_grant_authority():
         )
 
 
-@pytest.mark.parametrize("case", sorted(SETUP_CASES))
+@pytest.mark.parametrize("case", sorted(c for c in SETUP_CASES if SETUP_CASES[c] != "campaign/P1"))
 def test_original_setup_cases_have_only_their_exact_owned_root(tmp_path, case):
     selection, argv, env, cwd, manifest = selected(tmp_path)
     selection["registration"]["case"] = case
@@ -529,10 +531,80 @@ def test_closed_shared_setup_inventory_preserves_negative_cases():
         "test_experimental_first_halt.py": 15,
         "test_experimental_drain_retirement.py": 13,
         "test_experimental_ack_durability.py": 20,
+        "test_experimental_startup_diagnostics.py": 1,
     }
     assert all(
         SETUP_CASES[c] == ("combined" if "finite_priority.py::" in c else "cohort")
-        for c in SETUP_CASES
+        for c in SETUP_CASES if SETUP_CASES[c] != "campaign/P1"
     )
     assert not any("parking_admission" in c for c in SETUP_CASES)
     assert not any("PRIORITY-66" in c for c in SETUP_CASES)
+
+
+CAMPAIGN_CASE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
+CAMPAIGN = 'src/unrest_harness/experimental_cohort.py'
+CAMPAIGN_CALLS = {567: ['init', '--initial-branch=main', '--object-format=sha1'],
+                  570: ['add', '.'], 571: ['commit', '-m', 'base'], 572: ['rev-parse', 'HEAD']}
+
+@pytest.mark.parametrize('line', sorted(CAMPAIGN_CALLS))
+@pytest.mark.parametrize('change', [None, 'case', 'root', 'episode', 'directory', 'site',
+    'callable', 'globals', 'argv', 'environment', 'source-pin', 'foreign-caller'])
+def test_one_startup_failure_campaign_joins_original_four_calls(tmp_path, line, change):
+    import importlib
+    product = importlib.import_module('unrest_harness.experimental_custody')
+    cohort = importlib.import_module('unrest_harness.experimental_cohort')
+    directory = tmp_path / 'pytest/case/campaign/P1/base'
+    directory.mkdir(parents=True)
+    if line != 567:
+        git = directory / '.git'
+        git.mkdir()
+        (git / 'config').write_text('[core]\nrepositoryformatversion = 0\nfilemode = true\nbare = false\nlogallrefupdates = true\n')
+    def code(path):
+        return compile(Path(path).read_bytes(), str(path), 'exec', dont_inherit=True)
+    caller = SimpleNamespace(f_code=named(code(cohort.__file__), 'campaign'),
+        f_globals=vars(cohort), f_lineno=line, f_locals={'original': directory})
+    arguments = CAMPAIGN_CALLS[line]
+    helper = SimpleNamespace(f_code=named(code(product.__file__), 'git'), f_globals=vars(product),
+        f_lineno=38, f_back=caller, f_locals={'root': directory, 'arguments': tuple(arguments)})
+    vector = ['/usr/bin/git', '--no-replace-objects', *arguments]
+    environment = dict(route.ENVIRONMENT)
+    state = {'checkout': str(ROOT), 'owned_root': str(tmp_path), 'case': CAMPAIGN_CASE,
+        'product_pins': dict(PINS), 'isolated_source_code': code, 'isolated_named': named}
+    if change == 'case':
+        state['case'] = CASE
+    elif change in {'root', 'episode', 'directory'}:
+        parts = {'root': ('campaign', 'other'), 'episode': ('P1', 'P2'), 'directory': ('base', 'candidate-0')}
+        old, new = parts[change]
+        directory = Path(str(directory).replace('/' + old, '/' + new))
+        directory.mkdir(parents=True, exist_ok=True)
+        caller.f_locals['original'] = helper.f_locals['root'] = directory
+    elif change == 'site':
+        caller.f_lineno += 1
+    elif change == 'callable':
+        caller.f_code = (lambda: None).__code__
+    elif change == 'globals':
+        caller.f_globals = dict(vars(cohort))
+    elif change == 'argv':
+        vector.append('--extra')
+    elif change == 'environment':
+        environment['GIT_CONFIG_GLOBAL'] = '/foreign'
+    elif change == 'source-pin':
+        state['product_pins'][CAMPAIGN] = '0' * 64
+    elif change == 'foreign-caller':
+        caller.f_code = named(code(cohort.__file__), 'controller_io')
+    selected = route.matches(vector, directory, environment, state, [helper],
+        {'PINS': PINS, 'SITES': SITES}, SETUP_CASES)
+    assert (selected is not None) is (change is None)
+    if selected is not None:
+        registration = {**selected, 'owner_pid': 20, 'token': 'exact'}
+        launch = {'registration': registration, 'owner_pid': 20, 'token': 'exact', 'cwd': str(directory),
+            'bootstrap_sha256': None, 'transformed_argv_sha256': hashlib.sha256(json.dumps(vector).encode()).hexdigest(),
+            'environment_sha256': hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest()}
+        assert native.eligible(launch, vector, environment, str(directory),
+            {'owned_root': str(tmp_path), 'product_pins': dict(PINS)}, str(ROOT))
+
+
+def test_campaign_caller_and_root_inventory_is_only_the_original_four_calls():
+    assert {s: owner for s, owner in SITES.items() if owner == 'campaign'} == {
+        (CAMPAIGN, line): 'campaign' for line in CAMPAIGN_CALLS}
+    assert {c: root for c, root in SETUP_CASES.items() if root == 'campaign/P1'} == {CAMPAIGN_CASE: 'campaign/P1'}

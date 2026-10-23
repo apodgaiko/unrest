@@ -15,6 +15,7 @@ from orders_git_custody import eligible, join_registration
 VECTOR = ["/usr/lib/git-core/git", "maintenance", "run", "--auto", "--no-quiet"]
 MESSAGES = {
     ("setup", 40): "finite fixture",
+    ("campaign", 571): "base",
     ("seal", 197): "sealed candidate",
     ("integrate", 239): "authored lane integration",
 }
@@ -26,7 +27,7 @@ def metadata(parent, environment, cwd):
     message = MESSAGES.get((caller.get("function"), caller.get("line")))
     arguments = (
         ["commit", "-m", message]
-        if caller.get("function") == "setup"
+        if caller.get("function") in ("setup", "campaign")
         else ["commit", "--allow-empty", "-m", message]
     )
     if (

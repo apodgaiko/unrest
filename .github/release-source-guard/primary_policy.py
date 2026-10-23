@@ -153,7 +153,8 @@ _BACKEND_CONFIG = tuple(c for c, row in _BACKEND_POSTIMAGES.items()
                         if c not in INITIALIZATION_POSTIMAGE_CASES and row['script_sha256'] == 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53')
 _BACKEND_MISC = tuple(c for c in _BACKEND_POSTIMAGES if c not in _SETUP_CASES and c not in _BACKEND_CONFIG and c not in INITIALIZATION_POSTIMAGE_CASES)
 _BACKEND_ORDERS = tuple(c for c in _BACKEND_POSTIMAGES if 'finite_orders.py::' in c)
-_SETUP_ADDITIONAL = tuple(c for c in _SETUP_CASES if 'finite_orders.py::' not in c)
+_SETUP_ADDITIONAL = tuple(c for c in _SETUP_CASES if 'finite_orders.py::' not in c
+                          and c not in INITIALIZATION_POSTIMAGE_CASES)
 TEST_BACKEND_POSTIMAGE_GROUPS = (
     _BACKEND_MISC[:20], _BACKEND_MISC[20:35], _BACKEND_MISC[35:],
     _BACKEND_ORDERS[:10], _BACKEND_ORDERS[10:20], _BACKEND_ORDERS[20:],

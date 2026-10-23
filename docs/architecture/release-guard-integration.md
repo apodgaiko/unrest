@@ -1603,3 +1603,13 @@ source/code/globals, runtime, payload, owned root, token and authenticated READY
 Only unused FastMCP configuration is inapplicable; parent shared/dependency
 checks, original argv, interpreter flags, body, deadlines, protocol and cleanup
 assertions are unchanged. Unknown cases retain the preceding classification.
+
+The original coordinator startup/cleanup-failure case consumes four additional
+Git setup callsites in `experimental_cohort.campaign`, at lines 567, 570, 571
+and 572. The existing custody-Git route binds this one case, both current source
+files, the actual helper and campaign code/globals, literal AST arguments,
+canonical owned `campaign/P1/base` path, exact fixed environment and repository
+configuration. Only init, add, commit `base` and HEAD lookup are applicable.
+Existing stopped-image, owner birth, launch token, argv/environment and actual
+wait checks remain required. Stock maintenance consumes only that exact base
+commit and its object bytes; no other campaign episode or Git family is added.

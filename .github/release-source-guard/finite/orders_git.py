@@ -21,12 +21,19 @@ ENVIRONMENT = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_CONFIG_NOSYSTEM': '1
 
 def repository_profile(argv, cwd, owned_root, caller, root_name='cohort'):
     path = Path(cwd)
+    campaign = root_name == 'campaign/P1'
     if (path.resolve() != path or not path.is_relative_to(Path(owned_root) / 'pytest')
-            or root_name not in ('cohort', 'combined') or path.parent.name != root_name or argv[:2] != ['/usr/bin/git', '--no-replace-objects']):
+            or (not campaign and (root_name not in ('cohort', 'combined') or path.parent.name != root_name))
+            or (campaign and (path.name != 'base' or path.parent.name != 'P1'
+                             or path.parent.parent.name != 'campaign'))
+            or argv[:2] != ['/usr/bin/git', '--no-replace-objects']):
         return False
     arguments = argv[2:]
     owner = caller['function']
     prefixes = {
+        ('campaign', 567): ['init', '--initial-branch=main', '--object-format=sha1'],
+        ('campaign', 570): ['add', '.'], ('campaign', 571): ['commit', '-m', 'base'],
+        ('campaign', 572): ['rev-parse', 'HEAD'],
         ('setup', 36): ['init', '--initial-branch=main', '--object-format=sha1'],
         ('setup', 39): ['add', '.'], ('setup', 40): ['commit', '-m', 'finite fixture'],
         ('setup', 41): ['rev-parse', 'HEAD'], ('seal', 193): ['add', '--'],
@@ -38,13 +45,14 @@ def repository_profile(argv, cwd, owned_root, caller, root_name='cohort'):
         ('integrate', 241): ['rev-parse', 'HEAD'],
     }
     prefix = prefixes.get((owner, caller.get('line')))
-    if prefix is None or arguments[:len(prefix)] != prefix:
+    if (campaign != (owner == 'campaign') or prefix is None
+            or arguments[:len(prefix)] != prefix):
         return False
-    if owner == 'setup':
+    if owner in ('setup', 'campaign'):
         if path.name != 'base':
             return False
         valid = arguments in [['init', '--initial-branch=main', '--object-format=sha1'],
-                              ['add', '.'], ['commit', '-m', 'finite fixture'], ['rev-parse', 'HEAD']]
+                              ['add', '.'], ['commit', '-m', 'base' if campaign else 'finite fixture'], ['rev-parse', 'HEAD']]
         if arguments == ['init', '--initial-branch=main', '--object-format=sha1']:
             return valid and not (path / '.git').exists() and not (path / '.git').is_symlink()
     elif owner == 'seal':
