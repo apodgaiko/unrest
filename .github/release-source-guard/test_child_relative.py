@@ -445,6 +445,12 @@ def test_own_native_probe_preserves_all_prior_stage1_compartment_statements():
     import ast
     import hashlib
     source = (ROOT / 'primary_compartment.py').read_text()
+    seeded_test_setup = (
+        "            if spec.get('source_mode') == 'TEST-positive':\n"
+        "                from startup_journal_control import seed\n"
+        "                seed(spec, Path('/work/events'))\n")
+    assert source.count(seeded_test_setup) == 1
+    source = source.replace(seeded_test_setup, '')
     # Normalize the exact adoptive-wait and packed-export changes before
     # comparing every remaining statement to the original immutable AST.
     changes = {
