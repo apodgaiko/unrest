@@ -584,8 +584,11 @@ receive all current READY rows in their original order, with fresh mutable
 values, while the original predicate still chooses and verifies the first
 matching row. No authentication verdict or kernel observation is cached.
 Malformed metadata, nonportable JSON values, changed decoder policy, low
-recursion margin or already exposed mutable rows retain the complete list and
-its original error behavior. Every current byte is still read; the original
+recursion margin or mutable rows exposed outside the READY projection retain
+the complete list and its original error behavior. Repeated authentication
+within one acquisition reuses that acquisition's mutable READY objects, including
+any intervening mutations, without expanding unrelated journal rows. A later
+acquisition still reads every current byte and creates distinct mutable objects. Every current byte is still read; the original
 refresh loop still applies all poison and registration effects. Every other
 handler, including planning, connect, custody and drain, keeps the full list.
 Materialization preserves per-snapshot object identities but shares no mutable

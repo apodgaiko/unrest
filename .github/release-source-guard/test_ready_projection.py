@@ -200,3 +200,58 @@ def test_real_refresh_poison_cannot_be_hidden_by_ready_projection(tmp_path):
     assert reasons == ['finite_guard:caught-launch'] and owner.poisoned
     with pytest.raises(RuntimeError, match='global_poison_retained'):
         owner.handle({'kind': 'payload', 'pid': 20, 'fd': 6, 'token': 'owned', 'nonce': 'n'}, snapshot)
+
+
+@pytest.mark.parametrize('mutation', ['pins', 'token', 'owner', 'kind', 'missing-kind', 'duplicate'])
+def test_repeated_authentication_preserves_same_acquisition_mutations_and_original_checks(
+        tmp_path, monkeypatch, mutation):
+    rows = [{'kind': 'other', 'value': [n]} for n in range(100)]
+    rows.insert(50, ready())
+    if mutation == 'duplicate':
+        rows.append(ready())
+    (tmp_path / '20.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    snapshot = journal.EventJournal().snapshot(tmp_path)
+    exposed = snapshot.authentication_events()
+    assert snapshot.full is None
+    if mutation in {'pins', 'duplicate'}:
+        exposed[0]['guard_sha256'] = rows[50]['guard_sha256'] = 'wrong'
+    elif mutation == 'token':
+        exposed[0]['token'] = rows[50]['token'] = 'wrong'
+    elif mutation == 'owner':
+        exposed[0]['owner_pid'] = rows[50]['owner_pid'] = -1
+    elif mutation == 'kind':
+        exposed[0]['kind'] = rows[50]['kind'] = 'other'
+    else:
+        del exposed[0]['kind']
+        del rows[50]['kind']
+    assert snapshot.authentication_events()[0] is exposed[0]
+    assert snapshot.full is None
+    left, right = make_owner(False), make_owner(True)
+    request = {'kind': 'payload', 'pid': 20, 'token': 'owned', 'nonce': 'n', 'fd': 6}
+    assert execute(left, request, rows, monkeypatch) == execute(right, request, snapshot, monkeypatch)
+    assert snapshot.full is None
+    assert snapshot.materialize() == rows
+
+
+def test_repeated_projection_falls_back_after_a_nonready_row_is_exposed(tmp_path):
+    (tmp_path / '20.jsonl').write_text('{"kind":"other"}\n' + json.dumps(ready()) + '\n')
+    snapshot = journal.EventJournal().snapshot(tmp_path)
+    snapshot.authentication_events()
+    snapshot[0].update(ready(), guard_sha256='wrong')
+    rows = snapshot.authentication_events()
+    assert rows is snapshot.full and rows[0]['guard_sha256'] == 'wrong'
+
+
+def test_repeated_projection_does_not_decode_or_expand_unrelated_rows(tmp_path, monkeypatch):
+    (tmp_path / '20.jsonl').write_text(''.join(json.dumps({'kind': 'other', 'n': n}) + '\n'
+                                              for n in range(10000)) + json.dumps(ready()) + '\n')
+    reader = journal.EventJournal()
+    snapshot = reader.snapshot(tmp_path)
+    first = snapshot.authentication_events()
+    def refuse_expansion():
+        raise AssertionError('unrelated journal expansion')
+    monkeypatch.setattr(snapshot, 'materialize', refuse_expansion)
+    for _ in range(5):
+        assert snapshot.authentication_events()[0] is first[0]
+    fresh = reader.snapshot(tmp_path)
+    assert fresh.authentication_events()[0] is not first[0]

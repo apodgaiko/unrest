@@ -107,6 +107,7 @@ class JournalSnapshot(Sequence):
         self.count = sum(len(chunk[1]) for chunk in chunks)
         self.parsed = {}
         self.full = None
+        self.authentication_indices = frozenset()
 
     def __len__(self):
         return self.count
@@ -152,14 +153,15 @@ class JournalSnapshot(Sequence):
         """Fresh READY rows for handlers whose sole journal read authenticates.
 
         Every journal byte was acquired for this snapshot. Unknown row shapes,
-        changed decoder policy and previously exposed mutable values retain the
-        complete original list, including its error and mutation behavior.
+        changed decoder policy and exposed values outside the READY projection
+        retain the complete original list. Repeated authentication shares only
+        this acquisition's READY objects, preserving their current mutations.
         """
         frame, depth = sys._getframe(), 0
         while frame is not None:
             depth += 1
             frame = frame.f_back
-        if (self.full is not None or self.parsed
+        if (self.full is not None or not self.parsed.keys() <= self.authentication_indices
                 or sys.getrecursionlimit() - depth < 128 or json.loads is not _JSON_LOADS
                 or json._default_decoder is not _JSON_DECODER
                 or vars(_JSON_DECODER) != _JSON_POLICY
@@ -170,10 +172,12 @@ class JournalSnapshot(Sequence):
         for chunk in self.chunks:
             for index, item in enumerate(chunk[3]):
                 if item[0] == 'ready':
-                    row = json.loads(chunk[1][index])
-                    self.parsed[offset + index] = row
-                    rows.append(row)
+                    position = offset + index
+                    if position not in self.parsed:
+                        self.parsed[position] = json.loads(chunk[1][index])
+                    rows.append(self.parsed[position])
             offset += len(chunk[1])
+        self.authentication_indices = frozenset(self.parsed)
         return rows
 
     def census(self, registered, timed):
