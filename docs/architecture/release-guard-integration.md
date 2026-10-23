@@ -1645,3 +1645,9 @@ the existing five-second, token/PID/parent/manifest/guard/registry/interpreter-b
 core READY handshake before its constructor returns. Core READY does not claim
 completed endpoint setup or a sealed payload. Original cancellation deadlines,
 assertions, numeric waits and intentional early termination remain distinct.
+
+The current runtime guard digest is consumed by `primary_operations`; its exact
+current digest must also be consumed by the journal specialization, package
+specialization and child-relative constructor binding. The compartment controls
+check this entire startup pin chain before any original test is launched.
+Each consumer retains one exact current digest and its original drift refusal.
