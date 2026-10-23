@@ -483,6 +483,13 @@ def test_runtime_accepts_response_only_after_original_producer_receipt(runtime_f
 def test_new_response_observer_preserves_original_exit_poison():
     tree = ast.parse((ROOT / 'linux_producers.py').read_bytes())
     function = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'tick')
+    # Undo only the live-record selector; retain the original poison oracle.
+    assert ast.unparse(function.body[0]) == "select = getattr(self, 'event_rows', None)"
+    assert ast.unparse(function.body[1]) == 'rows = trace.records if select is None else select(trace.records, self)'
+    function.body = function.body[2:]
+    assert len(function.body) == 1 and isinstance(function.body[0], ast.For)
+    assert ast.unparse(function.body[0].iter) == 'rows'
+    function.body[0].iter = ast.parse('trace.records', mode='eval').body
     class Strip(ast.NodeTransformer):
         def visit_Expr(self, node):
             if ast.unparse(node) in {'self.completed_response(event, trace)', 'self.completed_cache(event, trace)'}:
