@@ -337,8 +337,8 @@ def consumer_site(tmp_path, monkeypatch):
                                          len(b'original fixture archive'), 10, 10],
                             'sha256': retained_file['sha256']}
         captures.append(row)
-    value = {'schema': 'unrest.v047.primary-dependency-output.v2', 'site': str(site),
-             'files': {'data.py': fixture_read(source, 20000)[1]},
+    value = {'schema': 'unrest.v047.primary-dependency-output.v3', 'site': str(site),
+             'files': {'data.py': fixture_read(source, 20000)[1]}, 'canonical_references': {},
              'compiled_references': dependency.compiled_references({'data.py': source.read_bytes()}),
              'directories': directories({'data.py'}), 'scripts': {}, 'bootstrap': producers,
              'bootstrap_captures': captures,
@@ -484,12 +484,16 @@ def test_consumer_default_denies_drift_and_foreign_lineage(consumer_site, change
 
 @pytest.mark.parametrize('change', ['none', 'magic', 'header', 'code', 'mode', 'hardlink'])
 @pytest.mark.parametrize('memoized', [False, True])
-def test_consumer_requires_exact_current_source_cache(consumer_site, change, memoized):
+@pytest.mark.parametrize('sealed', [False, True])
+def test_consumer_requires_exact_current_source_cache(consumer_site, change, memoized, sealed):
     import marshal
     fixture = consumer_site
     cache = Path(py_compile.compile(str(fixture.source), doraise=True))
     cache.chmod(0o644)
     body = cache.read_bytes()
+    if sealed:
+        fixture.value['canonical_references'] = dependency.compiled_reference_tables({'data.py': fixture.source.read_bytes()})[1]
+        fixture.support = fixture.publish()
     comparisons = {} if memoized else None
     if memoized:
         dependency.verify(fixture.site, fixture.support, comparisons=comparisons)
@@ -544,11 +548,15 @@ def test_declaration_duplicate_fields_refused():
         dependency.decode(b'{"schema":"first","schema":"second"}')
 
 
-def test_mutable_source_observation_cannot_authorize_foreign_cache(consumer_site, monkeypatch):
+@pytest.mark.parametrize('sealed', [False, True])
+def test_mutable_source_observation_cannot_authorize_foreign_cache(consumer_site, monkeypatch, sealed):
     import marshal
     fixture = consumer_site
     cache = Path(py_compile.compile(str(fixture.source), doraise=True))
     payload = cache.read_bytes()
+    if sealed:
+        fixture.value['canonical_references'] = dependency.compiled_reference_tables({'data.py': fixture.source.read_bytes()})[1]
+        fixture.support = fixture.publish()
     foreign = compile(b'VALUE = 2\n', str(fixture.source), 'exec', dont_inherit=True)
     cache.write_bytes(payload[:16] + marshal.dumps(foreign))
     cache.chmod(0o644)
@@ -704,27 +712,30 @@ def test_dependency_cost_clocks_preserve_all_original_verifier_statements():
     function.body = [node for node in function.body if not (isinstance(node, ast.Expr)
         and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
         and node.value.func.id == 'cost_phase')]
-    # Normalize only the explicit v2 reference-cache additions, retaining the
+    # Normalize only the explicit v2/v3 pure reference additions, retaining the
     # original verifier oracle and every pre-existing acquisition/check.
     assert sum(isinstance(node, ast.Assign) and ast.unparse(node) ==
                'references = verify_references(value)' for node in function.body) == 1
     assert sum(isinstance(node, ast.Expr) and ast.unparse(node) ==
-               'comparison_functions(namespace, {} if comparisons is None else comparisons, references)'
+               'comparison_functions(namespace, {} if comparisons is None else comparisons, references, canonical_refs)'
                for node in function.body) == 1
+    assert sum(isinstance(node, ast.Assign) and ast.unparse(node) ==
+               'canonical_refs = verify_canonical_references(value, references)' for node in function.body) == 1
     function.body = [node for node in function.body if not (isinstance(node, ast.Assign)
-        and ast.unparse(node) == 'references = verify_references(value)')]
+        and ast.unparse(node) in {'references = verify_references(value)',
+                                 'canonical_refs = verify_canonical_references(value, references)'})]
     for index, node in enumerate(function.body):
         if isinstance(node, ast.Expr) and ast.unparse(node) == (
-                'comparison_functions(namespace, {} if comparisons is None else comparisons, references)'):
+                'comparison_functions(namespace, {} if comparisons is None else comparisons, references, canonical_refs)'):
             function.body[index] = ast.parse('if comparisons is not None:\n    comparison_functions(namespace, comparisons)').body[0]
     class OriginalSchema(ast.NodeTransformer):
         def visit_Constant(self, node):
-            if node.value == 'unrest.v047.primary-dependency-output.v2':
+            if node.value == 'unrest.v047.primary-dependency-output.v3':
                 return ast.Constant(value='unrest.v046.primary-dependency-output.v1')
             return node
         def visit_Set(self, node):
             node.elts = [item for item in node.elts if not (isinstance(item, ast.Constant)
-                         and item.value == 'compiled_references')]
+                         and item.value in {'compiled_references', 'canonical_references'})]
             return self.generic_visit(node)
     function = OriginalSchema().visit(function)
     assert hashlib.sha256(ast.dump(function, include_attributes=False).encode()).hexdigest() == '02e8ee572256143c6e5da7c1996e136ef7222d12f3e3d8e7a16cb5d51c7d6596'

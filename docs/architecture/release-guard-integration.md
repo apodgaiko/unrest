@@ -1427,7 +1427,7 @@ change deadlines, and are explicitly diagnostic rather than certificates. Every
 original acquisition, comparison, cleanup assertion and release gate remains.
 
 The observer-owned primary dependency declaration uses
-`unrest.v047.primary-dependency-output.v2`. After the existing image/wheel
+`unrest.v047.primary-dependency-output.v3`. After the existing image/wheel
 projection and complete installed-byte checks, it seals a source SHA and digest
 of the original complete compiled-code identity for each compilable Python
 member, at the exact consumer filename with `exec`, `dont_inherit=True` and
@@ -1483,3 +1483,23 @@ a fresh, birth-bound reciprocal kernel peer or refuse the payload. No historical
 registration is removed, and absence never supplies a numeric wait, cleanup
 verdict or authorization. Requester and listener observation errors retain their
 original behavior. Original completion, cleanup and deadline tests remain intact.
+
+### Complete code comparison normal forms
+
+The v3 observer declaration also seals SHA-256 values of code objects serialized
+with marshal format zero under the pinned Python 3.13 interpreter. This format
+removes reference/intern-table differences while retaining the complete code
+structure, nested constants, filenames, line and exception tables and all original
+identity fields. The observer compiles immutable source at the exact consumer
+filename with optimization zero, round-trips that serialization, and independently
+checks the complete original code identity before sealing its digest.
+
+A consumer decodes each real current cache body as before. Only an exact normal
+form hash can reuse that independently sealed original identity digest. Unknown
+code takes the complete original projection. Expected compilation and actual-code
+comparison data remain independent and must agree at the original comparison.
+Global marshal, executable dispatch, every current source/cache byte, header,
+FD identity, census and final read remain unchanged. References contain no
+ownership, admission, wait or cleanup verdict. All original completion, cleanup
+and deadline assertions remain required. Local comparison speedups cannot certify
+native completion or release acceptance.

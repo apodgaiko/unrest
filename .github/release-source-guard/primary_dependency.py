@@ -386,12 +386,13 @@ def comparison_digest(value):
     return sha(json.dumps(value, separators=(',', ':')).encode())
 
 
-def compiled_references(expected):
+def compiled_reference_tables(expected):
     """Pure source derivations, sealed by the observer before test dispatch."""
     from finite.operation_activation import code_identity
     namespace = {'code_identity': code_identity}
     comparison_functions(namespace, {})
-    references = {}
+    import marshal
+    references, canonical = {}, {}
     for name, body in sorted(expected.items()):
         if not name.endswith('.py'):
             continue
@@ -401,9 +402,33 @@ def compiled_references(expected):
             # An unused .py data member need not compile. A later real cache
             # still takes the original compiler path; absence grants nothing.
             continue
-        references[name] = {'source_sha256': sha(body),
-                            'identity_sha256': comparison_digest(namespace['code_identity'](code))}
-    return references
+        identity = comparison_digest(namespace['code_identity'](code))
+        references[name] = {'source_sha256': sha(body), 'identity_sha256': identity}
+        payload = marshal.dumps(code, 0)
+        if comparison_digest(namespace['code_identity'](marshal.loads(payload))) != identity:
+            raise RuntimeError('primary_dependency_canonical_reference_roundtrip')
+        canonical[sha(payload)] = {'source': name, **references[name]}
+    return references, dict(sorted(canonical.items()))
+
+
+def compiled_references(expected):
+    return compiled_reference_tables(expected)[0]
+
+
+def verify_canonical_references(value, references):
+    table = value['canonical_references']
+    def digest(pin):
+        return type(pin) is str and len(pin) == 64 and not set(pin) - set('0123456789abcdef')
+    if type(table) is not dict:
+        raise RuntimeError('primary_dependency_canonical_reference_schema')
+    for pin, row in table.items():
+        if (not digest(pin) or type(row) is not dict
+                or set(row) != {'source', 'source_sha256', 'identity_sha256'}
+                or type(row['source']) is not str or row['source'] not in references
+                or row['source_sha256'] != references[row['source']]['source_sha256']
+                or not digest(row['identity_sha256'])):
+            raise RuntimeError('primary_dependency_canonical_reference_schema')
+    return table
 
 
 def verify_references(value):
@@ -513,8 +538,10 @@ def seal(owner, bootstrap):
         if actual != wanted or stat.S_IMODE(file['identity'][2]) != mode:
             raise RuntimeError('primary_dependency_projected_script')
         scripts[name] = file
-    declaration = {'schema': 'unrest.v047.primary-dependency-output.v2', 'site': str(SITE),
-                   'files': observed, 'compiled_references': compiled_references(expected),
+    references, canonical = compiled_reference_tables(expected)
+    declaration = {'schema': 'unrest.v047.primary-dependency-output.v3', 'site': str(SITE),
+                   'files': observed, 'compiled_references': references,
+                   'canonical_references': canonical,
                    'bootstrap': bootstrap['producers'],
                    'bootstrap_captures': [captures[pid] for pid in sorted(captures)],
                    'directories': directories, 'scripts': scripts,
@@ -647,7 +674,7 @@ def immutable_cache(namespace, name, source_name, optimize, expected_source):
     return current
 
 
-def comparison_functions(namespace, cache, references=None):
+def comparison_functions(namespace, cache, references=None, canonical=None):
     """Reuse only pure immutable derivations of complete current input bytes."""
     import marshal
     import types
@@ -725,6 +752,14 @@ def comparison_functions(namespace, cache, references=None):
     def current_identity(code):
         if type(code) is CompiledReference:
             return code.digest
+        if canonical is not None and type(code) is types.CodeType:
+            try:
+                normal = marshal.dumps(code, 0)
+            except (ValueError, RecursionError):
+                normal = None
+            reference = canonical.get(sha(normal)) if normal is not None else None
+            if reference is not None:
+                return reference['identity_sha256']
         key = marshal.dumps(code)
         if key not in identities:
             value = full_identity(code)
@@ -769,15 +804,16 @@ def verify(site, support, *, comparisons=None):
             or stat.S_IMODE(receipt['identity'][2]) != 0o444):
         raise RuntimeError('primary_dependency_receipt')
     value = decode(body)
-    if (set(value) != {'schema', 'site', 'files', 'compiled_references', 'directories', 'scripts', 'bootstrap', 'bootstrap_captures', 'omitted_backend_members',
+    if (set(value) != {'schema', 'site', 'files', 'compiled_references', 'canonical_references', 'directories', 'scripts', 'bootstrap', 'bootstrap_captures', 'omitted_backend_members',
                        'initial_source_bound_caches', 'wheel', 'source_files', 'source_custody',
                        'source_checkpoint_ready', 'selected_carrier'}
-            or value['schema'] != 'unrest.v047.primary-dependency-output.v2'
+            or value['schema'] != 'unrest.v047.primary-dependency-output.v3'
             or value['site'] != str(SITE) or value['source_checkpoint_ready'] is not False
             or value['selected_carrier'] is not None):
         raise RuntimeError('primary_dependency_schema')
     cost_phase('receipt')
     references = verify_references(value)
+    canonical_refs = verify_canonical_references(value, references)
     validate_bootstrap(value)
     verify_source_inputs(value['source_files'], value['source_custody'])
     if read(value['wheel']['path'], 20001)[1] != value['wheel']:
@@ -789,7 +825,7 @@ def verify(site, support, *, comparisons=None):
         raise RuntimeError('primary_dependency_cache_verifier')
     namespace = {'__file__': str(source), '__name__': 'primary_dependency_activation'}
     exec(compile(source_body, str(source), 'exec', dont_inherit=True), namespace)
-    comparison_functions(namespace, {} if comparisons is None else comparisons, references)
+    comparison_functions(namespace, {} if comparisons is None else comparisons, references, canonical_refs)
     cost_phase('activation')
     first, directories = site_metadata()
     source_map = cache_sources(first, value['files'])
