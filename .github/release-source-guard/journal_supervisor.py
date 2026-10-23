@@ -50,9 +50,15 @@ class JournalSupervisor(Supervisor):
         return snapshot
 
     def handle(self, request, events):
-        # The original handler still receives the entire current ordinary JSON list.
+        # These four original branches read events only in authenticate(). All
+        # other handlers retain the complete current ordinary JSON list.
         if type(events) is JournalSnapshot:
-            events = events.materialize()
+            if (type(request) is dict and type(request.get('kind')) is str
+                    and request['kind'] in {
+                    'payload', 'socketpair', 'listen', 'connected'}):
+                events = events.authentication_events()
+            else:
+                events = events.materialize()
         if request.get('kind') in {'approval_unix', 'fixture_unix_bind'}:
             if self.poisoned:
                 raise RuntimeError('global_poison_retained')

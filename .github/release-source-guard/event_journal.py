@@ -148,6 +148,34 @@ class JournalSnapshot(Sequence):
             self.full = rows
         return self.full
 
+    def authentication_events(self):
+        """Fresh READY rows for handlers whose sole journal read authenticates.
+
+        Every journal byte was acquired for this snapshot. Unknown row shapes,
+        changed decoder policy and previously exposed mutable values retain the
+        complete original list, including its error and mutation behavior.
+        """
+        frame, depth = sys._getframe(), 0
+        while frame is not None:
+            depth += 1
+            frame = frame.f_back
+        if (self.full is not None or self.parsed
+                or sys.getrecursionlimit() - depth < 128 or json.loads is not _JSON_LOADS
+                or json._default_decoder is not _JSON_DECODER
+                or vars(_JSON_DECODER) != _JSON_POLICY
+                or any(item is None for chunk in self.chunks for item in chunk[3])
+                or any(not all(chunk[7]) for chunk in self.chunks)):
+            return self.materialize()
+        rows, offset = [], 0
+        for chunk in self.chunks:
+            for index, item in enumerate(chunk[3]):
+                if item[0] == 'ready':
+                    row = json.loads(chunk[1][index])
+                    self.parsed[offset + index] = row
+                    rows.append(row)
+            offset += len(chunk[1])
+        return rows
+
     def census(self, registered, timed):
         """Keep every effectful original refresh row and its lifecycle witnesses."""
         selected = self.index.select(self.chunks, registered, timed)
@@ -205,10 +233,14 @@ class EventJournal:
                     prefix, count = chunk[4], chunk[5]
                 lines = list(chunk[1][:count]) if count else []
                 metadata = list(chunk[3][:count]) if count else []
+                portable = list(chunk[7][:count]) if count else []
                 tail = body[len(prefix):].decode('utf-8')
                 pieces = tail.splitlines(keepends=True)
                 stable_count = len(lines)
                 for index, line in enumerate(tail.splitlines()):
+                    default_policy = (json.loads is _JSON_LOADS
+                                      and json._default_decoder is _JSON_DECODER
+                                      and vars(_JSON_DECODER) == _JSON_POLICY)
                     try:
                         row = json.loads(line)
                     except json.JSONDecodeError:
@@ -216,12 +248,16 @@ class EventJournal:
                     else:
                         lines.append(line)
                         metadata.append(descriptor(row))
+                        portable.append(default_policy and json.loads is _JSON_LOADS
+                                        and json._default_decoder is _JSON_DECODER
+                                        and vars(_JSON_DECODER) == _JSON_POLICY
+                                        and shallow_json(row))
                     if index < len(pieces) - 1:
                         stable_count = len(lines)
                 stable_bytes = body[:len(body) - len(pieces[-1].encode('utf-8'))] if pieces else body
                 parsed = ParseBlocks(chunk[6] if chunk is not None else None)
                 chunk = (body, tuple(lines), '[' + ','.join(lines) + ']', tuple(metadata),
-                         stable_bytes, stable_count, parsed)
+                         stable_bytes, stable_count, parsed, tuple(portable))
             retained[path] = chunk
             current.append(chunk)
         self._snapshots = retained

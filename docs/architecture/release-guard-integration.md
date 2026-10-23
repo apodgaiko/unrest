@@ -577,8 +577,18 @@ poison effects and errors against the unchanged original implementation across
 append, replacement, truncation and deduplication-state changes.
 
 The tick retains a snapshot of the complete current byte acquisition. The
-original policy handler always receives its entire ordinary JSON list;
-materialization preserves per-snapshot object identities but shares no mutable
+original policy handler receives its entire ordinary JSON list except for the
+four `payload`, `socketpair`, `listen` and `connected` branches: their sole
+journal read is the unchanged authentication predicate. Those branches may
+receive all current READY rows in their original order, with fresh mutable
+values, while the original predicate still chooses and verifies the first
+matching row. No authentication verdict or kernel observation is cached.
+Malformed metadata, nonportable JSON values, changed decoder policy, low
+recursion margin or already exposed mutable rows retain the complete list and
+its original error behavior. Every current byte is still read; the original
+refresh loop still applies all poison and registration effects. Every other
+handler, including planning, connect, custody and drain, keeps the full list.
+Materialization preserves per-snapshot object identities but shares no mutable
 JSON values with another acquisition. Authentication, native ownership,
 receipt decisions, clocks, waits and deadlines remain original. Census
 telemetry includes byte acquisition, indexing and the original refresh work;

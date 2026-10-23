@@ -188,6 +188,8 @@ jobs:
         include:
           - group: postimages-1
             cases: tests/test_approval_recovery.py::test_durable_run_owner_and_restart_never_revives[success]
+          - group: postimages-2
+            cases: tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[backend_registered] tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[adapter_registered] tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[auth] tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[forwarding]
     steps:
       - uses: actions/checkout@v7.0.1
         with:

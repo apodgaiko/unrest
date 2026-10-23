@@ -377,7 +377,7 @@ def test_finite_stall_snapshot_is_diagnostic_only_and_never_forces_exit(
 
 def test_startup_reproduction_retains_original_capacity_case_and_deadlines():
     import yaml
-    from primary_policy import TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_APPROVAL_STARTUP_COST_CASES, root_seconds
+    from primary_policy import TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_APPROVAL_STARTUP_COST_CASES, TEST_CONTROLLED_CANCEL_CASES, root_seconds
     from primary_source_inputs import test_plan
     case='tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]'
     assert TEST_GIT_OVERHEAD_CASES == (case,)
@@ -387,10 +387,17 @@ def test_startup_reproduction_retains_original_capacity_case_and_deadlines():
     assert plan['source_checkpoint_ready'] is False
     workflow=yaml.safe_load((Path(__file__).parent.parent/'workflows/v046-source-readiness.yml').read_text())
     assert workflow['jobs']['controlled-backend-postimage-diagnosis']['strategy']['matrix']['include']==[
-        {'group':'postimages-1','cases':' '.join(TEST_APPROVAL_STARTUP_COST_CASES)}]
+        {'group':'postimages-1','cases':' '.join(TEST_APPROVAL_STARTUP_COST_CASES)},
+        {'group':'postimages-2','cases':' '.join(TEST_CONTROLLED_CANCEL_CASES)}]
     observed = test_plan((COMMAND + ' ' + ' '.join(TEST_APPROVAL_STARTUP_COST_CASES)).encode(), 'diagnostic', 'TEST-positive')
     assert observed['timeout_seconds'] == root_seconds(observed) == 180
     assert observed['source_checkpoint_ready'] is False
+    cancellation = test_plan((COMMAND + ' ' + ' '.join(TEST_CONTROLLED_CANCEL_CASES)).encode(), 'diagnostic', 'TEST-positive')
+    assert cancellation['timeout_seconds'] == root_seconds(cancellation) == 180
+    assert cancellation['source_checkpoint_ready'] is False
+    assert TEST_CONTROLLED_CANCEL_CASES == tuple(
+        'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[' + stage + ']'
+        for stage in ('backend_registered', 'adapter_registered', 'auth', 'forwarding'))
     for suffix in (' --maxfail=1', ' -k success'):
         with pytest.raises(RuntimeError):
             test_plan((COMMAND + ' ' + ' '.join(TEST_APPROVAL_STARTUP_COST_CASES) + suffix).encode(), 'diagnostic', 'TEST-positive')
