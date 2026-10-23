@@ -170,17 +170,15 @@ class JournalSnapshot(Sequence):
                 or sys.getrecursionlimit() - depth < 128 or json.loads is not _JSON_LOADS
                 or json._default_decoder is not _JSON_DECODER
                 or vars(_JSON_DECODER) != _JSON_POLICY
-                or any(item is None for chunk in self.chunks for item in chunk[3])
-                or any(not all(chunk[7]) for chunk in self.chunks)):
+                or any(chunk[8][2] for chunk in self.chunks)):
             return self.materialize()
         rows, offset = [], 0
         for chunk in self.chunks:
-            for index, item in enumerate(chunk[3]):
-                if item[0] == 'ready' or include_admitted and item[0] == 'admitted':
-                    position = offset + index
-                    if position not in self.parsed:
-                        self.parsed[position] = json.loads(chunk[1][index])
-                    rows.append(self.parsed[position])
+            for index in chunk[8][int(include_admitted)]:
+                position = offset + index
+                if position not in self.parsed:
+                    self.parsed[position] = json.loads(chunk[1][index])
+                rows.append(self.parsed[position])
             offset += len(chunk[1])
         self.authentication_indices = frozenset(self.parsed)
         self.authentication_projection = include_admitted
@@ -244,6 +242,8 @@ class EventJournal:
                 lines = list(chunk[1][:count]) if count else []
                 metadata = list(chunk[3][:count]) if count else []
                 portable = list(chunk[7][:count]) if count else []
+                projection = [[index for index in positions if index < count]
+                              for positions in chunk[8]] if count else [[], [], []]
                 tail = body[len(prefix):].decode('utf-8')
                 pieces = tail.splitlines(keepends=True)
                 stable_count = len(lines)
@@ -262,12 +262,21 @@ class EventJournal:
                                         and json._default_decoder is _JSON_DECODER
                                         and vars(_JSON_DECODER) == _JSON_POLICY
                                         and shallow_json(row))
+                        position = len(lines) - 1
+                        item = metadata[-1]
+                        if item is None or not portable[-1]:
+                            projection[2].append(position)
+                        if portable[-1] and item is not None and item[0] == 'ready':
+                            projection[0].append(position)
+                        if portable[-1] and item is not None and item[0] in {'ready', 'admitted'}:
+                            projection[1].append(position)
                     if index < len(pieces) - 1:
                         stable_count = len(lines)
                 stable_bytes = body[:len(body) - len(pieces[-1].encode('utf-8'))] if pieces else body
                 parsed = ParseBlocks(chunk[6] if chunk is not None else None)
                 chunk = (body, tuple(lines), '[' + ','.join(lines) + ']', tuple(metadata),
-                         stable_bytes, stable_count, parsed, tuple(portable))
+                         stable_bytes, stable_count, parsed, tuple(portable),
+                         tuple(tuple(positions) for positions in projection))
             retained[path] = chunk
             current.append(chunk)
         self._snapshots = retained

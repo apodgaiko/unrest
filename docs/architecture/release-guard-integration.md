@@ -1550,3 +1550,11 @@ that exact TEST-positive script receives this load; FULL, poison and other
 selections do not. Its reducer requires every inert row and still returns no
 release certificate. This bounded reproduction tests journal-size sensitivity
 before another full source checkpoint. It does not substitute for that checkpoint.
+
+Each immutable parsing chunk also records the READY positions, READY/admitted
+positions and positions requiring full-list fallback. Appending reuses positions
+only within the same byte-identical closed prefix; replacement and truncation
+recompute them. No kernel result, authorization verdict or mutable event value
+is retained in these indices. Every acquisition still enumerates and reads all
+current journal bytes. Selection applies the original handler to freshly decoded
+current rows, preserving the existing mutable-exposure and decoder fallbacks.

@@ -349,3 +349,88 @@ def test_connect_keeps_the_complete_original_policy_body():
     tree = ast.parse((ROOT / 'linux_supervisor.py').read_text())
     handle = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'handle')
     assert hashlib.sha256(ast.dump(handle, include_attributes=False).encode()).hexdigest() == '6fbeb95db17f96646b92c9ca1ae86e858f072e26084b6dd0fc38ea021b0f479e'
+
+
+@pytest.mark.parametrize('connection', [False, True])
+def test_projection_indices_follow_append_replacement_truncation_and_partial_tail(tmp_path, connection):
+    path = tmp_path / '20.jsonl'
+    reader = journal.EventJournal()
+    bodies = [
+        json.dumps(ready()) + '\n{"kind":"admitted","token":',
+        json.dumps(ready()) + '\n{"kind":"admitted","token":"one"}',
+        json.dumps(ready()) + '\n{"kind":"admitted","token":"two"}\n',
+        '{"kind":"other"}\n' + json.dumps(ready()) + '\n',
+        '{"kind":"ready","token":"replacement"}\n',
+        '', json.dumps(ready()),
+    ]
+    for body in bodies:
+        path.write_text(body)
+        expected = []
+        for line in body.splitlines():
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row['kind'] == 'ready' or connection and row['kind'] == 'admitted':
+                expected.append(row)
+        snapshot = reader.snapshot(tmp_path)
+        assert snapshot.authentication_events(include_admitted=connection) == expected
+        assert snapshot.full is None
+
+
+@pytest.mark.parametrize('connection', [False, True])
+def test_bad_prefix_and_replacement_never_retain_an_eligible_projection(tmp_path, connection):
+    path = tmp_path / '20.jsonl'
+    reader = journal.EventJournal()
+    for body, valid in [(json.dumps(ready()) + '\n{}\n', False),
+                        (json.dumps(ready()) + '\n', True),
+                        ('null\n' + json.dumps(ready()) + '\n', False),
+                        (json.dumps(ready()) + '\n', True)]:
+        path.write_text(body)
+        snapshot = reader.snapshot(tmp_path)
+        rows = snapshot.authentication_events(include_admitted=connection)
+        assert (snapshot.full is None) is valid
+        if valid:
+            assert rows == [ready()]
+        else:
+            assert rows is snapshot.full
+
+
+def test_index_reuse_still_reads_every_file_and_returns_fresh_values(tmp_path, monkeypatch):
+    for n in range(3):
+        (tmp_path / f'{n}.jsonl').write_text(json.dumps({**ready(), 'token': str(n)}) + '\n')
+    reader = journal.EventJournal()
+    old = reader.snapshot(tmp_path).authentication_events()
+    old[0]['token'] = 'mutated'
+    calls = []
+    read = Path.read_bytes
+    def current(path):
+        calls.append(path.name)
+        return read(path)
+    monkeypatch.setattr(Path, 'read_bytes', current)
+    new = reader.snapshot(tmp_path).authentication_events()
+    assert calls == ['0.jsonl', '1.jsonl', '2.jsonl']
+    assert [row['token'] for row in new] == ['0', '1', '2']
+    assert all(a is not b for a, b in zip(old, new))
+
+
+def test_nonportable_decoder_result_does_not_gain_index_comparisons(tmp_path, monkeypatch):
+    path = tmp_path / '20.jsonl'
+    path.write_text('{"kind":"other"}\n')
+    calls = []
+    class Kind:
+        def __hash__(self):
+            calls.append('hash')
+            return 13
+        def __eq__(self, other):
+            calls.append(('equal', other))
+            return False
+    journal.descriptor({'kind': Kind()})
+    expected = list(calls)
+    calls.clear()
+    monkeypatch.setattr(json, 'loads', lambda body: {'kind': Kind()})
+    snapshot = journal.EventJournal().snapshot(tmp_path)
+    # Unknown decoder objects retain only the original descriptor's effects;
+    # projection indexing must not compare them again.
+    assert calls == expected
+    assert snapshot.chunks[0][8] == ((), (), (0,))
