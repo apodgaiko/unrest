@@ -53,3 +53,46 @@ def test_seed_is_inert_and_exclusive(tmp_path, monkeypatch):
     with pytest.raises(FileExistsError):
         control.seed(selected(), tmp_path)
     assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before
+
+
+def test_passive_registration_capture_is_bound_to_exact_context_selection():
+    import hashlib
+    from finite import approval_stall_diagnostic as diagnostic
+    cases = list(control.TEST_JOURNAL_CONTEXT_CASES)
+    profile = {'source_mode': 'TEST-positive', 'orig_argv': ['/python', '/pytest', '-q', *cases]}
+    assert diagnostic.REGISTRATION_SELECTION_SHA256 == hashlib.sha256(json.dumps(['-q', *cases]).encode()).hexdigest()
+    assert diagnostic.registration_seconds(profile, diagnostic.REGISTRATION_CASE) == 2.0
+    for value in [dict(profile, source_mode='SOURCE'), dict(profile, source_mode='TEST-poison'),
+                  dict(profile, orig_argv=None), dict(profile, orig_argv=profile['orig_argv'][:-1]),
+                  dict(profile, orig_argv=[*profile['orig_argv'], '-k', 'foreign'])]:
+        assert diagnostic.registration_seconds(value, diagnostic.REGISTRATION_CASE) is None
+    assert diagnostic.registration_seconds(profile, cases[0]) is None
+
+
+def test_passive_registration_timer_uses_existing_snapshot_without_exit_or_timeout_patch(monkeypatch):
+    from types import SimpleNamespace
+    import primary_source_entry as entry
+    from finite import approval_stall_diagnostic as diagnostic
+    timers, captured = [], []
+    class Timer:
+        def __init__(self, seconds, callback):
+            self.seconds, self.callback = seconds, callback
+            timers.append(self)
+        def start(self):
+            pass
+    monkeypatch.setattr(entry.threading, 'Timer', Timer)
+    path = '/guard/finite/approval_stall_diagnostic.py'
+    owner = entry.Observer.__new__(entry.Observer)
+    owner.profile = {'source_mode': 'TEST-positive', 'orig_argv': [
+        '/python', '/pytest', '-q', *control.TEST_JOURNAL_CONTEXT_CASES]}
+    owner.manifest = {'direct_support': {'files': {path: 'bound-pin', '/guard/finite/orders_git_data.py': 'roster-pin'}}}
+    def load(name, actual, pin):
+        assert (name, actual, pin) == ('approval_stall_diagnostic', path, 'bound-pin')
+        return diagnostic
+    monkeypatch.setattr(entry, 'load', load)
+    owner.guard = SimpleNamespace(checked_source=lambda *args: {'CASES': {}})
+    owner.retain_stall_snapshot = lambda *args: captured.append(args)
+    owner.pytest_runtest_call(SimpleNamespace(nodeid=diagnostic.REGISTRATION_CASE, funcargs={}))
+    assert len(timers) == 1 and timers[0].seconds == 2.0
+    timers[0].callback()
+    assert captured == [(owner.startup_stall_token, diagnostic.REGISTRATION_CASE, None)]

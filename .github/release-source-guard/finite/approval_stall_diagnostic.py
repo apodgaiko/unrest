@@ -23,3 +23,17 @@ def case_seconds(profile, case):
     if case.startswith(DURABLE_PREFIX + '['):
         return 120
     return None
+
+
+REGISTRATION_CASE = 'tests/test_controlled_python_acp.py::test_actual_registration[late-2]'
+REGISTRATION_SELECTION_SHA256 = '9d84ea3ef8211e7591a9c2b8cc19afc947e1de7fd9c8d3b5fc1f9cfa31058446'
+
+def registration_seconds(profile, case):
+    """Passive stack capture only; never a test deadline or exit watchdog."""
+    argv = profile.get('orig_argv')
+    if (profile.get('source_mode') != 'TEST-positive'
+            or type(argv) is not list or any(type(value) is not str for value in argv)
+            or type(case) is not str or case != REGISTRATION_CASE
+            or hashlib.sha256(json.dumps(argv[2:]).encode()).hexdigest() != REGISTRATION_SELECTION_SHA256):
+        return None
+    return 2.0

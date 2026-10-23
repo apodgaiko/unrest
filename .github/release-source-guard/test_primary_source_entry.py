@@ -377,7 +377,7 @@ def test_finite_stall_snapshot_is_diagnostic_only_and_never_forces_exit(
 
 def test_startup_reproduction_retains_original_capacity_case_and_deadlines():
     import yaml
-    from primary_policy import TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_APPROVAL_STARTUP_COST_CASES, TEST_CONTROLLED_CANCEL_CASES, TEST_RECORDED_CLEANUP_GROUPS, root_seconds
+    from primary_policy import TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_APPROVAL_STARTUP_COST_CASES, TEST_CONTROLLED_CANCEL_CASES, TEST_RECORDED_CLEANUP_GROUPS, TEST_CONTROLLED_REGISTRATION_CASES, TEST_JOURNAL_CONTEXT_CASES, root_seconds
     from primary_source_inputs import test_plan
     case='tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]'
     assert TEST_GIT_OVERHEAD_CASES == (case,)
@@ -390,7 +390,9 @@ def test_startup_reproduction_retains_original_capacity_case_and_deadlines():
         {'group':'postimages-1','cases':' '.join(TEST_APPROVAL_STARTUP_COST_CASES)},
         {'group':'postimages-2','cases':' '.join(TEST_CONTROLLED_CANCEL_CASES)}] + [
         {'group':f'postimages-{i}','cases':' '.join(cases)}
-        for i,cases in enumerate(TEST_RECORDED_CLEANUP_GROUPS,3)]
+        for i,cases in enumerate(TEST_RECORDED_CLEANUP_GROUPS,3)] + [
+        {'group':'postimages-7','cases':' '.join(TEST_CONTROLLED_REGISTRATION_CASES)},
+        {'group':'postimages-8','cases':' '.join(TEST_JOURNAL_CONTEXT_CASES)}]
     assert len(TEST_RECORDED_CLEANUP_GROUPS) == 4
     for fault,cases in zip(('deep_json','array_id','object_id','success'), TEST_RECORDED_CLEANUP_GROUPS):
         assert cases == tuple('tests/test_acp_cleanup.py::test_recorded_transport_failures[' + fault + '-' + role + ']'

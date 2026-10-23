@@ -1558,3 +1558,11 @@ recompute them. No kernel result, authorization verdict or mutable event value
 is retained in these indices. Every acquisition still enumerates and reads all
 current journal bytes. Selection applies the original handler to freshly decoded
 current rows, preserving the existing mutable-exposure and decoder fallbacks.
+
+Only the exact five-case large-journal TEST-positive diagnostic may capture a
+passive task/thread stack two seconds into `test_actual_registration[late-2]`.
+It uses the existing identity-bound, non-inheritable original stderr descriptor
+and private encrypted output. Capture reads frame locations and task state, not
+locals or message bodies; it cannot cancel work, call the exit watchdog, change
+any assertion/deadline or issue a certificate. The original five-second test
+remains authoritative; other selections and FULL do not arm this capture.

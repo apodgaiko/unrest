@@ -155,7 +155,8 @@ class Observer:
             support = '/guard/finite/approval_stall_diagnostic.py'
             diagnostic = load('approval_stall_diagnostic', support,
                               manifest['direct_support']['files'][support])
-            if diagnostic.case_seconds(profile, diagnostic.PREFIX + '[success]') is not None:
+            if (diagnostic.case_seconds(profile, diagnostic.PREFIX + '[success]') is not None
+                    or diagnostic.registration_seconds(profile, diagnostic.REGISTRATION_CASE) is not None):
                 import stat
                 original = diagnostic_output_identity(2)
                 if not stat.S_ISFIFO(original[2]) or original[4] != os.O_WRONLY:
@@ -282,13 +283,21 @@ class Observer:
             diagnostic = load('approval_stall_diagnostic', support,
                               self.manifest['direct_support']['files'][support])
             approval_seconds = diagnostic.case_seconds(self.profile, item.nodeid)
+        registration_seconds = None
+        if (self.profile.get('source_mode') == 'TEST-positive' and item.nodeid ==
+                'tests/test_controlled_python_acp.py::test_actual_registration[late-2]'):
+            support = '/guard/finite/approval_stall_diagnostic.py'
+            diagnostic = load('approval_stall_diagnostic', support,
+                              self.manifest['direct_support']['files'][support])
+            registration_seconds = diagnostic.registration_seconds(self.profile, item.nodeid)
         finite_diagnostic = False
         if self.profile.get('source_mode') == 'TEST-positive':
             support = '/guard/finite/orders_git_data.py'
             roster = self.guard.checked_source(
                 support, self.manifest['direct_support']['files'][support])
             finite_diagnostic = item.nodeid in roster['CASES']
-        if not startup and not cleanup and approval_seconds is None and not finite_diagnostic:
+        if (not startup and not cleanup and approval_seconds is None
+                and registration_seconds is None and not finite_diagnostic):
             return
         import asyncio
         loops = [v if isinstance(v, asyncio.AbstractEventLoop)
@@ -318,6 +327,7 @@ class Observer:
                 self.metadata_case = item.nodeid
                 callback = self.retain_guard_overhead
         self.startup_stall_timer = threading.Timer(
+            registration_seconds if registration_seconds is not None else
             approval_seconds if approval_seconds is not None else 60 if startup else 10,
             lambda: callback(token, item.nodeid, loop))
         self.startup_stall_timer.daemon = True
