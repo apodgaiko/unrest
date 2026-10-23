@@ -98,6 +98,20 @@ def restore_before_numeric_wait(tree):
     return tree
 
 
+def restore_absent_peer_candidate(tree):
+    """Normalize only a missing historical payload-peer candidate observation."""
+    handle = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'handle')
+    loops = [n for n in ast.walk(handle) if isinstance(n, ast.For)
+             and ast.unparse(n.target) == 'pid' and ast.unparse(n.iter) == 'self.registered']
+    assert len(loops) == 1
+    block = loops[0].body[0]
+    assert isinstance(block, ast.Try) and len(block.handlers) == 1
+    assert ast.unparse(block) == ('try:\n    peers = self.observe(pid)\n'
+        'except (RuntimeError, FileNotFoundError):\n    continue')
+    block.handlers[0].type = ast.Name(id='RuntimeError', ctx=ast.Load())
+    return tree
+
+
 def restore_response_channel(tree):
     handle = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'handle')
     nodes = [n for n in handle.body if isinstance(n, ast.If) and ast.unparse(n.test) == "kind == 'source_response_output'"]
@@ -163,7 +177,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
         if name == 'finite/source_operations.py':
             tree = restore_dependency_diagnostic(restore_query_route(tree))
         if name == 'linux_supervisor.py':
-            tree = restore_response_channel(tree)
+            tree = restore_absent_peer_candidate(restore_response_channel(tree))
         if name == 'linux_trace.py':
             tree = restore_before_numeric_wait(restore_primary_allocation(restore_environment_name_grammar(tree)))
         if name == 'primary_source_authority.py':

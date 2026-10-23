@@ -401,7 +401,7 @@ class Supervisor:
             for pid in self.registered:
                 try:
                     peers = self.observe(pid)
-                except RuntimeError:
+                except (RuntimeError, FileNotFoundError):
                     continue
                 for peer in peers:
                     if (

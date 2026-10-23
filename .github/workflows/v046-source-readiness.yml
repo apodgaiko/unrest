@@ -190,6 +190,14 @@ jobs:
             cases: tests/test_approval_recovery.py::test_durable_run_owner_and_restart_never_revives[success]
           - group: postimages-2
             cases: tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[backend_registered] tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[adapter_registered] tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[auth] tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[forwarding]
+          - group: postimages-3
+            cases: tests/test_acp_cleanup.py::test_recorded_transport_failures[deep_json-work] tests/test_acp_cleanup.py::test_recorded_transport_failures[deep_json-validate] tests/test_acp_cleanup.py::test_recorded_transport_failures[deep_json-terminal_reviewer]
+          - group: postimages-4
+            cases: tests/test_acp_cleanup.py::test_recorded_transport_failures[array_id-work] tests/test_acp_cleanup.py::test_recorded_transport_failures[array_id-validate] tests/test_acp_cleanup.py::test_recorded_transport_failures[array_id-terminal_reviewer]
+          - group: postimages-5
+            cases: tests/test_acp_cleanup.py::test_recorded_transport_failures[object_id-work] tests/test_acp_cleanup.py::test_recorded_transport_failures[object_id-validate] tests/test_acp_cleanup.py::test_recorded_transport_failures[object_id-terminal_reviewer]
+          - group: postimages-6
+            cases: tests/test_acp_cleanup.py::test_recorded_transport_failures[success-work] tests/test_acp_cleanup.py::test_recorded_transport_failures[success-validate] tests/test_acp_cleanup.py::test_recorded_transport_failures[success-terminal_reviewer]
     steps:
       - uses: actions/checkout@v7.0.1
         with:

@@ -1470,3 +1470,16 @@ incomplete or malformed frame. They are diagnostic evidence only. Missing
 records, a refusal, or a header reporting success cannot issue a checkpoint.
 Original completion, cleanup, numeric-wait and collection assertions remain
 required. Capacity tests use synthetic data and cannot certify a source run.
+
+### Historical payload-peer candidates
+
+The payload handler still authenticates the requesting process and observes its
+current socket before searching registered reciprocal peers. A historical
+candidate whose `/proc` entry is absent cannot supply peer evidence, so that
+candidate is skipped just as an identity mismatch is skipped. Only
+`FileNotFoundError` joins the existing candidate-local `RuntimeError` handling;
+permission and other acquisition errors remain fatal. The search must still find
+a fresh, birth-bound reciprocal kernel peer or refuse the payload. No historical
+registration is removed, and absence never supplies a numeric wait, cleanup
+verdict or authorization. Requester and listener observation errors retain their
+original behavior. Original completion, cleanup and deadline tests remain intact.
