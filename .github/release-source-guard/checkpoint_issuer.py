@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from approval_wait_evidence import adopted_waits, original_missing, summary_closed
 
-import base64
 import io
 from pathlib import PurePosixPath
 import tarfile
@@ -19,13 +18,13 @@ import zipfile
 from checkpoint_receipt import COMMAND, PRIMARY, REPOSITORY, WORKFLOW
 from primary_custody import (ARCHIVE, CHECKSUM, INSTALLED, ORDER, SOURCE,
                              WHEEL, SDIST, canonical, kernel_success, sha)
-from primary_custody import decode_outputs
+from primary_custody import decode_outputs, phase_records
 from checkpoint_packages import LIMIT
 from structured_evidence import loads, require
 
 
 def records(phase):
-    return {name: base64.b64decode(body, validate=True) for name, body in phase['records'].items()}
+    return phase_records(phase)
 
 
 def source_result(data, kernel):

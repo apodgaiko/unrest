@@ -410,7 +410,7 @@ def main(*, own_constructor_fault=None):
             consume('PREFLIGHT' if preflight else 'FULL', script)
         create_capsule(prepared)
         stage = 'capture'
-        from source_raw_transport import capture as capture_raw_source
+        from source_raw_transport import capture_packed as capture_raw_source
         _, records = capture_raw_source(['docker', 'start', '--attach', container], raw, identity, 'primary-executor', source_invocation=source_invocation)
         stage = 'settled'
         state = json.loads(subprocess.check_output(['docker', 'inspect', '--format={{json .State}}', container]))

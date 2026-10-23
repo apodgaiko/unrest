@@ -352,6 +352,17 @@ def consume(archive, expected, envelope_sha256):
                      'negative-control-proof.json', 'provenance.json', 'prerequisite-status.json'} | {
                          'structured-' + name for name in SOURCE | CONTROLS} | {
                          'private-' + name for name in OPAQUE}
+        if any(name.startswith('packed-') for name in names):
+            # V3 keeps the physical archive/member caps above. Its separate
+            # logical budgets are validated before any bounded inflation.
+            require(MEMBER in names, 'direct_record_missing')
+            from source_raw_transport import consume_packed
+            def read_packed(name):
+                require(name in names, 'record_missing')
+                stream = source.extractfile(name)
+                require(stream is not None, 'record_missing')
+                return stream.read(LIMIT + 1)
+            return consume_packed(read_packed(MEMBER), envelope_sha256, expected, names, read_packed)
         require(set(names) <= permitted, 'unknown_archive_member')
         require(MEMBER in names, 'direct_record_missing')
         def read(name):

@@ -109,7 +109,7 @@ def test_real_shell_encrypts_original_source_paths_even_before_issuer(tmp_path, 
                         'ExitCode': 2 if outcome == 'source_failure' else 0}).encode()
     monkeypatch.setattr(ci_shell, 'prepare_capsule', prepare)
     monkeypatch.setattr(ci_shell, 'create_capsule', create)
-    monkeypatch.setattr(source_raw_transport, 'capture', capture)
+    monkeypatch.setattr(source_raw_transport, 'capture_packed', capture)
     monkeypatch.setattr(ci_shell, 'run', run)
     monkeypatch.setattr(ci_shell.subprocess, 'check_output', lambda *args, **kwargs: state)
     real_subprocess_run = subprocess.run

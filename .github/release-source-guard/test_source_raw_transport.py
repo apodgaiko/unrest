@@ -200,7 +200,7 @@ def test_public_primary_dispatch_and_controls_include_new_codec():
     root = Path(__file__).parent
     entry = ast.parse((root / 'primary_compartment.py').read_bytes())
     assert any(isinstance(n, ast.ImportFrom) and n.module == 'source_raw_transport'
-               and any(a.name == 'emit_source' for a in n.names) for n in ast.walk(entry))
+               and any(a.name == 'emit_packed_source' and a.asname == 'emit_source' for a in n.names) for n in ast.walk(entry))
     shell = (root / 'ci_shell.py').read_text()
     assert "capture_raw_source(['docker', 'start', '--attach', container]" in shell
     controls = (root / 'compartment_probe.py').read_text()

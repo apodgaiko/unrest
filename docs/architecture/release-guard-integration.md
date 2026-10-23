@@ -1434,3 +1434,29 @@ inputs; the shared compile cache contains only real code objects, and digest
 identities use a separate namespace. No launch, wait, cleanup or deadline
 requirement changes. Pure comparison speedups exclude the separately measured
 observer preparation cost and cannot certify original-test completion.
+
+### Bounded V3 evidence capacity
+
+PRIMARY explicitly selects V3 packed named records. The V2 raw codec and its
+refusal controls remain separate, with no parse fallback. V3 uses one zlib
+stream per record and binds both physical and logical sizes and SHA-256 values
+to the current invocation. Names are sorted and closed; decompression rejects
+truncation, trailing or concatenated streams, excess output and digest drift
+before any decoded record is accepted. Opaque records are never interpreted.
+
+Physical stdout and stored members retain the 64 MiB limit, and the entire
+expanded stored archive retains its 128 MiB limit, including the exact physical
+stdout, packed members and metadata. V3 deliberately introduces separate
+logical limits of 128 MiB per original record and 256 MiB in aggregate. This
+expands logical report capacity, not launch or test authority. All original
+record bytes are reconstructed exactly before the unchanged verdict reducers.
+The closed named result files may be acquired up to the same logical member
+limit. SOURCE custody stores an explicitly versioned compressed representation
+under its original MAC, with the phase file still bounded to 64 MiB; other
+phase storage remains unchanged.
+
+A valid bounded header and physical carrier are retained when V3 refuses an
+incomplete or malformed frame. They are diagnostic evidence only. Missing
+records, a refusal, or a header reporting success cannot issue a checkpoint.
+Original completion, cleanup, numeric-wait and collection assertions remain
+required. Capacity tests use synthetic data and cannot certify a source run.

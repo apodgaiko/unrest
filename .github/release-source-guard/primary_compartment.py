@@ -23,7 +23,7 @@ import source_root
 import dependency_closure
 import primary_entry_build
 from structured_evidence import source_binding, HEADER_LIMIT
-from source_raw_transport import emit_source
+from source_raw_transport import LOGICAL_MEMBER_LIMIT, emit_packed_source as emit_source
 
 
 STAGE = 'bootstrap'
@@ -336,7 +336,7 @@ def main():
     if source is not None and not package_build:
         for name in ('collection.json', 'summary.json', 'source.xml', 'source-provenance.json'):
             path = Path('/work') / name
-            if path.is_file() and not path.is_symlink() and path.stat().st_size <= 32 * 1024 * 1024:
+            if path.is_file() and not path.is_symlink() and path.stat().st_size <= LOGICAL_MEMBER_LIMIT:
                 records[name] = path.read_bytes()
         # A successful pytest return cannot erase a caught guard refusal.
         summary = json.loads(Path('/work/summary.json').read_bytes()) if Path('/work/summary.json').is_file() else None

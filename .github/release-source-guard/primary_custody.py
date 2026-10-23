@@ -139,6 +139,60 @@ def decode_outputs(body, duty):
     return result
 
 
+
+SOURCE_RECORD_CODEC = 'unrest.v047.source-records.zlib.v1'
+SOURCE_PHASE_LIMIT = 64 * 1024 * 1024
+
+
+def packed_source_records(records):
+    import zlib
+    from source_raw_transport import packed_rows, LOGICAL_MEMBER_LIMIT, LOGICAL_TOTAL_LIMIT
+    require(all(type(body) is bytes and len(body) <= LOGICAL_MEMBER_LIMIT
+                for body in records.values()) and sum(map(len, records.values())) <= LOGICAL_TOTAL_LIMIT,
+            'custody_logical_bound')
+    values = {}
+    rows = []
+    for name, body in sorted(records.items()):
+        packed = zlib.compress(body, level=6)
+        row = {'name': name, 'size': len(body), 'sha256': sha(body),
+               'packed_size': len(packed), 'packed_sha256': sha(packed)}
+        rows.append(row)
+        values[name] = {**{key: value for key, value in row.items() if key != 'name'},
+                        'bytes': base64.b64encode(packed).decode()}
+    packed_rows(rows)
+    return values
+
+
+def phase_records(phase):
+    if 'record_codec' not in phase:
+        return {name: base64.b64decode(body, validate=True) for name, body in phase['records'].items()}
+    from source_raw_transport import packed_rows, inflate_packed
+    from structured_evidence import LIMIT as PHYSICAL_LIMIT
+    require(phase['record_codec'] == SOURCE_RECORD_CODEC and phase['duty'] == SOURCE
+            and type(phase['records']) is dict, 'custody_record_codec')
+    from structured_evidence import SOURCE as SOURCE_MEMBERS
+    require(set(phase['records']) <= SOURCE_MEMBERS, 'custody_duty_records')
+    rows, encoded = [], {}
+    for name, record in sorted(phase['records'].items()):
+        require(type(record) is dict and set(record) == {
+            'size', 'sha256', 'packed_size', 'packed_sha256', 'bytes'}, 'custody_record_fields')
+        require(type(record['bytes']) is str and len(record['bytes']) <= 2 * PHYSICAL_LIMIT,
+                'custody_packed_bound')
+        rows.append({'name': name, **{key: value for key, value in record.items() if key != 'bytes'}})
+        encoded[name] = record['bytes']
+    packed_rows(rows)
+    require(sum(row['packed_size'] for row in rows) <= PHYSICAL_LIMIT, 'custody_packed_bound')
+    require(all(len(encoded[row['name']]) == 4 * ((row['packed_size'] + 2) // 3) for row in rows),
+            'custody_packed_encoding')
+    parts = {}
+    for row in rows:
+        try:
+            parts[row['name']] = base64.b64decode(encoded[row['name']], validate=True)
+        except (ValueError, TypeError):
+            raise RuntimeError('custody_packed_encoding') from None
+    return inflate_packed(rows, parts)
+
+
 class Custody:
     def __init__(self, root, binding, *, create=False):
         self.root, self.binding = Path(root), binding.value()
@@ -155,7 +209,10 @@ class Custody:
 
     def phase(self, duty):
         filename = sha(duty.encode()) + '.json'
-        envelope = loads(read_regular(self.root / filename, 2 * LIMIT, 0o600))
+        physical = read_regular(self.root / filename, 2 * LIMIT, 0o600)
+        envelope = loads(physical)
+        if duty == SOURCE and 'record_codec' in envelope.get('payload', {}):
+            require(len(physical) <= SOURCE_PHASE_LIMIT, 'custody_phase_bound')
         require(set(envelope) == {'payload', 'mac'}, 'custody_envelope')
         body = canonical(envelope['payload'])
         require(hmac.compare_digest(envelope['mac'], hmac.digest(self.key, body, 'sha256').hex()),
@@ -187,8 +244,13 @@ class Custody:
         value = {'binding': self.binding, 'duty': duty, 'script_sha256': script_sha256,
                  'input_pins': dict(input_pins or {}),
                  'previous_sha256': sha(canonical(prior)) if prior else None,
-                 'records': {name: base64.b64encode(body).decode() for name, body in sorted(records.items())},
+                 'records': (packed_source_records(records) if duty == SOURCE else
+                             {name: base64.b64encode(body).decode() for name, body in sorted(records.items())}),
                  'outputs': {name: sha(body) for name, body in sorted(outputs.items())}}
+        if duty == SOURCE:
+            value['record_codec'] = SOURCE_RECORD_CODEC
+            require(len(canonical({'payload': value, 'mac': '0' * 64})) <= SOURCE_PHASE_LIMIT,
+                    'custody_phase_bound')
         destination = self.root / sha(duty.encode())
         if outputs:
             destination.mkdir(mode=0o700)

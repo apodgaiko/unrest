@@ -1435,3 +1435,21 @@ pins. This omits an unrelated eager import; it grants no process or network effe
 All later endpoint enforcement, original protocol exchanges, numeric waits,
 completion/cleanup assertions and deadlines remain unchanged. Unknown classes,
 changed scripts and dependency-window negative controls keep the original setup.
+
+## V3 bounded lossless report capacity
+
+The current PRIMARY transport explicitly selects the V3 packed codec described
+in `docs/architecture/release-guard-integration.md`. V2 raw transport remains
+available only as its separate legacy codec; neither parser falls back to the
+other. The stored physical caps remain 64 MiB per member/stdout and 128 MiB for
+the complete expanded archive. V3 logical inflation is separately bounded to
+128 MiB per record and 256 MiB total, with exact lengths, hashes and a single
+complete zlib stream required before record acceptance. This is an explicit
+logical-capacity increase for the full source report, not preservation of the
+old logical limit. SOURCE phase custody uses the same lossless encoding under
+its existing MAC and retains a 64 MiB physical phase limit.
+
+Every original record and assertion remains available to the original reducers.
+A valid status header surviving an export refusal is a diagnostic, never proof
+that a source test or release gate passed. A refusal cannot produce a checkpoint,
+publication authority, a missing-wait exception or native-provider acceptance.
