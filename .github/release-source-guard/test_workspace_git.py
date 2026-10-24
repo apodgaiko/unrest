@@ -164,7 +164,7 @@ def test_linked_fixture_requires_exact_owned_worktree_chain(tmp_path, change):
 def worktree_child_fixture(tmp_path, site=314):
     from worktree_git_custody import IMAGE, SOURCE
     repository = tmp_path.resolve() / 'pytest/project'
-    tree = repository / ('.unrest-runtime/workspaces/trees/candidate-one' if site == 314 else '.unrest-runtime/workspaces/integration-abcdefgh')
+    tree = repository / ('.unrest-runtime/workspaces/trees/candidate-one' if site == 314 else '.unrest-runtime/workspaces/integration-abcdefgh' if site == 616 else '.unrest-runtime/evolution/rollback-abcdefgh')
     admin = repository / '.git/worktrees' / tree.name
     tree.mkdir(parents=True)
     admin.mkdir(parents=True)
@@ -175,8 +175,12 @@ def worktree_child_fixture(tmp_path, site=314):
     vector = ['git', 'worktree', 'add', '--detach', *(['--no-checkout'] if site == 314 else []), str(tree), 'a' * 40]
     parent = {'argv': vector, 'cwd': str(repository), 'environment': {'PATH': '/usr/bin:/bin'}}
     binding = {'path': str(ROOT / SOURCE), 'sha256': PINS[SOURCE], 'function': '_git', 'line': 222,
-               'caller': 'lease_workspace' if site == 314 else '_build_integration_commit', 'caller_line': site, 'expression_ast_sha256': SITES[site][1]}
-    registration = {'class': 'source-workspace-bound-git', 'source_binding': binding,
+               'caller': 'lease_workspace' if site == 314 else '_build_integration_commit', 'caller_line': site, 'expression_ast_sha256': SITES[site][1] if site in SITES else 'rollback-pending'}
+    if site == 1881:
+        from finite.workspace_git_data import ROLLBACK_AST
+        SOURCE = 'src/unrest_harness/evolution.py'
+        binding = {'path': str(ROOT / SOURCE), 'sha256': PINS[SOURCE], 'line': site, 'expression_ast_sha256': ROLLBACK_AST}
+    registration = {'class': ('source-git:' + SOURCE + ':1881') if site == 1881 else 'source-workspace-bound-git', 'source_binding': binding,
                     'owner_pid': 22, 'token': 'consumed-parent', 'case': CASES[1]}
     selected = {'registration': registration, 'owner_pid': 22, 'token': 'consumed-parent',
                 'bootstrap_sha256': None, 'cwd': str(repository),
@@ -193,9 +197,9 @@ def worktree_child_fixture(tmp_path, site=314):
 @pytest.mark.parametrize('change', [None, 'vector', 'oid', 'environment', 'parent', 'token', 'owner',
                                     'bootstrap', 'site', 'class', 'source', 'data', 'cwd', 'gitfile',
                                     'backlink', 'commondir', 'symlink', 'symbolic-head', 'foreign-head', 'missing-head', 'symlink-head'])
-@pytest.mark.parametrize('site', [314, 616])
+@pytest.mark.parametrize('site', [314, 616, 1881])
 def test_stock_worktree_child_is_only_the_exact_owned_parent_operation(tmp_path, change, site):
-    from worktree_git_custody import metadata, SOURCE
+    from worktree_git_custody import metadata
     parent, selected, vector, env, cwd, manifest = worktree_child_fixture(tmp_path, site)
     tree = Path(parent['argv'][-2])
     admin = Path(cwd) / '.git/worktrees' / tree.name
@@ -218,7 +222,7 @@ def test_stock_worktree_child_is_only_the_exact_owned_parent_operation(tmp_path,
     elif change == 'class':
         selected['registration']['class'] = 'foreign'
     elif change == 'source':
-        manifest['product_pins'][SOURCE] = 'foreign'
+        manifest['product_pins'].clear()
     elif change == 'data':
         manifest['direct_support']['files']['/guard/finite/workspace_git_data.py'] = 'foreign'
     elif change == 'cwd':

@@ -1,5 +1,6 @@
 """Exact original local workspace/evolution source inputs; no provider authority."""
 PINS = {'src/unrest_harness/accepted_point_authority.py': '4df305ef4be4c176d77e3faddfdb625193599bc9152c9cf470a763f3c58a9c80',
+ 'src/unrest_harness/evolution.py': '4f5547d803449eab5ce969688533afbf8dd099a117888d524187dc851d39b79d',
  'src/unrest_harness/workspaces.py': '9359e8bb14e68531a487aa8fbeb0eeb91cab444a1e24bbf02c0f03462e205f92',
  'tests/test_evolution.py': '778aeac7d73291bbeaaad3cb2ad2905d6a4e93a723a42378daa080222e7c57db',
  'tests/test_workspaces.py': '590b0e1d07d73a6a2a770edb41d839ec903f53b8c28ff19be16a0e13dc6abe14'}
@@ -162,3 +163,5 @@ CASE_PINS = {'tests/test_foundation_authority.py': 'c8f63d70d4dcc3d74215a9db5386
  'tests/test_project_adapter.py': 'b48d315875eedb9350219fcc3c203c778f329389f32d8f787de0c574390235cf',
  'tests/test_server.py': '4524714474b49852af00d4533f30456b87839ed0d5bbd2d10ba5502717ddef4e',
  'tests/test_v04_activation.py': '4741feb6a71d9c06be777a08a34e064be0610c1f8b755ebfffef21489621c435'}
+
+ROLLBACK_AST = '149f19bebc9fbb890e0ccea01d6622a23078e07cb8139f273e457bb2c2d1bad9'

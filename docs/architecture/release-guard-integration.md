@@ -2036,3 +2036,9 @@ the requested revision, and both a birth-matched terminal record and the actual
 parent wait4 returning zero after the current update-ref admission. Historical
 same-PID waits cannot authorize it. Later child waits remain required; no Python
 wait receipt or native final timing is inferred. Other sites remain refused.
+
+The separately observed rollback worktree creation at evolution line1881 admits
+only its stock update-ref child, with the exact evolution source/AST/class and
+owned evolution/rollback directory shape. Zero-HEAD, launch-token, current birth,
+image, environment and canonical backlink checks are unchanged. Rollback reset
+remains refused until independently evidenced; integration reset is separate.

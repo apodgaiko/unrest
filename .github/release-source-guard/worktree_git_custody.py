@@ -20,18 +20,24 @@ def metadata(parent, selected, vector, environment, cwd, manifest, checkout='/so
     if hashlib.sha256(body).hexdigest() != manifest['direct_support']['files'].get('/guard/finite/workspace_git_data.py'):
         return False
     data = {n.targets[0].id: ast.literal_eval(n.value) for n in ast.parse(body).body if isinstance(n, ast.Assign)}
-    pin = data['PINS'][SOURCE]
     registration = selected.get('registration', {})
     binding = registration.get('source_binding', {})
-    site = binding.get('caller_line')
-    if site not in {314, 616}:
+    relative = binding.get('path', '').removeprefix(checkout + '/')
+    site = binding.get('caller_line') if relative == SOURCE else binding.get('line')
+    if (relative, site) not in {(SOURCE, 314), (SOURCE, 616), ('src/unrest_harness/evolution.py', 1881)}:
         return False
+    pin = data['PINS'][relative]
     expected_binding = {'path': checkout + '/' + SOURCE, 'sha256': pin, 'function': '_git', 'line': 222,
                         'caller': 'lease_workspace' if site == 314 else '_build_integration_commit', 'caller_line': site,
-                        'expression_ast_sha256': data['SITES'][site][1]}
+                        'expression_ast_sha256': data['SITES'][site][1] if site in {314, 616} else data['ROLLBACK_AST']}
+    expected_class = 'source-workspace-bound-git'
+    if site == 1881:
+        expected_binding = {'path': checkout + '/' + relative, 'sha256': pin, 'line': 1881,
+                            'expression_ast_sha256': data['ROLLBACK_AST']}
+        expected_class = 'source-git:' + relative + ':1881'
     argv = parent['argv']
-    if (binding != expected_binding or registration.get('class') != 'source-workspace-bound-git'
-            or manifest['product_pins'].get(SOURCE) != pin
+    if (binding != expected_binding or registration.get('class') != expected_class
+            or manifest['product_pins'].get(relative) != pin
             or hashlib.sha256(Path(binding['path']).read_bytes()).hexdigest() != pin
             or len(argv) != (7 if site == 314 else 6)
             or argv[:-2] != (['git', 'worktree', 'add', '--detach', '--no-checkout'] if site == 314 else ['git', 'worktree', 'add', '--detach'])
@@ -47,8 +53,8 @@ def metadata(parent, selected, vector, environment, cwd, manifest, checkout='/so
         return False
     repository, tree = Path(cwd), Path(argv[-2])
     if (repository.resolve() != repository or not repository.is_relative_to(Path(manifest['owned_root']) / 'pytest')
-            or tree.parent != repository / ('.unrest-runtime/workspaces/trees' if site == 314 else '.unrest-runtime/workspaces')
-            or (site == 616 and not re.fullmatch('integration-[a-z0-9_]{8}', tree.name))
+            or tree.parent != repository / ('.unrest-runtime/workspaces/trees' if site == 314 else '.unrest-runtime/workspaces' if site == 616 else '.unrest-runtime/evolution')
+            or (site != 314 and not re.fullmatch(('integration-' if site == 616 else 'rollback-') + '[a-z0-9_]{8}', tree.name))
             or tree.resolve() != tree or not tree.is_dir() or not re.fullmatch('[A-Za-z0-9_-]+', tree.name)):
         return False
     common = repository / '.git'
