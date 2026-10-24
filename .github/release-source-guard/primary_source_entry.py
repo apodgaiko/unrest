@@ -272,7 +272,52 @@ class Observer:
                     self.guard.refuse('primary_source_custodian_not_ready')
                 time.sleep(.01)
 
+    def _start_cost_monitor(self, factory):
+        monitor = None
+        try:
+            monitor = factory('/guard')
+            if monitor.start():
+                self.metadata_monitor = monitor
+                return True
+        except Exception:
+            # Instrumentation cannot replace an original test outcome.
+            pass
+        if monitor is not None:
+            try:
+                monitor.stop()
+            except Exception:
+                pass
+        return False
+
+    def _finish_cost_monitor(self):
+        monitor = self.metadata_monitor
+        self.metadata_case = None
+        self.metadata_monitor = None
+        try:
+            result = monitor.stop()
+        except Exception:
+            # Retry only owned-slot cleanup; the monitor refuses foreign slots.
+            try:
+                monitor.stop()
+            except Exception:
+                pass
+            result = {'instrumented_cpu_only': True, 'diagnostic_failed': True, 'stage': 'stop'}
+        try:
+            sys.__stderr__.write('\n[retained guard CPU attribution]\n' + canonical(result).decode() + '\n')
+            sys.__stderr__.flush()
+        except Exception:
+            # Private diagnostic output cannot bypass original finalization.
+            pass
+
     def pytest_runtest_call(self, item):
+        if self.profile.get('source_mode') == 'TEST-positive' and len(self.profile.get('orig_argv', [])) == 5:
+            cutoff = self.guard.checked_source('/guard/finite/bootstrap_cost_diagnostic.py',
+                self.manifest['direct_support']['files']['/guard/finite/bootstrap_cost_diagnostic.py'])
+            if cutoff['selected'](self.profile, item.nodeid):
+                support = '/guard/finite/guard_cost_profile.py'
+                profiler = load('guard_cost_profile', support, self.manifest['direct_support']['files'][support])
+                if self._start_cost_monitor(profiler.CostProfile):
+                    self.metadata_case = item.nodeid
         prefix = 'tests/test_acp_cleanup.py::test_startup_failure_attribution_and_owned_cleanup['
         startup = item.nodeid.startswith(prefix)
         cleanup = item.nodeid.startswith(tuple('tests/test_acp_cleanup.py::' + owner + '[' for owner in (
@@ -527,10 +572,7 @@ class Observer:
 
     def pytest_runtest_logreport(self, report):
         if report.when == 'call' and report.nodeid == getattr(self, 'metadata_case', None):
-            result = self.metadata_monitor.stop()
-            self.metadata_case = None
-            sys.__stderr__.write('\n[retained guard CPU attribution]\n' + canonical(result).decode() + '\n')
-            sys.__stderr__.flush()
+            self._finish_cost_monitor()
         if (report.when == 'teardown' or report.when == 'call'
                 and self.approval_stall_case != report.nodeid) and self.startup_stall_timer is not None:
             self.startup_stall_token = None
@@ -551,6 +593,8 @@ class Observer:
             if status:
                 self.guard.refuse('primary_source_custodian_status')
     def pytest_sessionfinish(self, session, exitstatus):
+        if getattr(self, 'metadata_case', None) is not None:
+            self._finish_cost_monitor()
         self.startup_stall_token = None
         if self.startup_stall_timer is not None:
             self.startup_stall_timer.cancel()

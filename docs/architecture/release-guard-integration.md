@@ -2103,3 +2103,12 @@ then may authenticated runpy execute the current pinned backend body in its
 original main-module namespace. A different program, repeated wrapper, premature
 backend dispatch, forged code, foreign import or module replacement refuses.
 Other delayed bootstrap cases retain their ordinary complete startup domain.
+
+
+A separate closed two-case TEST command can attribute selected guard CPU for
+these original cutoff checks. It preserves installed profile hooks and test
+results, releases only its own monitoring slot at the call report or interrupted
+session shutdown, and writes metadata only to encrypted private diagnostics.
+The observer adds cost: its output is neither uninstrumented timing proof nor a
+source certificate. The full27-case module and all later release gates remain
+required; SOURCE never enables this monitor.

@@ -5,7 +5,7 @@ import sys
 import threading
 import time
 
-NAMES = frozenset({'admit', 'checked_source', 'digest', 'sha', 'current_code', 'check',
+NAMES = frozenset({'select', 'source_code', 'original_function', 'active_frames', 'evaluate', 'bound_code', 'profile', 'selected_port', 'admit', 'checked_source', 'digest', 'sha', 'current_code', 'check',
                    'translate', 'observe', 'identity', 'tree', 'tree_identity',
                    'require_ready', 'shared', 'inputs', 'dependency', 'verify',
                    'site_metadata', 'read', 'matches', 'before_python', 'ordinary_python'})
