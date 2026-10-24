@@ -37,6 +37,18 @@ def create(state, emit, refuse, ready):
                 self.emit({'kind': 'source_nested_execution_owner',
                            'custody_case': state['case'], 'execution_owner': owner,
                            'launch_token': launch['launch_token']})
+            if registration['class'] in {'source-approval-python-backend'}:
+                caller = inspect.currentframe().f_back
+                if (caller.f_code is not original.before_python.__code__
+                        or caller.f_globals is not original.before_python.__globals__
+                        or caller.f_locals.get('self') is not self
+                        or caller.f_locals.get('launch') is not launch
+                        or caller.f_locals.get('registration') is not registration
+                        or caller.f_locals.get('guard') is not guard):
+                    self.refuse('approval_stdlib_activation_caller')
+                checked('approval_stdlib.py')['activation'](
+                    self, guard, launch, argv, cwd, environment, registration)
+                return
             if registration['class'] == 'source-canonical-stdlib-acp':
                 caller = inspect.currentframe().f_back
                 if (caller.f_code is not original.before_python.__code__

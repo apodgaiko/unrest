@@ -40,13 +40,9 @@ def select(argv, cwd, env, state, append, refuse):
         return None
     root = Path(state["checkout"])
     out = Path(state["guard"]).parent
-    namespace = {}
-    exec(
-        compile(
-            (out / "fallback_binding.py").read_bytes(), str(out / "fallback_binding.py"), "exec"
-        ),
-        namespace,
-    )
+    guard = sys.modules['runtime_guard']
+    fallback = out / 'fallback_binding.py'
+    namespace = guard.checked_source(fallback, state['direct_support']['files'][str(fallback)])
     frames = namespace["active_frames"]()
     try:
         owned = Path(state["owned_root"])
@@ -86,7 +82,13 @@ def select(argv, cwd, env, state, append, refuse):
                     **custody,
                 }
             )
-            return {"class": kind, "python": True, "source_binding": binding}, translated
+            registered = {"class": kind, "python": True, "source_binding": binding}
+            if kind in {'source-approval-python-backend'}:
+                guard = sys.modules['runtime_guard']
+                path = out / 'approval_stdlib.py'
+                return guard.checked_source(path, state['direct_support']['files'][str(path)])[
+                    'translate'](registered, translated, state)
+            return registered, translated
 
         acp = pinned("src/unrest_harness/acp_runner.py")
         mcp = next(

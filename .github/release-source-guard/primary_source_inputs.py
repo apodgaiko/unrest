@@ -111,6 +111,16 @@ def python_environment(environment, registration, flags, *, lease_context=None):
             'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]',)
         and binding == {'path': '/source/tests/fixtures/controlled_python_acp.py',
                         'line': 1, 'sha256': 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'})
+    approval_binding = {
+        'source-approval-python-backend': ('src/unrest_harness/approval_relay.py', 131,
+            'efaba9521aa12d6fbdb228f05da210a4027675c79830d1a5ca93627faa80da44'),
+    }.get(registration['class'])
+    if approval_binding is not None and flags == [1, 1, 0]:
+        from finite.approval_routes import selected_mode
+        name, line, pin = approval_binding
+        exact_controlled = exact_controlled or (
+            selected_mode(registration.get('case')) is not None
+            and binding == {'path': '/source/' + name, 'line': line, 'sha256': pin})
     if exact_stream_environment(environment, registration, flags, lease_context):
         return {**environment, 'LC_CTYPE': 'C.UTF-8'}
     if exact_inventory_environment(environment, registration, flags, lease_context):

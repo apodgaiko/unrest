@@ -126,6 +126,8 @@ def install_barrier(state, guard, payload):
     target = payload['target']
     payload_pin = (support(state, 'mock_backend_setup.py')['ACP_PIN']
                    if state.get('class') == 'source-canonical-stdlib-acp' else PIN)
+    if state.get('class') in {'source-approval-python-backend'}:
+        payload_pin = support(state, 'approval_stdlib.py')['payload_pin'](state, payload)
     pins[target] = payload_pin
     guard_paths = set(state['direct_support']['files']) | {state['guard'], endpoint_path}
     if sys.platform == 'linux':

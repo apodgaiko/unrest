@@ -540,6 +540,10 @@ def attach(guard):
             domain = Path(guard._STATE['guard']).with_name('stdlib_backend.py')
             guard.checked_source(domain, guard._STATE['direct_support']['files'][str(domain)])[
                 'seal'](guard, sys.modules[__name__])
+        if guard._STATE['class'] in {'source-approval-python-backend'}:
+            domain = Path(guard._STATE['guard']).with_name('approval_stdlib.py')
+            guard.checked_source(domain, guard._STATE['direct_support']['files'][str(domain)])[
+                'seal'](guard, sys.modules[__name__])
         # The core READY record precedes endpoint authentication and setup.
         # Parents may proceed only after this child has completed both.
         guard.append({

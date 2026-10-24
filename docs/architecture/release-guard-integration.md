@@ -1707,3 +1707,21 @@ The exact 24-case completion/cleanup supporting selector uses the existing
 600-second diagnostic root allocation in both preparation and consumer policy.
 That setup allocation does not change any original case deadline or the
 four-second receipt-channel deadline, and TEST evidence is not a source certificate.
+
+### Controlled approval JSON startup
+
+The original approval resolver still authenticates the original actor, source
+expression, arguments, scenario, interpreter and owned paths before translating
+only its byte-pinned controlled Python backend to `-I -S`. The adapter, relay
+and worker MCP keep ordinary dependency startup. At activation the same resolver
+is rerun on the original vector. The translated actor consumes the complete
+current standard-library startup inventory and seal their module identities,
+import paths and executable code before the unchanged fixture body. Unknown
+imports, dynamic execution, module replacement and path drift fail closed. It
+cannot execute third-party dependencies, so unrelated site-package verification
+is inapplicable in this domain. Every other actor retains it. This is test
+setup only, with no native-provider acceptance or OS-isolation claim.
+
+The bounded diagnostic uses the existing exact 33-case approval-closure selection
+and existing 600-second root allocation. Original tests, parameters, assertions,
+per-case deadlines and the full source checkpoint remain unchanged.
