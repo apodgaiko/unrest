@@ -38,7 +38,7 @@ def metadata(parent, selected, environment, cwd, manifest, checkout='/source'):
             or binding.get('sha256') != site['source_sha256']
             or manifest['product_pins'].get(relative) != site['source_sha256']
             or hashlib.sha256(Path(source).read_bytes()).hexdigest() != site['source_sha256']
-            or registration.get('python') is not False or selected.get('bootstrap_sha256') is not None
+            or 'python' in registration or selected.get('bootstrap_sha256') is not None
             or selected.get('owner_pid') != registration.get('owner_pid')
             or selected.get('token') is None or selected['token'] != registration.get('token')
             or selected.get('transformed_argv_sha256') != hashlib.sha256(json.dumps(parent['argv']).encode()).hexdigest()

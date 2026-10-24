@@ -108,3 +108,27 @@ def test_only_exact_complete_cleanup_test_receives_same_disposable_config(tmp_pa
         other.mkdir()
         source_git_setup(other, changed)
         assert list(other.iterdir()) == []
+
+
+@pytest.mark.parametrize('scope', ['exact', 'subset', 'extra', 'reverse', 'poison', 'duty'])
+def test_workspace_diagnostic_uses_only_exact_full_source_home_defaults(tmp_path, scope):
+    from primary_policy import TEST_WORKSPACE_GIT_CASES
+    command = ['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *TEST_WORKSPACE_GIT_CASES]
+    selected = {'source_mode': 'TEST-positive', 'duty': 'TEST-source-positive', 'commands': [command]}
+    if scope == 'subset':
+        selected['commands'] = [command[:-1]]
+    elif scope == 'extra':
+        selected['commands'] = [command + ['-k', 'freeze']]
+    elif scope == 'reverse':
+        selected['commands'] = [command[:7] + list(reversed(TEST_WORKSPACE_GIT_CASES))]
+    elif scope == 'poison':
+        selected['source_mode'] = 'TEST-poison'
+    elif scope == 'duty':
+        selected['duty'] = 'foreign'
+    home = tmp_path / 'home'
+    home.mkdir()
+    source_git_setup(home, selected)
+    assert list(home.iterdir()) == ([home / '.gitconfig'] if scope == 'exact' else [])
+    if scope == 'exact':
+        assert (home / '.gitconfig').read_bytes() == SOURCE_GITCONFIG
+        assert (home / '.gitconfig').stat().st_mode & 0o777 == 0o400

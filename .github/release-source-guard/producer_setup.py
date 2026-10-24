@@ -47,12 +47,12 @@ def source_git_setup(home, plan):
     maintenance remains subject to the existing finite authority; this grants
     no additional native child or process-group permission.
     """
-    from primary_policy import TEST_CLEANUP_CASES
+    from primary_policy import TEST_CLEANUP_CASES, TEST_WORKSPACE_GIT_CASES
     source = plan.get('source_mode') == 'SOURCE'
     cleanup = (plan.get('source_mode') == 'TEST-positive'
                and plan.get('duty') == 'TEST-source-positive'
-               and plan.get('commands') == [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q',
-                                             *TEST_CLEANUP_CASES]])
+               and any(plan.get('commands') == [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *cases]]
+                       for cases in (TEST_CLEANUP_CASES, TEST_WORKSPACE_GIT_CASES)))
     if not source and not cleanup:
         return
     if (source and (plan.get('duty') != 'v0.4.7 source suite'

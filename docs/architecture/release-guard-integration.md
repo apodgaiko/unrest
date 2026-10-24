@@ -2006,3 +2006,9 @@ The original child-self-commit fixture admits its linked worktree only at the
 exact self-merge lease path and test site. Its gitfile, common directory, admin
 backlink and detached HEAD must agree with that owned repository; other gitdir
 redirects retain refusal. Native environment behavior requires bounded proof.
+
+The exact 24-case workspace diagnostic shares FULL’s read-only disposable-home
+configuration disabling incidental automatic Git maintenance. Original Git
+commands and assertions remain unchanged; subsets, reordering, extra arguments
+and other modes cannot select this setup. Explicit maintenance still requires
+its existing finite authority, and all focused refusal tests remain intact.

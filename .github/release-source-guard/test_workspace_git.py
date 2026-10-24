@@ -80,7 +80,7 @@ def fixture(tmp_path, key):
     binding = {'path': str(ROOT / relative), 'line': site['helper_line'], 'function': '_git',
                'caller': site['caller'], 'caller_line': line, 'sha256': site['source_sha256'],
                'expression_ast_sha256': site['expression_ast_sha256']}
-    registration = {'class': 'source-literal-git:' + relative + ':' + str(line), 'python': False,
+    registration = {'class': 'source-literal-git:' + relative + ':' + str(line),
                     'source_binding': binding, 'owner_pid': 20, 'token': 'actual',
                     'case': (relative + '::test_child_commit_is_not_parent_authority' if key == ('tests/test_workspaces.py', 325) else relative + '::test_fixture')}
     selected = {'registration': registration, 'bootstrap_sha256': None, 'owner_pid': 20,
