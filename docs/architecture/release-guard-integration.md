@@ -1816,3 +1816,24 @@ size, nanosecond modification time and change time. Access time is excluded: the
 required exact-byte read can itself update it. This prevents an unchanged
 fixture from refusing at a timestamp boundary, while every material custody
 field, exact body, alias target, owner and permission requirement remains.
+
+
+### Post-admission exec bookkeeping
+
+The source idle scheduler ignores only the short trailing suffix of successful
+exec bookkeeping for resolver-mediated nonroot processes. It checks the current
+exact OwnedTrace and nonempty static table on each classification: every static
+entry must have an explicit integer root PID, and the candidate must be another
+integer PID. Therefore that candidate cannot use the static fast path; the
+unchanged PrimaryAuthority first calls source.resolve, whose existing mixin
+forces the complete fresh callback before admission. No barrier verdict or
+record eligibility is cached. Root, wildcard, foreign or malformed tables and
+other trace types retain the original scheduling.
+
+Only exact memory-boundary, accepted-True exec-attempt and zero-return record
+shapes qualify; pending execve for that same proven resolver path likewise adds
+no duplicate census. Real kernel exec/child/exit/vfork events, numeric waits,
+failed/denied execs, unknown shapes, poison, receipt clients/readability and final
+settlement remain immediate. All raw records, kernel decisions, clocks and
+waits remain unchanged. This removes repeated journal reads after the fresh
+barrier without extending idle time or changing any test/receipt deadline.

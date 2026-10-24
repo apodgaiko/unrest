@@ -269,3 +269,157 @@ def test_idle_journal_poison_is_acquired_before_exec_and_final_barriers(tmp_path
     finally:
         first.close()
         second.close()
+
+
+def owned_trace():
+    from linux_trace import OwnedTrace
+    trace = OwnedTrace.__new__(OwnedTrace)
+    trace.child, trace.allowed = 1, [{'pid': 1}]
+    trace.records, trace.active, trace.pending, trace.poison = [], {1, 2}, {}, []
+    return trace
+
+
+def exec_bookkeeping(pid=2):
+    return [
+        {'kind': 'exec_memory_boundary', 'pid': pid, 'path_address': 10,
+         'argv_address': 20, 'environment_address': 30,
+         'observer_identity': {}, 'tracee_identity': {}},
+        {'kind': 'exec_attempt', 'pid': pid, 'path': '/native', 'argv': ['/native'],
+         'cwd': '/source', 'environment': {}, 'accepted': True},
+        {'kind': 'exec_syscall_return', 'pid': pid, 'return': 0},
+    ]
+
+
+def test_resolver_owned_bookkeeping_retains_raw_history_without_duplicate_idle_scan(monkeypatch):
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: 100.0)
+    first, second, _, supervisor = objects()
+    trace = owned_trace()
+    try:
+        service = scheduling.TickSchedule()
+        service.complete(trace)
+        rows = exec_bookkeeping()
+        for row in rows:
+            trace.records.append(row)
+            assert not service.due(trace, supervisor)
+        trace.pending[2] = {'syscall': 59}
+        assert not service.due(trace, supervisor)
+        assert trace.records == rows
+        trace.allowed.append({'pid': 2})
+        assert service.due(trace, supervisor)  # Current table; eligibility is never cached.
+    finally:
+        first.close()
+        second.close()
+
+
+@pytest.mark.parametrize('layout', ['root', 'wildcard', 'bool', 'nonroot', 'empty',
+                                    'tuple', 'malformed', 'subclass'])
+def test_static_or_unproven_admission_keeps_bookkeeping_effectful(layout):
+    trace = owned_trace()
+    pid = 2
+    if layout == 'root':
+        pid = 1
+    elif layout == 'wildcard':
+        trace.allowed = [{}]
+    elif layout == 'bool':
+        trace.allowed = [{'pid': True}]
+    elif layout == 'nonroot':
+        trace.allowed.append({'pid': 2})
+    elif layout == 'empty':
+        trace.allowed = []
+    elif layout == 'tuple':
+        trace.allowed = ({'pid': 1},)
+    elif layout == 'malformed':
+        trace.allowed = [None]
+    else:
+        from linux_trace import OwnedTrace
+        class Other(OwnedTrace):
+            pass
+        trace.__class__ = Other
+    trace.records = exec_bookkeeping(pid)
+    assert scheduling.record_progress(trace) == len(trace.records)
+    trace.pending[pid] = {'syscall': 59}
+    assert scheduling.progress(trace)[2] == frozenset({pid})
+
+
+@pytest.mark.parametrize('index, change', [
+    (0, {'path_address': True}), (0, {'observer_identity': None}),
+    (1, {'accepted': False}), (1, {'accepted': 1}), (1, {'argv': ()}),
+    (2, {'return': False}), (2, {'return': -2}), (2, {'denied': False}),
+    (2, {'extra': 0}), (2, {'kind': 'unknown'}),
+])
+def test_only_exact_successful_bookkeeping_shapes_are_idle(index, change):
+    trace = owned_trace()
+    trace.records = exec_bookkeeping()[:index + 1]
+    trace.records[-1].update(change)
+    assert scheduling.record_progress(trace) == len(trace.records)
+
+
+@pytest.mark.parametrize('kind', ['kernel_exec', 'kernel_child', 'kernel_exit',
+                                  'kernel_vfork_done', 'original_parent_wait4',
+                                  'tracer_terminal_wait', 'unknown'])
+def test_actual_trace_effects_are_never_suppressed_by_benign_suffix(kind):
+    trace = owned_trace()
+    trace.records = exec_bookkeeping() + [{'kind': kind, 'pid': 2}] + exec_bookkeeping()
+    assert scheduling.record_progress(trace) == 4
+
+
+@pytest.mark.parametrize('number', [322, 999, '59', True, None])
+def test_nonroot_unknown_pending_still_forces_service(number):
+    trace = owned_trace()
+    trace.pending[2] = {'syscall': number}
+    assert scheduling.progress(trace)[2] == frozenset({2})
+
+
+@pytest.mark.parametrize('failure', [None, 'poison', 'exception'])
+def test_actual_primary_dispatch_keeps_fresh_source_barrier_when_idle(monkeypatch, failure):
+    import sys
+    from pathlib import Path
+    from types import ModuleType
+    # Only unrelated Linux import-time package-query setup is isolated.
+    # Compile the complete current authority; its dispatch method is unchanged.
+    queries = ModuleType('producer_profile')
+    queries.query_package = lambda *args: None
+    module = ModuleType('primary_dispatch_control')
+    with monkeypatch.context() as patch:
+        patch.setitem(sys.modules, 'producer_profile', queries)
+        path = Path(__file__).with_name('primary_authority.py')
+        exec(compile(path.read_bytes(), str(path), 'exec'), vars(module))
+    PrimaryAuthority = module.Authority
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: 100.0)
+    first, second, _, supervisor = objects()
+    trace = owned_trace()
+    trace.identities = {2: {'ppid': 1}}
+    calls = []
+    cause = RuntimeError('fresh callback failed')
+    class Original:
+        def tick(self, actual):
+            assert actual is trace
+            calls.append('fresh_callback')
+            if failure == 'exception':
+                raise cause
+            if failure == 'poison':
+                self.supervisor.poisoned = True
+        def resolve(self, *args):
+            calls.append('original_resolver')
+            return True
+    class Source(OwnedMultiprocessCustody, Original):
+        pass
+    source = Source()
+    source.supervisor = supervisor
+    source._source_tick_schedule = scheduling.TickSchedule()
+    source._source_tick_schedule.complete(trace)
+    trace.records = exec_bookkeeping()
+    primary = PrimaryAuthority.__new__(PrimaryAuthority)
+    primary.source, primary.denials = source, []
+    try:
+        assert not source._source_tick_schedule.due(trace, supervisor)
+        if failure == 'exception':
+            with pytest.raises(RuntimeError) as caught:
+                primary.resolve(trace, 2, '/native', ['/native'], {}, '/source')
+            assert caught.value is cause
+        else:
+            assert primary.resolve(trace, 2, '/native', ['/native'], {}, '/source') is (failure is None)
+        assert calls == (['fresh_callback', 'original_resolver'] if failure is None else ['fresh_callback'])
+    finally:
+        first.close()
+        second.close()
