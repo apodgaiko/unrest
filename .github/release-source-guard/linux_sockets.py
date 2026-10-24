@@ -167,6 +167,48 @@ def sockets(pid: int) -> list[dict[str, Any]]:
     raise RuntimeError('owned socket observation retry exhausted')
 
 
+
+def _socket_inode(pid: int, descriptor: int) -> int | None:
+    try:
+        target = os.readlink(Path('/proc') / str(pid) / 'fd' / str(descriptor))
+    except FileNotFoundError:
+        return None
+    if not target.startswith('socket:[') or not target.endswith(']'):
+        return None
+    return int(target[8:-1])
+
+
+def _descriptor_snapshot(pid: int, descriptor: int) -> dict[str, Any] | None:
+    before = _socket_inode(pid, descriptor)
+    if before is None:
+        return None
+    table = tcp_table()
+    if _socket_inode(pid, descriptor) != before:
+        raise RuntimeError('owned descriptor binding changed during socket observation')
+    return {'pid': pid, 'fd': descriptor, **table[before]} if before in table else None
+
+
+def socket_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
+    """Reacquire one already-admitted listener; unrelated FDs supply no authority."""
+    if type(pid) is not int or pid <= 0 or type(descriptor) is not int or descriptor < 0:
+        raise ValueError('finite process descriptor required')
+    birth = identity(pid)
+    for attempt in range(3):
+        if identity(pid) != birth:
+            raise RuntimeError('stale_or_reused_ownership')
+        try:
+            row = _descriptor_snapshot(pid, descriptor)
+        except RuntimeError as error:
+            if (str(error) != 'owned descriptor binding changed during socket observation'
+                    or attempt == 2):
+                raise
+        else:
+            if identity(pid) != birth:
+                raise RuntimeError('stale_or_reused_ownership')
+            return row
+    raise RuntimeError('owned socket observation retry exhausted')
+
+
 def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
     if len(fds) != 2 or len(set(fds)) != 2:
         raise ValueError("exactly two distinct Unix descriptors required")

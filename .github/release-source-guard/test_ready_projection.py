@@ -348,6 +348,10 @@ def test_projection_selection_is_a_closed_boolean(tmp_path):
 def test_connect_keeps_the_complete_original_policy_body():
     tree = ast.parse((ROOT / 'linux_supervisor.py').read_text())
     handle = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'handle')
+    source = ast.unparse(handle)
+    assert source.count('current = self.observe_listener(entry)') == 1
+    handle = ast.parse(source.replace('current = self.observe_listener(entry)',
+        "current = next((s for s in self.observe(entry['pid']) if s['fd'] == entry['fd']), None)")).body[0]
     assert hashlib.sha256(ast.dump(handle, include_attributes=False).encode()).hexdigest() == '6fbeb95db17f96646b92c9ca1ae86e858f072e26084b6dd0fc38ea021b0f479e'
 
 

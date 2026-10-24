@@ -160,6 +160,16 @@ class Supervisor:
             raise RuntimeError("stale_or_reused_ownership")
         return kernel.sockets(pid)
 
+    def observe_listener(self, entry):
+        pid = entry['pid']
+        saved = self.registered[pid]['identity']
+        if kernel.identity(pid) != saved:
+            raise RuntimeError('stale_or_reused_ownership')
+        current = sockets.socket_descriptor(pid, entry['fd'])
+        if kernel.identity(pid) != saved:
+            raise RuntimeError('stale_or_reused_ownership')
+        return current
+
     def custody_support(self):
         # Only the code object survives. Each request receives fresh policy globals.
         path = ROOT / "custody_host.py"
@@ -305,7 +315,7 @@ class Supervisor:
                     ):
                         raise PendingOwnedListener("registered_finite_child_not_listening")
                 raise RuntimeError("foreign_or_unregistered_endpoint")
-            current = next((s for s in self.observe(entry["pid"]) if s["fd"] == entry["fd"]), None)
+            current = self.observe_listener(entry)
             if current != entry:
                 raise RuntimeError("listener_closed_or_changed_binding")
             self.connect_admissions[request["pid"], request["fd"]] = current

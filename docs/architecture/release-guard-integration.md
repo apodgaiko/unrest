@@ -762,6 +762,14 @@ descriptor snapshot. Neither a partial inventory nor a previous successful
 observation supplies authority. All other observation errors fail immediately;
 three consecutive census races still fail closed. The original listener, peer,
 cookie, address, ownership and payload checks run on the resulting fresh rows.
+For a connect request with an already-admitted listener, only that exact listener
+FD is reacquired: its current socket inode is read before and after a fresh TCP
+diagnostic table, under the registered process birth before and after. The
+complete resulting row must equal the admitted listener, including cookie, UID,
+state and address. Closure, reuse, missing diagnostic rows and identity drift
+cannot authorize the connect. Target-binding races retain the same three-attempt
+bound; unrelated descriptor churn is not evidence about this listener. Listen,
+connected reciprocal-peer and Unix-pair decisions retain whole-process censuses.
 
 Dependency member reads use the already opened and custody-checked regular
 descriptor directly. Each consumption still reads all current member bytes;

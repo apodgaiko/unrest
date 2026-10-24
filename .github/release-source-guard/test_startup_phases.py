@@ -268,6 +268,28 @@ if not state['buffer']:
 BASELINE_AST_SHA256 = {'finite/source_operations.py': 'a5d9f2958f8aa4dd57922407f3112d6917544cc87b22942febe254172bd50209', 'finite/runtime_guard.py': '3b26232fb8c8d033a984e5c0ba0fa1760600cb7b846af728b2fbbeb39ccd6fa4', 'finite/source_activation.py': 'fd49c0f30096da8163142b0f8f884d56a80dbf9f5b38b757f22486ec1f5efab7', 'linux_supervisor.py': '2fb9fb8012c9161fe64ad70dca851abdd65a2e86dca48701d3f5b2d2fabef99f', 'linux_trace.py': '344558174ec335476ac8f76fa0afdf4ee667a497825150e4388fdb8ca95f5b9c', 'primary_source_authority.py': 'b36a24d13b548d143379dacd844680f089a41e5f2666c9a9944eeb29607a1540'}
 
 
+def restore_exact_listener_acquisition(tree):
+    method = ast.unparse(ast.parse("""
+    def observe_listener(self, entry):
+        pid = entry['pid']
+        saved = self.registered[pid]['identity']
+        if kernel.identity(pid) != saved:
+            raise RuntimeError('stale_or_reused_ownership')
+        current = sockets.socket_descriptor(pid, entry['fd'])
+        if kernel.identity(pid) != saved:
+            raise RuntimeError('stale_or_reused_ownership')
+        return current
+    """.strip()).body[0])
+    owner = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'Supervisor')
+    actual = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == 'observe_listener')
+    assert ast.unparse(actual) == method
+    owner.body.remove(actual)
+    source = ast.unparse(tree)
+    assert source.count('current = self.observe_listener(entry)') == 1
+    return ast.parse(source.replace('current = self.observe_listener(entry)',
+        "current = next((s for s in self.observe(entry['pid']) if s['fd'] == entry['fd']), None)"))
+
+
 def test_only_closed_telemetry_changes_original_executable_trees():
     for name, expected in BASELINE_AST_SHA256.items():
         tree = ast.parse((ROOT / name).read_bytes())
@@ -276,7 +298,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
         if name == 'finite/source_operations.py':
             tree = restore_dependency_diagnostic(restore_query_route(tree))
         if name == 'linux_supervisor.py':
-            tree = restore_absent_peer_candidate(restore_response_channel(restore_empty_receipt(tree)))
+            tree = restore_exact_listener_acquisition(restore_absent_peer_candidate(restore_response_channel(restore_empty_receipt(tree))))
         if name == 'linux_trace.py':
             tree = restore_before_numeric_wait(restore_primary_allocation(restore_environment_name_grammar(tree)))
         if name == 'primary_source_authority.py':
@@ -431,3 +453,17 @@ def test_bounded_channel_telemetry_cannot_hide_receipt_or_deadline_mutation():
         assert before in original
         tree = StripTelemetry().visit(ast.parse(original.replace(before, after)))
         assert hashlib.sha256(ast.dump(tree, include_attributes=False).encode()).hexdigest() != BASELINE_AST_SHA256['linux_supervisor.py']
+
+
+def test_listener_acquisition_normalization_cannot_hide_authority_drift():
+    import pytest
+    source = (ROOT / 'linux_supervisor.py').read_text()
+    for before, after in [
+        ("current = sockets.socket_descriptor(pid, entry['fd'])", "current = entry"),
+        ("saved = self.registered[pid]['identity']", "saved = kernel.identity(pid)"),
+        ("if kernel.identity(pid) != saved:", "if False:"),
+        ("current = self.observe_listener(entry)", "current = entry"),
+    ]:
+        assert before in source
+        with pytest.raises((AssertionError, StopIteration)):
+            restore_exact_listener_acquisition(ast.parse(source.replace(before, after)))

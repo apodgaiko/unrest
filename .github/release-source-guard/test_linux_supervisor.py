@@ -189,3 +189,45 @@ def test_completed_diagnostic_redundancy_is_bounded_without_changing_receipts(mo
     assert summary['last_successful_completion'] == {'ordinal': 10002, 'snapshot': original_rows[-1]}
     assert json.dumps(supervisor.receipts, sort_keys=True).encode() == before
     assert len(json.dumps({'samples': supervisor.channel_diagnostics, 'summary': summary})) < 131072
+
+
+@pytest.mark.parametrize('change', ['none', 'missing', 'fd', 'pid', 'inode', 'socket_cookie',
+                                   'socket_uid', 'state', 'local_host', 'local_port'])
+def test_connect_exact_listener_keeps_full_original_row_equality(monkeypatch, change):
+    value = host.Supervisor.__new__(host.Supervisor)
+    value.poisoned = False
+    value.authenticate = lambda *args: None  # Pure post-authentication policy predicate.
+    birth = {'pid': 20, 'start_ticks': 11}
+    value.registered = {20: {'identity': birth}}
+    entry = {'pid': 20, 'fd': 16, 'inode': 279801, 'socket_cookie': 7369,
+             'socket_uid': 20000, 'state': 10, 'local_host': '127.0.0.1', 'local_port': 45415}
+    value.listeners, value.connect_admissions = {45415: entry}, {}
+    monkeypatch.setattr(host.kernel, 'identity', lambda pid: dict(birth))
+    current = dict(entry)
+    if change == 'missing':
+        current = None
+    elif change not in {'none', 'missing'}:
+        current[change] = '192.0.2.1' if change == 'local_host' else current[change] + 1
+    monkeypatch.setattr(host.sockets, 'socket_descriptor', lambda pid, fd: current)
+    request = {'kind': 'connect', 'pid': 99, 'fd': 3, 'host': '127.0.0.1', 'port': 45415}
+    if change == 'none':
+        assert value.handle(request, []) == {'listener': entry}
+        assert value.connect_admissions == {(99, 3): entry}
+    else:
+        with pytest.raises(RuntimeError, match='listener_closed_or_changed_binding'):
+            value.handle(request, [])
+        assert value.connect_admissions == {}
+
+
+@pytest.mark.parametrize('after', [False, True])
+def test_listener_snapshot_still_matches_registered_birth_before_and_after(monkeypatch, after):
+    value = host.Supervisor.__new__(host.Supervisor)
+    value.registered = {20: {'identity': {'pid': 20, 'start_ticks': 11}}}
+    calls = []
+    def identity(pid):
+        calls.append(pid)
+        return {'pid': pid, 'start_ticks': 12 if not after or len(calls) > 1 else 11}
+    monkeypatch.setattr(host.kernel, 'identity', identity)
+    monkeypatch.setattr(host.sockets, 'socket_descriptor', lambda pid, fd: {'pid': pid, 'fd': fd})
+    with pytest.raises(RuntimeError, match='stale_or_reused_ownership'):
+        value.observe_listener({'pid': 20, 'fd': 16})
