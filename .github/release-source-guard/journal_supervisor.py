@@ -49,6 +49,14 @@ class JournalSupervisor(Supervisor):
         self.diagnostic_schedule['refresh_cpu_ns'] = old_cpu + time.process_time_ns() - cpu
         return snapshot
 
+    def tick(self):
+        from journal_service import due, complete
+        if due(self):
+            result = Supervisor.tick(self)
+            complete(self)
+            return result
+        return None
+
     def handle(self, request, events):
         # These closed branches read events only in authenticate(). Connect also
         # reads admitted rows; other handlers keep the complete current list.

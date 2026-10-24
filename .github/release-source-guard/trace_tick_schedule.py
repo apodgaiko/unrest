@@ -7,14 +7,17 @@ import time
 IDLE_SECONDS = 0.100
 
 
-def resolver_owned_exec(trace, pid):
-    """The current primary static table cannot admit this nonroot PID."""
+def root_static_table(trace):
     from linux_trace import OwnedTrace
-    return (type(trace) is OwnedTrace and type(pid) is int
-            and type(trace.child) is int and pid != trace.child
+    return (type(trace) is OwnedTrace and type(trace.child) is int
             and type(trace.allowed) is list and bool(trace.allowed)
             and all(type(row) is dict and type(row.get('pid')) is int
                     and row['pid'] == trace.child for row in trace.allowed))
+
+
+def resolver_owned_exec(trace, pid):
+    """The current primary static table cannot admit this nonroot PID."""
+    return root_static_table(trace) and type(pid) is int and pid != trace.child
 
 
 def record_progress(trace):

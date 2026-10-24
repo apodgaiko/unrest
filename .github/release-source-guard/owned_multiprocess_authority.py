@@ -18,6 +18,7 @@ class OwnedMultiprocessCustody:
         result = super().start(*args, **kwargs)
         from journal_supervisor import JournalSupervisor
         JournalSupervisor.adopt(self.supervisor)
+        self.supervisor.source_census_owner = self
         self.supervisor.owned_trace = kwargs.get('trace')
         from approval_orphan_custody import install
         if hasattr(self.supervisor, 'ledger'):
@@ -53,7 +54,9 @@ class OwnedMultiprocessCustody:
     def resolve(self, trace, pid, path, vector, environment, cwd):
         if getattr(self, 'supervisor', None) is not None:
             # An exec decision never relies on an idle poll or prior census.
-            super().tick(trace)
+            from journal_service import fresh_census
+            with fresh_census(self.supervisor):
+                super().tick(trace)
             if self.supervisor.poisoned or trace.poison:
                 return False
             if hasattr(self, '_source_tick_schedule'):

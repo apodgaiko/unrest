@@ -1849,3 +1849,33 @@ read, I/O or scan methods retain the original glob/read path. Matching dotfiles,
 directories and symlinks stay in the sequence; individual read errors propagate.
 Scan errors retain CPython glob suppression. Parsing, original census decisions,
 receipt predicates and all fresh admission/final barriers are unchanged.
+
+
+### Trace observation and decision-free journal service
+
+Every existing kernel-progress callback still runs the original source producer
+observation, trace-progress update, exit collection, adoptive reaping and poison
+propagation. Journal service is separate: an exact known composition with no
+clients, no readable receipt, no poison and live owned processes may defer only
+the entire no-decision Supervisor.tick call until the existing 100ms idle period.
+The optimization additionally requires the current exact source owner and native
+producer object to have empty UV and child contexts. Any producer context, even
+a completed one, retains full per-event service: producer completion consumes
+poison state before journal service in the original callback. No receipt is
+accepted, policy evaluated or grant returned by a skipped call.
+This changes when a kernel-only progress callback acquires journal bytes; it
+does not delay kernel observation or numeric-wait handling.
+
+Every source exec forces the complete original fresh callback in a nested,
+exception-safe census context before the original resolver. Static root execs
+that bypass that resolver keep immediate journal service. Unknown composition,
+static tables, records and pending operations retain full service. Trace poison,
+receipt clients/readability and final settlement are immediate. Refresh itself
+always reads current membership and full file bytes; it never returns a cached
+authority snapshot. Only successful service advances its completion clock.
+
+The composed supervisor explicitly wraps tick as well as refresh/events/handle.
+The original Supervisor.tick, refresh and policy bodies remain unchanged.
+Focused checks retain original source callbacks at every kernel event and prove
+that current forbidden journal bytes or a current read error refuse before exec
+admission, even while no-decision service would otherwise remain idle.

@@ -15,11 +15,11 @@ def test_authority_methods_remain_original_with_closed_census_and_list_adapters(
                         if callable(value)}
     assert 'events' in original_methods and len(original_methods) > 10
     for name, method in original_methods.items():
-        if name not in {'events', 'refresh', 'handle'}:
+        if name not in {'events', 'refresh', 'handle', 'tick'}:
             assert getattr(JournalSupervisor, name) is method, name
     assert set(vars(JournalSupervisor)) - {
         '__module__', '__doc__', '__firstlineno__', '__static_attributes__',
-        'adopt', 'events', 'journal', 'refresh', 'handle'} == set()
+        'adopt', 'events', 'journal', 'refresh', 'handle', 'tick'} == set()
 
 
 def test_adoption_preserves_instance_state_and_existing_references():
