@@ -3,9 +3,27 @@
 import ast
 import hashlib
 import inspect
+import json
 import os
 import sys
 from pathlib import Path
+
+
+def syntax(state, source, body):
+    key = (str(source), hashlib.sha256(body).hexdigest())
+    cache = state.setdefault('anchor_syntax', {})
+    if key not in cache:
+        cache[key] = ast.parse(body)
+    return cache[key]
+
+
+def prepare(state, paths):
+    for source in paths:
+        try:
+            syntax(state, source, source.read_bytes())
+        except (OSError, SyntaxError, ValueError, TypeError):
+            # Optional syntax preparation cannot move a runtime refusal earlier.
+            continue
 
 
 def observe(state, directory):
@@ -57,11 +75,12 @@ def observe(state, directory):
             if any(a["source_sha256"] != pin for a in matching):
                 raise RuntimeError("passive_anchor_source_drift")
             cache = state.setdefault("cohort_passive_ASTs", {})
-            key = (str(source), pin)
+            key = (str(source), pin, hashlib.sha256(
+                json.dumps(matching, sort_keys=True).encode()).hexdigest())
             if key not in cache:
                 nodes = [
                     n
-                    for n in ast.walk(ast.parse(body))
+                    for n in ast.walk(syntax(state, source, body))
                     if isinstance(n, ast.Call) and any(a["line"] == n.lineno for a in matching)
                 ]
                 bound = []

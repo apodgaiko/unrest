@@ -2112,3 +2112,13 @@ session shutdown, and writes metadata only to encrypted private diagnostics.
 The observer adds cost: its output is neither uninstrumented timing proof nor a
 source certificate. The full27-case module and all later release gates remain
 required; SOURCE never enables this monitor.
+
+The two short-cutoff bootstrap cases prepare content-bound source syntax during
+guard setup. This stores only parsed syntax for the existing session and test
+sources; it stores no live frame, namespace, evaluated expression or admission.
+Every actual launch still reads and hashes current bytes, binds the current
+anchor inventory, checks its actual loader/code/globals, and evaluates current
+arguments and environment. Changed bytes select fresh syntax. Optional missing
+or malformed preparation retains the original runtime error path. Product
+clocks, deadlines, sleeps, full startup inventories and cleanup assertions do
+not change.

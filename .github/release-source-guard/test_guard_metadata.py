@@ -215,3 +215,42 @@ def test_static_binding_precomputed_paths_keep_real_owner_code_and_source(tmp_pa
     source.write_text(source.read_text() + '# changed\n')
     with pytest.raises(RuntimeError, match='inactive_source_owner_identity_drift'):
         module.check(state, rows.append, refuse)
+
+
+def test_anchor_preparation_caches_only_syntax_and_rechecks_inventory(anchored, tmp_path, monkeypatch):
+    module, state, source, row, active = anchored
+    parse = module.ast.parse
+    parses = []
+    def counted(body):
+        parses.append(body)
+        return parse(body)
+    monkeypatch.setattr(module.ast, 'parse', counted)
+    module.prepare(state, [source])
+    assert len(parses) == 1 and 'cohort_passive_ASTs' not in state
+    assert len(module.observe(state, tmp_path)) == 1 and len(parses) == 1
+    row['expression_ast_sha256'] = '0' * 64
+    with pytest.raises(RuntimeError, match='passive_anchor_AST_drift'):
+        module.observe(state, tmp_path)
+    source.write_text('different()\n')
+    with pytest.raises(RuntimeError, match='passive_anchor_source_drift'):
+        module.observe(state, tmp_path)
+
+
+@pytest.mark.parametrize('name', ['anchor_probe', 'fallback_binding'])
+def test_optional_syntax_preparation_retains_current_bytes_and_original_errors(tmp_path, name):
+    module = load(name)
+    source = tmp_path / 'source.py'
+    state = {}
+    module.prepare(state, [source])
+    source.write_text('not valid ?')
+    module.prepare(state, [source])
+    with pytest.raises(SyntaxError):
+        module.syntax(state, source, source.read_bytes())
+    source.write_text('first()\n')
+    module.prepare(state, [source])
+    first = module.syntax(state, source, source.read_bytes())
+    assert module.syntax(state, source, source.read_bytes()) is first
+    source.write_text('second()\n')
+    second = module.syntax(state, source, source.read_bytes())
+    assert second is not first
+    assert ast.dump(second) == ast.dump(ast.parse(source.read_bytes()))

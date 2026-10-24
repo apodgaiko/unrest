@@ -261,6 +261,17 @@ class Observer:
 
     def pytest_runtest_setup(self, item):
         self.guard._STATE['case'] = item.nodeid
+        if item.nodeid in (
+                'tests/test_experimental_bootstrap.py::test_actual_sequential_initialize_and_session_share_cutoff',
+                'tests/test_experimental_bootstrap.py::test_startup_subtracts_from_actual_inference_timeout'):
+            paths = [Path(self.manifest['checkout']) / name for name in (
+                'src/unrest_harness/experimental_session.py',
+                'tests/test_experimental_bootstrap.py')]
+            for name in ('anchor_probe.py', 'fallback_binding.py'):
+                support = str(Path(self.manifest['guard']).with_name(name))
+                self.guard.checked_source(support,
+                    self.manifest['direct_support']['files'][support])['prepare'](
+                        self.guard._STATE, paths)
         if item.nodeid == 'tests/test_server.py::test_composed_restart_stop_replacement_and_cancel_are_distinct':
             self.custodian = sys.modules['restart_custody'].start_custodian(
                 Path(self.manifest['owned_root']))

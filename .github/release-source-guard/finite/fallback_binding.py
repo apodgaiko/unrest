@@ -34,6 +34,23 @@ def active_frames():
     return result
 
 
+def syntax(state, source, body):
+    key = (str(source), hashlib.sha256(body).hexdigest())
+    cache = state.setdefault('fallback_syntax', {})
+    if key not in cache:
+        cache[key] = ast.parse(body)
+    return cache[key]
+
+
+def prepare(state, paths):
+    for source in paths:
+        try:
+            syntax(state, source, source.read_bytes())
+        except (OSError, SyntaxError, ValueError, TypeError):
+            # Live source, loader and expression checks still decide admission.
+            continue
+
+
 def matches(registration, argv, cwd, environment, state):
     source = Path(registration["source_binding"]["path"])
     if not source.is_absolute():
@@ -104,7 +121,7 @@ def matches(registration, argv, cwd, environment, state):
             else:
                 if source not in sources:
                     continue
-                tree = ast.parse(source.read_bytes())
+                tree = syntax(state, source, source.read_bytes())
                 source_binding = sources[source]
                 module = sys.modules.get(frame.f_globals.get("__name__"))
                 if module is None or vars(module) is not frame.f_globals:

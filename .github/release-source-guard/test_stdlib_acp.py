@@ -206,7 +206,8 @@ def test_registration_backend_additions_preserve_all_prior_rows():
 
 
 @pytest.mark.parametrize('change', [None, 'line', 'code', 'argv'])
-def test_actual_original_caller_binding_reaches_resolver(tmp_path,monkeypatch,change):
+@pytest.mark.parametrize('warm', [False, True])
+def test_actual_original_caller_binding_reaches_resolver(tmp_path,monkeypatch,change,warm):
     import types
     from finite import fallback_binding, registry
     from unrest_harness import experimental_session as session
@@ -234,6 +235,8 @@ def test_actual_original_caller_binding_reaches_resolver(tmp_path,monkeypatch,ch
                     return result
         return None
     state['isolated_named']=named
+    if warm:
+        fallback_binding.prepare(state, [ROOT / setup.SESSION])
     frame = types.SimpleNamespace(f_code=session._SessionOwner._open_role_owned.__code__,
         f_globals=vars(session),f_lineno=553,
         f_locals={'adapter_argv':tuple(argv),'home':home,'environment':environment})

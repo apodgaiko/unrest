@@ -182,3 +182,34 @@ def test_interrupted_diagnostic_never_bypasses_original_finalization(failure):
 
     assert observer._start_cost_monitor(StartFailure) is False
     assert calls[-1] == "start-failure-cleanup"
+
+
+@pytest.mark.parametrize('case', [*CASES, 'tests/test_experimental_bootstrap.py::test_expiry_during_seal_cannot_publish_grant'])
+def test_setup_prepares_only_content_syntax_before_original_call(case):
+    import ast
+    from pathlib import Path
+    from types import SimpleNamespace
+    source = (Path(__file__).parent / 'primary_source_entry.py').read_text()
+    tree = ast.parse(source)
+    observer = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Observer')
+    setup = next(n for n in observer.body if isinstance(n, ast.FunctionDef) and n.name == 'pytest_runtest_setup')
+    namespace = {'Path': Path}
+    exec(compile(ast.Module(body=[setup], type_ignores=[]), '<setup-control>', 'exec'), namespace)
+    calls = []
+    state = {}
+    manifest = {'checkout': '/source', 'guard': '/guard/finite/runtime_guard.py',
+                'direct_support': {'files': {f'/guard/finite/{name}': name
+                    for name in ('anchor_probe.py', 'fallback_binding.py')}}}
+    def checked(path, pin):
+        assert path == '/guard/finite/' + pin
+        def prepare(actual, paths):
+            assert actual is state
+            assert paths == [Path('/source/src/unrest_harness/experimental_session.py'),
+                             Path('/source/tests/test_experimental_bootstrap.py')]
+            calls.append(pin)
+        return {'prepare': prepare}
+    instance = SimpleNamespace(manifest=manifest,
+                              guard=SimpleNamespace(_STATE=state, checked_source=checked))
+    namespace['pytest_runtest_setup'](instance, SimpleNamespace(nodeid=case))
+    assert state['case'] == case
+    assert calls == (['anchor_probe.py', 'fallback_binding.py'] if case in CASES else [])
