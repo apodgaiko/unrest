@@ -2012,3 +2012,12 @@ configuration disabling incidental automatic Git maintenance. Original Git
 commands and assertions remain unchanged; subsets, reordering, extra arguments
 and other modes cannot select this setup. Explicit maintenance still requires
 its existing finite authority, and all focused refusal tests remain intact.
+
+The original lease-worktree creation at WorkspaceManager line314 may launch
+stock Git update-ref HEAD with its same requested revision. That native child
+is joined to the consumed parent token, exact source/argv/environment, current
+process births and image, and the owned linked-worktree gitfile/admin backlinks.
+The admin HEAD must be a regular all-zero detached initialization; symbolic,
+foreign, missing or redirected HEAD refuses. Only one such child per parent is
+admitted; actual numeric waits remain required.
+This route grants no other worktree-site, reset, generic Git or provider authority.

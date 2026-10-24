@@ -159,3 +159,112 @@ def test_linked_fixture_requires_exact_owned_worktree_chain(tmp_path, change):
                   'backlink': admin / 'gitdir', 'head': admin / 'HEAD'}[change]
         target.write_text('foreign\n')
     assert not maintenance.metadata(parent, selected, env, cwd, manifest, checkout=str(ROOT))
+
+
+def worktree_child_fixture(tmp_path):
+    from worktree_git_custody import IMAGE, SOURCE
+    repository = tmp_path.resolve() / 'pytest/project'
+    tree = repository / '.unrest-runtime/workspaces/trees/candidate-one'
+    admin = repository / '.git/worktrees/candidate-one'
+    tree.mkdir(parents=True)
+    admin.mkdir(parents=True)
+    (tree / '.git').write_text('gitdir: ' + str(admin) + '\n')
+    (admin / 'gitdir').write_text(str(tree / '.git') + '\n')
+    (admin / 'commondir').write_text('../..\n')
+    (admin / 'HEAD').write_text('0' * 40 + '\n')
+    vector = ['git', 'worktree', 'add', '--detach', '--no-checkout', str(tree), 'a' * 40]
+    parent = {'argv': vector, 'cwd': str(repository), 'environment': {'PATH': '/usr/bin:/bin'}}
+    binding = {'path': str(ROOT / SOURCE), 'sha256': PINS[SOURCE], 'function': '_git', 'line': 222,
+               'caller': 'lease_workspace', 'caller_line': 314, 'expression_ast_sha256': SITES[314][1]}
+    registration = {'class': 'source-workspace-bound-git', 'source_binding': binding,
+                    'owner_pid': 22, 'token': 'consumed-parent', 'case': CASES[1]}
+    selected = {'registration': registration, 'owner_pid': 22, 'token': 'consumed-parent',
+                'bootstrap_sha256': None, 'cwd': str(repository),
+                'transformed_argv_sha256': hashlib.sha256(json.dumps(vector).encode()).hexdigest(),
+                'environment_sha256': hashlib.sha256(json.dumps(parent['environment'], sort_keys=True).encode()).hexdigest()}
+    environment = {**parent['environment'], 'PATH': '/usr/lib/git-core:/usr/bin:/bin',
+                   'GIT_EXEC_PATH': '/usr/lib/git-core', 'GIT_PREFIX': '',
+                   'GIT_DIR': str(tree / '.git'), 'GIT_WORK_TREE': str(tree)}
+    manifest = {'owned_root': str(tmp_path.resolve()), 'product_pins': {SOURCE: PINS[SOURCE]},
+                'direct_support': {'files': {'/guard/finite/workspace_git_data.py': hashlib.sha256(DATA.read_bytes()).hexdigest()}}}
+    return parent, selected, [IMAGE, 'update-ref', 'HEAD', 'a' * 40], environment, str(repository), manifest
+
+
+@pytest.mark.parametrize('change', [None, 'vector', 'oid', 'environment', 'parent', 'token', 'owner',
+                                    'bootstrap', 'site', 'class', 'source', 'data', 'cwd', 'gitfile',
+                                    'backlink', 'commondir', 'symlink', 'symbolic-head', 'foreign-head', 'missing-head', 'symlink-head'])
+def test_stock_worktree_child_is_only_the_exact_owned_parent_operation(tmp_path, change):
+    from worktree_git_custody import metadata, SOURCE
+    parent, selected, vector, env, cwd, manifest = worktree_child_fixture(tmp_path)
+    tree = Path(parent['argv'][5])
+    admin = Path(cwd) / '.git/worktrees/candidate-one'
+    if change == 'vector':
+        vector[1] = 'reset'
+    elif change == 'oid':
+        vector[-1] = 'b' * 40
+    elif change == 'environment':
+        env['GIT_COMMON_DIR'] = '/foreign'
+    elif change == 'parent':
+        parent['argv'][1] = 'foreign'
+    elif change == 'token':
+        selected['token'] = 'foreign'
+    elif change == 'owner':
+        selected['owner_pid'] = 99
+    elif change == 'bootstrap':
+        selected['bootstrap_sha256'] = 'foreign'
+    elif change == 'site':
+        selected['registration']['source_binding']['caller_line'] = 616
+    elif change == 'class':
+        selected['registration']['class'] = 'foreign'
+    elif change == 'source':
+        manifest['product_pins'][SOURCE] = 'foreign'
+    elif change == 'data':
+        manifest['direct_support']['files']['/guard/finite/workspace_git_data.py'] = 'foreign'
+    elif change == 'cwd':
+        selected['cwd'] = '/foreign'
+    elif change in {'gitfile', 'backlink', 'commondir'}:
+        target = {'gitfile': tree / '.git', 'backlink': admin / 'gitdir', 'commondir': admin / 'commondir'}[change]
+        target.write_text('foreign\n')
+    elif change in {'symbolic-head', 'foreign-head'}:
+        (admin / 'HEAD').write_text('ref: refs/heads/foreign\n' if change == 'symbolic-head' else 'b' * 40 + '\n')
+    elif change == 'missing-head':
+        (admin / 'HEAD').unlink()
+    elif change == 'symlink-head':
+        (admin / 'HEAD').rename(admin / 'retained-head')
+        (admin / 'HEAD').symlink_to(admin / 'retained-head')
+    elif change == 'symlink':
+        admin.rename(admin.with_name('foreign'))
+        admin.symlink_to(admin.with_name('foreign'), target_is_directory=True)
+    assert metadata(parent, selected, vector, env, cwd, manifest, checkout=str(ROOT)) is (change is None)
+
+
+@pytest.mark.parametrize('change', [None, 'parent-birth', 'parent-drift', 'child-parent', 'image'])
+def test_worktree_child_resolver_requires_fresh_birth_and_one_actual_child(tmp_path, monkeypatch, change):
+    from types import SimpleNamespace
+    import worktree_git_custody as custody
+    image = tmp_path / 'git-image'
+    image.write_bytes(b'pinned image')
+    cwd = tmp_path / 'cwd'
+    cwd.mkdir()
+    saved = {'pid': 10, 'ppid': 2, 'start_ticks': 20}
+    reads = []
+    def current(pid):
+        if pid == 11:
+            return {'pid': 11, 'ppid': 99 if change == 'child-parent' else 10, 'start_ticks': 30}
+        reads.append(pid)
+        return {**saved, 'start_ticks': 21 if change == 'parent-birth' or (change == 'parent-drift' and len(reads) > 1) else 20}
+    def paths(value):
+        return image if value == custody.IMAGE else cwd if value == '/proc/10/cwd' else Path(value)
+    monkeypatch.setattr(custody, 'identity', current)
+    monkeypatch.setattr(custody, 'Path', paths)
+    monkeypatch.setattr(custody, 'metadata', lambda *args: True)
+    authority = SimpleNamespace(native_context={10: {}}, bound={10: {'token': 'actual-parent'}},
+                                contexts={10: {'identity': saved}}, pipe_records=[],
+                                manifest={'git_maintenance_sha256': 'foreign' if change == 'image' else hashlib.sha256(image.read_bytes()).hexdigest()})
+    trace = SimpleNamespace(identities={11: {'ppid': 10}})
+    vector = [custody.IMAGE, 'update-ref', 'HEAD', 'a' * 40]
+    assert custody.resolve(authority, trace, 11, custody.IMAGE, vector, {}, str(cwd)) is (change is None)
+    if change is None:
+        assert len(authority.pipe_records) == 1
+        assert authority.pipe_records[0]['original_worktree_token'] == 'actual-parent'
+        assert not custody.resolve(authority, trace, 11, custody.IMAGE, vector, {}, str(cwd))
