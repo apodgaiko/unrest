@@ -24,14 +24,13 @@ def require_inputs():
         pytest.skip('source payload is absent from isolated control capsule')
 
 
-def test_exact_compatibility_inputs_change_only_three_pins():
+def test_exact_object_reader_inputs_retire_only_removed_launch_anchor():
     require_inputs()
     manifest = baseline()
     expected = deepcopy(manifest)
     expected['product_pins'].update(patch.POST)
-    for row in expected['anchor_inventory']:
-        if row['path'] == patch.SOURCE:
-            row['source_sha256'] = patch.POST[patch.SOURCE]
+    expected['anchor_inventory'].remove(patch.ANCHOR)
+    next(row for row in expected['anchor_inventory'] if row['path'] == patch.FIXTURE_ANCHOR['path'])['source_sha256'] = patch.POST[patch.FIXTURE_ANCHOR['path']]
     patch.admit(manifest, ROOT, lambda root, name: (root / name).read_bytes())
     assert manifest == expected
 
@@ -69,17 +68,17 @@ def test_each_changed_postimage_refuses_without_partial_repin(name):
     assert manifest == before
 
 
-def test_product_delta_keeps_original_native_git_owner():
+def test_product_delta_has_only_pinned_no_child_object_reader():
     require_inputs()
     import ast
-    source = ROOT / 'src/unrest_harness/experimental_candidate.py'
-    assert hashlib.sha256(source.read_bytes()).hexdigest() == patch.POST[source.relative_to(ROOT).as_posix()]
+    source = ROOT / patch.SOURCE
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == patch.POST[patch.SOURCE]
     module = ast.parse(source.read_bytes())
     owner = next(n for n in module.body if isinstance(n, ast.ClassDef) and n.name == '_Observation')
-    method = next(n for n in owner.body if isinstance(n, ast.FunctionDef) and n.name == 'git')
-    assert hashlib.sha256(ast.dump(method, include_attributes=False).encode()).hexdigest() == 'cef37191574dcc383fc345438ac524c94c13cba166cb6bdd9314b0df6a4bfa8e'
-    assert method.lineno == 147
-    assert next(n for n in ast.walk(method) if isinstance(n, ast.Call) and ast.unparse(n.func) == 'subprocess.Popen').lineno == 151
+    assert not any(isinstance(n, ast.FunctionDef) and n.name == 'git' for n in owner.body)
+    method = next(n for n in owner.body if isinstance(n, ast.FunctionDef) and n.name == 'object')
+    assert hashlib.sha256(ast.dump(method, include_attributes=False).encode()).hexdigest() == patch.OWNER_AST
+    assert not any(isinstance(n, ast.Call) and ast.unparse(n.func).startswith('subprocess.') for n in ast.walk(module))
 
 
 @pytest.mark.parametrize('change', ['missing', 'duplicate', 'count', 'source_sha256', 'line', 'owner', 'route', 'family', 'expression_ast_sha256'])
@@ -97,5 +96,23 @@ def test_anchor_membership_or_identity_drift_never_changes_manifest(change):
         row[change] = 'foreign'
     before = deepcopy(manifest)
     with pytest.raises(RuntimeError, match='candidate_template_anchor_preimage'):
+        patch.admit(manifest, ROOT, lambda root, name: (root / name).read_bytes())
+    assert manifest == before
+
+
+@pytest.mark.parametrize('change', ['missing', 'duplicate', 'source_sha256', 'line', 'owner', 'route', 'family', 'expression_ast_sha256'])
+def test_fixture_anchor_identity_drift_refuses_atomically(change):
+    require_inputs()
+    manifest = baseline()
+    row = next(v for v in manifest['anchor_inventory'] if v['path'] == patch.FIXTURE_ANCHOR['path'])
+    if change == 'missing':
+        manifest['anchor_inventory'].remove(row)
+    elif change == 'duplicate':
+        manifest['anchor_inventory'].append(deepcopy(row))
+    else:
+        row[change] = 'foreign'
+    before = deepcopy(manifest)
+    expected = 'candidate_template_anchor_preimage' if change in {'missing', 'duplicate'} else 'candidate_template_fixture_anchor'
+    with pytest.raises(RuntimeError, match=expected):
         patch.admit(manifest, ROOT, lambda root, name: (root / name).read_bytes())
     assert manifest == before

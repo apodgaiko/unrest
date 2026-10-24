@@ -84,7 +84,7 @@ def admit_tracker_acquisition(manifest):
 
 def admit_candidate_template(manifest):
     body = CLOCK_READER(Path('/guard'), 'candidate_template_source_inputs.py')
-    if hashlib.sha256(body).hexdigest() != 'fc9aea0ccc198d8ee52bf7fea7418e45276ff38ad22c85cd685cf43f6ba15e45':
+    if hashlib.sha256(body).hexdigest() != 'fcde1d6c6b88cfdd9423a9e4a9e439fcf62ecfad32b528c74f8eaed8e37e5275':
         raise RuntimeError('candidate_template_support_drift')
     namespace = {'__name__': 'candidate_template_source_inputs'}
     exec(compile(body, '/guard/candidate_template_source_inputs.py', 'exec', dont_inherit=True), namespace)
@@ -126,8 +126,8 @@ def main():
     release['admit'](manifest, ROOT, CLOCK_READER)
     admit_ownership_document(manifest)
     admit_tracker_acquisition(manifest)
-    admit_candidate_template(manifest)
     admit_approval_imports(manifest)
+    admit_candidate_template(manifest)
     admit_controlled_fixture_cleanup(manifest)
     for name, pin in manifest['product_pins'].items():
         observed = sha(ROOT / name)

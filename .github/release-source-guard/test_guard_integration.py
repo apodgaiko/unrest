@@ -141,6 +141,13 @@ def test_exact_version_transition_keeps_historical_template_and_core():
             delta = b'                "canonical-backend",\n                "source-canonical-stdlib-backend",\n'
             assert body.count(delta) == 1
             body = body.replace(delta, b'                "canonical-backend",\n', 1)
+        if name == 'primary_source_authority.py':
+            # Undo only the separately reviewed fresh-journal projection to
+            # compare this version transition with its original core bytes.
+            imported = b'from journal_supervisor import launch_events\n'
+            called = b'events = launch_events(self.supervisor)'
+            assert body.count(imported) == body.count(called) == 1
+            body = body.replace(imported, b'', 1).replace(called, b'events = self.supervisor.events()', 1)
         assert hashlib.sha256(body).hexdigest() == pin
 
 
@@ -273,9 +280,9 @@ def test_all_prepared_passive_anchors_match_current_source_bytes_and_expressions
     monkeypatch.setattr(prepare_source, 'CLOCK_READER', read, raising=False)
     prepare_source.admit_ownership_document(template)
     prepare_source.admit_tracker_acquisition(template)
-    candidate_template_source_inputs.admit(template, ROOT, read)
     approval_import_source_inputs.admit(template, ROOT, read)
-    assert len(template['anchor_inventory']) == 176
+    candidate_template_source_inputs.admit(template, ROOT, read)
+    assert len(template['anchor_inventory']) == 175
     for row in template['anchor_inventory']:
         body = (ROOT / row['path']).read_bytes()
         assert row['source_sha256'] == hashlib.sha256(body).hexdigest(), row['path']

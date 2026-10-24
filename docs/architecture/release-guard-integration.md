@@ -1979,3 +1979,9 @@ length and full object hash. It no longer launches candidate-object `cat-file`
 queries. Real fixture setup, custody Git commands, source cases, completion and
 cleanup assertions remain intact; this grants no new command or provider
 permission. Every verification still performs a fresh candidate observation.
+
+The exact object-reader source transition validates the original 176-anchor
+inventory before retiring only the removed candidate object Git launch anchor.
+The resulting 175 live anchors retain their original identities and checks.
+Unknown preimages, changed reviewed bytes, duplicate or foreign anchors refuse
+atomically; no replacement launch route is admitted.
