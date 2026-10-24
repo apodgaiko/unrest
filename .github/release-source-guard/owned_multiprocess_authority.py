@@ -86,7 +86,7 @@ class OwnedMultiprocessCustody:
 
     def pipe_binding(self, pid):
         from role_pipe_custody import CLASSES, binding as role_binding
-        if self.bound.get(pid, {}).get('registration', {}).get('class') in CLASSES:
+        if getattr(self, 'bound', {}).get(pid, {}).get('registration', {}).get('class') in CLASSES:
             return role_binding(self, pid)
         original = super().pipe_binding(pid)
         if original is not None:
