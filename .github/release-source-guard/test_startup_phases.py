@@ -171,7 +171,11 @@ ACP_POST_ADMISSION_HOOK = b"        if registration['class'] == 'controlled-acp'
 
 ORDERS_TOKEN_HOOK = b'        if registration["class"] == "source-orders-custody-git":\n            orders_path = Path(state["guard"]).with_name("orders_git.py")\n            checked_source(orders_path, state["direct_support"]["files"][str(orders_path)])[\n                "bind_launch"](registration, child_argv, kwargs.get("cwd"), kwargs.get("env"),\n                               state, launch_token, append, refuse)\n'
 
+ROLE_TOKEN_HOOK = b'        if registration["class"] in {"source-owned-role:worker", "source-owned-role:validator",\n                                     "source-owned-role:terminal-reviewer"}:\n            role_path = Path(state["guard"]).with_name("role_routes.py")\n            checked_source(role_path, state["direct_support"]["files"][str(role_path)])[\n                "bind_launch"](registration, child_argv, kwargs.get("cwd"),\n                               inherited_environment() if kwargs.get("env") is None else dict(kwargs["env"]),\n                               code, state, launch_token, append, refuse)\n'
+
 def restore_stdlib_acp_bytes(body):
+    assert body.count(ROLE_TOKEN_HOOK) == 1
+    body = body.replace(ROLE_TOKEN_HOOK, b'', 1)
     assert body.count(ORDERS_TOKEN_HOOK) == 1
     body = body.replace(ORDERS_TOKEN_HOOK, b'', 1)
     assert body.count(ACP_POST_ADMISSION_HOOK) == 1
@@ -184,6 +188,13 @@ def restore_stdlib_acp_bytes(body):
 
 def restore_stdlib_ready_class(tree):
     import textwrap
+    role = ast.parse(textwrap.dedent(ROLE_TOKEN_HOOK.decode())).body[0]
+    matches = [(node, i) for node in ast.walk(tree)
+               for field, value in ast.iter_fields(node) if field == 'body' and isinstance(value, list)
+               for i, child in enumerate(value)
+               if ast.dump(child, include_attributes=False) == ast.dump(role, include_attributes=False)]
+    assert len(matches) == 1
+    matches[0][0].body.pop(matches[0][1])
     token = ast.parse(textwrap.dedent(ORDERS_TOKEN_HOOK.decode())).body[0]
     parents = [(node, i) for node in ast.walk(tree)
                for field, value in ast.iter_fields(node) if field == 'body' and isinstance(value, list)

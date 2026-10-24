@@ -89,6 +89,33 @@ def admit(argv, cwd, environment, state, append, refuse):
                 "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest(),
             }
         )
-        return {"class": "source-owned-role:" + role, "python": True, "source_binding": binding}
+        return {"class": "source-owned-role:" + role, "python": True, "source_binding": binding,
+                "pipe_device": info.st_dev, "pipe_inode": info.st_ino,
+                "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest()}
     finally:
         del frame
+
+
+def bind_launch(registration, argv, cwd, environment, bootstrap, state, token, append, refuse):
+    """Bind the live admission pipe to this launch, before its actual binding."""
+    if (registration.get('class') not in {
+            'source-owned-role:worker', 'source-owned-role:validator',
+            'source-owned-role:terminal-reviewer'} or registration.get('python') is not True
+            or type(token) is not str or len(token) != 32
+            or any(c not in '0123456789abcdef' for c in token)
+            or type(registration.get('pipe_device')) is not int
+            or type(registration.get('pipe_inode')) is not int
+            or registration['pipe_device'] < 0 or registration['pipe_inode'] <= 0
+            or type(registration.get('source_binding')) is not dict
+            or type(registration.get('argv_sha256')) is not str
+            or type(bootstrap) is not str):
+        refuse('owned_role_launch_binding_context')
+    append({'kind': 'owned_role_launch_binding', 'token': token,
+            'class': registration['class'], 'case': state.get('case'),
+            'source_binding': dict(registration['source_binding']),
+            'pipe_device': registration['pipe_device'], 'pipe_inode': registration['pipe_inode'],
+            'argv_sha256': registration['argv_sha256'],
+            'transformed_argv_sha256': hashlib.sha256(json.dumps(argv).encode()).hexdigest(),
+            'environment_sha256': hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest(),
+            'bootstrap_sha256': hashlib.sha256(bootstrap.encode()).hexdigest(),
+            'cwd': str(Path(cwd or os.getcwd()).resolve())})

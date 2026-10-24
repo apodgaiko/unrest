@@ -1879,3 +1879,29 @@ The original Supervisor.tick, refresh and policy bodies remain unchanged.
 Focused checks retain original source callbacks at every kernel event and prove
 that current forbidden journal bytes or a current read error refuse before exec
 admission, even while no-decision service would otherwise remain idle.
+
+### Repeated ordinary role pipes and completed build producers
+
+Ordinary MCP role custody binds the pipe resolved from the live, pinned source
+frame to the unique launch token before the actual launch and admission records.
+The logical argv digest remains distinct from the transformed bootstrap digest.
+The stopped-image join requires one preceding sidecar, one actual launch and one
+admission with the same owner, case, source, cwd, environment and bootstrap. A
+read-only event view removes only well-formed historical observations of the
+same logical argv outside that current case and pipe identity. The original
+exactly-two-equal observations, parent identity and pre/post-exec descriptor
+checks still decide custody. Missing, duplicate, late, crossed or malformed
+bindings refuse; port or descriptor-number reuse never selects authority.
+
+Completed UV contexts remain in the original producer maps. Idle journal service
+may treat them as no-ops only while every live cache completion and helper
+response receipt already exists, with exact known context shapes. Classification
+is recomputed before each producer tick; pending work keeps the original full
+service even if that tick completes it. Actual producer callbacks, exit-86
+refusals and exec/receipt/finalization barriers retain their original checks.
+
+The bounded release diagnostic runs the original mock, build crosswalk, repeated
+terminal-review cleanup, saved-review cancellation and C1 tests in that order
+with inert journal history. It cannot certify the full source suite. The frozen
+release still requires the full unexcluded Python 3.13 source checkpoint and all
+archive, installed lifecycle, independent validation, desktop and release gates.

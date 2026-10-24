@@ -41,8 +41,50 @@ def no_producer_context(owner):
     if type(source) not in (SourceAuthority, DependencySourceAuthority) or source.supervisor is not owner:
         return False
     producer = source.producers
-    return (type(producer) is NativeProducers and type(producer.uv) is dict
-            and not producer.uv and type(producer.children) is dict and not producer.children)
+    if (type(producer) is not NativeProducers or type(producer.uv) is not dict
+            or type(producer.children) is not dict):
+        return False
+    if not producer.uv and not producer.children:
+        return True
+    # Completed entries remain in the original producer maps. Recompute from
+    # live maps on every callback; completion grants no launch authority.
+    if (type(getattr(producer, 'common', None)) is not dict or type(getattr(producer, 'cache_completed', None)) is not set
+            or type(getattr(producer, 'response_receipts', None)) is not dict
+            or (producer.cache_current is not None and type(producer.cache_current) is not dict)
+            or (producer.common.get('primary_producer') is not None
+                and type(producer.common['primary_producer']) is not dict)
+            or any(type(pid) is not int for pid in producer.cache_completed)
+            or any(type(pid) is not int for pid in producer.response_receipts)):
+        return False
+    uv_fields = {'pid', 'identity', 'owner_pid', 'launch_token', 'token', 'operation',
+                 'record_sha256', 'profile', 'binding', 'seen_requests', 'children'}
+    child_fields = {'kind', 'pid', 'parent', 'identity', 'role', 'helper', 'token',
+                    'profile_sha256', 'original_argv_sha256', 'environment_sha256',
+                    'flags', 'cwd', 'source_operation_token'}
+    for pid, context in producer.uv.items():
+        if (type(pid) is not int or type(context) is not dict or set(context) != uv_fields
+                or type(context['pid']) is not int or context['pid'] != pid
+                or type(context['children']) is not list
+                or type(context['seen_requests']) is not set
+                or any(type(context[key]) is not dict for key in ('identity', 'profile', 'binding'))
+                or type(context['operation']) is not str
+                or context['operation'] not in {'source-build', 'source-install'}
+                or any(type(child) is not dict or type(child.get('pid')) is not int
+                       or producer.children.get(child['pid']) != child
+                       for child in context['children'])):
+            return False
+    for pid, child in producer.children.items():
+        if (type(pid) is not int or type(child) is not dict or set(child) != child_fields
+                or type(child['pid']) is not int or child['pid'] != pid or type(child['parent']) is not int
+                or child['parent'] not in producer.uv
+                or child not in producer.uv[child['parent']]['children']
+                or type(child['role']) is not str
+                or child['role'] not in {'isolated-uv-helper', 'isolated-uv-query'}):
+            return False
+    return ((producer.cache_current is None or all(pid in producer.cache_completed for pid in producer.uv))
+            and (not producer.common.get('primary_producer')
+                 or all(child['role'] != 'isolated-uv-helper' or pid in producer.response_receipts
+                        for pid, child in producer.children.items())))
 
 
 def due(owner):
@@ -75,3 +117,13 @@ def due(owner):
 
 def complete(owner):
     owner._journal_census_completed = time.monotonic()
+
+
+@contextmanager
+def producer_census(owner):
+    """A pending producer keeps original service even if this tick completes it."""
+    if no_producer_context(owner):
+        yield
+    else:
+        with fresh_census(owner):
+            yield

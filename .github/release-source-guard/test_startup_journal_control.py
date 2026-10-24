@@ -159,3 +159,21 @@ def test_exact_loaded_c1_retains_original_ordering_case_and_diagnostic_bound(tmp
                        ('script_sha256', '0' * 64), ('source_checkpoint_ready', True),
                        ('selected_carrier', 'foreign'), ('commands', spec['commands'] + spec['commands'])]:
         assert not control.selected({**spec, key: value})
+
+
+def test_exact_release_preflight_has_original_build_role_history_and_c1_only():
+    from primary_policy import TEST_RELEASE_PREFLIGHT_CASES, TEST_C1_WITNESS_CASES, root_seconds
+    from ci_shell import resources
+    cases = TEST_RELEASE_PREFLIGHT_CASES
+    assert cases == (TEST_C1_WITNESS_CASES[0],
+        'tests/contracts/test_lean_evidence_crosswalk.py::test_crosswalk_is_complete_and_every_mapped_node_passes',
+        'tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[reader-terminal_reviewer]',
+        'tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[cancel]', TEST_C1_WITNESS_CASES[1])
+    script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
+    spec = plan(script, 'diagnostic', 'TEST-positive')
+    assert spec['timeout_seconds'] == root_seconds(spec) == 600 and control.selected(spec)
+    assert resources(spec)[1] == 3 * 1024 ** 3
+    assert spec['source_checkpoint_ready'] is False and spec['selected_carrier'] is None
+    for changed in (cases[::-1], cases[:-1], (*cases, '-k', 'cancel')):
+        with pytest.raises(RuntimeError):
+            plan(('env -u CODEX_PATH uv run pytest -q ' + ' '.join(changed)).encode(), 'diagnostic', 'TEST-positive')

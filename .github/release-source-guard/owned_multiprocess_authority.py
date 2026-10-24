@@ -46,7 +46,9 @@ class OwnedMultiprocessCustody:
         if not hasattr(self, '_source_tick_schedule'):
             self._source_tick_schedule = TickSchedule()
         if self._source_tick_schedule.due(trace, self.supervisor):
-            result = super().tick(trace)
+            from journal_service import producer_census
+            with producer_census(self.supervisor):
+                result = super().tick(trace)
             self._source_tick_schedule.complete(trace)
             return result
         return None
@@ -83,6 +85,9 @@ class OwnedMultiprocessCustody:
         return plan_resolve(self, trace, pid, path, vector, environment, cwd)
 
     def pipe_binding(self, pid):
+        from role_pipe_custody import CLASSES, binding as role_binding
+        if self.bound.get(pid, {}).get('registration', {}).get('class') in CLASSES:
+            return role_binding(self, pid)
         original = super().pipe_binding(pid)
         if original is not None:
             return original

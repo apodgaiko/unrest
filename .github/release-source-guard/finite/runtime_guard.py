@@ -1295,6 +1295,13 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
             }
             code = bootstrap(str(manifest), pin, state["guard"], state["guard_sha256"], payload)
             child_argv = [argv[0], *flags, "-c", code]
+        if registration["class"] in {"source-owned-role:worker", "source-owned-role:validator",
+                                     "source-owned-role:terminal-reviewer"}:
+            role_path = Path(state["guard"]).with_name("role_routes.py")
+            checked_source(role_path, state["direct_support"]["files"][str(role_path)])[
+                "bind_launch"](registration, child_argv, kwargs.get("cwd"),
+                               inherited_environment() if kwargs.get("env") is None else dict(kwargs["env"]),
+                               code, state, launch_token, append, refuse)
         if registration["class"] == "source-orders-custody-git":
             orders_path = Path(state["guard"]).with_name("orders_git.py")
             checked_source(orders_path, state["direct_support"]["files"][str(orders_path)])[

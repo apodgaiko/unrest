@@ -241,3 +241,142 @@ def test_unknown_or_any_producer_context_always_keeps_full_service(service, chan
     else:
         owner.source_census_owner = None
     assert due(owner)
+
+
+def completed_producer(owner):
+    producer = owner.source_census_owner.producers
+    producer.common = {'primary_producer': {'enabled': True}}
+    producer.cache_current, producer.cache_completed = {}, {89, 105}
+    producer.response_receipts, producer.poisoned_exits = {}, set()
+    producer.uv = {}
+    for pid, operation in [(89, 'source-build'), (105, 'source-install')]:
+        producer.uv[pid] = dict(pid=pid, identity={'pid': pid}, owner_pid=20,
+                               launch_token='a' * 32, token='b' * 32,
+                               operation=operation, record_sha256='c' * 64,
+                               profile={}, binding={}, seen_requests=set(), children=[])
+    producer.children = {}
+    for pid, parent, role in [(97, 89, 'isolated-uv-helper'), (98, 89, 'isolated-uv-helper'),
+                              (101, 89, 'isolated-uv-helper'), (102, 89, 'isolated-uv-helper'),
+                              (108, 105, 'isolated-uv-query')]:
+        child = dict(kind='native_source_child', pid=pid, parent=parent, identity={'pid': pid},
+                     role=role, helper='main', token='d' * 32, profile_sha256='e' * 64,
+                     original_argv_sha256='f' * 64, environment_sha256='1' * 64,
+                     flags=[1, 0, 1], cwd='/owned/build', source_operation_token='b' * 32)
+        producer.children[pid] = child
+        producer.uv[parent]['children'].append(child)
+        if role == 'isolated-uv-helper':
+            producer.response_receipts[pid] = {'completed': True}
+    return producer
+
+
+def test_completed_build_query_contexts_execute_original_tick_without_journal_effects(service, monkeypatch):
+    from linux_producers import NativeProducers
+    from primary_source_authority import SourceAuthority as Original
+    owner, _, _ = service
+    producer = completed_producer(owner)
+    complete(owner)
+    trace = owner.owned_trace
+    trace.records = ([{'kind': 'kernel_exit', 'pid': pid, 'raw': 0} for pid in producer.uv]
+                     + [{'kind': 'original_parent_wait4', 'child': pid, 'parent_tgid': child['parent'],
+                         'raw': 0} for pid, child in producer.children.items()])
+    def forbidden(*args, **kwargs):
+        pytest.fail('completed original producer attempted journal-sensitive work')
+    monkeypatch.setattr(Supervisor, 'tick', forbidden)
+    monkeypatch.setattr(owner, 'events', forbidden)
+    monkeypatch.setattr(producer, 'interface', SimpleNamespace(response_receipt=forbidden, cache_view=forbidden), raising=False)
+    # Real original producer methods are not replaced: both completion branches
+    # return before reading the journal or writing any new receipt/cache grant.
+    NativeProducers.tick(producer, trace)
+    Original.tick(owner.source_census_owner, trace)
+    assert not due(owner) and producer.cache_completed == {89, 105}
+
+
+@pytest.mark.parametrize('change', ['cache', 'receipt', 'new_uv', 'new_child', 'unknown_role',
+                                    'unknown_uv_field', 'unknown_child_field', 'bad_key'])
+def test_completed_state_is_rechecked_before_next_original_producer_tick(service, monkeypatch, change):
+    from primary_source_authority import SourceAuthority as Original
+    owner, _, _ = service
+    producer = completed_producer(owner)
+    complete(owner)
+    assert not due(owner)
+    if change == 'cache':
+        producer.cache_completed.remove(89)
+    elif change == 'receipt':
+        producer.response_receipts.pop(97)
+    elif change == 'new_uv':
+        producer.uv[110] = {**producer.uv[105], 'pid': 110, 'children': []}
+    elif change == 'new_child':
+        child = {**producer.children[97], 'pid': 111}
+        producer.children[111] = child
+        producer.uv[89]['children'].append(child)
+    elif change == 'unknown_role':
+        producer.children[97]['role'] = 'unknown'
+    elif change == 'unknown_uv_field':
+        producer.uv[89]['unknown'] = True
+    elif change == 'unknown_child_field':
+        producer.children[97]['unknown'] = True
+    else:
+        producer.response_receipts['97'] = {}
+    calls = []
+    monkeypatch.setattr(Supervisor, 'tick', lambda actual: calls.append('fresh'))
+    monkeypatch.setattr(type(producer), 'tick', lambda actual, trace: calls.append('producer'))
+    Original.tick(owner.source_census_owner, owner.owned_trace)
+    assert calls == ['producer', 'fresh']
+
+
+def test_completed_producer_exit86_refusal_is_still_immediate(service):
+    from linux_producers import NativeProducers
+    owner, _, _ = service
+    producer = completed_producer(owner)
+    complete(owner)
+    observed = []
+    def poison(reason):
+        observed.append(reason)
+        owner.poisoned = True
+    owner.poison = poison
+    owner.owned_trace.records = [{'kind': 'kernel_exit', 'pid': 97, 'raw': 86 << 8}]
+    NativeProducers.tick(producer, owner.owned_trace)
+    assert observed == ['native_preinitialization_refusal'] and due(owner)
+
+
+def test_pending_producer_is_classified_before_completion_not_after(service, monkeypatch):
+    from primary_source_authority import SourceAuthority as Original
+    from journal_service import producer_census
+    owner, _, _ = service
+    producer = completed_producer(owner)
+    producer.cache_completed.remove(89)
+    complete(owner)
+    calls = []
+    def finish(actual, trace):
+        assert due(owner)  # Pre-tick force remains active during the callback.
+        actual.cache_completed.add(89)
+        calls.append('producer_completed')
+    monkeypatch.setattr(type(producer), 'tick', finish)
+    monkeypatch.setattr(Supervisor, 'tick', lambda actual: calls.append('original_full_service'))
+    with producer_census(owner):
+        Original.tick(owner.source_census_owner, owner.owned_trace)
+    assert calls == ['producer_completed', 'original_full_service']
+    assert not due(owner)
+
+
+@pytest.mark.parametrize('change', ['operation', 'role', 'context_child_pid', 'common_primary',
+                                    'cache_current', 'context_pid', 'child_pid'])
+def test_malformed_completed_contexts_fall_back_to_original_service(service, change):
+    owner, _, _ = service
+    producer = completed_producer(owner)
+    complete(owner)
+    if change == 'operation':
+        producer.uv[89]['operation'] = []
+    elif change == 'role':
+        producer.children[97]['role'] = []
+    elif change == 'context_child_pid':
+        producer.uv[89]['children'] = [{'pid': []}]
+    elif change == 'common_primary':
+        producer.common['primary_producer'] = []
+    elif change == 'cache_current':
+        producer.cache_current = []
+    elif change == 'context_pid':
+        producer.uv[89]['pid'] = True
+    else:
+        producer.children[97]['pid'] = True
+    assert due(owner)
