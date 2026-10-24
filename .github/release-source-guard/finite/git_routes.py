@@ -60,6 +60,8 @@ def foundation(argv, cwd, env, state, append, refuse):
     sources = {
         str(Path(state["checkout"]) / relative): line
         for relative, line in (
+            ("tests/test_evolution.py", 35),
+            ("tests/test_workspaces.py", 31),
             ("tests/test_foundation_authority.py", 25),
             ("tests/test_foundation_integration.py", 28),
             ("tests/test_improve_adapter.py", 28),
@@ -302,6 +304,12 @@ def admit(argv, cwd, env, state, append, refuse):
     namespace = {"__file__": str(candidate)}
     exec(current_code(candidate, state["direct_support"]["files"][str(candidate)], state), namespace)
     selected = namespace["admit"](argv, cwd, env, state, append, refuse)
+    if selected is not None:
+        return selected
+    workspace = Path(state['guard']).with_name('workspace_git.py')
+    namespace = {'__file__': str(workspace)}
+    exec(current_code(workspace, state['direct_support']['files'][str(workspace)], state), namespace)
+    selected = namespace['admit'](argv, cwd, env, state, append, refuse)
     if selected is not None:
         return selected
     selected = coordinator(argv, cwd, env, state, append, refuse)

@@ -1985,3 +1985,24 @@ inventory before retiring only the removed candidate object Git launch anchor.
 The resulting 175 live anchors retain their original identities and checks.
 Unknown preimages, changed reviewed bytes, duplicate or foreign anchors refuse
 atomically; no replacement launch route is admitted.
+
+Original workspace and evolution fixture checks retain all collected cases and
+literal Git calls. Their finite support binds the original helper, live owner,
+source bytes, call expression, owned directory and environment. The workspace
+product's existing Git methods also bind their original call sites; the one
+cleanup fault wrapper is admitted only in its exact original case. Commit-tree
+input must match the original subprocess call and is recorded by digest.
+
+Stock Git maintenance is a distinct native child. Only the enumerated original
+fixture commit sites can supply its authority, joined to the consumed parent
+launch token, current source and native process identity, exact commit/config
+bytes, image and environment. Each parent admits at most one such child. Numeric
+wait evidence remains required; Python READY is not inferred for a native leaf.
+The bounded two-module diagnostic is the complete original 24-case tuple, carries
+no source checkpoint authority and grants no provider, generic Git or review
+permission. The full unexcluded source checkpoint remains separate.
+
+The original child-self-commit fixture admits its linked worktree only at the
+exact self-merge lease path and test site. Its gitfile, common directory, admin
+backlink and detached HEAD must agree with that owned repository; other gitdir
+redirects retain refusal. Native environment behavior requires bounded proof.

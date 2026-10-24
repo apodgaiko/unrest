@@ -69,6 +69,9 @@ class OwnedMultiprocessCustody:
         from native_relative_custody import resolve
         if resolve(self, trace, pid, path, vector, environment, cwd):
             return True
+        from fixture_git_maintenance import resolve as fixture_maintenance
+        if fixture_maintenance(self, trace, pid, path, vector, environment, cwd):
+            return True
         from candidate_git_custody import resolve as candidate_resolve
         if candidate_resolve(self, trace, pid, path, vector, environment, cwd):
             return True
