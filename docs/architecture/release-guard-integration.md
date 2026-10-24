@@ -883,7 +883,9 @@ its callable and caller code/globals, the actual source call expression and
 arguments, and the current case. The stopped-child adapter runs only after the
 original resolver explicitly declines; it joins that consumed registration to
 actual parent birth, cwd, argv/environment digests and the pinned native image.
-Object reads retain the original product's closed `cat-file` kinds and full OIDs.
+The legacy candidate-object guard route admits only its pinned closed `cat-file`
+kinds and full OIDs; the current restricted candidate reader performs no such
+launch and independently decodes and hashes local loose objects.
 Unknown absolute native commands remain refused. No missing mutable state key
 implicitly creates source authority.
 
@@ -1971,9 +1973,9 @@ full source suite retains every original build, role, distribution and C1 case.
 Neither a subset result nor a prior candidate’s pass substitutes for that full
 checkpoint. No assertion, deadline, denied review or evidence failure is waived.
 
-A one-shot observer resolver profile measures the first exact candidate-object
-Git vector. It emits at most 64 hashed code locations and numeric call/CPU-time
-counters into the existing private native diagnostic records. The resolver,
-current-input acquisitions, verdicts and errors are unchanged; diagnostic failure
-cannot replace the initiating result. These counters are not acceptance or native
-provider evidence, and no payload body or environment is copied into them.
+The restricted candidate input reader decodes its already-required local loose
+objects directly, checking bounded compressed/expanded bytes, canonical type and
+length and full object hash. It no longer launches candidate-object `cat-file`
+queries. Real fixture setup, custody Git commands, source cases, completion and
+cleanup assertions remain intact; this grants no new command or provider
+permission. Every verification still performs a fresh candidate observation.

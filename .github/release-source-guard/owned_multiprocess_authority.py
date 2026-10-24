@@ -54,11 +54,6 @@ class OwnedMultiprocessCustody:
         return None
 
     def resolve(self, trace, pid, path, vector, environment, cwd):
-        from resolver_cost_profile import observe
-        with observe(self, path, vector):
-            return self.resolve_measured(trace, pid, path, vector, environment, cwd)
-
-    def resolve_measured(self, trace, pid, path, vector, environment, cwd):
         if getattr(self, 'supervisor', None) is not None:
             # An exec decision never relies on an idle poll or prior census.
             from journal_service import fresh_census

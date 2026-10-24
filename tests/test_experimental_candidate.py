@@ -599,3 +599,14 @@ def test_overlap_loop_checks_deadline(repo: tuple[Path, str, str],
     with pytest.raises(CandidateInputError, match="^observation_deadline$"):
         observe(repo)
     assert calls == 1
+
+
+def test_observation_and_verification_create_no_object_read_children(
+    repo: tuple[Path, str, str], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = observe(repo)
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("candidate object observation launched a process")
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    assert observe(repo) == original
+    verify_candidate_inputs(repo[0], original)

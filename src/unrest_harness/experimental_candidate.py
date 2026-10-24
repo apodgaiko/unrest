@@ -6,17 +6,15 @@ import hashlib
 import os
 from pathlib import Path
 import re
-import selectors
 import stat
 import struct
-import subprocess
 import time
+import zlib
 
 from .canonical_identity import canonical_json_bytes, verify_canonical_json_bytes
 
 
 DOMAIN = b"unrest.experimental-candidate-inputs.v1\0"
-GIT = Path("/usr/bin/git").resolve()
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_BYTES = 64 * 1024 * 1024
 MAX_ENTRIES = 4096
@@ -144,43 +142,6 @@ class _Observation:
         self.total += size
         _require(self.total <= MAX_TOTAL_BYTES, "aggregate_size")
 
-    def git(self, arguments: tuple[str, ...]) -> bytes:
-        # Only object type and raw object templates are admitted by callers.
-        self.tick()
-        deadline = min(self.deadline, time.monotonic() + COMMAND_SECONDS)
-        with subprocess.Popen(
-            [str(GIT), "--no-replace-objects", *arguments], cwd=self.root,
-            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "GIT_CONFIG_NOSYSTEM": "1",
-                 "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0",
-                 "GIT_TERMINAL_PROMPT": "0"},
-            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-        ) as process:
-            assert process.stdout is not None
-            chunks: list[bytes] = []
-            size = 0
-            try:
-                with selectors.DefaultSelector() as selector:
-                    selector.register(process.stdout, selectors.EVENT_READ)
-                    while True:
-                        remaining = deadline - time.monotonic()
-                        _require(remaining > 0, "git_deadline")
-                        _require(bool(selector.select(remaining)), "git_deadline")
-                        chunk = os.read(process.stdout.fileno(), 65536)
-                        if not chunk:
-                            break
-                        size += len(chunk)
-                        _require(size <= MAX_FILE_BYTES, "object_size")
-                        chunks.append(chunk)
-                remaining = deadline - time.monotonic()
-                _require(remaining > 0, "git_deadline")
-                _require(process.wait(timeout=remaining) == 0, "git_object")
-            except BaseException:
-                process.kill()
-                process.wait()
-                raise
-        self.account(size)
-        return b"".join(chunks)
-
     def object(self, oid: str, kind: str) -> bytes:
         self.tick()
         _require(_OID.fullmatch(oid) is not None, "oid")
@@ -189,11 +150,26 @@ class _Observation:
             # No packed/promisor/alternate storage is admitted. Missing objects fail locally.
             location = self.root / ".git" / "objects" / oid[:2] / oid[2:]
             _require(location.is_file(), "missing_object")
-            observed_kind = self.git(("cat-file", "-t", oid)).decode("ascii").strip()
-            _require(observed_kind == kind, "object_type")
-            raw = self.git(("cat-file", kind, oid))
-            header = f"{kind} {len(raw)}\0".encode("ascii")
-            _require(hashlib.sha1(header + raw).hexdigest() == oid, "object_hash")
+            deadline = min(self.deadline, time.monotonic() + COMMAND_SECONDS)
+            _require(time.monotonic() < deadline, "git_deadline")
+            compressed = self.read(location)
+            decoder = zlib.decompressobj()
+            try:
+                expanded = decoder.decompress(compressed, MAX_FILE_BYTES + 65)
+            except zlib.error:
+                raise CandidateInputError("git_object") from None
+            _require(not decoder.unconsumed_tail and len(expanded) <= MAX_FILE_BYTES + 64,
+                     "object_size")
+            _require(decoder.eof and not decoder.unused_data, "git_object")
+            header, separator, raw = expanded.partition(b"\0")
+            _require(bool(separator) and len(header) <= 64, "git_object")
+            encoded_kind, space, size = header.partition(b" ")
+            _require(encoded_kind == kind.encode("ascii"), "object_type")
+            _require(bool(space) and size == str(len(raw)).encode("ascii"), "git_object")
+            _require(len(raw) <= MAX_FILE_BYTES, "object_size")
+            _require(hashlib.sha1(expanded).hexdigest() == oid, "object_hash")
+            self.account(len(raw))
+            _require(time.monotonic() < deadline, "git_deadline")
             self.objects[oid] = (kind, raw)
         observed_kind, raw = self.objects[oid]
         _require(observed_kind == kind, "object_type")
@@ -389,7 +365,7 @@ def observe_candidate_inputs(
     try:
         return _observe(root, expected_base_oid, expected_candidate_commit_oid,
                         extra_input_files, output_directories, targets)
-    except (OSError, UnicodeError, struct.error, subprocess.TimeoutExpired) as error:
+    except (OSError, UnicodeError, struct.error) as error:
         raise CandidateInputError("observation_failed") from error
 
 

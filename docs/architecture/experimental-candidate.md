@@ -49,24 +49,24 @@ active hooks, extensions and nested repositories. Metadata links/special files
 refuse. This is intentionally a restricted fixture reader, not a generic Git
 compatibility layer or repository-wide fsck.
 
-Config is parsed before Git runs using a closed ASCII fixture grammar. Only
-`[core]` and `[user]` sections are allowed; core repositoryformatversion=0,
+Config is parsed before object observation using a closed ASCII fixture grammar.
+Only `[core]` and `[user]` sections are allowed; core repositoryformatversion=0,
 bare=false, boolean filemode/logallrefupdates/ignorecase/precomposeunicode and
 plain user name/email values are supported. Includes, remote/credential/filter/
-diff/textconv/fsmonitor/hook helpers and every other setting refuse. Ambient
-Git overrides are discarded. `/usr/bin/git` is resolved once, with fixed
-`--no-replace-objects cat-file -t OID` and `cat-file TYPE OID` argument templates,
-closed stdin, discarded stderr and no shell. The entire environment is PATH
-(`/usr/bin:/bin`), LC_ALL=C, GIT_CONFIG_NOSYSTEM=1,
-GIT_CONFIG_GLOBAL=/dev/null, GIT_OPTIONAL_LOCKS=0 and GIT_TERMINAL_PROMPT=0.
-There is no network recovery path or dependence on lazy-fetch suppression.
+diff/textconv/fsmonitor/hook helpers and every other setting refuse. Object reads
+launch no Git process and consult no ambient Git environment or configuration.
+Each relied-on loose file is read and zlib-decoded locally under the existing
+stable-custody requirement. Its canonical type/decimal-size/NUL header, expanded
+length and complete SHA-1 object identity must match. Truncated streams, extra
+streams or trailing bytes, unsupported kinds and oversized expansions refuse;
+there is no packed/promisor/alternate or network recovery path.
 
 Limits: 8 MiB per file/object/command output; 64 MiB aggregate bytes read from
-input/index/config/ref files and Git stdout; 512 unique relied-on objects;
+input/index/config/ref files and compressed plus expanded object bytes; 512 unique relied-on objects;
 4096 admitted filesystem entries across metadata and the full worktree (including
 root children and the root `.git` entry), with a separate 4096 worktree ceiling;
 4096 expanded tree entries across base and candidate traversals, including every
-directory occurrence even when its object is cached; 5 seconds per Git command;
+directory occurrence even when its object is cached; 5 seconds per loose-object acquisition (the existing `COMMAND_SECONDS` bound);
 60 seconds per observation, starting before declaration validation. Directory
 iterators admit and count entries before sorting, stopping at the first excess
 entry. Cached traversal, enumeration, declaration/overlap and parsing loops
@@ -74,8 +74,8 @@ check the deadline; bounded sorts and bulk byte operations check on completion.
 Declarations accept only concrete built-in lists and tuples, at most 4096 items
 each. Deterministic sorting follows bounded admission. Regular
 filesystem reads assume local stable custody; these are not hard real-time
-bounds on a stalled filesystem syscall. Git children are killed and reaped on
-failure/deadline. No child is retained after return.
+bounds on a stalled filesystem syscall. No object-read child is created or retained after return; observation and
+acquisition deadline failures still refuse before returning a manifest.
 
 ## Paths and file coverage
 

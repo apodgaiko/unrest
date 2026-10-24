@@ -165,11 +165,11 @@ def test_product_object_reader_is_bound_to_plain_import_code():
     if not path.is_file():
         pytest.skip('product source is absent from the isolated control capsule')
     from unrest_harness.experimental_candidate import _Observation
-    path = Path(_Observation.git.__code__.co_filename)
+    path = Path(_Observation.object.__code__.co_filename)
     if not path.is_file():
         pytest.skip('product source is absent from the isolated control capsule')
     compiled = compile(path.read_bytes(), str(path), 'exec', dont_inherit=True)
-    assert named(named(compiled, '_Observation'), 'git') == _Observation.git.__code__
+    assert named(named(compiled, '_Observation'), 'object') == _Observation.object.__code__
 
 
 def test_admitted_journal_omits_template_python_field_but_bootstrap_is_native():
