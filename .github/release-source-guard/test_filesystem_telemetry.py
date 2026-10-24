@@ -63,3 +63,44 @@ def test_real_owned_directory_is_read_only(tmp_path, monkeypatch):
     telemetry.observe('before_dispatch')
     assert len(telemetry.records) == 1
     assert before == (tmp_path.stat().st_ino, marker.stat().st_ino, marker.read_bytes())
+
+
+def test_resolver_failure_retains_errno_without_replacing_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(MODULE, 'PATHS', (str(tmp_path),))
+    telemetry = MODULE.Telemetry()
+    source = types.SimpleNamespace(filesystem_telemetry=telemetry)
+    initiating = OSError(errno.ENOSPC, 'private write body')
+    with pytest.raises(OSError) as caught:
+        try:
+            raise initiating
+        except BaseException as error:
+            MODULE.observe_trace_failure(source, error)
+            raise
+    assert caught.value is initiating
+    assert telemetry.records[0]['initiating_error'] == {'class': 'OSError', 'errno': errno.ENOSPC}
+    assert telemetry.records[0]['phase'] == 'trace_failure'
+    row = telemetry.records[0]['filesystems'][0]
+    if tmp_path.stat().st_uid in (0, 20000, 20001):
+        assert row['bytes_available'] >= 0
+    else:
+        assert row['diagnostic_error'] == {'class': 'RuntimeError', 'errno': None}
+    assert 'private write body' not in repr(telemetry.records)
+    MODULE.observe_trace_failure(source, OSError(errno.EIO, 'later'))
+    assert len(telemetry.records) == 1
+    MODULE.observe_trace_failure(None, initiating)
+
+
+@pytest.mark.parametrize('secondary', [RuntimeError('secondary-private'), MemoryError(), KeyboardInterrupt()])
+def test_failed_observation_never_replaces_initiating_failure(secondary):
+    class Observer:
+        def observe(self, *_):
+            raise secondary
+    source = types.SimpleNamespace(filesystem_telemetry=Observer())
+    initiating = OSError(errno.ENOSPC, 'initiating-private')
+    with pytest.raises(OSError) as caught:
+        try:
+            raise initiating
+        except BaseException as error:
+            assert MODULE.observe_trace_failure(source, error) is False
+            raise
+    assert caught.value is initiating

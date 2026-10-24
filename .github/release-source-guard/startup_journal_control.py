@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from primary_policy import TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, TEST_RELEASE_PREFLIGHT_CASES, TEST_RELEASE_BUILD_PREFLIGHT_CASES, sha
+from primary_policy import TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, TEST_RELEASE_PREFLIGHT_CASES, TEST_RELEASE_BUILD_PREFLIGHT_CASES, TEST_RELEASE_STORAGE_PREFLIGHT_CASES, sha
 
 FILES = 512
 ROWS_PER_FILE = 80
@@ -13,7 +13,7 @@ KIND = 'startup_journal_load_control'
 
 def selected(spec):
     commands = [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *cases]
-                for cases in (TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, TEST_RELEASE_PREFLIGHT_CASES, TEST_RELEASE_BUILD_PREFLIGHT_CASES)]
+                for cases in (TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, TEST_RELEASE_PREFLIGHT_CASES, TEST_RELEASE_BUILD_PREFLIGHT_CASES, TEST_RELEASE_STORAGE_PREFLIGHT_CASES)]
     command = spec.get('commands', [None])[0] if type(spec.get('commands')) is list and len(spec['commands']) == 1 else None
     return (spec.get('source_mode') == 'TEST-positive'
             and spec.get('duty') == 'TEST-source-positive'

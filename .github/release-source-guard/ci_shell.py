@@ -40,6 +40,7 @@ def resources(spec=None):
                 or spec.get('commands') != [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q']]):
             raise RuntimeError('primary_source_resource_scope')
         mounts['/work'] = 'rw,exec,nosuid,nodev,size=2g,uid=20000,gid=20000,mode=0711'
+        mounts['/receipts'] = TMPFS['/receipts'].replace('size=32m,', 'size=128m,', 1)
         memory = 3221225472
     if spec is not None and spec.get('source_mode') == 'TEST-positive':
         from primary_policy import TEST_SELECTIONS
@@ -49,6 +50,9 @@ def resources(spec=None):
             raise RuntimeError('primary_source_fixture_mount_scope')
         mounts['/work'] = mounts['/work'].replace('rw,', 'rw,exec,', 1)
         from startup_journal_control import selected
+        from primary_policy import TEST_RELEASE_STORAGE_PREFLIGHT_CASES
+        if selected(spec) and spec.get('commands') == [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *TEST_RELEASE_STORAGE_PREFLIGHT_CASES]]:
+            mounts['/receipts'] = TMPFS['/receipts'].replace('size=32m,', 'size=128m,', 1)
         from primary_policy import TEST_INITIALIZATION_CASES
         initialization = ['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *TEST_INITIALIZATION_CASES]
         if selected(spec) or (spec.get('commands') == [initialization]

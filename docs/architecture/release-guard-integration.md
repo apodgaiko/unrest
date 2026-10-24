@@ -1923,3 +1923,22 @@ when that snapshot is later fully materialized. Appends, rewrites and truncation
 recompute current positions. Changed decoder policy, exposed values, shallow-data
 limits or a narrow recursion margin retain the complete original decoding path.
 Only parsing metadata crosses acquisitions; no launch decision or mutable row does.
+
+
+### Retained source metadata capacity
+
+The exact full SOURCE command and the seven-case repeated-build diagnostic use
+a finite 128 MiB observer-owned, non-executable `/receipts` tmpfs. Other commands
+retain 32 MiB. This metadata allocation stays within the existing 3 GiB capsule
+memory cap; it changes no candidate workspace, launch admission, source test,
+assertion, deadline, original-parent wait requirement or evidence-retention rule.
+The diagnostic retains the existing six cases and additionally executes the
+original extracted-distribution checker, including its second native build and
+15 persistence cases. It is not a source checkpoint.
+
+Trace failure observation covers resolver exceptions as well as tick exceptions.
+It retains the first exception class/errno and current mount block/inode counts
+without storing exception text or substituting a diagnostic error for the
+initiating failure. Earlier write failures without an errno or failure-time
+filesystem observation remain uncertain; a larger metadata budget is not proof
+of their exact operating-system error.

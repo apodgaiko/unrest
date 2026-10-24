@@ -53,3 +53,17 @@ class Telemetry:
 
     def failed(self):
         return any('diagnostic_error' in row for record in self.records for row in record['filesystems'])
+
+
+def observe_trace_failure(source, error):
+    """Best-effort diagnostics must never replace an already-failed trace."""
+    try:
+        telemetry = getattr(source, 'filesystem_telemetry', None)
+        if telemetry is None:
+            return False
+        telemetry.observe('trace_failure', error)
+        return True
+    except BaseException:
+        # Resource exhaustion can also prevent its own observation. The caller
+        # retains the initiating failure and its original fail-closed outcome.
+        return False

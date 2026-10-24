@@ -451,6 +451,11 @@ def test_own_native_probe_preserves_all_prior_stage1_compartment_statements():
         "                seed(spec, Path('/work/events'))\n")
     assert source.count(seeded_test_setup) == 1
     source = source.replace(seeded_test_setup, '')
+    failure_observation = (
+        '        from filesystem_telemetry import observe_trace_failure\n'
+        '        observe_trace_failure(source, error)\n')
+    assert source.count(failure_observation) == 1
+    source = source.replace(failure_observation, '')
     # Normalize the exact adoptive-wait and packed-export changes before
     # comparing every remaining statement to the original immutable AST.
     changes = {

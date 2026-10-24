@@ -274,6 +274,8 @@ def main():
         result = trace.run()
         tick(trace)
     except BaseException as error:
+        from filesystem_telemetry import observe_trace_failure
+        observe_trace_failure(source, error)
         failure = 'trace_failure'
         trace_status = trace_failure_status(error)
         result = {'records': trace.records, 'poison': trace.poison,

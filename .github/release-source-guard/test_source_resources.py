@@ -15,8 +15,9 @@ def test_only_full_source_changes_workspace_capacity():
     original = deepcopy(ci_shell.TMPFS)
     mounts, memory = ci_shell.resources(spec())
     assert memory == 3 * 1024 ** 3
+    assert mounts['/receipts'] == original['/receipts'].replace('size=32m,', 'size=128m,', 1)
     assert mounts['/work'] == 'rw,exec,nosuid,nodev,size=2g,uid=20000,gid=20000,mode=0711'
-    assert {k: v for k, v in mounts.items() if k != '/work'} == {k: v for k, v in original.items() if k != '/work'}
+    assert {k: v for k, v in mounts.items() if k not in {'/work', '/receipts'}} == {k: v for k, v in original.items() if k not in {'/work', '/receipts'}}
     assert ci_shell.TMPFS == original
     assert ci_shell.resources({'duty': 'Build wheel and source distribution'}) == (original, 1073741824)
     current, origins = config()
@@ -112,3 +113,29 @@ def test_exact_initialization_probe_matches_full_memory_without_other_scope_chan
         assert ci_shell.resources(changed)[1] == 1073741824
         with pytest.raises(RuntimeError, match='configuration'):
             ci_shell.validate(current, 'sha256:owned', origins, changed)
+
+
+def test_only_exact_repeated_build_diagnostic_receives_full_receipt_capacity():
+    from primary_policy import TEST_RELEASE_STORAGE_PREFLIGHT_CASES, TEST_RELEASE_BUILD_PREFLIGHT_CASES
+    from primary_source_inputs import test_plan
+    assert len(TEST_RELEASE_STORAGE_PREFLIGHT_CASES) == 7
+    assert TEST_RELEASE_STORAGE_PREFLIGHT_CASES[:-2] == TEST_RELEASE_BUILD_PREFLIGHT_CASES[:-1]
+    assert TEST_RELEASE_STORAGE_PREFLIGHT_CASES[-1] == TEST_RELEASE_BUILD_PREFLIGHT_CASES[-1]
+    command = 'env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_RELEASE_STORAGE_PREFLIGHT_CASES)
+    value = test_plan(command.encode(), 'diagnostic', 'TEST-positive')
+    mounts, memory = ci_shell.resources(value)
+    assert mounts['/receipts'] == ci_shell.resources(spec())[0]['/receipts']
+    assert memory == 3 * 1024 ** 3 and value['timeout_seconds'] == 600
+    assert value['source_checkpoint_ready'] is False and value['selected_carrier'] is None
+    for field in ('duty', 'commands'):
+        drift = deepcopy(value)
+        drift[field] = 'foreign'
+        with pytest.raises(RuntimeError):
+            ci_shell.resources(drift)
+    for field, replacement in [('script_sha256', '0' * 64), ('source_checkpoint_ready', True), ('selected_carrier', 'foreign')]:
+        drift = deepcopy(value)
+        drift[field] = replacement
+        assert ci_shell.resources(drift)[0]['/receipts'] == ci_shell.TMPFS['/receipts']
+    legacy = 'env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_RELEASE_BUILD_PREFLIGHT_CASES)
+    old = test_plan(legacy.encode(), 'diagnostic', 'TEST-positive')
+    assert ci_shell.resources(old)[0]['/receipts'] == ci_shell.TMPFS['/receipts']
