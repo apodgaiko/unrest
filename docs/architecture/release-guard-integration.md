@@ -1970,3 +1970,10 @@ persistence, installed lifecycle, independent validation and desktop gates. The
 full source suite retains every original build, role, distribution and C1 case.
 Neither a subset result nor a prior candidate’s pass substitutes for that full
 checkpoint. No assertion, deadline, denied review or evidence failure is waived.
+
+A one-shot observer resolver profile measures the first exact candidate-object
+Git vector. It emits at most 64 hashed code locations and numeric call/CPU-time
+counters into the existing private native diagnostic records. The resolver,
+current-input acquisitions, verdicts and errors are unchanged; diagnostic failure
+cannot replace the initiating result. These counters are not acceptance or native
+provider evidence, and no payload body or environment is copied into them.

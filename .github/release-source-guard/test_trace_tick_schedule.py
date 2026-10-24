@@ -7,6 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 import trace_tick_schedule as scheduling
+import resolver_cost_profile as profile
+import linux_producers
 from owned_multiprocess_authority import OwnedMultiprocessCustody
 
 
@@ -423,3 +425,102 @@ def test_actual_primary_dispatch_keeps_fresh_source_barrier_when_idle(monkeypatc
     finally:
         first.close()
         second.close()
+
+
+
+
+@pytest.fixture
+def owner(monkeypatch):
+    class Producer:
+        def __init__(self):
+            self.records = []
+    monkeypatch.setattr(linux_producers, 'NativeProducers', Producer)
+    return SimpleNamespace(producers=Producer())
+
+
+VECTOR = ['/usr/bin/git', '--no-replace-objects', 'cat-file', '-t', '0' * 40]
+
+
+def test_one_shot_closed_metadata_never_copies_vectors(owner):
+    for _ in range(2):
+        with profile.observe(owner, '/usr/bin/git', VECTOR):
+            sum(range(20))
+    assert len(owner.producers.records) == 1
+    result = owner.producers.records[0]
+    assert set(result) == {'kind', 'diagnostic_only', 'eligible_certificate', 'elapsed_ns', 'rows'}
+    assert result['diagnostic_only'] and result['eligible_certificate'] is False
+    assert 0 < len(result['rows']) <= 64
+    for row in result['rows']:
+        assert set(row) == {'location_sha256', 'calls', 'recursive_calls', 'self_ns', 'total_ns'}
+        assert len(row['location_sha256']) == 64
+        assert all(type(value) is int and value >= 0 for key, value in row.items() if key != 'location_sha256')
+
+
+@pytest.mark.parametrize('failure', [RuntimeError, MemoryError, KeyboardInterrupt])
+def test_profile_failure_never_replaces_the_body_exception(owner, monkeypatch, failure):
+    class Broken:
+        def __init__(self, **kwargs):
+            pass
+        def enable(self):
+            pass
+        def disable(self):
+            raise failure('diagnostic')
+    monkeypatch.setattr(profile.cProfile, 'Profile', Broken)
+    original = ValueError('original')
+    with pytest.raises(ValueError) as caught:
+        with profile.observe(owner, '/usr/bin/git', VECTOR):
+            raise original
+    assert caught.value is original and owner.producers.records == []
+
+
+def test_profile_construction_failure_leaves_body_unchanged(owner, monkeypatch):
+    def broken(**kwargs):
+        raise RuntimeError('diagnostic')
+    monkeypatch.setattr(profile.cProfile, 'Profile', broken)
+    observed = []
+    with profile.observe(owner, '/usr/bin/git', VECTOR):
+        observed.append('actual')
+    assert observed == ['actual'] and owner.producers.records == []
+
+
+@pytest.mark.parametrize('path,vector', [('/other', VECTOR), ('/usr/bin/git', []),
+                                       ('/usr/bin/git', ['/usr/bin/git', 'status'])])
+def test_other_routes_are_not_profiled(owner, path, vector):
+    with profile.observe(owner, path, vector):
+        pass
+    assert not hasattr(owner, '_resolver_cost_attempted') and owner.producers.records == []
+
+
+def test_existing_profile_hook_and_events_remain_unchanged(owner):
+    import sys
+    events = []
+    def hook(frame, event, arg):
+        events.append(event)
+    before = sys.getprofile()
+    sys.setprofile(hook)
+    try:
+        with profile.observe(owner, '/usr/bin/git', VECTOR):
+            assert sys.getprofile() is hook
+            sum(range(20))
+        assert sys.getprofile() is hook and events
+        assert not hasattr(owner, '_resolver_cost_attempted')
+        assert owner.producers.records == []
+    finally:
+        sys.setprofile(before)
+
+
+def test_partial_enable_failure_attempts_disable_before_body(owner, monkeypatch):
+    calls = []
+    class Partial:
+        def __init__(self, **kwargs):
+            pass
+        def enable(self):
+            calls.append('enable')
+            raise RuntimeError('partial')
+        def disable(self):
+            calls.append('disable')
+    monkeypatch.setattr(profile.cProfile, 'Profile', Partial)
+    with profile.observe(owner, '/usr/bin/git', VECTOR):
+        calls.append('body')
+    assert calls == ['enable', 'disable', 'body']
+    assert owner.producers.records == []
