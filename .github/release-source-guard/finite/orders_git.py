@@ -198,3 +198,22 @@ def admit(argv, cwd, environment, state, append, refuse):
         return registration
     finally:
         frames.clear()
+
+
+def bind_launch(registration, argv, cwd, environment, state, token, append, refuse):
+    """Bind this admitted caller to its launch, independent of other threads."""
+    source = registration.get('source_binding')
+    caller = registration.get('caller_binding')
+    if (registration.get('class') != CLASS or registration.get('python') is not False
+            or registration.get('case') != state.get('case')
+            or type(source) is not dict or type(caller) is not dict
+            or type(token) is not str or len(token) != 32
+            or any(c not in '0123456789abcdef' for c in token)
+            or environment != ENVIRONMENT):
+        refuse('orders_git_launch_binding_context')
+    append({'kind': 'orders_custody_launch_binding', 'token': token,
+            'class': CLASS, 'python': False, 'case': registration['case'],
+            'source_binding': dict(source), 'caller_binding': dict(caller),
+            'argv_sha256': hashlib.sha256(json.dumps(argv).encode()).hexdigest(),
+            'environment_sha256': hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest(),
+            'bootstrap_sha256': None, 'cwd': str(Path(cwd).resolve())})

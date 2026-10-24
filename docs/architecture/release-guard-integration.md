@@ -1743,3 +1743,13 @@ The bounded diagnostic selects this exact original case plus the existing mock
 control; it cannot issue a source checkpoint. The full unexcluded source command
 and every release gate remain unchanged. Historical native-route review denial
 and failed evidence remain preserved; this binding does not retry that route.
+
+Custody launch evidence carries the freshly minted launch token before the
+actual launch record and process creation. The stopped-image join requires one
+matching owner/token binding with exact caller, source, vector, environment, cwd
+and null bootstrap, preceding that launch. Interleaved threads cannot erase one
+another's evidence. A previous launch by the same PID does not define ownership.
+Missing, duplicate, late or mismatched token records fail; there is no legacy
+window fallback. Current kernel parent birth, executable, repository and stock
+maintenance checks remain independent requirements. Original concrete admissions
+and historical concurrency failures remain retained.

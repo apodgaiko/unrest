@@ -66,7 +66,7 @@ class Operations(_LegacyOperations):
         if guard is None or guard.__dict__.get('_STATE') is not state or state.get('phase') != 'INSTALLING':
             self.refuse('primary_native_route_install_boundary')
         guard_body = Path(state['guard']).read_bytes()
-        if hashlib.sha256(guard_body).hexdigest() != '57359092fa2f21ad5600c632651ba0cb79e69155c9ff6f8208e8a88affb43c3d':
+        if hashlib.sha256(guard_body).hexdigest() != 'd3029b485965d5e951ad7265bff3b58adeaf59e58c7708c9100f42407cf4b406':
             self.refuse('primary_native_route_guard_drift')
         original_install = original_guard_install(guard, state, guard_body, self.refuse)
         caller = sys._getframe(1)

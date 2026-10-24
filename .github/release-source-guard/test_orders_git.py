@@ -16,6 +16,7 @@ import pytest
 SUPPORT = Path(__file__).parent
 ROOT = SUPPORT.parent.parent
 sys.path.insert(0, str(SUPPORT))
+sys.path.insert(0, str(ROOT))
 from finite import orders_git as route  # noqa: E402
 import orders_git_custody as native  # noqa: E402
 from finite.orders_git_data import PINS, SITES, CASES as SETUP_CASES  # noqa: E402
@@ -324,7 +325,11 @@ def test_python_admission_joins_real_source_code_and_call_arguments(tmp_path, ch
         "duplicate-launch",
         "missing-caller",
         "duplicate-caller",
-        "old-window",
+        "interleaved-launch",
+        "legacy-window",
+        "token",
+        "binding-environment",
+        "binding-bootstrap",
         "after-launch",
         "owner",
         "case",
@@ -337,16 +342,17 @@ def test_python_admission_joins_real_source_code_and_call_arguments(tmp_path, ch
         "caller-drift",
     ],
 )
-def test_stopped_image_joins_actual_admitted_shape_to_exact_caller_window(tmp_path, change):
+def test_stopped_image_joins_actual_admitted_shape_to_exact_caller_token(tmp_path, change):
     selection, vector, env, cwd, manifest = selected(tmp_path)
     full = selection["registration"]
     concrete = {
-        "kind": "concrete_orders_custody_git",
+        "kind": "orders_custody_launch_binding",
         **full,
         "argv_sha256": selection["transformed_argv_sha256"],
+        "environment_sha256": selection["environment_sha256"],
+        "bootstrap_sha256": None,
         "cwd": cwd,
     }
-    concrete.pop("token")
     # runtime_guard's admitted event carries neither python nor caller_binding.
     admitted = {k: v for k, v in full.items() if k not in ("python", "caller_binding")}
     admitted["argv_sha256"] = selection["transformed_argv_sha256"]
@@ -362,8 +368,17 @@ def test_stopped_image_joins_actual_admitted_shape_to_exact_caller_window(tmp_pa
         events.pop(0)
     elif change == "duplicate-caller":
         events.insert(0, dict(concrete))
-    elif change == "old-window":
+    elif change == "interleaved-launch":
         events.insert(1, {**launch, "token": "previous"})
+    elif change == "legacy-window":
+        concrete['kind'] = 'concrete_orders_custody_git'
+        concrete.pop('token')
+    elif change == "token":
+        concrete['token'] = 'crossed'
+    elif change == "binding-environment":
+        concrete['environment_sha256'] = 'foreign'
+    elif change == "binding-bootstrap":
+        concrete['bootstrap_sha256'] = 'foreign'
     elif change == "after-launch":
         events.reverse()
     elif change in ("owner", "case", "class", "python", "cwd", "argv", "source"):
@@ -378,7 +393,7 @@ def test_stopped_image_joins_actual_admitted_shape_to_exact_caller_window(tmp_pa
     snapshot = json.dumps(selection, sort_keys=True)
     joined = native.join_registration(selection, events)
     accepted = joined is not None and native.eligible(joined, vector, env, cwd, manifest, str(ROOT))
-    assert accepted is (change is None)
+    assert accepted is (change in (None, 'interleaved-launch'))
     assert json.dumps(selection, sort_keys=True) == snapshot
 
 

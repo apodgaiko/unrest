@@ -45,7 +45,7 @@ def eligible(selected, vector, environment, cwd, manifest, checkout='/source'):
 
 
 def join_registration(selected, events):
-    """Consume the concrete caller from this launch's preceding journal window."""
+    """Consume the caller explicitly bound to this launch's unique token."""
     admitted = selected.get('registration', {})
     if admitted.get('class') != CLASS:
         return None
@@ -53,33 +53,32 @@ def join_registration(selected, events):
                 if row.get('kind') == 'actual_launch_binding'
                 and row.get('owner_pid') == selected.get('owner_pid')
                 and row.get('token') == selected.get('token')]
-    if len(launches) != 1:
+    bindings = [(i, row) for i, row in enumerate(events)
+                if row.get('kind') == 'orders_custody_launch_binding'
+                and row.get('owner_pid') == selected.get('owner_pid')
+                and row.get('token') == selected.get('token')]
+    if len(launches) != 1 or len(bindings) != 1:
         return None
-    index = launches[0]
-    if any(events[index].get(n) != selected.get(n) for n in (
+    index, row = bindings[0]
+    launch = events[launches[0]]
+    if index >= launches[0] or any(launch.get(name) != selected.get(name) for name in (
             'owner_pid', 'token', 'cwd', 'bootstrap_sha256',
             'transformed_argv_sha256', 'environment_sha256')):
         return None
-    start = max((i + 1 for i, row in enumerate(events[:index])
-                 if row.get('kind') == 'actual_launch_binding'
-                 and row.get('owner_pid') == selected.get('owner_pid')), default=0)
-    concrete = [row for row in events[start:index]
-                if row.get('kind') == 'concrete_orders_custody_git'
-                and row.get('owner_pid') == selected.get('owner_pid')]
-    if len(concrete) != 1:
-        return None
-    row = concrete[0]
     if (row.get('class') != CLASS or row.get('python') is not False
             or row.get('case') != admitted.get('case')
             or row.get('source_binding') != admitted.get('source_binding')
+            or type(row.get('caller_binding')) is not dict
             or row.get('cwd') != selected.get('cwd')
+            or row.get('bootstrap_sha256') is not None
+            or row.get('environment_sha256') != selected.get('environment_sha256')
             or row.get('argv_sha256') != selected.get('transformed_argv_sha256')
             or row.get('argv_sha256') != admitted.get('argv_sha256')):
         return None
-    # The original admitted record intentionally omits route-specific fields.
-    # Keep it unchanged and join only the authenticated concrete caller here.
+    # Preserve the original admitted projection. The stopped-image predicate
+    # independently rechecks caller source, command, repository and executable.
     return {**selected, 'registration': {**admitted, 'python': False,
-                                        'caller_binding': row.get('caller_binding')}}
+                                        'caller_binding': row['caller_binding']}}
 
 
 def resolve(authority, trace, pid, path, vector, environment, cwd):

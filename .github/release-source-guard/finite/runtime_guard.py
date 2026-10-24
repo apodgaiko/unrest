@@ -1295,6 +1295,11 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
             }
             code = bootstrap(str(manifest), pin, state["guard"], state["guard_sha256"], payload)
             child_argv = [argv[0], *flags, "-c", code]
+        if registration["class"] == "source-orders-custody-git":
+            orders_path = Path(state["guard"]).with_name("orders_git.py")
+            checked_source(orders_path, state["direct_support"]["files"][str(orders_path)])[
+                "bind_launch"](registration, child_argv, kwargs.get("cwd"), kwargs.get("env"),
+                               state, launch_token, append, refuse)
         append(
             {
                 "kind": "actual_launch_binding",

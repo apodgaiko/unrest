@@ -160,7 +160,7 @@ jobs:
           python-version: "3.13"
           enable-cache: false
       - name: Source-bound guard fixture controls (not source checkpoint)
-        run: PYTHONDONTWRITEBYTECODE=1 env -u CODEX_PATH uv run pytest -q .github/release-source-guard/test_stdlib_backend.py .github/release-source-guard/test_stdlib_acp.py .github/release-source-guard/test_approval_stdlib.py .github/release-source-guard/test_c1_witness.py
+        run: PYTHONDONTWRITEBYTECODE=1 env -u CODEX_PATH uv run pytest -q .github/release-source-guard/test_stdlib_backend.py .github/release-source-guard/test_stdlib_acp.py .github/release-source-guard/test_approval_stdlib.py .github/release-source-guard/test_c1_witness.py .github/release-source-guard/test_orders_launch_token.py
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
       - name: Original approval recovery and cleanup cases

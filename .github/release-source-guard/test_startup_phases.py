@@ -169,7 +169,11 @@ def restore_controlled_postimage_class(tree):
 
 ACP_POST_ADMISSION_HOOK = b"        if registration['class'] == 'controlled-acp':\n            path = Path(state['guard']).with_name('stdlib_acp.py')\n            selected = checked_source(path, state['direct_support']['files'][str(path)])[\n                'after_admission'](registration, argv, cwd, environment, state, append, refuse)\n            if selected is not None:\n                return selected\n"
 
+ORDERS_TOKEN_HOOK = b'        if registration["class"] == "source-orders-custody-git":\n            orders_path = Path(state["guard"]).with_name("orders_git.py")\n            checked_source(orders_path, state["direct_support"]["files"][str(orders_path)])[\n                "bind_launch"](registration, child_argv, kwargs.get("cwd"), kwargs.get("env"),\n                               state, launch_token, append, refuse)\n'
+
 def restore_stdlib_acp_bytes(body):
+    assert body.count(ORDERS_TOKEN_HOOK) == 1
+    body = body.replace(ORDERS_TOKEN_HOOK, b'', 1)
     assert body.count(ACP_POST_ADMISSION_HOOK) == 1
     body = body.replace(ACP_POST_ADMISSION_HOOK, b'', 1)
     new = b'                "source-canonical-stdlib-backend", "source-canonical-stdlib-acp",\n'
@@ -180,6 +184,14 @@ def restore_stdlib_acp_bytes(body):
 
 def restore_stdlib_ready_class(tree):
     import textwrap
+    token = ast.parse(textwrap.dedent(ORDERS_TOKEN_HOOK.decode())).body[0]
+    parents = [(node, i) for node in ast.walk(tree)
+               for field, value in ast.iter_fields(node) if field == 'body' and isinstance(value, list)
+               for i, child in enumerate(value)
+               if ast.dump(child, include_attributes=False) == ast.dump(token, include_attributes=False)]
+    assert len(parents) == 1
+    parent, index = parents[0]
+    parent.body.pop(index)
     expected = ast.parse(textwrap.dedent(ACP_POST_ADMISSION_HOOK.decode())).body[0]
     parents = [(node, i, child) for node in ast.walk(tree)
                for field, value in ast.iter_fields(node) if field == 'body' and isinstance(value, list)
