@@ -44,11 +44,11 @@ CANCELLATION_CASES = frozenset(('tests/test_controlled_python_acp.py::test_cance
 
 REGISTRATION_CASES = frozenset(('tests/test_controlled_python_acp.py::test_actual_registration[delayed-1]', 'tests/test_controlled_python_acp.py::test_actual_registration[delayed-2]', 'tests/test_controlled_python_acp.py::test_actual_registration[late-1]', 'tests/test_controlled_python_acp.py::test_actual_registration[late-2]'))
 WITNESS_CASES = frozenset({'tests/test_controlled_python_acp.py::test_single_c1_fixed_timing_protocol_witness'})
-ACP_ISOLATED_CASES = REGISTRATION_CASES | frozenset({'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]'})
+ACP_ISOLATED_CASES = REGISTRATION_CASES | WITNESS_CASES | frozenset({'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]'})
 
 def selected_script(state, payload):
     kind, root = state.get('class'), Path(state['checkout'])
-    if kind == 'source-canonical-stdlib-backend' and state.get('case') not in INITIALIZATION_CASES | CANCELLATION_CASES | REGISTRATION_CASES:
+    if kind == 'source-canonical-stdlib-backend' and state.get('case') not in INITIALIZATION_CASES | CANCELLATION_CASES | REGISTRATION_CASES | WITNESS_CASES:
         return None
     if kind in CLASSES:
         return str(root / SCRIPT), PIN

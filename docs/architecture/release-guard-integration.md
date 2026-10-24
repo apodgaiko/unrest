@@ -1777,3 +1777,18 @@ and retains its 600-second diagnostic cap, false source certificate and absent
 carrier. The five-case registration/cancellation load selection is unchanged.
 Original C1 ordering, completion, cleanup and test deadlines remain unchanged;
 a loaded diagnostic pass does not replace the full unexcluded source suite.
+
+
+### C1 controlled leaf startup domain
+
+The exact original controlled C1 protocol witness now uses the existing sealed
+standard-library domains for its byte-pinned local ACP adapter and synthetic
+app-server. Both original admissions, live caller bindings, interpreter/script
+pins, streams, authenticated READY and actual parent waits still precede or
+constrain execution. The translated vector adds only `-I -S`; unrelated source
+and native routes keep their existing setup. Third-party execution remains
+refused by the existing import/code barrier. This avoids repeatedly preparing
+unneeded third-party inputs in twelve stdlib-only C1 children while retaining
+the original two-second RPC limit, ten-second slow worker, ordering assertions,
+real broker completion and owned cleanup. Native adapter acceptance remains
+UNVERIFIED. The loaded diagnostic and full-source gates remain required.

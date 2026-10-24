@@ -16,7 +16,7 @@ from finite import mock_backend_setup as setup, stdlib_backend as domain
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('case', sorted(setup.INITIALIZATION_CASES | setup.CANCELLATION_CASES))
+@pytest.mark.parametrize('case', sorted(setup.INITIALIZATION_CASES | setup.CANCELLATION_CASES | setup.WITNESS_CASES))
 @pytest.mark.parametrize('vector_type', [list, tuple])
 @pytest.mark.parametrize('change', [None, 'case', 'original-refusal', 'class', 'script'])
 def test_translation_follows_unchanged_original_admission(monkeypatch, case, vector_type, change):
@@ -207,8 +207,8 @@ def test_native_environment_projection_is_exact_initialization_domain(change):
         {**environment, 'LC_CTYPE': 'C.UTF-8'} if change is None else environment)
 
 
-@pytest.mark.parametrize('case', sorted(setup.CANCELLATION_CASES))
-def test_cancellation_domain_uses_same_exact_backend_setup(case):
+@pytest.mark.parametrize('case', sorted(setup.CANCELLATION_CASES | setup.WITNESS_CASES))
+def test_cancellation_and_witness_domains_use_same_exact_backend_setup(case):
     from test_mock_backend_setup import leaf_context
     state, endpoint, payload = leaf_context(domain.ORIGINAL)
     state['class'] = payload['class'] = domain.CLASS

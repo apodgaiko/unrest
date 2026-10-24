@@ -152,3 +152,23 @@ def test_c1_does_not_admit_other_fixture_setup_sites(tmp_path, line, args):
         config(path)
     assert not route.repository_profile(['/usr/bin/git', '--no-replace-objects', *args],
         path, tmp_path, {'function': 'setup', 'line': line}, 'campaign/C1')
+
+
+@pytest.mark.parametrize('kind', ['source-canonical-stdlib-backend', 'source-canonical-stdlib-acp'])
+@pytest.mark.parametrize('change', [None, 'case', 'flags', 'binding'])
+def test_c1_stdlib_locale_projection_is_exact(kind, change):
+    from primary_source_inputs import python_environment
+    source = 'src/unrest_harness/experimental_session.py' if kind.endswith('backend') else 'tests/fixtures/controlled_python_acp.py'
+    pin = '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2' if kind.endswith('backend') else 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'
+    binding = {'path': '/source/' + source, 'line': 506 if kind.endswith('backend') else 1, 'sha256': pin}
+    if kind.endswith('backend'):
+        binding['function'] = '_open_role_owned'
+    row = {'class': kind, 'case': CASE, 'source_binding': binding}
+    flags = [1, 1, 0]
+    if change == 'case':
+        row['case'] += '-foreign'
+    elif change == 'flags':
+        flags = [0, 0, 0]
+    elif change == 'binding':
+        binding['sha256'] = 'foreign'
+    assert python_environment({}, row, flags) == ({'LC_CTYPE': 'C.UTF-8'} if change is None else {})

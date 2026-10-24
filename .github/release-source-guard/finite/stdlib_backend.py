@@ -31,7 +31,7 @@ def select(argv, cwd, environment, state, emit, refuse):
         return None
     argv = list(argv)
     setup = support(state, 'mock_backend_setup.py')
-    if state.get('case') not in setup['INITIALIZATION_CASES'] | setup['CANCELLATION_CASES'] | setup['REGISTRATION_CASES']:
+    if state.get('case') not in setup['INITIALIZATION_CASES'] | setup['CANCELLATION_CASES'] | setup['REGISTRATION_CASES'] | setup['WITNESS_CASES']:
         return None
     # The unchanged resolver authenticates the original live owner, exact
     # config renderer, script digest, interpreter, streams and call expression.
