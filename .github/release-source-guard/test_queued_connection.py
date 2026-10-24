@@ -26,6 +26,7 @@ def model(monkeypatch):
         observations.append(pid)
         return [dict(listener)] if pid == 200 else [dict(own)]
     value.observe = observe
+    value.observe_connection = lambda pid: value.observe(pid)
     monkeypatch.setattr(base, 'sockets', SimpleNamespace(
         reciprocal_peer=lambda *args: None, retained_tcp_descriptor=lambda *args: None,
         live_binding=lambda *args: None, closed_binding=lambda *args: None))

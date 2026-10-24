@@ -2061,3 +2061,19 @@ The wrapper also uses the existing five-second authenticated core READY join
 before publishing a child handle. Its token, process/parent identities and
 manifest, guard, registry and interpreter digests must match; early cancellation
 does not waive that proof and no original probe deadline changes.
+
+
+Diagnostic plan rendering and root allocation consume one shared closed extended
+selection list. The original source budget and every test's own deadline remain
+unchanged; a bounded diagnostic cannot supply a source certificate.
+
+For connected TCP acquisition only, a directory entry that vanishes before its
+symlink can be read contributes no socket row. Each attempt still checks process
+birth and obtains complete before/after socket maps around the current kernel
+TCP table; those maps must agree. There are at most three attempts. No old or
+guessed row supplies authority. Missing client/listener/peer evidence, inode or
+cookie replacement, ambiguous reciprocal peers, permission and malformed data
+retain the original connection-policy refusal. Generic, Unix and payload census
+behavior is unchanged. The complete original connected policy body and its
+listener/peer predicates remain covered by their unchanged historical AST digest;
+only the exact acquisition call and birth-checked getter are normalized.

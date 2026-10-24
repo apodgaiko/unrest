@@ -313,3 +313,54 @@ def retained_unix_member(pid: int, descriptor: int,
             or current.get('peer_inode', 0) not in (0, saved['peer_inode'])):
         return None
     return {'fd': descriptor, **current}
+
+
+def _connected_socket_fds(pid: int) -> dict[int, int]:
+    """Vanished entries supply no authority in a fresh connected TCP census."""
+    if type(pid) is not int or pid <= 0:
+        raise ValueError('positive owned PID required')
+    directory = Path('/proc') / str(pid) / 'fd'
+    result = {}
+    for path in sorted(directory.iterdir(), key=lambda p: int(p.name)):
+        try:
+            target = os.readlink(path)
+        except FileNotFoundError:
+            # No retained or guessed row: the complete fresh before/after
+            # socket maps below must still agree around the kernel table read.
+            continue
+        if target.startswith('socket:[') and target.endswith(']'):
+            result[int(path.name)] = int(target[8:-1])
+        if len(result) > 4096:
+            raise RuntimeError('unbounded owned socket inventory')
+    return result
+
+
+def _connected_socket_snapshot(pid: int) -> list[dict[str, Any]]:
+    before = _connected_socket_fds(pid)
+    table = tcp_table()
+    rows = [{'pid': pid, 'fd': fd, **table[inode]}
+            for fd, inode in before.items() if inode in table]
+    if _connected_socket_fds(pid) != before:
+        raise RuntimeError('owned descriptor binding changed during socket observation')
+    return rows
+
+
+def connected_sockets(pid: int) -> list[dict[str, Any]]:
+    """Same bounded stable TCP rows, without authority from disappeared FDs."""
+    birth = identity(pid)
+    for attempt in range(3):
+        if identity(pid) != birth:
+            raise RuntimeError('stale_or_reused_ownership')
+        try:
+            rows = _connected_socket_snapshot(pid)
+        except RuntimeError as error:
+            if (str(error) not in {
+                    'owned descriptor observation raced',
+                    'owned descriptor binding changed during socket observation'}
+                    or attempt == 2):
+                raise
+        else:
+            if identity(pid) != birth:
+                raise RuntimeError('stale_or_reused_ownership')
+            return rows
+    raise RuntimeError('owned socket observation retry exhausted')

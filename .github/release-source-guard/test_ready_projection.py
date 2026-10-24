@@ -59,6 +59,7 @@ def execute(owner, request, events, monkeypatch):
         return [{'fd': 6}, {'fd': 7}]
     monkeypatch.setattr(original.kernel, 'identity', identity)
     monkeypatch.setattr(original.kernel, 'sockets', sockets)
+    monkeypatch.setattr(original.sockets, 'connected_sockets', sockets)
     monkeypatch.setattr(original.kernel, 'unix_pair', pair)
     monkeypatch.setattr(original.sockets, 'reciprocal_peer', lambda *args: None)
     try:
@@ -346,7 +347,8 @@ def test_projection_selection_is_a_closed_boolean(tmp_path):
 
 
 def test_connect_keeps_the_complete_original_policy_body():
-    tree = ast.parse((ROOT / 'linux_supervisor.py').read_text())
+    from test_startup_phases import restore_connected_acquisition
+    tree = restore_connected_acquisition(ast.parse((ROOT / 'linux_supervisor.py').read_text()))
     handle = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'handle')
     source = ast.unparse(handle)
     assert source.count('current = self.observe_listener(entry)') == 1

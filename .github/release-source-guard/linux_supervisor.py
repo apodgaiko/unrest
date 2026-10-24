@@ -160,6 +160,15 @@ class Supervisor:
             raise RuntimeError("stale_or_reused_ownership")
         return kernel.sockets(pid)
 
+    def observe_connection(self, pid):
+        saved = self.registered[pid]['identity']
+        if kernel.identity(pid) != saved:
+            raise RuntimeError('stale_or_reused_ownership')
+        rows = sockets.connected_sockets(pid)
+        if kernel.identity(pid) != saved:
+            raise RuntimeError('stale_or_reused_ownership')
+        return rows
+
     def observe_listener(self, entry):
         pid = entry['pid']
         saved = self.registered[pid]['identity']
@@ -324,11 +333,11 @@ class Supervisor:
             listener = self.connect_admissions.get((request["pid"], request["fd"]))
             if listener is None:
                 raise RuntimeError("connection_without_listener_admission")
-            server_sockets = self.observe(listener["pid"])
+            server_sockets = self.observe_connection(listener["pid"])
             current = next(
                 (s for s in server_sockets if s["fd"] == listener["fd"]), None
             )
-            own = next((s for s in self.observe(request["pid"]) if s["fd"] == request["fd"]), None)
+            own = next((s for s in self.observe_connection(request["pid"]) if s["fd"] == request["fd"]), None)
             if (
                 not own
                 or own["remote_host"] != "127.0.0.1"

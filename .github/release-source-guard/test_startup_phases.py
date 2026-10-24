@@ -309,6 +309,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
         if name == 'finite/source_operations.py':
             tree = restore_dependency_diagnostic(restore_query_route(tree))
         if name == 'linux_supervisor.py':
+            tree = restore_connected_acquisition(tree)
             tree = restore_exact_listener_acquisition(restore_absent_peer_candidate(restore_response_channel(restore_empty_receipt(tree))))
         if name == 'linux_trace.py':
             tree = restore_before_numeric_wait(restore_primary_allocation(restore_environment_name_grammar(tree)))
@@ -478,3 +479,42 @@ def test_listener_acquisition_normalization_cannot_hide_authority_drift():
         assert before in source
         with pytest.raises((AssertionError, StopIteration)):
             restore_exact_listener_acquisition(ast.parse(source.replace(before, after)))
+
+
+def restore_connected_acquisition(tree):
+    owner = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Supervisor')
+    methods = [n for n in owner.body if isinstance(n, ast.FunctionDef) and n.name == 'observe_connection']
+    assert len(methods) == 1
+    expected = ast.parse("""def observe_connection(self, pid):
+        saved = self.registered[pid]['identity']
+        if kernel.identity(pid) != saved:
+            raise RuntimeError('stale_or_reused_ownership')
+        rows = sockets.connected_sockets(pid)
+        if kernel.identity(pid) != saved:
+            raise RuntimeError('stale_or_reused_ownership')
+        return rows
+""").body[0]
+    assert ast.dump(methods[0], include_attributes=False) == ast.dump(expected, include_attributes=False)
+    owner.body.remove(methods[0])
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute) and n.func.attr == 'observe_connection']
+    assert len(calls) == 2
+    assert {ast.unparse(n.args[0]) for n in calls} == {"listener['pid']", "request['pid']"}
+    for call in calls:
+        assert ast.unparse(call.func.value) == 'self' and len(call.args) == 1 and not call.keywords
+        call.func.attr = 'observe'
+    return tree
+
+
+def test_connected_acquisition_normalization_cannot_hide_authority_drift():
+    import pytest
+    source = (ROOT / 'linux_supervisor.py').read_text()
+    for before, after in [
+        ('rows = sockets.connected_sockets(pid)', 'rows = []'),
+        ("saved = self.registered[pid]['identity']", 'saved = kernel.identity(pid)'),
+        ("if kernel.identity(pid) != saved:", 'if False:'),
+        ('self.observe_connection(request["pid"])', 'self.observe_connection(listener["pid"])'),
+    ]:
+        assert before in source
+        with pytest.raises((AssertionError, StopIteration)):
+            restore_connected_acquisition(ast.parse(source.replace(before, after)))

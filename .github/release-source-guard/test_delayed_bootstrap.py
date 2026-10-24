@@ -17,7 +17,7 @@ CASE = ROUTE.CASES[0]
 
 
 def test_original_module_collection_and_diagnostic_scope_remain_exact():
-    from primary_policy import TEST_BOOTSTRAP_CASES
+    from primary_policy import TEST_BOOTSTRAP_CASES, root_seconds
     from primary_source_inputs import test_plan as plan
 
     assert TEST_BOOTSTRAP_CASES == ROUTE.CASES and len(set(ROUTE.CASES)) == 27
@@ -25,7 +25,7 @@ def test_original_module_collection_and_diagnostic_scope_remain_exact():
     command = ("env -u CODEX_PATH uv run pytest -q " + " ".join(ROUTE.CASES)).encode()
     p = plan(command, "bootstrap", "TEST-positive")
     assert (
-        p["timeout_seconds"] == 600
+        p["timeout_seconds"] == root_seconds(p) == 600
         and not p["source_checkpoint_ready"]
         and p["selected_carrier"] is None
     )
@@ -254,3 +254,14 @@ def test_wrapper_never_intercepts_original_noninline_acp():
         )
         is None
     )
+
+
+def test_every_extended_selection_has_one_producer_and_consumer_allocation():
+    from primary_policy import EXTENDED_TEST_SELECTIONS, root_seconds
+    from primary_source_inputs import test_plan as plan
+    for cases in EXTENDED_TEST_SELECTIONS:
+        command = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
+        for mode in ('TEST-positive', 'TEST-poison'):
+            selected = plan(command, 'bounded', mode)
+            assert selected['timeout_seconds'] == root_seconds(selected) == 600
+            assert not selected['source_checkpoint_ready'] and selected['selected_carrier'] is None
