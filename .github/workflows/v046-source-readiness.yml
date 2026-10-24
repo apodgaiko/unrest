@@ -286,7 +286,7 @@ jobs:
       - name: Workspace Git binding controls
         run: PYTHONDONTWRITEBYTECODE=1 env -u CODEX_PATH uv run pytest -q .github/release-source-guard/test_workspace_git.py
       - name: Original bootstrap binding controls
-        run: PYTHONDONTWRITEBYTECODE=1 env -u CODEX_PATH uv run pytest -q .github/release-source-guard/test_delayed_bootstrap.py .github/release-source-guard/test_stdlib_backend.py .github/release-source-guard/test_connected_observation.py .github/release-source-guard/test_queued_connection.py .github/release-source-guard/test_ready_projection.py
+        run: PYTHONDONTWRITEBYTECODE=1 env -u CODEX_PATH uv run pytest -q .github/release-source-guard/test_delayed_bootstrap.py .github/release-source-guard/test_bootstrap_stdlib.py .github/release-source-guard/test_stdlib_acp.py .github/release-source-guard/test_stdlib_backend.py .github/release-source-guard/test_connected_observation.py .github/release-source-guard/test_queued_connection.py .github/release-source-guard/test_ready_projection.py
       - name: Workspace compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
       - name: All original bootstrap cases (not source checkpoint)

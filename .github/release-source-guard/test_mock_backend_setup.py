@@ -204,6 +204,7 @@ def test_initialization_canonical_backend_uses_existing_stdlib_setup_gate(case):
 def test_initialization_setup_repair_preserves_entire_original_selector():
     tree = ast.parse((ROOT / 'finite/mock_backend_setup.py').read_bytes())
     selector = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'select')
+    restore_bootstrap_selector(selector)
     gates = [n for n in ast.walk(selector) if isinstance(n, ast.Compare)
              and ast.unparse(n) == "state['class'] in {'source-controlled-backend-postimage', 'source-canonical-stdlib-backend'}"]
     assert len(gates) == 1
@@ -211,3 +212,40 @@ def test_initialization_setup_repair_preserves_entire_original_selector():
     gate.ops = [ast.Eq()]
     gate.comparators = [ast.Constant(value='source-controlled-backend-postimage')]
     assert hashlib.sha256(ast.dump(selector, include_attributes=False).encode()).hexdigest() == '89c1817868b35b4b38a191ca68b5dc4764bfec2bdcb046c8b8064a04e860b9f1'
+
+
+def restore_bootstrap_selector(selector):
+    """Invert only the exact additive cutoff catalogue and inline target steps."""
+    expected = ast.parse("""
+if state.get('case') in BOOTSTRAP_CUTOFF_CASES:
+    bootstrap_path = Path(state['guard']).with_name('delayed_bootstrap.py')
+    catalog = guard.checked_source(bootstrap_path,
+        state['direct_support']['files'][str(bootstrap_path)])['bootstrap_catalog'](catalog)
+inline = state['class'] == 'source-canonical-stdlib-backend' and payload['mode'] == 'inline'
+script = Path(payload['sys_argv'][1] if inline else payload['target'])
+""").body
+    parents = [n for n in ast.walk(selector) if isinstance(n, (ast.FunctionDef, ast.Try, ast.If))]
+    for index, node in enumerate(expected):
+        matches = [(parent, statement) for parent in parents for statement in parent.body
+                   if ast.dump(statement, include_attributes=False) == ast.dump(node, include_attributes=False)]
+        assert len(matches) == 1
+        parent, statement = matches[0]
+        if index < 2:
+            parent.body.remove(statement)
+        else:
+            parent.body[parent.body.index(statement)] = ast.parse("script = Path(payload['target'])").body[0]
+
+
+@pytest.mark.parametrize('change', ['case', 'target', 'catalogue'])
+def test_bootstrap_selector_inverse_cannot_hide_changed_authority(change):
+    tree = ast.parse((ROOT / 'finite/mock_backend_setup.py').read_bytes())
+    selector = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'select')
+    if change == 'case':
+        node = next(n for n in ast.walk(selector) if isinstance(n, ast.Name) and n.id == 'BOOTSTRAP_CUTOFF_CASES')
+        node.id = 'FOREIGN_CASES'
+    else:
+        key = 'sys_argv' if change == 'target' else 'bootstrap_catalog'
+        node = next(n for n in ast.walk(selector) if isinstance(n, ast.Constant) and n.value == key)
+        node.value = 'foreign'
+    with pytest.raises(AssertionError):
+        restore_bootstrap_selector(selector)

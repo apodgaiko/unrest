@@ -31,6 +31,8 @@ def select(argv, cwd, environment, state, emit, refuse):
         return None
     argv = list(argv)
     setup = support(state, 'mock_backend_setup.py')
+    if state.get('case') in setup['BOOTSTRAP_CUTOFF_CASES']:
+        return support(state, 'delayed_bootstrap.py')['select'](argv, cwd, environment, state, emit, refuse)
     if state.get('case') not in setup['INITIALIZATION_CASES'] | setup['CANCELLATION_CASES'] | setup['REGISTRATION_CASES'] | setup['WITNESS_CASES']:
         return None
     # The unchanged resolver authenticates the original live owner, exact
@@ -123,7 +125,12 @@ def install_barrier(state, guard, payload):
     pins[state['guard']] = state['guard_sha256']
     endpoint_path = str(Path(state['guard']).with_name('endpoint.py'))
     pins[endpoint_path] = state['endpoint']['sha256']
-    target = payload['target']
+    inline = None
+    if payload.get('mode') == 'inline':
+        inline = support(state, 'bootstrap_stdlib.py')
+        if not inline['inline_eligible'](state, {'token': state['token'], 'identity': {'pid': os.getpid()}}, payload):
+            guard.refuse('stdlib_bootstrap_inline_binding')
+    target = payload['sys_argv'][1] if inline is not None else payload['target']
     payload_pin = (support(state, 'mock_backend_setup.py')['ACP_PIN']
                    if state.get('class') == 'source-canonical-stdlib-acp' else PIN)
     if state.get('class') in {'source-approval-python-backend'}:
@@ -250,6 +257,7 @@ def install_barrier(state, guard, payload):
         current(path)
     code_cache = {}
     dispatch = [False]
+    wrapper_dispatched = [False]
     checked_source = guard.checked_source
     run_code = sys.modules['runpy']._run_code
 
@@ -280,8 +288,16 @@ def install_barrier(state, guard, payload):
         executed = args[0]
         path = executed.co_filename
         frame = sys._getframe(1)
+        if path == '<string>' and inline is not None:
+            if not inline['wrapper_dispatch'](executed, frame, guard, payload, wrapper_dispatched[0]):
+                guard.refuse('stdlib_bootstrap_wrapper_dispatch')
+            wrapper_dispatched[0] = True
+            guard.append({'kind': 'source_bootstrap_wrapper_dispatch', 'token': state['token'],
+                          'case': state['case'], 'wrapper_sha256': hashlib.sha256(payload['target'].encode()).hexdigest(),
+                          'backend_sha256': PIN, 'stage': 1})
+            return
         if path == target:
-            if (dispatch[0] or executed != code(target)
+            if (inline is not None and not wrapper_dispatched[0] or dispatch[0] or executed != code(target)
                     or frame.f_code is not run_code.__code__
                     or frame.f_globals is not vars(sys.modules['runpy'])
                     or frame.f_locals.get('code') is not executed
@@ -289,6 +305,9 @@ def install_barrier(state, guard, payload):
                 guard.refuse('stdlib_backend_payload_dispatch')
             payload_module[0] = sys.modules['__main__']
             dispatch[0] = True
+            if inline is not None:
+                guard.append({'kind': 'source_bootstrap_backend_dispatch', 'token': state['token'],
+                              'case': state['case'], 'backend_sha256': PIN, 'stage': 2})
             return
         if path in state['direct_support']['files']:
             if (frame.f_code is not checked_source.__code__

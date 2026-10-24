@@ -77,14 +77,15 @@ def test_original_module_collection_and_diagnostic_scope_remain_exact():
         "stdin-type",
     ],
 )
-def test_exact_live_wrapper_refuses_drift(tmp_path, monkeypatch, change):
+@pytest.mark.parametrize("delay", [32, 0.5])
+def test_exact_live_wrapper_refuses_drift(tmp_path, monkeypatch, change, delay):
     isolated = load("isolated_refusal")
     code = isolated.source_code(ROOT / ROUTE.SOURCE)
     fixture_code = named(code, "delayed_backend")
     delayed_code = named(named(fixture_code, "install"), "delayed")
     environment = {"PATH": "/exact-original"}
     argv0 = [str(Path(sys.executable).resolve()), str(tmp_path / "fake-app-server"), "app-server"]
-    argv = ROUTE.vector(argv0, 32)
+    argv = ROUTE.vector(argv0, delay)
     options = {
         "cwd": tmp_path,
         "env": environment,
@@ -98,8 +99,8 @@ def test_exact_live_wrapper_refuses_drift(tmp_path, monkeypatch, change):
     import asyncio.subprocess
 
     local = {
-        "delay": 32,
-        "script": ROUTE.script(32),
+        "delay": delay,
+        "script": ROUTE.script(delay),
         "args": tuple(argv),
         "kwargs": options,
         "launch": asyncio.subprocess.create_subprocess_exec,
@@ -143,7 +144,7 @@ def test_exact_live_wrapper_refuses_drift(tmp_path, monkeypatch, change):
         "checkout": str(ROOT),
         "guard": str(Path(ROUTE.__file__).with_name("runtime_guard.py")),
         "product_pins": {ROUTE.SOURCE: ROUTE.PIN},
-        "case": CASE,
+        "case": CASE if delay == 32 else ROUTE.CUTOFF_CASES[1],
         "token": "root",
         "class": "pytest-root",
         "isolated_source_code": isolated.source_code,
@@ -234,7 +235,11 @@ def test_exact_live_wrapper_refuses_drift(tmp_path, monkeypatch, change):
 
     if change is None:
         selected, vector = ROUTE.select(argv, tmp_path, environment, state, lambda e: None, refuse)
-        assert selected["class"] == ROUTE.CLASS and selected["delay"] == 32 and vector == argv
+        if delay == 32:
+            assert selected["class"] == ROUTE.CLASS and selected["delay"] == 32 and vector == argv
+        else:
+            assert selected["class"] == "source-canonical-stdlib-backend" and selected["delay"] == 0.5
+            assert vector == [argv[0], "-I", "-S", *argv[1:]]
     elif change in {"case", "token", "class"}:
         assert ROUTE.select(argv, tmp_path, environment, state, lambda e: None, refuse) is None
     else:

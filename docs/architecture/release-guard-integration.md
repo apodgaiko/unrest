@@ -2051,9 +2051,10 @@ inline-wrapper binding. It verifies the current fixture code and closure, exact
 case-specific delay (32,60 or0.5 seconds), the live original product owner and
 configuration-derived vector, owned pinned backend bytes, interpreter, streams,
 environment and subprocess options. It preserves the original runpy body and
-actual sleep. Activation re-resolves this same binding and consumes the complete
-ordinary shared startup inventory; no stdlib-only translation or generic inline
-launch authority follows. All27 original bootstrap cases and their timing,
+actual sleep. Activation re-resolves this same binding. The32/60-second cases
+consume the complete ordinary shared startup inventory; the exact half-second
+cutoff case uses the two-stage standard-library seal described below. No generic
+inline launch authority follows. All27 original bootstrap cases and their timing,
 completion, no-prompt, lifetime and cleanup assertions remain unchanged. The
 additive bounded module diagnostic preserves all existing diagnostic jobs and
 cannot certify the full source checkpoint.
@@ -2085,3 +2086,20 @@ exec environment remains byte-exact. This projection requires the pinned origina
 fixture binding, one of its actual delayed cases and original Python flags; an
 explicit locale is never replaced. It neither admits a launch nor changes any
 bootstrap timing or completion assertion.
+
+
+The two original short-cutoff bootstrap checks use the existing sealed standard-
+library runtime only after their original live-owner admission. The sequential
+initialize/session check retains its0.55-second cutoff and both0.3-second phases.
+The inference-timeout check retains its2-second cutoff and real0.5-second wrapper
+sleep. Their canonical backend and controlled ACP bytes, original vectors,
+configuration/environment bindings, startup input inventories, core READY joins
+and actual parent waits remain required. This is fixture setup only and adds no
+provider or unknown-launch authority.
+
+The half-second wrapper is a two-stage execution domain: the one exact compiled
+sleep/runpy body may execute once in the unchanged guard child namespace; only
+then may authenticated runpy execute the current pinned backend body in its
+original main-module namespace. A different program, repeated wrapper, premature
+backend dispatch, forged code, foreign import or module replacement refuses.
+Other delayed bootstrap cases retain their ordinary complete startup domain.

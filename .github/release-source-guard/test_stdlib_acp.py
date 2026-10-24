@@ -148,8 +148,8 @@ async def test_original_acp_under_sealed_stdlib_domain(tmp_path):
 
 def test_exact_fixture_and_finite_case_roster():
     assert hashlib.sha256((ROOT / setup.ACP).read_bytes()).hexdigest() == setup.ACP_PIN
-    assert len(setup.ACP_ISOLATED_CASES) == 6 and len(setup.REGISTRATION_CASES) == 4
-    assert setup.ACP_ISOLATED_CASES - setup.REGISTRATION_CASES - setup.WITNESS_CASES == {
+    assert len(setup.ACP_ISOLATED_CASES - setup.BOOTSTRAP_CUTOFF_CASES) == 6 and len(setup.REGISTRATION_CASES) == 4
+    assert setup.ACP_ISOLATED_CASES - setup.BOOTSTRAP_CUTOFF_CASES - setup.REGISTRATION_CASES - setup.WITNESS_CASES == {
         'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]'}
 
 

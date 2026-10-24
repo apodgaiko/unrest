@@ -40,6 +40,11 @@ CASES = (
     "tests/test_experimental_bootstrap.py::test_expiry_during_seal_cannot_publish_grant",
 )
 CLASS = "source-delayed-bootstrap"
+CUTOFF_CASES = (
+    'tests/test_experimental_bootstrap.py::test_actual_sequential_initialize_and_session_share_cutoff',
+    'tests/test_experimental_bootstrap.py::test_startup_subtracts_from_actual_inference_timeout',
+)
+
 
 
 def delay_for(case):
@@ -74,6 +79,25 @@ def vector(original, delay):
     return [original[0], "-c", script(delay), *original[1:]]
 
 
+
+def bootstrap_catalog(catalog):
+    return {
+        **catalog,
+        "CASES": {
+            case: {
+                "script_sha256": "be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53",
+                "sources": {
+                    "tests/test_experimental_bootstrap.py": "c81fc04a81ef3aa657c16a69627c4c6b80ba1012f9255d2a05b15557934a7383",
+                    "tests/test_experimental_session.py": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3",
+                    "tests/test_experimental_startup_diagnostics.py": "b2b2d05a217dcd4e082e06371c00e9ae91fb99a7c50bfcec15e7e810b2b7d65f",
+                    "tools/probe_v046_startup.py": "eb26f43472ce1798d2dd066fa87d6ceb5d58d1a94abc0e9edddeb20b285dd564",
+                },
+                "filename": "fake-app-server",
+            }
+            for case in CASES
+        },
+    }
+
 def select(argv, cwd, environment, state, emit, refuse):
     delay = delay_for(state.get("case"))
     if (
@@ -97,22 +121,7 @@ def select(argv, cwd, environment, state, emit, refuse):
     ):
         refuse("delayed_bootstrap_source_drift")
     catalog = checked("backend_postimage_catalog.py")
-    catalog = {
-        **catalog,
-        "CASES": {
-            case: {
-                "script_sha256": "be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53",
-                "sources": {
-                    "tests/test_experimental_bootstrap.py": "c81fc04a81ef3aa657c16a69627c4c6b80ba1012f9255d2a05b15557934a7383",
-                    "tests/test_experimental_session.py": "baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3",
-                    "tests/test_experimental_startup_diagnostics.py": "b2b2d05a217dcd4e082e06371c00e9ae91fb99a7c50bfcec15e7e810b2b7d65f",
-                    "tools/probe_v046_startup.py": "eb26f43472ce1798d2dd066fa87d6ceb5d58d1a94abc0e9edddeb20b285dd564",
-                },
-                "filename": "fake-app-server",
-            }
-            for case in CASES
-        },
-    }
+    catalog = bootstrap_catalog(catalog)
     binding = checked("fallback_binding.py")
     frames = binding["active_frames"]()
     try:
@@ -124,6 +133,8 @@ def select(argv, cwd, environment, state, emit, refuse):
                 return None
             if binding["matches"](registration, list(argv), cwd, environment, state) is None:
                 refuse("bootstrap_original_backend_caller")
+            if state['case'] == CUTOFF_CASES[0]:
+                return {**registration, 'class': 'source-canonical-stdlib-backend'}, [argv[0], '-I', '-S', *argv[1:]]
             return registration, list(argv)
         compiled = state["isolated_source_code"](source)
         named = state["isolated_named"]
@@ -282,6 +293,8 @@ def select(argv, cwd, environment, state, emit, refuse):
                 "original_delay_and_cleanup_assertions_retained": True,
             }
         )
+        if state['case'] == CUTOFF_CASES[1]:
+            return {**selected, 'class': 'source-canonical-stdlib-backend'}, [argv[0], '-I', '-S', *argv[1:]]
         return selected, list(argv)
     finally:
         frames.clear()
