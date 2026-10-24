@@ -71,6 +71,6 @@ class CurrentFiles:
             if not default_policy(root):
                 body = path.read_bytes()
             else:
-                with io.open(spelling, 'rb') as stream:
+                with io.open(spelling, 'rb', buffering=0) as stream:
                     body = stream.read()
             yield path, body

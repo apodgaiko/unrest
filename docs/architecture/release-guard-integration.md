@@ -1906,3 +1906,12 @@ cleanup, saved-review cancellation and C1 tests in that order
 with inert journal history. It cannot certify the full source suite. The frozen
 release still requires the full unexcluded Python 3.13 source checkpoint and all
 archive, installed lifecycle, independent validation, desktop and release gates.
+
+The default-policy journal acquisition opens a fresh unbuffered binary FileIO
+stream and reads to EOF. It retains every current membership/byte acquisition
+and avoids constructing a redundant BufferedReader for each file. Changed path
+or IO policy still delegates to the original Path.read_bytes route. Empty and
+large files, current rewrites/replacements, aliases, permissions and read errors
+retain the original behavior; differential OS-descriptor controls cover FIFO
+EOF/nonblocking reads, interruption and Linux PTY partial-data/EIO behavior.
+No file content, type verdict or descriptor is cached across acquisitions.
