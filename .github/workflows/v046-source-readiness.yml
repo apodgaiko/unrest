@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   compartment-controls:
-    if: ${{ github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-startup-cancel-20261021' && github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-postimages-20261022' && github.ref != 'refs/heads/codex/source-guard-structured-20261018-bootstrap-cutoff-repro-20261025' }}
+    if: ${{ github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-startup-cancel-20261021' && github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-postimages-20261022' && github.ref != 'refs/heads/codex/source-guard-structured-20261018-source-composition-bootstrap-cutoff-repro-20261025' }}
     name: Linux compartment controls (not a source checkpoint)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -307,7 +307,7 @@ jobs:
 
   bootstrap-cutoff-cost-diagnosis:
     name: Original bootstrap cutoff CPU diagnosis (not certification)
-    if: ${{ github.ref == 'refs/heads/codex/source-guard-structured-20261018-bootstrap-cutoff-repro-20261025' }}
+    if: ${{ github.ref == 'refs/heads/codex/source-guard-structured-20261018-source-composition-bootstrap-cutoff-repro-20261025' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
