@@ -1714,7 +1714,8 @@ The original approval resolver still authenticates the original actor, source
 expression, arguments, scenario, interpreter and owned paths before translating
 only its byte-pinned controlled Python backend to `-I -S`. The adapter, relay
 and worker MCP keep ordinary dependency startup. At activation the same resolver
-is rerun on the original vector. The translated actor consumes the complete
+is rerun on the original vector, applying the same `os.fspath` list
+normalization as the original guard admission. The translated actor consumes the complete
 current standard-library startup inventory and seal their module identities,
 import paths and executable code before the unchanged fixture body. Unknown
 imports, dynamic execution, module replacement and path drift fail closed. It

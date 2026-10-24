@@ -85,3 +85,28 @@ def test_same_name_helper_cannot_mint_post_admission_translation(monkeypatch):
         return domain.translate(registered, translated, {'case': approval_routes.CASE})
     with pytest.raises(RuntimeError, match='original_admission'):
         registration()
+
+
+@pytest.mark.parametrize('container', [list, tuple])
+def test_activation_replay_matches_original_admit_vector_normalization(monkeypatch, container):
+    from types import SimpleNamespace
+    vector = [Path('/original/backend'), 'app-server']
+    translated = [sys.executable, '-I', '-S', '/original/backend', 'app-server']
+    registration = {'class': 'source-approval-python-backend'}
+    seen, rows = [], []
+    def select(argv, *args):
+        seen.append(argv)
+        assert type(argv) is list and argv == ['/original/backend', 'app-server']
+        return registration, translated
+    def shared(activation):
+        seen.append('current-stdlib-consumed')
+    monkeypatch.setattr(domain, 'support', lambda state, name:
+        {'select': select} if name == 'approval_routes.py' else {'shared': shared})
+    activation = SimpleNamespace(state={}, emit=rows.append,
+        refuse=lambda reason: pytest.fail(reason))
+    original = container(vector)
+    domain.activation(activation, None, {'args': original, 'launch_token': 'bound'},
+                      translated, None, {}, registration)
+    assert list(original) == vector
+    assert seen == [['/original/backend', 'app-server'], 'current-stdlib-consumed']
+    assert len(rows) == 1 and rows[0]['original_admission_retained']

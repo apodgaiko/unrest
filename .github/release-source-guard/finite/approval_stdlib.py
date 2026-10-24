@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import sys
 
 CLASSES = frozenset({'source-approval-python-backend'})
@@ -41,8 +42,9 @@ def activation(activation, guard, launch, argv, cwd, environment, registration):
     state = activation.state
     # The base before_python already binds the actual constructor/frame/token.
     # Re-run the same original resolver on the original vector; no new route.
+    original = [os.fspath(item) for item in launch['args']]
     actual = support(state, 'approval_routes.py')['select'](
-        launch['args'], cwd, environment, state, activation.emit, activation.refuse)
+        original, cwd, environment, state, activation.emit, activation.refuse)
     if (registration['class'] not in CLASSES or actual != (registration, argv)
             or argv[1:3] != ['-I', '-S']):
         activation.refuse('approval_stdlib_activation')
