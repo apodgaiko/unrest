@@ -4,14 +4,14 @@ from __future__ import annotations
 import select
 import time
 
-IDLE_SECONDS = 0.010
+IDLE_SECONDS = 0.100
 
 
 def progress(trace):
     # The tracer still observes both stops and the actual result of every wait.
     # Merely entering/leaving wait4 or waitid grants no launch authority. A
     # recorded result, exec, receipt, child change or poison remains immediate;
-    # otherwise use the existing ten-millisecond idle acquisition bound.
+    # otherwise use the bounded hundred-millisecond idle acquisition period.
     pending = frozenset(pid for pid, row in trace.pending.items()
                         if type(row) is not dict or type(row.get('syscall')) is not int
                         or row['syscall'] not in (61, 247))

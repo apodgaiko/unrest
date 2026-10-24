@@ -87,3 +87,47 @@ def test_nonreflexive_metadata_uses_original_full_materialization(tmp_path):
     rows = snapshot.census({}, set())
     assert rows is snapshot.materialize()
     assert str(rows[0]['pid']) == 'nan'
+
+
+def test_candidate_positions_preserve_current_membership_and_inert_row_rewrites(tmp_path):
+    path = tmp_path / '1.jsonl'
+    rows = [{'kind': 'diagnostic_only', 'ordinal': n} for n in range(100)]
+    rows += [{'kind': 'registered', 'pid': 2, 'token': 'child'},
+             {'kind': 'launch_lifecycle_binding', 'token': 'child'},
+             {'kind': 'ready', 'owner_pid': 2, 'token': 'child'}]
+    path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    journal = event_journal.EventJournal()
+    snapshot = journal.snapshot(tmp_path)
+    assert snapshot.chunks[0][9] == ((100, 102), (101,), ())
+    assert snapshot.census({}, set()) == rows[100:]
+    marker = tuple(rows[-1].get(key) for key in event_journal.MARKER)
+    assert journal.snapshot(tmp_path).census({2: {}}, {marker}) == []
+    rows[0] = {'kind': 'forbidden', 'reason': 'changed current bytes'}
+    path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    assert journal.snapshot(tmp_path).census({2: {}}, {marker}) == [rows[0]]
+    rows[1] = {'kind': []}
+    path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    snapshot = journal.snapshot(tmp_path)
+    assert snapshot.chunks[0][9][2] == (1,)
+    assert snapshot.census({2: {}}, {marker}) is snapshot.materialize()
+
+
+def test_nonportable_decoder_rows_keep_full_census_across_policy_changes(tmp_path, monkeypatch):
+    path = tmp_path / '1.jsonl'
+    path.write_text('{"kind":"diagnostic_only"}\n')
+    decoder = event_journal.json.loads
+    class Kind(str):
+        pass
+    def loads(body):
+        value = decoder(body)
+        if type(value) is dict and 'kind' in value:
+            value['kind'] = Kind(value['kind'])
+        return value
+    monkeypatch.setattr(event_journal.json, 'loads', loads)
+    journal = event_journal.EventJournal()
+    snapshot = journal.snapshot(tmp_path)
+    assert snapshot.chunks[0][9][2] == (0,)
+    assert snapshot.census({}, set()) is snapshot.materialize()
+    monkeypatch.setattr(event_journal.json, 'loads', decoder)
+    snapshot = journal.snapshot(tmp_path)
+    assert snapshot.census({}, set()) is snapshot.materialize()

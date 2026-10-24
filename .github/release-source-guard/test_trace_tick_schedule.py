@@ -17,7 +17,7 @@ def objects():
     return first, second, trace, supervisor
 
 
-def test_empty_spins_do_not_reacquire_and_ten_ms_uses_actual_clock(monkeypatch):
+def test_empty_spins_do_not_reacquire_and_idle_period_uses_actual_clock(monkeypatch):
     now = [100.0]
     monkeypatch.setattr(scheduling.time, 'monotonic', lambda: now[0])
     first, second, trace, supervisor = objects()
@@ -26,7 +26,7 @@ def test_empty_spins_do_not_reacquire_and_ten_ms_uses_actual_clock(monkeypatch):
         assert service.due(trace, supervisor)
         service.complete(trace)
         assert not any(service.due(trace, supervisor) for _ in range(1000))
-        now[0] += 0.009
+        now[0] += scheduling.IDLE_SECONDS - 0.001
         assert not service.due(trace, supervisor)
         now[0] += 0.002
         assert service.due(trace, supervisor)
@@ -132,7 +132,7 @@ def test_idle_callback_completion_follows_full_acquisition_and_propagates_failur
         assert authority._source_tick_schedule.last == 101.0
         authority.tick(trace)
         assert len(calls) == 1
-        now[0] += .011
+        now[0] += scheduling.IDLE_SECONDS + .001
         with pytest.raises(RuntimeError) as caught:
             authority.tick(trace)
         assert caught.value is cause and authority._source_tick_schedule.last == 101.0
@@ -194,7 +194,7 @@ def test_wait_entry_and_empty_exit_do_not_amplify_idle_census(monkeypatch, numbe
             assert not service.due(trace, supervisor)
             trace.pending.pop(1)
             assert not service.due(trace, supervisor)
-        now[0] += .011
+        now[0] += scheduling.IDLE_SECONDS + .001
         assert service.due(trace, supervisor)
         service.complete(trace)
         trace.records.append({'kind': 'original_parent_wait4', 'child': 2, 'raw': 0})
@@ -229,6 +229,43 @@ def test_receipt_wakes_service_during_an_inflight_wait(monkeypatch):
         second.sendall(b'original receipt bytes')
         assert service.due(trace, supervisor)
         assert first.recv(100) == b'original receipt bytes'
+    finally:
+        first.close()
+        second.close()
+
+
+def test_idle_journal_poison_is_acquired_before_exec_and_final_barriers(tmp_path, monkeypatch):
+    """A less frequent idle census is never an authorization snapshot."""
+    from event_journal import EventJournal
+    now = [100.0]
+    monkeypatch.setattr(scheduling.time, 'monotonic', lambda: now[0])
+    first, second, trace, supervisor = objects()
+    path = tmp_path / '1.jsonl'
+    path.write_text('{"kind":"ready"}\n')
+    reader, calls = EventJournal(), []
+    class Original:
+        def tick(self, actual):
+            calls.append('fresh')
+            self.supervisor.poisoned = any(row['kind'] == 'forbidden' for row in reader.events(tmp_path))
+        def resolve(self, *args):
+            calls.append('grant')
+            return True
+    class Authority(OwnedMultiprocessCustody, Original):
+        pass
+    authority = Authority()
+    authority.supervisor = supervisor
+    try:
+        authority.tick(trace)
+        path.write_text('{"kind":"forbidden","reason":"current"}\n')
+        now[0] += 0.001
+        authority.tick(trace)
+        assert calls == ['fresh'] and not supervisor.poisoned
+        assert authority.resolve(trace, 2, '/native', [], {}, '/source') is False
+        assert calls == ['fresh', 'fresh'] and supervisor.poisoned
+        supervisor.poisoned = False
+        trace.active.clear()
+        authority.tick(trace)
+        assert calls == ['fresh', 'fresh', 'fresh'] and supervisor.poisoned
     finally:
         first.close()
         second.close()

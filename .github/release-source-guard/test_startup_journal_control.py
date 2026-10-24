@@ -137,3 +137,25 @@ def test_initialization_passive_capture_is_independently_bound_and_never_full():
     assert diagnostic.registration_seconds(profile, diagnostic.REGISTRATION_CASE) is None
     assert diagnostic.registration_seconds(dict(profile, source_mode='SOURCE'), diagnostic.INITIALIZATION_CASE) is None
     assert diagnostic.registration_seconds(dict(profile, orig_argv=profile['orig_argv'][:-1]), diagnostic.INITIALIZATION_CASE) is None
+
+
+def test_exact_loaded_c1_retains_original_ordering_case_and_diagnostic_bound(tmp_path, monkeypatch):
+    from ci_shell import resources
+    from primary_policy import TEST_C1_WITNESS_CASES
+    script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_C1_WITNESS_CASES)).encode()
+    spec = plan(script, 'diagnostic', 'TEST-positive')
+    assert control.selected(spec)
+    assert spec['timeout_seconds'] == 600
+    assert spec['source_checkpoint_ready'] is False and spec['selected_carrier'] is None
+    assert resources(spec)[1] == 3 * 1024 ** 3
+    monkeypatch.setattr(control, 'FILES', 2)
+    monkeypatch.setattr(control, 'ROWS_PER_FILE', 3)
+    control.seed(spec, tmp_path)
+    rows = [json.loads(row) for path in sorted(tmp_path.iterdir()) for row in path.read_text().splitlines()]
+    assert len(rows) == 6
+    assert all(row['kind'] == control.KIND and row['diagnostic_only'] is True
+               and row['eligible_certificate'] is False and 'pid' not in row and 'token' not in row for row in rows)
+    for key, value in [('source_mode', 'SOURCE'), ('source_mode', 'TEST-poison'),
+                       ('script_sha256', '0' * 64), ('source_checkpoint_ready', True),
+                       ('selected_carrier', 'foreign'), ('commands', spec['commands'] + spec['commands'])]:
+        assert not control.selected({**spec, key: value})

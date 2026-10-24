@@ -835,7 +835,7 @@ cannot certify FULL or substitute for the unexcluded source checkpoint.
 The Linux tracer, its deadline algorithm and every original supervisor method
 remain unchanged. The selected source custody mixin calls the original full
 callback eagerly, when kernel records/active/pending/poison state changes,
-whenever receipt clients exist or the receipt listener is readable, and when ten milliseconds have elapsed after the last completed idle check.
+whenever receipt clients exist or the receipt listener is readable, and when 100 milliseconds have elapsed after the last completed idle check.
 Final trace settlement always forces
 the callback. No request is accepted, read, authenticated or answered by the
 readiness predicate itself.
@@ -1274,8 +1274,8 @@ The complete unexcluded release suite and every other release gate remain.
 ### Wait observation scheduling
 
 The Linux tracer still observes both syscall stops and actual numeric results
-of every wait4/waitid. A pending wait alone uses the existing 10 ms idle census
-bound rather than forcing a complete census at both stops. Recorded results,
+of every wait4/waitid. A pending wait alone uses the 100 ms idle census
+period rather than forcing a complete census at both stops. Recorded results,
 exec decisions, child changes, poison, readable receipt channels and pending
 receipt clients force the original immediate service. Adoptive-wait collection
 and pre-wait identity acquisition remain outside this idle scheduling decision.
@@ -1753,3 +1753,27 @@ Missing, duplicate, late or mismatched token records fail; there is no legacy
 window fallback. Current kernel parent birth, executable, repository and stock
 maintenance checks remain independent requirements. Original concrete admissions
 and historical concurrency failures remain retained.
+
+
+### Accumulated journal observation cost
+
+Idle periodic acquisition uses 100 ms; this is a service period, not a test or
+receipt deadline. Actual trace progress, live receipt clients, readable receipt
+channels, poison, exec decisions and final settlement still force immediate
+original callbacks. Every acquisition reads all current journal bytes. No
+authorization, wait result or kernel identity is reused. This reduces repeated
+idle observation of large historical journals without delaying an admission
+decision behind an idle timer.
+
+Census chunks retain immutable positions of possibly effectful descriptors and
+lifecycle witnesses. Each changed census re-evaluates registration and timing
+membership against the current supervisor state; malformed metadata retains the
+full original loop. Inert history cannot become registration authority.
+
+The exact existing two-case controlled C1 diagnostic selection also receives
+the existing 512-file, 80-row-per-file inert load before source execution. It
+creates no PID, token, READY or wait witness, never overwrites process journals,
+and retains its 600-second diagnostic cap, false source certificate and absent
+carrier. The five-case registration/cancellation load selection is unchanged.
+Original C1 ordering, completion, cleanup and test deadlines remain unchanged;
+a loaded diagnostic pass does not replace the full unexcluded source suite.

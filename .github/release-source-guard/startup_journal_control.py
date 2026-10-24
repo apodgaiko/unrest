@@ -1,10 +1,10 @@
-"""Finite TEST-only inert journal load; no registration or authority witnesses."""
+"""Exact TEST-only inert journal loads; no registration or authority witnesses."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from primary_policy import TEST_JOURNAL_CONTEXT_CASES, sha
+from primary_policy import TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, sha
 
 FILES = 512
 ROWS_PER_FILE = 80
@@ -12,10 +12,12 @@ KIND = 'startup_journal_load_control'
 
 
 def selected(spec):
-    command = ['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *TEST_JOURNAL_CONTEXT_CASES]
+    commands = [['env', '-u', 'CODEX_PATH', 'uv', 'run', 'pytest', '-q', *cases]
+                for cases in (TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES)]
+    command = spec.get('commands', [None])[0] if type(spec.get('commands')) is list and len(spec['commands']) == 1 else None
     return (spec.get('source_mode') == 'TEST-positive'
             and spec.get('duty') == 'TEST-source-positive'
-            and spec.get('commands') == [command]
+            and command in commands
             and spec.get('script_sha256') == sha(' '.join(command).encode())
             and spec.get('source_checkpoint_ready') is False
             and spec.get('selected_carrier') is None)

@@ -208,18 +208,18 @@ class CensusIndex:
         selected, lifecycles, pending = [], [], False
         index = 0
         for chunk in chunks:
-            for item in chunk[3]:
-                if item is None:
-                    return None
-                kind, marker, pid, enabled = item
+            candidates, witnesses, invalid = chunk[9]
+            if invalid:
+                return None
+            lifecycles.extend(index + position for position in witnesses)
+            for position in candidates:
+                kind, marker, pid, enabled = chunk[3][position]
                 unresolved = enabled and pid not in registered
                 if kind == 'forbidden' or unresolved or marker is not None and marker not in timed:
-                    selected.append(index)
+                    selected.append(index + position)
                 if unresolved:
                     pending = True
-                if kind == 'launch_lifecycle_binding':
-                    lifecycles.append(index)
-                index += 1
+            index += len(chunk[3])
         if pending:
             selected = sorted(set(selected) | set(lifecycles))
         return tuple(selected)
@@ -244,6 +244,8 @@ class EventJournal:
                 portable = list(chunk[7][:count]) if count else []
                 projection = [[index for index in positions if index < count]
                               for positions in chunk[8]] if count else [[], [], []]
+                census = [[index for index in positions if index < count]
+                          for positions in chunk[9]] if count else [[], [], []]
                 tail = body[len(prefix):].decode('utf-8')
                 pieces = tail.splitlines(keepends=True)
                 stable_count = len(lines)
@@ -265,6 +267,14 @@ class EventJournal:
                         position = len(lines) - 1
                         item = metadata[-1]
                         if item is None or not portable[-1]:
+                            census[2].append(position)
+                        else:
+                            kind, marker, _, enabled = item
+                            if kind == 'forbidden' or enabled or marker is not None:
+                                census[0].append(position)
+                            if kind == 'launch_lifecycle_binding':
+                                census[1].append(position)
+                        if item is None or not portable[-1]:
                             projection[2].append(position)
                         if portable[-1] and item is not None and item[0] == 'ready':
                             projection[0].append(position)
@@ -276,7 +286,8 @@ class EventJournal:
                 parsed = ParseBlocks(chunk[6] if chunk is not None else None)
                 chunk = (body, tuple(lines), '[' + ','.join(lines) + ']', tuple(metadata),
                          stable_bytes, stable_count, parsed, tuple(portable),
-                         tuple(tuple(positions) for positions in projection))
+                         tuple(tuple(positions) for positions in projection),
+                         tuple(tuple(positions) for positions in census))
             retained[path] = chunk
             current.append(chunk)
         self._snapshots = retained
