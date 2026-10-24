@@ -291,7 +291,9 @@ def test_other_original_workspace_callers_have_exact_finite_case_and_source_bind
 
 
 @pytest.mark.parametrize('site,head,allowed', [(314, 'a' * 40, False), (616, 'a' * 40, True),
-                                             (616, '0' * 40, False), (616, 'ref: refs/heads/main', False)])
+                                             (616, '0' * 40, False), (616, 'ref: refs/heads/main', False),
+                                             (1881, 'a' * 40, True), (1881, '0' * 40, False),
+                                             (1881, 'ref: refs/heads/main', False)])
 def test_integration_reset_requires_only_its_exact_detached_revision(tmp_path, site, head, allowed):
     from worktree_git_custody import metadata, IMAGE
     parent, selected, _, env, cwd, manifest = worktree_child_fixture(tmp_path, site)

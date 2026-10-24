@@ -43,7 +43,7 @@ def metadata(parent, selected, vector, environment, cwd, manifest, checkout='/so
             or argv[:-2] != (['git', 'worktree', 'add', '--detach', '--no-checkout'] if site == 314 else ['git', 'worktree', 'add', '--detach'])
             or not re.fullmatch('[0-9a-f]{40}', argv[-1])
             or (vector != [IMAGE, 'update-ref', 'HEAD', argv[-1]]
-                and not (site == 616 and vector == [IMAGE, 'reset', '--hard', '--no-recurse-submodules']))
+                and not (site in {616, 1881} and vector == [IMAGE, 'reset', '--hard', '--no-recurse-submodules']))
             or selected.get('bootstrap_sha256') is not None
             or selected.get('owner_pid') != registration.get('owner_pid')
             or not selected.get('token') or selected['token'] != registration.get('token')

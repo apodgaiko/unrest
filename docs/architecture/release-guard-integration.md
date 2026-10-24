@@ -2038,7 +2038,9 @@ same-PID waits cannot authorize it. Later child waits remain required; no Python
 wait receipt or native final timing is inferred. Other sites remain refused.
 
 The separately observed rollback worktree creation at evolution line1881 admits
-only its stock update-ref child, with the exact evolution source/AST/class and
+its stock update-ref child, with the exact evolution source/AST/class and
 owned evolution/rollback directory shape. Zero-HEAD, launch-token, current birth,
-image, environment and canonical backlink checks are unchanged. Rollback reset
-remains refused until independently evidenced; integration reset is separate.
+image, environment and canonical backlink checks are unchanged. The separately
+observed rollback reset uses the same current-birth, post-admission successful
+parent-wait and exact detached-HEAD requirements as integration reset. No other
+worktree creation site or reset shape is admitted.
