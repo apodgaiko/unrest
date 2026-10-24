@@ -1331,7 +1331,7 @@ self-pipe. The original MCP cleanup can force-kill the owned server; local ident
 checks leave no partial control frame on that boundary. This enforcement does
 not depend on normal interpreter shutdown. Original
 numeric wait statuses remain evidence, including SIGKILL where observed. The
-observer's incomplete-channel refusal, every real completion/cleanup assertion,
+observer's partial-frame, unknown-peer and expired-channel refusals, every real completion/cleanup assertion,
 all deadlines, the full-source command and release gates are unchanged. The exact
 sixteen-case completion/cleanup diagnostic is supporting evidence, never a source certificate. No
 network, generic interpreter, provider, or process-launch authority is added.
@@ -1689,3 +1689,16 @@ one matching original admission, launch lifecycle and registration, exact
 PID/parent/start/boot/UID/tick identity and the unchanged source/kernel/tracer/
 actual-parent numeric wait join. It removes old listener authority only; the
 replacement still requires a fresh kernel-bound listener before any admission.
+
+### Empty controlled-child channels during SIGTERM cleanup
+
+The observer captures SO_PEERCRED and a fresh identity equal to the registered
+birth at accept, before parsing bytes. A zero-byte EOF can remain pending only
+for that exact captured `controlled-acp` child, within the original four-second
+channel deadline. It closes without a request, receipt, response, ledger admission
+or effect only after the actual original-parent SIGTERM wait (-15/raw15), exact
+nonce/token/owner joins and ordered kernel birth/exit/tracer/parent waits settle.
+The terminal proof is shared with listener retirement; socket/listener facts are
+not invented for channels. Partial frames, unknown peers, missing or stale birth,
+other classes and expired or incomplete wait proof retain refusal. A nearby child
+exit does not establish channel ownership; earlier unbound failures stay failed.

@@ -13,6 +13,8 @@ import stat
 import time
 import types
 
+import receipt_lifecycle
+
 ROOT = Path(__file__).parent / "finite"
 
 
@@ -534,6 +536,7 @@ class Supervisor:
                 "authenticated": False,
                 "output": None,
             }
+            receipt_lifecycle.capture(self, stream, self.clients[stream], kernel.identity)
         for stream, state in list(self.clients.items()):
             try:
                 if time.monotonic() - state["started"] > 4:
@@ -544,6 +547,14 @@ class Supervisor:
                     except BlockingIOError:
                         continue
                     if not block:
+                        if not state['buffer']:
+                            if receipt_lifecycle.empty_exit(self, state, events):
+                                self.record_channel_diagnostic(state, 'owned_empty_reaped')
+                                stream.close()
+                                del self.clients[stream]
+                            else:
+                                state['pending_reason'] = 'actual_parent_wait_record_still_pending'
+                            continue
                         raise RuntimeError("receipt_channel_closed_before_request")
                     state["buffer"].extend(block)
                     if len(state["buffer"]) < 4:

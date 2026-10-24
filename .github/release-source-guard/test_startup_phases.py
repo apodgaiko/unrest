@@ -208,6 +208,40 @@ def restore_stdlib_ready_class(tree):
     return tree
 
 
+
+def restore_empty_receipt(tree):
+    expected = ast.parse("""
+if not state['buffer']:
+    if receipt_lifecycle.empty_exit(self, state, events):
+        self.record_channel_diagnostic(state, 'owned_empty_reaped')
+        stream.close()
+        del self.clients[stream]
+    else:
+        state['pending_reason'] = 'actual_parent_wait_record_still_pending'
+    continue
+""").body[0]
+    capture = ast.parse('receipt_lifecycle.capture(self, stream, self.clients[stream], kernel.identity)').body[0]
+    removed = [0, 0, 0]
+    class Restore(ast.NodeTransformer):
+        def visit_Import(self, node):
+            if ast.dump(node) == ast.dump(ast.parse('import receipt_lifecycle').body[0]):
+                removed[0] += 1
+                return None
+            return node
+        def visit_Expr(self, node):
+            if ast.dump(node) == ast.dump(capture):
+                removed[1] += 1
+                return None
+            return self.generic_visit(node)
+        def visit_If(self, node):
+            if ast.dump(node) == ast.dump(expected):
+                removed[2] += 1
+                return None
+            return self.generic_visit(node)
+    tree = Restore().visit(tree)
+    assert removed == [1, 1, 1]
+    return tree
+
 BASELINE_AST_SHA256 = {'finite/source_operations.py': 'a5d9f2958f8aa4dd57922407f3112d6917544cc87b22942febe254172bd50209', 'finite/runtime_guard.py': '3b26232fb8c8d033a984e5c0ba0fa1760600cb7b846af728b2fbbeb39ccd6fa4', 'finite/source_activation.py': 'fd49c0f30096da8163142b0f8f884d56a80dbf9f5b38b757f22486ec1f5efab7', 'linux_supervisor.py': '2fb9fb8012c9161fe64ad70dca851abdd65a2e86dca48701d3f5b2d2fabef99f', 'linux_trace.py': '344558174ec335476ac8f76fa0afdf4ee667a497825150e4388fdb8ca95f5b9c', 'primary_source_authority.py': 'b36a24d13b548d143379dacd844680f089a41e5f2666c9a9944eeb29607a1540'}
 
 
@@ -219,7 +253,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
         if name == 'finite/source_operations.py':
             tree = restore_dependency_diagnostic(restore_query_route(tree))
         if name == 'linux_supervisor.py':
-            tree = restore_absent_peer_candidate(restore_response_channel(tree))
+            tree = restore_absent_peer_candidate(restore_response_channel(restore_empty_receipt(tree)))
         if name == 'linux_trace.py':
             tree = restore_before_numeric_wait(restore_primary_allocation(restore_environment_name_grammar(tree)))
         if name == 'primary_source_authority.py':

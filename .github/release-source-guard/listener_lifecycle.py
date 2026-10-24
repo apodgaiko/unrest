@@ -6,15 +6,14 @@ import os
 import linux_trace
 
 
-def reaped(entry, registered, events, records, nonce):
-    pid = entry.get('pid')
+def actually_waited(pid, registered, events, records, nonce):
+    """Require original-parent and ordered kernel terminal facts for this birth."""
     saved = registered.get(pid)
     if type(pid) is not int or pid <= 0 or saved is None:
         return False
     birth, token = saved['identity'], saved['token']
     parent = registered.get(birth['ppid'])
-    if (parent is None or entry.get('state') != 10 or entry.get('local_host') != '127.0.0.1'
-            or entry.get('socket_uid') != birth['uid']):
+    if parent is None:
         return False
     raw = [row for row in events if row.get('kind') == 'raw_actual_parent_waitpid'
            and row.get('pid') == pid and row.get('child_token') == token]
@@ -78,6 +77,14 @@ def reaped(entry, registered, events, records, nonce):
              and item.get('options') == row['options']]
     return (len(births) == len(exits) == len(tracer) == len(waits) == 1
             and births[0] < exits[0] < tracer[0] < waits[0])
+
+
+def reaped(entry, registered, events, records, nonce):
+    saved = registered.get(entry.get('pid'))
+    return (saved is not None and entry.get('state') == 10
+            and entry.get('local_host') == '127.0.0.1'
+            and entry.get('socket_uid') == saved['identity']['uid']
+            and actually_waited(entry.get('pid'), registered, events, records, nonce))
 
 
 def retire(supervisor, request, events):

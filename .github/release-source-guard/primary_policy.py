@@ -140,6 +140,12 @@ TEST_COMPLETION_PIPE_CASES = tuple(
     for role, targets in (('work', '0'), ('work', '1'), ('validate', '2'))) + TEST_CLEANUP_SUCCESS_CASES
 
 
+TEST_RECEIPT_CLEANUP_CASES = TEST_COMPLETION_PIPE_CASES + tuple(
+    'tests/test_controlled_python_acp.py::test_real_local_boundaries[' + case + ']'
+    for case in ('receipts', 'correction', 'uncertainty', 'completion_failure',
+                 'journal_failure', 'expiry', 'identity', 'bridge_marking'))
+
+
 INITIALIZATION_POSTIMAGE_CASES = ('tests/test_controlled_python_acp.py::test_programmatic_private_preflight', 'tests/test_experimental_startup_diagnostics.py::test_initialization_probe_real_controlled_path_no_prompt', 'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[refusal]', 'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]', 'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[permission]', 'tests/test_experimental_startup_diagnostics.py::test_initialized_owner_has_no_http_mutation_authority', 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure')
 REGISTRATION_POSTIMAGE_CASES = tuple('tests/test_controlled_python_acp.py::test_actual_registration[' + case + ']' for case in ('delayed-1', 'delayed-2', 'late-1', 'late-2'))
 CANCELLATION_POSTIMAGE_CASES = tuple('tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[' + stage + ']' for stage in ('backend_registered', 'adapter_registered', 'auth', 'forwarding'))
@@ -184,7 +190,7 @@ TEST_RECORDED_CLEANUP_GROUPS = tuple(
           if '::test_recorded_transport_failures[' + fault + '-' in case)
     for fault in ('deep_json', 'array_id', 'object_id', 'success'))
 
-TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES, TEST_CANDIDATE_FIXTURE_CASES, TEST_CANDIDATE_ORACLE_CASES, TEST_NATIVE_TERMINAL_CASES, TEST_LAUNCH_PLAN_CASES, TEST_APPROVAL_UNIX_CASES, TEST_SOCKET_CARRIER_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_APPROVAL_EXPIRY_CASES, TEST_CLEANUP_SUCCESS_CASES, TEST_CLEANUP_FIXTURE_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_APPROVAL_STARTUP_COST_CASES, TEST_CONTROLLED_CANCEL_CASES, TEST_CONTROLLED_REGISTRATION_CASES, TEST_JOURNAL_CONTEXT_CASES, TEST_INITIALIZATION_CASES) + TEST_BACKEND_POSTIMAGE_GROUPS + TEST_RECORDED_CLEANUP_GROUPS
+TEST_SELECTIONS = ((TEST_CASE,), TEST_SEAM_CASES, PREFLIGHT_CASES, TEST_STARTUP_CASES, TEST_CLEANUP_CASES, TEST_READINESS_CASES, TEST_INVENTORY_CASES, TEST_STREAM_CASES, TEST_FORMAT_CASES, TEST_NATIVE_SLEEP_CASES, TEST_CANDIDATE_FIXTURE_CASES, TEST_CANDIDATE_ORACLE_CASES, TEST_NATIVE_TERMINAL_CASES, TEST_LAUNCH_PLAN_CASES, TEST_APPROVAL_UNIX_CASES, TEST_SOCKET_CARRIER_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_APPROVAL_EXPIRY_CASES, TEST_CLEANUP_SUCCESS_CASES, TEST_CLEANUP_FIXTURE_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_RECEIPT_CLEANUP_CASES, TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, TEST_APPROVAL_STARTUP_COST_CASES, TEST_CONTROLLED_CANCEL_CASES, TEST_CONTROLLED_REGISTRATION_CASES, TEST_JOURNAL_CONTEXT_CASES, TEST_INITIALIZATION_CASES) + TEST_BACKEND_POSTIMAGE_GROUPS + TEST_RECORDED_CLEANUP_GROUPS
 TEST_SEAM_ROOT_SECONDS = 600
 
 
@@ -347,7 +353,7 @@ def root_seconds(spec):
         return SOURCE_BUDGET['root_seconds']
     if mode in {'TEST-positive', 'TEST-poison'}:
         scripts = {('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
-                   for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, *TEST_BACKEND_POSTIMAGE_GROUPS)}
+                   for cases in (TEST_SEAM_CASES, TEST_CLEANUP_CASES, TEST_APPROVAL_CLOSURE_CASES, TEST_APPROVAL_REMAINING_CASES, TEST_TERMINAL_ORDER_CASES, TEST_COMPLETION_PIPE_CASES, TEST_RECEIPT_CLEANUP_CASES, TEST_GIT_OVERHEAD_CASES, TEST_COHORT_STARTUP_CASES, *TEST_BACKEND_POSTIMAGE_GROUPS)}
         for script in scripts:
             if (spec['commands'] == [shlex.split(script.decode())]
                     and spec['script_sha256'] == sha(script)
