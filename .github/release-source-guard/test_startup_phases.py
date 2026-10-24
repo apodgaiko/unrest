@@ -269,7 +269,12 @@ def test_only_closed_telemetry_changes_original_executable_trees():
         if name == 'linux_trace.py':
             tree = restore_before_numeric_wait(restore_primary_allocation(restore_environment_name_grammar(tree)))
         if name == 'primary_source_authority.py':
-            tree = restore_bootstrap_cache(restore_producer_profile(tree))
+            source = ast.unparse(tree)
+            assert source.count('from journal_supervisor import launch_events') == 1
+            assert source.count('events = launch_events(self.supervisor)') == 1
+            source = source.replace('from journal_supervisor import launch_events', '')
+            source = source.replace('events = launch_events(self.supervisor)', 'events = self.supervisor.events()')
+            tree = restore_bootstrap_cache(restore_producer_profile(ast.parse(source)))
         if name == 'finite/source_activation.py':
             tree = restore_controlled_postimage_class(restore_primary_cache(tree))
         tree = StripTelemetry().visit(tree)

@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 import linux_git
 from linux_supervisor import Supervisor
+from journal_supervisor import launch_events
 from linux_observation import process_identity
 from linux_producers import NativeProducers
 from finite.linux_identity import identity
@@ -114,7 +115,7 @@ class SourceAuthority:
         if pid not in self.bound:
             argv_pin = hashlib.sha256(json.dumps(vector).encode()).hexdigest()
             env_pin = hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest()
-            events = self.supervisor.events()
+            events = launch_events(self.supervisor)
             matching = [row for row in events if row['kind'] == 'actual_launch_binding'
                         and row['owner_pid'] == parent and row['token'] not in self.consumed
                         and row['transformed_argv_sha256'] == argv_pin

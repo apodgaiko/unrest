@@ -184,6 +184,25 @@ class JournalSnapshot(Sequence):
         self.authentication_projection = include_admitted
         return rows
 
+    def launch_events(self):
+        """One fresh acquisition for the three closed launch-join readers."""
+        frame, depth = sys._getframe(), 0
+        while frame is not None:
+            depth += 1
+            frame = frame.f_back
+        if (self.full is not None or self.parsed or sys.getrecursionlimit() - depth < 128
+                or json.loads is not _JSON_LOADS or json._default_decoder is not _JSON_DECODER
+                or vars(_JSON_DECODER) != _JSON_POLICY or any(chunk[8][2] for chunk in self.chunks)):
+            return self.materialize()
+        rows, offset = [], 0
+        for chunk in self.chunks:
+            for index in chunk[10]:
+                position = offset + index
+                self.parsed[position] = json.loads(chunk[1][index])
+                rows.append(self.parsed[position])
+            offset += len(chunk[1])
+        return rows
+
     def census(self, registered, timed):
         """Keep every effectful original refresh row and its lifecycle witnesses."""
         selected = self.index.select(self.chunks, registered, timed)
@@ -244,6 +263,7 @@ class EventJournal:
                 portable = list(chunk[7][:count]) if count else []
                 projection = [[index for index in positions if index < count]
                               for positions in chunk[8]] if count else [[], [], []]
+                launch_positions = [index for index in chunk[10] if index < count] if count else []
                 census = [[index for index in positions if index < count]
                           for positions in chunk[9]] if count else [[], [], []]
                 tail = body[len(prefix):].decode('utf-8')
@@ -266,6 +286,9 @@ class EventJournal:
                                         and shallow_json(row))
                         position = len(lines) - 1
                         item = metadata[-1]
+                        if portable[-1] and item is not None and item[0] in {
+                                'actual_launch_binding', 'admitted', 'orders_custody_launch_binding'}:
+                            launch_positions.append(position)
                         if item is None or not portable[-1]:
                             census[2].append(position)
                         else:
@@ -287,7 +310,8 @@ class EventJournal:
                 chunk = (body, tuple(lines), '[' + ','.join(lines) + ']', tuple(metadata),
                          stable_bytes, stable_count, parsed, tuple(portable),
                          tuple(tuple(positions) for positions in projection),
-                         tuple(tuple(positions) for positions in census))
+                         tuple(tuple(positions) for positions in census),
+                         tuple(launch_positions))
             retained[path] = chunk
             current.append(chunk)
         self._snapshots = retained

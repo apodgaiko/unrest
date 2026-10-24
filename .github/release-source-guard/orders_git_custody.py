@@ -5,6 +5,7 @@ import ast
 import hashlib
 import json
 from pathlib import Path
+from journal_supervisor import launch_events
 
 from finite.orders_git import CLASS, ENVIRONMENT, PRODUCT, repository_profile
 from finite.linux_identity import identity
@@ -90,7 +91,7 @@ def resolve(authority, trace, pid, path, vector, environment, cwd):
     selected = authority.bound.get(pid)
     if selected is None:
         return False
-    selected = join_registration(selected, authority.supervisor.events())
+    selected = join_registration(selected, launch_events(authority.supervisor))
     if selected is None or not eligible(selected, vector, environment, cwd, authority.manifest):
         return False
     parent = trace.identities[pid]['ppid']

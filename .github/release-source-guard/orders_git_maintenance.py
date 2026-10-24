@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from journal_supervisor import launch_events
 import re
 import zlib
 
@@ -82,7 +83,7 @@ def resolve(authority, trace, pid, path, vector, environment, cwd):
     original = authority.bound.get(parent)
     if context is None or original is None or parent in authority.maintenance:
         return False
-    selected = join_registration(original, authority.supervisor.events())
+    selected = join_registration(original, launch_events(authority.supervisor))
     if (
         selected is None
         or context.get("orders_registration") != selected["registration"]

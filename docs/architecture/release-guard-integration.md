@@ -1792,3 +1792,20 @@ unneeded third-party inputs in twelve stdlib-only C1 children while retaining
 the original two-second RPC limit, ten-second slow worker, ordering assertions,
 real broker completion and owned cleanup. Native adapter acceptance remains
 UNVERIFIED. The loaded diagnostic and full-source gates remain required.
+
+
+### Current launch journal projection
+
+Only the original source launch resolver and the token-bound orders Git join
+consume the fresh launch projection through the exact JournalSupervisor or
+its existing ApprovalSupervisor composition. Other supervisor types retain
+their complete events surface. Their journal predicates read exactly
+`actual_launch_binding`, `admitted` and `orders_custody_launch_binding` rows.
+Every current file byte is still acquired; immutable positions select these
+three kinds in original order with fresh mutable values. No eligibility, kernel
+identity, source pin or authorization verdict is cached. Malformed/nonportable
+metadata, changed decoder policy, low recursion margin or previously exposed
+values retain complete original materialization and error behavior. Generic
+events, refresh, receipt policies and final evidence remain complete. The
+original launch predicates, duplicate checks, token/source/argv/environment/cwd
+joins and actual numeric waits are unchanged.

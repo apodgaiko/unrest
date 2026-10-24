@@ -99,3 +99,11 @@ class JournalSupervisor(Supervisor):
             if own['state'] not in (1, 8):
                 raise
             return Supervisor.handle(self, {**request, 'kind': 'payload'}, events)
+
+
+def launch_events(supervisor):
+    """Only exact composition uses the closed fresh-byte launch projection."""
+    from approval_orphan_custody import ApprovalSupervisor
+    if type(supervisor) not in (JournalSupervisor, ApprovalSupervisor):
+        return supervisor.events()
+    return supervisor.journal().snapshot(Path(supervisor.manifest['events'])).launch_events()
