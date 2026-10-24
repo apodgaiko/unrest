@@ -54,7 +54,7 @@ def test_reproduction_retains_complete_original_module_and_full_source_command()
     assert "self._finish_cost_monitor()" in source.decode()
 
 
-@pytest.mark.parametrize("failure", ["stop", "write", "flush", "serialize", None])
+@pytest.mark.parametrize("failure", ["stop", "write", "flush", "serialize", "append", None])
 def test_interrupted_diagnostic_never_bypasses_original_finalization(failure):
     import hashlib
     import json
@@ -139,7 +139,14 @@ def test_interrupted_diagnostic_never_bypasses_original_finalization(failure):
         "source_mode": "TEST-positive",
         "manifest": "pinned",
     }
+
+    def retain_metadata(row):
+        if failure == "append":
+            raise OSError("diagnostic only")
+        captured["cpu-attribution"] = row
+
     observer.guard = SimpleNamespace(
+        append=retain_metadata,
         observe_summary=lambda manifest: {"events": [{"kind": "ready", "token": "root"}]},
         refuse=lambda reason: (_ for _ in ()).throw(RuntimeError(reason)),
     )
@@ -156,6 +163,11 @@ def test_interrupted_diagnostic_never_bypasses_original_finalization(failure):
     assert captured["/work/source-provenance.json"]["collection_before"] == list(CASES)
     assert ("closed", 19) in calls and calls.count("timer-cancel") == 3
     assert observer.metadata_case is None and observer.stack_output_fd is None
+    if failure != "append":
+        assert captured["cpu-attribution"]["kind"] == "source_guard_cpu_attribution"
+        assert captured["cpu-attribution"]["diagnostic_only"] is True
+        assert captured["cpu-attribution"]["eligible_certificate"] is False
+        assert captured["cpu-attribution"]["metadata"]["instrumented_cpu_only"] is True
     assert calls.count("stop") == (2 if failure == "stop" else 1)
 
     class StartFailure:

@@ -303,6 +303,12 @@ class Observer:
                 pass
             result = {'instrumented_cpu_only': True, 'diagnostic_failed': True, 'stage': 'stop'}
         try:
+            self.guard.append({'kind': 'source_guard_cpu_attribution', 'diagnostic_only': True,
+                'eligible_certificate': False, 'metadata': result})
+        except Exception:
+            # Optional metadata cannot bypass original summary/cleanup work.
+            pass
+        try:
             sys.__stderr__.write('\n[retained guard CPU attribution]\n' + canonical(result).decode() + '\n')
             sys.__stderr__.flush()
         except Exception:
