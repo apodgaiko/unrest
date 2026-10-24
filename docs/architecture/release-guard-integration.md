@@ -1943,3 +1943,22 @@ without storing exception text or substituting a diagnostic error for the
 initiating failure. Earlier write failures without an errno or failure-time
 filesystem observation remain uncertain; a larger metadata budget is not proof
 of their exact operating-system error.
+
+
+### Separate loaded C1 and complete source acceptance
+
+The native readiness job executes the original documented two-case loaded C1
+gate: ordinary mock completion followed by the unchanged controlled C1 witness,
+with all 512 files and 40,960 inert rows. Its 600-second diagnostic allocation,
+original fixed timing, completion/cleanup assertions, sealed child domains and
+actual numeric parent waits remain mandatory. It makes no repeated-build or
+repeated-role coverage claim. The six- and seven-case diagnostic selections
+remain available; their preceding workloads and failed results are not
+reclassified by this narrower-purpose gate.
+
+Acceptance requires both the loaded C1 gate and the complete unexcluded Python
+3.13 source suite on the same frozen candidate, plus all archive, extracted
+persistence, installed lifecycle, independent validation and desktop gates. The
+full source suite retains every original build, role, distribution and C1 case.
+Neither a subset result nor a prior candidate’s pass substitutes for that full
+checkpoint. No assertion, deadline, denied review or evidence failure is waived.
