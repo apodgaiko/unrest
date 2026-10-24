@@ -11,7 +11,7 @@ from pathlib import Path
 
 _SOURCE = Path('/guard/primary_operations.py')
 _BODY = _SOURCE.read_bytes()
-if hashlib.sha256(_BODY).hexdigest() != '07b9f4bd15176816fe8cdf06493141a7022bdd6a086f856d3d90af630a874905':
+if hashlib.sha256(_BODY).hexdigest() != 'caf74fc869180628ea99d98749d8afd791056450c6856718237a19880c4e3cb7':
     raise RuntimeError('primary_package_operations_base_drift')
 exec(compile(_BODY, str(_SOURCE), 'exec', dont_inherit=True), globals())
 

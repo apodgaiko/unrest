@@ -84,6 +84,7 @@ _ORIGINAL_SYSTEM = os.system
 _ORIGINAL_RUN = subprocess.run
 
 _STATE = None
+_CLOSED_LEAF = None
 _LOCAL = threading.local()
 
 
@@ -184,11 +185,14 @@ def require_ready(token):
             refuse("ready_activation_support_drift")
         if _STATE.get("operation_activation") is not _STATE.get("activation_owner"):
             refuse("ready_activation_callback_replaced")
+    leaf = _STATE.get('closed_bootstrap_leaf')
+    if leaf is not None:
+        leaf.validate_ready()
     support = _STATE.get("operation_support")
     if support is not None:
         owner = _STATE.get('operations')
         method = getattr(owner, 'profile', None)
-        if (owner is not _STATE.get('operation_profile_owner')
+        if leaf is None and (owner is not _STATE.get('operation_profile_owner')
                 or getattr(method, '__func__', None) is not _STATE.get('operation_profile_function')
                 or method.__func__.__code__ is not _STATE.get('operation_profile_code')
                 or method.__func__.__globals__ is not _STATE.get('operation_profile_globals')
@@ -591,6 +595,9 @@ def audit(event, args):
         and _STATE["phase"] != "READY"
     ):
         refuse("finite_guard_installation_not_READY")
+    if _CLOSED_LEAF is not None:
+        _CLOSED_LEAF.audit(event, args)
+        return
     if event in ("os.system", "subprocess.Popen") and _STATE["isolated_composition"].delegate(
         event, args
     ):
@@ -715,7 +722,7 @@ def child(manifest, pin, payload):
 
 
 def install(manifest, pin, token="root", command_class="pytest-root", case=None):
-    global _STATE
+    global _STATE, _CLOSED_LEAF
     if _STATE is not None:
         if digest(manifest) != pin or pin != _STATE["ready_record"]["manifest_sha256"]:
             refuse("duplicate_install_manifest_drift")
@@ -790,6 +797,18 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
         refuse("duplicate_finite_audit_install")
     sys.addaudithook(audit)
     sys._unrest_finite_source_audit = audit
+    leaf_path = Path(__file__).with_name('closed_bootstrap_leaf.py')
+    if (command_class in {'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp'}
+            and case in (
+                'tests/test_experimental_bootstrap.py::test_actual_sequential_initialize_and_session_share_cutoff',
+                'tests/test_experimental_bootstrap.py::test_startup_subtracts_from_actual_inference_timeout')
+            and str(leaf_path) in support['files']):
+        leaf = checked_source(leaf_path, support['files'][str(leaf_path)])['select'](
+            sys.modules[__name__], state, sys._getframe())
+        if leaf is not None:
+            _CLOSED_LEAF = state['closed_bootstrap_leaf'] = leaf
+            leaf.install()
+            return
     composition = Path(__file__).with_name("refusal_composition.py")
     isolated = Path(__file__).with_name("isolated_refusal.py")
     isolated_namespace = checked_source(isolated, state["direct_support"]["files"][str(isolated)])

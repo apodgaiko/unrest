@@ -173,7 +173,39 @@ ORDERS_TOKEN_HOOK = b'        if registration["class"] == "source-orders-custody
 
 ROLE_TOKEN_HOOK = b'        if registration["class"] in {"source-owned-role:worker", "source-owned-role:validator",\n                                     "source-owned-role:terminal-reviewer"}:\n            role_path = Path(state["guard"]).with_name("role_routes.py")\n            checked_source(role_path, state["direct_support"]["files"][str(role_path)])[\n                "bind_launch"](registration, child_argv, kwargs.get("cwd"),\n                               inherited_environment() if kwargs.get("env") is None else dict(kwargs["env"]),\n                               code, state, launch_token, append, refuse)\n'
 
+
+CLOSED_BOOTSTRAP_HOOK = b"""    leaf_path = Path(__file__).with_name('closed_bootstrap_leaf.py')
+    if (command_class in {'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp'}
+            and case in (
+                'tests/test_experimental_bootstrap.py::test_actual_sequential_initialize_and_session_share_cutoff',
+                'tests/test_experimental_bootstrap.py::test_startup_subtracts_from_actual_inference_timeout')
+            and str(leaf_path) in support['files']):
+        leaf = checked_source(leaf_path, support['files'][str(leaf_path)])['select'](
+            sys.modules[__name__], state, sys._getframe())
+        if leaf is not None:
+            _CLOSED_LEAF = state['closed_bootstrap_leaf'] = leaf
+            leaf.install()
+            return
+"""
+
+
+def restore_closed_bootstrap_bytes(body):
+    replacements = (
+        (b'_CLOSED_LEAF = None\n', b''),
+        (b'    global _STATE, _CLOSED_LEAF\n', b'    global _STATE\n'),
+        (b"    leaf = _STATE.get('closed_bootstrap_leaf')\n    if leaf is not None:\n        leaf.validate_ready()\n", b''),
+        (b"        if leaf is None and (owner is not _STATE.get('operation_profile_owner')", b"        if (owner is not _STATE.get('operation_profile_owner')"),
+        (b'    if _CLOSED_LEAF is not None:\n        _CLOSED_LEAF.audit(event, args)\n        return\n', b''),
+        (CLOSED_BOOTSTRAP_HOOK, b''),
+    )
+    for current, previous in replacements:
+        assert body.count(current) == 1
+        body = body.replace(current, previous, 1)
+    return body
+
+
 def restore_stdlib_acp_bytes(body):
+    body = restore_closed_bootstrap_bytes(body)
     delayed = b'                "source-delayed-bootstrap",\n'
     assert body.count(delayed) == 1
     body = body.replace(delayed, b'', 1)
@@ -276,6 +308,62 @@ if not state['buffer']:
     assert removed == [1, 1, 1]
     return tree
 
+
+def restore_closed_bootstrap_leaf(tree):
+    """Remove only the exact new closed-leaf branches; retain the old oracle."""
+    pieces = [
+        "_CLOSED_LEAF = None",
+        "leaf = _STATE.get('closed_bootstrap_leaf')",
+        "if leaf is not None:\n    leaf.validate_ready()",
+        "if _CLOSED_LEAF is not None:\n    _CLOSED_LEAF.audit(event, args)\n    return",
+        "leaf_path = Path(__file__).with_name('closed_bootstrap_leaf.py')",
+        """if (command_class in {'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp'}
+            and case in (
+                'tests/test_experimental_bootstrap.py::test_actual_sequential_initialize_and_session_share_cutoff',
+                'tests/test_experimental_bootstrap.py::test_startup_subtracts_from_actual_inference_timeout')
+            and str(leaf_path) in support['files']):
+        leaf = checked_source(leaf_path, support['files'][str(leaf_path)])['select'](
+            sys.modules[__name__], state, sys._getframe())
+        if leaf is not None:
+            _CLOSED_LEAF = state['closed_bootstrap_leaf'] = leaf
+            leaf.install()
+            return""",
+    ]
+    expected = [ast.dump(ast.parse(body).body[0], include_attributes=False) for body in pieces]
+    counts = [0] * len(expected)
+    condition = ast.parse("""owner is not _STATE.get('operation_profile_owner')
+        or getattr(method, '__func__', None) is not _STATE.get('operation_profile_function')
+        or method.__func__.__code__ is not _STATE.get('operation_profile_code')
+        or method.__func__.__globals__ is not _STATE.get('operation_profile_globals')
+        or _STATE.get('operation_profile_sources') != frozenset(
+            method.__func__.__globals__['SOURCE_FRAME_PATHS'])""".replace('\n', ' '), mode='eval').body
+    globals_restored = []
+    checks_restored = []
+    class Restore(ast.NodeTransformer):
+        def visit(self, node):
+            current = ast.dump(node, include_attributes=False)
+            if current in expected:
+                counts[expected.index(current)] += 1
+                return None
+            return super().visit(node)
+        def visit_Global(self, node):
+            if node.names == ['_STATE', '_CLOSED_LEAF']:
+                globals_restored.append(True)
+                return ast.Global(names=['_STATE'])
+            return node
+        def visit_If(self, node):
+            if (isinstance(node.test, ast.BoolOp) and isinstance(node.test.op, ast.And)
+                    and len(node.test.values) == 2
+                    and ast.unparse(node.test.values[0]) == 'leaf is None'):
+                assert ast.dump(node.test.values[1], include_attributes=False) == ast.dump(condition, include_attributes=False)
+                node.test = node.test.values[1]
+                checks_restored.append(True)
+            return self.generic_visit(node)
+    tree = Restore().visit(tree)
+    assert counts == [1] * len(expected) and len(globals_restored) == len(checks_restored) == 1
+    return tree
+
+
 BASELINE_AST_SHA256 = {'finite/source_operations.py': 'a5d9f2958f8aa4dd57922407f3112d6917544cc87b22942febe254172bd50209', 'finite/runtime_guard.py': '3b26232fb8c8d033a984e5c0ba0fa1760600cb7b846af728b2fbbeb39ccd6fa4', 'finite/source_activation.py': 'fd49c0f30096da8163142b0f8f884d56a80dbf9f5b38b757f22486ec1f5efab7', 'linux_supervisor.py': '2fb9fb8012c9161fe64ad70dca851abdd65a2e86dca48701d3f5b2d2fabef99f', 'linux_trace.py': '344558174ec335476ac8f76fa0afdf4ee667a497825150e4388fdb8ca95f5b9c', 'primary_source_authority.py': 'b36a24d13b548d143379dacd844680f089a41e5f2666c9a9944eeb29607a1540'}
 
 
@@ -305,6 +393,7 @@ def test_only_closed_telemetry_changes_original_executable_trees():
     for name, expected in BASELINE_AST_SHA256.items():
         tree = ast.parse((ROOT / name).read_bytes())
         if name == 'finite/runtime_guard.py':
+            tree = restore_closed_bootstrap_leaf(tree)
             tree = restore_stdlib_ready_class(restore_launch_image_observation(tree))
         if name == 'finite/source_operations.py':
             tree = restore_dependency_diagnostic(restore_query_route(tree))
@@ -518,3 +607,26 @@ def test_connected_acquisition_normalization_cannot_hide_authority_drift():
         assert before in source
         with pytest.raises((AssertionError, StopIteration)):
             restore_connected_acquisition(ast.parse(source.replace(before, after)))
+
+
+def test_closed_leaf_byte_and_ast_inverses_preserve_the_same_original_tree():
+    body = (ROOT / 'finite/runtime_guard.py').read_bytes()
+    original_bytes = restore_closed_bootstrap_bytes(body)
+    original_tree = restore_closed_bootstrap_leaf(ast.parse(body))
+    assert ast.dump(ast.parse(original_bytes), include_attributes=False) == ast.dump(original_tree, include_attributes=False)
+
+
+def test_closed_leaf_inverses_refuse_changed_or_duplicate_branches():
+    import pytest
+    body = (ROOT / 'finite/runtime_guard.py').read_bytes()
+    for before, after in [
+            (b"leaf.validate_ready()", b"leaf.install()"),
+            (b"_CLOSED_LEAF.audit(event, args)", b"_CLOSED_LEAF.audit(event, ())"),
+            (b"and case in (", b"or case in ("),
+            (b"_CLOSED_LEAF = None\n", b"_CLOSED_LEAF = None\n_CLOSED_LEAF = None\n")]:
+        assert body.count(before) == 1
+        changed = body.replace(before, after)
+        with pytest.raises(AssertionError):
+            restore_closed_bootstrap_bytes(changed)
+        with pytest.raises(AssertionError):
+            restore_closed_bootstrap_leaf(ast.parse(changed))

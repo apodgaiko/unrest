@@ -2122,3 +2122,16 @@ arguments and environment. Changed bytes select fresh syntax. Optional missing
 or malformed preparation retains the original runtime error path. Product
 clocks, deadlines, sleeps, full startup inventories and cleanup assertions do
 not change.
+
+For the two exact short-cutoff bootstrap cases, the separately sealed canonical
+backend and controlled ACP children may install a closed leaf guard. Selection
+requires their actual guard-child/endpoint-wrapper call chain, original exact
+payload, current source pins, native prebody consumption, isolated flags and an
+empty operation lineage. It grants no process-launch route: process creation and
+profile replacement always refuse durably, including caught local refusals.
+The child retains all common runtime, registry, support/spec byte checks and
+acquires its activation spec through the original checked dependency loader.
+It does not install or claim the general root operation observer. Original
+parent admission, native custody, endpoint authentication, descriptor/socket
+hooks, the complete execution/import seal and actual numeric parent waits
+remain required. Every other case and the root retain the general guard.
