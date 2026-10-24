@@ -1,4 +1,4 @@
-"""One stock update-ref child at either observed owned worktree creation site."""
+"""Finite observed update-ref and integration-reset children of owned worktrees."""
 from __future__ import annotations
 
 import ast
@@ -36,7 +36,8 @@ def metadata(parent, selected, vector, environment, cwd, manifest, checkout='/so
             or len(argv) != (7 if site == 314 else 6)
             or argv[:-2] != (['git', 'worktree', 'add', '--detach', '--no-checkout'] if site == 314 else ['git', 'worktree', 'add', '--detach'])
             or not re.fullmatch('[0-9a-f]{40}', argv[-1])
-            or vector != [IMAGE, 'update-ref', 'HEAD', argv[-1]]
+            or (vector != [IMAGE, 'update-ref', 'HEAD', argv[-1]]
+                and not (site == 616 and vector == [IMAGE, 'reset', '--hard', '--no-recurse-submodules']))
             or selected.get('bootstrap_sha256') is not None
             or selected.get('owner_pid') != registration.get('owner_pid')
             or not selected.get('token') or selected['token'] != registration.get('token')
@@ -59,7 +60,8 @@ def metadata(parent, selected, vector, environment, cwd, manifest, checkout='/so
             or regular(admin / 'commondir', 256) != b'../..\n'):
         return False
     head = admin / 'HEAD'
-    if head.resolve() != head or not head.is_file() or regular(head, 64) != b'0' * 40 + b'\n':
+    expected_head = b'0' * 40 + b'\n' if vector[1] == 'update-ref' else (argv[-1] + '\n').encode()
+    if head.resolve() != head or not head.is_file() or regular(head, 64) != expected_head:
         return False
     expected = {**parent['environment'], 'GIT_DIR': str(tree / '.git'), 'GIT_WORK_TREE': str(tree),
                 'GIT_EXEC_PATH': '/usr/lib/git-core', 'GIT_PREFIX': '',
@@ -68,12 +70,15 @@ def metadata(parent, selected, vector, environment, cwd, manifest, checkout='/so
 
 
 def resolve(authority, trace, pid, path, vector, environment, cwd):
-    if path != IMAGE or len(vector) != 4 or vector[:3] != [IMAGE, 'update-ref', 'HEAD']:
+    if (path != IMAGE or len(vector) != 4
+            or (vector[:3] != [IMAGE, 'update-ref', 'HEAD']
+                and vector != [IMAGE, 'reset', '--hard', '--no-recurse-submodules'])):
         return False
     parent = trace.identities[pid]['ppid']
     context, selected = authority.native_context.get(parent), authority.bound.get(parent)
     consumed = getattr(authority, 'worktree_ref_parents', set())
-    if context is None or selected is None or parent in consumed:
+    operation = (parent, vector[1])
+    if context is None or selected is None or operation in consumed:
         return False
     before = identity(parent)
     saved = authority.contexts.get(parent)
@@ -83,13 +88,34 @@ def resolve(authority, trace, pid, path, vector, environment, cwd):
             or not metadata(context, selected, vector, environment, cwd, authority.manifest)
             or identity(parent) != before):
         return False
+    prior_wait = None
+    if vector[1] == 'reset':
+        previous = getattr(authority, 'worktree_ref_children', {}).get(parent)
+        if previous is None or previous['parent_identity'] != before or previous['token'] != selected['token']:
+            return False
+        current_records = trace.records[previous['trace_records']:]
+        waits = [row for row in current_records if row.get('kind') == 'original_parent_wait4'
+                 and row.get('parent_tgid') == parent and row.get('child') == previous['pid']
+                 and row.get('raw') == 0 and row.get('normalized') == 0]
+        exits = [row for row in current_records if row.get('kind') == 'tracer_terminal_wait'
+                 and row.get('pid') == previous['pid'] and row.get('raw') == 0 and row.get('normalized') == 0
+                 and all(row.get('identity', {}).get(key) == previous['identity'].get(key)
+                         for key in ('pid', 'ppid', 'start_ticks', 'boot_id'))]
+        if len(waits) != 1 or len(exits) != 1:
+            return False
+        prior_wait = hashlib.sha256(json.dumps(waits[0], sort_keys=True).encode()).hexdigest()
     child = identity(pid)
     if child['ppid'] != parent:
         return False
-    consumed.add(parent)
+    consumed.add(operation)
     authority.worktree_ref_parents = consumed
-    authority.contexts[pid] = {'role': 'source-worktree-update-ref', 'identity': child}
-    authority.pipe_records.append({'kind': 'worktree_update_ref_child', 'pid': pid, 'identity': child,
+    if vector[1] == 'update-ref':
+        children = getattr(authority, 'worktree_ref_children', {})
+        children[parent] = {'pid': pid, 'identity': child, 'parent_identity': before, 'token': selected['token'], 'trace_records': len(trace.records)}
+        authority.worktree_ref_children = children
+    authority.contexts[pid] = {'role': 'source-worktree-child', 'identity': child}
+    authority.pipe_records.append({'kind': 'worktree_git_child', 'operation': vector[1], 'pid': pid, 'identity': child,
+                                   'prior_actual_wait_sha256': prior_wait,
                                    'parent_identity': before, 'original_worktree_token': selected['token'],
                                    'executable_sha256': authority.manifest['git_maintenance_sha256']})
     return True

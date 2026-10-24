@@ -262,7 +262,7 @@ def test_worktree_child_resolver_requires_fresh_birth_and_one_actual_child(tmp_p
     authority = SimpleNamespace(native_context={10: {}}, bound={10: {'token': 'actual-parent'}},
                                 contexts={10: {'identity': saved}}, pipe_records=[],
                                 manifest={'git_maintenance_sha256': 'foreign' if change == 'image' else hashlib.sha256(image.read_bytes()).hexdigest()})
-    trace = SimpleNamespace(identities={11: {'ppid': 10}})
+    trace = SimpleNamespace(identities={11: {'ppid': 10}}, records=[])
     vector = [custody.IMAGE, 'update-ref', 'HEAD', 'a' * 40]
     assert custody.resolve(authority, trace, 11, custody.IMAGE, vector, {}, str(cwd)) is (change is None)
     if change is None:
@@ -284,3 +284,67 @@ def test_other_original_workspace_callers_have_exact_finite_case_and_source_bind
         selected = [case for case in ADDITIONAL_CASES if case.split('::', 1)[0] == name]
         assert selected and all(case.split('::', 1)[1].split('[', 1)[0] in functions for case in selected)
     assert all(case.split('::', 1)[0] in CASE_PINS for case in ADDITIONAL_CASES)
+
+
+@pytest.mark.parametrize('site,head,allowed', [(314, 'a' * 40, False), (616, 'a' * 40, True),
+                                             (616, '0' * 40, False), (616, 'ref: refs/heads/main', False)])
+def test_integration_reset_requires_only_its_exact_detached_revision(tmp_path, site, head, allowed):
+    from worktree_git_custody import metadata, IMAGE
+    parent, selected, _, env, cwd, manifest = worktree_child_fixture(tmp_path, site)
+    tree = Path(parent['argv'][-2])
+    (Path(cwd) / '.git/worktrees' / tree.name / 'HEAD').write_text(head + '\n')
+    assert metadata(parent, selected, [IMAGE, 'reset', '--hard', '--no-recurse-submodules'],
+                    env, cwd, manifest, checkout=str(ROOT)) is allowed
+
+
+@pytest.mark.parametrize('change', [None, 'no-update', 'no-wait', 'nonzero', 'wrong-parent', 'exit-birth',
+                                    'duplicate-wait', 'parent-token', 'parent-birth', 'historical-wait'])
+def test_integration_reset_requires_actual_preceding_native_wait(tmp_path, monkeypatch, change):
+    from types import SimpleNamespace
+    import worktree_git_custody as custody
+    image = tmp_path / 'git-image'
+    image.write_bytes(b'pinned image')
+    cwd = tmp_path / 'cwd'
+    cwd.mkdir()
+    parent = {'pid': 10, 'ppid': 2, 'start_ticks': 20, 'boot_id': 'boot'}
+    first = {'pid': 11, 'ppid': 10, 'start_ticks': 30, 'boot_id': 'boot'}
+    def current(pid):
+        return dict(parent) if pid == 10 else {**first, 'pid': pid, 'start_ticks': 30 if pid == 11 else 40}
+    def paths(value):
+        return image if value == custody.IMAGE else cwd if value == '/proc/10/cwd' else Path(value)
+    monkeypatch.setattr(custody, 'identity', current)
+    monkeypatch.setattr(custody, 'Path', paths)
+    monkeypatch.setattr(custody, 'metadata', lambda *args: True)
+    authority = SimpleNamespace(native_context={10: {}}, bound={10: {'token': 'parent-token'}},
+                                contexts={10: {'identity': dict(parent)}}, pipe_records=[],
+                                manifest={'git_maintenance_sha256': hashlib.sha256(image.read_bytes()).hexdigest()})
+    trace = SimpleNamespace(identities={11: {'ppid': 10}, 12: {'ppid': 10}}, records=[])
+    if change == 'historical-wait':
+        trace.records = [{'kind': 'original_parent_wait4', 'parent_tgid': 10, 'child': 11, 'raw': 0, 'normalized': 0}]
+    assert custody.resolve(authority, trace, 11, custody.IMAGE,
+                           [custody.IMAGE, 'update-ref', 'HEAD', 'a' * 40], {}, str(cwd))
+    wait = {'kind': 'original_parent_wait4', 'parent_tgid': 10, 'child': 11, 'raw': 0, 'normalized': 0}
+    terminal = {'kind': 'tracer_terminal_wait', 'pid': 11, 'raw': 0, 'normalized': 0, 'identity': dict(first)}
+    trace.records = [wait, terminal]
+    if change == 'no-update':
+        authority.worktree_ref_children.clear()
+    elif change == 'no-wait':
+        trace.records = [terminal]
+    elif change == 'nonzero':
+        wait['raw'] = 256
+    elif change == 'wrong-parent':
+        wait['parent_tgid'] = 99
+    elif change == 'exit-birth':
+        terminal['identity']['start_ticks'] = 99
+    elif change == 'duplicate-wait':
+        trace.records.append(dict(wait))
+    elif change == 'parent-token':
+        authority.bound[10]['token'] = 'foreign'
+    elif change == 'parent-birth':
+        parent['start_ticks'] = 99
+    vector = [custody.IMAGE, 'reset', '--hard', '--no-recurse-submodules']
+    assert custody.resolve(authority, trace, 12, custody.IMAGE, vector, {}, str(cwd)) is (change is None)
+    if change is None:
+        record = authority.pipe_records[-1]
+        assert record['prior_actual_wait_sha256'] == hashlib.sha256(json.dumps(wait, sort_keys=True).encode()).hexdigest()
+        assert not custody.resolve(authority, trace, 12, custody.IMAGE, vector, {}, str(cwd))

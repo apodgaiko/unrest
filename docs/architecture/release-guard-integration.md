@@ -2022,10 +2022,17 @@ The admin HEAD must be a regular all-zero detached initialization; symbolic,
 foreign, missing or redirected HEAD refuses. Only one such child per parent is
 admitted; actual numeric waits remain required.
 Each site keeps its distinct owned directory shape. This route grants no other
-worktree-site, reset, generic Git or provider authority.
+worktree-site, generic Git or provider authority.
 
 The product workspace Git method closure includes exactly60 original collected
 cases: the24-case diagnostic plus36 existing foundation, adapter, server and
 measurement callers. Additional callers bind their exact test-source bytes;
 method, expression, argv, environment and native custody checks remain unchanged.
 This does not expand the diagnostic command or permit unknown cases.
+
+The observed integration reset at line616 is a separate once-only phase. It
+requires the same parent birth and launch token, current detached HEAD equal to
+the requested revision, and both a birth-matched terminal record and the actual
+parent wait4 returning zero after the current update-ref admission. Historical
+same-PID waits cannot authorize it. Later child waits remain required; no Python
+wait receipt or native final timing is inferred. Other sites remain refused.
