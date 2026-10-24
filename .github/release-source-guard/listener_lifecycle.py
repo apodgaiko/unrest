@@ -30,19 +30,48 @@ def reaped(entry, registered, events, records, nonce):
             or row.get('owner_identity') != parent['identity']
             or row.get('owner_token') != parent['token'] or type(row.get('options')) is not int):
         return False
+    lifecycle = [item for item in events if item.get('kind') == 'launch_lifecycle_binding'
+                 and item.get('owner_pid') == birth['ppid'] and item.get('token') == token]
+    registrations = [item for item in events if item.get('kind') == 'registered'
+                     and item.get('owner_pid') == birth['ppid'] and item.get('pid') == pid
+                     and item.get('token') == token]
+    admissions = [item for item in events if item.get('kind') == 'admitted'
+                  and item.get('owner_pid') == birth['ppid'] and item.get('token') == token]
+    new_session = (len(lifecycle) == len(registrations) == len(admissions) == 1
+                   and lifecycle[0].get('start_new_session') is True
+                   and registrations[0].get('python') is True
+                   and type(registrations[0].get('class')) is str and bool(registrations[0]['class'])
+                   and type(lifecycle[0].get('case')) is str and bool(lifecycle[0]['case'])
+                   and registrations[0].get('class') == admissions[0].get('class')
+                   and lifecycle[0].get('case') == registrations[0].get('case') == admissions[0].get('case')
+                   and (birth.get('pgid'), birth.get('sid')) == (pid, pid)
+                   and type(parent['identity'].get('pgid')) is int
+                   and type(parent['identity'].get('sid')) is int)
     def same_birth(observed):
         uids = observed.get('uids')
         if (type(uids) is not list or len(uids) != 4
                 or any(type(uid) is not int or uid != birth['uid'] for uid in uids)):
             return False
-        return {key: uids[0] if key == 'uid' else observed.get(key) for key in birth} == birth
+        actual = {key: uids[0] if key == 'uid' else observed.get(key) for key in birth}
+        if actual == birth:
+            return True
+        # Fork observation can precede the original, explicitly bound setsid().
+        # PID/parent/start/boot/UID/tick identity and every numeric wait remain
+        # exact; only this verified inherited-to-new-session transition varies.
+        return (new_session
+                and {key: value for key, value in actual.items() if key not in {'pgid', 'sid'}}
+                    == {key: value for key, value in birth.items() if key not in {'pgid', 'sid'}}
+                and (actual.get('pgid'), actual.get('sid'))
+                    == (parent['identity']['pgid'], parent['identity']['sid']))
     births = [i for i, item in enumerate(records) if item.get('kind') == 'kernel_child'
               and item.get('child') == pid and same_birth(item.get('identity', {}))]
     exits = [i for i, item in enumerate(records) if item.get('kind') == 'kernel_exit'
              and item.get('pid') == pid and item.get('raw') == status]
     tracer = [i for i, item in enumerate(records) if item.get('kind') == 'tracer_terminal_wait'
               and item.get('pid') == pid and item.get('raw') == status
-              and item.get('normalized') == code and same_birth(item.get('identity', {}))]
+              and item.get('normalized') == code and len(births) == 1
+              and item.get('identity') == records[births[0]].get('identity')
+              and same_birth(item.get('identity', {}))]
     waits = [i for i, item in enumerate(records) if item.get('kind') == 'original_parent_wait4'
              and item.get('child') == pid and item.get('parent_tgid') == birth['ppid']
              and item.get('raw') == status and item.get('normalized') == code

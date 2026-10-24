@@ -10,8 +10,10 @@ from listener_lifecycle import reaped
 
 
 def fixture(code=-15):
-    parent = {'pid': 10, 'ppid': 1, 'start_ticks': 100, 'boot_id': 'boot', 'uid': 20000}
-    child = {'pid': 20, 'ppid': 10, 'start_ticks': 200, 'boot_id': 'boot', 'uid': 20000}
+    parent = {'pid': 10, 'ppid': 1, 'start_ticks': 100, 'boot_id': 'boot', 'uid': 20000,
+              'pgid': 10, 'sid': 10, 'clock_ticks_per_second': 100}
+    child = {'pid': 20, 'ppid': 10, 'start_ticks': 200, 'boot_id': 'boot', 'uid': 20000,
+              'pgid': 10, 'sid': 10, 'clock_ticks_per_second': 100}
     entry = {'pid': 20, 'fd': 6, 'state': 10, 'local_host': '127.0.0.1', 'local_port': 12345,
              'socket_uid': 20000, 'socket_cookie': 99, 'inode': 88}
     registered = {10: {'identity': parent, 'token': 'parent'},
@@ -147,3 +149,92 @@ def test_snapshot_plan_retains_raw_wait_for_actual_listener_retirement(tmp_path,
     assert value.handle(request, snapshot) == {'plan_recorded': True, 'network_admitted': False}
     assert value.listeners == {} and value.plans[12345] is request
     assert snapshot.full == events
+
+
+def session_fixture(code=-15):
+    entry, registered, events, records = fixture(code)
+    registered[20]['identity'].update(pgid=20, sid=20)
+    events.extend([
+        {'kind': 'launch_lifecycle_binding', 'owner_pid': 10, 'token': 'old-child',
+         'start_new_session': True, 'case': 'original-case'},
+        {'kind': 'registered', 'owner_pid': 10, 'pid': 20, 'token': 'old-child',
+         'python': True, 'class': 'composed-http-role:worker', 'case': 'original-case'},
+        {'kind': 'admitted', 'owner_pid': 10, 'token': 'old-child',
+         'class': 'composed-http-role:worker', 'case': 'original-case'},
+    ])
+    return entry, registered, events, records
+
+
+@pytest.mark.parametrize('code', [0, 17, -15])
+def test_explicit_setsid_accepts_only_saved_fork_snapshot_without_rewriting_it(code):
+    values = session_fixture(code)
+    before = deepcopy(values)
+    assert reaped(*values, 'nonce') is True
+    assert values == before
+
+
+@pytest.mark.parametrize('change', [
+    'missing', 'duplicate', 'false', 'integer', 'owner', 'token', 'case',
+    'registration', 'admission', 'class', 'empty-class', 'empty-case', 'not-python',
+    'fork-pgid', 'fork-sid', 'ready-pgid', 'ready-sid',
+    'pid', 'ppid', 'start_ticks', 'boot_id', 'clock_ticks_per_second', 'uids',
+    'terminal-snapshot', 'missing-wait', 'duplicate-wait', 'wait-order', 'status', 'options',
+])
+def test_setsid_never_substitutes_for_birth_launch_or_actual_wait_proof(change):
+    entry, registered, events, records = session_fixture()
+    if change == 'missing':
+        events.pop(1)
+    elif change == 'duplicate':
+        events.append(deepcopy(events[1]))
+    elif change in {'false', 'integer'}:
+        events[1]['start_new_session'] = False if change == 'false' else 1
+    elif change in {'owner', 'token', 'case'}:
+        key = {'owner': 'owner_pid', 'token': 'token', 'case': 'case'}[change]
+        events[1][key] = 99 if change == 'owner' else 'foreign'
+    elif change in {'registration', 'admission'}:
+        events.pop(2 if change == 'registration' else 3)
+    elif change == 'class':
+        events[3]['class'] = 'foreign'
+    elif change == 'empty-class':
+        events[2]['class'] = events[3]['class'] = ''
+    elif change == 'empty-case':
+        for event in events[1:]:
+            event['case'] = ''
+    elif change == 'not-python':
+        events[2]['python'] = False
+    elif change.startswith('fork-'):
+        for index in (0, 2):
+            records[index]['identity'][change[5:]] = 99
+    elif change.startswith('ready-'):
+        registered[20]['identity'][change[6:]] = 99
+    elif change in {'pid', 'ppid', 'start_ticks', 'boot_id', 'clock_ticks_per_second', 'uids'}:
+        for index in (0, 2):
+            records[index]['identity'][change] = [20000, 0, 20000, 20000] if change == 'uids' else 'foreign'
+    elif change == 'terminal-snapshot':
+        records[2]['identity'].update(pgid=20, sid=20)
+    elif change == 'missing-wait':
+        records.pop()
+    elif change == 'duplicate-wait':
+        records.append(deepcopy(records[-1]))
+    elif change == 'wait-order':
+        records.reverse()
+    elif change == 'status':
+        records[-1]['raw'] = 0
+    elif change == 'options':
+        records[-1]['options'] = 1
+    assert reaped(entry, registered, events, records, 'nonce') is False
+
+
+def test_setsid_retirement_preserves_evidence_and_requires_a_new_listener(monkeypatch):
+    value, entry, _, request = model(monkeypatch)
+    entry, registered, events, records = session_fixture()
+    value.listeners = {12345: entry}
+    value.registered = registered
+    value.owned_trace.records = records
+    before = deepcopy((events, records, value.connections, value.connect_admissions))
+    assert value.handle(request, events) == {'plan_recorded': True, 'network_admitted': False}
+    assert value.listeners == {}
+    assert (events, records, value.connections, value.connect_admissions) == before
+    with pytest.raises(RuntimeError, match='foreign_or_unregistered_endpoint'):
+        value.handle({'kind': 'connect', 'pid': 10, 'fd': 11, 'host': '127.0.0.1', 'port': 12345}, events)
+    assert (10, 11) not in value.connect_admissions

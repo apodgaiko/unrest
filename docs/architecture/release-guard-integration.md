@@ -1680,3 +1680,12 @@ Host unit fixture controls normalize interpreter search-path aliases only after
 ordered physical equality with the same three stdlib paths and absent zip is
 proved. Foreign, reordered or missing entries fail with layout diagnostics.
 Production native sealing retains exact path strings and does not normalize.
+
+Listener retirement distinguishes immutable process birth from a recorded
+`start_new_session=True` transition. The pre-exec fork/terminal tracer identity
+may retain the registered parent's process group and session, while the READY
+child identity has its own PID as both. This variation is accepted only with
+one matching original admission, launch lifecycle and registration, exact
+PID/parent/start/boot/UID/tick identity and the unchanged source/kernel/tracer/
+actual-parent numeric wait join. It removes old listener authority only; the
+replacement still requires a fresh kernel-bound listener before any admission.
