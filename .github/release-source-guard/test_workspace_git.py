@@ -161,21 +161,21 @@ def test_linked_fixture_requires_exact_owned_worktree_chain(tmp_path, change):
     assert not maintenance.metadata(parent, selected, env, cwd, manifest, checkout=str(ROOT))
 
 
-def worktree_child_fixture(tmp_path):
+def worktree_child_fixture(tmp_path, site=314):
     from worktree_git_custody import IMAGE, SOURCE
     repository = tmp_path.resolve() / 'pytest/project'
-    tree = repository / '.unrest-runtime/workspaces/trees/candidate-one'
-    admin = repository / '.git/worktrees/candidate-one'
+    tree = repository / ('.unrest-runtime/workspaces/trees/candidate-one' if site == 314 else '.unrest-runtime/workspaces/integration-abcdefgh')
+    admin = repository / '.git/worktrees' / tree.name
     tree.mkdir(parents=True)
     admin.mkdir(parents=True)
     (tree / '.git').write_text('gitdir: ' + str(admin) + '\n')
     (admin / 'gitdir').write_text(str(tree / '.git') + '\n')
     (admin / 'commondir').write_text('../..\n')
     (admin / 'HEAD').write_text('0' * 40 + '\n')
-    vector = ['git', 'worktree', 'add', '--detach', '--no-checkout', str(tree), 'a' * 40]
+    vector = ['git', 'worktree', 'add', '--detach', *(['--no-checkout'] if site == 314 else []), str(tree), 'a' * 40]
     parent = {'argv': vector, 'cwd': str(repository), 'environment': {'PATH': '/usr/bin:/bin'}}
     binding = {'path': str(ROOT / SOURCE), 'sha256': PINS[SOURCE], 'function': '_git', 'line': 222,
-               'caller': 'lease_workspace', 'caller_line': 314, 'expression_ast_sha256': SITES[314][1]}
+               'caller': 'lease_workspace' if site == 314 else '_build_integration_commit', 'caller_line': site, 'expression_ast_sha256': SITES[site][1]}
     registration = {'class': 'source-workspace-bound-git', 'source_binding': binding,
                     'owner_pid': 22, 'token': 'consumed-parent', 'case': CASES[1]}
     selected = {'registration': registration, 'owner_pid': 22, 'token': 'consumed-parent',
@@ -193,11 +193,12 @@ def worktree_child_fixture(tmp_path):
 @pytest.mark.parametrize('change', [None, 'vector', 'oid', 'environment', 'parent', 'token', 'owner',
                                     'bootstrap', 'site', 'class', 'source', 'data', 'cwd', 'gitfile',
                                     'backlink', 'commondir', 'symlink', 'symbolic-head', 'foreign-head', 'missing-head', 'symlink-head'])
-def test_stock_worktree_child_is_only_the_exact_owned_parent_operation(tmp_path, change):
+@pytest.mark.parametrize('site', [314, 616])
+def test_stock_worktree_child_is_only_the_exact_owned_parent_operation(tmp_path, change, site):
     from worktree_git_custody import metadata, SOURCE
-    parent, selected, vector, env, cwd, manifest = worktree_child_fixture(tmp_path)
-    tree = Path(parent['argv'][5])
-    admin = Path(cwd) / '.git/worktrees/candidate-one'
+    parent, selected, vector, env, cwd, manifest = worktree_child_fixture(tmp_path, site)
+    tree = Path(parent['argv'][-2])
+    admin = Path(cwd) / '.git/worktrees' / tree.name
     if change == 'vector':
         vector[1] = 'reset'
     elif change == 'oid':
@@ -213,7 +214,7 @@ def test_stock_worktree_child_is_only_the_exact_owned_parent_operation(tmp_path,
     elif change == 'bootstrap':
         selected['bootstrap_sha256'] = 'foreign'
     elif change == 'site':
-        selected['registration']['source_binding']['caller_line'] = 616
+        selected['registration']['source_binding']['caller_line'] = 999
     elif change == 'class':
         selected['registration']['class'] = 'foreign'
     elif change == 'source':
@@ -268,3 +269,18 @@ def test_worktree_child_resolver_requires_fresh_birth_and_one_actual_child(tmp_p
         assert len(authority.pipe_records) == 1
         assert authority.pipe_records[0]['original_worktree_token'] == 'actual-parent'
         assert not custody.resolve(authority, trace, 11, custody.IMAGE, vector, {}, str(cwd))
+
+
+
+def test_other_original_workspace_callers_have_exact_finite_case_and_source_bindings():
+    from finite.workspace_git_data import ADDITIONAL_CASES, CASE_PINS
+    assert len(ADDITIONAL_CASES) == len(set(ADDITIONAL_CASES)) == 36
+    assert not set(ADDITIONAL_CASES).intersection(CASES)
+    assert len(set(CASES + ADDITIONAL_CASES)) == 60
+    for name, pin in CASE_PINS.items():
+        body = (ROOT / name).read_bytes()
+        assert hashlib.sha256(body).hexdigest() == pin
+        functions = {n.name for n in ast.parse(body).body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        selected = [case for case in ADDITIONAL_CASES if case.split('::', 1)[0] == name]
+        assert selected and all(case.split('::', 1)[1].split('[', 1)[0] in functions for case in selected)
+    assert all(case.split('::', 1)[0] in CASE_PINS for case in ADDITIONAL_CASES)

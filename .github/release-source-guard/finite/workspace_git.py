@@ -29,8 +29,15 @@ def admit(argv, cwd, env, state, append, refuse):
     data = {n.targets[0].id: ast.literal_eval(n.value) for n in ast.parse(body).body
             if isinstance(n, ast.Assign)}
     pins, sites = data['PINS'], data['SITES']
-    if state.get('case') not in data['CASES']:
+    case = state.get('case')
+    if case not in (*data['CASES'], *data['ADDITIONAL_CASES']):
         return None
+    if case in data['ADDITIONAL_CASES']:
+        case_source = case.split('::', 1)[0]
+        case_pin = data['CASE_PINS'][case_source]
+        if (state['product_pins'].get(case_source) != case_pin
+                or hashlib.sha256((Path(state['checkout']) / case_source).read_bytes()).hexdigest() != case_pin):
+            refuse('workspace_git_case_source_drift')
     root = Path(state['checkout'])
     frame = inspect.currentframe()
     try:

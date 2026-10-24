@@ -2013,11 +2013,19 @@ commands and assertions remain unchanged; subsets, reordering, extra arguments
 and other modes cannot select this setup. Explicit maintenance still requires
 its existing finite authority, and all focused refusal tests remain intact.
 
-The original lease-worktree creation at WorkspaceManager line314 may launch
+The original lease and integration worktree creation sites at WorkspaceManager
+lines314 and616 may launch
 stock Git update-ref HEAD with its same requested revision. That native child
 is joined to the consumed parent token, exact source/argv/environment, current
 process births and image, and the owned linked-worktree gitfile/admin backlinks.
 The admin HEAD must be a regular all-zero detached initialization; symbolic,
 foreign, missing or redirected HEAD refuses. Only one such child per parent is
 admitted; actual numeric waits remain required.
-This route grants no other worktree-site, reset, generic Git or provider authority.
+Each site keeps its distinct owned directory shape. This route grants no other
+worktree-site, reset, generic Git or provider authority.
+
+The product workspace Git method closure includes exactly60 original collected
+cases: the24-case diagnostic plus36 existing foundation, adapter, server and
+measurement callers. Additional callers bind their exact test-source bytes;
+method, expression, argv, environment and native custody checks remain unchanged.
+This does not expand the diagnostic command or permit unknown cases.

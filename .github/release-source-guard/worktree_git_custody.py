@@ -1,4 +1,4 @@
-"""One stock update-ref child of the original owned detached-worktree launch."""
+"""One stock update-ref child at either observed owned worktree creation site."""
 from __future__ import annotations
 
 import ast
@@ -23,16 +23,20 @@ def metadata(parent, selected, vector, environment, cwd, manifest, checkout='/so
     pin = data['PINS'][SOURCE]
     registration = selected.get('registration', {})
     binding = registration.get('source_binding', {})
+    site = binding.get('caller_line')
+    if site not in {314, 616}:
+        return False
     expected_binding = {'path': checkout + '/' + SOURCE, 'sha256': pin, 'function': '_git', 'line': 222,
-                        'caller': 'lease_workspace', 'caller_line': 314,
-                        'expression_ast_sha256': data['SITES'][314][1]}
+                        'caller': 'lease_workspace' if site == 314 else '_build_integration_commit', 'caller_line': site,
+                        'expression_ast_sha256': data['SITES'][site][1]}
     argv = parent['argv']
     if (binding != expected_binding or registration.get('class') != 'source-workspace-bound-git'
             or manifest['product_pins'].get(SOURCE) != pin
             or hashlib.sha256(Path(binding['path']).read_bytes()).hexdigest() != pin
-            or len(argv) != 7 or argv[:5] != ['git', 'worktree', 'add', '--detach', '--no-checkout']
-            or not re.fullmatch('[0-9a-f]{40}', argv[6])
-            or vector != [IMAGE, 'update-ref', 'HEAD', argv[6]]
+            or len(argv) != (7 if site == 314 else 6)
+            or argv[:-2] != (['git', 'worktree', 'add', '--detach', '--no-checkout'] if site == 314 else ['git', 'worktree', 'add', '--detach'])
+            or not re.fullmatch('[0-9a-f]{40}', argv[-1])
+            or vector != [IMAGE, 'update-ref', 'HEAD', argv[-1]]
             or selected.get('bootstrap_sha256') is not None
             or selected.get('owner_pid') != registration.get('owner_pid')
             or not selected.get('token') or selected['token'] != registration.get('token')
@@ -40,9 +44,10 @@ def metadata(parent, selected, vector, environment, cwd, manifest, checkout='/so
             or selected.get('environment_sha256') != hashlib.sha256(json.dumps(parent['environment'], sort_keys=True).encode()).hexdigest()
             or parent['cwd'] != cwd or selected.get('cwd') != cwd):
         return False
-    repository, tree = Path(cwd), Path(argv[5])
+    repository, tree = Path(cwd), Path(argv[-2])
     if (repository.resolve() != repository or not repository.is_relative_to(Path(manifest['owned_root']) / 'pytest')
-            or tree.parent != repository / '.unrest-runtime/workspaces/trees'
+            or tree.parent != repository / ('.unrest-runtime/workspaces/trees' if site == 314 else '.unrest-runtime/workspaces')
+            or (site == 616 and not re.fullmatch('integration-[a-z0-9_]{8}', tree.name))
             or tree.resolve() != tree or not tree.is_dir() or not re.fullmatch('[A-Za-z0-9_-]+', tree.name)):
         return False
     common = repository / '.git'
