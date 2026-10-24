@@ -1915,3 +1915,11 @@ large files, current rewrites/replacements, aliases, permissions and read errors
 retain the original behavior; differential OS-descriptor controls cover FIFO
 EOF/nonblocking reads, interruption and Linux PTY partial-data/EIO behavior.
 No file content, type verdict or descriptor is cached across acquisitions.
+
+The closed launch-row projection uses the same immutable ParseBlocks mechanism
+as full journal materialization. Exact selected current line tuples bind cached
+encodings; each acquisition decodes new mutable objects and preserves aliases
+when that snapshot is later fully materialized. Appends, rewrites and truncation
+recompute current positions. Changed decoder policy, exposed values, shallow-data
+limits or a narrow recursion margin retain the complete original decoding path.
+Only parsing metadata crosses acquisitions; no launch decision or mutable row does.

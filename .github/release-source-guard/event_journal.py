@@ -198,10 +198,15 @@ class JournalSnapshot(Sequence):
             return self.materialize()
         rows, offset = [], 0
         for chunk in self.chunks:
-            for index in chunk[10]:
-                position = offset + index
-                self.parsed[position] = json.loads(chunk[1][index])
-                rows.append(self.parsed[position])
+            positions = chunk[10]
+            if positions:
+                selected = (None, tuple(chunk[1][index] for index in positions))
+                current = chunk[11].materialize(selected)
+                if current is None:
+                    current = [json.loads(line) for line in selected[1]]
+                for index, row in zip(positions, current):
+                    self.parsed[offset + index] = row
+                    rows.append(row)
             offset += len(chunk[1])
         return rows
 
@@ -313,7 +318,8 @@ class EventJournal:
                          stable_bytes, stable_count, parsed, tuple(portable),
                          tuple(tuple(positions) for positions in projection),
                          tuple(tuple(positions) for positions in census),
-                         tuple(launch_positions))
+                         tuple(launch_positions),
+                         ParseBlocks(chunk[11] if chunk is not None else None))
             retained[path] = chunk
             current.append(chunk)
         self._snapshots = retained

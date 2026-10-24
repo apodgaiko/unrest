@@ -163,3 +163,81 @@ def test_real_approval_install_composition_uses_projection_but_other_subclasses_
     foreign = Foreign.__new__(Foreign)
     foreign.manifest = owner.manifest
     assert launch_events(foreign) == rows
+
+
+def test_launch_blocks_reuse_only_immutable_matching_lines_and_fresh_rows(tmp_path):
+    path = tmp_path / '1.jsonl'
+    rows = [{'kind': 'admitted', 'n': n, 'nested': [n]} for n in range(event_journal.BLOCK * 3)]
+    write(path, rows)
+    reader = event_journal.EventJournal()
+    first = reader.snapshot(tmp_path)
+    selected = first.launch_events()
+    blocks = first.chunks[0][11].blocks
+    assert len(blocks) == 3 and all(type(item[1]) is bytes for item in blocks)
+    selected[0]['nested'].append('mutable value belongs to this snapshot')
+    assert first.materialize()[0] is selected[0]
+    rows.append({'kind': 'actual_launch_binding', 'nested': ['new current row']})
+    with path.open('a') as stream:
+        stream.write(json.dumps(rows[-1]) + '\n')
+    second = reader.snapshot(tmp_path)
+    assert second.launch_events() == rows
+    assert all(old[1] is new[1] for old, new in zip(blocks, second.chunks[0][11].blocks))
+    assert second.materialize()[0] is second.parsed[0]
+    assert second.materialize()[0] is not selected[0]
+    rows[0] = {'kind': 'inert', 'nested': ['rewritten']}
+    write(path, rows)
+    assert reader.snapshot(tmp_path).launch_events() == rows[1:]
+    write(path, [{'kind': 'orders_custody_launch_binding', 'nested': ['truncated']}])
+    assert reader.snapshot(tmp_path).launch_events() == [{'kind': 'orders_custody_launch_binding', 'nested': ['truncated']}]
+    path.unlink()
+    assert reader.snapshot(tmp_path).launch_events() == []
+
+
+@pytest.mark.parametrize('change', ['loads', 'decoder'])
+def test_warm_launch_blocks_never_replay_under_changed_decoder_policy(tmp_path, monkeypatch, change):
+    path = tmp_path / '1.jsonl'
+    rows = [{'kind': 'inert'}, {'kind': 'admitted', 'n': 1}]
+    write(path, rows)
+    reader = event_journal.EventJournal()
+    assert reader.snapshot(tmp_path).launch_events() == rows[1:]
+    assert reader._snapshots[path][11].blocks
+    if change == 'loads':
+        actual = event_journal.json.loads
+        monkeypatch.setattr(event_journal.json, 'loads', lambda body: actual(body, parse_int=lambda value: int(value) + 10))
+    else:
+        monkeypatch.setattr(event_journal.json._default_decoder, 'parse_int', lambda value: int(value) + 10)
+    snapshot = reader.snapshot(tmp_path)
+    assert snapshot.launch_events() is snapshot.materialize()
+    assert snapshot.materialize() == [event_journal.json.loads(line) for line in path.read_text().splitlines()]
+
+
+@pytest.mark.parametrize('shape', ['deep', 'large-int', 'nonfinite'])
+def test_nonportable_launch_rows_keep_original_full_materialization(tmp_path, shape):
+    value = 1
+    if shape == 'deep':
+        for _ in range(20):
+            value = [value]
+    elif shape == 'large-int':
+        value = 1 << 80
+    else:
+        value = float('nan')
+    write(tmp_path / '1.jsonl', [{'kind': 'inert'}, {'kind': 'admitted', 'value': value}])
+    reader = event_journal.EventJournal()
+    for _ in range(2):
+        snapshot = reader.snapshot(tmp_path)
+        assert snapshot.launch_events() is snapshot.materialize()
+        assert snapshot.chunks[0][11].blocks == ()
+        assert len(snapshot.materialize()) == 2
+
+
+def test_warm_launch_blocks_preserve_original_path_near_recursion_boundary(tmp_path, monkeypatch):
+    write(tmp_path / '1.jsonl', [{'kind': 'inert'}, {'kind': 'admitted', 'nested': [1]}])
+    reader = event_journal.EventJournal()
+    assert len(reader.snapshot(tmp_path).launch_events()) == 1
+    def refused(*args):
+        pytest.fail('immutable parse replay must not run near recursion boundary')
+    monkeypatch.setattr(event_journal.marshal, 'loads', refused)
+    monkeypatch.setattr(event_journal.sys, 'getrecursionlimit', lambda: 100)
+    snapshot = reader.snapshot(tmp_path)
+    assert snapshot.launch_events() is snapshot.materialize()
+    assert len(snapshot.materialize()) == 2
