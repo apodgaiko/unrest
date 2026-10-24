@@ -8,6 +8,8 @@ import marshal
 import sys
 from pathlib import Path
 
+from journal_files import CurrentFiles
+
 TIMED = frozenset({'admitted', 'actual_launch_binding', 'ready', 'source_entry',
                    'test_outcome', 'actual_parent_preexit_drain',
                    'custody_IPC_listener_ready', 'custodian_stage'})
@@ -248,11 +250,11 @@ class EventJournal:
     def __init__(self):
         self._snapshots = {}
         self._index = CensusIndex()
+        self._files = CurrentFiles()
 
     def snapshot(self, directory):
         current, retained = [], {}
-        for path in sorted(Path(directory).glob('*.jsonl')):
-            body = path.read_bytes()
+        for path, body in self._files.acquire(Path(directory)):
             chunk = self._snapshots.get(path)
             if chunk is None or chunk[0] != body:
                 prefix, count = b'', 0

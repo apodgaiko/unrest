@@ -1837,3 +1837,15 @@ failed/denied execs, unknown shapes, poison, receipt clients/readability and fin
 settlement remain immediate. All raw records, kernel decisions, clocks and
 waits remain unchanged. This removes repeated journal reads after the fresh
 barrier without extending idle time or changing any test/receipt deadline.
+
+### Fresh journal file acquisition
+
+The exact POSIX/default-path acquisition enumerates current matching names on
+every snapshot, sorts those names, and opens and reads every file completely.
+It reuses only normalized Path/string spelling for names still present. It
+never reuses directory membership, descriptors, stat results or byte verdicts.
+The original glob call and its audit behavior precede selection; changed path,
+read, I/O or scan methods retain the original glob/read path. Matching dotfiles,
+directories and symlinks stay in the sequence; individual read errors propagate.
+Scan errors retain CPython glob suppression. Parsing, original census decisions,
+receipt predicates and all fresh admission/final barriers are unchanged.
