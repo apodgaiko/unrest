@@ -119,8 +119,8 @@ def test_only_exact_repeated_build_diagnostic_receives_full_receipt_capacity():
     from primary_policy import TEST_RELEASE_STORAGE_PREFLIGHT_CASES, TEST_RELEASE_BUILD_PREFLIGHT_CASES
     from primary_source_inputs import test_plan
     assert len(TEST_RELEASE_STORAGE_PREFLIGHT_CASES) == 7
-    assert TEST_RELEASE_STORAGE_PREFLIGHT_CASES[:-2] == TEST_RELEASE_BUILD_PREFLIGHT_CASES[:-1]
-    assert TEST_RELEASE_STORAGE_PREFLIGHT_CASES[-1] == TEST_RELEASE_BUILD_PREFLIGHT_CASES[-1]
+    assert TEST_RELEASE_STORAGE_PREFLIGHT_CASES[:-1] == TEST_RELEASE_BUILD_PREFLIGHT_CASES
+    assert TEST_RELEASE_STORAGE_PREFLIGHT_CASES[-1] == 'tests/test_distribution_check.py::test_checker_builds_and_executes_15_cases_with_extracted_provenance'
     command = 'env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_RELEASE_STORAGE_PREFLIGHT_CASES)
     value = test_plan(command.encode(), 'diagnostic', 'TEST-positive')
     mounts, memory = ci_shell.resources(value)

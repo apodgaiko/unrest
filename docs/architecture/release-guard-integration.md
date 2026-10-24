@@ -1933,8 +1933,9 @@ retain 32 MiB. This metadata allocation stays within the existing 3 GiB capsule
 memory cap; it changes no candidate workspace, launch admission, source test,
 assertion, deadline, original-parent wait requirement or evidence-retention rule.
 The diagnostic retains the existing six cases and additionally executes the
-original extracted-distribution checker, including its second native build and
-15 persistence cases. It is not a source checkpoint.
+original extracted-distribution checker after that six-case prefix, matching
+the full source suite’s C1-before-distribution order. Its second native build
+and all 15 persistence cases retain their original assertions. It is not a source checkpoint.
 
 Trace failure observation covers resolver exceptions as well as tick exceptions.
 It retains the first exception class/errno and current mount block/inode counts
