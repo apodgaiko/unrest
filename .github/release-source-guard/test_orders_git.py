@@ -504,7 +504,7 @@ def test_housekeeping_other_vectors_do_not_consult_or_grant_authority():
         )
 
 
-@pytest.mark.parametrize("case", sorted(c for c in SETUP_CASES if SETUP_CASES[c] != "campaign/P1"))
+@pytest.mark.parametrize("case", sorted(c for c in SETUP_CASES if not SETUP_CASES[c].startswith("campaign/")))
 def test_original_setup_cases_have_only_their_exact_owned_root(tmp_path, case):
     selection, argv, env, cwd, manifest = selected(tmp_path)
     selection["registration"]["case"] = case
@@ -532,10 +532,11 @@ def test_closed_shared_setup_inventory_preserves_negative_cases():
         "test_experimental_drain_retirement.py": 13,
         "test_experimental_ack_durability.py": 20,
         "test_experimental_startup_diagnostics.py": 1,
+        "test_controlled_python_acp.py": 1,
     }
     assert all(
         SETUP_CASES[c] == ("combined" if "finite_priority.py::" in c else "cohort")
-        for c in SETUP_CASES if SETUP_CASES[c] != "campaign/P1"
+        for c in SETUP_CASES if not SETUP_CASES[c].startswith("campaign/")
     )
     assert not any("parking_admission" in c for c in SETUP_CASES)
     assert not any("PRIORITY-66" in c for c in SETUP_CASES)

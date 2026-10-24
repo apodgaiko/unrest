@@ -43,6 +43,7 @@ INITIALIZATION_CASES = frozenset((
 CANCELLATION_CASES = frozenset(('tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[backend_registered]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[adapter_registered]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[auth]', 'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[forwarding]'))
 
 REGISTRATION_CASES = frozenset(('tests/test_controlled_python_acp.py::test_actual_registration[delayed-1]', 'tests/test_controlled_python_acp.py::test_actual_registration[delayed-2]', 'tests/test_controlled_python_acp.py::test_actual_registration[late-1]', 'tests/test_controlled_python_acp.py::test_actual_registration[late-2]'))
+WITNESS_CASES = frozenset({'tests/test_controlled_python_acp.py::test_single_c1_fixed_timing_protocol_witness'})
 ACP_ISOLATED_CASES = REGISTRATION_CASES | frozenset({'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]'})
 
 def selected_script(state, payload):
@@ -64,7 +65,7 @@ def selected_script(state, payload):
                 or not path.is_relative_to(Path(state['owned_root']))):
             return None
         return target, (BACKEND_PIN if kind == 'canonical-backend'
-                        or state.get('case') in CONFIGURATION_CASES | INITIALIZATION_CASES | CANCELLATION_CASES | REGISTRATION_CASES else BARRIER_PIN)
+                        or state.get('case') in CONFIGURATION_CASES | INITIALIZATION_CASES | CANCELLATION_CASES | REGISTRATION_CASES | WITNESS_CASES else BARRIER_PIN)
     return None
 
 

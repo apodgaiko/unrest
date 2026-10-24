@@ -21,15 +21,20 @@ ENVIRONMENT = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_CONFIG_NOSYSTEM': '1
 
 def repository_profile(argv, cwd, owned_root, caller, root_name='cohort'):
     path = Path(cwd)
-    campaign = root_name == 'campaign/P1'
+    witness = root_name == 'campaign/C1'
+    campaign = root_name == 'campaign/P1' or witness and caller['function'] == 'campaign'
     if (path.resolve() != path or not path.is_relative_to(Path(owned_root) / 'pytest')
-            or (not campaign and (root_name not in ('cohort', 'combined') or path.parent.name != root_name))
-            or (campaign and (path.name != 'base' or path.parent.name != 'P1'
+            or (not campaign and not witness and (root_name not in ('cohort', 'combined') or path.parent.name != root_name))
+            or (witness and (path.parent.name != 'C1' or path.parent.parent.name != 'campaign'
+                             or path.name not in ('base', 'candidate-0', 'candidate-1', 'integration')))
+            or (campaign and (path.name != 'base' or path.parent.name != ('C1' if witness else 'P1')
                              or path.parent.parent.name != 'campaign'))
             or argv[:2] != ['/usr/bin/git', '--no-replace-objects']):
         return False
     arguments = argv[2:]
     owner = caller['function']
+    if witness and owner not in {'campaign', 'seal', 'integrate'}:
+        return False
     prefixes = {
         ('campaign', 567): ['init', '--initial-branch=main', '--object-format=sha1'],
         ('campaign', 570): ['add', '.'], ('campaign', 571): ['commit', '-m', 'base'],
@@ -56,13 +61,17 @@ def repository_profile(argv, cwd, owned_root, caller, root_name='cohort'):
         if arguments == ['init', '--initial-branch=main', '--object-format=sha1']:
             return valid and not (path / '.git').exists() and not (path / '.git').is_symlink()
     elif owner == 'seal':
-        valid = path.name in ('z-first-candidate', 'a-second-candidate') and (
-            arguments in [['add', '--', 'a'], ['add', '--', 'b'],
-                          ['commit', '--allow-empty', '-m', 'sealed candidate'], ['rev-parse', 'HEAD']]
+        names = ('candidate-0', 'candidate-1') if witness else ('z-first-candidate', 'a-second-candidate')
+        scopes = ([['add', '--', 'lane_a.txt' if path.name == 'candidate-0' else 'lane_b.txt']]
+                  if witness else [['add', '--', 'a'], ['add', '--', 'b']])
+        valid = path.name in names and (
+            arguments in [*scopes, ['commit', '--allow-empty', '-m', 'sealed candidate'], ['rev-parse', 'HEAD']]
             or len(arguments) == 4 and arguments[:3] == ['diff', '--cached', '--name-only'])
     elif owner == 'integrate':
+        scopes = ([['add', '--', 'lane_a.txt'], ['add', '--', 'lane_b.txt']]
+                  if witness else [['add', '--', 'a'], ['add', '--', 'b']])
         valid = path.name == 'integration' and (
-            arguments in [['add', '--', 'a'], ['add', '--', 'b'],
+            arguments in [*scopes,
                           ['commit', '--allow-empty', '-m', 'authored lane integration'], ['rev-parse', 'HEAD']]
             or len(arguments) == 4 and arguments[:3] == ['diff', '--cached', '--name-only'])
     else:
@@ -118,9 +127,30 @@ def matches(argv, cwd, environment, state, frames, data, cases):
         plain = state['isolated_named'](compile(source.read_bytes(), str(source), 'exec', dont_inherit=True), frame.f_code.co_name)
         if frame.f_code not in (expected, plain):
             return None
+    witness = cases[state['case']] == 'campaign/C1'
+    if witness and caller.f_code.co_name == 'campaign':
+        from unrest_harness.experimental_session import ControlledTransport
+        local = caller.f_locals
+        transport = local.get('transport')
+        if (local.get('episodes') != ('C1',) or local.get('episode') != 'C1'
+                or local.get('trusted_process') is not True or local.get('package') is not None
+                or local.get('fixture') != root / 'tests/fixtures/experimental_session_app_server.py'
+                or type(transport) is not ControlledTransport
+                or transport.fixture != root / 'tests/fixtures/controlled_python_acp.py'
+                or transport.interpreter.resolve() != Path(state['runtime']['realpath'])
+                or local.get('configuration') is not None or local.get('controlled_timing') is not None
+                or local.get('controlled_rounds') is not None
+                or local.get('controlled_terminal_defect') is not False
+                or local.get('streaming') is not True or local.get('reuse') is not True):
+            return None
+        transport.verify(controlled=True, package=None)
     if caller.f_code.co_name in ('seal', 'integrate'):
         instance = caller.f_locals.get('self' if caller.f_code.co_name == 'seal' else 'lane')
-        if type(instance) is not module.Custody or instance.writes not in (('a',), ('b',)):
+        scopes = (('lane_a.txt',), ('lane_b.txt',)) if witness else (('a',), ('b',))
+        if type(instance) is not module.Custody or instance.writes not in scopes:
+            return None
+        if witness and (instance.root.parent != Path(cwd).parent
+                or instance.root.name != ('candidate-0' if instance.writes == ('lane_a.txt',) else 'candidate-1')):
             return None
         if caller.f_code.co_name == 'seal' and instance.root != cwd:
             return None

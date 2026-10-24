@@ -199,7 +199,7 @@ def test_registration_backend_additions_preserve_all_prior_rows():
     from finite import backend_postimage_catalog as catalog
     import primary_policy as policy
     assert setup.REGISTRATION_CASES == frozenset(policy.REGISTRATION_POSTIMAGE_CASES) == frozenset(policy.TEST_CONTROLLED_REGISTRATION_CASES)
-    prior = {k:v for k,v in catalog.CASES.items() if k not in setup.REGISTRATION_CASES}
+    prior = {k:v for k,v in catalog.CASES.items() if k not in setup.REGISTRATION_CASES | setup.WITNESS_CASES}
     assert len(prior) == 149
     # Frozen current base manifest, rather than a new count-only acceptance.
     assert hashlib.sha256(json.dumps(prior,sort_keys=True,separators=(',',':')).encode()).hexdigest() == '229faa0b00d864d82d5ad5398c8a4ac1c477117d179fe72bf9235739b692b825'

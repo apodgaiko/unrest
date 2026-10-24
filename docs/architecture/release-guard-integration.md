@@ -1726,3 +1726,20 @@ setup only, with no native-provider acceptance or OS-isolation claim.
 The bounded diagnostic uses the existing exact 33-case approval-closure selection
 and existing 600-second root allocation. Original tests, parameters, assertions,
 per-case deadlines and the full source checkpoint remain unchanged.
+
+### Original controlled C1 witness
+
+The single existing controlled C1 protocol witness retains its original timing
+(including the second worker's ten-second delay), stage ordering and owned-handle
+cleanup assertions. Its custody Git routes bind only the original four campaign
+setup sites, two candidate directories with their respective lane file, and
+authored integration sites under the owned campaign/C1 root. The original
+explicit ControlledTransport and fixture/runtime/source pins are required; no
+native provider route is redirected or admitted. Existing stopped-image, stock
+maintenance and actual-parent wait joins remain required. Its canonical backend
+uses the original ordinary startup domain and unchanged fixture bytes.
+
+The bounded diagnostic selects this exact original case plus the existing mock
+control; it cannot issue a source checkpoint. The full unexcluded source command
+and every release gate remain unchanged. Historical native-route review denial
+and failed evidence remain preserved; this binding does not retry that route.
