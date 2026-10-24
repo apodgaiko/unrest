@@ -111,6 +111,12 @@ def python_environment(environment, registration, flags, *, lease_context=None):
             'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]',)
         and binding == {'path': '/source/tests/fixtures/controlled_python_acp.py',
                         'line': 1, 'sha256': 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be'})
+    from finite.delayed_bootstrap import CLASS as DELAYED_CLASS, SOURCE as DELAYED_SOURCE, PIN as DELAYED_PIN, delay_for
+    exact_controlled = exact_controlled or (
+        registration['class'] == DELAYED_CLASS and flags == [0, 0, 0]
+        and delay_for(registration.get('case')) is not None
+        and binding == {'path': '/source/' + DELAYED_SOURCE, 'line': 38,
+                        'sha256': DELAYED_PIN})
     approval_binding = {
         'source-approval-python-backend': ('src/unrest_harness/approval_relay.py', 131,
             'efaba9521aa12d6fbdb228f05da210a4027675c79830d1a5ca93627faa80da44'),

@@ -84,7 +84,7 @@ def admit_tracker_acquisition(manifest):
 
 def admit_candidate_template(manifest):
     body = CLOCK_READER(Path('/guard'), 'candidate_template_source_inputs.py')
-    if hashlib.sha256(body).hexdigest() != '9edf5d58bb4cb76af849e4fa6116a5253b5054455e50179f6b41d23b98b8a61a':
+    if hashlib.sha256(body).hexdigest() != 'bfbbac8a8e6c2413ff5a32cbda6f36377af5bf2c942bfe9871b5362c74c33040':
         raise RuntimeError('candidate_template_support_drift')
     namespace = {'__name__': 'candidate_template_source_inputs'}
     exec(compile(body, '/guard/candidate_template_source_inputs.py', 'exec', dont_inherit=True), namespace)

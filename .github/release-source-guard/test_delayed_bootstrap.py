@@ -265,3 +265,28 @@ def test_every_extended_selection_has_one_producer_and_consumer_allocation():
             selected = plan(command, 'bounded', mode)
             assert selected['timeout_seconds'] == root_seconds(selected) == 600
             assert not selected['source_checkpoint_ready'] and selected['selected_carrier'] is None
+
+
+@pytest.mark.parametrize("case", ROUTE.CASES)
+@pytest.mark.parametrize("change", [None, "class", "case", "line", "path", "pin", "flags", "LANG", "LC_ALL", "LC_CTYPE"])
+def test_only_exact_delayed_wrapper_projects_cpython_locale(case, change):
+    from primary_source_inputs import python_environment
+
+    row = {"class": ROUTE.CLASS, "case": case,
+           "source_binding": {"path": "/source/" + ROUTE.SOURCE,
+                              "line": 38, "sha256": ROUTE.PIN}}
+    environment = {"CODEX_HOME": "/owned/home", "PRIVATE_MARKER": "retained"}
+    flags = [0, 0, 0]
+    if change in {"class", "case"}:
+        row[change] += "-foreign"
+    elif change in {"line", "path", "pin"}:
+        row["source_binding"]["sha256" if change == "pin" else change] = "foreign"
+    elif change == "flags":
+        flags = [1, 1, 0]
+    elif change in {"LANG", "LC_ALL", "LC_CTYPE"}:
+        environment[change] = "C"
+    before = dict(environment)
+    actual = python_environment(environment, row, flags)
+    assert environment == before
+    assert actual == ({**environment, "LC_CTYPE": "C.UTF-8"}
+                      if change is None and ROUTE.delay_for(case) is not None else environment)

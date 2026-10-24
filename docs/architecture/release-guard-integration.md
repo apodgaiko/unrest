@@ -2077,3 +2077,11 @@ retain the original connection-policy refusal. Generic, Unix and payload census
 behavior is unchanged. The complete original connected policy body and its
 listener/peer predicates remain covered by their unchanged historical AST digest;
 only the exact acquisition call and birth-checked getter are normalized.
+
+
+For this exact delayed-wrapper registration only, the post-init Python profile
+records CPython's observed absent-locale coercion to LC_CTYPE=C.UTF-8. The original
+exec environment remains byte-exact. This projection requires the pinned original
+fixture binding, one of its actual delayed cases and original Python flags; an
+explicit locale is never replaced. It neither admits a launch nor changes any
+bootstrap timing or completion assertion.
