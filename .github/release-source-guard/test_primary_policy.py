@@ -99,3 +99,15 @@ def test_registration_diagnosis_selects_only_four_original_cases_and_no_full_aut
             make_test_plan(changed, text, 'TEST-positive')
     with pytest.raises(RuntimeError):
         plan(script, text)
+
+
+def test_receipt_diagnostic_producer_and_consumer_use_the_same_existing_root_budget():
+    from primary_policy import TEST_RECEIPT_CLEANUP_CASES, TEST_SEAM_ROOT_SECONDS, root_seconds
+    from primary_source_inputs import test_plan
+    script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(TEST_RECEIPT_CLEANUP_CASES)).encode()
+    for mode in ('TEST-positive', 'TEST-poison'):
+        plan = test_plan(script, 'bounded diagnostic workflow', mode)
+        assert plan['timeout_seconds'] == root_seconds(plan) == TEST_SEAM_ROOT_SECONDS == 600
+        assert not plan['source_checkpoint_ready'] and plan['selected_carrier'] is None
+        with pytest.raises(RuntimeError, match='primary_source_test_script'):
+            test_plan(script + b' --deselect=anything', 'bounded diagnostic workflow', mode)

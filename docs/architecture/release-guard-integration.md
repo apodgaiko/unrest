@@ -1702,3 +1702,8 @@ The terminal proof is shared with listener retirement; socket/listener facts are
 not invented for channels. Partial frames, unknown peers, missing or stale birth,
 other classes and expired or incomplete wait proof retain refusal. A nearby child
 exit does not establish channel ownership; earlier unbound failures stay failed.
+
+The exact 24-case completion/cleanup supporting selector uses the existing
+600-second diagnostic root allocation in both preparation and consumer policy.
+That setup allocation does not change any original case deadline or the
+four-second receipt-channel deadline, and TEST evidence is not a source certificate.
