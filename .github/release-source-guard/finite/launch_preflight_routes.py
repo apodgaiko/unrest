@@ -78,15 +78,20 @@ def specification(case, directory):
 def fixture(spec, runtime, *, owner_uid=None):
     launcher, body = spec['launcher'], spec['body']
     before = launcher.lstat()
+    def stable(info):
+        # Reading exact bytes may update atime; it cannot change custody.
+        return tuple(getattr(info, name) for name in (
+            'st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid',
+            'st_size', 'st_mtime_ns', 'st_ctime_ns'))
     if spec['kind'] == 'python-alias':
         return (stat.S_ISLNK(before.st_mode) and launcher.resolve() == Path(runtime['realpath'])
                 and hashlib.sha256(launcher.read_bytes()).hexdigest() == runtime['sha256']
-                and launcher.lstat() == before)
+                and stable(launcher.lstat()) == stable(before))
     if body is None:
         return spec['kind'] == 'native-true' and launcher == Path('/usr/bin/true')
     return (stat.S_ISREG(before.st_mode) and before.st_mode & 0o777 == 0o700
             and before.st_nlink == 1 and before.st_uid == (os.getuid() if owner_uid is None else owner_uid)
-            and launcher.read_bytes() == body and launcher.lstat() == before)
+            and launcher.read_bytes() == body and stable(launcher.lstat()) == stable(before))
 
 
 def select(argv, cwd, env, state, append, refuse):

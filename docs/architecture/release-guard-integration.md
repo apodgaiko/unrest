@@ -1809,3 +1809,10 @@ values retain complete original materialization and error behavior. Generic
 events, refresh, receipt policies and final evidence remain complete. The
 original launch predicates, duplicate checks, token/source/argv/environment/cwd
 joins and actual numeric waits are unchanged.
+
+
+Launch fixture read stability compares device, inode, mode, link count, UID, GID,
+size, nanosecond modification time and change time. Access time is excluded: the
+required exact-byte read can itself update it. This prevents an unchanged
+fixture from refusing at a timestamp boundary, while every material custody
+field, exact body, alias target, owner and permission requirement remains.

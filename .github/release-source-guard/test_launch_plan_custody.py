@@ -130,3 +130,59 @@ def test_image_skips_directory_and_non_executable_without_host_fallback(tmp_path
     selected.chmod(0o600)
     with pytest.raises(FileNotFoundError):
         image('adapter', tmp_path, {'PATH': 'blocked:selected'})
+
+
+def test_reading_exact_fixture_does_not_invalidate_custody_by_updating_atime(tmp_path):
+    name = 'test_real_invalid_format_is_distinct_safe_startup_failure'
+    spec = routes.specification(routes.SOURCE + '::' + name, str(tmp_path))
+    launcher = spec['launcher']
+    launcher.write_bytes(spec['body'])
+    launcher.chmod(0o700)
+    os.utime(launcher, ns=(1, launcher.stat().st_mtime_ns))
+    before = launcher.lstat()
+    assert routes.fixture(spec, {})
+    after = launcher.lstat()
+    assert all(getattr(before, name) == getattr(after, name) for name in (
+        'st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid',
+        'st_size', 'st_mtime_ns', 'st_ctime_ns'))
+
+
+@pytest.mark.parametrize('field', ['st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_uid',
+                                  'st_gid', 'st_size', 'st_mtime_ns', 'st_ctime_ns'])
+def test_fixture_read_still_refuses_each_changed_material_identity(tmp_path, monkeypatch, field):
+    from types import SimpleNamespace
+    spec = routes.specification(routes.SOURCE + '::test_real_invalid_format_is_distinct_safe_startup_failure', str(tmp_path))
+    launcher = spec['launcher']
+    launcher.write_bytes(spec['body'])
+    launcher.chmod(0o700)
+    read = Path.read_bytes
+    lstat = Path.lstat
+    changed = [False]
+    def current(path):
+        value = lstat(path)
+        if changed[0] and path == launcher:
+            names = ('st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+            return SimpleNamespace(**{name: getattr(value, name) + (name == field) for name in names})
+        return value
+    def read_bytes(path):
+        result = read(path)
+        changed[0] = True
+        return result
+    monkeypatch.setattr(Path, 'lstat', current)
+    monkeypatch.setattr(Path, 'read_bytes', read_bytes)
+    assert not routes.fixture(spec, {})
+
+
+def test_alias_resolution_reads_do_not_invalidate_link_custody_by_atime(tmp_path):
+    spec = routes.specification(routes.SOURCE + '::' + routes.ALIAS_OWNER, str(tmp_path))
+    launcher = spec['launcher']
+    launcher.symlink_to(sys.executable)
+    runtime = {'realpath': str(Path(sys.executable).resolve()),
+               'sha256': hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}
+    os.utime(launcher, ns=(1, launcher.lstat().st_mtime_ns), follow_symlinks=False)
+    before = launcher.lstat()
+    assert routes.fixture(spec, runtime)
+    after = launcher.lstat()
+    assert all(getattr(before, name) == getattr(after, name) for name in (
+        'st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid',
+        'st_size', 'st_mtime_ns', 'st_ctime_ns'))
