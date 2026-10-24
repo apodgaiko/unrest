@@ -1900,8 +1900,9 @@ is recomputed before each producer tick; pending work keeps the original full
 service even if that tick completes it. Actual producer callbacks, exit-86
 refusals and exec/receipt/finalization barriers retain their original checks.
 
-The bounded release diagnostic runs the original mock, build crosswalk, repeated
-terminal-review cleanup, saved-review cancellation and C1 tests in that order
+The bounded release diagnostic runs the original mock, crosswalk history, actual
+packaged-policy contract (with its build/install fixture), repeated terminal-review
+cleanup, saved-review cancellation and C1 tests in that order
 with inert journal history. It cannot certify the full source suite. The frozen
 release still requires the full unexcluded Python 3.13 source checkpoint and all
 archive, installed lifecycle, independent validation, desktop and release gates.

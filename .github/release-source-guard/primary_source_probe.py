@@ -7,7 +7,7 @@ import json
 import hashlib
 import xml.etree.ElementTree as ET
 
-from primary_policy import TEST_SELECTIONS, TEST_SEAM_CASES, TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, TEST_RELEASE_PREFLIGHT_CASES
+from primary_policy import TEST_SELECTIONS, TEST_SEAM_CASES, TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, TEST_RELEASE_PREFLIGHT_CASES, TEST_RELEASE_BUILD_PREFLIGHT_CASES
 from preflight_policy import CASES as PREFLIGHT_CASES
 
 
@@ -30,7 +30,7 @@ def check(records, mode, *, require_faults=False):
             or len(cases) != len(collection) or any(list(case) for case in cases)
             or not any(row['kind'] == 'ready' and row['token'] == 'root' for row in summary['events'])):
         raise RuntimeError('primary_source_test_original_case_not_proved')
-    if tuple(collection) in (TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, TEST_RELEASE_PREFLIGHT_CASES):
+    if tuple(collection) in (TEST_JOURNAL_CONTEXT_CASES, TEST_C1_WITNESS_CASES, TEST_RELEASE_PREFLIGHT_CASES, TEST_RELEASE_BUILD_PREFLIGHT_CASES):
         from startup_journal_control import FILES, ROWS_PER_FILE, KIND
         load = [row for row in summary['events'] if row['kind'] == KIND]
         if (len(load) != FILES * ROWS_PER_FILE

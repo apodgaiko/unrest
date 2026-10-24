@@ -164,7 +164,7 @@ jobs:
       - name: Original compartment controls
         run: python3 .github/release-source-guard/probe_controller.py "$RUNNER_TEMP/source-readiness"
       - name: Original build, repeated roles and C1 with inert journal history
-        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/contracts/test_lean_evidence_crosswalk.py::test_crosswalk_is_complete_and_every_mapped_node_passes tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[reader-terminal_reviewer] tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[cancel] tests/test_controlled_python_acp.py::test_single_c1_fixed_timing_protocol_witness
+        run: env -u CODEX_PATH uv run pytest -q tests/test_acp_runner.py::test_run_node_with_mock_agent tests/contracts/test_lean_evidence_crosswalk.py::test_crosswalk_is_complete_and_every_mapped_node_passes tests/contracts/test_lean_package.py::test_reference_contract_scenario[VAL-PACKAGE-001__packaged-policy-is-versioned-and-loadable] tests/test_acp_cleanup.py::test_cleanup_faults_and_repeated_cancellation[reader-terminal_reviewer] tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[cancel] tests/test_controlled_python_acp.py::test_single_c1_fixed_timing_protocol_witness
         shell: python3 .github/release-source-guard/ci_shell.py --source-test TEST-positive {0}
       - name: Preserve encrypted diagnostic evidence
         if: always()

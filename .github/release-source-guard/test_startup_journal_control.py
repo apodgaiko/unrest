@@ -177,3 +177,20 @@ def test_exact_release_preflight_has_original_build_role_history_and_c1_only():
     for changed in (cases[::-1], cases[:-1], (*cases, '-k', 'cancel')):
         with pytest.raises(RuntimeError):
             plan(('env -u CODEX_PATH uv run pytest -q ' + ' '.join(changed)).encode(), 'diagnostic', 'TEST-positive')
+
+
+def test_build_preflight_selects_the_actual_original_build_fixture():
+    from primary_policy import TEST_RELEASE_BUILD_PREFLIGHT_CASES, TEST_RELEASE_PREFLIGHT_CASES
+    from ci_shell import resources
+    cases = TEST_RELEASE_BUILD_PREFLIGHT_CASES
+    build = 'tests/contracts/test_lean_package.py::test_reference_contract_scenario[VAL-PACKAGE-001__packaged-policy-is-versioned-and-loadable]'
+    assert cases == (*TEST_RELEASE_PREFLIGHT_CASES[:2], build, *TEST_RELEASE_PREFLIGHT_CASES[2:])
+    assert len(cases) == len(set(cases)) == 6
+    script = ('env -u CODEX_PATH uv run pytest -q ' + ' '.join(cases)).encode()
+    spec = plan(script, 'diagnostic', 'TEST-positive')
+    assert spec['timeout_seconds'] == 600 and control.selected(spec)
+    assert resources(spec)[1] == 3 * 1024 ** 3
+    assert spec['source_checkpoint_ready'] is False and spec['selected_carrier'] is None
+    for changed in (cases[::-1], cases[:-1], (*cases, '-k', 'package')):
+        with pytest.raises(RuntimeError):
+            plan(('env -u CODEX_PATH uv run pytest -q ' + ' '.join(changed)).encode(), 'diagnostic', 'TEST-positive')

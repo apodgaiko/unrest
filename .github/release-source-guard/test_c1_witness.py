@@ -172,3 +172,15 @@ def test_c1_stdlib_locale_projection_is_exact(kind, change):
     elif change == 'binding':
         binding['sha256'] = 'foreign'
     assert python_environment({}, row, flags) == ({'LC_CTYPE': 'C.UTF-8'} if change is None else {})
+
+
+def test_build_preflight_package_case_uses_actual_build_fixture():
+    import ast
+    from primary_policy import TEST_RELEASE_BUILD_PREFLIGHT_CASES
+    assert TEST_RELEASE_BUILD_PREFLIGHT_CASES[2] == 'tests/contracts/test_lean_package.py::test_reference_contract_scenario[VAL-PACKAGE-001__packaged-policy-is-versioned-and-loadable]'
+    root = Path(__file__).resolve().parents[2]
+    tree = ast.parse((root / 'tests/contracts/test_lean_package.py').read_bytes())
+    actual = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'test_reference_contract_scenario')
+    assert 'built_distribution' in [a.arg for a in actual.args.args]
+    fixture = ast.parse((root / 'tests/contracts/conftest.py').read_bytes())
+    assert any(isinstance(n, ast.FunctionDef) and n.name == 'built_distribution' for n in fixture.body)
