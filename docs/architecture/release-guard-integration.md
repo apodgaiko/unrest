@@ -2044,3 +2044,20 @@ image, environment and canonical backlink checks are unchanged. The separately
 observed rollback reset uses the same current-birth, post-admission successful
 parent-wait and exact detached-HEAD requirements as integration reset. No other
 worktree creation site or reset shape is admitted.
+
+
+The original bootstrap module's delayed backend fixture has a distinct finite
+inline-wrapper binding. It verifies the current fixture code and closure, exact
+case-specific delay (32,60 or0.5 seconds), the live original product owner and
+configuration-derived vector, owned pinned backend bytes, interpreter, streams,
+environment and subprocess options. It preserves the original runpy body and
+actual sleep. Activation re-resolves this same binding and consumes the complete
+ordinary shared startup inventory; no stdlib-only translation or generic inline
+launch authority follows. All27 original bootstrap cases and their timing,
+completion, no-prompt, lifetime and cleanup assertions remain unchanged. The
+additive bounded module diagnostic preserves all existing diagnostic jobs and
+cannot certify the full source checkpoint.
+The wrapper also uses the existing five-second authenticated core READY join
+before publishing a child handle. Its token, process/parent identities and
+manifest, guard, registry and interpreter digests must match; early cancellation
+does not waive that proof and no original probe deadline changes.

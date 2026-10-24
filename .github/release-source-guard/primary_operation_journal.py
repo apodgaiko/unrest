@@ -9,7 +9,7 @@ from typing import Any
 
 _PRIMARY = Path('/guard/primary_operations.py')
 _PRIMARY_BODY = _PRIMARY.read_bytes()
-if hashlib.sha256(_PRIMARY_BODY).hexdigest() != '0ad3a10035d8dbfeffa419192ed703971d2382a7ac54fa92bd82253786ff025e':
+if hashlib.sha256(_PRIMARY_BODY).hexdigest() != '07b9f4bd15176816fe8cdf06493141a7022bdd6a086f856d3d90af630a874905':
     raise RuntimeError('primary_journal_operation_base_drift')
 exec(compile(_PRIMARY_BODY, str(_PRIMARY), 'exec', dont_inherit=True), globals())
 _PrimaryOperations: Any = globals()['Operations']

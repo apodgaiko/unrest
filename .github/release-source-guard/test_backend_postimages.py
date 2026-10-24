@@ -324,6 +324,7 @@ def test_policy_loading_never_imports_or_caches_source_only_catalog(tmp_path):
         copied / "finite/backend_postimage_catalog.py",
     )
     shutil.copyfile(support / "finite/orders_git_data.py", copied / "finite/orders_git_data.py")
+    shutil.copyfile(support / "finite/workspace_git_data.py", copied / "finite/workspace_git_data.py")
     code = (
         "import json,sys; import primary_policy as p; "
         "print(json.dumps({'cases':sum(map(len,p.TEST_BACKEND_POSTIMAGE_GROUPS)),"

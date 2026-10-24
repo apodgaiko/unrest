@@ -1401,6 +1401,7 @@ def install(manifest, pin, token="root", command_class="pytest-root", case=None)
             in (
                 "canonical-backend",
                 "source-canonical-stdlib-backend", "source-canonical-stdlib-acp",
+                "source-delayed-bootstrap",
                 "controlled-acp",
                 "source-foreign-journal-owner",
                 "source-benchmark-five-run",

@@ -222,7 +222,7 @@ def test_cancellation_and_witness_domains_use_same_exact_backend_setup(case):
     assert not setup.eligible(state,endpoint,payload)
 
 
-@pytest.mark.parametrize('kind', [domain.CLASS, 'source-canonical-stdlib-acp'])
+@pytest.mark.parametrize('kind', [domain.CLASS, 'source-canonical-stdlib-acp', 'source-delayed-bootstrap'])
 @pytest.mark.parametrize('change', [None, 'token', 'guard', 'manifest', 'registry', 'runtime', 'pid', 'parent'])
 def test_new_class_consumes_original_five_second_core_ready_handshake(change, kind):
     from types import SimpleNamespace

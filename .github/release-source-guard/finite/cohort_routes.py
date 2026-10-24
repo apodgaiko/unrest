@@ -55,6 +55,12 @@ def bound_code(state: dict[str, Any], source: Path) -> Any:
 def select(
     argv: list[str], cwd: Any, env: Any, state: dict[str, Any], append: Any, refuse: Any
 ) -> Any:
+    route = Path(state["guard"]).with_name("delayed_bootstrap.py")
+    selected = sys.modules["runtime_guard"].checked_source(
+        route, state["direct_support"]["files"][str(route)]
+    )["select"](argv, cwd, env, state, append, refuse)
+    if selected is not None:
+        return selected
     route = Path(state["guard"]).with_name("stdlib_backend.py")
     selected = sys.modules["runtime_guard"].checked_source(
         route, state["direct_support"]["files"][str(route)]

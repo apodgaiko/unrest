@@ -174,6 +174,9 @@ ORDERS_TOKEN_HOOK = b'        if registration["class"] == "source-orders-custody
 ROLE_TOKEN_HOOK = b'        if registration["class"] in {"source-owned-role:worker", "source-owned-role:validator",\n                                     "source-owned-role:terminal-reviewer"}:\n            role_path = Path(state["guard"]).with_name("role_routes.py")\n            checked_source(role_path, state["direct_support"]["files"][str(role_path)])[\n                "bind_launch"](registration, child_argv, kwargs.get("cwd"),\n                               inherited_environment() if kwargs.get("env") is None else dict(kwargs["env"]),\n                               code, state, launch_token, append, refuse)\n'
 
 def restore_stdlib_acp_bytes(body):
+    delayed = b'                "source-delayed-bootstrap",\n'
+    assert body.count(delayed) == 1
+    body = body.replace(delayed, b'', 1)
     assert body.count(ROLE_TOKEN_HOOK) == 1
     body = body.replace(ROLE_TOKEN_HOOK, b'', 1)
     assert body.count(ORDERS_TOKEN_HOOK) == 1
@@ -187,6 +190,14 @@ def restore_stdlib_acp_bytes(body):
 
 
 def restore_stdlib_ready_class(tree):
+    delayed = [n for n in ast.walk(tree) if isinstance(n, ast.Constant)
+               and n.value == 'source-delayed-bootstrap']
+    assert len(delayed) == 1
+    owners = [n for n in ast.walk(tree) if isinstance(n, ast.Tuple) and delayed[0] in n.elts]
+    assert len(owners) == 1 and owners[0].elts.index(delayed[0]) == 3
+    assert [ast.literal_eval(n) for n in owners[0].elts[:3]] == [
+        'canonical-backend', 'source-canonical-stdlib-backend', 'source-canonical-stdlib-acp']
+    owners[0].elts.remove(delayed[0])
     import textwrap
     role = ast.parse(textwrap.dedent(ROLE_TOKEN_HOOK.decode())).body[0]
     matches = [(node, i) for node in ast.walk(tree)

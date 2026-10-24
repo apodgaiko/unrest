@@ -37,6 +37,26 @@ def create(state, emit, refuse, ready):
                 self.emit({'kind': 'source_nested_execution_owner',
                            'custody_case': state['case'], 'execution_owner': owner,
                            'launch_token': launch['launch_token']})
+            if registration['class'] == 'source-delayed-bootstrap':
+                caller = inspect.currentframe().f_back
+                if (caller.f_code is not original.before_python.__code__
+                        or caller.f_globals is not original.before_python.__globals__
+                        or caller.f_locals.get('self') is not self
+                        or caller.f_locals.get('launch') is not launch
+                        or caller.f_locals.get('registration') is not registration
+                        or caller.f_locals.get('guard') is not guard):
+                    self.refuse('delayed_bootstrap_activation_caller')
+                actual = checked('delayed_bootstrap.py')['select'](
+                    launch['args'], cwd, environment, state, self.emit, self.refuse)
+                if actual != (registration, argv):
+                    self.refuse('delayed_bootstrap_activation_registration')
+                self.shared()
+                self.emit({'kind': 'source_ordinary_startup_consumption',
+                           'class': registration['class'],
+                           'source_binding': registration['source_binding'],
+                           'launch_token': launch['launch_token'],
+                           'shared_startup_seal': True})
+                return
             if registration['class'] in {'source-approval-python-backend'}:
                 caller = inspect.currentframe().f_back
                 if (caller.f_code is not original.before_python.__code__
