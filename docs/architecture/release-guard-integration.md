@@ -47,6 +47,15 @@ is not distinguishable here. Actual arguments and state must still be verified
 by route-specific parameter/custody checks; retained defaults are insufficient.
 Unknown compiler modes, including unprepared Beartype routes, remain refused.
 
+`process_ledger.py` joins kernel and authenticated control facts incrementally.
+It keeps logical process tokens separate from exec epochs, fences readiness at
+observed exit, and requires the original parent's exact birth and actual waitpid
+receipt alongside the ordered kernel wait4 facts. WNOWAIT and tracer reaps do not
+retire descendants. The declared session exception changes only the registered
+pgid/sid view after matching admission, registration and lifecycle witnesses;
+original birth evidence remains intact. Socket custody and the production
+control channel remain separate integration obligations.
+
 `launch_policy.py` renders finite typed declarations and compares complete launch
 observations. Executable identity is separate from `argv[0]`. Inline hashes come
 from the exact rendered command; dynamic program holes require explicit quoting
