@@ -2335,3 +2335,18 @@ temporary ancestor does not establish source access. Before canaries, the root
 driver forks an actual capability-free source UID, checks runtime/support read
 and executable access there, and requires its numeric successful wait. No
 permissions of the original runner temporary tree or checkout are changed.
+
+
+### Owned Unix self-pairs
+
+`unix_endpoints.py` adds reciprocal stream-pair generation and retained-member
+checks for asyncio self-pipes. Admission needs a current body-ready owner/case;
+each actual descriptor binds birth, FD, inode, kernel cookie, UID and peer inode.
+A member can survive peer closure but cannot authorize an FD alias, replacement
+Unix/TCP socket, or another pair generation. Both acquisition boundaries verify
+actual birth before/after; per-operation checks reacquire only the affected FDs,
+not every unrelated socket in the process. Unknown pathname connects and other
+Unix effects still require surrounding default-deny dispatch; this reducer does
+not grant them. Original native socket tests remain intact, with separate real
+pair payload, close, alias and replacement controls added. Source-callsite
+selection and original-bootstrap composition are still integration requirements.

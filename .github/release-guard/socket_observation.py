@@ -212,14 +212,20 @@ def socket_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
 
 
 def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
-    if len(fds) != 2 or len(set(fds)) != 2:
+    if (type(fds) is not list or len(fds) != 2
+            or any(type(fd) is not int or fd < 0 for fd in fds) or len(set(fds)) != 2):
         raise ValueError("exactly two distinct Unix descriptors required")
-    before = socket_fds(pid)
+    before: dict[int, int] = {}
+    for fd in fds:
+        inode = _socket_inode(pid, fd)
+        if inode is None:
+            raise RuntimeError('Unix pair no longer has two live kernel descriptors')
+        before[fd] = inode
     table = unix_table()
-    if any(fd not in before or before[fd] not in table for fd in fds):
+    if any(before[fd] not in table for fd in fds):
         raise RuntimeError("Unix pair no longer has two live kernel descriptors")
     rows = [{"fd": fd, **table[before[fd]]} for fd in fds]
-    if (socket_fds(pid) != before or any(row["type"] != socket.SOCK_STREAM for row in rows)
+    if ({fd: _socket_inode(pid, fd) for fd in fds} != before or any(row["type"] != socket.SOCK_STREAM for row in rows)
             or rows[0]["inode"] != rows[1].get("peer_inode")
             or rows[1]["inode"] != rows[0].get("peer_inode")):
         raise RuntimeError("Unix pair kernel peer binding refused")
@@ -303,11 +309,11 @@ def retained_unix_member(pid: int, descriptor: int,
     saved = next((row for row in pair if row['fd'] == descriptor), None)
     if saved is None:
         return None
-    before = socket_fds(pid)
-    if before.get(descriptor) != saved['inode']:
+    before = _socket_inode(pid, descriptor)
+    if before != saved['inode']:
         return None
     current = unix_table().get(saved['inode'])
-    if socket_fds(pid).get(descriptor) != saved['inode']:
+    if _socket_inode(pid, descriptor) != saved['inode']:
         raise RuntimeError('retained Unix descriptor changed during observation')
     if (current is None or current['socket_cookie'] != saved['socket_cookie']
             or current.get('socket_uid') != saved['socket_uid']
@@ -390,3 +396,34 @@ def acquire_tcp(birth, descriptor: int, *, retained: bool = False):
     if Birth.read(process_identity(birth.pid)) != birth:
         raise RuntimeError('stale_or_reused_ownership')
     return None if row is None else Socket.read(birth, row)
+
+
+def acquire_unix_pair(birth, descriptors):
+    from process_ledger import Birth
+    from linux_observation import process_identity
+    from unix_endpoints import Member
+
+    if type(birth) is not Birth or Birth.read(process_identity(birth.pid)) != birth:
+        raise RuntimeError('stale_or_reused_ownership')
+    rows = unix_pair(birth.pid, descriptors)
+    if Birth.read(process_identity(birth.pid)) != birth:
+        raise RuntimeError('stale_or_reused_ownership')
+    return tuple(Member.read(birth, row) for row in rows)
+
+
+def acquire_unix_member(birth, descriptor, pair):
+    from process_ledger import Birth
+    from linux_observation import process_identity
+    from unix_endpoints import Member, Pair
+
+    if type(descriptor) is not int or descriptor < 0:
+        raise ValueError('exact Unix descriptor required')
+    if (type(birth) is not Birth or type(pair) is not Pair or pair.owner.birth != birth
+            or Birth.read(process_identity(birth.pid)) != birth):
+        raise RuntimeError('stale_or_reused_ownership')
+    saved = [{'fd': member.fd, 'inode': member.inode, 'socket_cookie': member.cookie,
+              'socket_uid': member.uid, 'peer_inode': member.peer} for member in pair.members]
+    row = retained_unix_member(birth.pid, descriptor, saved)
+    if Birth.read(process_identity(birth.pid)) != birth:
+        raise RuntimeError('stale_or_reused_ownership')
+    return Member.read(birth, row) if row is not None else None
