@@ -5,6 +5,29 @@ oracles and evidence retain their original identities. Experimental features
 remain disabled by default; genuine native approval, ACP reuse and final-candidate
 timing remain UNVERIFIED.
 
+## Guard simplification in progress
+
+The replacement enforcement implementation has a 10,000 physical-line ceiling;
+tests are retained and counted separately. The ceiling includes policy, native
+code, generators, generated enforcement and workflow glue. Relocating, packing
+or delegating enforcement does not remove it from the count. Obsolete guard
+implementation counts until removed. This ceiling is not yet satisfied.
+
+`.github/release-guard/content_manifest.py` is the first standalone replacement
+component. It measures an independently enumerated file inventory through bounded
+nofollow descriptor reads, binds complete bytes and permission modes, and rejects
+aliases, malformed records and observed replacement races. Consumers supply a
+separate trusted expected digest and exact inventory. Content equality alone does
+not establish that reference's authority, an immutable snapshot, launch permission
+or a release certificate. The host must separately establish reference custody
+and read-only source/runtime mounts before integration.
+
+The replacement is not selected by any current execution workflow. Existing
+guard, product tests, review restrictions and release gates remain effective
+during construction. Removing historical implementation-shape checks requires
+an independently reviewed crosswalk preserving their behavioral mutation cases.
+No product-test timing parameter changes follow from the guard rewrite.
+
 `full_bootstrap.semantic_manifest` binds sorted tracked source, guard, policy,
 lock and workflow command bytes and modes. It excludes only the readiness carrier
 from its own semantic digest. The host writes that immutable manifest separately
