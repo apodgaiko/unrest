@@ -28,6 +28,15 @@ during construction. Removing historical implementation-shape checks requires
 an independently reviewed crosswalk preserving their behavioral mutation cases.
 No product-test timing parameter changes follow from the guard rewrite.
 
+The standalone `linux_trace.py` replacement uses one SEIZE startup path with a
+held pipe, kernel-bound fork/clone accounting and exact terminal waits. Failure
+cleanup freezes and harvests births before PTRACE_KILL; CONT with an injected
+signal is not treated as a kill guarantee. Pending births, mixed-user cleanup
+without CAP_KILL, unrelated-child safety and original-parent wait assertions
+have separate finite Linux controls. Local synthetic controls cannot certify
+those kernel behaviors. The replacement control workflow is not the product
+source checkpoint and does not activate the replacement in release execution.
+
 `launch_policy.py` renders finite typed declarations and compares complete launch
 observations. Executable identity is separate from `argv[0]`. Inline hashes come
 from the exact rendered command; dynamic program holes require explicit quoting

@@ -1,0 +1,28 @@
+name: Guard replacement kernel controls
+
+on:
+  push:
+    branches: ['codex/guard-simplification-v047']
+
+permissions:
+  contents: read
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          python-version: '3.13'
+          enable-cache: false
+      - run: uv sync --locked
+      - name: Finite source-free kernel and replacement component controls
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: timeout --signal=TERM --kill-after=5 120 uv run --no-sync pytest -q -o faulthandler_timeout=15 .github/release-guard
+      - name: Actual mixed-user cleanup without CAP_KILL
+        run: sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 60 "$PWD/.venv/bin/python" -I -B .github/release-guard/test_mixed_uid_control.py
