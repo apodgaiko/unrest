@@ -1,6 +1,7 @@
 """Real Linux ptrace seam controls; these do not run original source cases."""
 from __future__ import annotations
 
+import errno
 import hashlib
 import importlib.util
 import json
@@ -247,7 +248,7 @@ def test_pre_attach_refusal_closes_barrier_before_body_and_actual_parent_reaps(f
 
             def invalid_seize(request, pid, address=0, data=0):
                 if request == 0x4206:
-                    # Real kernel EINVAL before attachment, not a simulated result.
+                    # Real kernel EIO for unsupported option bits, before attachment.
                     data = trace.ctypes.c_void_p(1 << 63)
                 return original(request, pid, address, data)
 
@@ -256,7 +257,7 @@ def test_pre_attach_refusal_closes_barrier_before_body_and_actual_parent_reaps(f
                                        cleanup_seconds=2)
             with pytest.raises(OSError) as result:
                 observer.run()
-            assert result.value.errno == 22
+            assert result.value.errno == errno.EIO
             assert observer.root_parent_wait == 125 << 8
             assert not observer.active and not observer.attached and not observer.poison
             assert observer.start_write is None and not observer.pidfds
