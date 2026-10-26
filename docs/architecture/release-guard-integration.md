@@ -2319,3 +2319,11 @@ as a fallback if an observer dies before delivering its PID notice. Adopted
 cleanup always fails that source case and records its actual cleanup wait
 separately; it never supplies original-parent certification. Actual EOF, live
 adoption and missing-notice controls exercise this boundary.
+
+
+The native control build uses a separate finite copy of its CI interpreter tree.
+Managed uv installations may have private ancestors inaccessible to the source
+UID; the builder never changes those host permissions. It rejects special,
+setid, escaping or directory-symlink inputs, bounds files/bytes, and makes only
+its new owned copy traversable before linking the native entries there. This
+copy is setup for the closed controls, not proof of an immutable full capsule.

@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
+import stat
 import subprocess
 import sys
 import sysconfig
@@ -23,16 +25,35 @@ def main():
     root = Path(os.environ['RUNNER_TEMP']).resolve() / 'guard-native-control'
     root.mkdir(mode=0o755)
     compiler = Path('/usr/bin/cc').resolve(strict=True)
-    entry = Path(sys.base_prefix) / 'bin/python-unrest-guard-control'
+    original = Path(sys.base_prefix).resolve(strict=True)
+    runtime = root / 'runtime'
+    # uv's managed installation can have a private ancestor. Copy only this
+    # interpreter tree; never relax permissions on the shared host installation.
+    members = sorted(original.rglob('*'))
+    if len(members) > 20000:
+        raise RuntimeError('native runtime inventory bound')
+    for member in members:
+        target = member.resolve(strict=True)
+        mode = member.stat().st_mode
+        if (not target.is_relative_to(original) or stat.S_IMODE(mode) & 0o6000
+                or not (stat.S_ISREG(mode) or stat.S_ISDIR(mode))
+                or member.is_symlink() and target.is_dir()):
+            raise RuntimeError('native runtime input custody refused')
+    if sum(member.stat().st_size for member in members if member.is_file()) > 512 * 1024 * 1024:
+        raise RuntimeError('native runtime byte bound')
+    shutil.copytree(original, runtime, symlinks=False)
+    for member in [runtime, *sorted(runtime.rglob('*'))]:
+        member.chmod(0o755 if member.is_dir() or member.stat().st_mode & 0o111 else 0o644)
+    entry = runtime / 'bin/python-unrest-guard-control'
     if entry.exists() or entry.is_symlink():
         raise RuntimeError('native control output already exists')
     profiles = root / 'profiles'
     bootstrap = support / 'native_entry.py'
-    library = Path(sysconfig.get_config_var('LIBDIR')) / 'libpython3.13.so.1.0'
+    library = runtime / Path(sysconfig.get_config_var('LIBDIR')).relative_to(original) / 'libpython3.13.so.1.0'
     if sysconfig.get_config_var('SOABI') != 'cpython-313-x86_64-linux-gnu':
         raise RuntimeError('native control ABI refused')
     argv = [str(compiler), '-O2', '-Wall', '-Wextra', '-Werror',
-            '-I' + sysconfig.get_path('include'), '-L' + str(library.parent),
+            '-I' + str(runtime / Path(sysconfig.get_path('include')).relative_to(original)), '-L' + str(library.parent),
             '-DGUARD_BOOTSTRAP=' + json.dumps(repr(str(bootstrap))),
             '-DGUARD_PROFILES=' + json.dumps(repr(str(profiles))),
             '-DGUARD_BOOTSTRAP_SHA256=' + json.dumps(pin(bootstrap)['sha256']),
@@ -54,7 +75,7 @@ def main():
               'library': pin(library), 'compiler': pin(compiler),
               'recipient': pin(support / 'evidence-recipient.pem'), 'profiles': str(profiles),
               'support': str(support), 'soabi': sysconfig.get_config_var('SOABI'),
-              'runtime': pin(Path(sys.executable).resolve()), 'compiler_argv': argv,
+              'runtime': pin(runtime / Path(sys.executable).resolve().relative_to(original)), 'compiler_argv': argv,
               'head': os.environ['GITHUB_SHA'], 'run': int(os.environ['GITHUB_RUN_ID']),
               'attempt': int(os.environ['GITHUB_RUN_ATTEMPT'])}
     target = root / 'binding.json'
