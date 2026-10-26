@@ -187,13 +187,13 @@ class Frame:
 
 
 def peer(stream: socket.socket, birth: Birth, gid: int) -> None:
-    from linux_observation import process_identity
+    from linux_observation import credential_identity
 
     integer(gid)
     if type(birth) is not Birth or stream.family != socket.AF_UNIX:
         raise Refused('control peer')
     actual = struct.unpack('3i', stream.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
-    current = process_identity(birth.pid)
+    current = credential_identity(birth.pid)
     if (actual != (birth.pid, birth.uid, gid) or Birth.read(current) != birth
             or current['gids'] != [gid] * 4):
         raise Refused('control kernel peer')

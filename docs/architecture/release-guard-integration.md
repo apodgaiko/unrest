@@ -2288,3 +2288,34 @@ protocol model with no PID or execution claim. They do not pass the two original
 timing tests: kernel admission, native entry, authenticated READY, endpoint
 sealing, actual child execution and original-parent waits are still mandatory
 before selecting this path for a source checkpoint.
+
+
+### Native prebody control integration
+
+The CI-only `native_build.py` compiles `native_entry.c` against its actual
+CPython 3.13 library and records the native image, bootstrap, compiler, runtime
+and public evidence-recipient byte pins. A C audit hook precedes initialization;
+one closed command body is released only after its birth-bound observer profile,
+actual credentials/flags/vector/environment, two authenticated READY messages
+and pinned native/bootstrap bytes agree. A caught forbidden process or network
+effect still makes the native process fail with status 86.
+
+`test_native_entry_control.py` exercises the real entry under the SEIZE observer,
+with source UID 20000/capabilities zero and observer UID 20001/no CAP_KILL. It
+requires actual numeric parent waits for positive, caught-refusal and mismatched
+binding cases. Setup failure before attach closes the held startup pipe and
+requires a numeric cancellation wait. Raw process records and diagnostics are
+encrypted to the existing public recipient; only the encrypted archive is
+uploaded. The source programs are fixed control canaries, not a product route.
+These controls do not establish an immutable runtime capsule, pass either
+original timing test, or certify the full source suite.
+
+
+Peer authentication reads the observer's public kernel birth/credential fields;
+it does not require the source to ptrace the observer's namespace links. Full
+namespace acquisition remains an observer responsibility. The dedicated native
+control driver begins childless and uses a bounded kernel direct-child census
+as a fallback if an observer dies before delivering its PID notice. Adopted
+cleanup always fails that source case and records its actual cleanup wait
+separately; it never supplies original-parent certification. Actual EOF, live
+adoption and missing-notice controls exercise this boundary.
