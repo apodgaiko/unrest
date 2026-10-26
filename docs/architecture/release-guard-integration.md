@@ -2263,3 +2263,28 @@ The framing, authentication and reduction controls remain source-free. Actual
 policy handlers, finite operation schemas, descriptor inheritance restrictions,
 Unix path ownership and root/child bootstrap integration remain prerequisites
 before this transport can replace the selected release supervisor.
+
+
+### Source-derived bootstrap intent
+
+`controlled_startup.py` owns the direct backend, exact half-second wrapper and
+controlled ACP intents for the two original short-cutoff bootstrap cases. It
+reconstructs expected vectors and environments from prepared source and checked
+owner state, then compares the complete observation. It checks the actual
+product and asyncio call frames, original constructor options, runtime and
+fixture pins, current class/function/closure links and owned-root generation.
+The original request and prospective `-I/-S` translation remain separate.
+There is no legacy resolution fallback inside this selector.
+
+`Owner.verify_binding` checks retained function code, loader, globals, links,
+closures and defaults without claiming an executing caller. `Owner.verify`
+retains the additional actual frame, callsite and free-variable checks. This
+allows the selector to check the original environment and transport methods
+without executing arbitrary expressions or adopting their current code.
+
+The focused controls reach the actual backend and ACP product/asyncio Popen
+audit paths and stop before OS launch. The ACP controls use a test-only backend
+protocol model with no PID or execution claim. They do not pass the two original
+timing tests: kernel admission, native entry, authenticated READY, endpoint
+sealing, actual child execution and original-parent waits are still mandatory
+before selecting this path for a source checkpoint.

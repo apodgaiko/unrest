@@ -20,7 +20,7 @@ jobs:
           python-version: '3.13'
           enable-cache: false
       - run: uv sync --locked
-      - name: Finite source-free kernel and replacement component controls
+      - name: Bounded kernel and source-admission controls
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: timeout --signal=TERM --kill-after=5 120 uv run --no-sync pytest -q -o faulthandler_timeout=15 .github/release-guard

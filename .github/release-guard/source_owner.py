@@ -211,10 +211,10 @@ class Owner:
     defaults: tuple[object, ...] | None = None
     keyword_defaults: tuple[tuple[str, object], ...] = ()
 
-    def verify(self, frame: types.FrameType) -> None:
+    def verify_binding(self) -> None:
+        """Check retained code and binding, without claiming a live caller frame."""
         if (type(self.module) is not types.ModuleType
                 or type(self.function) is not types.FunctionType
-                or type(frame) is not types.FrameType
                 or _namespace(sys.modules).get(self.unit.module) is not self.module):
             raise Refused('live source module or function refused')
         namespace = _namespace(self.module)
@@ -246,13 +246,11 @@ class Owner:
         elif self.unit.mode != 'pytest':
             raise Refused('unprepared compiler mode')
         function = self.function
-        _safe_code(frame.f_code)
-        if (frame.f_globals is not vars(self.module) or function.__globals__ is not vars(self.module)
-                or function.__code__ is not frame.f_code
-                or frame.f_code != self.unit.code(self.qualified, self.first_line)
+        _safe_code(function.__code__)
+        if (function.__globals__ is not vars(self.module)
+                or function.__code__ != self.unit.code(self.qualified, self.first_line)
                 or type(function.__module__) is not str or function.__module__ != self.unit.module
-                or type(function.__qualname__) is not str or function.__qualname__ != self.qualified
-                or not self.call_lines[0] <= frame.f_lineno <= self.call_lines[1]):
+                or type(function.__qualname__) is not str or function.__qualname__ != self.qualified):
             raise Refused('live source code, globals or callsite changed')
         if not self.links or not any(link.expected is function for link in self.links):
             raise Refused('source owner needs an explicit live identity link')
@@ -263,18 +261,12 @@ class Owner:
                 or any(cell is not anchor for cell, anchor
                        in zip(cells, self.cell_anchors, strict=True))):
             raise Refused('closure layout changed')
-        for index, (cell, expected) in enumerate(zip(cells, self.closure, strict=True)):
+        for cell, expected in zip(cells, self.closure, strict=True):
             try:
                 actual = cell.cell_contents
             except ValueError as error:
                 raise Refused('empty owner closure') from error
-            name = function.__code__.co_freevars[index]
-            local: dict[str, object] = {}
-            for key, value in frame.f_locals.items():
-                if type(key) is not str or len(local) >= 8192:
-                    raise Refused('frame local namespace refused')
-                local[key] = value
-            if name not in local or actual is not expected or local[name] is not expected:
+            if actual is not expected:
                 raise Refused('owner closure changed')
         keyword_defaults = function.__kwdefaults__
         if keyword_defaults is None:
@@ -285,6 +277,23 @@ class Owner:
         expected_defaults = (self.defaults, self.keyword_defaults)
         if _literal(actual_defaults) != _literal(expected_defaults):
             raise Refused('source defaults changed')
+
+
+    def verify(self, frame: types.FrameType) -> None:
+        self.verify_binding()
+        if (type(frame) is not types.FrameType or frame.f_code is not self.function.__code__
+                or frame.f_globals is not vars(self.module)
+                or not self.call_lines[0] <= frame.f_lineno <= self.call_lines[1]):
+            raise Refused('live source code, globals or callsite changed')
+        if self.closure:
+            local: dict[str, object] = {}
+            for key, value in frame.f_locals.items():
+                if type(key) is not str or len(local) >= 8192:
+                    raise Refused('frame local namespace refused')
+                local[key] = value
+            for name, expected in zip(self.function.__code__.co_freevars, self.closure, strict=True):
+                if name not in local or local[name] is not expected:
+                    raise Refused('owner closure changed')
 
 
 def active_frames() -> tuple[types.FrameType, ...]:
