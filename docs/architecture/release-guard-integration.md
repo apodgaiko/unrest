@@ -28,6 +28,24 @@ during construction. Removing historical implementation-shape checks requires
 an independently reviewed crosswalk preserving their behavioral mutation cases.
 No product-test timing parameter changes follow from the guard rewrite.
 
+`launch_policy.py` renders finite typed declarations and compares complete launch
+observations. Executable identity is separate from `argv[0]`. Inline hashes come
+from the exact rendered command; dynamic program holes require explicit quoting
+or bounded integers. Script/module identities still need independent file/tree
+custody. Parameter values, source owner/case and acquired-root generations must
+be authenticated before rendering; copying observed argv into expected slots is
+not validation. Exact environment pairs preserve duplicate detection, and zero
+or multiple matching declarations refuse. The library neither admits a process
+nor establishes that an observation came from the kernel.
+
+`size_budget.py --root <checkout> --check` counts all maintained `.github` files,
+including both guard generations, policy/assets and full workflow text. Test
+files are reported separately. External enforcement helpers must be supplied
+with `--support`; even test-named support then counts as enforcement. The report
+always distinguishes numerical size from the separate dependency-closure audit
+and release certification. A dormant smaller implementation cannot satisfy the
+ceiling while the old implementation remains in the tree.
+
 `full_bootstrap.semantic_manifest` binds sorted tracked source, guard, policy,
 lock and workflow command bytes and modes. It excludes only the readiness carrier
 from its own semantic digest. The host writes that immutable manifest separately

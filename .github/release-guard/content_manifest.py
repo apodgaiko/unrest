@@ -92,7 +92,7 @@ def _root(stack: ExitStack, path: Path) -> tuple[int, list[tuple[int, str, int, 
     return parent, chain
 
 
-def _member(root: int, name: str) -> Member:
+def _member(root: int, name: str, line_counts: dict[str, int] | None) -> Member:
     parts = name.split("/")
     directories: list[tuple[int, str, int, tuple[int, ...]]] = []
     with ExitStack() as stack:
@@ -120,12 +120,15 @@ def _member(root: int, name: str) -> Member:
         if _key(before) != _key(os.fstat(fd)):
             raise Refused("file_acquisition_race")
         digest = hashlib.sha256()
+        counted_bytes = bytearray()
         size = 0
         while block := os.read(fd, 65536):
             size += len(block)
             if size > MAX_FILE_BYTES or size > before.st_size:
                 raise Refused("file_read_bound")
             digest.update(block)
+            if line_counts is not None:
+                counted_bytes.extend(block)
         if (size != before.st_size or _key(before) != _key(os.fstat(fd))
                 or _key(before) != _key(os.stat(parts[-1], dir_fd=parent,
                                                  follow_symlinks=False))):
@@ -135,12 +138,16 @@ def _member(root: int, name: str) -> Member:
                     or expected != _key(os.stat(part, dir_fd=ancestor,
                                                 follow_symlinks=False))):
                 raise Refused("directory_read_race")
+        if line_counts is not None:
+            try:
+                line_counts[name] = len(counted_bytes.decode("utf-8").splitlines())
+            except UnicodeError:
+                raise Refused("opaque_guard_payload") from None
         return {"path": name, "mode": stat.S_IMODE(before.st_mode),
                 "size": size, "sha256": digest.hexdigest()}
 
 
-def capture(root: Path, paths: Sequence[str]) -> Manifest:
-    """Measure exactly the supplied inventory without importing or running it."""
+def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | None) -> Manifest:
     names = _inventory(paths)
     try:
         with ExitStack() as stack:
@@ -149,7 +156,7 @@ def capture(root: Path, paths: Sequence[str]) -> Manifest:
             files = []
             total = 0
             for name in names:
-                member = _member(fd, name)
+                member = _member(fd, name, line_counts)
                 total += member["size"]
                 if total > MAX_TOTAL_BYTES:
                     raise Refused("total_byte_bound")
@@ -164,6 +171,17 @@ def capture(root: Path, paths: Sequence[str]) -> Manifest:
     except OSError:
         raise Refused("filesystem_acquisition_refused") from None
     return {"schema": SCHEMA, "files": files}
+
+
+def capture(root: Path, paths: Sequence[str]) -> Manifest:
+    """Measure exactly the supplied inventory without importing or running it."""
+    return _capture(root, paths, None)
+
+
+def measure_lines(root: Path, paths: Sequence[str]) -> tuple[Manifest, dict[str, int]]:
+    """Count text lines from the same bounded nofollow reads as content hashes."""
+    counts: dict[str, int] = {}
+    return _capture(root, paths, counts), counts
 
 
 def _digest(value: object) -> bool:
