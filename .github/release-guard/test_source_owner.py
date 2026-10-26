@@ -43,8 +43,12 @@ def module(request, monkeypatch):
     path, name = '/sealed/owner_control.py', 'sealed_owner_control'
     unit = owner.prepare(BODY, path, name, mode, hashlib.sha256(BODY).hexdigest())
     module = types.ModuleType(name)
-    loader = (importlib.machinery.SourceFileLoader(name, path) if mode == 'plain'
-              else AssertionRewritingHook(request.config))
+    if mode == 'beartype-passive':
+        from beartype.claw._importlib._clawimpload import BeartypeSourceFileLoader
+        loader = BeartypeSourceFileLoader(name, path)
+    else:
+        loader = (importlib.machinery.SourceFileLoader(name, path) if mode == 'plain'
+                  else AssertionRewritingHook(request.config))
     module.__file__, module.__loader__ = path, loader
     module.__spec__ = importlib.machinery.ModuleSpec(name, loader, origin=path)
     monkeypatch.setitem(sys.modules, name, module)
@@ -60,7 +64,7 @@ def bound(unit, module, name='route', **extra):
                        (1, 100), (owner.Link(module, name, fn),), **defaults, **extra)
 
 
-@pytest.mark.parametrize('module', ['plain', 'pytest'], indirect=True)
+@pytest.mark.parametrize('module', ['plain', 'pytest', 'beartype-passive'], indirect=True)
 def test_prepared_owner_matches_actual_loader_code_globals_defaults_and_case(module):
     unit, module = module
     expected = bound(unit, module)
@@ -165,7 +169,7 @@ def test_actual_async_owner_chain_and_parameter_suffix(module):
         asyncio.run(module.inner())
 
 
-@pytest.mark.parametrize('mode', ['plain', 'pytest'])
+@pytest.mark.parametrize('mode', ['plain', 'pytest', 'beartype-passive'])
 def test_prepare_compiles_without_executing_and_unknown_modes_closed(mode):
     body = b"raise AssertionError('source executed during preparation')\n"
     unit = owner.prepare(body, '/sealed/noexec.py', 'noexec', mode, hashlib.sha256(body).hexdigest())
@@ -244,6 +248,7 @@ def test_identical_function_clone_is_not_claimed_as_distinguishable(module):
 
 def test_inspection_refuses_custom_namespace_keys_without_comparison_callbacks():
     class Key:
+        armed = False
         def __hash__(self):
             return hash('route')
 
@@ -297,3 +302,77 @@ def test_live_metadata_callbacks_are_never_invoked(module, mutation):
             co_consts=(*module.route.__code__.co_consts, Constant()))
     with pytest.raises(Refused):
         module.route()
+
+
+
+@pytest.mark.parametrize('module', ['beartype-passive'], indirect=True)
+@pytest.mark.parametrize('attribute,value', [('_module_conf', object()), ('_module_name', 'other')])
+def test_passive_loader_cannot_enable_an_unprepared_transform(module, attribute, value):
+    unit, module = module
+    expected = bound(unit, module)
+    module.check = expected.verify
+    setattr(module.__loader__, attribute, value)
+    with pytest.raises(Refused, match='beartype compiler'):
+        module.route()
+
+
+@pytest.mark.parametrize('module', ['plain', 'pytest', 'beartype-passive'], indirect=True)
+def test_loader_class_reference_is_prepared_before_live_module_mutation(module, monkeypatch):
+    unit, module = module
+    expected = bound(unit, module)
+    retained_type = unit.loader_type
+    module.check = lambda frame: expected.verify(frame)
+    if unit.mode == 'plain':
+        monkeypatch.setattr(importlib.machinery, 'SourceFileLoader', type('Replacement', (), {}))
+    elif unit.mode == 'pytest':
+        import _pytest.assertion.rewrite as rewrite
+        monkeypatch.setattr(rewrite, 'AssertionRewritingHook', type('Replacement', (), {}))
+    else:
+        import beartype.claw._importlib._clawimpload as claw
+        monkeypatch.setattr(claw, 'BeartypeSourceFileLoader', type('Replacement', (), {}))
+    assert unit.loader_type is retained_type
+    assert module.route() is None
+
+
+
+@pytest.mark.parametrize('module', ['beartype-passive'], indirect=True)
+def test_passive_loader_metadata_refuses_custom_keys_without_equality_callbacks(module):
+    unit, module = module
+    expected = bound(unit, module)
+    module.check = expected.verify
+    class Key:
+        armed = False
+        def __hash__(self):
+            return hash('_module_conf')
+        def __eq__(self, other):
+            if self.armed:
+                raise AssertionError('metadata equality callback executed')
+            return False
+    values = vars(module.__loader__)
+    del values['_module_conf']
+    key = Key()
+    values[key] = None
+    key.armed = True
+    with pytest.raises(Refused, match='non-string namespace key'):
+        module.route()
+
+
+def test_actual_passive_loader_matches_independently_prepared_code(tmp_path, monkeypatch):
+    from beartype.claw._importlib._clawimpload import BeartypeSourceFileLoader
+    import importlib.util
+
+    path = str(tmp_path / 'guard_passive_owner_control.py')
+    name = '_guard_passive_owner_control'
+    from pathlib import Path
+    Path(path).write_bytes(BODY)
+    unit = owner.prepare(BODY, path, name, 'beartype-passive', hashlib.sha256(BODY).hexdigest())
+    loader = BeartypeSourceFileLoader(name, path)
+    spec = importlib.util.spec_from_file_location(name, path, loader=loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    loader.exec_module(module)
+    assert loader._module_conf is None and loader._module_name is None
+    expected = bound(unit, module)
+    module.check = lambda frame: expected.verify(frame)
+    assert module.route() is None

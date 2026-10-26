@@ -45,7 +45,14 @@ remain external prerequisites. Python frames do not identify an executing
 FunctionType object: a directly called clone with identical code/globals/freevars
 is not distinguishable here. Actual arguments and state must still be verified
 by route-specific parameter/custody checks; retained defaults are insufficient.
-Unknown compiler modes, including unprepared Beartype routes, remain refused.
+The loader class reference is retained at trusted preparation, rather than
+resolved again from mutable module globals during each admission. The explicit
+`beartype-passive` mode covers only the observed Beartype source-loader class
+with both `_module_conf` and `_module_name` absent from active configuration
+(their actual values must both be `None`). This mode still compiles the acquired
+bytes independently with ordinary CPython compilation. Metadata dictionaries
+use the same bounded string-key snapshot as other live namespaces. Active
+Beartype transformations and all other unprepared compiler modes remain refused.
 
 `process_ledger.py` joins kernel and authenticated control facts incrementally.
 It keeps logical process tokens separate from exec epochs, fences readiness at

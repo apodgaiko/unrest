@@ -33,6 +33,7 @@ class SourceUnit:
     mode: str
     source_sha256: str
     codes: tuple[types.CodeType, ...]
+    loader_type: type
 
     def code(self, qualified: str, line: int) -> types.CodeType:
         found = [code for code in self.codes
@@ -53,13 +54,18 @@ def prepare(body: bytes, path: str, module: str, mode: str,
             or type(path) is not str or not path.startswith('/')
             or str(PurePosixPath(path)) != path or '..' in PurePosixPath(path).parts
             or type(module) is not str or not module or type(mode) is not str
-            or mode not in ('plain', 'pytest') or type(expected_sha256) is not str
+            or mode not in ('plain', 'pytest', 'beartype-passive') or type(expected_sha256) is not str
             or hashlib.sha256(body).hexdigest() != expected_sha256):
         raise Refused('source unit input refused')
+    loader_type: type = importlib.machinery.SourceFileLoader
+    if mode == 'beartype-passive':
+        from beartype.claw._importlib._clawimpload import BeartypeSourceFileLoader
+        loader_type = BeartypeSourceFileLoader
     try:
         tree = ast.parse(body, filename=path)
         if mode == 'pytest':
-            from _pytest.assertion.rewrite import rewrite_asserts
+            from _pytest.assertion.rewrite import AssertionRewritingHook, rewrite_asserts
+            loader_type = AssertionRewritingHook
             rewrite_asserts(tree, body, path)
         root = compile(tree, path, 'exec', dont_inherit=True, optimize=0)
     except (ValueError, SyntaxError, RecursionError) as error:
@@ -73,7 +79,7 @@ def prepare(body: bytes, path: str, module: str, mode: str,
         codes.append(code)
         pending.extend((value, depth + 1) for value in code.co_consts
                        if type(value) is types.CodeType)
-    return SourceUnit(path, module, mode, expected_sha256, tuple(codes))
+    return SourceUnit(path, module, mode, expected_sha256, tuple(codes), loader_type)
 
 
 def _safe_code(code: types.CodeType) -> None:
@@ -221,16 +227,23 @@ class Owner:
                 or type(namespace.get('__name__')) is not str
                 or namespace['__name__'] != self.unit.module):
             raise Refused('live module origin or specification changed')
-        if self.unit.mode == 'plain':
-            if (type(loader) is not importlib.machinery.SourceFileLoader
-                    or type(loader.path) is not str or loader.path != self.unit.path
+        if type(loader) is not self.unit.loader_type:
+            raise Refused('prepared compiler loader identity changed')
+        if self.unit.mode in ('plain', 'beartype-passive'):
+            loader = cast(Any, loader)
+            if (type(loader.path) is not str or loader.path != self.unit.path
                     or type(loader.name) is not str or loader.name != self.unit.module):
                 raise Refused('plain compiler loader refused')
-        elif self.unit.mode == 'pytest':
-            from _pytest.assertion.rewrite import AssertionRewritingHook
-            if type(loader) is not AssertionRewritingHook:
-                raise Refused('pytest compiler loader refused')
-        else:
+            if self.unit.mode == 'beartype-passive':
+                # This class also serves ordinary untransformed imports. Its
+                # inactive configuration delegates to CPython's plain compiler.
+                # Active type-checking transformation is a different compiler
+                # and remains unprepared; no live generated code is adopted.
+                values = _namespace(vars(loader))
+                if (values.get('_module_conf', False) is not None
+                        or values.get('_module_name', False) is not None):
+                    raise Refused('active or changed beartype compiler refused')
+        elif self.unit.mode != 'pytest':
             raise Refused('unprepared compiler mode')
         function = self.function
         _safe_code(frame.f_code)
