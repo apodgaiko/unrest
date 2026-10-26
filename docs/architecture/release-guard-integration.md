@@ -37,6 +37,16 @@ have separate finite Linux controls. Local synthetic controls cannot certify
 those kernel behaviors. The replacement control workflow is not the product
 source checkpoint and does not activate the replacement in release execution.
 
+`source_owner.py` prepares plain or pytest-rewritten source code once from
+separately authenticated immutable bytes. Admission-side checks still inspect
+live module/loader/globals, retained function bindings, actual frame freevars,
+closure cells and ordered synchronous/await owners. Compiler and case authority
+remain external prerequisites. Python frames do not identify an executing
+FunctionType object: a directly called clone with identical code/globals/freevars
+is not distinguishable here. Actual arguments and state must still be verified
+by route-specific parameter/custody checks; retained defaults are insufficient.
+Unknown compiler modes, including unprepared Beartype routes, remain refused.
+
 `launch_policy.py` renders finite typed declarations and compares complete launch
 observations. Executable identity is separate from `argv[0]`. Inline hashes come
 from the exact rendered command; dynamic program holes require explicit quoting
