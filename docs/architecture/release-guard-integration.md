@@ -2228,3 +2228,31 @@ prove control-channel authentication, launch-policy integration, Unix approval
 path ownership, source-suite parity or release certification. The historical
 release guard remains selected until those integrations and their crosswalk
 are complete.
+
+### Bounded control transport
+
+`control_transport.py` retains the existing 8 KiB request, 16 KiB response and
+four-second absolute channel bounds. Each scheduler call performs at most one
+read or write; a complete request is delivered once and partial writes reuse
+the encoded response. Duplicate JSON fields, unsupported values and excessive
+nesting, work or text are refused before dispatch.
+
+Accepted channels capture the actual Unix peer, process birth, token, exec
+generation, command class and GID before reading bytes. Admission consumes
+only that channel's decoded request, rechecks the actual peer and current
+registration, and binds nonce, identifier and operation. Source callers must
+independently verify the observer peer and the exact typed request echo.
+Transport refusals reach the shared ledger poison sink. New channels can
+still authenticate the fixed failure-drain methods; drains cannot clear the
+original failure or enable ordinary operations.
+
+Empty EOF supplies no permission or completion evidence. The controlled-ACP
+SIGTERM exception requires the same captured ledger, birth, class, token and
+exec generation, no request or response bytes, the unchanged channel deadline,
+and the ledger's full original-parent wait join. Kernel disappearance or a
+tracer reap alone cannot discharge it.
+
+The framing, authentication and reduction controls remain source-free. Actual
+policy handlers, finite operation schemas, descriptor inheritance restrictions,
+Unix path ownership and root/child bootstrap integration remain prerequisites
+before this transport can replace the selected release supervisor.
