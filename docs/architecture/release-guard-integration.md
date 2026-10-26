@@ -2327,3 +2327,11 @@ UID; the builder never changes those host permissions. It rejects special,
 setid, escaping or directory-symlink inputs, bounds files/bytes, and makes only
 its new owned copy traversable before linking the native entries there. This
 copy is setup for the closed controls, not proof of an immutable full capsule.
+
+
+The complete diagnostic tree, including its closed support snapshot, resides
+under a new run/attempt-specific `/tmp` parent. Copying beneath a private runner
+temporary ancestor does not establish source access. Before canaries, the root
+driver forks an actual capability-free source UID, checks runtime/support read
+and executable access there, and requires its numeric successful wait. No
+permissions of the original runner temporary tree or checkout are changed.

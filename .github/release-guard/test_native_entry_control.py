@@ -264,6 +264,25 @@ def drain_adopted(profiles: Path, label: str = 'unexpected') -> None:
         raise RuntimeError('native control required fallback adopted cleanup')
 
 
+def filesystem_access(binding: dict, profiles: Path) -> None:
+    from compartment import credentials
+    child = os.fork()
+    if child == 0:
+        try:
+            credentials(20000)
+            checks = [(binding[name]['path'], os.R_OK | os.X_OK)
+                      for name in ('entry', 'negative_entry', 'runtime')]
+            checks += [(binding['library']['path'], os.R_OK)]
+            checks += [(str(path), os.R_OK) for path in sorted(Path(binding['support']).glob('*.py'))]
+            os._exit(0 if all(os.access(path, mode, effective_ids=True) for path, mode in checks) else 125)
+        except BaseException:
+            os._exit(124)
+    raw = settle_owned(child, terminate=False)
+    (profiles / 'filesystem-access.json').write_text(json.dumps({'actual_source_wait': raw}))
+    if raw != 0:
+        raise RuntimeError('native source UID filesystem access refused')
+
+
 def ownership_controls(profiles: Path) -> None:
     """Exercise adopted EOF and forced cleanup with real exact child waits."""
     from compartment import credentials
@@ -366,6 +385,7 @@ def main():
     os.chown(profiles, 20001, 20001)
     success = False
     try:
+        filesystem_access(binding, profiles)
         ownership_controls(profiles)
         for case in CASES:
             read, write = os.pipe()

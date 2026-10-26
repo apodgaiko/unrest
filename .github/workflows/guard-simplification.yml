@@ -29,12 +29,12 @@ jobs:
       - name: Build pinned CPython native control entry
         run: uv run --no-sync python .github/release-guard/native_build.py
       - name: Actual native prebody and caught-refusal controls
-        run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 120 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_native_entry_control.py" "$RUNNER_TEMP/guard-native-control/binding.json"
+        run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 120 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_native_entry_control.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json"
       - name: Retain encrypted native control diagnostics
         if: always()
         uses: actions/upload-artifact@v4.6.2
         with:
           name: native-control-private
-          path: ${{ runner.temp }}/guard-native-control/native-control-private.cms
+          path: /tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/native-control-private.cms
           if-no-files-found: ignore
           retention-days: 7

@@ -21,9 +21,20 @@ def main():
     if (os.environ.get('GITHUB_ACTIONS') != 'true' or sys.platform != 'linux'
             or sys.version_info[:2] != (3, 13) or os.uname().machine != 'x86_64'):
         raise RuntimeError('native control build requires its Linux CI lane')
-    support = Path(__file__).resolve().parent
-    root = Path(os.environ['RUNNER_TEMP']).resolve() / 'guard-native-control'
+    original_support = Path(__file__).resolve().parent
+    run_id, attempt = int(os.environ['GITHUB_RUN_ID']), int(os.environ['GITHUB_RUN_ATTEMPT'])
+    parent = Path('/tmp') / f'unrest-native-control-{run_id}-{attempt}'
+    parent.mkdir(mode=0o755)
+    root = parent / 'guard-native-control'
     root.mkdir(mode=0o755)
+    support = root / 'support'
+    support.mkdir(mode=0o755)
+    for member in sorted(original_support.iterdir()):
+        if member.suffix in ('.py', '.c', '.pem') and not member.name.startswith('test_'):
+            if member.is_symlink() or not member.is_file() or member.stat().st_size > 4 * 1024 * 1024:
+                raise RuntimeError('native support input refused')
+            shutil.copyfile(member, support / member.name)
+            (support / member.name).chmod(0o644)
     compiler = Path('/usr/bin/cc').resolve(strict=True)
     original = Path(sys.base_prefix).resolve(strict=True)
     runtime = root / 'runtime'
