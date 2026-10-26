@@ -21,7 +21,7 @@ import traceback
 
 CASES = ('positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
          'bad-flags', 'bad-identity', 'bad-native', 'bad-entry', 'bad-nonce',
-         'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap')
+         'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap', 'bad-environment', 'bad-cwd')
 
 
 def worker(case, binding, output):
@@ -107,6 +107,10 @@ def worker(case, binding, output):
             profile['native_sha256' if case == 'bad-native' else 'entry_sha256'] = '0' * 64
         elif case in ('bad-nonce', 'bad-token'):
             profile['nonce' if case == 'bad-nonce' else 'token'] = 'f' * (64 if case == 'bad-nonce' else 32)
+        elif case == 'bad-environment':
+            profile['environment'] = {'LC_CTYPE': 'C.UTF-8'}
+        elif case == 'bad-cwd':
+            profile['cwd'] = '/tmp'
         elif case == 'bad-observer':
             profile['observer']['uids'] = [0] * 4
         target = root / (str(child) + '.json')

@@ -64,6 +64,13 @@ static int guard_audit(const char *event, PyObject *args, void *unused) {
 }
 int main(int argc, char **argv) {
     if (PySys_AddAuditHook(guard_audit,NULL) < 0) return 86;
+    /* Isolated UTF-8 startup must not rewrite the admitted environment by
+       coercing LC_CTYPE. Keep the audit hook ahead of preinitialization. */
+    PyPreConfig preconfig;
+    PyPreConfig_InitIsolatedConfig(&preconfig);
+    preconfig.utf8_mode = 1;
+    PyStatus startup = Py_PreInitialize(&preconfig);
+    if (PyStatus_Exception(startup)) Py_ExitStatusException(startup);
     int status = Py_BytesMain(argc,argv);
     return poisoned ? 86 : status;
 }

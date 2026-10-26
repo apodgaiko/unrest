@@ -89,7 +89,7 @@ def consume(directory: str, event: str, arguments: tuple) -> None:
             or type(arguments) is not tuple or len(arguments) != 1 or type(arguments[0]) is not str
             or arguments[0] != BODIES[case] + '\n' or actual['uids'] != [20000] * 4
             or actual['gids'] != [20000] * 4 or any(actual['capabilities'].values())
-            or actual['no_new_privs'] != 1 or actual['seccomp'] != 2
+            or actual['no_new_privs'] != 1 or actual['seccomp'] != 2 or sys.flags.utf8_mode != 1
             or canonical(actual) != claimed
             or os.readlink('/proc/self/ns/mnt') != profile['mount_namespace']
             or profile['argv'] != sys.orig_argv or profile['environment'] != dict(os.environ)

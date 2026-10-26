@@ -2350,3 +2350,13 @@ Unix effects still require surrounding default-deny dispatch; this reducer does
 not grant them. Original native socket tests remain intact, with separate real
 pair payload, close, alias and replacement controls added. Source-callsite
 selection and original-bootstrap composition are still integration requirements.
+
+
+Native preinitialization uses CPython's isolated `PyPreConfig` with explicit
+UTF-8 mode before `Py_BytesMain`, after installing the C audit hook. Ordinary
+locale coercion can otherwise add `LC_CTYPE` to an admitted empty environment.
+The producer must preserve that environment; the consumer's exact comparison
+is retained, and UTF-8 mode is checked. A profile claiming the former coerced
+environment is a negative control, alongside wrong-cwd and other startup binding
+negatives. This follows the CPython initialization contract:
+https://docs.python.org/3.13/c-api/init_config.html#isolated-configuration
