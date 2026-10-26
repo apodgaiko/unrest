@@ -2204,3 +2204,27 @@ It does not install or claim the general root operation observer. Original
 parent admission, native custody, endpoint authentication, descriptor/socket
 hooks, the complete execution/import seal and actual numeric parent waits
 remain required. Every other case and the root retain the general guard.
+
+### Endpoint observation and TCP reduction
+
+`socket_observation.py` retains the existing Linux SOCK_DIAG, SO_COOKIE,
+reciprocal peer, retained Unix pair and TCP descriptor observations. Local
+observer descriptors use `dup`; foreign descriptors still require the actual
+`pidfd_getfd` relationship. `acquire_tcp` checks the expected process birth
+before and after reacquiring the affected descriptor. No cached port, inode,
+PID or request-supplied identity supplies ownership.
+
+`endpoint_policy.py` consumes independently declared routes, authenticated
+ledger epochs and fresh kernel observations. Core readiness permits listener
+registration; both peers need complete body readiness before a connect ticket
+is issued. Tickets are single-use objects. Accepted peers remain usable after
+a one-shot listener closes, but cannot authorize reconnect or a replacement
+listener. Retained operations require the same birth, descriptor, inode,
+SO_COOKIE, UID and addresses. Listener retirement additionally requires the
+ledger's complete actual-original-parent wait join. Refusals remain sticky.
+
+The native socket controls exercise the observation/reducer seam. They do not
+prove control-channel authentication, launch-policy integration, Unix approval
+path ownership, source-suite parity or release certification. The historical
+release guard remains selected until those integrations and their crosswalk
+are complete.
