@@ -121,3 +121,71 @@ def test_channel_poison_blocks_ordinary_but_allows_captured_authenticated_drain(
             else:
                 assert admission.admit(frame) == outgoing
     assert ledger.poison
+
+
+def test_distinct_processes_authenticate_each_other_before_consuming_reply(tmp_path):
+    import signal
+    import time
+
+    observer_birth = Birth.read(process_identity(os.getpid()))
+    path = str(tmp_path / 'control.sock')
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(path)
+    listener.listen(1)
+    listener.settimeout(4)
+    child = os.fork()
+    if child == 0:
+        listener.close()
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stream:
+                stream.settimeout(4)
+                stream.connect(path)
+                peer(stream, observer_birth, os.getgid())
+                source = Frame(stream, RESPONSE_LIMIT, [])
+                request = {'pid': os.getpid(), 'nonce': 'a' * 64, 'token': 'child', 'generation': 0,
+                           'id': '1' * 32, 'kind': 'ready', 'payload': {}}
+                source.answer(request)
+                while not source.send():
+                    time.sleep(.001)
+                response = None
+                while response is None:
+                    response = source.read()
+                    time.sleep(.001)
+                peer(stream, observer_birth, os.getgid())
+                assert verify_reply(response, request) == {'ok': True}
+        except BaseException:
+            os._exit(125)
+        os._exit(0)
+    waited = False
+    try:
+        stream, _ = listener.accept()
+        with stream:
+            actual = process_identity(child)
+            child_birth = Birth.read(actual)
+            ledger = Ledger('a' * 64)
+            # Authentication-only setup from actual proc identities. These rows
+            # do not claim ptrace event or source-completion certification.
+            ledger.kernel(0, {'kind': 'kernel_root', 'identity': process_identity(os.getpid())})
+            ledger.kernel(1, {'kind': 'kernel_child', 'parent': os.getpid(), 'child': child,
+                              'event': 1, 'identity': actual})
+            ledger.register(child_birth, 'child', (('runtime', 'b' * 64),), 'c' * 64,
+                            case='peer-control', command_class='control')
+            incoming = Frame(stream, REQUEST_LIMIT, ledger.poison)
+            incoming.capture(ledger, child_birth, 'child', os.getgid())
+            while incoming.read() is None:
+                time.sleep(.001)
+            request = Admission(ledger, frozenset({'ready'})).admit(incoming)
+            incoming.answer(reply(request, {'ok': True}))
+            while not incoming.send():
+                time.sleep(.001)
+        actual_pid, raw = os.waitpid(child, 0)
+        waited = True
+        assert actual_pid == child and raw == 0
+        assert child_birth.pid != observer_birth.pid and not ledger.poison
+    finally:
+        listener.close()
+        if not waited:
+            actual_pid, _ = os.waitpid(child, os.WNOHANG)
+            if actual_pid == 0:
+                os.kill(child, signal.SIGKILL)
+                assert os.waitpid(child, 0)[0] == child
