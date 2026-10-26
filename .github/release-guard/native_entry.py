@@ -99,7 +99,16 @@ def consume(directory: str, event: str, arguments: tuple) -> None:
             or sys.executable != profile['native'] or type(profile['generation']) is not int or profile['generation'] != 1
             or hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest() != profile['native_sha256']
             or hashlib.sha256(Path(__file__).read_bytes()).hexdigest() != profile['entry_sha256']):
-        raise ValueError('native actual execution binding')
+        diagnostic = {
+            'environment_matches': profile['environment'] == dict(os.environ),
+            'locale_coercion_only': dict(os.environ) == {**profile['environment'], 'LC_CTYPE': 'C.UTF-8'},
+            'flags': [sys.flags.isolated, sys.flags.no_site, sys.flags.dont_write_bytecode],
+            'argv_matches': profile['argv'] == sys.orig_argv,
+            'identity_matches': canonical(actual) == claimed,
+            'executable_matches': sys.executable == profile['native'],
+            'body_matches': type(case) is str and case in BODIES and arguments == (BODIES[case] + '\n',),
+        }
+        raise ValueError('native actual execution binding: ' + json.dumps(diagnostic, sort_keys=True))
     for name, size in (('nonce', 64), ('token', 32), ('seal', 64)):
         value = profile[name]
         if type(value) is not str or len(value) != size or any(char not in '0123456789abcdef' for char in value):
