@@ -14,6 +14,7 @@ from controlled_startup import ACP_PIN, BACKEND_PIN
 from ordinary_acp import MOCK, PINS
 from source_owner import _safe_code
 from source_profile import ROOT_COMMAND, digest
+from cleanup_inline import body as inline_body
 
 
 class Bodies:
@@ -28,6 +29,9 @@ class Bodies:
         self.codes: tuple[types.CodeType, ...]
         if role == 'root':
             self.codes = (compile(ROOT_COMMAND + '\n', '<string>', 'exec', dont_inherit=True),)
+        elif role == 'cleanup-inline':
+            importlib.import_module('time')
+            self.codes = (compile(inline_body(profile['case']) + '\n', '<string>', 'exec', dont_inherit=True),)
         else:
             names = ('asyncio', 'json', 'os', 'sys') if role == 'acp' else (
                 'copy', 'json', 'os', 'pathlib', 'sys', 'signal', 'secrets', 'time', 'tomllib', 'urllib.request')
@@ -78,7 +82,7 @@ class Bodies:
             if args[1] != expected.co_filename:
                 raise Refused('sealed compilation filename')
             if expected.co_filename == '<string>':
-                data = ROOT_COMMAND + '\n' if role == 'root' else str(wrapper(self.profile['case'])) + '\n'
+                data = (ROOT_COMMAND if role == 'root' else inline_body(self.profile['case']) if role == 'cleanup-inline' else str(wrapper(self.profile['case']))) + '\n'
                 if type(args[0]) not in (str, bytes) or args[0] not in (data, data.encode()):
                     raise Refused('sealed inline compilation bytes')
             else:

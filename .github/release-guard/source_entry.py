@@ -19,6 +19,7 @@ from control_transport import finite
 from bootstrap_cases import BOOTSTRAP
 from ordinary_acp import CASES as ORDINARY_CASES
 from cleanup_launch import ALL_CASES as CLEANUP_CASES, OFFLINE
+from cleanup_inline import STARTUP
 from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies
@@ -68,12 +69,12 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] not in ('root', 'mcp') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES):
+        if self.profile['role'] not in ('root', 'mcp') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *STARTUP):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
-        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES):
+        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *STARTUP):
             if (type(executable) is not str or type(vector) is not list
                     or not 2 <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
                 raise Refused('ordinary process audit primitives')

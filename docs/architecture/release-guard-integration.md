@@ -2538,3 +2538,21 @@ selection. They require all original setup/call/teardown outcomes and zero child
 births; neither child profiles nor process-intent selection admit their case IDs.
 The remaining inline cleanup catalogue is declarative until its original caller,
 child-body and custody integration is completed. Templates grant no execution.
+
+Startup attribution has one setup-only fixture correction: its nine cases select
+`sys.executable -c pass` for launcher preflight, replacing dependence on an
+unrelated installed `codex-acp`. The original `forbidden` ACP-spawn function is
+retained. Every case parameter, assertion, inline MCP body, readiness timeout and
+cleanup path is unchanged. This inert preflight command is not a permitted child
+launch. Earlier whole-file byte evidence remains historical, not a certificate
+for the revised file; release certification still runs the current full suite.
+
+The startup-only inline domain admits one declared exit23 or sleep30 command
+through the original live caller and an independently reconstructed host intent.
+Its sealed child accepts that exact command once and has no process or network
+payload authority. Readiness deliberately probes a non-listening child: the
+observer records the original free-port descriptor after bind and permits at most
+16 fresh loopback attempts to that case's measured port. Those attempts create
+no Route, Ticket or Connection and grant no payload access. Immediate connection
+success refuses; a pending attempt is not reported as failed or peer-authenticated.
+The original tests must still prove their startup error, privacy and actual reaps.

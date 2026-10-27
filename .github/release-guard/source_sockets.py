@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio.selector_events
 import asyncio.unix_events
+import errno
 import os
 import socket
 import sys
@@ -11,6 +12,7 @@ import types
 from bootstrap_cases import declaration
 from content_manifest import Refused
 from cleanup_launch import ALL_CASES as CLEANUP_CASES
+from cleanup_inline import STARTUP
 
 TYPE = type
 
@@ -82,7 +84,7 @@ class Hooks:
             self.rpc('bind', {'fd': descriptor, **source})
             self.local.socket = 'socket.bind', stream, args[0]
         elif name in ('connect', 'connect_ex'):
-            cleanup = self.policy.case in CLEANUP_CASES or self.policy.profile['case'] in CLEANUP_CASES
+            cleanup = self.policy.case in (*CLEANUP_CASES, *STARTUP) or self.policy.profile['case'] in (*CLEANUP_CASES, *STARTUP)
             if ((role not in ('root', 'cleanup-acp') if cleanup else role != 'acp' and not declaration(self.policy.profile['case']).broker_http) or kwargs or len(args) != 1 or type(args[0]) is not tuple
                     or len(args[0]) != 2 or type(args[0][0]) is not str or args[0][0] != '127.0.0.1'
                     or type(args[0][1]) is not int or not 0 < args[0][1] <= 65535):
@@ -90,14 +92,22 @@ class Hooks:
             if role == 'root':
                 self.policy.calls.connection(args[0][1])
             answer = self.rpc('connect', {'fd': descriptor, 'address': list(args[0])})
+            probe = answer.get('probe') is True
+            if probe and (role != 'root' or self.policy.case not in STARTUP):
+                self.policy.refuse('source negative probe context')
             self.local.socket = 'socket.connect', stream, args[0]
             try:
                 result = self.original[name](stream, *args)
             except BlockingIOError:
-                self.rpc('connected', {'fd': descriptor, 'ticket': answer['ticket']})
+                if not probe:
+                    self.rpc('connected', {'fd': descriptor, 'ticket': answer['ticket']})
                 raise
             finally:
                 self.local.socket = None
+            if probe:
+                if type(result) is not int or result not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, errno.ECONNREFUSED):
+                    self.policy.refuse('source negative probe unexpectedly connected')
+                return result
             self.rpc('connected', {'fd': descriptor, 'ticket': answer['ticket']})
             return result
         elif name in ('send', 'sendall', 'recv', 'recv_into', 'recvfrom', 'recvfrom_into', 'accept'):
@@ -124,7 +134,9 @@ class Hooks:
             result = self.original[name](stream, *args, **kwargs)
         finally:
             self.local.socket = None
-        if name == 'listen':
+        if name == 'bind' and role == 'root' and self.policy.case in STARTUP:
+            self.rpc('bound', {'fd': descriptor})
+        elif name == 'listen':
             self.rpc('listen', {'fd': descriptor, 'stage': 'after'})
         elif name == 'accept':
             accepted, _ = result

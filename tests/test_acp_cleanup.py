@@ -39,7 +39,15 @@ async def rescue(children):
 @pytest.mark.parametrize('failure', ['exit', 'deadline', 'cancel'])
 async def test_startup_failure_attribution_and_owned_cleanup(tmp_path, monkeypatch, role, failure, caplog):
     _, store, _ = controller_fixture(tmp_path)
-    runner = a.ACPNodeRunner(store.config, AssetLoader(store.config))
+    # Preflight is exercised; ACP execution remains forbidden in these cases.
+    preflight_command = f'{sys.executable} -c pass'
+    config = replace(
+        store.config,
+        worker_acp_command=preflight_command,
+        validator_acp_command=preflight_command,
+        terminal_reviewer_acp_command=preflight_command,
+    )
+    runner = a.ACPNodeRunner(config, AssetLoader(config))
     children = []
     entered = asyncio.Event()
     original_wait = runner._wait_for_server_ready

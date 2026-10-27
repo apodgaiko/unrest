@@ -158,8 +158,8 @@ class OriginalCases:
         from ordinary_acp import ALL_CASES as ORDINARY_CASES
         from cleanup_launch import ALL_CASES as CLEANUP_CASES
         from cleanup_effects import CleanupCalls
-        from cleanup_inline import NO_LAUNCH
-        cls = CleanupCalls if item.nodeid in (*CLEANUP_CASES, *NO_LAUNCH) else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
+        from cleanup_inline import NO_LAUNCH, STARTUP
+        cls = CleanupCalls if item.nodeid in (*CLEANUP_CASES, *NO_LAUNCH, *STARTUP) else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
         policy.case, policy.calls = item.nodeid, cls(policy, item)
         policy.client.request('case-start', {'case': item.nodeid})
         yield

@@ -18,7 +18,7 @@ from source_owner import Link, active_frames, _namespace
 TEST = 'tests/test_acp_cleanup.py'
 SCRIPT = 'tests/fixtures/cleanup_acp_process.py'
 SERVER = 'src/unrest_harness/server.py'
-PINS = {PRODUCT: ACP_PINS[PRODUCT], TEST: 'f63f37e40e925d409c4f8203ebabe85dcc0bc5d7e9c77feb267c485eacfce321',
+PINS = {PRODUCT: ACP_PINS[PRODUCT], TEST: '8903f87610c61684a4db0dcf22f771ed5a9f75bcade8ce4f1c528378b1c992ae',
     SCRIPT: 'f4b1c4ca59b7550e5bcd43210e487b0f979c3133196ff39470eae36b76726959',
     SERVER: '166a002df8676817407a4345078e61135139e6a2ffc99e5bf3fa923117c07efc',
     'tests/test_provider_review.py': 'dd9962020bcf265bc6a4e35de8ca7fe557666a1d0e63fa325b4ad955c2465a5e'}
@@ -233,7 +233,7 @@ class Launches:
             expected_env, port, descriptor = None, None, None
             if executable == 'git':
                 role = 'git-init' if vector[1:3] == ['init', '-q'] else 'git-commit'
-                line = 123 if role == 'git-init' else 124
+                line = 131 if role == 'git-init' else 132
                 if test is None or test.f_lineno != line or env is not None:
                     raise Refused('cleanup original Git call')
                 actual_env = dict(os.environ)

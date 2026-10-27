@@ -28,7 +28,8 @@ class CleanupCalls(Sources):
         self.test_owner = self.owner(self.test_unit, self.tests, item.obj, item.originalname,
                                     (Link(self.tests, item.originalname, item.obj),))
         self.test_owner.verify_binding()
-        self.startup = Launches(self)
+        from cleanup_inline import STARTUP, Launches as InlineLaunches
+        self.startup = InlineLaunches(self) if item.nodeid in STARTUP else Launches(self)
         module, unit = self.startup.module, self.startup.unit
         cls = module.ACPNodeRunner
         self.cleanup = tuple(self.owner(unit, module, vars(module)[name], name,

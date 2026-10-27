@@ -25,7 +25,7 @@ from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pa
 from source_profile import METHODS, ROOT_COMMAND, digest
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
 from unix_endpoints import UnixPairs
-from cleanup_inline import NO_LAUNCH
+from cleanup_inline import NO_LAUNCH, STARTUP, expected as inline_expected
 from cleanup_launch import ALL_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_site, child_count, SCRIPT, OFFLINE, base_path, read_pipe, expected as cleanup_expected, scenario, snapshot_path, translated as cleanup_translated
 
 
@@ -55,6 +55,7 @@ class Observer:
         self.routes, self.connections, self.descriptors = {}, {}, {}
         self.eof_drains, self.eof_fds, self.interrupted_records = {}, {}, []
         self.connected_routes: dict[str, int] = {}
+        self.probe_ports = {}
         self.frames, self.controls, self.completed = [], [], []
         self.case, self.finished, self.serial = None, False, 0
         self.out_read, self.output = out_read, bytearray()
@@ -80,7 +81,7 @@ class Observer:
             'nonce': self.ledger.nonce, 'token': token, 'generation': 1,
             'mount_namespace': os.readlink('/proc/self/ns/mnt'), **self.meta,
             'inherited': list(inherited),
-            'script': None if role in ('root', 'mcp') else (str(Path(self.meta['checkout']) / SCRIPT) if role == 'cleanup-acp' else (str(Path(self.meta['checkout']) / ACP)
+            'script': None if role in ('root', 'mcp', 'cleanup-inline') else (str(Path(self.meta['checkout']) / SCRIPT) if role == 'cleanup-acp' else (str(Path(self.meta['checkout']) / ACP)
                 if role == 'acp' else str(Path(self.meta['checkout']) / MOCK) if role == 'mock-acp'
                 else str(Path(cwd).parent / 'fake-app-server')))}
         source['seal'] = hashlib.sha256(json.dumps(source, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -95,7 +96,7 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline'}[role]
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp'), expected_generation=1)
         if role in ('backend', 'delayed-backend', 'acp'):
@@ -142,7 +143,7 @@ class Observer:
                 parent_inodes.add((info.st_dev, info.st_ino))
         for descriptor in (0, 1, 2):
             info = (Path('/proc') / str(pid) / 'fd' / str(descriptor)).stat()
-            if role in ('git-init', 'git-commit') or (descriptor == 0 and (role == 'mcp' or role == 'git-observe')):
+            if role in ('git-init', 'git-commit') or (descriptor == 0 and role in ('mcp', 'git-observe', 'cleanup-inline')):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -209,10 +210,12 @@ class Observer:
     def launch(self, actor, payload):
         self.launch_owner(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256'))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES) or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *STARTUP) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
+        if self.case in STARTUP:
+            return self.inline_launch(actor, payload)
         if self.case in CLEANUP_CASES:
             return self.cleanup_launch(actor, payload)
         self.root_only(actor)
@@ -270,6 +273,23 @@ class Observer:
             'executable_sha256': self.binding['entry']['sha256']}
         return {'ok': True, 'ticket': self.serial, 'token': token}
 
+    def inline_launch(self, actor, payload):
+        self.root_only(actor)
+        result, site = inline_expected(self.case, self.binding['entry']['path'], self.binding['entry']['sha256'],
+            Path(self.meta['checkout']), self.meta_environment())
+        vector = [result.argv[0], '-I', '-S', *result.argv[1:]]
+        if (payload['original'] != result.wire() or payload['source_line'] != site
+                or payload['script_sha256'] != result.payload_sha256 or payload['translated'] != vector
+                or any(value['case'] == self.case for value in self.intents.values())):
+            raise Refused('cleanup inline independent reconstruction')
+        self.serial += 1
+        token = os.urandom(16).hex()
+        self.intents[self.serial] = {'case': self.case, 'role': 'cleanup-inline', 'parent': actor['birth'],
+            'environment': dict(result.environment), 'cwd': result.cwd, 'translated': vector,
+            'token': token, 'consumed': False, 'pid': None, 'executable': result.executable,
+            'executable_sha256': result.executable_sha256}
+        return {'ok': True, 'ticket': self.serial, 'token': token}
+
     def ordinary_launch(self, payload):
         original = payload['original']
         role = 'sleep' if original['executable'] == '/bin/sleep' else 'mock-acp'
@@ -317,7 +337,7 @@ class Observer:
             inherited = [read_pipe(actor['birth'].pid, descriptor)]
         result = cleanup_expected(self.case, role, base, self.binding['entry']['path'], self.binding['entry']['sha256'],
             Path(self.meta['checkout']), self.meta_environment(), port=port, descriptor=descriptor)
-        site = {'mcp': module_site(self.case), 'cleanup-acp': 409, 'git-init': 123, 'git-commit': 124, 'git-observe': 266}[role]
+        site = {'mcp': module_site(self.case), 'cleanup-acp': 409, 'git-init': 131, 'git-commit': 132, 'git-observe': 266}[role]
         vector = list(cleanup_translated(result, self.directory))
         if (original != result.wire() or payload['source_line'] != site or payload['script_sha256'] != result.payload_sha256
                 or payload['translated'] != vector
@@ -445,7 +465,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = 1 if self.case in STARTUP else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:
@@ -522,8 +542,8 @@ class Observer:
             shape(payload, ('fd', 'tag', 'nonce'))
             fd = number(payload['fd'])
             if ((actor['role'] == 'mcp' and payload['tag'] != 'mcp')
-                    or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in CLEANUP_CASES else ('broker', 'bridge', 'lifetime'))
-                        or self.case not in (*BOOTSTRAP, *CLEANUP_CASES))):
+                    or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in (*CLEANUP_CASES, *STARTUP) else ('broker', 'bridge', 'lifetime'))
+                        or self.case not in (*BOOTSTRAP, *CLEANUP_CASES, *STARTUP))):
                 raise Refused('source finite root listener')
             nonce = payload['nonce']
             if ((payload['tag'] in ('broker', 'mcp', 'mcp-probe') and nonce is not None)
@@ -541,6 +561,20 @@ class Observer:
             self.listener_fds.pop(key, None)
             self.bindings[key] = {'socket': observed, 'tag': payload['tag'], 'nonce': nonce,
                                   'case': self.case, 'listening': False, 'listen_pending': False}
+        elif kind == 'bound':
+            self.root_only(actor)
+            shape(payload, ('fd',))
+            if self.case not in STARTUP or self.case in self.probe_ports:
+                raise Refused('source finite negative probe case')
+            fd = number(payload['fd'])
+            binding = self.bindings[actor['birth'], fd]
+            observed = acquire_tcp(actor['birth'], fd, retained=True)
+            if (binding['case'] != self.case or binding['tag'] != 'mcp-probe' or observed is None
+                    or observed.binding() != binding['socket'].binding() or observed.state != 7
+                    or observed.local[0] != '127.0.0.1' or not 0 < observed.local[1] <= 65535
+                    or observed.remote is not None):
+                raise Refused('source acquired negative probe port')
+            self.probe_ports[self.case] = {'socket': observed, 'attempts': 0}
         elif kind == 'listen':
             if actor['role'] != 'mcp':
                 self.root_only(actor)
@@ -581,6 +615,16 @@ class Observer:
             if type(address) is not list or len(address) != 2 or address[0] != '127.0.0.1':
                 raise Refused('source literal loopback connection')
             port = number(address[1], 1)
+            if self.case in STARTUP:
+                self.root_only(actor)
+                probe = self.probe_ports.get(self.case)
+                observed = acquire_tcp(actor['birth'], number(payload['fd']), retained=True)
+                if (probe is None or probe['socket'].local != ('127.0.0.1', port) or probe['attempts'] >= 16
+                        or observed is None or observed.owner != actor['birth'] or observed.uid != actor['birth'].uid
+                        or observed.state != 7 or observed.local != ('0.0.0.0', 0) or observed.remote is not None):
+                    raise Refused('source finite negative readiness probe')
+                probe['attempts'] += 1
+                return {'ok': True, 'probe': True}  # Never creates a Route, Ticket or Connection.
             if self.case in CLEANUP_CASES:
                 if actor['role'] not in ('root', 'cleanup-acp'):
                     raise Refused('source cleanup connection role')
