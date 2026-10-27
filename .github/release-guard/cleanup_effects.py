@@ -39,6 +39,11 @@ class CleanupCalls(Sources):
         owner = self.owner(unit, module, function, 'ACPNodeRunner.run_node',
                            (Link(module, 'ACPNodeRunner', cls), Link(cls, 'run_node', function)))
         self.cleanup = (*self.cleanup, replace(owner, call_lines=(1584, 1584)))
+        if item.nodeid in STARTUP:
+            function = vars(cls)['_close_mcp_process']
+            owner = self.owner(unit, module, function, 'ACPNodeRunner._close_mcp_process',
+                (Link(module, 'ACPNodeRunner', cls), Link(cls, '_close_mcp_process', function)))
+            self.cleanup = (*self.cleanup, replace(owner, call_lines=(1281, 1281)))
         self.process_class = asyncio.subprocess.Process
         self.transport_class = vars(asyncio.unix_events)['_UnixSubprocessTransport']
         static = vars(cls)['_find_free_port']

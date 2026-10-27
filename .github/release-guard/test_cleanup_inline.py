@@ -364,3 +364,51 @@ def test_inline_leaf_accepts_only_its_exact_once_command(case):
         policy.audit('exec', (expected_code,))
     with pytest.raises(Refused):
         policy.audit('compile', (text.encode(), '<string>'))
+
+
+@pytest.mark.asyncio
+async def test_original_mcp_startup_termination_keeps_source_and_process_identity(tmp_path, monkeypatch):
+    import asyncio
+    import asyncio.unix_events
+    import hashlib
+    import json
+    import types
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from tests import test_acp_cleanup as original
+    from tests.test_provider_review import controller_fixture
+    from unrest_harness import acp_runner
+    from unrest_harness.assets import AssetLoader
+    from cleanup_effects import CleanupCalls
+    from cleanup_launch import PINS
+    case = next(iter(STARTUP))
+    data = json.dumps({'schema': 'unrest.guard-content.v1', 'files': [
+        {'path': name, 'sha256': pin} for name, pin in sorted(PINS.items())]}).encode()
+    (tmp_path / 'source-manifest.json').write_bytes(data)
+    native = object()
+    transport = object.__new__(asyncio.unix_events._UnixSubprocessTransport)
+    transport._closed, transport._pid, transport._proc, transport._returncode = True, 123, native, None
+    process = object.__new__(asyncio.subprocess.Process)
+    process.pid, process._transport = 123, transport
+    policy = types.SimpleNamespace(directory=tmp_path, case=case, children={123: {'process': native}},
+        profile={'checkout': str(Path(__file__).resolve().parents[2]), 'owned': str(tmp_path),
+                 'source_sha256': hashlib.sha256(data).hexdigest()})
+    item = types.SimpleNamespace(nodeid=case, module=original, obj=original.test_startup_failure_attribution_and_owned_cleanup,
+                                 originalname='test_startup_failure_attribution_and_owned_cleanup')
+    calls = CleanupCalls(policy, item)
+    (tmp_path / 'fixture').mkdir()
+    _, store, _ = controller_fixture(tmp_path / 'fixture')
+    runner = acp_runner.ACPNodeRunner(store.config, AssetLoader(store.config))
+    signals = []
+    def terminate(self):
+        calls.signal(123, 15, False)
+        signals.append(123)
+    async def close(*args, **kwargs):
+        pass
+    monkeypatch.setattr(asyncio.subprocess.Process, 'terminate', terminate)
+    monkeypatch.setattr(acp_runner, '_close_subprocess', close)
+    assert await runner._close_mcp_process(process, {}, terminate=True) == ''
+    assert signals == [123]
+    transport._proc = object()
+    with pytest.raises(Refused, match='process generation'):
+        await runner._close_mcp_process(process, {}, terminate=True)
+    assert signals == [123]
