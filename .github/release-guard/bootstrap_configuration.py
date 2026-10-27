@@ -1,12 +1,13 @@
-"""Original fresh controlled ProviderConfig binding for bootstrap cases only."""
+"""Original fresh controlled ProviderConfig binding for fresh bootstrap and controlled probes."""
 from __future__ import annotations
 
 import importlib
 from pathlib import Path
 import types
 
-from bootstrap_cases import CATALOGUE, CATALOGUE_PIN, CONFIG_PIN, CONFIG_SOURCE, declaration
+from bootstrap_cases import CATALOGUE, CATALOGUE_PIN, CONFIG_PIN, CONFIG_SOURCE
 from content_manifest import Refused
+from controlled_cases import configured
 from source_owner import Link, Owner, prepare
 from source_profile import digest
 
@@ -46,7 +47,7 @@ class Binding:
         return values
 
     def check(self, config, root, case):
-        if not declaration(case).configured or type(root) is not type(Path('/')) or root.name != 'owner':
+        if not configured(case) or type(root) is not type(Path('/')) or root.name != 'owner':
             raise Refused('bootstrap configured case or root')
         for owner in self.owners:
             owner.verify_binding()

@@ -12,8 +12,7 @@ import pytest
 from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
-from bootstrap_cases import declaration
-from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS
+from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, configured
 from bootstrap_configuration import Binding
 from content_manifest import Refused
 from controlled_startup import SESSION, SESSION_PIN, TEST, TEST_PIN, Startup, dictionary
@@ -94,10 +93,10 @@ class BootstrapCalls(TestSources):
                 root = values.get('root')
                 if (type(root) is not type(Path('/')) or not cast(Path, root).is_relative_to(Path(self.profile['owned']))
                         or values.get('controlled') is not True
-                        or (controlled or not declaration(self.policy.case).configured) and values.get('provider_config') is not None
+                        or not configured(self.policy.case) and values.get('provider_config') is not None
                         or type(values.get('transport')) is not self.startup.transport):
                     raise Refused('root owned controlled listener')
-                if not controlled and declaration(self.policy.case).configured:
+                if configured(self.policy.case):
                     self.startup.configuration.check(values.get('provider_config'), root, self.policy.case)
                 if controlled:
                     role = frame.f_locals.get('name')
@@ -134,7 +133,7 @@ class BootstrapCalls(TestSources):
         self.session_unit = self.unit(SESSION, self.session, self.mode(self.session))
         self.startup = Startup(self.session, self.tests, self.session_unit, self.test_unit,
             checkout, Path(self.profile['owned']), Path(self.profile['native']), self.profile['native_sha256'],
-            configuration_binding=Binding(checkout) if not controlled and declaration(item.nodeid).configured else None,
+            configuration_binding=Binding(checkout) if configured(item.nodeid) else None,
             case=item.nodeid)
         relay = importlib.import_module('unrest_harness.experimental_relay')
         relay_unit = self.unit('src/unrest_harness/experimental_relay.py', relay, self.mode(relay))

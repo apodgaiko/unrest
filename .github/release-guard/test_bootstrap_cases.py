@@ -98,3 +98,25 @@ def test_populated_fixture_renderer_disables_exact_servers_and_skills_without_au
         assert config.argv(home/'backend',home) == [str(home/'backend'),*arguments,'app-server']
         assert encoded == json.dumps(config.thread_config(home),sort_keys=True)
     assert encoded.count('mcp_servers') == 1
+
+
+@pytest.mark.parametrize('case', __import__('controlled_cases').FRESH)
+def test_original_fresh_probe_configuration_binding_and_render(fresh, case):
+    from controlled_startup import expected_entry
+    binding, config, root, home = fresh
+    binding.check(config, root, case)
+    value, _, _ = expected_entry(case, binding.checkout, home, '/pinned/python', 'a'*64, backend=True)
+    assert value.argv[1:] == tuple(config.argv(root/'fake-app-server', home))
+    assert dict(value.environment)['CODEX_HOME'] == str(config.codex_home)
+    assert dict(value.environment)['CODEX_CONFIG'] == json.dumps(config.thread_config(home), sort_keys=True)
+
+
+def test_fresh_configuration_case_is_closed_and_callback_free():
+    from controlled_cases import configured, STARTUP_FAILURE
+    class Trap:
+        def __hash__(self):
+            pytest.fail('case hashing callback')
+    assert configured(BOOTSTRAP[0]) is True and configured(STARTUP_FAILURE) is False
+    for case in ('foreign', Trap()):
+        with pytest.raises(Refused):
+            configured(case)

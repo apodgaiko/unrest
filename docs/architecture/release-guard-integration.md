@@ -2819,3 +2819,21 @@ Direct compilation, foreign parser callers and changed bindings refuse.
 The component groups partition the original controlled cases exactly once by
 existing histories and timer budgets. This changes neither original test timers
 nor the full unexcluded release checkpoint.
+
+
+Concurrent constructors retain one unconsumed launch intent per parent. A later
+fully validated request waits until the prior child passes its exact exec
+boundary; malformed requests and duplicate role launches still refuse before
+waiting. All consumers defer their side effects until an admission ticket exists.
+The kernel fork check remains unique, and the source RPC deadline remains finite.
+Negative integer descriptors preserve the original kernel EBADF result, allowing
+closed-journal failure tests to exercise product cleanup. Noninteger descriptors
+and every live socket operation retain their existing mediation.
+
+Fresh controlled probes reuse the existing ProviderConfig/CommonInputs binding:
+exact empty configuration membership, original methods, synthetic subscription,
+user and system roots, original catalogue bytes and role-specific rendering.
+The 13 initialization/configuration cases grant no broker HTTP authority. Their
+original postimages and retaining wrappers are closed declarations; the separate
+root HTTP-mutation negative remains outside this admitted slice. The coordinator
+startup-failure case admits only its backend prefix and forbids an ACP launch.

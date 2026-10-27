@@ -17,7 +17,7 @@ from typing import Any
 
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from content_manifest import Refused, capture
-from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, backend as controlled_backend, backend_path
+from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, backend as controlled_backend, backend_path, configured as is_configured
 from launch_policy import Expected, Observation, Rule, match, render
 from source_owner import Link, Owner, SourceUnit, active_frames, _namespace, _safe_code, frame_fields as frame_locals
 
@@ -61,7 +61,7 @@ def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None):
     if type(case) is not str or case not in (*BOOTSTRAP,*CONTROLLED) or type(backend) is not bool:
         raise Refused('controlled entry declaration')
     checkout,home = path(checkout),path(home)
-    configured = case not in CONTROLLED and declaration(case).configured
+    configured = is_configured(case)
     options,config = configuration(checkout,home) if configured else ([],None)
     environment = {'HOME':str(home),'CODEX_HOME':str(home/'codex'),'TMPDIR':str(home/'tmp'),'PATH':'/usr/bin:/bin'}
     if config is not None:
@@ -172,7 +172,7 @@ class Startup:
             if type(instance) not in (self.base, self.synthetic):
                 raise Refused('startup owner type')
             values = dictionary(instance, self.base)
-            configured = case not in CONTROLLED and declaration(case).configured
+            configured = is_configured(case)
             backend_pin, backend_name = controlled_backend(case) if case in CONTROLLED else (BACKEND_PIN, 'fake-app-server')
             if (values.get('controlled') is not True or values.get('provider_package') is not None
                     or not configured and values.get('provider_config') is not None):

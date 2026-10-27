@@ -9,13 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from content_manifest import Refused
-from controlled_cases import CASES, STARTUP_FAILURE
+from controlled_cases import CASES, FRESH, STARTUP_FAILURE
 
 
 def limits(case: str) -> tuple[int, int]:
     if type(case) is not str or case not in CASES:
         raise Refused('controlled pair case')
-    if case == STARTUP_FAILURE:
+    if case == STARTUP_FAILURE or case in FRESH:
         return 1, 0
     file, name = case.split('::')
     if file.endswith('test_controlled_acp_cancel.py'):

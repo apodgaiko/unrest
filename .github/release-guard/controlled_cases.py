@@ -11,6 +11,9 @@ from content_manifest import Refused
 STARTUP_FAILURE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
 
 PINS = {
+    'tools/probe_v046_startup.py': 'eb26f43472ce1798d2dd066fa87d6ceb5d58d1a94abc0e9edddeb20b285dd564',
+    'tests/test_experimental_config_frames.py': '2cc54ff5577127750ce01a6a08e97ec879367797aa6ab903eea5842d47bc03e7',
+    'tests/test_controlled_acp_warnings.py': '8d0a9a1aa0d804357acbb267523d3d7c0b7baf37349432b0b5243e2787d6e3c7',
     'tests/test_experimental_startup_diagnostics.py': 'b2b2d05a217dcd4e082e06371c00e9ae91fb99a7c50bfcec15e7e810b2b7d65f',
     'src/unrest_harness/experimental_custody.py': 'a6da184702daa03c9e9a7b6c5fcf22d9514901abb9112c44c8686a05880d25dc',
     'src/unrest_harness/experimental_cohort.py': 'd830a15c39394463022150c7b01c41e941100ae55f4eff033fc247cbf6af7c61',
@@ -31,7 +34,24 @@ PINS = {
     'tests/test_experimental_session.py': 'baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3',
 }
 
+FRESH = {
+    'tests/test_controlled_acp_warnings.py::test_original_private_large_config[drift]': ('ac3c013153cb15b8bffe3faffe808508d123d0ca5128135de435797bfeefc1b6', 'fake-app-server'),
+    'tests/test_controlled_acp_warnings.py::test_original_private_large_config[eof]': ('86e9936c23bf9a5904628d87516f6fe8df671a98fd8d56b43928a236cb96ffdc', 'fake-app-server'),
+    'tests/test_controlled_acp_warnings.py::test_original_private_large_config[error]': ('af9dfe00e21a60320bc23f431289fa908146acc2182185c7e973e606682e09e1', 'fake-app-server'),
+    'tests/test_controlled_acp_warnings.py::test_original_private_large_config[ready]': ('518f21e20db36960dfe0f5f5e78f99489aeebebcc09b0e860a7bf57820b2d90e', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_programmatic_private_preflight': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_experimental_config_frames.py::test_pinned_adapter_large_private_and_adapter_replies[drift]': ('ac3c013153cb15b8bffe3faffe808508d123d0ca5128135de435797bfeefc1b6', 'fake-app-server'),
+    'tests/test_experimental_config_frames.py::test_pinned_adapter_large_private_and_adapter_replies[eof]': ('86e9936c23bf9a5904628d87516f6fe8df671a98fd8d56b43928a236cb96ffdc', 'fake-app-server'),
+    'tests/test_experimental_config_frames.py::test_pinned_adapter_large_private_and_adapter_replies[error]': ('af9dfe00e21a60320bc23f431289fa908146acc2182185c7e973e606682e09e1', 'fake-app-server'),
+    'tests/test_experimental_config_frames.py::test_pinned_adapter_large_private_and_adapter_replies[ready]': ('518f21e20db36960dfe0f5f5e78f99489aeebebcc09b0e860a7bf57820b2d90e', 'fake-app-server'),
+    'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[permission]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[refusal]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_experimental_startup_diagnostics.py::test_bridge_failure_preserved_through_owned_close[timeout]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_experimental_startup_diagnostics.py::test_initialization_probe_real_controlled_path_no_prompt': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+}
+
 CASES = {
+    **FRESH,
     STARTUP_FAILURE: ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
     'tests/test_controlled_acp_cancel.py::test_owned_cancel_wire_and_cleanup[pending]': ('a10467373bda96d6e702a03e70c96ce5562082b050df668ecbc7638b5b4eaf63', 'fake-app-server'),
     'tests/test_experimental_ack_durability.py::test_ack_durability[False--1-None-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
@@ -126,6 +146,13 @@ CASES = {
     'tests/test_controlled_python_acp.py::test_single_c1_fixed_timing_protocol_witness': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
 }
 
+def configured(case):
+    if type(case) is not str:
+        raise Refused('controlled configuration case type')
+    from bootstrap_cases import declaration
+    return case in FRESH if case in CASES else declaration(case).configured
+
+
 def backend(case):
     if type(case) is not str or case not in CASES:
         raise Refused('controlled finite source case')
@@ -138,6 +165,9 @@ def backend_path(case, root):
 
 
 GROUPS = {
+    'controlled-probes4': tuple(case for case in FRESH if '::test_programmatic_private_preflight' in case or '::test_bridge_failure_preserved_through_owned_close[' in case),
+    'controlled-large8': tuple(case for case in FRESH if 'large' in case),
+    'controlled-initialize1': tuple(case for case in FRESH if '::test_initialization_probe_real_controlled_path_no_prompt' in case),
     'controlled-startup1': (STARTUP_FAILURE,),
     'controlled-cancel1': tuple(case for case in CASES if 'test_controlled_acp_cancel.py::' in case),
     'controlled-ack20': tuple(case for case in CASES if 'test_experimental_ack_durability.py::' in case),
