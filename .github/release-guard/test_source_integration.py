@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import signal
 import sys
+import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,6 +21,7 @@ from process_ledger import Birth
 from source_code import Bodies
 from source_host import inventory
 import source_host
+from source_entry import Policy
 from source_observer import Observer
 from source_profile import ROOT_COMMAND
 import source_observer
@@ -138,6 +141,34 @@ def test_sealed_leaf_keeps_exact_fixture_execution(tmp_path):
     assert bodies.audit('exec', (compile(script.read_bytes(), str(script), 'exec', dont_inherit=True),))
     with pytest.raises(Refused, match='unknown Python execution'):
         bodies.audit('exec', (compile('print("foreign")', str(script), 'exec'),))
+
+
+@pytest.mark.parametrize('sig', [signal.SIGTERM, 15])
+def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypatch, sig):
+    import subprocess
+    checked, requested = [], []
+    def check(pid, number, group):
+        checked.append((pid, number, group))
+        assert type(number) is int and number == 15
+    def request(kind, payload):
+        requested.append((kind, payload))
+        return {'ok': True, 'live': False}  # Actual terminal evidence forbids delivery.
+    policy = SimpleNamespace(profile={'role': 'root'}, local=threading.local(),
+        calls=SimpleNamespace(signal=check), children={123: {'token': 'owned'}},
+        client=SimpleNamespace(request=request))
+    def refuse(code):
+        raise Refused(code)
+    policy.refuse = refuse
+    for obj, name in ((subprocess.Popen, '__init__'), (os, 'waitpid'), (os, 'kill'), (os, 'killpg')):
+        monkeypatch.setattr(obj, name, getattr(obj, name))  # Register restoration before installation.
+    Policy.install_process_hooks(policy)
+    with pytest.raises(ProcessLookupError):
+        os.killpg(123, sig)
+    assert checked == [(123, 15, True)]
+    assert requested == [('custody_signal', {'pid': 123, 'child_token': 'owned', 'signal': 15, 'group': True})]
+    with pytest.raises(Refused, match='nonnumeric'):
+        os.killpg(123, True)
+    assert len(requested) == 1
 
 
 @pytest.mark.skipif(sys.platform != 'linux', reason='actual Linux subreaper ownership')

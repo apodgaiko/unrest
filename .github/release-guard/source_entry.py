@@ -4,6 +4,7 @@ from __future__ import annotations
 import errno
 import hashlib
 import os
+import signal as signals
 from pathlib import Path
 import subprocess
 import sys
@@ -170,6 +171,9 @@ class Policy:
             return actual, raw
 
         def signal(pid, sig, *, group):
+            if type(sig) not in (int, signals.Signals):
+                policy.refuse('source nonnumeric signal')
+            sig = int.__int__(sig)
             if policy.profile['role'] != 'root' or policy.calls is None:
                 policy.refuse('source signal role')
             policy.calls.signal(pid, sig, group)
