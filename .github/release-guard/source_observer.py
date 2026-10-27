@@ -516,8 +516,10 @@ class Observer:
                     slot = self.listeners[self.listener_key(actor['case'],tag,scope)]
                     name = actor['token'] + ':' + tag
                     route = Route(name, actor['case'], self.owner(root_actor), self.owner(actor), slot['socket'].local[1])
-                    self.endpoints.declare(route)
-                    self.endpoints.listen(name, acquire_tcp(self.root_birth, slot['socket'].fd, retained=True))
+                    actual_listener = acquire_tcp(self.root_birth, slot['socket'].fd, retained=True)
+                    sharing = actual_listener if any(value.port == route.port and value.case not in self.endpoints.retired for value in self.endpoints.routes.values()) else None
+                    self.endpoints.declare(route, shared_listener=sharing)
+                    self.endpoints.listen(name, actual_listener)
                     self.routes[actor['birth'], route.port] = name
         elif kind == 'body-ready':
             self.actor_control(actor, kind, payload)
