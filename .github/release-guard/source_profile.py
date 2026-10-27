@@ -5,6 +5,7 @@ import os
 import stat
 import fcntl
 import hashlib
+import json
 from pathlib import Path
 import sys
 
@@ -27,6 +28,12 @@ FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'e
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
     'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
     'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script', 'cases', 'inherited'}
+
+
+def case_seal(cases):
+    if type(cases) not in (tuple, list) or not 0 < len(cases) <= 20000 or any(type(case) is not str or not case or len(case) > 4096 for case in cases):
+        raise Refused('source case inventory primitives')
+    return {'count': len(cases), 'cases_sha256': hashlib.sha256(json.dumps(cases, separators=(',', ':')).encode()).hexdigest()}
 
 
 def digest(path: Path) -> str:

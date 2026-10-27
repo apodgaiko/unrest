@@ -172,5 +172,6 @@ def main():
                        'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *policy.profile['cases']], plugins=[plugin])
     if code != 0 or plugin.completed != policy.profile['cases'] or policy.poison:
         raise Refused('root original source cases failed')
-    policy.client.request('root-finish', {'cases': list(plugin.completed)})
+    from source_profile import case_seal
+    policy.client.request('root-finish', case_seal(plugin.completed))
     return 0

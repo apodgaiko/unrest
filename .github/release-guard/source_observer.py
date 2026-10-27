@@ -526,8 +526,10 @@ class Observer:
                 self.case = None
         elif kind == 'root-finish':
             self.root_only(actor)
-            shape(payload, ('cases',))
-            if self.case is not None or payload['cases'] != list(self.cases) or tuple(self.completed) != self.cases:
+            from source_profile import case_seal
+            shape(payload, ('count', 'cases_sha256'))
+            if (self.case is not None or type(payload['count']) is not int or type(payload['cases_sha256']) is not str
+                    or payload != case_seal(self.cases) or tuple(self.completed) != self.cases):
                 raise Refused('source original source completion incomplete')
             self.finished = True
         elif kind == 'git-pipe':

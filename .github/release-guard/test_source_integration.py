@@ -335,3 +335,26 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
         os.close(ready_read)
         actual, raw = os.waitpid(child, 0)
         assert actual == child and raw == 0
+
+
+
+def test_root_completion_seal_is_bounded_and_requires_all_ordered_completions():
+    from source_profile import case_seal
+    from control_transport import encode, REQUEST_LIMIT
+    cases = tuple('tests/test_large.py::test_case[' + str(index) + ']' for index in range(5077))
+    seal = case_seal(cases)
+    assert len(encode(seal, REQUEST_LIMIT)) < 128
+    observer = object.__new__(Observer)
+    observer.root_birth = Birth(1,1,1,1,'boot',20000)
+    observer.finished, observer.case = False, None
+    observer.cases, observer.completed = cases, list(cases)
+    actor = dict(birth=observer.root_birth,role='root')
+    for changed in ({**seal,'count':True},{**seal,'count':5076},{**seal,'cases_sha256':'0'*64}):
+        with pytest.raises(Refused, match='completion incomplete'):
+            observer.dispatch(actor, {'kind':'root-finish','payload':changed})
+    observer.completed = list(reversed(cases))
+    with pytest.raises(Refused, match='completion incomplete'):
+        observer.dispatch(actor, {'kind':'root-finish','payload':seal})
+    observer.completed = list(cases)
+    assert observer.dispatch(actor, {'kind':'root-finish','payload':seal}) == {'ok':True}
+    assert observer.finished
