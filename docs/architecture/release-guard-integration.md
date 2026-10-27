@@ -2853,3 +2853,15 @@ Backend postimages are acquired at their own file parent. The unchanged manifest
 reader still binds full file bytes, modes, file/parent metadata and nofollow
 ancestor identity. Unrelated sibling directories can change clocks without
 invalidating that file; replacing its file, parent or ancestor still refuses.
+
+
+The production native entry accepts only the source profile schema. Synthetic
+native-control programs and their profile consumer live in a separately pinned
+test bootstrap and binary, compiled from the same counted native C implementation.
+The production support inventory excludes that test bootstrap, and source_host
+rejects test entry/bootstrap bindings before source preparation. Diagnostics
+retain all 16 original cases plus three real production prebody refusals for
+control, unknown and malformed source schemas. Production input bytes are verified
+before diagnostic compilation; generated test inputs are then verified separately.
+Diagnostic results establish shared native behavior; source results identify the
+production binary independently and remain necessary.

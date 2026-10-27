@@ -74,16 +74,8 @@ def main():
             *shlex.split(sysconfig.get_config_var('SYSLIBS') or ''), '-o', str(entry)]
     subprocess.run(argv, check=True)
     entry.chmod(0o755)
-    bad_entry = entry.with_name(entry.name + '-badpin')
-    if bad_entry.exists() or bad_entry.is_symlink():
-        raise RuntimeError('negative native control output already exists')
-    bad_argv = [('-DGUARD_BOOTSTRAP_SHA256=' + json.dumps('0' * 64))
-                if value.startswith('-DGUARD_BOOTSTRAP_SHA256=') else value for value in argv]
-    bad_argv[-1] = str(bad_entry)
-    subprocess.run(bad_argv, check=True)
-    bad_entry.chmod(0o755)
     record = {'schema': 'unrest.native-control-build.v1', 'entry': pin(entry),
-              'negative_entry': pin(bad_entry), 'bootstrap': pin(bootstrap), 'source': pin(support / 'native_entry.c'),
+              'bootstrap': pin(bootstrap), 'source': pin(support / 'native_entry.c'),
               'library': pin(library), 'compiler': pin(compiler),
               'recipient': pin(support / 'evidence-recipient.pem'), 'profiles': str(profiles),
               'support': str(support), 'soabi': sysconfig.get_config_var('SOABI'),

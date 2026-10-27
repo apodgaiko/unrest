@@ -32,6 +32,12 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def production_binding(binding):
+    require(Path(binding['bootstrap']['path']) == Path(binding['support'])/'native_entry.py'
+            and Path(binding['entry']['path']) == Path(binding['runtime']['path']).parent/'python-unrest-guard-control',
+            'source host requires production native binding')
+
+
 def inventory(root):
     """Measure private runtime/dependency copies, including large extension DSOs."""
     rows, total = [], 0
@@ -292,6 +298,7 @@ def main():
     for name in ('entry', 'bootstrap', 'source', 'library', 'compiler', 'runtime', 'recipient'):
         row = binding[name]
         require(hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() == row['sha256'], 'native host input drift')
+    production_binding(binding)
     profiles = Path(binding['profiles'])
     if not profiles.exists() and not profiles.is_symlink():
         profiles.mkdir(mode=0o755)

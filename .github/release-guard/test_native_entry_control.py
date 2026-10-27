@@ -21,7 +21,8 @@ import traceback
 
 CASES = ('positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
          'bad-flags', 'bad-identity', 'bad-native', 'bad-entry', 'bad-nonce',
-         'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap', 'bad-environment', 'bad-cwd')
+         'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap', 'bad-environment', 'bad-cwd',
+         'source-reject-control', 'source-reject-unknown', 'source-reject-profile')
 
 
 def worker(case, binding, output):
@@ -29,10 +30,12 @@ def worker(case, binding, output):
     from control_transport import Admission, Frame, REQUEST_LIMIT, reply
     from linux_observation import process_identity
     from linux_trace import OwnedTrace, install_observation_filter
-    from native_entry import BODIES
+    from test_native_profile import BODIES
     from process_ledger import Birth, Ledger, canonical
 
     root = Path(binding['profiles'])
+    if case.startswith('source-reject-'):
+        binding = binding['production']
     native = binding['negative_entry'] if case == 'bad-bootstrap' else binding['entry']
     program = BODIES[case] if case in BODIES else BODIES['positive']
     argv = [native['path'], '-I', '-S', '-c', program]
@@ -97,6 +100,10 @@ def worker(case, binding, output):
                    'flags': [1, 1, 0], 'native': native['path'], 'native_sha256': native['sha256'],
                    'entry_sha256': binding['bootstrap']['sha256'], 'nonce': nonce, 'token': token,
                    'seal': seal, 'generation': 1, 'mount_namespace': os.readlink('/proc/self/ns/mnt')}
+        if case == 'source-reject-unknown':
+            profile['schema'] = 'unknown'
+        elif case == 'source-reject-profile':
+            profile['schema'] = 'unrest.bootstrap-source.v1'
         if case == 'bad-case':
             profile['case'] = 'foreign'
         elif case == 'bad-flags':
@@ -360,6 +367,32 @@ def ownership_controls(profiles: Path) -> None:
             os.close(read)
 
 
+def diagnostic_binding(production, root):
+    import subprocess
+    support = root / 'test-support'
+    support.mkdir(mode=0o755)
+    source = Path(__file__).with_name('test_native_profile.py')
+    bootstrap = support / source.name
+    bootstrap.write_bytes(source.read_bytes())
+    bootstrap.chmod(0o444)
+    digest = hashlib.sha256(bootstrap.read_bytes()).hexdigest()
+    def compile_entry(name, pin):
+        target = Path(production['entry']['path']).with_name(name)
+        if target.exists() or target.is_symlink():
+            raise RuntimeError('test native output already exists')
+        argv = [('-DGUARD_BOOTSTRAP=' + json.dumps(repr(str(bootstrap))) if value.startswith('-DGUARD_BOOTSTRAP=')
+                 else '-DGUARD_BOOTSTRAP_SHA256=' + json.dumps(pin) if value.startswith('-DGUARD_BOOTSTRAP_SHA256=')
+                 else value) for value in production['compiler_argv']]
+        argv[-1] = str(target)
+        subprocess.run(argv, check=True)
+        target.chmod(0o755)
+        return {'path':str(target),'sha256':hashlib.sha256(target.read_bytes()).hexdigest()}
+    return {**production,'production':production,
+        'bootstrap':{'path':str(bootstrap),'sha256':digest},
+        'entry':compile_entry('python-unrest-guard-test',digest),
+        'negative_entry':compile_entry('python-unrest-guard-test-badpin','0'*64)}
+
+
 def main():
     if sys.platform != 'linux' or os.getuid() != 0 or len(sys.argv) != 2:
         raise RuntimeError('native control requires exact root CI invocation')
@@ -378,10 +411,14 @@ def main():
     root = binding_path.parent
     if root.name != 'guard-native-control' or binding['profiles'] != str(root / 'profiles'):
         raise RuntimeError('native controlled output root')
-    for name in ('entry', 'negative_entry', 'bootstrap', 'source', 'library', 'compiler', 'runtime', 'recipient'):
-        row = binding[name]
-        if hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() != row['sha256']:
-            raise RuntimeError('native build input changed')
+    def verify_inputs(record, names):
+        for name in names:
+            row = record[name]
+            if hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() != row['sha256']:
+                raise RuntimeError('native build input changed')
+    verify_inputs(binding, ('entry', 'bootstrap', 'source', 'library', 'compiler', 'runtime', 'recipient'))
+    binding = diagnostic_binding(binding, root)
+    verify_inputs(binding, ('entry', 'negative_entry', 'bootstrap', 'source', 'library', 'compiler', 'runtime', 'recipient'))
     if direct_children():
         raise RuntimeError('native dedicated driver must begin childless')
     profiles = Path(binding['profiles'])
