@@ -188,6 +188,11 @@ class Link:
             if type(self.container) is not staticmethod or type(self.key) is not str or self.key != '__func__':
                 raise Refused('static function link refused')
             actual = self.container.__func__
+        elif self.mode == 'partial-function':
+            from functools import partial
+            if type(self.container) is not partial or type(self.key) is not str or self.key != 'func':
+                raise Refused('partial function link refused')
+            actual = self.container.func
         elif self.mode == 'frame':
             if type(self.container) is not types.FrameType or type(self.key) is not str:
                 raise Refused('frame link refused')

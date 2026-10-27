@@ -376,3 +376,20 @@ def test_actual_passive_loader_matches_independently_prepared_code(tmp_path, mon
     expected = bound(unit, module)
     module.check = lambda frame: expected.verify(frame)
     assert module.route() is None
+
+
+def test_native_partial_function_link_has_no_attribute_callback():
+    from functools import partial
+    from source_owner import Link
+    def function(value):
+        return value
+    bound = partial(function, 1)
+    Link(bound, 'func', function, 'partial-function').check()
+    with pytest.raises(Refused):
+        Link(partial(lambda value: value, 1), 'func', function, 'partial-function').check()
+    class Trap:
+        @property
+        def func(self):
+            raise AssertionError('callback must not execute')
+    with pytest.raises(Refused):
+        Link(Trap(), 'func', function, 'partial-function').check()

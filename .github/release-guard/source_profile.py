@@ -13,7 +13,7 @@ from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
 from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, MOCK, PINS
 from cleanup_launch import ALL_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_mode, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
-from cleanup_inline import NO_LAUNCH, STARTUP, body as inline_body
+from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES, INFLIGHT, body as inline_body
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 
@@ -67,8 +67,8 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or profile['schema'] != 'unrest.bootstrap-source.v1'
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *STARTUP))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), *CLEANUP_GROUPS)):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS))
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, *CLEANUP_GROUPS)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -129,11 +129,13 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
                 or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
             raise Refused('source fixed root body')
     elif role == 'cleanup-inline':
-        if (profile['case'] not in STARTUP or profile['case'] not in profile['cases']
-                or profile['cwd'] != profile['checkout'] or script is not None
+        if (profile['case'] not in DECLARATIONS or profile['case'] not in profile['cases']
+                or (profile['cwd'] != profile['checkout'] and not (profile['case'] in INFLIGHT
+                    and Path(profile['cwd']).parent == Path(profile['owned']) / 'pytest'
+                    and profile['environment'] == {})) or script is not None
                 or profile['argv'] != [native, '-I', '-S', '-c', inline_body(profile['case'])]
                 or event != 'cpython.run_command' or arguments != (inline_body(profile['case']) + '\n',)):
-            raise Refused('source exact inline startup body')
+            raise Refused('source exact inline cleanup body')
     elif role in ('mcp', 'cleanup-acp'):
         if (profile['case'] not in CLEANUP_CASES or profile['case'] not in profile['cases']
                 or Path(profile['cwd']).name != 'workspace'

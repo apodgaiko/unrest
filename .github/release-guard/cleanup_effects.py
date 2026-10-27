@@ -12,7 +12,7 @@ from content_manifest import Refused
 from controlled_startup import Intent
 from launch_policy import Observation, match
 from source_calls import Sources, nested_signal
-from source_owner import Link, active_frames
+from source_owner import Link, active_frames, _namespace
 
 
 class CleanupCalls(Sources):
@@ -28,8 +28,8 @@ class CleanupCalls(Sources):
         self.test_owner = self.owner(self.test_unit, self.tests, item.obj, item.originalname,
                                     (Link(self.tests, item.originalname, item.obj),))
         self.test_owner.verify_binding()
-        from cleanup_inline import STARTUP, Launches as InlineLaunches
-        self.startup = InlineLaunches(self) if item.nodeid in STARTUP else Launches(self)
+        from cleanup_inline import STARTUP, DECLARATIONS, Launches as InlineLaunches
+        self.startup = InlineLaunches(self) if item.nodeid in DECLARATIONS else Launches(self)
         module, unit = self.startup.module, self.startup.unit
         cls = module.ACPNodeRunner
         self.cleanup = tuple(self.owner(unit, module, vars(module)[name], name,
@@ -45,6 +45,7 @@ class CleanupCalls(Sources):
                 (Link(module, 'ACPNodeRunner', cls), Link(cls, '_close_mcp_process', function)))
             self.cleanup = (*self.cleanup, replace(owner, call_lines=(1281, 1281)))
         self.process_class = asyncio.subprocess.Process
+        self.terminal_type = module.ManagedTerminal
         self.transport_class = vars(asyncio.unix_events)['_UnixSubprocessTransport']
         static = vars(cls)['_find_free_port']
         if type(static) is not staticmethod:
@@ -58,7 +59,37 @@ class CleanupCalls(Sources):
 
     def signal(self, pid, sig, group):
         # Reuse the original nested finalizer binding; it adds no group right.
-        return nested_signal(self, pid, sig, group)
+        from cleanup_inline import CLIENT, INFLIGHT, Launches as InlineLaunches
+        base = self.cleanup
+        frames = active_frames()
+        try:
+            if self.policy.case in (*tuple(CLIENT)[1:], *INFLIGHT):
+                wrapper = vars(self.startup.module)['_close_subprocess']
+                name = self.case_item.originalname + '.<locals>.' + ('close_barrier' if self.policy.case in INFLIGHT else 'faulty_close')
+                owner = self.owner(self.test_unit, self.tests, wrapper, name,
+                                  (Link(self.startup.module, '_close_subprocess', wrapper),))
+                matches = [frame for frame in frames if frame.f_code is wrapper.__code__]
+                owner.verify_binding()
+                if len(matches) > 1:
+                    raise Refused('cleanup original close wrapper frame')
+                if matches:
+                    owner.verify(matches[0])
+                values = dict(zip(wrapper.__code__.co_freevars, owner.closure, strict=True))
+                if values.get('close') is not base[0].function:
+                    raise Refused('cleanup original retained close')
+                if type(self.startup) is not InlineLaunches:
+                    raise Refused('cleanup original inline adapter')
+                self.startup.children(values.get('children'), 3)
+                key = 'settlement_fault' if self.policy.case in INFLIGHT else 'cancel'
+                variant = _namespace(self.case_item.funcargs).get(key) if self.policy.case in INFLIGHT else values.get(key)
+                if type(variant) is not bool or variant != self.policy.case.endswith('[True]'):
+                    raise Refused('cleanup original close variant')
+                link = Link(wrapper, wrapper.__code__.co_freevars.index('close'), base[0].function, 'cell')
+                self.cleanup = (replace(base[0], links=(Link(self.startup.module, '_close_subprocess', wrapper), link)), *base[1:])
+            return nested_signal(self, pid, sig, group)
+        finally:
+            self.cleanup = base
+            del frames
 
     def listener(self):
         frames = active_frames()

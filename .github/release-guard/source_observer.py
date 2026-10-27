@@ -25,7 +25,7 @@ from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pa
 from source_profile import METHODS, ROOT_COMMAND, digest
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
 from unix_endpoints import UnixPairs
-from cleanup_inline import NO_LAUNCH, STARTUP, expected as inline_expected
+from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count, expected as inline_expected
 from cleanup_launch import ALL_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_site, child_count, SCRIPT, OFFLINE, base_path, read_pipe, expected as cleanup_expected, scenario, snapshot_path, translated as cleanup_translated
 
 
@@ -143,7 +143,14 @@ class Observer:
                 parent_inodes.add((info.st_dev, info.st_ino))
         for descriptor in (0, 1, 2):
             info = (Path('/proc') / str(pid) / 'fd' / str(descriptor)).stat()
-            if role in ('git-init', 'git-commit') or (descriptor == 0 and role in ('mcp', 'git-observe', 'cleanup-inline')):
+            inline = role == 'cleanup-inline'
+            terminal = inline and self.case in INFLIGHT and os.readlink(Path('/proc') / str(pid) / 'cwd') != self.meta['checkout']
+            inherited = inline and (descriptor == 0 if terminal or self.case in STARTUP else descriptor == 2)
+            if terminal and descriptor == 2:
+                other = (Path('/proc') / str(pid) / 'fd/1').stat()
+                if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
+                    raise Refused('cleanup inline merged terminal stderr')
+            if role in ('git-init', 'git-commit') or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -210,11 +217,11 @@ class Observer:
     def launch(self, actor, payload):
         self.launch_owner(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256'))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *STARTUP) or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
-        if self.case in STARTUP:
+        if self.case in DECLARATIONS:
             return self.inline_launch(actor, payload)
         if self.case in CLEANUP_CASES:
             return self.cleanup_launch(actor, payload)
@@ -275,12 +282,17 @@ class Observer:
 
     def inline_launch(self, actor, payload):
         self.root_only(actor)
+        existing = [value for value in self.intents.values() if value['case'] == self.case]
+        terminal = payload['source_line'] == 1034
+        if (len(existing) >= inline_count(self.case) or terminal != (self.case in INFLIGHT and len(existing) == 2)
+                or any(not value['consumed'] or not self.actors[value['pid']]['returned'] for value in existing)):
+            raise Refused('cleanup inline original child order')
+        base = base_path(payload['original']['cwd'], Path(self.meta['owned'])) if terminal else None
         result, site = inline_expected(self.case, self.binding['entry']['path'], self.binding['entry']['sha256'],
-            Path(self.meta['checkout']), self.meta_environment())
+            Path(self.meta['checkout']), self.meta_environment(), base=base, terminal=terminal)
         vector = [result.argv[0], '-I', '-S', *result.argv[1:]]
         if (payload['original'] != result.wire() or payload['source_line'] != site
-                or payload['script_sha256'] != result.payload_sha256 or payload['translated'] != vector
-                or any(value['case'] == self.case for value in self.intents.values())):
+                or payload['script_sha256'] != result.payload_sha256 or payload['translated'] != vector):
             raise Refused('cleanup inline independent reconstruction')
         self.serial += 1
         token = os.urandom(16).hex()
@@ -465,7 +477,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = 1 if self.case in STARTUP else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:

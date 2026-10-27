@@ -412,3 +412,166 @@ async def test_original_mcp_startup_termination_keeps_source_and_process_identit
     with pytest.raises(Refused, match='process generation'):
         await runner._close_mcp_process(process, {}, terminate=True)
     assert signals == [123]
+
+@pytest.fixture
+def inline_context(tmp_path, monkeypatch):
+    import hashlib
+    import json
+    import os
+    import sys
+    import types
+    from cleanup_effects import CleanupCalls
+    from cleanup_launch import PINS
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from tests import test_acp_cleanup as original
+    checkout = Path(__file__).resolve().parents[2]
+    owned = tmp_path / 'owned'
+    base = owned / 'pytest' / 'case'
+    base.mkdir(parents=True)
+    data = json.dumps({'schema': 'unrest.guard-content.v1', 'files': [
+        {'path': name, 'sha256': pin} for name, pin in sorted(PINS.items())]}).encode()
+    (tmp_path / 'source-manifest.json').write_bytes(data)
+    root = {'HOME': str(owned / 'home'), 'TMPDIR': str(owned / 'tmp'), 'PATH': '/usr/bin:/bin',
+            'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
+    for key in tuple(os.environ):
+        monkeypatch.delenv(key)
+    import cleanup_launch
+    monkeypatch.setattr(cleanup_launch, 'base_path', lambda value, owned: Path(value))
+    def context(case):
+        name = case.split('::')[1].split('[')[0]
+        function = vars(original)[name]
+        variant = case.endswith('[True]')
+        item = types.SimpleNamespace(nodeid=case, module=original, obj=function, originalname=name,
+            funcargs={'tmp_path': base, 'cancel': variant, 'settlement_fault': variant})
+        policy = types.SimpleNamespace(directory=tmp_path, case=case, children={}, profile={
+            'checkout': str(checkout), 'owned': str(owned), 'source_sha256': hashlib.sha256(data).hexdigest(),
+            'native': sys.executable, 'native_sha256': 'a' * 64, 'environment': root})
+        for key, value in {**root, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'}.items():
+            monkeypatch.setenv(key, value)
+        return original, function, base, policy, CleanupCalls(policy, item)
+    return context
+
+
+@pytest.mark.parametrize('case', (*CLIENT, *INFLIGHT))
+@pytest.mark.parametrize('effect', ('launch', 'signal'))
+@pytest.mark.asyncio
+async def test_original_client_launch_siblings_without_process_effects(case, inline_context, monkeypatch, effect, mutation=None):
+    import asyncio
+    import asyncio.unix_events
+    import sys
+    original, function, base, policy, calls = inline_context(case)
+    admitted, signals, checking, failures = [], [], [], []
+    class Stop(BaseException):
+        pass
+    async def wait(self):
+        if checking and self.returncode is None:
+            raise asyncio.TimeoutError
+        return self.returncode
+    def terminate(self, sig=15):
+        from source_owner import active_frames
+        frames = active_frames()
+        try:
+            owned = any(f.f_code.co_qualname in ('_close_subprocess', 'ACPClient._cleanup.<locals>.finish_terminal') for f in frames)
+        finally:
+            del frames
+        if checking and owned:
+            try:
+                calls.signal(self.pid, sig, False)
+            except BaseException as error:
+                failures.append(error)
+                raise
+            signals.append((self.pid, sig))
+        self._transport._returncode = 0
+    monkeypatch.setattr(asyncio.subprocess.Process, 'wait', wait)
+    monkeypatch.setattr(asyncio.subprocess.Process, 'terminate', terminate)
+    monkeypatch.setattr(asyncio.subprocess.Process, 'kill', lambda self: terminate(self, 9))
+    async def spawn(factory, program, *args, **kwargs):
+        if mutation == 'body':
+            args = ('-c', SLEEP + ';pass')
+        elif mutation == 'case':
+            policy.case = case + '-foreign'
+        elif mutation == 'caller':
+            import source_owner
+            monkeypatch.setattr(source_owner, 'active_frames', lambda: (sys._getframe(),))
+        try:
+            intent = calls.startup.select(case, (program, [program, *args], kwargs.get('cwd'), kwargs.get('env')))
+        except BaseException as error:
+            failures.append(error)
+            raise
+        admitted.append(intent)
+        if effect == 'launch' and len(admitted) == child_count(case):
+            raise Stop
+        transport = object.__new__(asyncio.unix_events._UnixSubprocessTransport)
+        transport._closed, transport._pid, transport._proc, transport._returncode = True, 100 + len(admitted), object(), None
+        policy.children[transport._pid] = {'process': transport._proc, 'case': case}
+        protocol = factory()
+        protocol.stdout = asyncio.StreamReader()
+        protocol.stdout.feed_eof()
+        return transport, protocol
+    monkeypatch.setattr(asyncio.get_running_loop(), 'subprocess_exec', spawn)
+    arguments = [base, monkeypatch]
+    if case not in (next(iter(CLIENT)),):
+        arguments.append(case.endswith('[True]'))
+    # The third inflight launch runs in the original separate producer Task.
+    if effect == 'signal':
+        from unrest_harness import acp_runner
+        original_cleanup = acp_runner.ACPClient.cleanup
+        async def cleanup(self):
+            checking.append(True)
+            try:
+                try:
+                    await original_cleanup(self)
+                except Refused as error:
+                    failures.append(error)
+                    raise
+                except BaseException as error:
+                    if (type(error) not in (RuntimeError, asyncio.CancelledError)
+                            or type(error) is RuntimeError and error.args not in (
+                                ('controlled reader fault',), ('controlled terminal cleanup fault',),
+                                ('controlled post-settlement failure',))):
+                        failures.append(error)
+                        raise
+            finally:
+                checking.clear()
+            raise Stop
+        monkeypatch.setattr(acp_runner.ACPClient, 'cleanup', cleanup)
+    if case in INFLIGHT and effect == 'launch':
+        async def wait_for(awaitable, timeout):
+            if awaitable.cr_code.co_qualname != 'Event.wait':
+                return await awaitable
+            task = asyncio.ensure_future(awaitable)
+            for _ in range(100):
+                await asyncio.sleep(0)
+                if failures:
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                    raise failures[0]
+                if effect == 'launch' and len(admitted) == 3 or effect == 'signal' and signals:
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                    raise Stop
+                if task.done():
+                    return task.result()
+            raise AssertionError('finite no-effect producer did not reach launch')
+        monkeypatch.setattr(asyncio, 'wait_for', wait_for)
+    with pytest.raises(Refused if mutation else Stop):
+        await function(*arguments)
+    if mutation:
+        assert admitted == [] and not signals
+        return
+    assert len(admitted) == child_count(case)
+    assert not failures
+    assert {pid for pid, sig in signals} == (set(range(101, 101 + child_count(case))) if effect == 'signal' else set())
+    assert all(type(sig) is int and sig in (9, 15) for pid, sig in signals)
+    assert all(value.original.argv == (sys.executable, '-c', SLEEP) for value in admitted)
+    if case in INFLIGHT:
+        assert admitted[-1].original.cwd == str(base)
+        assert admitted[-1].original.environment == ()
+
+
+@pytest.mark.parametrize('case', (*CLIENT, *INFLIGHT))
+@pytest.mark.parametrize('mutation', ('body', 'case', 'caller'))
+@pytest.mark.asyncio
+async def test_original_client_rejects_foreign_launch_context(case, mutation, inline_context, monkeypatch):
+    await test_original_client_launch_siblings_without_process_effects(
+        case, inline_context, monkeypatch, 'launch', mutation)

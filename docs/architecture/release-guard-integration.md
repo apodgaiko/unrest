@@ -2556,3 +2556,26 @@ observer records the original free-port descriptor after bind and permits at mos
 no Route, Ticket or Connection and grant no payload access. Immediate connection
 success refuses; a pending attempt is not reported as failed or peer-authenticated.
 The original tests must still prove their startup error, privacy and actual reaps.
+
+The inline domain also covers the three direct-client and two in-flight
+registration cases. Initial children retain PIPE stdin/stdout and inherited
+stderr. The in-flight terminal child is third, after two returned owned children;
+it has the exact fixture cwd, empty environment and merged stdout/stderr. The
+observer reconstructs this order and descriptor shape independently. Children
+must have unique identities from the current case and the original
+Process/transport/Popen generation. Fault wrappers retain the original close
+function through an authenticated source closure. Terminal finalizers are the
+original prepared function and exact one-argument `partial` step; this grants no
+process-group signal authority. Local no-effect admission checks are distinct
+from original completion, cancellation and actual-parent-reap evidence.
+
+Remaining replacement integration is organized by shared execution mechanisms:
+experimental owner pairs, ordinary ACP/terminal plans, provider-session plans,
+causal Git/native helpers, fixed Python entry forms, composed MCP/desktop roles,
+owned multiprocessing, run workers/approval relay, build/install/extracted
+artifact domains, and other exact native leaves. Literal registry rows are not
+a complete inventory: generated programs, native descendants, package-domain
+transitions and multiprocessing custody must also close. The current bounded
+runner is not the full source checkpoint. Switching primary CI and deleting the
+old guard requires that complete closure and behavioral-test migration; a
+smaller dormant replacement or a passing selected subset does not satisfy it.

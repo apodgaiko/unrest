@@ -19,7 +19,7 @@ from control_transport import finite
 from bootstrap_cases import BOOTSTRAP
 from ordinary_acp import CASES as ORDINARY_CASES
 from cleanup_launch import ALL_CASES as CLEANUP_CASES, OFFLINE
-from cleanup_inline import STARTUP
+from cleanup_inline import DECLARATIONS
 from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies
@@ -69,12 +69,12 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] not in ('root', 'mcp') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *STARTUP):
+        if self.profile['role'] not in ('root', 'mcp') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
-        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *STARTUP):
+        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS):
             if (type(executable) is not str or type(vector) is not list
                     or not 2 <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
                 raise Refused('ordinary process audit primitives')
@@ -166,7 +166,7 @@ class Policy:
                 policy.refuse('source constructor without admitted audit')
             policy.local.launch = None
             policy.client.request('launch-return', {'pid': process.pid, 'ticket': pending['ticket'], 'token': pending['token']})
-            policy.children[process.pid] = {'token': pending['token'], 'process': process}
+            policy.children[process.pid] = {'token': pending['token'], 'process': process, 'case': policy.case}
 
         def waitpid(pid, options):
             if (type(pid) is int and pid > 0 and pid not in policy.children
@@ -179,7 +179,7 @@ class Policy:
                 if process.pid != pid:
                     policy.refuse('source failed-constructor child identity')
                 policy.client.request('launch-return', {'pid': pid, 'ticket': pending['ticket'], 'token': pending['token']})
-                policy.children[pid] = {'token': pending['token'], 'process': process}
+                policy.children[pid] = {'token': pending['token'], 'process': process, 'case': policy.case}
             if type(pid) is not int or pid <= 0 or type(options) is not int or pid not in policy.children:
                 policy.refuse('source wait outside owned constructor')
             saved = policy.children[pid]

@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import types
-from typing import Any
+from typing import Any, cast
 
 from content_manifest import Refused
 from control_transport import unique
@@ -16,6 +16,7 @@ class Sources:
     cleanup: Any
     process_class: Any
     transport_class: Any
+    terminal_type: Any
     def __init__(self, policy, item):
         self.policy, self.profile = policy, policy.profile
         raw = (policy.directory / 'source-manifest.json').read_bytes()
@@ -66,6 +67,11 @@ class Sources:
             process = frame.f_locals.get('process')
             if owner.qualified in ('ACPNodeRunner.run_node.<locals>.finish_mcp', 'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp', 'ACPNodeRunner.run_node'):
                 process = frame.f_locals.get('mcp_process')
+            if owner.qualified == 'ACPClient._cleanup.<locals>.finish_terminal':
+                terminal = frame.f_locals.get('terminal')
+                if type(terminal) is not self.terminal_type:
+                    raise Refused('root original cleanup terminal type')
+                process = vars(terminal).get('process')
             if type(process) is not self.process_class:
                 raise Refused('root original cleanup process type')
             transport = vars(process).get('_transport')
@@ -94,13 +100,23 @@ def nested_signal(self, pid, sig, group):
                     and type(frame.f_code.co_qualname) is str
                     and frame.f_code.co_qualname == '_finish_owned_cleanup.<locals>.finish'):
                 step = frame.f_locals.get('step')
+                from functools import partial
+                terminal_step = type(step) is partial and type(step.func) is types.FunctionType and step.func.__qualname__ == 'ACPClient._cleanup.<locals>.finish_terminal'
+                if terminal_step:
+                    step = cast(partial, step)
+                    original = step
+                    if len(step.args) != 1 or step.keywords or type(step.args[0]) is not self.terminal_type:
+                        raise Refused('root original terminal cleanup operands')
+                    step = step.func
                 if type(step) is types.FunctionType and type(step.__qualname__) is str and step.__qualname__ in (
+                        'ACPClient._cleanup.<locals>.finish_terminal',
                         'ACPNodeRunner.run_node.<locals>.finish_mcp',
                         'ACPNodeRunner.run_node.<locals>.finish_agent',
                         'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp',
                         'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_agent'):
                     owner = self.owner(self.startup.unit, self.startup.module, step, step.__qualname__,
-                                       (Link(frame, 'step', step, 'frame'),))
+                                       ((Link(frame, 'step', original, 'frame'), Link(original, 'func', step, 'partial-function'))
+                                        if terminal_step else (Link(frame, 'step', step, 'frame'),)))
                     self.cleanup = (*self.cleanup, owner)
                     break
         Sources.signal(self, pid, sig, group)

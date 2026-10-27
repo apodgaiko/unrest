@@ -20,6 +20,7 @@ NO_LAUNCH = tuple(TEST + f'::test_response_correlation_keeps_numeric_identity[{v
                   for variant in ('1_0', '1_1', 'None', 'True', '1.0', 'rid5', 'rid6'))
 DECLARATIONS = {**STARTUP, **CLIENT, **INFLIGHT}
 CASES = (*DECLARATIONS, *NO_LAUNCH)
+CLIENT_CASES = (*CLIENT, *INFLIGHT)
 
 
 def declaration(case):
@@ -148,6 +149,7 @@ class Launches(SharedLaunches):
         import asyncio
         if type(values) is not list or len(values) > maximum:
             raise Refused('cleanup inline child list bound')
+        seen = set()
         for process in values:
             if type(process) is not asyncio.subprocess.Process:
                 raise Refused('cleanup inline child type')
@@ -156,9 +158,11 @@ class Launches(SharedLaunches):
             if type(transport) is not self.calls.transport_class:
                 raise Refused('cleanup inline child transport')
             pid = fields.get('pid')
-            if (type(pid) is not int or pid not in self.calls.policy.children
+            if (type(pid) is not int or pid in seen or pid not in self.calls.policy.children
+                    or self.calls.policy.children[pid].get('case') != self.policy.case
                     or instance_fields(transport).get('_proc') is not self.calls.policy.children[pid]['process']):
                 raise Refused('cleanup inline child generation')
+            seen.add(pid)
 
     def startup(self, case, frames, base):
         import types
@@ -298,6 +302,10 @@ class Launches(SharedLaunches):
                 if len(matches) != 1 or matches[0].f_lineno != source_site(case):
                     raise Refused('cleanup inline original direct caller')
                 self.calls.test_owner.verify(matches[0])
+                values = frame_fields(matches[0])
+                self.children(values.get('children', []), child_count(case) - 1)
+                if family == 'inflight' and values.get('spawn') is not self.constructor:
+                    raise Refused('cleanup inline initial retained constructor')
             result, site = expected(case, self.profile['native'], self.profile['native_sha256'],
                 Path(self.profile['checkout']), self.profile['environment'], base=base, terminal=terminal)
             if executable != result.executable or (environment is not None and not terminal):
