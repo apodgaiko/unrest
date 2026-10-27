@@ -12,7 +12,7 @@ from content_manifest import Refused, capture
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
 from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, MOCK, PINS
-from cleanup_launch import CASES as CLEANUP_CASES, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
+from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE, module_mode, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 
@@ -67,7 +67,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp')
             or type(profile['case']) is not str
             or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, CLEANUP_CASES)):
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, CLEANUP_CASES, CLEANUP_SMOKE)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -136,7 +136,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             argv = profile['argv']
             if (script is not None or event != 'cpython.run_module' or arguments != ('unrest_harness',)
                     or len(argv) != 15 or argv[:4] != [native, '-I', '-S', '-m'] or argv[4:12] != [
-                        'unrest_harness', '--mode', 'worker', '--transport', 'streamable-http', '--host', '127.0.0.1', '--port']
+                        'unrest_harness', '--mode', module_mode(profile['case']), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port']
                     or type(argv[12]) is not str or not argv[12].isdigit() or not 0 < int(argv[12]) <= 65535
                     or argv[13:] != ['--sensitive-inventory-fd', str(inherited[0][0])]):
                 raise Refused('source exact worker module entry')

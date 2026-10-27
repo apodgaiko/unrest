@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 import types
 
-from cleanup_launch import CASES, Launches, PINS, SERVER, TEST, base_path, expected, sys_module, translated
+from cleanup_launch import git_completion, Launches, PINS, SERVER, TEST, base_path, expected, sys_module, translated
 from content_manifest import Refused
 from controlled_startup import Intent
 from launch_policy import Observation, match
@@ -96,7 +96,7 @@ class ModuleCalls(Sources):
         self.startup = self
 
     def select(self, case, audit):
-        if case not in CASES[:2]:
+        if not git_completion(case):
             raise Refused('cleanup no completion query case')
         executable, vector, cwd, env = audit
         module = sys_module('unrest_harness.server')

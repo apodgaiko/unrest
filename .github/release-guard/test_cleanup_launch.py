@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from cleanup_launch import CASES, OFFLINE, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
+from cleanup_launch import ALL_CASES, RECORDED, CASES, OFFLINE, selection, child_count, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
 import cleanup_launch
 from content_manifest import Refused
 from source_owner import Link
@@ -142,3 +142,87 @@ def test_original_free_port_bind_has_its_actual_source_owner(monkeypatch):
     assert effects == [{'tag': 'mcp-probe', 'nonce': None}]
     with pytest.raises(Refused, match='free port probe'):
         calls.listener()
+
+
+@pytest.mark.parametrize('case', ALL_CASES)
+@pytest.mark.asyncio
+async def test_original_mcp_constructor_options_without_launch(tmp_path, monkeypatch, case):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    import asyncio
+    import sys
+    import types
+    from unrest_harness import acp_runner
+    from unrest_harness.assets import AssetLoader
+    from unrest_harness.models import Task
+    from tests.test_provider_review import controller_fixture
+    from cleanup_launch import Launches
+    from source_calls import Sources
+    checkout = Path(__file__).resolve().parents[2]
+    _, store, _ = controller_fixture(tmp_path)
+    runner = acp_runner.ACPNodeRunner(store.config, AssetLoader(store.config))
+    calls = object.__new__(Sources)
+    calls.profile = {'checkout': str(checkout), 'owned': str(tmp_path.parent), 'native': sys.executable,
+                     'native_sha256': 'a' * 64, 'environment': {'HOME': '/home', 'TMPDIR': '/tmp', 'PATH': '/usr/bin:/bin'}}
+    calls.policy = types.SimpleNamespace(profile=calls.profile, directory=tmp_path)
+    calls.pins = PINS
+    calls.tests = sys.modules[__name__]
+    function = test_original_mcp_constructor_options_without_launch
+    calls.test_owner = types.SimpleNamespace(function=function, verify=lambda frame: None)
+    launches = Launches(calls)
+    monkeypatch.setattr(cleanup_launch, 'base_path', lambda value, owned: Path(value))
+    monkeypatch.setattr(cleanup_launch, 'read_pipe', lambda pid, fd: None)
+    observed = []
+    class Stop(BaseException):
+        pass
+    async def subprocess_exec(factory, program, *args, **kwargs):
+        observed.append(launches.select(case, (program, [program, *args], kwargs['cwd'], kwargs['env'])))
+        raise Stop
+    monkeypatch.setattr(asyncio.get_running_loop(), 'subprocess_exec', subprocess_exec)
+    env = environment(tmp_path, calls.profile['environment'], agent=False, case=case)
+    recorded, _, role = selection(case)
+    with pytest.raises(Stop):
+        if role == 'terminal_reviewer':
+            await runner._start_terminal_reviewer_mcp(project_id='project', mission_id='mission-001',
+                report_path=env['UNREST_TERMINAL_REVIEW_PATH'], workspace_dir=str(tmp_path / 'workspace'),
+                mcp_port=12345, sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
+        else:
+            await runner._start_worker_mcp_server(task=Task(id='w1', type=role, body='controlled',
+                targets=['VAL-CLEANUP'] if recorded and role == 'validate' else [], skill='s'),
+                project_id='project', mission_id='mission-001', handoff_path=env['UNREST_HANDOFF_PATH'],
+                workspace_dir=str(tmp_path / 'workspace'), mcp_port=12345,
+                sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
+    assert len(observed) == 1 and observed[0].original.rule == 'cleanup:mcp'
+
+
+@pytest.mark.parametrize('case', ALL_CASES)
+def test_cleanup_declaration_preserves_every_original_role_and_payload(tmp_path, case, monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from tests.test_acp_cleanup import malformed
+    recorded, variant, role = selection(case)
+    body = json.loads(scenario(case, tmp_path))
+    assert body['role'] == role
+    if recorded:
+        assert case in RECORDED and body['raw'] == malformed(variant)
+        assert body['receipt'] == str(tmp_path / 'receipt')
+    else:
+        assert body == {'role': role, 'no_handoff': True}
+    assert module_mode(case) == {'work': 'worker', 'validate': 'validator', 'terminal_reviewer': 'terminal-reviewer'}[role]
+    assert child_count(case) == ((5 if role == 'work' else 4) if recorded else 2)
+    assert git_completion(case) is (recorded and role == 'work')
+    env = environment(tmp_path, {'HOME': '/home', 'TMPDIR': '/tmp', 'PATH': '/usr/bin:/bin'}, agent=False, case=case)
+    if role == 'terminal_reviewer':
+        assert not {'UNREST_NODE_ID', 'UNREST_NODE_TYPE', 'UNREST_HANDOFF_PATH', 'UNREST_NODE_ASSIGNMENT'} & env.keys()
+        assert env['UNREST_TERMINAL_REVIEW_PATH'].endswith('/terminal-reviews/attempt-1.json')
+    else:
+        assert env['UNREST_NODE_ID'] == 'w1' and env['UNREST_NODE_TYPE'] == role
+        assert json.loads(env['UNREST_NODE_ASSIGNMENT']) == {'targets': ['VAL-CLEANUP'] if recorded and role == 'validate' else [], 'task_type': role}
+
+
+def test_cleanup_declaration_does_not_admit_adjacent_cases_or_git(tmp_path):
+    for case in (CASES[0] + '-foreign', 'tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[observer]', True):
+        with pytest.raises(Refused):
+            selection(case)
+    for case in ALL_CASES:
+        if not git_completion(case):
+            with pytest.raises(Refused, match='undeclared launch role'):
+                expected(case, 'git-observe', tmp_path, '/native', 'a' * 64, tmp_path, {})

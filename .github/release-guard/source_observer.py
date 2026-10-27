@@ -25,7 +25,7 @@ from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pa
 from source_profile import METHODS, ROOT_COMMAND, digest
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
 from unix_endpoints import UnixPairs
-from cleanup_launch import CASES as CLEANUP_CASES, SCRIPT, OFFLINE, base_path, read_pipe, expected as cleanup_expected, scenario, snapshot_path, translated as cleanup_translated
+from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE, module_site, child_count, SCRIPT, OFFLINE, base_path, read_pipe, expected as cleanup_expected, scenario, snapshot_path, translated as cleanup_translated
 
 
 def shape(value, keys):
@@ -316,7 +316,7 @@ class Observer:
             inherited = [read_pipe(actor['birth'].pid, descriptor)]
         result = cleanup_expected(self.case, role, base, self.binding['entry']['path'], self.binding['entry']['sha256'],
             Path(self.meta['checkout']), self.meta_environment(), port=port, descriptor=descriptor)
-        site = {'mcp': 2191, 'cleanup-acp': 409, 'git-init': 123, 'git-commit': 124, 'git-observe': 266}[role]
+        site = {'mcp': module_site(self.case), 'cleanup-acp': 409, 'git-init': 123, 'git-commit': 124, 'git-observe': 266}[role]
         vector = list(cleanup_translated(result, self.directory))
         if (original != result.wire() or payload['source_line'] != site or payload['script_sha256'] != result.payload_sha256
                 or payload['translated'] != vector
@@ -444,7 +444,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = (2 if self.case == CLEANUP_CASES[2] else 5) if self.case in CLEANUP_CASES else 0 if self.case in NEGATIVE_CASES else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in NEGATIVE_CASES else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:
@@ -693,7 +693,7 @@ class Observer:
             if actor is None or uid != 20000 or gid != 20000:
                 stream.close()
                 raise Refused('source registered channel peer')
-            frame = Frame(stream, REQUEST_LIMIT, self.ledger.poison, seconds=8 if self.cases == CLEANUP_CASES else 4)
+            frame = Frame(stream, REQUEST_LIMIT, self.ledger.poison, seconds=8 if self.cases in (CLEANUP_CASES, CLEANUP_SMOKE) else 4)
             frame.capture(self.ledger, actor['birth'], actor['token'], 20000)
             self.frames.append({'frame': frame, 'actor': actor, 'request': None})
         for channel in list(self.frames):

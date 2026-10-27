@@ -2485,3 +2485,12 @@ requires both actual numeric terminal waits. This is cleanup custody, not an
 original-parent product wait or successful-test evidence. Original fixture Git
 init/commit inherit the exact three parent standard descriptors; completion
 queries retain captured output pipes.
+
+The cleanup declaration covers the 12 original recorded-transport parameters
+and 15 original cleanup-fault parameters through one role/payload table. Its
+three-case smoke selection remains separate from the 27-case selection. Worker,
+validator and terminal-reviewer module entry, result environment and actual child
+counts differ explicitly; terminal completion has no completion-Git permission.
+MCP sensitive inventory is the original retained `SensitiveValueInventory`
+class, with its live module binding and empty underlying dictionary checked for
+these credential-free cases. No arbitrary mapping callbacks authorize a launch.

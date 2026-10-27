@@ -10,7 +10,7 @@ import types
 
 from bootstrap_cases import declaration
 from content_manifest import Refused
-from cleanup_launch import CASES as CLEANUP_CASES
+from cleanup_launch import ALL_CASES as CLEANUP_CASES
 
 TYPE = type
 

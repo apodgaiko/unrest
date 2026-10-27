@@ -18,7 +18,7 @@ from content_manifest import Refused
 from control_transport import finite
 from bootstrap_cases import BOOTSTRAP
 from ordinary_acp import CASES as ORDINARY_CASES
-from cleanup_launch import CASES as CLEANUP_CASES, OFFLINE
+from cleanup_launch import ALL_CASES as CLEANUP_CASES, OFFLINE
 from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies

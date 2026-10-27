@@ -165,7 +165,7 @@ def worker(binding, metadata, raw_directory):
     from source_observer import Observer
     from source_profile import ROOT_COMMAND
     metadata = isolate(metadata, binding['support'])
-    timeout = 60 if metadata['cases'][0].startswith('tests/test_acp_cleanup.py::') else 30 if len(metadata['cases']) in (3, 42) else 60 if len(metadata['cases']) == 2 else 170
+    timeout = (170 if len(metadata['cases']) == 27 else 60) if metadata['cases'][0].startswith('tests/test_acp_cleanup.py::') else 30 if len(metadata['cases']) in (3, 42) else 60 if len(metadata['cases']) == 2 else 170
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
@@ -258,7 +258,7 @@ def drain_owned(rows):
                          'original_parent_wait_proven': False})
 
 def main():
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3')),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup27')),
             'source host requires exact root Linux invocation')
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     binding_file = Path(sys.argv[1]).resolve(strict=True)
@@ -281,8 +281,8 @@ def main():
         from bootstrap_cases import BOOTSTRAP
         from controlled_startup import CASES
         from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES
-        from cleanup_launch import CASES as CLEANUP_CASES
-        cases = CLEANUP_CASES if len(sys.argv) == 3 and sys.argv[2] == 'cleanup3' else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
+        from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE
+        cases = (CLEANUP_SMOKE if sys.argv[2] == 'cleanup3' else CLEANUP_CASES) if len(sys.argv) == 3 and sys.argv[2] in ('cleanup3', 'cleanup27') else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
         metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root), 'cases': list(cases)}
         pid = os.fork()
         if pid == 0:
@@ -292,7 +292,7 @@ def main():
                 (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
                 os._exit(125)
             os._exit(0)
-        raw, deadline = None, time.monotonic() + (80 if cases == CLEANUP_CASES else 50 if len(cases) in (3, 42) else 80 if len(cases) == 2 else 190)
+        raw, deadline = None, time.monotonic() + (190 if cases == CLEANUP_CASES else 80 if cases == CLEANUP_SMOKE else 50 if len(cases) in (3, 42) else 80 if len(cases) == 2 else 190)
         try:
             while raw is None:
                 actual, status = os.waitpid(pid, os.WNOHANG)

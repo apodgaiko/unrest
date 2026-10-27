@@ -28,6 +28,39 @@ CASES = tuple(TEST + '::' + name for name in (
     'test_cleanup_faults_and_repeated_cancellation[cancel-work]'))
 OFFLINE = {'FASTMCP_CHECK_FOR_UPDATES': 'off'}
 
+RECORDED = tuple(TEST + f'::test_recorded_transport_failures[{variant}-{role}]'
+                 for variant in ('deep_json', 'array_id', 'object_id', 'success')
+                 for role in ('work', 'validate', 'terminal_reviewer'))
+FAULTS = tuple(TEST + f'::test_cleanup_faults_and_repeated_cancellation[{variant}-{role}]'
+               for variant in ('reader', 'client', 'progress', 'cancel', 'primary')
+               for role in ('work', 'validate', 'terminal_reviewer'))
+ALL_CASES = (*RECORDED, *FAULTS)
+
+
+def selection(case):
+    if type(case) is not str or case not in ALL_CASES:
+        raise Refused('cleanup finite case declaration')
+    variant, role = case.rsplit('[', 1)[1][:-1].split('-', 1)
+    return case in RECORDED, variant, role
+
+
+def module_mode(case):
+    return {'work': 'worker', 'validate': 'validator', 'terminal_reviewer': 'terminal-reviewer'}[selection(case)[2]]
+
+
+def module_site(case):
+    return 2247 if selection(case)[2] == 'terminal_reviewer' else 2191
+
+
+def child_count(case):
+    recorded, _, role = selection(case)
+    return (5 if role == 'work' else 4) if recorded else 2
+
+
+def git_completion(case):
+    recorded, _, role = selection(case)
+    return recorded and role == 'work'
+
 
 def digest(path):
     return capture(path.parent, [path.name])['files'][0]['sha256']
@@ -44,35 +77,40 @@ def base_path(value, owned):
 
 
 def scenario(case, base):
-    if case == CASES[2]:
-        record = {'role': 'work', 'no_handoff': True}
-    elif case in CASES[:2]:
-        record = {'raw': None if case == CASES[0] else json.dumps({'jsonrpc': '2.0', 'id': [], 'result': {}}),
-                  'role': 'work', 'receipt': str(base / 'receipt')}
+    recorded, variant, role = selection(case)
+    if not recorded:
+        record = {'role': role, 'no_handoff': True}
     else:
-        raise Refused('cleanup finite scenario')
+        raw = (None if variant == 'success' else '[' * 10000 + '0' + ']' * 10000 if variant == 'deep_json'
+               else json.dumps({'jsonrpc': '2.0', 'id': [] if variant == 'array_id' else {}, 'result': {}}))
+        record = {'raw': raw, 'role': role, 'receipt': str(base / 'receipt')}
     return json.dumps(record).encode()
 
 
 def snapshot_path(directory, case):
-    if case not in CASES:
+    if case not in ALL_CASES:
         raise Refused('cleanup snapshot case')
     return directory / ('scenario-' + hashlib.sha256(case.encode()).hexdigest() + '.json')
 
 
-def environment(base, root_environment, *, agent):
+def environment(base, root_environment, *, agent, case=CASES[0]):
+    recorded, _, role = selection(case)
     result = {key: root_environment[key] for key in ('HOME', 'TMPDIR', 'PATH')}
     home = base / 'home'
     result.update(UNREST_CAPABILITY_PROFILE='safe', UNREST_CAPABILITY_POLICY_VERSION='1',
-        UNREST_HOME=str(home), UNREST_PROJECT_ID='project', UNREST_MISSION_ID='mission-001',
-        UNREST_NODE_ID='w1', UNREST_NODE_TYPE='work',
-        UNREST_HANDOFF_PATH=str(home / 'projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json'))
+        UNREST_HOME=str(home), UNREST_PROJECT_ID='project', UNREST_MISSION_ID='mission-001')
+    if role == 'terminal_reviewer':
+        result['UNREST_TERMINAL_REVIEW_PATH'] = str(home / 'projects/project/.unrest-runtime/missions/mission-001/terminal-reviews/attempt-1.json')
+    else:
+        result.update(UNREST_NODE_ID='w1', UNREST_NODE_TYPE=role,
+            UNREST_HANDOFF_PATH=str(home / 'projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json'))
     if agent:
         result.update(INITIAL_AGENT_MODE='agent', CODEX_CONFIG=json.dumps({
             'sandbox_mode': 'workspace-write', 'approval_policy': 'on-request',
             'model_reasoning_effort': 'medium'}, separators=(',', ':'), sort_keys=True))
-    else:
-        result['UNREST_NODE_ASSIGNMENT'] = '{"targets":[],"task_type":"work"}'
+    elif role != 'terminal_reviewer':
+        result['UNREST_NODE_ASSIGNMENT'] = json.dumps({'targets': ['VAL-CLEANUP'] if recorded and role == 'validate' else [],
+                                                     'task_type': role}, separators=(',', ':'))
     return result
 
 
@@ -112,7 +150,7 @@ def system_git():
 
 
 def expected(case, role, base, native, native_pin, checkout, root_environment, *, port=None, descriptor=None):
-    if case not in CASES:
+    if case not in ALL_CASES:
         raise Refused('cleanup finite case')
     home = base / 'workspace'
     vector: tuple[str, ...]
@@ -120,23 +158,23 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
     if role == 'cleanup-acp':
         vector = (native, str(checkout / SCRIPT), str(base / 'scenario.json'))
         executable, pin, kind, payload = native, native_pin, 'python-script', PINS[SCRIPT]
-        env = environment(base, root_environment, agent=True)
+        env = environment(base, root_environment, agent=True, case=case)
         owner, cwd = PRODUCT + ':spawn_launch', str(home)
     elif role == 'mcp':
         if type(port) is not int or not 0 < port <= 65535 or type(descriptor) is not int or not 3 <= descriptor <= 1024:
             raise Refused('cleanup finite listener or descriptor')
-        vector = (native, '-m', 'unrest_harness', '--mode', 'worker', '--transport', 'streamable-http',
+        vector = (native, '-m', 'unrest_harness', '--mode', module_mode(case), '--transport', 'streamable-http',
                   '--host', '127.0.0.1', '--port', str(port), '--sensitive-inventory-fd', str(descriptor))
         executable, pin, kind, payload = native, native_pin, 'python-module', PINS[SERVER]
-        env = environment(base, root_environment, agent=False)
-        owner, cwd = PRODUCT + ':_start_worker_mcp_server', str(home)
-    elif role in ('git-init', 'git-commit', 'git-observe') and case in CASES[:2]:
+        env = environment(base, root_environment, agent=False, case=case)
+        owner, cwd = PRODUCT + (':_start_terminal_reviewer_mcp' if module_site(case) == 2247 else ':_start_worker_mcp_server'), str(home)
+    elif role in ('git-init', 'git-commit', 'git-observe') and (case in RECORDED if role != 'git-observe' else git_completion(case)):
         arguments = {'git-init': ('init', '-q', str(home)),
             'git-commit': ('-c', 'user.name=Controlled', '-c', 'user.email=controlled@example.invalid',
                            '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit', '--allow-empty', '-qm', 'Controlled'),
             'git-observe': ('rev-parse', 'HEAD')}[role]
         vector, executable, pin, kind, payload = ('git', *arguments), '/usr/bin/git', system_git(), 'native', None
-        env = ({**environment(base, root_environment, agent=False), **OFFLINE} if role == 'git-observe' else
+        env = ({**environment(base, root_environment, agent=False, case=case), **OFFLINE} if role == 'git-observe' else
                {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'})
         cwd = str(checkout) if role == 'git-init' else str(home)
         owner = SERVER + ':_completion_context' if role == 'git-observe' else TEST + ':test_recorded_transport_failures'
@@ -162,6 +200,8 @@ class Launches:
         self.unit = calls.unit(PRODUCT, self.module, calls.mode(self.module))
         self.constructor, self.constructor_code = asyncio.create_subprocess_exec, asyncio.create_subprocess_exec.__code__
         self.plan_type = self.module.LaunchPlan
+        self.inventory_module = sys_module('unrest_harness.capability_policy')
+        self.inventory_type = self.inventory_module.SensitiveValueInventory
 
     def select(self, case, audit):
         executable, vector, cwd, env = audit
@@ -196,7 +236,7 @@ class Launches:
                     raise Refused('cleanup original constructor options')
                 kw = local['kwds']
                 role = 'mcp' if vector[1:3] == ['-m', 'unrest_harness'] else 'cleanup-acp'
-                name = '_start_worker_mcp_server' if role == 'mcp' else 'spawn_launch'
+                name = ('_start_terminal_reviewer_mcp' if module_site(case) == 2247 else '_start_worker_mcp_server') if role == 'mcp' else 'spawn_launch'
                 cls = self.module.ACPNodeRunner
                 function = vars(cls)[name] if role == 'mcp' else vars(self.module)[name]
                 links = (Link(cls, name, function),) if role == 'mcp' else (Link(self.module, name, function),)
@@ -210,7 +250,9 @@ class Launches:
                 line = matches[0].f_lineno
                 if role == 'mcp':
                     port, descriptor = values.get('mcp_port'), values.get('read_fd')
-                    if (line != 2191 or type(port) is not int or type(descriptor) is not int or type(values.get('sensitive_inventory')) is not dict or values['sensitive_inventory']
+                    if (line != module_site(case) or type(port) is not int or type(descriptor) is not int or self.inventory_module.SensitiveValueInventory is not self.inventory_type
+                            or type(values.get('sensitive_inventory')) is not self.inventory_type
+                            or dict.__len__(values['sensitive_inventory']) != 0
                             or set(kw) != {'cwd', 'env', 'pass_fds'} or type(kw['pass_fds']) is not tuple
                             or len(kw['pass_fds']) != 1 or type(kw['pass_fds'][0]) is not int or kw['pass_fds'][0] != descriptor
                             or local.get('stdin') is not None or kw['env'] is not env):

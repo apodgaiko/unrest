@@ -156,7 +156,7 @@ class OriginalCases:
             raise Refused('root original case cursor')
         policy = self.policy
         from ordinary_acp import ALL_CASES as ORDINARY_CASES
-        from cleanup_launch import CASES as CLEANUP_CASES
+        from cleanup_launch import ALL_CASES as CLEANUP_CASES
         from cleanup_effects import CleanupCalls
         cls = CleanupCalls if item.nodeid in CLEANUP_CASES else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
         policy.case, policy.calls = item.nodeid, cls(policy, item)
