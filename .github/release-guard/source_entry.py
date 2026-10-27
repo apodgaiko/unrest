@@ -22,6 +22,7 @@ from ordinary_acp import CASES as ORDINARY_CASES
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, OFFLINE
 from cleanup_inline import DECLARATIONS
 from git_sites import CASES as GIT_CASES
+from session_launch import CASES as SESSION_CASES, INVALID as SESSION_INVALID
 from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies
@@ -39,11 +40,11 @@ class Policy:
         self.children: dict[int, dict] = {}
         self.local = threading.local()
         self.bodies: Any
-        if profile['role'] in ('mcp', 'cleanup-acp'):
+        if profile['role'] in ('mcp', 'cleanup-acp', 'session-adapter', 'session-child'):
             from library_code import Computation
             self.bodies = Computation({'source': profile['checkout'], 'dependencies': profile['dependencies'],
                                        'stdlib': str(Path(profile['runtime_root']) / 'lib/python3.13')},
-                entry_script=profile['script'] if profile['role'] == 'cleanup-acp' else None)
+                entry_script=profile['script'] if profile['role'] in ('cleanup-acp', 'session-adapter', 'session-child') else None)
         else:
             self.bodies = Bodies(profile)
         self.wire_code = Client.request.__code__
@@ -71,14 +72,14 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] not in ('root', 'mcp') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES):
+        if self.profile['role'] not in ('root', 'mcp', 'session-adapter') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
-        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES):
+        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES):
             if (type(executable) is not str or type(vector) is not list
-                    or not 2 <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
+                    or not (1 if self.case in SESSION_INVALID else 2) <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
                 raise Refused('ordinary process audit primitives')
             intent = self.calls.startup.select(self.case, args)
         else:
@@ -242,13 +243,21 @@ class Policy:
             if type(sig) not in (int, signals.Signals):
                 policy.refuse('source nonnumeric signal')
             sig = int.__int__(sig)
-            if policy.profile['role'] != 'root' or policy.calls is None:
+            if policy.profile['role'] not in ('root', 'session-adapter') or policy.calls is None:
                 policy.refuse('source signal role')
             try:
-                policy.calls.signal(pid, sig, group)
+                self_stop = policy.calls.signal(pid, sig, group)
             except BaseException:
                 traceback.print_exc(file=sys.stderr)  # Retained only in encrypted execution evidence.
                 policy.refuse('source cleanup signal refused')
+            if self_stop is True:
+                if policy.client.request('self-stop', {'signal': sig}) != {'ok': True}:
+                    policy.refuse('source self stop response')
+                policy.local.signal = 'os.kill', (pid, sig)
+                try:
+                    return original_kill(pid, sig)
+                finally:
+                    policy.local.signal = None
             saved = policy.children[pid]
             answer = policy.client.request('custody_signal', {'pid': pid, 'child_token': saved['token'],
                                                               'signal': sig, 'group': group})
@@ -269,7 +278,7 @@ class Policy:
         def killpg(pid, sig):
             return signal(pid, sig, group=True)
 
-        if self.profile['role'] in ('root', 'mcp'):
+        if self.profile['role'] in ('root', 'mcp', 'session-adapter'):
             setattr(subprocess.Popen, '__init__', construct)
             setattr(subprocess.Popen, 'communicate', communicate)
             safe = vars(subprocess).get('_del_safe')
@@ -284,7 +293,7 @@ def activate(directory, profile, event, arguments):
     actual, pins = validate(profile, event, arguments)
     client = Client(directory, profile, METHODS)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] in ('root', 'mcp', 'cleanup-acp'):
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child'):
         sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
         # Only guard/locked dependencies initialize here; candidate test modules
         # are imported by the real pytest body after the native READY boundary.
@@ -293,6 +302,9 @@ def activate(directory, profile, event, arguments):
         elif profile['role'] == 'mcp':
             from cleanup_effects import ModuleCalls
             policy.case, policy.calls = profile['case'], ModuleCalls(policy, None)
+        elif profile['role'] == 'session-adapter':
+            from session_calls import SessionChild
+            policy.case, policy.calls = profile['case'], SessionChild(policy)
     from source_sockets import Hooks
     policy.sockets = Hooks(policy)
     client.request('core-ready', {'pins': [list(pair) for pair in pins]})

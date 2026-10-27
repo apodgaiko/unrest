@@ -2739,3 +2739,15 @@ owner mode grants no launch permission by itself.
 Git commands with a declared non-null input bind stdin to a parent-owned pipe;
 commands without input retain inherited stdin. Input text is independently
 reconstructed and compared at the original `subprocess.run` frame.
+
+
+The shared provider-session family retains all 69 original cases, including
+cross-Task cancellation and the original 0.3-second descendant timeout. Its
+five invalid-format executable cases bind the exact fixture bytes and require
+the kernel's ENOEXEC result, no successful exec epoch, and the actual numeric
+parent wait. They are not zero-launch cases or successful bodies. Other
+negative cases grant no child. Positive fixtures use one immutable LaunchPlan,
+fixed scripts/arguments, parent-owned pipes and an independently reconstructed
+least-privilege environment. The timeout fixture's sole descendant retains its
+actual parent wait before the adapter can restore its own SIGTERM status.
+These controls authorize no provider executable or denied review replay.

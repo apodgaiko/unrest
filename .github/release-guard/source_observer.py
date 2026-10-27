@@ -25,6 +25,7 @@ from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pa
 from source_profile import METHODS, ROOT_COMMAND, digest
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
 from unix_endpoints import UnixPairs
+from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, INVALID as SESSION_INVALID, INVALID_BYTES, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT, expected as session_expected
 from git_sites import CASES as GIT_CASES
 from git_observer import Git
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count, expected as inline_expected
@@ -75,7 +76,11 @@ class Observer:
 
     def profile(self, pid, role, case, vector, environment, cwd, token, inherited=()):
         actual = process_identity(pid)
-        parent = self.root_birth if role != 'root' else Birth.read(process_identity(os.getpid()))
+        parent = Birth.read(process_identity(actual['ppid']))
+        scripts = {'session-adapter': SESSION_SCRIPT, 'session-child': SESSION_SCRIPT,
+                   'cleanup-acp': SCRIPT, 'acp': ACP, 'mock-acp': MOCK}
+        script = (str(Path(self.meta['checkout']) / scripts[role]) if role in scripts else
+                  str(Path(cwd).parent / 'fake-app-server') if role in ('backend', 'delayed-backend') else None)
         source = {'schema': 'unrest.bootstrap-source.v1', 'role': role, 'case': case,
             'identity': canonical(actual), 'parent': canonical(process_identity(parent.pid)),
             'observer': canonical(process_identity(os.getpid())), 'argv': vector,
@@ -84,9 +89,7 @@ class Observer:
             'nonce': self.ledger.nonce, 'token': token, 'generation': 1,
             'mount_namespace': os.readlink('/proc/self/ns/mnt'), **self.meta,
             'inherited': list(inherited),
-            'script': None if role in ('root', 'mcp', 'cleanup-inline', 'workspace-owned') else (str(Path(self.meta['checkout']) / SCRIPT) if role == 'cleanup-acp' else (str(Path(self.meta['checkout']) / ACP)
-                if role == 'acp' else str(Path(self.meta['checkout']) / MOCK) if role == 'mock-acp'
-                else str(Path(cwd).parent / 'fake-app-server')))}
+            'script': script}
         source['seal'] = hashlib.sha256(json.dumps(source, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         target = self.directory / (str(pid) + '.json')
         with target.open('x') as stream:
@@ -99,10 +102,10 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline'}[role]
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
-                             command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp', 'workspace-owned'), expected_generation=1)
-        if role in ('backend', 'delayed-backend', 'acp', 'workspace-owned'):
+                             command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'), expected_generation=1)
+        if role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'):
             common = {'owner_pid': self.root, 'token': token, 'case': case, 'class': command_class}
             witnesses = ({'kind': 'admitted', **common}, {'kind': 'registered', 'pid': pid, 'python': True, **common},
                          {'kind': 'launch_lifecycle_binding', 'start_new_session': True, **common})
@@ -110,6 +113,7 @@ class Observer:
         return actor
 
     def consume(self, trace):
+        self.ledger_trace = trace
         while self.ledger.next_kernel < len(trace.records):
             row = trace.records[self.ledger.next_kernel]
             self.ledger.kernel(self.ledger.next_kernel, row)
@@ -122,7 +126,7 @@ class Observer:
                         self.git.reserve_helper(birth, parent)
                     candidates = [value for value in self.intents.values()
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
-                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command') or len(candidates) != 1:
+                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
@@ -155,7 +159,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
+            if role in ('git-init', 'git-commit', 'session-child') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -205,12 +209,12 @@ class Observer:
         intent['stdout'] = self.stdio(pid, intent['role'],
             input_pipe=intent['role'] == 'git-command' and intent['command'].stdin is not None)
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
-        if intent['role'] == 'sleep' or intent['role'].startswith('git-'):
+        if intent['role'] in ('sleep', 'session-invalid') or intent['role'].startswith('git-'):
             actual = process_identity(pid)
             birth = Birth.read(actual)
             pins = (('native-fixture', intent['executable_sha256']),)
             self.ledger.register(birth, intent['token'], pins, intent['executable_sha256'],
-                                 case=intent['case'], command_class='native-' + intent['role'], expected_generation=1)
+                                 case=intent['case'], command_class='native-' + intent['role'], expected_generation=0 if intent['role'] == 'session-invalid' else 1)
             self.actors[pid] = {'birth': birth, 'role': intent['role'], 'case': intent['case'], 'token': intent['token'],
                 'returned': False, 'body_ready': False, 'signals': set(), 'kernel_admitted': True}
         else:
@@ -229,16 +233,31 @@ class Observer:
         if actor['role'] == 'root':
             self.root_only(actor)
             return
+        if actor['role'] == 'session-adapter' and actor['case'] == self.case == SESSION_TIMEOUT and not self.finished:
+            return
         if self.finished or actor['role'] not in ('root', 'mcp') or actor['role'] == 'mcp' and actor['case'] != self.case:
             raise Refused('source original launch owner')
 
     def launch(self, actor, payload):
         self.launch_owner(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256', *(('git',) if self.case in GIT_CASES else ())))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES) or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
+        if self.case in SESSION_CASES:
+            child = actor['role'] == 'session-adapter'
+            if child and self.case != SESSION_TIMEOUT or not child and actor['role'] != 'root':
+                raise Refused('session original launch parent')
+            expected = session_expected(self.case, original['cwd'], Path(self.meta['checkout']), Path(self.meta['owned']),
+                self.binding['entry']['path'], self.binding['entry']['sha256'], self.meta_environment(), child=child)
+            role = 'session-invalid' if self.case in SESSION_INVALID else 'session-child' if child else 'session-inline' if expected.payload_kind == 'python-command' else 'session-adapter'
+            if role == 'session-invalid':
+                from git_observer import regular
+                if regular(Path(expected.executable)) != INVALID_BYTES or Path(expected.executable).stat().st_mode & 0o777 != 0o700:
+                    raise Refused('session exact invalid executable fixture')
+            vector = list(expected.argv) if role == 'session-invalid' else [expected.argv[0], '-I', '-S', *expected.argv[1:]]
+            return self.admit_launch(actor, payload, expected, role, 51 if child else 75, vector, expected.payload_sha256)
         if self.case in GIT_CASES:
             return self.git.launch(actor, payload)
         if self.case in DECLARATIONS:
@@ -417,7 +436,11 @@ class Observer:
         raise Refused('source unadmitted payload descriptor')
 
     def completed_child(self, actor):
-        terminal = self.ledger.process(actor['birth']).terminal
+        process = self.ledger.process(actor['birth'])
+        terminal = process.terminal
+        if actor['role'] == 'session-invalid':
+            failures = [row for row in self.ledger_trace.records if row['kind'] == 'exec_syscall_return' and row['pid'] == actor['birth'].pid]
+            return process.generation == 0 and terminal is not None and terminal[2] == 255 and len(failures) == 1 and failures[0]['return'] == -8
         return (terminal is not None and (actor.get('kernel_admitted') is True or actor['body_ready']
                 or terminal[2] in (-9, -15) and -terminal[2] in actor['signals']))
 
@@ -480,7 +503,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = len(children) if self.case in GIT_CASES else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in GIT_CASES else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:
@@ -721,11 +744,19 @@ class Observer:
             self.connections[ticket.route.client.birth, ticket.client.fd] = connection
         elif kind == 'payload':
             return self.socket_payload(actor, payload)
+        elif kind == 'self-stop':
+            shape(payload, ('signal',))
+            children = [value for value in self.actors.values() if self.ledger.process(value['birth']).parent == actor['birth']]
+            if (actor['role'] != 'session-adapter' or actor['case'] != self.case or self.case != SESSION_TIMEOUT
+                    or type(payload['signal']) is not int or payload['signal'] != 15 or 15 not in actor['signals']
+                    or len(children) != 1 or not all(self.ledger.reaped(value['birth'], value['token']) for value in children)):
+                raise Refused('session self stop before original child wait')
         elif kind == 'custody_signal':
-            self.root_only(actor)
+            self.launch_owner(actor)
             shape(payload, ('pid', 'child_token', 'signal', 'group'))
             child = self.actors.get(number(payload['pid'], 1))
             if (child is None or child['role'] == 'root' or child['case'] != self.case or payload['child_token'] != child['token']
+                    or self.ledger.process(child['birth']).parent != actor['birth']
                     or type(payload['signal']) is not int or payload['signal'] not in (0, 9, 15) or type(payload['group']) is not bool):
                 raise Refused('source exact owned signal')
             process = self.ledger.process(child['birth'])

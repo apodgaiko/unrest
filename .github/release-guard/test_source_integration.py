@@ -328,7 +328,7 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
         observer.stdio(child, role, input_pipe=input_pipe)
         os.write(command_write, b'1')
         assert os.read(ready_read, 1) == b'2'
-        with pytest.raises(Refused, match='descriptor'):
+        with pytest.raises(Refused, match='descriptor|pipe'):
             observer.stdio(child, role, input_pipe=input_pipe)
     finally:
         os.close(command_write)

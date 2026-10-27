@@ -30,9 +30,9 @@ class Bodies:
         self.codes: tuple[types.CodeType, ...]
         if role == 'root':
             self.codes = (compile(ROOT_COMMAND + '\n', '<string>', 'exec', dont_inherit=True),)
-        elif role in ('cleanup-inline', 'workspace-owned'):
+        elif role in ('cleanup-inline', 'workspace-owned', 'session-inline'):
             importlib.import_module('time')
-            self.codes = (compile((OWNED_BODY if role == 'workspace-owned' else inline_body(profile['case'])) + '\n', '<string>', 'exec', dont_inherit=True),)
+            self.codes = (compile(('pass' if role == 'session-inline' else OWNED_BODY if role == 'workspace-owned' else inline_body(profile['case'])) + '\n', '<string>', 'exec', dont_inherit=True),)
         else:
             names = ('asyncio', 'json', 'os', 'sys') if role == 'acp' else (
                 'copy', 'json', 'os', 'pathlib', 'sys', 'signal', 'secrets', 'time', 'tomllib', 'urllib.request')
@@ -83,7 +83,7 @@ class Bodies:
             if args[1] != expected.co_filename:
                 raise Refused('sealed compilation filename')
             if expected.co_filename == '<string>':
-                data = (ROOT_COMMAND if role == 'root' else OWNED_BODY if role == 'workspace-owned' else inline_body(self.profile['case']) if role == 'cleanup-inline' else str(wrapper(self.profile['case']))) + '\n'
+                data = (ROOT_COMMAND if role == 'root' else 'pass' if role == 'session-inline' else OWNED_BODY if role == 'workspace-owned' else inline_body(self.profile['case']) if role == 'cleanup-inline' else str(wrapper(self.profile['case']))) + '\n'
                 if type(args[0]) not in (str, bytes) or args[0] not in (data, data.encode()):
                     raise Refused('sealed inline compilation bytes')
             else:
