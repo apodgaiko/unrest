@@ -9,7 +9,7 @@ from pathlib import Path
 import stat
 import types
 
-from content_manifest import Refused, capture
+from content_manifest import Refused, capture, native_digest
 from controlled_startup import Intent
 from launch_policy import Observation, Rule, match, render
 from ordinary_acp import PRODUCT, PINS as ACP_PINS, plain_environment
@@ -108,7 +108,7 @@ def system_git():
         if (member == path and (not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111)
                 or member != path and not stat.S_ISDIR(info.st_mode)):
             raise Refused('cleanup system Git type')
-    return digest(path)
+    return native_digest(path)
 
 
 def expected(case, role, base, native, native_pin, checkout, root_environment, *, port=None, descriptor=None):

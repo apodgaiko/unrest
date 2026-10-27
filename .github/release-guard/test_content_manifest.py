@@ -286,3 +286,20 @@ def test_failure_after_nested_open_closes_directory_fds(source, monkeypatch):
     with pytest.raises(content.Refused, match="filesystem_acquisition_refused"):
         content.capture(source, NAMES)
     assert acquired and sorted(acquired) == sorted(closed)
+
+
+def test_native_measurement_has_a_separate_finite_bound(tmp_path):
+    executable = tmp_path / 'native'
+    data = b'x' * (content.MAX_FILE_BYTES + 1)
+    executable.write_bytes(data)
+    assert content.native_digest(executable) == hashlib.sha256(data).hexdigest()
+    with pytest.raises(content.Refused, match='file_bound'):
+        content.capture(tmp_path, ['native'])
+    with executable.open('wb') as stream:
+        stream.truncate(16 * 1024 * 1024 + 1)
+    with pytest.raises(content.Refused, match='file_bound'):
+        content.native_digest(executable)
+    executable.unlink()
+    executable.symlink_to('missing')
+    with pytest.raises(content.Refused):
+        content.native_digest(executable)

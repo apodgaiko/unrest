@@ -92,7 +92,8 @@ def _root(stack: ExitStack, path: Path) -> tuple[int, list[tuple[int, str, int, 
     return parent, chain
 
 
-def _member(root: int, name: str, line_counts: dict[str, int] | None) -> Member:
+def _member(root: int, name: str, line_counts: dict[str, int] | None,
+            file_bound: int = MAX_FILE_BYTES) -> Member:
     parts = name.split("/")
     directories: list[tuple[int, str, int, tuple[int, ...]]] = []
     with ExitStack() as stack:
@@ -112,7 +113,7 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None) -> Member:
         if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
                 or before.st_mode & 0o7000):
             raise Refused("nonregular_or_aliased_file")
-        if before.st_size > MAX_FILE_BYTES:
+        if before.st_size > file_bound:
             raise Refused("file_bound")
         fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                      dir_fd=parent)
@@ -124,7 +125,7 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None) -> Member:
         size = 0
         while block := os.read(fd, 65536):
             size += len(block)
-            if size > MAX_FILE_BYTES or size > before.st_size:
+            if size > file_bound or size > before.st_size:
                 raise Refused("file_read_bound")
             digest.update(block)
             if line_counts is not None:
@@ -147,7 +148,8 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None) -> Member:
                 "size": size, "sha256": digest.hexdigest()}
 
 
-def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | None) -> Manifest:
+def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | None,
+             file_bound: int = MAX_FILE_BYTES) -> Manifest:
     names = _inventory(paths)
     try:
         with ExitStack() as stack:
@@ -156,7 +158,7 @@ def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | Non
             files = []
             total = 0
             for name in names:
-                member = _member(fd, name, line_counts)
+                member = _member(fd, name, line_counts, file_bound)
                 total += member["size"]
                 if total > MAX_TOTAL_BYTES:
                     raise Refused("total_byte_bound")
@@ -176,6 +178,11 @@ def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | Non
 def capture(root: Path, paths: Sequence[str]) -> Manifest:
     """Measure exactly the supplied inventory without importing or running it."""
     return _capture(root, paths, None)
+
+
+def native_digest(path: Path) -> str:
+    """Measure a native executable, retaining source manifests' smaller limit."""
+    return _capture(path.parent, [path.name], None, 16 * 1024 * 1024)['files'][0]['sha256']
 
 
 def measure_lines(root: Path, paths: Sequence[str]) -> tuple[Manifest, dict[str, int]]:

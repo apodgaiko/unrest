@@ -13,7 +13,7 @@ import socket
 import stat
 import struct
 
-from content_manifest import Refused
+from content_manifest import Refused, native_digest
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from controlled_startup import ACP, ACP_PIN, BACKEND_PIN, SESSION
@@ -171,7 +171,7 @@ class Observer:
                    and value['cwd'] == cwd and path == value.get('executable', self.binding['entry']['path'])]
         if len(matches) != 1:
             return False
-        if digest(Path(path).resolve(strict=True)) != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
+        if native_digest(Path(path).resolve(strict=True)) != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
             return False
         intent = matches[0]
         if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):

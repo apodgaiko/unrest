@@ -2473,3 +2473,7 @@ this exact cleanup checkpoint and four for other groups. Original product clocks
 timeouts and completion/cleanup assertions remain unchanged. Acquired endpoint
 observations are retained in the encrypted diagnostics. These bounded checkpoints
 remain separate from full source and release certification.
+
+Native executable measurement uses a separate 16 MiB full-byte bound; source
+manifests retain their 4 MiB member limit. Both retain nofollow acquisition,
+regular single-link file checks, and before/after identity verification.
