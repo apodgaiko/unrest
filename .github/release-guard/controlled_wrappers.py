@@ -10,7 +10,7 @@ from pathlib import Path
 import types
 
 from content_manifest import Refused
-from controlled_cases import PINS, ADMISSION, WARNING_REFUSALS, NOTIFICATION_STARTUP
+from controlled_cases import PINS, ADMISSION, WARNING_REFUSALS, NOTIFICATION_STARTUP, NOTIFICATION_SIGNALS
 from source_owner import Link, prepare, _namespace, _safe_code
 
 WRAPPERS = {
@@ -67,7 +67,7 @@ def instance_environment(instance, base, original, config, checkout, case):
     if case in ADMISSION:
         qualified = 'test_owner_adapter_bound_privacy_first_failure_cleanup_no_send.<locals>.<lambda>'
         module_name, retained = 'tests.test_experimental_admission_bounds', 'environment'
-    elif case in NOTIFICATION_STARTUP:
+    elif case in (*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS):
         qualified = 'test_controlled_process_http_revocation_and_warning_privacy.<locals>.<lambda>'
         module_name, retained = 'tests.test_experimental_notifications', 'environment'
     elif case in WARNING_REFUSALS:

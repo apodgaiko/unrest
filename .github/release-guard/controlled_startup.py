@@ -105,6 +105,7 @@ class Startup:
         self.root_identity = self.root_key()
         self.configuration = configuration_binding
         self.case = case
+        self.owners: dict[str, object] = {}
         self.runtime_pin = interpreter_sha256
         if hashlib.sha256(interpreter.read_bytes()).hexdigest() != interpreter_sha256:
             raise Refused('startup runtime bytes')
@@ -232,6 +233,10 @@ class Startup:
             match((expected,),observed,expected.owner,case)
             if self.root_key() != self.root_identity:
                 raise Refused('startup owned root replaced')
+            from controlled_cases import NOTIFICATION_SIGNALS
+            if case in NOTIFICATION_SIGNALS:
+                if self.owners.setdefault(str(root),instance) is not instance:
+                    raise Refused('controlled notification owner generation changed')
             return Intent(expected, (expected.argv[0], '-I', '-S', *expected.argv[1:]), frame.f_lineno, script_pin)
         finally:
             del frames

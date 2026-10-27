@@ -2889,3 +2889,10 @@ connected/connecting/errored/unknown status parameters and backend postimages.
 They use one pair, zero broker HTTP and no fixture signal. The original
 notification environment lambda retains its exact owner and configuration.
 Disabled and later-phase notification cases remain outside this slice.
+
+The 16 later-phase non-disabled notification cases retain their checked owner
+object, exact original write/transition code and closure cells. Parked signals
+require the real test frame; before-send signals bind the retained worker client,
+original session/prompt branch and active broker in its request task. External
+case parameters, original backend/Popen and parent/birth joins remain mandatory.
+No global task search or root HTTP permission follows from this signal chain.

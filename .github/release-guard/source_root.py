@@ -12,7 +12,7 @@ import pytest
 from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
-from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, WARNING_REFUSALS, configured
+from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, WARNING_REFUSALS, NOTIFICATION_SIGNALS, configured
 from bootstrap_configuration import Binding
 from content_manifest import Refused
 from controlled_startup import SESSION, SESSION_PIN, TEST, TEST_PIN, Startup, dictionary
@@ -35,6 +35,17 @@ class BootstrapCalls(TestSources):
 
     def signal(self,pid,sig,group):
         case = self.policy.case
+        if case in NOTIFICATION_SIGNALS and sig == USER_SIGNAL:
+            if group:
+                raise Refused('controlled notification group signal')
+            from notification_calls import signal_owner
+            instance = signal_owner(self)
+            values = dictionary(instance,self.startup.base)
+            backends = _namespace(values['backends'])
+            if type(backends.get('worker')) is not self.backend_type:
+                raise Refused('controlled notification backend type')
+            self.process(dictionary(backends['worker'],self.backend_type).get('process'),pid=pid)
+            return
         warning = case in WARNING_REFUSALS
         if (not warning and case != 'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure') or sig != USER_SIGNAL:
             return Sources.signal(self,pid,sig,group)
@@ -138,6 +149,9 @@ class BootstrapCalls(TestSources):
             checkout, Path(self.profile['owned']), Path(self.profile['native']), self.profile['native_sha256'],
             configuration_binding=Binding(checkout) if configured(item.nodeid) else None,
             case=item.nodeid)
+        if item.nodeid in NOTIFICATION_SIGNALS:
+            from notification_calls import prepare as prepare_notification
+            prepare_notification(self)
         relay = importlib.import_module('unrest_harness.experimental_relay')
         relay_unit = self.unit('src/unrest_harness/experimental_relay.py', relay, self.mode(relay))
         base = self.startup.base

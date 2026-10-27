@@ -9,7 +9,7 @@ on:
         description: 'Exact original case group; none runs only kernel/admission controls'
         type: choice
         default: none
-        options: [none, controlled-notification-startup8, controlled-warning4, controlled-admission6, controlled-private8, controlled-probes4, controlled-large8, controlled-initialize1, controlled-startup1, controlled-cancel1, controlled-ack20, controlled-bridge1, controlled-drain3, controlled-capacity10, controlled-batches4, controlled-orders-PP, controlled-orders-RP, controlled-orders-RC, controlled-orders-RR, controlled-stops12, controlled-halt15, controlled-cancellation4, controlled-registration4, controlled-witness1, imports6, session-timeout, sessions69, workspaces24, bootstrap27, ordinary42, cleanup7, cleanup9, cleanup5, cleanup-review3, cleanup12, cleanup15]
+        options: [none, controlled-notification-signals16, controlled-notification-startup8, controlled-warning4, controlled-admission6, controlled-private8, controlled-probes4, controlled-large8, controlled-initialize1, controlled-startup1, controlled-cancel1, controlled-ack20, controlled-bridge1, controlled-drain3, controlled-capacity10, controlled-batches4, controlled-orders-PP, controlled-orders-RP, controlled-orders-RC, controlled-orders-RR, controlled-stops12, controlled-halt15, controlled-cancellation4, controlled-registration4, controlled-witness1, imports6, session-timeout, sessions69, workspaces24, bootstrap27, ordinary42, cleanup7, cleanup9, cleanup5, cleanup-review3, cleanup12, cleanup15]
 
 permissions:
   contents: read

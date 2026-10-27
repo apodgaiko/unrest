@@ -17,7 +17,7 @@ import time
 from content_manifest import Refused, native_digest
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, declaration
-from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS
+from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
 from controlled_pairs import before_bind, before_spawn, limits as controlled_limits, scope as controlled_scope
 from controlled_startup import ACP, expected_entry
 from endpoint_policy import Endpoints, Owner, Route
@@ -815,9 +815,9 @@ class Observer:
                     or self.ledger.process(child['birth']).parent != actor['birth']
                     or type(payload['signal']) is not int or type(payload['group']) is not bool
                     or payload['signal'] not in (0,9,15) and not (payload['signal'] == 10 and payload['group'] is False
-                        and child['role'] == 'backend' and self.case in (*WARNING_REFUSALS,'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure'))):
+                        and child['role'] == 'backend' and self.case in (*WARNING_REFUSALS,*NOTIFICATION_SIGNALS,'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure'))):
                 raise Refused('source exact owned signal')
-            if payload['signal'] == 10 and self.case in WARNING_REFUSALS and 10 in child['signals']:
+            if payload['signal'] == 10 and self.case in (*WARNING_REFUSALS,*NOTIFICATION_SIGNALS) and 10 in child['signals']:
                 raise Refused('controlled warning signal replay')
             process = self.ledger.process(child['birth'])
             if payload['signal'] == 0:
