@@ -113,18 +113,18 @@ def test_reply_requires_exact_request_echo():
             control.verify_reply(changed, request)
 
 
-def test_partial_writes_do_not_reencode_or_duplicate_effect(channels):
-    _, _, frame = channels
-    class Partial:
-        def __init__(self):
-            self.written = bytearray()
-        def send(self, data):
-            self.written.extend(data[:3])
-            return min(3, len(data))
-        def close(self):
-            pass
-    stream = Partial()
-    frame.stream = stream
+def test_partial_writes_do_not_reencode_or_duplicate_effect(channels, monkeypatch):
+    left, _, frame = channels
+    send, encode = control._SEND, control.encode
+    calls = {'encode': 0, 'send': 0}
+    def partial(stream, data):
+        calls['send'] += 1
+        return send(stream, data[:3])
+    def once(value, limit):
+        calls['encode'] += 1
+        return encode(value, limit)
+    monkeypatch.setattr(control, '_SEND', partial)
+    monkeypatch.setattr(control, 'encode', once)
     answer = {'ok': True, 'count': 123}
     frame.answer(answer)
     for _ in range(100):
@@ -132,9 +132,19 @@ def test_partial_writes_do_not_reencode_or_duplicate_effect(channels):
             break
     else:
         pytest.fail('bounded partial send failed')
-    assert bytes(stream.written) == control.encode(answer, control.RESPONSE_LIMIT)
+    expected = encode(answer, control.RESPONSE_LIMIT)
+    received = bytearray()
+    left.settimeout(1)
+    while len(received) < len(expected):
+        received.extend(left.recv(len(expected) - len(received)))
+    assert bytes(received) == expected
+    assert calls['encode'] == 1 and calls['send'] > 1
+    sends = calls['send']
     assert frame.send()
-    assert bytes(stream.written) == control.encode(answer, control.RESPONSE_LIMIT)
+    assert calls == {'encode': 1, 'send': sends}
+    left.setblocking(False)
+    with pytest.raises(BlockingIOError):
+        left.recv(1)
 
 
 
@@ -222,3 +232,21 @@ def test_empty_channel_cannot_discharge_using_another_ledger(channels):
     other.control(root, 'root-token', 0, 0, 'parent-wait', receipt(other, root, same_child, 15))
     assert other.reaped(same_child, 'child-token')
     assert not control.cancelled_empty(frame, other, same_child, 'child-token')
+
+
+def test_private_framing_never_reenters_payload_io_wrappers(channels, monkeypatch):
+    left, right, frame = channels
+    send, recv = socket.socket.send, socket.socket.recv
+    def payload_only(*args, **kwargs):
+        raise AssertionError('private control channel reentered payload mediation')
+    with monkeypatch.context() as patch:
+        for method in ('send', 'recv', 'close'):
+            patch.setattr(socket.socket, method, payload_only)
+        assert send(left, wire(b'{"control":true}')) > 0
+        assert frame.read() == {'control': True}
+        frame.answer({'ok': True})
+        assert frame.send()
+        assert json.loads(recv(left, 100)[4:]) == {'ok': True}
+        with pytest.raises(Refused):
+            frame.refuse('controlled refusal')
+        assert right.fileno() == -1 and frame.poison

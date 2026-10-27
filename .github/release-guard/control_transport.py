@@ -20,6 +20,9 @@ from process_ledger import Birth, Ledger, integer, text
 REQUEST_LIMIT = 8192
 RESPONSE_LIMIT = 16384
 CHANNEL_SECONDS = 4
+# Control framing uses captured I/O so source payload mediation cannot recurse
+# into the private, independently peer-authenticated observer channel.
+_SEND, _RECV, _CLOSE = socket.socket.send, socket.socket.recv, socket.socket.close
 DRAIN = frozenset({'custody_close', 'custody_signal', 'drain_inventory', 'drain_child', 'drain_complete'})
 
 
@@ -75,7 +78,7 @@ def fail_channel(method):
             self.poison.append('control transport refused')
             self.shared_poison.append('control transport refused')
             try:
-                self.stream.close()
+                _CLOSE(self.stream)
             except OSError:
                 pass
             raise
@@ -122,7 +125,7 @@ class Frame:
     def refuse(self, reason: str):
         self.poison.append(reason)
         self.shared_poison.append(reason)
-        self.stream.close()
+        _CLOSE(self.stream)
         raise Refused(reason)
 
     @fail_channel
@@ -132,7 +135,7 @@ class Frame:
         if self.received is not None or self.eof:
             return None
         try:
-            block = self.stream.recv(self.limit + 5 - len(self.buffer))
+            block = _RECV(self.stream, self.limit + 5 - len(self.buffer))
         except BlockingIOError:
             return None
         if not block:
@@ -177,7 +180,7 @@ class Frame:
         if not self.output:
             return True
         try:
-            sent = self.stream.send(self.output)
+            sent = _SEND(self.stream, self.output)
         except BlockingIOError:
             return False
         if sent <= 0:

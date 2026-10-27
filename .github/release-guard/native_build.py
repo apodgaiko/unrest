@@ -67,6 +67,7 @@ def main():
             '-I' + str(runtime / Path(sysconfig.get_path('include')).relative_to(original)), '-L' + str(library.parent),
             '-DGUARD_BOOTSTRAP=' + json.dumps(repr(str(bootstrap))),
             '-DGUARD_PROFILES=' + json.dumps(repr(str(profiles))),
+            '-DGUARD_CONTROL_SOCKET=' + json.dumps(str(profiles / 'control.sock')),
             '-DGUARD_BOOTSTRAP_SHA256=' + json.dumps(pin(bootstrap)['sha256']),
             str(support / 'native_entry.c'), '-Wl,-rpath,' + str(library.parent),
             '-lpython3.13', *shlex.split(sysconfig.get_config_var('LIBS') or ''),

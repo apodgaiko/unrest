@@ -1,0 +1,136 @@
+"""Closed original-bootstrap profile consumption, before any source body."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import sys
+
+from content_manifest import Refused, capture
+from controlled_startup import ACP_PIN, BACKEND_PIN, CASES, WRAPPER
+from linux_observation import credential_identity, process_identity
+from process_ledger import Birth, canonical
+
+ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
+METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
+    'launch-intent', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'listen', 'accepted', 'connect', 'connected',
+    'payload', 'parent-wait', 'custody_signal', 'custody_close', 'guard-refusal'})
+FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
+    'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
+    'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
+    'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script'}
+
+
+def digest(path: Path) -> str:
+    return capture(path.parent, [path.name])['files'][0]['sha256']
+
+
+def readonly_mounts(expected: dict, namespace: str) -> None:
+    if type(expected) is not dict or len(expected) != 4 or os.readlink('/proc/self/ns/mnt') != namespace:
+        raise Refused('source immutable generation')
+    for point, identity in expected.items():
+        if (type(point) is not str or type(identity) is not list or len(identity) != 3
+                or any(type(value) is not int or value <= 0 for value in identity)):
+            raise Refused('source mount identity types')
+    observed = {}
+    for line in Path('/proc/self/mountinfo').read_text().splitlines():
+        fields = line.split()
+        if len(fields) < 10:
+            raise Refused('source mount ABI')
+        point = fields[4]
+        if point in expected:
+            info = os.stat(point, follow_symlinks=False)
+            observed[point] = [int(fields[0]), info.st_dev, info.st_ino]
+            if 'ro' not in fields[5].split(','):
+                raise Refused('source mutable input mount')
+    if observed != expected:
+        raise Refused('source mount generation changed')
+
+
+def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
+    if (type(profile) is not dict or set(profile) != FIELDS
+            or profile['schema'] != 'unrest.bootstrap-source.v1'
+            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend')
+            or type(profile['case']) is not str
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else CASES)):
+        raise Refused('source closed profile')
+    for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
+        value = profile[key]
+        if type(value) is not str or not value.startswith('/') or str(Path(value).resolve()) != value:
+            raise Refused('source canonical profile path')
+    for key in ('native_sha256', 'entry_sha256', 'source_sha256', 'support_sha256', 'runtime_sha256',
+                'dependency_sha256', 'nonce', 'seal', 'token'):
+        value = profile[key]
+        size = 32 if key == 'token' else 64
+        if type(value) is not str or len(value) != size or any(char not in '0123456789abcdef' for char in value):
+            raise Refused('source profile byte identity')
+    expected_mounts = {profile['checkout'], profile['dependencies'], profile['runtime_root'], str(Path(__file__).parent)}
+    if type(profile['mounts']) is not dict or set(profile['mounts']) != expected_mounts:
+        raise Refused('source exact mounted input inventory')
+    if Path(profile['native']) != Path(profile['runtime_root']) / 'bin/python-unrest-guard-control':
+        raise Refused('source native runtime root')
+    actual = process_identity(os.getpid())
+    parent, observer = Birth.read(profile['parent']), Birth.read(profile['observer'])
+    if (canonical(profile['identity']) != profile['identity'] or canonical(actual) != profile['identity'] or parent.pid != os.getppid()
+            or Birth.read(credential_identity(parent.pid)) != parent or observer.uid != 20001
+            or (parent != observer if profile['role'] == 'root' else parent.uid != 20000)
+            or actual['uids'] != [20000] * 4 or actual['gids'] != [20000] * 4
+            or any(actual['capabilities'].values()) or actual['no_new_privs'] != 1 or actual['seccomp'] != 2
+            or type(profile['generation']) is not int or profile['generation'] != 1
+            or [sys.flags.isolated, sys.flags.no_site, sys.flags.dont_write_bytecode, sys.flags.utf8_mode] != [1, 1, 0, 1]
+            or profile['native'] != sys.executable or digest(Path(sys.executable)) != profile['native_sha256']
+            or digest(Path(__file__).with_name('native_entry.py')) != profile['entry_sha256']):
+        raise Refused('source actual profile binding')
+    if (type(profile['environment']) is not dict
+            or any(type(key) is not str or type(value) is not str for key, value in profile['environment'].items())
+            or profile['environment'] != dict(os.environ) or profile['cwd'] != os.getcwd()
+            or type(profile['argv']) is not list or any(type(arg) is not str for arg in profile['argv'])
+            or profile['argv'] != sys.orig_argv):
+        raise Refused('source actual request binding')
+    for name in os.listdir('/proc/self/fd'):
+        descriptor = int(name)
+        if descriptor > 2:
+            try:
+                os.fstat(descriptor)
+            except OSError:
+                continue
+            raise Refused('source ambient inherited descriptor')
+    readonly_mounts(profile['mounts'], profile['mount_namespace'])
+    native = profile['native']
+    role, script = profile['role'], profile['script']
+    if role == 'root':
+        if (profile['cwd'] != profile['checkout'] or script is not None or event != 'cpython.run_command' or arguments != (ROOT_COMMAND + '\n',)
+                or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
+            raise Refused('source fixed root body')
+    else:
+        if (not Path(profile['cwd']).is_relative_to(Path(profile['owned']))
+                or Path(profile['cwd']).name != 'worker'
+                or role == 'backend' and profile['case'] != CASES[0]
+                or role == 'delayed-backend' and profile['case'] != CASES[1]):
+            raise Refused('source closed leaf role or home')
+        if type(script) is not str or str(Path(script).resolve()) != script:
+            raise Refused('source leaf path')
+        if role == 'acp':
+            expected = [native, '-I', '-S', str(Path(profile['checkout']) / 'tests/fixtures/controlled_python_acp.py'), '--controlled-local-acp-v1']
+            if script != expected[3]:
+                raise Refused('source exact ACP path')
+            pin = ACP_PIN
+        else:
+            owned = Path(profile['owned'])
+            path = Path(script)
+            if not path.is_relative_to(owned) or path != Path(profile['cwd']).parent / 'fake-app-server':
+                raise Refused('source backend path')
+            expected = [native, '-I', '-S', script, 'app-server']
+            pin = BACKEND_PIN
+            if role == 'delayed-backend':
+                expected = [native, '-I', '-S', '-c', WRAPPER, script, 'app-server']
+        if profile['argv'] != expected or digest(Path(script)) != pin:
+            raise Refused('source leaf bytes or vector')
+        if role == 'delayed-backend':
+            if event != 'cpython.run_command' or arguments != (WRAPPER + '\n',):
+                raise Refused('source exact delayed wrapper')
+        elif event != 'cpython.run_file' or arguments != (script,):
+            raise Refused('source exact script entry')
+    pins = tuple(sorted((('entry', profile['entry_sha256']), ('native', profile['native_sha256']),
+                        ('source', profile['source_sha256']), ('support', profile['support_sha256']),
+                        ('runtime', profile['runtime_sha256']), ('dependency', profile['dependency_sha256']))))
+    return actual, pins

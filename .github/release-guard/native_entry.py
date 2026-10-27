@@ -10,10 +10,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import socket
 import stat
 import sys
-import time
 
 BODY_READY = False
 BODIES = {
@@ -38,8 +36,7 @@ def key(info):
         'st_size', 'st_mtime_ns', 'st_ctime_ns'))
 
 
-def consume(directory: str, event: str, arguments: tuple) -> None:
-    global BODY_READY
+def acquire(directory: str) -> tuple[Path, dict]:
     root = Path(directory)
     parent = root.lstat()
     if (root.resolve() != root or parent.st_uid != 20001
@@ -58,12 +55,26 @@ def consume(directory: str, event: str, arguments: tuple) -> None:
     finally:
         os.close(descriptor)
     profile = json.loads(body, object_pairs_hook=unique)
+    if type(profile) is not dict:
+        raise ValueError('native profile object')
+    return root, profile
+
+
+def consume(directory: str, event: str, arguments: tuple) -> None:
+    global BODY_READY, POLICY
+    root, profile = acquire(directory)
+    if profile.get('schema') == 'unrest.bootstrap-source.v1':
+        sys.path.insert(0, str(Path(__file__).parent))
+        from source_entry import activate
+        POLICY = activate(root, profile, event, arguments)
+        BODY_READY = True
+        return
     fields = {'schema', 'case', 'identity', 'observer', 'argv', 'environment', 'cwd', 'flags',
               'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation', 'mount_namespace'}
     if type(profile) is not dict or set(profile) != fields or profile['schema'] != 'unrest.native-control.v1':
         raise ValueError('native profile schema')
     sys.path.insert(0, str(Path(__file__).parent))
-    from control_transport import Frame, RESPONSE_LIMIT, peer, verify_reply
+    from bootstrap_wire import Client
     from linux_observation import process_identity
     from process_ledger import Birth, canonical
 
@@ -116,26 +127,12 @@ def consume(directory: str, event: str, arguments: tuple) -> None:
     observer = Birth.read(profile['observer'])
     if observer.uid != 20001 or observer.pid != os.getppid():
         raise ValueError('native observer parent')
+    client = Client(root, profile, frozenset({'core-ready', 'body-ready'}))
     for kind, payload in (
             ('core-ready', {'pins': [['entry', profile['entry_sha256']], ['native', profile['native_sha256']]]}),
             ('body-ready', {'seal': profile['seal']})):
-        request = {'pid': os.getpid(), 'nonce': profile['nonce'], 'token': profile['token'],
-                   'generation': 1, 'id': os.urandom(16).hex(), 'kind': kind, 'payload': payload}
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stream:
-            stream.settimeout(4)
-            stream.connect(str(root / 'control.sock'))
-            peer(stream, observer, 20001)
-            frame = Frame(stream, RESPONSE_LIMIT, [])
-            frame.answer(request)
-            while not frame.send():
-                time.sleep(.0001)
-            response = None
-            while response is None:
-                response = frame.read()
-                time.sleep(.0001)
-            peer(stream, observer, 20001)
-            if verify_reply(response, request) != {'ok': True}:
-                raise ValueError('native readiness refused')
+        if client.request(kind, payload) != {'ok': True}:
+            raise ValueError('native readiness refused')
     sys.path.pop(0)
     sys.dont_write_bytecode = True
     BODY_READY = True

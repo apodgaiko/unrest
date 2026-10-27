@@ -22,11 +22,30 @@ not establish that reference's authority, an immutable snapshot, launch permissi
 or a release certificate. The host must separately establish reference custody
 and read-only source/runtime mounts before integration.
 
-The replacement is not selected by any current execution workflow. Existing
-guard, product tests, review restrictions and release gates remain effective
-during construction. Removing historical implementation-shape checks requires
+The short replacement workflow includes the two unchanged original bootstrap
+timeout cases. It is an integration checkpoint, not the release source suite.
+Existing guard, product tests, review restrictions and release gates remain
+effective during construction. Removing historical implementation-shape checks requires
 an independently reviewed crosswalk preserving their behavioral mutation cases.
 No product-test timing parameter changes follow from the guard rewrite.
+
+`source_host.py` prepares a private generation of tracked source, locked
+dependencies, runtime and support. The observer makes those four inputs
+read-only in a private mount namespace before dropping credentials, and binds
+their complete measured bytes and mount identities into each native profile.
+The fixed pytest root runs at UID20000 without capabilities. Its independent
+observer runs at UID20001 with only DAC_READ_SEARCH and SYS_PTRACE. The kernel
+stop binds each finite child intent to actual executable bytes, argv,
+environment, cwd and birth before native prebody/READY admission. Cleanup
+requires both kernel terminal observations and actual original-parent waits;
+adopted fallback cleanup is retained as failure evidence.
+
+The trusted root may compile ordinary in-process pytest/library code after its
+exact entry. Privileged effects still require current source-owner and finite
+observer admission. Sealed child compilation/imports remain closed to their
+fixed fixture bodies, including the once-only delayed-wrapper dispatch. This
+boundary does not claim isolation from arbitrary hostile Python in the trusted
+root, executing-function clones, or genuine native provider acceptance.
 
 The standalone `linux_trace.py` replacement uses one SEIZE startup path with a
 held pipe, kernel-bound fork/clone accounting and exact terminal waits. Failure

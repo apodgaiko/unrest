@@ -12,18 +12,45 @@
 #ifndef GUARD_PROFILES
 #error observer-owned profile directory required
 #endif
+#ifndef GUARD_CONTROL_SOCKET
+#error fixed observer channel required
+#endif
 static int entering = 0, entered = 0, poisoned = 0;
+static _Thread_local int checking = 0;
+static PyObject *policy = NULL;
 static int forbidden(const char *event) {
     return !strcmp(event,"subprocess.Popen") || !strcmp(event,"os.exec") ||
         !strcmp(event,"os.posix_spawn") || !strcmp(event,"os.system") ||
         !strcmp(event,"os.fork") || !strcmp(event,"os.forkpty") ||
         !strcmp(event,"socket.bind") || !strcmp(event,"socket.connect") ||
         !strcmp(event,"socket.sendto") || !strcmp(event,"socket.sendmsg") ||
+        !strcmp(event,"socket.getaddrinfo") || !strcmp(event,"socket.getnameinfo") ||
+        !strcmp(event,"socket.gethostbyname") || !strcmp(event,"socket.gethostbyaddr") ||
         !strcmp(event,"sys.setprofile") || !strcmp(event,"sys.settrace");
 }
 static int guard_audit(const char *event, PyObject *args, void *unused) {
     (void)unused;
-    if (entering) return 0;
+    if (entering || checking) return 0;
+    if (entered && !strcmp(event,"socket.connect") && PyTuple_Check(args) &&
+        PyTuple_GET_SIZE(args) == 2 && PyUnicode_Check(PyTuple_GET_ITEM(args,1)) &&
+        PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(args,1),GUARD_CONTROL_SOCKET) == 0)
+        return 0;  /* Only the fixed protected observer channel, never a caller path. */
+    int effect = forbidden(event) || !strcmp(event,"compile") || !strcmp(event,"exec") ||
+        !strcmp(event,"os.kill") || !strcmp(event,"os.killpg") ||
+        !strcmp(event,"socket.__new__") || !strcmp(event,"import");
+    if (entered && policy != NULL && !Py_IsFinalizing() && effect) {
+        checking = 1;
+        PyObject *answer = PyObject_CallFunction(policy,"sO",event,args);
+        checking = 0;
+        if (answer != Py_True) {
+            poisoned = 1;
+            Py_XDECREF(answer);
+            if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError,"source policy refused effect");
+            return -1;
+        }
+        Py_DECREF(answer);
+        return 0;
+    }
     if (forbidden(event)) {
         if (!entered) _exit(86);
         poisoned = 1;
@@ -54,6 +81,11 @@ static int guard_audit(const char *event, PyObject *args, void *unused) {
         if (result == NULL || PyDict_GetItemString(globals,"BODY_READY") != Py_True) {
             if (PyErr_Occurred()) PyErr_Print();
             _exit(86);
+        }
+        PyObject *candidate = PyDict_GetItemString(globals,"POLICY");
+        if (candidate != NULL) {
+            if (!PyCallable_Check(candidate)) _exit(86);
+            policy = Py_NewRef(candidate);
         }
         Py_DECREF(result);
         Py_DECREF(module);

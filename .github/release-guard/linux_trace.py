@@ -502,13 +502,13 @@ class OwnedTrace:
             if (initial != self.child or not os.WIFSTOPPED(status)
                     or status >> 16 != 128):
                 raise RuntimeError("owned seize interrupt stop missing")
+            self.records.append({"kind": "kernel_root", "identity": self.identities[self.child]})
             if self.on_attached is not None:
                 self.on_attached()
             assert self.start_write is not None
             if os.write(self.start_write, b'1') != 1:
                 raise RuntimeError('owned startup release failed')
             self._close_start()
-            self.records.append({"kind": "kernel_root", "identity": self.identities[self.child]})
             # EXITKILL keeps tracer failure fail-closed; forks/clones are followed by
             # the kernel, not discovered by process-table polling.
             ptrace(7 if self.selective else 24, self.child)
