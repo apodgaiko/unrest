@@ -11,6 +11,7 @@ import sys
 
 from content_manifest import Refused, capture
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
+from controlled_cases import CASES as CONTROLLED, GROUPS as CONTROLLED_GROUPS, backend as controlled_backend, backend_path
 from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
 from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, MOCK, PINS
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_mode, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
@@ -78,8 +79,8 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or profile['schema'] != 'unrest.bootstrap-source.v1'
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, FIXED_CASES, *SESSION_GROUPS, *CLEANUP_GROUPS)):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES))
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, FIXED_CASES, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values())):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -204,9 +205,9 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             raise Refused('source original mock ACP leaf')
     else:
         if (not Path(profile['cwd']).is_relative_to(Path(profile['owned']))
-                or Path(profile['cwd']).name != 'worker'
+                or Path(profile['cwd']).name not in (('worker','validator') if profile['case'] in CONTROLLED else ('worker',))
                 or profile['case'] not in profile['cases']
-                or role == 'backend' and wrapper(profile['case']) is not None
+                or role == 'backend' and profile['case'] not in CONTROLLED and wrapper(profile['case']) is not None
                 or role == 'delayed-backend' and wrapper(profile['case']) is None):
             raise Refused('source closed leaf role or home')
         if type(script) is not str or str(Path(script).resolve()) != script:
@@ -219,11 +220,11 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         else:
             owned = Path(profile['owned'])
             path = Path(script)
-            if not path.is_relative_to(owned) or path != Path(profile['cwd']).parent / 'fake-app-server':
+            if not path.is_relative_to(owned) or path != (backend_path(profile['case'],Path(profile['cwd']).parent) if profile['case'] in CONTROLLED else Path(profile['cwd']).parent / 'fake-app-server'):
                 raise Refused('source backend path')
-            options, _ = configuration(Path(profile['checkout']), Path(profile['cwd'])) if declaration(profile['case']).configured else ([], None)
+            options, _ = configuration(Path(profile['checkout']), Path(profile['cwd'])) if profile['case'] not in CONTROLLED and declaration(profile['case']).configured else ([], None)
             expected = [native, '-I', '-S', script, *options, 'app-server']
-            pin = BACKEND_PIN
+            pin = controlled_backend(profile['case'])[0] if profile['case'] in CONTROLLED else BACKEND_PIN
             if role == 'delayed-backend':
                 expected = [native, '-I', '-S', '-c', wrapper(profile['case']), script, *options, 'app-server']
         if profile['argv'] != expected or digest(Path(script)) != pin:

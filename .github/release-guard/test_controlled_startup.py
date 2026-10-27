@@ -275,3 +275,57 @@ def test_live_context_refuses_callback_objects_without_invoking_them(context, mu
             await owner.close()
     asyncio.run(run())
     assert not owner.backends and not owner.roles
+
+
+@pytest.mark.parametrize('case', [
+    'tests/test_controlled_python_acp.py::test_single_c1_fixed_timing_protocol_witness',
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False--1-None-write]',
+])
+def test_finite_unconfigured_owner_selection_uses_actual_backend_bytes(tmp_path, monkeypatch, case):
+    from controlled_cases import CASES as CONTROLLED
+    from tests.test_experimental_finite_orders import CompletionBarriers
+    if 'ack_durability' in case:
+        case = next(name for name in CONTROLLED if 'test_ack_durability[' in name)
+    checkout = Path(__file__).resolve().parents[2]
+    tests = __import__(case.split('::')[0].removesuffix('.py').replace('/','.'),fromlist=['x'])
+    modules = ((session, 'plain' if type(session.__loader__) is importlib.machinery.SourceFileLoader else 'beartype-passive'), (tests,'pytest'))
+    units = [prepare(Path(module.__file__).read_bytes(),module.__file__,module.__name__,mode,
+        hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()) for module,mode in modules]
+    gate = Startup(session,tests,*units,checkout,tmp_path,Path(sys.executable),
+        hashlib.sha256(Path(sys.executable).resolve().read_bytes()).hexdigest(),case=case)
+    owner = owner_fixture.__wrapped__(tmp_path,None)
+    if 'ack_durability' in case:
+        barriers = CompletionBarriers(monkeypatch,tmp_path)
+        owner.backend_launcher.write_bytes(barriers.fixture.read_bytes())
+        owner.backend_digest = hashlib.sha256(owner.backend_launcher.read_bytes()).hexdigest()
+    async def start_server(*args,**kwargs):
+        return Server()
+    monkeypatch.setattr(asyncio,'start_server',start_server)
+    selected = []
+    def inspect(args):
+        selected.append(gate.select(case,observation(args)))
+    ACTIVE[0] = inspect
+    async def run():
+        try:
+            with pytest.raises(StoppedBeforeExec):
+                await owner._open_role_owned('validator',StartupDiagnostics())
+        finally:
+            ACTIVE[0] = None
+            await owner.close()
+    asyncio.run(run())
+    assert len(selected) == 1 and selected[0].original.argv[-1] == 'app-server'
+    assert selected[0].original.cwd == str(owner.root/'validator')
+
+
+def test_controlled_cleanup_keeps_live_original_method_binding(context,monkeypatch):
+    from source_root import BootstrapCalls
+    gate,_ = context
+    calls = object.__new__(BootstrapCalls)
+    calls.controlled,calls.startup,calls.anchors = True,gate,{}
+    owner = calls.method(gate.unit,session,gate.base,'_SessionOwner','_reap')
+    owner.verify_binding()
+    async def foreign(*args,**kwargs):
+        pass
+    monkeypatch.setattr(gate.base,'_reap',foreign)
+    with pytest.raises(Refused):
+        owner.verify_binding()

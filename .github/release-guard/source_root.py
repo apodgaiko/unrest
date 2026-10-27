@@ -12,6 +12,7 @@ from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
 from bootstrap_cases import declaration
+from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS
 from bootstrap_configuration import Binding
 from content_manifest import Refused
 from controlled_startup import SESSION, SESSION_PIN, TEST, TEST_PIN, Startup, dictionary
@@ -22,6 +23,10 @@ from source_calls import TestSources, nested_signal
 class BootstrapCalls(TestSources):
     def method(self, unit, module, cls, type_name, method):
         function = vars(cls)[method]
+        if self.controlled and method == 'start':
+            self.anchors[type_name + '.' + method] = function
+            return self.owner(unit, module, function, type_name + '.' + method,
+                (*self.startup.links, Link(module, type_name, cls), Link(self.anchors, type_name + '.' + method, function)))
         return self.owner(unit, module, function, type_name + '.' + method,
                           (*self.startup.links, Link(module, type_name, cls), Link(cls, method, function)))
 
@@ -33,11 +38,27 @@ class BootstrapCalls(TestSources):
             if len(matches) != 1:
                 raise Refused('root original listener callsite')
             name, owner, frame = matches[0]
+            controlled = self.policy.case in CONTROLLED
+            scope = None
+            if controlled:
+                from controlled_wrappers import verify
+                verify(self.startup.bridge if name == 'bridge' else self.startup.base,
+                    'start' if name != 'lifetime' else '_open_role_owned', owner.function, Path(self.profile['checkout']))
             owner.verify(frame)
             instance = frame.f_locals.get('self')
             if name == 'bridge':
                 if type(instance) is not self.startup.bridge:
                     raise Refused('root original bridge type')
+                if controlled:
+                    parents = [f for f in frames if f.f_code is self.startup.open.__code__ and f.f_globals is vars(self.session)]
+                    if len(parents) != 1 or parents[0].f_locals.get('bridge') is not instance:
+                        raise Refused('root bridge original owner pair')
+                    parent = parents[0]
+                    values = dictionary(parent.f_locals.get('self'), self.startup.base)
+                    root, role = values.get('root'), parent.f_locals.get('name')
+                    if type(root) is not type(Path('/')) or type(role) is not str or role not in ('worker','validator'):
+                        raise Refused('root bridge owner scope')
+                    scope = str(root / role)
             else:
                 if type(instance) not in (self.startup.synthetic, self.startup.base):
                     raise Refused('root original session type')
@@ -45,11 +66,16 @@ class BootstrapCalls(TestSources):
                 root = values.get('root')
                 if (type(root) is not type(Path('/')) or not cast(Path, root).is_relative_to(Path(self.profile['owned']))
                         or values.get('controlled') is not True
-                        or not declaration(self.policy.case).configured and values.get('provider_config') is not None
+                        or (controlled or not declaration(self.policy.case).configured) and values.get('provider_config') is not None
                         or type(values.get('transport')) is not self.startup.transport):
                     raise Refused('root owned controlled listener')
-                if declaration(self.policy.case).configured:
+                if not controlled and declaration(self.policy.case).configured:
                     self.startup.configuration.check(values.get('provider_config'), root, self.policy.case)
+                if controlled:
+                    role = frame.f_locals.get('name')
+                    if name == 'lifetime' and (type(role) is not str or role not in ('worker','validator')):
+                        raise Refused('root lifetime role scope')
+                    scope = str(root if name == 'broker' else root / role)
             nonce = None
             if name == 'bridge':
                 nonce = dictionary(instance, self.startup.bridge).get('nonce')
@@ -61,18 +87,23 @@ class BootstrapCalls(TestSources):
             if name != 'broker' and (type(nonce) is not str or len(nonce) != 64
                     or any(char not in '0123456789abcdef' for char in nonce)):
                 raise Refused('root listener application nonce')
-            return {'tag': name, 'nonce': nonce}
+            return {'tag': name, 'nonce': nonce, **({'scope': scope} if controlled else {})}
         finally:
             del frames
 
     def __init__(self, policy, item):
-        super().__init__(policy, item, TEST, {SESSION: SESSION_PIN, TEST: TEST_PIN})
+        controlled = item.nodeid in CONTROLLED
+        test = item.nodeid.split('::')[0] if controlled else TEST
+        super().__init__(policy, item, test, CONTROLLED_PINS if controlled else {SESSION: SESSION_PIN, TEST: TEST_PIN})
+        self.anchors = {}
+        self.controlled = controlled
         checkout = Path(self.profile['checkout'])
         self.session = importlib.import_module('unrest_harness.experimental_session')
         self.session_unit = self.unit(SESSION, self.session, self.mode(self.session))
         self.startup = Startup(self.session, self.tests, self.session_unit, self.test_unit,
             checkout, Path(self.profile['owned']), Path(self.profile['native']), self.profile['native_sha256'],
-            configuration_binding=Binding(checkout) if declaration(item.nodeid).configured else None)
+            configuration_binding=Binding(checkout) if not controlled and declaration(item.nodeid).configured else None,
+            case=item.nodeid)
         relay = importlib.import_module('unrest_harness.experimental_relay')
         relay_unit = self.unit('src/unrest_harness/experimental_relay.py', relay, self.mode(relay))
         base = self.startup.base

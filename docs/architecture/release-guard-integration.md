@@ -2776,3 +2776,16 @@ metadata has a separate 64 MiB per-member domain, matching the existing isolated
 input inventory bound; complete pack/index/ref bytes are hashed before sealing.
 The envelope digest binds both domains and the same read-only source mount covers
 them. A Git pack is metadata, never an inline/module execution declaration.
+
+
+Controlled source families key broker listeners by original owner root and role
+listeners by that owner's worker/validator home. A backend is admitted once per
+pair; its matching ACP requires that backend's actual constructor return and the
+same pair's bridge/lifetime sockets. Different owners, roles or generations cannot
+borrow the most recent case-wide process or listener. Source-derived case bounds
+also cap listener-only owners, role pairs and aggregate broker requests. Existing
+per-backend connection limits and actual original-parent wait requirements remain.
+Only the exact prepared observing wrappers retaining original functions are valid;
+arbitrary constructor wrappers and replaced cleanup methods refuse. The catalogue
+covers unchanged unconfigured source fixtures; configured inputs keep a separate
+binding and native/provider execution remains unverified.

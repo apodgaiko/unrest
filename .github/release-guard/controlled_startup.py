@@ -17,6 +17,7 @@ from typing import Any
 
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from content_manifest import Refused, capture
+from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, backend as controlled_backend, backend_path
 from launch_policy import Expected, Observation, Rule, match, render
 from source_owner import Link, Owner, SourceUnit, active_frames, _namespace, _safe_code, frame_fields as frame_locals
 
@@ -59,12 +60,12 @@ class Intent:
 class Startup:
     def __init__(self, session: types.ModuleType, tests: types.ModuleType,
                  session_unit: SourceUnit, test_unit: SourceUnit,
-                 checkout: Path, owned: Path, interpreter: Path, interpreter_sha256: str, *, configuration_binding=None):
+                 checkout: Path, owned: Path, interpreter: Path, interpreter_sha256: str, *, configuration_binding=None, case=None):
         import asyncio
-        if (session_unit.source_sha256 != SESSION_PIN or test_unit.source_sha256 != TEST_PIN
-                or session_unit.path != str(checkout / SESSION) or test_unit.path != str(checkout / TEST)
+        if (session_unit.source_sha256 != SESSION_PIN or test_unit.source_sha256 != (CONTROLLED_PINS.get(case.split('::')[0]) if case in CONTROLLED else TEST_PIN)
+                or session_unit.path != str(checkout / SESSION) or test_unit.path != str(checkout / (case.split('::')[0] if case in CONTROLLED else TEST))
                 or session_unit.module != 'unrest_harness.experimental_session'
-                or test_unit.module != 'tests.test_experimental_bootstrap' or test_unit.mode != 'pytest'):
+                or test_unit.module != (case.split('::')[0].removesuffix('.py').replace('/', '.') if case in CONTROLLED else 'tests.test_experimental_bootstrap') or test_unit.mode != 'pytest'):
             raise Refused('startup prepared source authority')
         self.checkout, self.owned = path(checkout), path(owned)
         if type(interpreter) is not PATH_TYPE or not interpreter.is_absolute():
@@ -72,6 +73,7 @@ class Startup:
         self.interpreter_path, self.interpreter = interpreter, path(interpreter.resolve())
         self.root_identity = self.root_key()
         self.configuration = configuration_binding
+        self.case = case
         self.runtime_pin = interpreter_sha256
         if hashlib.sha256(interpreter.read_bytes()).hexdigest() != interpreter_sha256:
             raise Refused('startup runtime bytes')
@@ -84,9 +86,9 @@ class Startup:
         self.open = _namespace(self.base)['_open_role_owned']
         self.environment = _namespace(self.base)['_environment']
         self.argv = _namespace(self.transport)['argv']
-        self.fixture = _namespace(tests)['delayed_backend']
+        self.fixture = _namespace(tests).get('delayed_backend')
         self.fixture_type = type(self.fixture)
-        self.fixture_function = dictionary(self.fixture, self.fixture_type)['_fixture_function']
+        self.fixture_function = dictionary(self.fixture, self.fixture_type)['_fixture_function'] if self.fixture is not None else None
         self.anchors = {'environment': self.environment, 'fixture': self.fixture_function}
         self.constructor = asyncio.subprocess.create_subprocess_exec
         self.constructor_code = self.constructor.__code__
@@ -123,7 +125,7 @@ class Startup:
             raise Refused('startup source file bytes')
 
     def select(self, case: str, observed: Observation) -> Intent:
-        if type(case) is not str or case not in BOOTSTRAP or self.root_key() != self.root_identity or os.getcwd() != str(self.checkout):
+        if type(case) is not str or case not in (*BOOTSTRAP, *CONTROLLED) or case in CONTROLLED and case != self.case or self.root_key() != self.root_identity or os.getcwd() != str(self.checkout):
             raise Refused('startup case or root generation')
         frames = active_frames()
         try:
@@ -140,8 +142,10 @@ class Startup:
             if type(instance) not in (self.base, self.synthetic):
                 raise Refused('startup owner type')
             values = dictionary(instance, self.base)
+            configured = case not in CONTROLLED and declaration(case).configured
+            backend_pin, backend_name = controlled_backend(case) if case in CONTROLLED else (BACKEND_PIN, 'fake-app-server')
             if (values.get('controlled') is not True or values.get('provider_package') is not None
-                    or not declaration(case).configured and values.get('provider_config') is not None):
+                    or not configured and values.get('provider_config') is not None):
                 raise Refused('startup controlled owner configuration')
             transport = values.get('transport')
             if type(transport) is not self.transport:
@@ -162,23 +166,23 @@ class Startup:
                 raise Refused('startup controlled runtime selection')
             self.binding(self.argv, 'ControlledTransport.argv', self.transport, 'argv')
             root, backend = path(values.get('root')), path(values.get('backend_launcher'))
-            if (not root.is_relative_to(self.owned) or backend != root / 'fake-app-server'
-                    or type(values.get('backend_digest')) is not str or values['backend_digest'] != BACKEND_PIN
+            if (not root.is_relative_to(self.owned) or backend != (backend_path(case, root) if case in CONTROLLED else root / backend_name)
+                    or type(values.get('backend_digest')) is not str or values['backend_digest'] != backend_pin
                     or type(local.get('name')) is not str or local['name'] not in ('worker', 'validator')):
                 raise Refused('startup owner paths')
-            if declaration(case).configured:
+            if configured:
                 if self.configuration is None:
                     raise Refused('startup configured source boundary absent')
                 self.configuration.check(values.get('provider_config'), root, case)
             home = root / local['name']
             if path(local.get('home')) != home:
                 raise Refused('startup role home')
-            self.source_file(backend, BACKEND_PIN, owned=True)
+            self.source_file(backend, backend_pin, owned=True)
             self.source_file(self.checkout / ACP, ACP_PIN, owned=False)
             environment = {'HOME': str(home), 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'),
                            'PATH': '/usr/bin:/bin', 'INITIAL_AGENT_MODE': 'read-only',
                            'CODEX_PATH': str(root / 'fixed-relay')}
-            config_argv, config_json = configuration(self.checkout, home) if declaration(case).configured else ([], None)
+            config_argv, config_json = configuration(self.checkout, home) if configured else ([], None)
             if config_json is not None:
                 environment.update(CODEX_HOME=str(root.parent.parent / 'subscription'), CODEX_CONFIG=config_json)
             expected_argv: tuple[str, ...]
@@ -191,7 +195,7 @@ class Startup:
                 environment = {key: value for key, value in environment.items()
                                if key not in ('CODEX_PATH', 'INITIAL_AGENT_MODE')}
                 source_environment = local.get('backend_environment')
-                script_pin, kind = BACKEND_PIN, 'backend'
+                script_pin, kind = backend_pin, 'backend'
             else:
                 expected_argv = (str(self.interpreter), str(self.checkout / ACP), '--controlled-local-acp-v1')
                 if (type(local.get('adapter_argv')) is not tuple
@@ -218,7 +222,7 @@ class Startup:
                 raise Refused('startup source environment')
             self.constructor_frame(frames, expected_argv, source_environment, home, backend_spawn,
                                    case)
-            if backend_spawn and wrapper(case) is not None:
+            if backend_spawn and case not in CONTROLLED and wrapper(case) is not None:
                 expected_argv = (expected_argv[0], '-c', wrapper(case), *expected_argv[1:])
                 script_kind, payload_pin = 'python-command', None
             else:
@@ -248,14 +252,17 @@ class Startup:
             raise Refused('startup actual constructor vector')
         actual_argv = (values['program'], *values['args'])
         expected_argv = original_argv
-        delayed_wrapper = wrapper(case)
+        delayed_wrapper = None if case in CONTROLLED else wrapper(case)
         if delayed_wrapper is not None:
             if backend:
                 expected_argv = (original_argv[0], '-c', delayed_wrapper, *original_argv[1:])
             self.delayed(frames, expected_argv, environment, home, backend, declaration(case).delay)
         else:
             self.binding(self.environment, '_SessionOwner._environment', self.base, '_environment')
-            if asyncio.create_subprocess_exec is not self.constructor:
+            if case in CONTROLLED:
+                from controlled_wrappers import verify
+                verify(asyncio, 'create_subprocess_exec', self.constructor, self.checkout)
+            elif asyncio.create_subprocess_exec is not self.constructor:
                 raise Refused('startup unexpected constructor wrapper')
         keywords = values.get('kwds')
         if type(keywords) is not dict:

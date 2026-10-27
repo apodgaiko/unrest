@@ -17,6 +17,8 @@ import time
 from content_manifest import Refused, native_digest
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
+from controlled_cases import CASES as CONTROLLED, backend as controlled_backend, backend_path
+from controlled_pairs import before_bind, before_spawn, limits as controlled_limits, scope as controlled_scope
 from controlled_startup import ACP, ACP_PIN, BACKEND_PIN, SESSION
 from endpoint_policy import Endpoints, Owner, Route
 from launch_policy import Rule, render
@@ -82,7 +84,7 @@ class Observer:
         scripts = {'session-adapter': SESSION_SCRIPT, 'session-child': SESSION_SCRIPT,
                    'cleanup-acp': SCRIPT, 'acp': ACP, 'mock-acp': MOCK}
         script = (str(Path(self.meta['checkout']) / scripts[role]) if role in scripts else
-                  str(Path(cwd).parent / 'fake-app-server') if role in ('backend', 'delayed-backend') else None)
+                  str(backend_path(case,Path(cwd).parent) if case in CONTROLLED else Path(cwd).parent / 'fake-app-server') if role in ('backend', 'delayed-backend') else None)
         source = {'schema': 'unrest.bootstrap-source.v1', 'role': role, 'case': case,
             'identity': canonical(actual), 'parent': canonical(process_identity(parent.pid)),
             'observer': canonical(process_identity(os.getpid())), 'argv': vector,
@@ -247,7 +249,7 @@ class Observer:
     def launch(self, actor, payload):
         self.launch_owner(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256', *(('git',) if self.case in GIT_CASES else ())))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES) or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
@@ -288,6 +290,8 @@ class Observer:
         self.root_only(actor)
         if self.case in ORDINARY_CASES:
             return self.ordinary_launch(actor, payload)
+        if self.case in CONTROLLED:
+            return self.controlled_launch(actor, payload)
         cwd = original['cwd']
         if type(cwd) is not str:
             raise Refused('source launch cwd type')
@@ -331,11 +335,39 @@ class Observer:
         translated = [native, '-I', '-S', *expected.argv[1:]]
         return self.admit_launch(actor, payload, expected, role, payload['source_line'], translated, script_pin)
 
+    def listener_key(self, case, tag, scope=None):
+        return (case, tag, scope) if case in CONTROLLED else (case, tag)
+
+    def controlled_launch(self, actor, payload):
+        original = payload['original']
+        cwd = controlled_scope(self.case,'bridge',original['cwd'],Path(self.meta['owned']))
+        home = Path(cwd)
+        role = 'backend' if payload['source_line'] == 506 else 'acp' if payload['source_line'] == 553 else None
+        records = [v for v in self.intents.values() if v['case'] == self.case]
+        before_spawn(self.case,cwd,role,records,self.actors)
+        native, pin = self.binding['entry']['path'], self.binding['entry']['sha256']
+        backend_pin, _ = controlled_backend(self.case)
+        environment = {'HOME':cwd, 'CODEX_HOME':str(home/'codex'), 'TMPDIR':str(home/'tmp'), 'PATH':'/usr/bin:/bin'}
+        if role == 'backend':
+            script, script_pin = backend_path(self.case,home.parent), backend_pin
+            vector = (native, str(script), 'app-server')
+        else:
+            bridge = self.listeners[self.listener_key(self.case,'bridge',cwd)]
+            lifetime = self.listeners[self.listener_key(self.case,'lifetime',cwd)]
+            environment.update(CODEX_PATH=str(home.parent/'fixed-relay'),INITIAL_AGENT_MODE='read-only',
+                SYNTHETIC_RELAY=json.dumps([bridge['socket'].local[1],bridge['nonce'],lifetime['socket'].local[1],lifetime['nonce']]))
+            script, script_pin = Path(self.meta['checkout']) / ACP, ACP_PIN
+            vector = (native,str(script),'--controlled-local-acp-v1')
+        expected = render(Rule('controlled-startup:'+role,SESSION+':_open_role_owned',(self.case,),native,pin,
+            vector,tuple(sorted(environment.items())),cwd,'python-script',script_pin),self.case,SESSION+':_open_role_owned',{}, {})
+        return self.admit_launch(actor,payload,expected,role,payload['source_line'],[native,'-I','-S',*vector[1:]],script_pin)
+
     def admit_launch(self, actor, payload, expected, role, site, vector, script_pin,
                      *, maximum=1, environment=None, inherited=(), port=None):
         if (payload['original'] != expected.wire() or payload['source_line'] != site
                 or payload['translated'] != vector or payload['script_sha256'] != script_pin
                 or sum(value['case'] == self.case and value['role'] == role
+                       and (self.case not in CONTROLLED or value['cwd'] == expected.cwd)
                        for value in self.intents.values()) >= maximum):
             raise Refused('source independent launch reconstruction')
         self.serial += 1
@@ -500,11 +532,12 @@ class Observer:
                 raise Refused('source exact READY pins')
             self.actor_control(actor, kind, {'pins': actor['pins']})
             tags = (('bridge', 'lifetime') if actor['role'] == 'acp' else
-                    ('broker',) if actor['role'] in ('backend', 'delayed-backend') and declaration(actor['case']).broker_http else ())
+                    ('broker',) if actor['role'] in ('backend', 'delayed-backend') and (controlled_limits(actor['case'])[1] > 0 if actor['case'] in CONTROLLED else declaration(actor['case']).broker_http) else ())
             if tags:
                 root_actor = self.actors[self.root]
                 for tag in tags:
-                    slot = self.listeners[(actor['case'], tag)]
+                    scope = actor['profile']['cwd'] if tag in ('bridge','lifetime') else str(Path(actor['profile']['cwd']).parent)
+                    slot = self.listeners[self.listener_key(actor['case'],tag,scope)]
                     name = actor['token'] + ':' + tag
                     route = Route(name, actor['case'], self.owner(root_actor), self.owner(actor), slot['socket'].local[1])
                     self.endpoints.declare(route)
@@ -524,7 +557,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in GIT_CASES else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:
@@ -604,17 +637,23 @@ class Observer:
                 self.root_only(actor)
             elif actor['case'] != self.case or self.case not in CLEANUP_CASES:
                 raise Refused('source declared module listener case')
-            shape(payload, ('fd', 'tag', 'nonce'))
+            shape(payload, ('fd', 'tag', 'nonce', *(('scope',) if self.case in CONTROLLED else ())))
+            scope = controlled_scope(self.case,payload['tag'],payload.get('scope'),Path(self.meta['owned'])) if self.case in CONTROLLED else None
             fd = number(payload['fd'])
             if ((actor['role'] == 'mcp' and payload['tag'] != 'mcp')
                     or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in (*CLEANUP_CASES, *STARTUP) else ('broker', 'bridge', 'lifetime'))
-                        or self.case not in (*BOOTSTRAP, *CLEANUP_CASES, *STARTUP))):
+                        or self.case not in (*BOOTSTRAP, *CONTROLLED, *CLEANUP_CASES, *STARTUP))):
                 raise Refused('source finite root listener')
+            if self.case in CONTROLLED:
+                slots = [row for row in (*self.bindings.values(),*self.listeners.values()) if row['case'] == self.case]
+                before_bind(self.case,payload['tag'],scope,slots)
+                if payload['tag'] == 'bridge':
+                    before_spawn(self.case,scope,'acp',[v for v in self.intents.values() if v['case'] == self.case],self.actors)
             nonce = payload['nonce']
             if ((payload['tag'] in ('broker', 'mcp', 'mcp-probe') and nonce is not None)
                     or payload['tag'] not in ('broker', 'mcp', 'mcp-probe') and (type(nonce) is not str or len(nonce) != 64
                     or any(char not in '0123456789abcdef' for char in nonce))
-                    or (self.case, payload['tag']) in self.listeners):
+                    or self.listener_key(self.case,payload['tag'],scope) in self.listeners):
                 raise Refused('source listener application binding')
             observed = acquire_tcp(actor['birth'], fd, retained=True)
             if observed is None or observed.state != 7 or observed.local != ('0.0.0.0', 0) or observed.remote is not None:
@@ -625,7 +664,7 @@ class Observer:
             self.connections.pop(key, None)
             self.listener_fds.pop(key, None)
             self.bindings[key] = {'socket': observed, 'tag': payload['tag'], 'nonce': nonce,
-                                  'case': self.case, 'listening': False, 'listen_pending': False}
+                                  'case': self.case, 'scope':scope, 'listening': False, 'listen_pending': False}
         elif kind == 'bound':
             self.root_only(actor)
             shape(payload, ('fd',))
@@ -657,7 +696,7 @@ class Observer:
                 raise Refused('source original listener descriptor')
             if payload['stage'] == 'before':
                 if (binding['listen_pending'] or observed.state != (10 if binding['listening'] else 7)
-                        or binding['listening'] and observed != self.listeners[self.case, binding['tag']]['socket']):
+                        or binding['listening'] and observed != self.listeners[self.listener_key(self.case,binding['tag'],binding['scope'])]['socket']):
                     raise Refused('source listener before state')
                 binding['listen_pending'] = True
             elif payload['stage'] == 'after':
@@ -665,12 +704,12 @@ class Observer:
                     raise Refused('source listener after state')
                 # asyncio re-applies Uvicorn's original backlog to this same
                 # listener. A repeated listen grants no new endpoint authority.
-                previous = self.listeners.get((self.case, binding['tag']))
+                previous = self.listeners.get(self.listener_key(self.case,binding['tag'],binding['scope']))
                 if previous is not None and observed != previous['socket']:
                     raise Refused('source changed repeated listener')
                 binding['listen_pending'], binding['listening'] = False, True
                 slot = {**binding, 'socket': observed}
-                self.listeners[self.case, binding['tag']] = slot
+                self.listeners[self.listener_key(self.case,binding['tag'],binding['scope'])] = slot
                 self.listener_fds[actor['birth'], fd] = slot
             else:
                 raise Refused('source listener stage')
@@ -715,6 +754,12 @@ class Observer:
                     raise Refused('source leaf connection role')
                 name = self.routes[actor['birth'], port]
                 maximum = 1 if actor['role'] == 'acp' else 8
+            if self.case in CONTROLLED and actor['role'] == 'backend':
+                total = sum(count for route,count in self.connected_routes.items()
+                    if self.endpoints.routes[route].case == self.case
+                    and self.actors[self.endpoints.routes[route].client.birth.pid]['role'] == 'backend')
+                if total >= controlled_limits(self.case)[1]:
+                    raise Refused('controlled case broker request bound')
             if self.connected_routes.get(name, 0) >= maximum:
                 raise Refused('source finite connection count')
             listener = self.endpoints.listeners[name]

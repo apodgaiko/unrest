@@ -10,6 +10,8 @@ import sys
 import types
 
 from bootstrap_cases import declaration
+from controlled_cases import CASES as CONTROLLED
+from controlled_pairs import limits as controlled_limits
 from content_manifest import Refused
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES
 from cleanup_inline import STARTUP
@@ -59,7 +61,7 @@ class Hooks:
                 if args[3] != 0 or not (self.policy.private_call() or getattr(self.local, 'pair', None) is not None):
                     raise Refused('source Unix creation outside sealed self-pair')
             elif (self.policy.profile['role'] not in ('root', 'acp', 'mcp', 'cleanup-acp')
-                    and not declaration(self.policy.profile['case']).broker_http):
+                    and not (controlled_limits(self.policy.profile['case'])[1] > 0 if self.policy.profile['case'] in CONTROLLED else declaration(self.policy.profile['case']).broker_http)):
                 raise Refused('source backend network creation')
             return True
         pending = getattr(self.local, 'socket', None)
@@ -85,7 +87,7 @@ class Hooks:
             self.local.socket = 'socket.bind', stream, args[0]
         elif name in ('connect', 'connect_ex'):
             cleanup = self.policy.case in (*CLEANUP_CASES, *STARTUP) or self.policy.profile['case'] in (*CLEANUP_CASES, *STARTUP)
-            if ((role not in ('root', 'cleanup-acp') if cleanup else role != 'acp' and not declaration(self.policy.profile['case']).broker_http) or kwargs or len(args) != 1 or type(args[0]) is not tuple
+            if ((role not in ('root', 'cleanup-acp') if cleanup else role != 'acp' and not (controlled_limits(self.policy.profile['case'])[1] > 0 if self.policy.profile['case'] in CONTROLLED else declaration(self.policy.profile['case']).broker_http)) or kwargs or len(args) != 1 or type(args[0]) is not tuple
                     or len(args[0]) != 2 or type(args[0][0]) is not str or args[0][0] != '127.0.0.1'
                     or type(args[0][1]) is not int or not 0 < args[0][1] <= 65535):
                 self.policy.refuse('source unknown connection')

@@ -1,0 +1,144 @@
+"""Finite controlled backend postimages from the unchanged source cases.
+
+Each row binds its complete backend bytes; launch authority still requires the
+original controlled owner, runtime, role, constructor and owned pair generation.
+Configured fixtures are admitted separately and are absent from this catalogue.
+"""
+from __future__ import annotations
+
+from content_manifest import Refused
+
+PINS = {
+    'src/unrest_harness/experimental_cohort.py': 'd830a15c39394463022150c7b01c41e941100ae55f4eff033fc247cbf6af7c61',
+    'src/unrest_harness/experimental_provider_config.py': '92c8d11fc6aedbf8a737be416387de5f0aa4a239ce8e9e048f543bb8cd4041a5',
+    'src/unrest_harness/experimental_session.py': '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2',
+    'tests/controlled_transport.py': '93f50ee7ce976db2dfddb0df5cc4df202768147f753e618f91eb1352a3d6bca9',
+    'tests/fixtures/controlled_python_acp.py': 'f5134a2d79b348b70b05a66566ff65d0049f102665200a22f3a6fcbd1c4f58be',
+    'tests/fixtures/experimental_session_app_server.py': 'be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53',
+    'tests/test_controlled_acp_cancel.py': 'f19e29820f7b6e65bd0ee863f2b58a8ff811984843b418b3d82f9c667b696233',
+    'tests/test_controlled_python_acp.py': 'b1e700c6ba4bcdc734b595ae12ad9fcce5d5ff8f1fddc4f5f70e6629875665da',
+    'tests/test_experimental_ack_durability.py': 'dd8b0d8954ec6dfd5195dc617f3a179bb04823b7929832af954cf38ce3163f0d',
+    'tests/test_experimental_bridge_shutdown.py': 'b3ee029992d35039d5163febbb327cdd4c92d31fa47cc9f73b9b364f896e1ecb',
+    'tests/test_experimental_drain_retirement.py': '1ff7a2341842a74a7e20d5ebaae2791f69cd8b40fe581e059d1d1f136f87346d',
+    'tests/test_experimental_finite_orders.py': 'aca649f5eb745f52a6a6e5457ebd7f10f983a3936d24074050db161dfec9ff61',
+    'tests/test_experimental_finite_priority.py': '05ac2bda998c5bb8043d2e090741dca9046b055b3e123d5c1abc248e87b5111b',
+    'tests/test_experimental_finite_stops.py': '47e3bdecc0eb3aac50669c08fc76f7f367aa22288e197ef5e68fdd4eba4ad9ed',
+    'tests/test_experimental_first_halt.py': '0678f16ff434aa6d1dc69c3532938b81cb085d43fce4b05646aade2514955766',
+    'tests/test_experimental_session.py': 'baca26ee3feb60d74d435becb950db24e8849aa16015cf15e1943cfbc0f3f9e3',
+}
+
+CASES = {
+    'tests/test_controlled_acp_cancel.py::test_owned_cancel_wire_and_cleanup[pending]': ('a10467373bda96d6e702a03e70c96ce5562082b050df668ecbc7638b5b4eaf63', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False--1-None-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False--1-None-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False-0-None-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False-0-None-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False-0-fsync-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False-0-fsync-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False-0-write-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False-0-write-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False-1-None-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[False-1-None-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True--1-None-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True--1-None-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True-0-None-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True-0-None-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True-0-fsync-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True-0-fsync-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True-0-write-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True-0-write-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True-1-None-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_ack_durability.py::test_ack_durability[True-1-None-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure': ('4cb170e8a739a112f1afd88623cb0c92e3f1da6fbcc6c505da4f1a9668394551', 'controlled.py'),
+    'tests/test_experimental_drain_retirement.py::test_original_stop_and_retired_delivery[original-unchanged]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_drain_retirement.py::test_original_stop_and_retired_delivery[retired-delivery]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_drain_retirement.py::test_prior_failure_kept_while_unaffected_sent_sibling_drains': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-1]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-2]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-3]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-4]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[2-8]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[4-1]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[4-2]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[4-3]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[4-4]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_capacity_and_parking[4-8]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_simultaneous_completion_batches[validators0-workers0]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_simultaneous_completion_batches[validators0-workers1]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_simultaneous_completion_batches[validators1-workers0]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_actual_simultaneous_completion_batches[validators1-workers1]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[alternating-first-PP]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[alternating-first-RC]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[alternating-first-RP]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[alternating-first-RR]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[alternating-second-PP]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[alternating-second-RC]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[alternating-second-RP]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[alternating-second-RR]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[first-PP]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[first-RC]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[first-RP]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[first-RR]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[second-PP]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[second-RC]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[second-RP]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_orders.py::test_script_order_boundaries[second-RR]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[completion-expiry-stop]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[completion-stop-expiry]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[expiry-completion-stop]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[expiry-stop-completion]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[sibling-fail-sibling-pass-stop]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[sibling-fail-stop-sibling-pass]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[sibling-pass-sibling-fail-stop]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[sibling-pass-stop-sibling-fail]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[stop-completion-expiry]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[stop-expiry-completion]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[stop-sibling-fail-sibling-pass]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_finite_stops.py::test_actual_stop_event_permutations[stop-sibling-pass-sibling-fail]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[campaign-expiry]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[closed]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[cutoff]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[episode-expiry]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[persistent-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[persistent-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[unrelated-halt]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_first_owned_halt[write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_other_owned_journal_halts[fsync-reserve]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_other_owned_journal_halts[fsync-send]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_other_owned_journal_halts[fsync-session_identity]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_other_owned_journal_halts[write-reserve]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_other_owned_journal_halts[write-send]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_experimental_first_halt.py::test_other_owned_journal_halts[write-session_identity]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[backend_registered]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[adapter_registered]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[auth]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_cancel_at_actual_boundary[forwarding]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_actual_registration[delayed-1]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_actual_registration[delayed-2]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_actual_registration[late-1]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_actual_registration[late-2]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_python_acp.py::test_single_c1_fixed_timing_protocol_witness': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+}
+
+def backend(case):
+    if type(case) is not str or case not in CASES:
+        raise Refused('controlled finite source case')
+    return CASES[case]
+
+
+def backend_path(case, root):
+    _, filename = backend(case)
+    return (root.parent if filename == 'controlled.py' else root) / filename
+
+
+GROUPS = {
+    'controlled-cancel1': tuple(case for case in CASES if 'test_controlled_acp_cancel.py::' in case),
+    'controlled-ack20': tuple(case for case in CASES if 'test_experimental_ack_durability.py::' in case),
+    'controlled-bridge1': tuple(case for case in CASES if 'test_experimental_bridge_shutdown.py::' in case),
+    'controlled-drain3': tuple(case for case in CASES if 'test_experimental_drain_retirement.py::' in case),
+    'controlled-orders30': tuple(case for case in CASES if 'test_experimental_finite_orders.py::' in case),
+    'controlled-stops12': tuple(case for case in CASES if 'test_experimental_finite_stops.py::' in case),
+    'controlled-halt15': tuple(case for case in CASES if 'test_experimental_first_halt.py::' in case),
+    'controlled-wrappers9': tuple(case for case in CASES if 'test_controlled_python_acp.py::' in case),
+}

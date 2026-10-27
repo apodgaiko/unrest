@@ -18,6 +18,7 @@ from bootstrap_wire import Client
 from content_manifest import Refused
 from control_transport import finite
 from bootstrap_cases import BOOTSTRAP
+from controlled_cases import CASES as CONTROLLED
 from ordinary_acp import CASES as ORDINARY_CASES
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, OFFLINE
 from cleanup_inline import DECLARATIONS
@@ -74,7 +75,7 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] not in ('root', 'mcp', 'session-adapter', 'fixed-inline') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES):
+        if self.profile['role'] not in ('root', 'mcp', 'session-adapter', 'fixed-inline') or self.calls is None or self.case not in (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')

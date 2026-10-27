@@ -112,7 +112,7 @@ def test_existing_listener_can_relisten_without_new_endpoint_authority(tmp_path,
     bound = replace(initial, local=('127.0.0.1', 12345))
     listening = replace(bound, state=10)
     observer.bindings = {(actor['birth'], 7): {'socket': initial, 'tag': 'broker', 'nonce': None,
-        'case': CASES[0], 'listening': False, 'listen_pending': False}}
+        'case': CASES[0], 'scope':None, 'listening': False, 'listen_pending': False}}
     observer.listeners, observer.listener_fds = {}, {}
     observed = bound
     monkeypatch.setattr(source_observer, 'acquire_tcp', lambda *args, **kwargs: observed)
@@ -134,7 +134,7 @@ def test_sealed_leaf_keeps_exact_fixture_execution(tmp_path):
     fixture = checkout / 'tests/fixtures/experimental_session_app_server.py'
     script = tmp_path / 'fake-app-server'
     script.write_bytes(fixture.read_bytes())
-    bodies = Bodies({'role': 'backend', 'checkout': str(checkout), 'script': str(script)})
+    bodies = Bodies({'role': 'backend', 'case':CASES[0], 'checkout': str(checkout), 'script': str(script)})
     with pytest.raises(Refused, match='compilation bytes'):
         bodies.audit('compile', (b'print("foreign")', str(script)))
     assert bodies.audit('compile', (script.read_bytes(), str(script)))

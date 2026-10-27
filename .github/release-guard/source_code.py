@@ -11,6 +11,7 @@ import types
 from content_manifest import Refused
 from bootstrap_cases import wrapper
 from controlled_startup import ACP_PIN, BACKEND_PIN
+from controlled_cases import CASES as CONTROLLED, backend as controlled_backend
 from ordinary_acp import MOCK, PINS
 from source_owner import _safe_code
 from source_profile import ROOT_COMMAND, digest
@@ -40,7 +41,9 @@ class Bodies:
                 importlib.import_module(name)
             fixture = Path(profile['checkout']) / ('tests/fixtures/controlled_python_acp.py'
                 if role == 'acp' else MOCK if role == 'mock-acp' else 'tests/fixtures/experimental_session_app_server.py')
-            self.pin = ACP_PIN if role == 'acp' else PINS[MOCK] if role == 'mock-acp' else BACKEND_PIN
+            if role == 'backend' and profile['case'] in CONTROLLED:
+                fixture = Path(profile['script'])
+            self.pin = ACP_PIN if role == 'acp' else PINS[MOCK] if role == 'mock-acp' else controlled_backend(profile['case'])[0] if profile['case'] in CONTROLLED else BACKEND_PIN
             if digest(fixture) != self.pin:
                 raise Refused('sealed fixture source bytes')
             self.data = fixture.read_bytes()
