@@ -228,3 +228,21 @@ def test_native_sysconfig_module_name_is_exact_and_readonly(tmp_path, monkeypatc
     file.symlink_to(outside)
     with pytest.raises(Refused, match='outside immutable'):
         policy.audit('import', (name, None))
+
+
+def test_cpython_file_parser_is_bound_to_one_initial_script(domain):
+    file = domain.roots['source'] / 'entry.py'
+    file.write_bytes(b'value = 7\n')
+    policy = Computation({key: str(path) for key, path in domain.roots.items()}, str(file))
+    with pytest.raises(Refused, match='file parser'):
+        domain.compilation(None, str(file), None)
+    with pytest.raises(Refused, match='file parser'):
+        policy.compilation(None, str(file), sys._getframe())
+    with pytest.raises(Refused, match='file parser'):
+        policy.compilation(None, str(file) + '-foreign', None)
+    policy.compilation(None, str(file), None)
+    policy.execution(compile(file.read_bytes(), str(file), 'exec', dont_inherit=True))
+    with pytest.raises(Refused, match='file parser'):
+        policy.compilation(None, str(file), None)
+    with pytest.raises(Refused, match='differs from immutable'):
+        policy.execution(compile('value = 8', str(file), 'exec', dont_inherit=True))

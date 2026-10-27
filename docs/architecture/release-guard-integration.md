@@ -2499,3 +2499,9 @@ The library computation domain admits the exact native CPython sysconfigdata
 module name, including the Linux multiarch hyphens. It derives that one name
 from retained primitive runtime fields and measures its immutable stdlib file;
 sysconfig environment overrides and other hyphenated names grant no authority.
+
+CPython's initial script parser reports a compile event with no source buffer.
+Only the already validated cleanup fixture entry may use that event, once, with
+its exact filename and no Python caller frame. The guard measures its immutable
+source and still requires the ensuing code object to match those bytes. This
+exception grants no subsequent parser, generated-code or process authority.

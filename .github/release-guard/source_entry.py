@@ -39,7 +39,8 @@ class Policy:
         if profile['role'] in ('mcp', 'cleanup-acp'):
             from library_code import Computation
             self.bodies = Computation({'source': profile['checkout'], 'dependencies': profile['dependencies'],
-                                       'stdlib': str(Path(profile['runtime_root']) / 'lib/python3.13')})
+                                       'stdlib': str(Path(profile['runtime_root']) / 'lib/python3.13')},
+                entry_script=profile['script'] if profile['role'] == 'cleanup-acp' else None)
         else:
             self.bodies = Bodies(profile)
         self.wire_code = Client.request.__code__

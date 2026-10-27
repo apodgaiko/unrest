@@ -100,7 +100,7 @@ def copy_ast(value, depth=0, budget=None):
 
 
 class Computation:
-    def __init__(self, roots):
+    def __init__(self, roots, entry_script=None):
         if (type(roots) is not dict or set(roots) != {'source', 'dependencies', 'stdlib'}
                 or any(type(name) is not str or type(path) is not str for name, path in roots.items())):
             raise Refused('library immutable root schema')
@@ -112,6 +112,10 @@ class Computation:
         self.platform_import = '_sysconfigdata_' + '_'.join(runtime)
         if any(not path.is_absolute() or path.resolve(strict=True) != path for path in self.roots.values()):
             raise Refused('library canonical input roots')
+        if entry_script is not None and (type(entry_script) is not str or not Path(entry_script).is_absolute()):
+            raise Refused('library fixed entry script')
+        self.entry_script = entry_script
+        self.entry_compiled = False
         self.units, self.generated, self.producer_units = {}, {}, {}
         self.generated_codes: set[types.CodeType] = set()
         self.transformed: dict[str, set[types.CodeType]] = {}
@@ -178,6 +182,13 @@ class Computation:
         raise Refused('library unprepared compiler caller')
 
     def compilation(self, data, filename, frame):
+        if data is None:
+            if (type(filename) is not str or filename != self.entry_script or frame is not None
+                    or self.entry_compiled):
+                raise Refused('library undeclared file parser compilation')
+            self.body(filename)
+            self.entry_compiled = True
+            return
         if ast_type(type(data)):
             return self.transformation(data, filename, frame)
         if (type(data) is not str and type(data) is not bytes) or type(filename) is not str or len(filename) > 4096:
