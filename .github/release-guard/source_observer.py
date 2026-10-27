@@ -12,6 +12,7 @@ from pathlib import Path
 import socket
 import stat
 import struct
+import time
 
 from content_manifest import Refused, native_digest
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
@@ -814,7 +815,7 @@ class Observer:
                             raise Refused('source undischarged empty control EOF')
                     continue
                 channel['request'] = self.admission.admit(frame)
-                self.controls.append(channel['request'])
+                self.controls.append({**channel['request'], 'observed_monotonic_ns': time.monotonic_ns()})
             if frame.output is None:
                 answer = self.dispatch(actor, channel['request'])
                 if answer is not None:

@@ -17,7 +17,7 @@ from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES, INFLI
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 from git_sites import CASES as GIT_CASES, OWNED_BODY
-from session_launch import CASES as SESSION_CASES, SCRIPT as SESSION_SCRIPT, PINS as SESSION_PINS, expected as session_expected
+from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS, SCRIPT as SESSION_SCRIPT, PINS as SESSION_PINS, expected as session_expected
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
@@ -70,7 +70,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline')
             or type(profile['case']) is not str
             or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, SESSION_CASES, *CLEANUP_GROUPS)):
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *SESSION_GROUPS, *CLEANUP_GROUPS)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]

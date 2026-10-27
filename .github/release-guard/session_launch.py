@@ -46,6 +46,7 @@ CASES = (*PLAN,
     *tuple(ARGS)[1:3], node('acp_message_ids_select_final_json_without_hiding_prior_bytes'), tuple(ARGS)[3],
     node('acp_final_message_still_requires_whole_json_and_complete_ids'), *tuple(ARGS)[4:],
     node('private_artifact_cannot_escape_caller_root'))
+GROUPS = (CASES, (TIMEOUT,))
 PINS = {'tests/test_provider_sessions.py': 'a6f8e62dd6ed4dce983bcc11f4ed5d600e92c36f5f1500be1fbae4317fe9145e', 'src/unrest_harness/provider_sessions.py': '7ecb0826e0c6a6b322f08209676d0b8e673688b64dd4c2aa3aad212ddc7cd7cc', 'tests/mock_provider_session_acp.py': 'cf4070d08c7d60b028f56c87bdcf4271238f0275212d6a13b681664738eb3fdd', 'src/unrest_harness/acp_runner.py': '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f'}
 
 

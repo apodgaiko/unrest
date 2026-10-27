@@ -9,7 +9,7 @@ on:
         description: 'Exact original case group; none runs only kernel/admission controls'
         type: choice
         default: none
-        options: [none, sessions69, workspaces24, bootstrap27, ordinary42, cleanup7, cleanup9, cleanup5, cleanup-review3, cleanup12, cleanup15]
+        options: [none, session-timeout, sessions69, workspaces24, bootstrap27, ordinary42, cleanup7, cleanup9, cleanup5, cleanup-review3, cleanup12, cleanup15]
 
 permissions:
   contents: read
