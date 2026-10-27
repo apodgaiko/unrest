@@ -210,6 +210,31 @@ class Link:
             raise Refused('live identity link changed')
 
 
+def _default_snapshot(value, records, depth=0, budget=None):
+    budget = [4096, 2 * 1024 * 1024] if budget is None else budget
+    if not records:
+        return _literal(value, depth, budget)
+    budget[0] -= 1
+    if type(records) is not tuple or len(records) > 8 or depth > 16 or budget[0] < 0:
+        raise Refused('source default record bound')
+    for index, record in enumerate(records):
+        if type(record) is not tuple or len(record) != 3:
+            raise Refused('source default record schema')
+        anchor, cls, fields = record
+        if type(cls) is not type or type(anchor) is not cls or type(fields) is not tuple:
+            raise Refused('source default record identity')
+        if value is anchor:
+            actual = tuple(sorted(instance_fields(value).items()))
+            if _literal(actual, depth + 1, budget) != _literal(fields, depth + 1, budget):
+                raise Refused('source default record fields changed')
+            return ('record', index)
+    if type(value) is tuple:
+        if len(value) > 4096:
+            raise Refused('source default tuple bound')
+        return ('tuple', tuple(_default_snapshot(item, records, depth + 1, budget) for item in value))
+    return ('literal', type(value), _literal(value, depth, budget))
+
+
 @dataclass(frozen=True)
 class Owner:
     unit: SourceUnit
@@ -223,6 +248,7 @@ class Owner:
     cell_anchors: tuple[types.CellType, ...] = ()
     defaults: tuple[object, ...] | None = None
     keyword_defaults: tuple[tuple[str, object], ...] = ()
+    default_objects: tuple[tuple[object, type, tuple[tuple[str, object], ...]], ...] = ()
 
     def verify_binding(self) -> None:
         """Check retained code and binding, without claiming a live caller frame."""
@@ -288,7 +314,7 @@ class Owner:
             raise Refused('keyword default dictionary type')
         actual_defaults = (function.__defaults__, tuple(sorted(_namespace(keyword_defaults).items())))
         expected_defaults = (self.defaults, self.keyword_defaults)
-        if _literal(actual_defaults) != _literal(expected_defaults):
+        if _default_snapshot(actual_defaults, self.default_objects) != _default_snapshot(expected_defaults, self.default_objects):
             raise Refused('source defaults changed')
 
 

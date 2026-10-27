@@ -422,3 +422,66 @@ def test_current_owner_rejects_ambiguous_foreign_or_unbounded_frames(module, mut
         route.__kwdefaults__ = {'flag': True}
     with pytest.raises(Refused):
         route()
+
+
+def record_owner(monkeypatch):
+    body = b'''class Budget:
+    def __init__(self):
+        self.max_processes = 0
+        self.max_patch_bytes = 10000000
+
+budget = Budget()
+def route(value=budget, *, flag=True):
+    return check(__import__('sys')._getframe())
+'''
+    path, name = '/sealed/record_default.py', 'record_default'
+    unit = owner.prepare(body, path, name, 'plain', hashlib.sha256(body).hexdigest())
+    module = types.ModuleType(name)
+    loader = importlib.machinery.SourceFileLoader(name, path)
+    module.__file__, module.__loader__ = path, loader
+    module.__spec__ = importlib.machinery.ModuleSpec(name, loader, origin=path)
+    monkeypatch.setitem(sys.modules, name, module)
+    exec(unit.code('<module>', 1), vars(module))
+    fn, budget, cls = module.route, module.budget, module.Budget
+    fields = (('max_patch_bytes', 10000000), ('max_processes', 0))
+    target = owner.Owner(unit, module, fn, 'route', fn.__code__.co_firstlineno, (1, 100),
+        (owner.Link(module, 'route', fn), owner.Link(module, 'Budget', cls)), defaults=(budget,),
+        keyword_defaults=(('flag', True),), default_objects=((budget, cls, fields),))
+    return module, target
+
+
+def test_original_default_record_requires_identity_class_and_primitive_field_snapshot(monkeypatch):
+    module, target = record_owner(monkeypatch)
+    module.check = lambda frame: target.verify(frame)
+    module.route()
+    vars(module.budget)['max_processes'] = 1
+    with pytest.raises(Refused, match='record fields changed'):
+        module.route()
+
+
+def test_replacement_default_record_and_mutated_class_binding_refuse(monkeypatch):
+    module, target = record_owner(monkeypatch)
+    module.check = lambda frame: target.verify(frame)
+    module.route.__defaults__ = (module.Budget(),)
+    with pytest.raises(Refused):
+        module.route()
+    module.route.__defaults__ = target.defaults
+    module.Budget = type('Budget', (), {})
+    with pytest.raises(Refused, match='identity link changed'):
+        module.route()
+
+
+@pytest.mark.parametrize('mutation', ('bool-int', 'literal-marker', 'aggregate-bytes', 'aggregate-work'))
+def test_anchored_defaults_keep_type_tags_and_global_bounds(monkeypatch, mutation):
+    module, target = record_owner(monkeypatch)
+    module.check = lambda frame: target.verify(frame)
+    if mutation == 'bool-int':
+        module.route.__kwdefaults__['flag'] = 1
+    elif mutation == 'literal-marker':
+        module.route.__defaults__ = (('record', 0),)
+    elif mutation == 'aggregate-bytes':
+        module.route.__defaults__ = (('x' * 131071,) * 5,)
+    else:
+        module.route.__defaults__ = ((None,) * 4096,)
+    with pytest.raises(Refused, match='default .*bound' if mutation.startswith('aggregate-') else None):
+        module.route()

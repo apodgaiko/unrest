@@ -2674,3 +2674,23 @@ Development pushes run the bounded replacement control suite. Original source
 groups are explicit workflow-dispatch selections so a support edit does not
 silently replay a passing cohort. This does not change the required full,
 unexcluded release checkpoint or primary release gates.
+
+The replacement Git caller selector prepares the original24 workspace/evolution
+cases and75 literal source sites. It checks the original fixture/helper or manager
+method, actual selected test frame, subprocess argv/options, owned repository
+relationship and integration stdin/environment. WorkspaceLease and PromotionRecord
+class/module bindings are retained rather than adopted after mutation. A helper cwd
+is type-checked before any truth test. These declarations remain unactivated;
+the test-only real-caller probe is not kernel/source admission certification.
+
+The original lease method's ResourceBudget default is an explicitly anchored
+record: its exact object, original class binding and primitive field snapshot must
+remain unchanged. Tuple, literal and record snapshots have disjoint type-sensitive
+representations and share the original aggregate work/byte/depth bounds. No generic
+object evaluation or callback-based defaults are admitted.
+
+The actual native Git wait control uses a disposable repository with
+maintenance.autoDetach=false and the exact current --no-detach helper vector.
+Detached descendants do not receive a numeric-wait exception. The caller probe's
+separate disposable home disables automatic maintenance as already specified for
+the24-case diagnostic; neither setup changes product tests or provider review.

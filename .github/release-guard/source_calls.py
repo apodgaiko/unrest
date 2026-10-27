@@ -38,7 +38,7 @@ class Sources:
         return prepare(file.read_bytes(), str(file), module.__name__, mode, self.pins[path])
 
     @staticmethod
-    def owner(unit, module, function, qualified, links):
+    def owner(unit, module, function, qualified, links, *, default_objects=()):
         if type(function) is not types.FunctionType:
             raise Refused('root original caller function')
         codes = [code for code in unit.codes if code.co_qualname == qualified]
@@ -51,7 +51,7 @@ class Sources:
         return Owner(unit, module, function, qualified, codes[0].co_firstlineno, (1, 100000),
                      links, closure=tuple(cell.cell_contents for cell in (function.__closure__ or ())),
                      cell_anchors=function.__closure__ or (), defaults=defaults,
-                     keyword_defaults=tuple(sorted((keywords or {}).items())))
+                     keyword_defaults=tuple(sorted((keywords or {}).items())), default_objects=default_objects)
 
     def acp_cleanup(self, module, unit):
         import asyncio
