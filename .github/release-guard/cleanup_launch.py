@@ -1,7 +1,6 @@
 """Finite original cleanup transport cases, module entry and native Git operands."""
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import os
@@ -207,6 +206,7 @@ def translated(result, directory):
 
 class Launches:
     def __init__(self, calls):
+        import asyncio
         self.calls, self.policy, self.profile = calls, calls.policy, calls.profile
         self.module = sys_module('unrest_harness.acp_runner')
         self.unit = calls.unit(PRODUCT, self.module, calls.mode(self.module))

@@ -129,6 +129,14 @@ class Policy:
                 self.popen(args)
                 return True
             if event in ('socket.bind', 'socket.connect', 'socket.__new__'):
+                if self.sockets is None:
+                    import socket
+                    if (event != 'socket.__new__' or type(args) is not tuple or len(args) != 4
+                            or type(args[0]) not in (socket.socket, socket.SocketType)
+                            or any(type(v) is not int for v in args[1:])
+                            or args[1:] != (socket.AF_UNIX, socket.SOCK_STREAM, 0) or not self.private_call()):
+                        raise Refused('source fixed-script private channel only')
+                    return True
                 return self.sockets.audit(event, args)
             if event in ('os.kill', 'os.killpg'):
                 pending = getattr(self.local, 'signal', None)
@@ -305,10 +313,14 @@ def activate(directory, profile, event, arguments):
         elif profile['role'] == 'session-adapter':
             from session_calls import SessionChild
             policy.case, policy.calls = profile['case'], SessionChild(policy)
-    from source_sockets import Hooks
-    policy.sockets = Hooks(policy)
+    if profile['role'] not in ('session-adapter', 'session-child'):
+        from source_sockets import Hooks
+        policy.sockets = Hooks(policy)
+        from source_owner import bind_asyncio
+        bind_asyncio()
     client.request('core-ready', {'pins': [list(pair) for pair in pins]})
-    policy.sockets.install()
+    if policy.sockets is not None:
+        policy.sockets.install()
     policy.install_process_hooks()
     client.request('body-ready', {'seal': profile['seal']})
     sys.dont_write_bytecode = True

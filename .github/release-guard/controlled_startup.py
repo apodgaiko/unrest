@@ -7,7 +7,6 @@ separate mandatory boundaries. There is no legacy resolver fallback.
 """
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 import hashlib
 import json
@@ -61,6 +60,7 @@ class Startup:
     def __init__(self, session: types.ModuleType, tests: types.ModuleType,
                  session_unit: SourceUnit, test_unit: SourceUnit,
                  checkout: Path, owned: Path, interpreter: Path, interpreter_sha256: str, *, configuration_binding=None):
+        import asyncio
         if (session_unit.source_sha256 != SESSION_PIN or test_unit.source_sha256 != TEST_PIN
                 or session_unit.path != str(checkout / SESSION) or test_unit.path != str(checkout / TEST)
                 or session_unit.module != 'unrest_harness.experimental_session'
@@ -235,6 +235,7 @@ class Startup:
             del frames
 
     def constructor_frame(self, frames, original_argv, environment, home, backend, case):
+        import asyncio
         if self.constructor.__code__ is not self.constructor_code:
             raise Refused('startup constructor code changed')
         constructors = [frame for frame in frames if frame.f_code is self.constructor_code
@@ -273,6 +274,7 @@ class Startup:
             raise Refused('startup original process options')
 
     def delayed(self, frames, expected_argv, environment, home, backend, delay):
+        import asyncio
         if (type(self.fixture) is not self.fixture_type
                 or dictionary(self.fixture, self.fixture_type).get('_fixture_function') is not self.fixture_function):
             raise Refused('startup original delayed fixture')

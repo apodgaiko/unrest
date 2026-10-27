@@ -11,7 +11,6 @@ cached as successful checks. Mutable closure contents need their own verifier.
 from __future__ import annotations
 
 import ast
-import asyncio
 from dataclasses import dataclass
 import hashlib
 import importlib.machinery
@@ -24,6 +23,14 @@ from content_manifest import Refused
 
 MAX_FRAMES = 64
 MAX_SOURCE = 4 * 1024 * 1024
+_ASYNCIO = sys.modules.get('asyncio')
+
+
+def bind_asyncio():
+    global _ASYNCIO
+    _ASYNCIO = sys.modules['asyncio']
+    if type(_ASYNCIO) is not types.ModuleType:
+        raise Refused('prepared asyncio module')
 
 
 @dataclass(frozen=True)
@@ -391,6 +398,9 @@ def active_frames() -> tuple[types.FrameType, ...]:
                 raise Refused('synchronous owner chain bound')
             frames.append(current)
             current = current.f_back
+        if _ASYNCIO is None:
+            return tuple(frames)
+        asyncio = _ASYNCIO
         try:
             task = asyncio.current_task()
         except RuntimeError:

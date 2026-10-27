@@ -2751,3 +2751,10 @@ fixed scripts/arguments, parent-owned pipes and an independently reconstructed
 least-privilege environment. The timeout fixture's sole descendant retains its
 actual parent wait before the adapter can restore its own SIGTERM status.
 These controls authorize no provider executable or denied review replay.
+
+Synchronous fixed-script startup does not initialize asyncio or its socket
+machinery. Such scripts retain only the authenticated private Unix control
+channel; all other socket creation and network effects refuse. Async callers
+retain their original scheduler module during trusted bootstrap. A fixed-script
+child prepares its already pinned script directly instead of re-reading unrelated
+source manifests. These reductions change no product timeout or cleanup oracle.

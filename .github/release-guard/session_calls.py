@@ -1,7 +1,6 @@
 """Shared exact LaunchPlan and fixed-script descendant ownership."""
 from __future__ import annotations
 
-import asyncio
 import importlib
 import os
 from pathlib import Path
@@ -14,7 +13,7 @@ from launch_policy import Observation, match
 from ordinary_acp import plain_environment
 from session_launch import LIVE, PLAN, INVALID, PINS, PRODUCT, SCRIPT, TEST, TIMEOUT, expected, stream_limit
 from source_calls import Sources, TestSources
-from source_owner import Link, active_frames, frame_fields, instance_fields, _namespace
+from source_owner import Link, active_frames, frame_fields, instance_fields, _namespace, prepare
 
 
 def plan_fields(plan):
@@ -51,6 +50,7 @@ def inherited_options(options):
 
 class SessionCalls(TestSources):
     def __init__(self, policy, item):
+        import asyncio
         super().__init__(policy, item, TEST, PINS)
         self.startup = self
         self.module = importlib.import_module('unrest_harness.provider_sessions')
@@ -65,6 +65,7 @@ class SessionCalls(TestSources):
         return Sources.unit(self, 'src/unrest_harness/acp_runner.py', module, self.mode(module))
 
     def select(self, case, audit):
+        import asyncio
         if type(case) is not str or case != self.case_item.nodeid or case not in LIVE:
             raise Refused('session active original launch case')
         frames = active_frames()
@@ -134,12 +135,10 @@ class SessionCalls(TestSources):
 
 class SessionChild(Sources):
     def __init__(self, policy):
-        super().__init__(policy, None)
-        if any(self.pins[name] != pin for name, pin in PINS.items()):
-            raise Refused('session descendant source pins')
-        self.startup = self
+        self.policy, self.profile, self.startup = policy, policy.profile, self
         self.module = sys.modules['__main__']
-        self.unit = self.unit(SCRIPT, self.module, 'script')
+        file = Path(self.profile['checkout']) / SCRIPT
+        self.unit = prepare(file.read_bytes(), str(file), '__main__', 'script', PINS[SCRIPT])
         self.process_type = __import__('subprocess').Popen
 
     def select(self, case, audit):

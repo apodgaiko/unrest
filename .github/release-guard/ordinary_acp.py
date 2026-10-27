@@ -5,7 +5,6 @@ fabricated Python READY. Source selection does not grant group-signal authority.
 """
 from __future__ import annotations
 
-import asyncio
 import gc
 import importlib
 import os
@@ -144,6 +143,7 @@ def options(values, role, plan=None):
 
 class Ordinary:
     def __init__(self, calls):
+        import asyncio
         self.calls, self.profile = calls, calls.profile
         self.module = importlib.import_module('unrest_harness.acp_runner')
         self.unit = calls.unit(PRODUCT, self.module, calls.mode(self.module))
@@ -152,6 +152,7 @@ class Ordinary:
         self.constructor_code = self.constructor.__code__
 
     def select(self, case, audit):
+        import asyncio
         executable, vector, cwd, env = audit
         frames = active_frames()
         try:

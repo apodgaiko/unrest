@@ -35,6 +35,10 @@ class Probe:
         self.case, self.calls = None, None
         self.original_init = subprocess.Popen.__init__
 
+    def pytest_collection_finish(self, session):
+        from source_owner import bind_asyncio
+        bind_asyncio()
+
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_protocol(self, item, nextitem):
         assert item.nodeid == CASES[len(self.completed)]
