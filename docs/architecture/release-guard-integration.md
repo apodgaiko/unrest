@@ -2717,3 +2717,13 @@ source tests, and duplicated setup/control jobs. Their526 workflow lines are
 removed; historical commands and results remain in Git/CI history. The primary
 CI workflow and all product tests retain their release requirements. Development
 uses the single bounded guard-control workflow with explicit source-group input.
+
+
+The current pinned stock Git updates detached HEAD through its internal ref-store
+API. It does not spawn an update-ref process for worktree creation. The replacement
+therefore admits only the single exact reset helper for integration/rollback
+checkout, after checking the requested detached HEAD and owned backlinks. Lease
+creation with --no-checkout admits no native helper. The older update-ref/reset
+sequence is historical runtime evidence, not a requirement to wait for a process
+that the current Git image never creates. Every actual helper retains its matching
+exit, terminal and original Git-parent numeric wait. No wait exception is added.

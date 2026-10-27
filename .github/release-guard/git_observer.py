@@ -221,20 +221,16 @@ class Git:
         process = host.ledger.process(parent)
         intent = self.commands.get(process.token)
         if (intent is None or not intent['consumed'] or intent['case'] != host.case
-                or intent['operation'] not in ('lease-add', 'integration-add', 'rollback-add')
+                or intent['operation'] not in ('integration-add', 'rollback-add')
                 or process.exit is not None or process.terminal is not None):
             raise Refused('git child outside original worktree creation')
         siblings = host.ledger.children.get(parent, ())
-        if not siblings or siblings[-1] != birth:
-            raise Refused('git helper birth order')
-        previous = siblings[:-1]
-        if (len(previous) > 1 or previous and (intent['operation'] == 'lease-add'
-                or not self.values.native_child_reaped(parent, previous[0], host.case, process.pins))):
-            raise Refused('git helper phase needs actual native parent wait')
+        if list(siblings) != [birth]:
+            raise Refused('git single current checkout helper')
         tree, revision = intent['command'].argv[-2:]
         root, worktree = Path(intent['repository']), Path(tree)
         self.location(root, tree)
-        expected_head = revision.encode() + b'\n' if previous else b'0' * 40 + b'\n'
+        expected_head = revision.encode() + b'\n'
         if regular(root / '.git/worktrees' / worktree.name / 'HEAD', 64) != expected_head:
             raise Refused('git helper detached HEAD phase')
         executable = '/usr/lib/git-core/git'
@@ -243,7 +239,7 @@ class Git:
         environment = {**intent['environment'], 'GIT_DIR': str(worktree / '.git'), 'GIT_WORK_TREE': tree,
             'GIT_EXEC_PATH': '/usr/lib/git-core', 'GIT_PREFIX': '',
             'PATH': '/usr/lib/git-core:' + intent['environment']['PATH']}
-        vector = [executable, 'reset', '--hard', '--no-recurse-submodules'] if previous else [executable, 'update-ref', 'HEAD', revision]
+        vector = [executable, 'reset', '--hard', '--no-recurse-submodules']
         host.serial += 1
         child = {'case': host.case, 'role': 'git-helper', 'parent': parent, 'environment': environment,
             'cwd': intent['cwd'], 'translated': vector, 'token': os.urandom(16).hex(), 'consumed': False,
