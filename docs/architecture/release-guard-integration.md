@@ -2876,3 +2876,10 @@ source-input envelope binds its descriptor; each profile binds the exact mounted
 generation. Only ROOT discovery prepends `/native/bin`; controlled role PATHs
 remain `/usr/bin:/bin`. This metadata view supplies no native launch intent,
 provider selection or permission override. Unknown native execution still fails.
+
+The four original warning-refusal cases use one owned worker pair and no broker
+HTTP requests. Their exact original lambda retains its owner, original bound
+environment and ProviderConfig. The sole SIGUSR1 requires the original test
+frame/line, selected attack parameter and retained worker backend generation.
+The observer separately binds case, parent, token and birth and refuses a repeat
+signal. Group signals and other native or provider effects remain forbidden.

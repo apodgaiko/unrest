@@ -12,7 +12,7 @@ import pytest
 from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
-from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, configured
+from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, WARNING_REFUSALS, configured
 from bootstrap_configuration import Binding
 from content_manifest import Refused
 from controlled_startup import SESSION, SESSION_PIN, TEST, TEST_PIN, Startup, dictionary
@@ -35,14 +35,17 @@ class BootstrapCalls(TestSources):
 
     def signal(self,pid,sig,group):
         case = self.policy.case
-        if case != 'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure' or sig != USER_SIGNAL:
+        warning = case in WARNING_REFUSALS
+        if (not warning and case != 'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure') or sig != USER_SIGNAL:
             return Sources.signal(self,pid,sig,group)
         if group:
             raise Refused('controlled teardown signal is not a group signal')
         frames = active_frames()
         try:
-            frame = self.test_owner.current(frames,line=41)
-            instance = frame.f_locals.get('session')
+            frame = self.test_owner.current(frames,line=191 if warning else 41)
+            if warning and (type(frame.f_locals.get('attack')) is not str or case.rsplit('[',1)[1] != frame.f_locals['attack']+']'):
+                raise Refused('controlled warning original parameter')
+            instance = frame.f_locals.get('owner' if warning else 'session')
             if type(instance) not in (self.startup.base,self.startup.synthetic):
                 raise Refused('controlled teardown original session')
             backends = dictionary(instance,self.startup.base).get('backends')

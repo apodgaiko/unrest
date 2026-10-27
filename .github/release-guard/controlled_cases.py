@@ -61,7 +61,10 @@ ADMISSION = {
     'tests/test_experimental_admission_bounds.py::test_owner_adapter_bound_privacy_first_failure_cleanup_no_send[unterminated_frame]': ('5f4e60fbc40b71443b6608a1fbc6756e8e8638058c8ebba49408d4d60cd898ef', 'fake-app-server'),
 }
 
+WARNING_REFUSALS = {'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[late-cancel]': ('ef53f021de521fdcd51ea74a798cda9acaa88e9bfb7673bf35b751861f2865ca', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[malformed]': ('927d91d15ae5cae209cace517f1183f1a54239b32ac188edd52085d5adbedb9e', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[unsupported]': ('1e29b51c0c55d924bb45674a895c3b7e85f81707a6112307c7d38eaff54bbaa9', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[wrong-callback]': ('ef53f021de521fdcd51ea74a798cda9acaa88e9bfb7673bf35b751861f2865ca', 'fake-app-server')}
+
 POPULATED = {
+    **WARNING_REFUSALS,
     **ADMISSION,
     'tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-False]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
     'tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-True]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
@@ -200,7 +203,8 @@ def backend_path(case, root):
 
 
 GROUPS = {
-    'controlled-private8': tuple(case for case in POPULATED if case not in ADMISSION),
+    'controlled-private8': tuple(case for case in POPULATED if case not in (*ADMISSION,*WARNING_REFUSALS)),
+    'controlled-warning4': tuple(WARNING_REFUSALS),
     'controlled-admission6': tuple(ADMISSION),
     'controlled-probes4': tuple(case for case in FRESH if '::test_programmatic_private_preflight' in case or '::test_bridge_failure_preserved_through_owned_close[' in case),
     'controlled-large8': tuple(case for case in FRESH if 'large' in case),
