@@ -11,6 +11,7 @@ from content_manifest import Refused
 STARTUP_FAILURE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
 
 PINS = {
+    'tests/test_experimental_notifications.py': '5a1aea6102ae089fb8d5ad82496562a020def6ce1f4ece95b8ef84dadb22cf00',
     'tests/test_experimental_admission_bounds.py': '97557e0d3bd047948cbee27aa6e5c3f30daa45ed79a4544eae19b5e22f2e6c9d',
     'tests/test_experimental_provider_config.py': 'e2efb30678c7372df2f69523b27573517082819b7412d7cabc604b48bf7faa6b',
     'tools/probe_v046_startup.py': 'eb26f43472ce1798d2dd066fa87d6ceb5d58d1a94abc0e9edddeb20b285dd564',
@@ -63,7 +64,10 @@ ADMISSION = {
 
 WARNING_REFUSALS = {'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[late-cancel]': ('ef53f021de521fdcd51ea74a798cda9acaa88e9bfb7673bf35b751861f2865ca', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[malformed]': ('927d91d15ae5cae209cace517f1183f1a54239b32ac188edd52085d5adbedb9e', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[unsupported]': ('1e29b51c0c55d924bb45674a895c3b7e85f81707a6112307c7d38eaff54bbaa9', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[wrong-callback]': ('ef53f021de521fdcd51ea74a798cda9acaa88e9bfb7673bf35b751861f2865ca', 'fake-app-server')}
 
+NOTIFICATION_STARTUP = {'tests/test_controlled_acp_warnings.py::test_original_owner_warning_state_and_phase[startup-connected]': ('de67ffdb73a2e3275d06611496401cf0e785fe60b66ad114aa1b37d0264a369a', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_original_owner_warning_state_and_phase[startup-connecting]': ('af2899c0869c7742a041414460822794be2fa3f940d986321c983c872b36b70f', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_original_owner_warning_state_and_phase[startup-errored]': ('b31549518e4eaddd35c256a74bd823af86f900b8318ee4e2962465f155e62d55', 'fake-app-server'), 'tests/test_controlled_acp_warnings.py::test_original_owner_warning_state_and_phase[startup-unknown]': ('f8dd8e17bf918032054912f64461eea4846e5a4a67adb68adc774be2591628c8', 'fake-app-server'), 'tests/test_experimental_notifications.py::test_controlled_process_http_revocation_and_warning_privacy[startup-connected]': ('de67ffdb73a2e3275d06611496401cf0e785fe60b66ad114aa1b37d0264a369a', 'fake-app-server'), 'tests/test_experimental_notifications.py::test_controlled_process_http_revocation_and_warning_privacy[startup-connecting]': ('af2899c0869c7742a041414460822794be2fa3f940d986321c983c872b36b70f', 'fake-app-server'), 'tests/test_experimental_notifications.py::test_controlled_process_http_revocation_and_warning_privacy[startup-errored]': ('b31549518e4eaddd35c256a74bd823af86f900b8318ee4e2962465f155e62d55', 'fake-app-server'), 'tests/test_experimental_notifications.py::test_controlled_process_http_revocation_and_warning_privacy[startup-unknown]': ('f8dd8e17bf918032054912f64461eea4846e5a4a67adb68adc774be2591628c8', 'fake-app-server')}
+
 POPULATED = {
+    **NOTIFICATION_STARTUP,
     **WARNING_REFUSALS,
     **ADMISSION,
     'tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-False]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
@@ -203,8 +207,9 @@ def backend_path(case, root):
 
 
 GROUPS = {
-    'controlled-private8': tuple(case for case in POPULATED if case not in (*ADMISSION,*WARNING_REFUSALS)),
+    'controlled-private8': tuple(case for case in POPULATED if case not in (*ADMISSION,*WARNING_REFUSALS,*NOTIFICATION_STARTUP)),
     'controlled-warning4': tuple(WARNING_REFUSALS),
+    'controlled-notification-startup8': tuple(NOTIFICATION_STARTUP),
     'controlled-admission6': tuple(ADMISSION),
     'controlled-probes4': tuple(case for case in FRESH if '::test_programmatic_private_preflight' in case or '::test_bridge_failure_preserved_through_owned_close[' in case),
     'controlled-large8': tuple(case for case in FRESH if 'large' in case),

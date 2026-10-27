@@ -2883,3 +2883,9 @@ environment and ProviderConfig. The sole SIGUSR1 requires the original test
 frame/line, selected attack parameter and retained worker backend generation.
 The observer separately binds case, parent, token and birth and refuses a repeat
 signal. Group signals and other native or provider effects remain forbidden.
+
+Eight direct/delegating startup-notification refusals retain their original
+connected/connecting/errored/unknown status parameters and backend postimages.
+They use one pair, zero broker HTTP and no fixture signal. The original
+notification environment lambda retains its exact owner and configuration.
+Disabled and later-phase notification cases remain outside this slice.

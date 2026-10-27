@@ -9,13 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from content_manifest import Refused
-from controlled_cases import CASES, FRESH, POPULATED, ADMISSION, WARNING_REFUSALS, STARTUP_FAILURE
+from controlled_cases import CASES, FRESH, POPULATED, ADMISSION, WARNING_REFUSALS, NOTIFICATION_STARTUP, STARTUP_FAILURE
 
 
 def limits(case: str) -> tuple[int, int]:
     if type(case) is not str or case not in CASES:
         raise Refused('controlled pair case')
-    if case == STARTUP_FAILURE or case in (*FRESH,*ADMISSION,*WARNING_REFUSALS):
+    if case == STARTUP_FAILURE or case in (*FRESH,*ADMISSION,*WARNING_REFUSALS,*NOTIFICATION_STARTUP):
         return 1, 0
     if case in POPULATED:
         return (1, 3) if case.endswith('-True]') else (2, 13)
