@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import json
 from pathlib import Path
+import sys
 import types
 from typing import cast
 
@@ -185,6 +186,10 @@ class OriginalCases:
         if report.when in phases:
             raise Refused('root duplicate test phase')
         phases[report.when] = report.outcome
+        if report.failed:
+            # Preserve the initiating failure even when protocol finalization
+            # correctly refuses; this stream is private and byte bounded.
+            sys.stderr.write(report.longreprtext + '\n')
 
 
 def main():

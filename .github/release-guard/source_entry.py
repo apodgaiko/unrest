@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
+import traceback
 import types
 from typing import Any, NoReturn
 
@@ -112,6 +113,7 @@ class Policy:
             raise Refused('source unknown privileged effect')
         except BaseException:
             self.poison = True
+            traceback.print_exc(file=sys.stderr)  # Owned output pipe; encrypted by the host.
             try:
                 self.client.request('guard-refusal', {'code': 'source-audit-refused'})
             except BaseException:
