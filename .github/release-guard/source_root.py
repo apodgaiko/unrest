@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 import hashlib
 import importlib
 import json
@@ -74,7 +75,7 @@ class Sources:
             owner, frame = matches[0]
             owner.verify(frame)
             process = frame.f_locals.get('process')
-            if process is None and owner.qualified == 'ACPNodeRunner.run_node.<locals>.finish_mcp':
+            if process is None and owner.qualified in ('ACPNodeRunner.run_node.<locals>.finish_mcp', 'ACPNodeRunner.run_node'):
                 process = frame.f_locals.get('mcp_process')
             if type(process) is not self.process_class:
                 raise Refused('root original cleanup process type')
@@ -191,6 +192,13 @@ class OrdinaryCalls(Sources):
         self.cleanup = tuple(self.owner(unit, acp, vars(acp)[name], name,
                              (Link(acp, name, vars(acp)[name]),))
                              for name in ('_close_subprocess', '_wait_for_process_exit'))
+        from ordinary_acp import CASES as ORDINARY_CASES
+        if item.nodeid == ORDINARY_CASES[2]:
+            cls = acp.ACPNodeRunner
+            function = vars(cls)['run_node']
+            owner = self.owner(unit, acp, function, 'ACPNodeRunner.run_node',
+                               (Link(acp, 'ACPNodeRunner', cls), Link(cls, 'run_node', function)))
+            self.cleanup = (*self.cleanup, replace(owner, call_lines=(1584, 1584)))
         self.process_class = asyncio.subprocess.Process
         self.transport_class = vars(importlib.import_module('asyncio.unix_events'))['_UnixSubprocessTransport']
 
@@ -198,6 +206,7 @@ class OrdinaryCalls(Sources):
         if group:
             raise Refused('ordinary inherited session has no group authority')
         frames = active_frames()
+        base_cleanup = self.cleanup
         try:
             for frame in frames:
                 if (frame.f_globals is vars(self.startup.module)
@@ -214,7 +223,7 @@ class OrdinaryCalls(Sources):
             super().signal(pid, sig, group)
         finally:
             # Keep no coroutine/closure frame alive between privileged calls.
-            self.cleanup = self.cleanup[:2]
+            self.cleanup = base_cleanup
             del frames
 
     def listener(self):

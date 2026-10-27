@@ -184,7 +184,10 @@ class Policy:
             sig = int.__int__(sig)
             if policy.profile['role'] != 'root' or policy.calls is None:
                 policy.refuse('source signal role')
-            policy.calls.signal(pid, sig, group)
+            try:
+                policy.calls.signal(pid, sig, group)
+            except BaseException:
+                policy.refuse('source cleanup signal refused')
             saved = policy.children[pid]
             answer = policy.client.request('custody_signal', {'pid': pid, 'child_token': saved['token'],
                                                               'signal': sig, 'group': group})

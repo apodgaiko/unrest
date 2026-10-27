@@ -168,3 +168,14 @@ def test_cleanup_qualifier_subclass_never_runs_equality(monkeypatch):
     monkeypatch.setattr(source_root, 'active_frames', lambda: (frame,))
     monkeypatch.setattr(source_root.Sources, 'signal', lambda *args: None)
     calls.signal(1, 15, False)
+
+
+def test_exception_cleanup_callsite_stays_exact_original():
+    import ast
+    source = (Path(__file__).resolve().parents[2] / 'src/unrest_harness/acp_runner.py').read_text()
+    nodes = [node for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Call) and node.lineno == 1584]
+    assert len(nodes) == 1
+    call = nodes[0]
+    assert isinstance(call.func, ast.Attribute) and call.func.attr == 'terminate'
+    assert isinstance(call.func.value, ast.Name) and call.func.value.id == 'mcp_process'
+    assert call.args == [] and call.keywords == []
