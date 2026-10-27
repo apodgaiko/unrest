@@ -1,12 +1,14 @@
 """Original prepared constructor wrappers retain exact original functions."""
 import asyncio
 from pathlib import Path
+import sys
 
 import pytest
 
 from content_manifest import Refused
 from controlled_wrappers import verify
-from tests.test_controlled_acp_cancel import methods
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tests.test_controlled_acp_cancel import methods  # noqa: E402
 
 
 def test_original_observing_wrapper_keeps_source_and_closure_binding(monkeypatch):
@@ -42,3 +44,20 @@ def test_wrapper_metadata_cannot_execute_comparison_or_hash_callbacks(monkeypatc
         live.__code__ = live.__code__.replace(co_consts=(*live.__code__.co_consts,Text('foreign')))
     with pytest.raises(Refused):
         verify(asyncio,'create_subprocess_exec',original,Path(__file__).resolve().parents[2])
+
+
+@pytest.mark.parametrize('barrier', [False, True])
+def test_original_retirement_wrapper_keeps_product_start_without_launch(monkeypatch, tmp_path, barrier):
+    from tests import test_experimental_drain_retirement as tests
+    from unrest_harness.experimental_session import _SessionOwner
+    original = _SessionOwner.start
+    class Stopped(RuntimeError):
+        pass
+    async def inspect(*args, **kwargs):
+        verify(_SessionOwner, 'start', original, Path(__file__).resolve().parents[2])
+        with pytest.raises(Refused):
+            verify(_SessionOwner, 'start', lambda: None, Path(__file__).resolve().parents[2])
+        raise Stopped
+    monkeypatch.setattr(tests, 'original_stop', inspect)
+    with pytest.raises(Stopped):
+        asyncio.run(tests.test_original_stop_and_retired_delivery(tmp_path, monkeypatch, lambda *args: None, barrier))
