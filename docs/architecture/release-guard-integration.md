@@ -2664,11 +2664,10 @@ operations and primitive operands. Parent, lease, integration and evolution-only
 rollback locations are separate. Integration trees and patches retain distinct
 path shapes; promotion and rollback have opposite causal directions. Date facts
 carry their predecessor, and integration commits carry their tree, predecessor,
-date and exact ordered lease/patch-message digest. Both command building and
-value reduction are currently unactivated support: they grant no source launch
-permission and do not certify the original workspace/evolution cases. Source
-callers, owned filesystem custody and original stdout pipe generations must be
-bound before enabling this family.
+date and exact ordered lease/patch-message digest. Command building and value reduction grant no permission by themselves. The
+workspaces24 group now joins them to original callers, owned repository metadata,
+stdout pipe generations and native admission. This group remains separate from
+the full release checkpoint.
 
 Development pushes run the bounded replacement control suite. Original source
 groups are explicit workflow-dispatch selections so a support edit does not
@@ -2680,8 +2679,8 @@ cases and75 literal source sites. It checks the original fixture/helper or manag
 method, actual selected test frame, subprocess argv/options, owned repository
 relationship and integration stdin/environment. WorkspaceLease and PromotionRecord
 class/module bindings are retained rather than adopted after mutation. A helper cwd
-is type-checked before any truth test. These declarations remain unactivated;
-the test-only real-caller probe is not kernel/source admission certification.
+is type-checked before any truth test. The declarations are enabled only in the exact workspaces24 group; the test-only
+real-caller probe remains separate from kernel/source admission certification.
 
 The original lease method's ResourceBudget default is an explicitly anchored
 record: its exact object, original class binding and primitive field snapshot must
@@ -2694,3 +2693,20 @@ maintenance.autoDetach=false and the exact current --no-detach helper vector.
 Detached descendants do not receive a numeric-wait exception. The caller probe's
 separate disposable home disables automatic maintenance as already specified for
 the24-case diagnostic; neither setup changes product tests or provider review.
+
+
+The workspace/evolution group uses the existing native entry, case fence and
+parent-receipt protocol. Git values come from the retained original communicate
+function and stdout wrapper, joined to the child/parent pipe generation and the
+successful actual parent wait. Stock update-ref/reset helpers have exact parent
+births, vectors, environments and linked-worktree phases; they require actual
+Git-parent kernel waits and receive no invented Python receipts. The single
+original owned-Python body keeps its process-budget, restart and cleanup tests.
+CPython polling uses the same actual-wait receipt hook as direct waits; raw
+termination status is retained. Liveness probes remain signal0 and cannot target
+a foreign process generation. Git's UTC Z and +00:00 date forms remain byte-exact.
+
+The disposable diagnostic home/configuration belongs to the observer. A sticky
+group-writable owned root permits normal temporary test directories while
+preventing the source UID from replacing that home. No user home, private
+evidence, provider permission or denied review carrier is changed.

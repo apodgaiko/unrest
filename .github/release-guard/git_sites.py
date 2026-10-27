@@ -109,3 +109,6 @@ SITES = {
     ('src/unrest_harness/evolution.py', 'EvolutionManager._restore_exact_predecessor', 1905): 'rollback-reset',
     ('src/unrest_harness/accepted_point_authority.py', '_validate_git_index', 386): 'check-index',
 }
+
+OWNED_SITE = ('src/unrest_harness/workspaces.py', 'WorkspaceManager.start_owned_process', 754)
+OWNED_BODY = 'import time; time.sleep(60)'

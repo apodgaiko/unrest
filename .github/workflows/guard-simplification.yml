@@ -9,7 +9,7 @@ on:
         description: 'Exact original case group; none runs only kernel/admission controls'
         type: choice
         default: none
-        options: [none, bootstrap27, ordinary42, cleanup7, cleanup9, cleanup5, cleanup-review3, cleanup12, cleanup15]
+        options: [none, workspaces24, bootstrap27, ordinary42, cleanup7, cleanup9, cleanup5, cleanup-review3, cleanup12, cleanup15]
 
 permissions:
   contents: read
@@ -28,14 +28,17 @@ jobs:
           enable-cache: false
       - run: uv sync --locked
       - name: Bounded kernel and source-admission controls
+        if: github.event_name == 'push' || inputs.source_group == 'none'
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: timeout --signal=TERM --kill-after=5 120 uv run --no-sync pytest -q -o faulthandler_timeout=15 .github/release-guard
       - name: Actual mixed-user cleanup without CAP_KILL
+        if: github.event_name == 'push' || inputs.source_group == 'none'
         run: sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 60 "$PWD/.venv/bin/python" -I -B .github/release-guard/test_mixed_uid_control.py
       - name: Build pinned CPython native control entry
         run: uv run --no-sync python .github/release-guard/native_build.py
       - name: Actual native prebody and caught-refusal controls
+        if: github.event_name == 'push' || inputs.source_group == 'none'
         run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 120 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_native_entry_control.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json"
       - name: Exact original source case group
         if: github.event_name == 'workflow_dispatch' && inputs.source_group != 'none'

@@ -5,6 +5,7 @@ filesystem/native custody, original-parent waits and causal value registration.
 """
 from __future__ import annotations
 
+import hashlib
 import importlib
 from pathlib import Path
 import subprocess
@@ -13,7 +14,7 @@ import types
 
 from content_manifest import Refused
 from git_commands import build, FIELDS, path
-from git_sites import CASES, PINS, SITES
+from git_sites import CASES, PINS, SITES, OWNED_SITE, OWNED_BODY
 from source_calls import TestSources
 from source_owner import Link, active_frames, frame_fields, instance_fields
 
@@ -45,13 +46,14 @@ class GitCalls(TestSources):
             if module is not None:
                 self.sources[name] = (module, self.test_unit if module is self.tests else self.unit(name, module, self.mode(module)))
         self.record_types = {}
-        for name, typename in (('workspaces', 'WorkspaceLease'), ('evolution', 'PromotionRecord')):
+        for name, typename in (('workspaces', 'WorkspaceLease'), ('workspaces', 'OwnedProcess'), ('evolution', 'PromotionRecord')):
             module = self.sources['src/unrest_harness/' + name + '.py'][0]
             self.record_types[name, typename] = (module, vars(module)[typename])
         for name, qualified, _ in SITES:
             if name in self.sources:
                 self.owner_for(name, qualified)
         self.startup = self
+        self.pending, self.owned_pid, self.native_pin = None, None, None
 
     def owner_for(self, name, qualified):
         key = (name, qualified)
@@ -85,10 +87,76 @@ class GitCalls(TestSources):
         return result
 
     def signal(self, pid, sig, group):
-        raise Refused('git selector has no signal authority')
+        if self.case_item.nodeid != CASES[7] or pid != self.owned_pid or type(pid) is not int or type(sig) is not int or type(group) is not bool or sig not in (0, 9, 15):
+            raise Refused('workspace exact owned process signal')
+        frames = active_frames()
+        try:
+            self.test_owner.current(frames)
+            module = 'src/unrest_harness/workspaces.py'
+            drains = [f for f in frames if f.f_code.co_qualname == 'WorkspaceManager._drain_owned_processes']
+            if sig or drains:
+                owner = self.owner_for(module, 'WorkspaceManager._drain_owned_processes')
+                local = frame_fields(owner.current(frames))
+                process = self.record(local.get('process'), 'workspaces', 'OwnedProcess')
+                if process['pid'] != pid or process['process_group_id'] != pid:
+                    raise Refused('workspace signal registry binding')
+                if sig and (not group or instance_fields(local['self'])['_live_processes'].get(pid) is not self.policy.children[pid]['process']):
+                    raise Refused('workspace original live process handle')
+            elif group:
+                raise Refused('workspace probe group signal')
+        finally:
+            del frames
 
     def listener(self):
         raise Refused('git selector has no listener authority')
+
+    def select(self, case, arguments):
+        from controlled_startup import Intent
+        from git_observer import image
+        from launch_policy import Rule, render
+        if type(case) is not str or case != self.case_item.nodeid:
+            raise Refused('git selected launch case')
+        executable, vector, cwd, environment = arguments
+        owned = vector == [self.profile['native'], '-c', OWNED_BODY]
+        if owned:
+            site, fields, command = OWNED_SITE, {}, None
+            frames = active_frames()
+            try:
+                self.test_owner.current(frames)
+                local = frame_fields(self.owner_for(*OWNED_SITE[:2]).current(frames, line=OWNED_SITE[2]))
+                lease = self.record(local.get('lease'), 'workspaces', 'WorkspaceLease')
+                if case != CASES[7] or self.owned_pid is not None or path_text(cwd) != self.repository + '/.unrest-runtime/workspaces/trees/process' or lease['worktree_path'] != path_text(cwd):
+                    raise Refused('workspace original owned launch')
+                constructors = [f for f in frames if f.f_code is self.policy.constructor_code and f.f_globals is self.policy.constructor_globals]
+                if len(constructors) != 1:
+                    raise Refused('workspace original process constructor')
+                options = frame_fields(constructors[0])
+                if (any(type(options.get(k)) is not int or options[k] != -3 for k in ('stdin', 'stdout', 'stderr'))
+                        or options.get('start_new_session') is not True or options.get('shell') is not False
+                        or options.get('preexec_fn') is not None or options.get('pass_fds') != ()):
+                    raise Refused('workspace exact owned process options')
+            finally:
+                del frames
+            argv, native, pin, kind, body_pin = tuple(vector), self.profile['native'], self.profile['native_sha256'], 'python-command', hashlib.sha256(OWNED_BODY.encode()).hexdigest()
+            phase = 'call'
+        else:
+            site, operation, fields, command = self.select_command()
+            if vector != list(command.argv) or path_text(cwd) != command.cwd or executable != 'git':
+                raise Refused('git exact audited command')
+            if self.native_pin is None:
+                self.native_pin = image()
+            argv, native, pin, kind, body_pin = command.argv, '/usr/bin/git', self.native_pin, 'native', None
+            phase = 'setup' if site[1] == 'repository' else 'call'
+        env = {**self.profile['environment'], 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (' + phase + ')', **({} if owned else dict(command.additions))}
+        if environment is not None and (type(environment) is not dict or any(type(k) is not str or type(v) is not str for k, v in environment.items()) or environment != env):
+            raise Refused('git exact audited environment')
+        owner = site[0] + ':' + site[1] + ':' + str(site[2])
+        rule = Rule('workspace:owned' if owned else 'git:' + operation, owner, (case,), native, pin, argv, tuple(sorted(env.items())), path_text(cwd), kind, body_pin)
+        expected = render(rule, case, owner, {}, {})
+        wire_fields = {k: [list(row) for row in v] if k == 'leases' else list(v) if k == 'new_inputs' else v for k, v in fields.items()}
+        self.pending = ({'site': list(site), 'repository': self.repository, 'fields': wire_fields}, command)
+        translated = (argv[0], '-I', '-S', *argv[1:]) if owned else argv
+        return Intent(expected, translated, site[2], body_pin)
 
     def select_command(self):
         if type(self.policy.case) is not str or self.policy.case != self.case_item.nodeid:

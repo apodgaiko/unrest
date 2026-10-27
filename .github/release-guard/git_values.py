@@ -31,6 +31,19 @@ def digest(value, length=40):
     return value
 
 
+def date_text(value):
+    text(value)
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        raise Refused('git value date') from None
+    canonical = parsed.isoformat()
+    alternatives = (canonical, canonical[:-6] + 'Z') if canonical.endswith('+00:00') else (canonical,)
+    if parsed.tzinfo is None or value not in alternatives:
+        raise Refused('git value canonical date')
+    return value
+
+
 @dataclass(frozen=True)
 class Value:
     case: str
@@ -85,6 +98,20 @@ class Values:
                 and exited[1] == terminal[1] == wait[1]
                 and terminal[2] == wait[2] == 0 and wait[3] == 0)
 
+    def descendants_reaped(self, birth):
+        process = self.ledger.process(birth)
+        case = process.case
+        pending = [birth]
+        checked = 0
+        while pending:
+            parent = pending.pop()
+            for child in self.ledger.children.get(parent, ()):
+                checked += 1
+                if checked > 16 or not self.native_child_reaped(parent, child, case, process.pins):
+                    return False
+                pending.append(child)
+        return True
+
     @fail_closed
     def observe(self, birth, token, case, repository, location, kind, output, *, inputs=()):
         if (self.poison or self.ledger.poison or type(birth) is not Birth
@@ -103,15 +130,8 @@ class Values:
                 or process.terminal is None or process.terminal[2] != 0):
             raise Refused('git value needs successful actual parent join')
         digest(process.pins[0][1], 64)
-        pending = [birth]
-        checked = 0
-        while pending:
-            parent = pending.pop()
-            for child in self.ledger.children.get(parent, ()):
-                checked += 1
-                if checked > 16 or not self.native_child_reaped(parent, child, case, process.pins):
-                    raise Refused('git value has unsettled native descendants')
-                pending.append(child)
+        if not self.descendants_reaped(birth):
+            raise Refused('git value has unsettled native descendants')
         if (type(output) is not str or not 1 < len(output) <= 128
                 or not output.endswith('\n') or '\n' in output[:-1] or '\r' in output):
             raise Refused('git value exact stdout line')
@@ -128,12 +148,7 @@ class Values:
             if len(inputs) != 1:
                 raise Refused('git date predecessor')
             self.require(case, repository, 'parent', 'commit', digest(inputs[0]))
-            try:
-                parsed = datetime.fromisoformat(value)
-            except ValueError:
-                raise Refused('git value date') from None
-            if parsed.tzinfo is None or parsed.isoformat() != value:
-                raise Refused('git value canonical date')
+            date_text(value)
         elif kind == 'integration-commit':
             if len(inputs) != 4:
                 raise Refused('git commit dependency set')

@@ -194,3 +194,13 @@ def test_native_descendant_wait_has_no_generic_reap_exception(mutation):
     with pytest.raises(Refused, match='unsettled native descendants'):
         values.observe(child, token, CASE, REPO, 'parent', 'commit', BASE + '\n')
     assert values.poison
+
+
+@pytest.mark.parametrize('value', ('2026-10-27T18:25:07Z', '2026-10-27T18:25:07+00:00', '2026-10-27T18:25:07+04:00'))
+def test_actual_git_date_forms_remain_exact_and_predecessor_bound(value):
+    values, ledger, root, _, _ = flow()
+    child, token = producer(ledger, root, 102, 1)
+    record = values.observe(child, token, CASE, REPO, 'parent', 'date', value + '\n', inputs=(BASE,))
+    assert record.value == value and record.inputs == (BASE,)
+    with pytest.raises(Refused):
+        values.require(CASE, REPO, 'parent', 'date', value, ('9' * 40,))

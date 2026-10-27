@@ -25,6 +25,8 @@ from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pa
 from source_profile import METHODS, ROOT_COMMAND, digest
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
 from unix_endpoints import UnixPairs
+from git_sites import CASES as GIT_CASES
+from git_observer import Git
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count, expected as inline_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_site, child_count, SCRIPT, OFFLINE, base_path, read_pipe, expected as cleanup_expected, scenario, snapshot_path, translated as cleanup_translated
 
@@ -49,6 +51,7 @@ class Observer:
         self.root_birth = Birth.read(process_identity(root_pid))
         self.ledger = Ledger(os.urandom(32).hex())
         self.admission = Admission(self.ledger, METHODS)
+        self.git = Git(self)
         self.endpoints, self.actors, self.intents = Endpoints(self.ledger), {}, {}
         self.pairs = UnixPairs(self.endpoints)
         self.bindings, self.listeners, self.listener_fds, self.pair_intents = {}, {}, {}, {}
@@ -81,7 +84,7 @@ class Observer:
             'nonce': self.ledger.nonce, 'token': token, 'generation': 1,
             'mount_namespace': os.readlink('/proc/self/ns/mnt'), **self.meta,
             'inherited': list(inherited),
-            'script': None if role in ('root', 'mcp', 'cleanup-inline') else (str(Path(self.meta['checkout']) / SCRIPT) if role == 'cleanup-acp' else (str(Path(self.meta['checkout']) / ACP)
+            'script': None if role in ('root', 'mcp', 'cleanup-inline', 'workspace-owned') else (str(Path(self.meta['checkout']) / SCRIPT) if role == 'cleanup-acp' else (str(Path(self.meta['checkout']) / ACP)
                 if role == 'acp' else str(Path(self.meta['checkout']) / MOCK) if role == 'mock-acp'
                 else str(Path(cwd).parent / 'fake-app-server')))}
         source['seal'] = hashlib.sha256(json.dumps(source, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -96,10 +99,10 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned'}[role]
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
-                             command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp'), expected_generation=1)
-        if role in ('backend', 'delayed-backend', 'acp'):
+                             command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp', 'workspace-owned'), expected_generation=1)
+        if role in ('backend', 'delayed-backend', 'acp', 'workspace-owned'):
             common = {'owner_pid': self.root, 'token': token, 'case': case, 'class': command_class}
             witnesses = ({'kind': 'admitted', **common}, {'kind': 'registered', 'pid': pid, 'python': True, **common},
                          {'kind': 'launch_lifecycle_binding', 'start_new_session': True, **common})
@@ -115,9 +118,11 @@ class Observer:
                 if birth.pid == birth.tgid:
                     parent = self.ledger.process(birth).parent
                     actor = self.actors.get(parent.pid) if parent is not None else None
+                    if actor is not None and actor['role'] == 'git-command':
+                        self.git.reserve_helper(birth, parent)
                     candidates = [value for value in self.intents.values()
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
-                    if actor is None or actor['role'] not in ('root', 'mcp') or len(candidates) != 1:
+                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
@@ -150,10 +155,14 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit') or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
+            if role in ('git-init', 'git-commit', 'git-helper') or role == 'git-command' and descriptor == 0 or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
+            elif role == 'workspace-owned':
+                null = Path('/dev/null').stat()
+                if not stat.S_ISCHR(info.st_mode) or info.st_rdev != null.st_rdev:
+                    raise Refused('workspace exact null descriptors')
             elif role == 'sleep' and (descriptor == 0 or self.case != ORDINARY_CASES[2]):
                 expected_fd = parent / str(descriptor) if descriptor == 0 else Path('/dev/null')
                 expected_info = expected_fd.stat()
@@ -165,6 +174,9 @@ class Observer:
                     raise Refused('source exact ACP stderr')
             elif not stat.S_ISFIFO(info.st_mode) or (info.st_dev, info.st_ino) not in parent_inodes:
                 raise Refused('source exact parent-owned pipe')
+
+        output = (Path('/proc') / str(pid) / 'fd/1').stat()
+        return (output.st_dev, output.st_ino)
 
     def resolve(self, trace, pid, path, vector, environment, cwd):
         self.consume(trace)
@@ -185,8 +197,8 @@ class Observer:
         intent = matches[0]
         if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):
             return False
-        self.stdio(pid, intent['role'])
-        intent['consumed'], intent['pid'] = True, pid
+        intent['stdout'] = self.stdio(pid, intent['role'])
+        intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
         if intent['role'] == 'sleep' or intent['role'].startswith('git-'):
             actual = process_identity(pid)
             birth = Birth.read(actual)
@@ -216,11 +228,13 @@ class Observer:
 
     def launch(self, actor, payload):
         self.launch_owner(actor)
-        shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256'))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS) or type(payload['source_line']) is not int:
+        shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256', *(('git',) if self.case in GIT_CASES else ())))
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
+        if self.case in GIT_CASES:
+            return self.git.launch(actor, payload)
         if self.case in DECLARATIONS:
             return self.inline_launch(actor, payload)
         if self.case in CLEANUP_CASES:
@@ -460,7 +474,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = len(children) if self.case in GIT_CASES else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:
@@ -471,10 +485,10 @@ class Observer:
                             'actual_original_parent_reap': True, 'accepted_peer_proven': False})
                         self.eof_fds.pop((actor['birth'], drain['socket'].fd), None)
                         del self.eof_drains[serial]
-                if (payload['case'] != self.case or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
+                if (payload['case'] != self.case or self.case in GIT_CASES and len(children) < 5 or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
-                        or any(not self.ledger.reaped(value['birth'], value['token']) for value in children)
+                        or any(not (self.git.reaped(value) if self.case in GIT_CASES else self.ledger.reaped(value['birth'], value['token'])) for value in children)
                         or any(ticket.route.case == self.case for ticket in self.endpoints.tickets.values())):
                     raise Refused('source original case actual cleanup incomplete')
                 self.endpoints.retire_case(self.case)
@@ -486,6 +500,10 @@ class Observer:
             if self.case is not None or payload['cases'] != list(self.cases) or tuple(self.completed) != self.cases:
                 raise Refused('source original source completion incomplete')
             self.finished = True
+        elif kind == 'git-pipe':
+            return self.git.seal_pipe(actor, payload)
+        elif kind == 'git-output':
+            return self.git.output(actor, payload)
         elif kind == 'launch-intent':
             return self.launch(actor, payload)
         elif kind == 'launch-return':
@@ -701,10 +719,19 @@ class Observer:
             self.root_only(actor)
             shape(payload, ('pid', 'child_token', 'signal', 'group'))
             child = self.actors.get(number(payload['pid'], 1))
-            if (child is None or child['role'] == 'root' or payload['child_token'] != child['token']
-                    or type(payload['signal']) is not int or payload['signal'] not in (9, 15) or type(payload['group']) is not bool):
+            if (child is None or child['role'] == 'root' or child['case'] != self.case or payload['child_token'] != child['token']
+                    or type(payload['signal']) is not int or payload['signal'] not in (0, 9, 15) or type(payload['group']) is not bool):
                 raise Refused('source exact owned signal')
             process = self.ledger.process(child['birth'])
+            if payload['signal'] == 0:
+                if child['role'] != 'workspace-owned' or payload['group']:
+                    raise Refused('source exact owned liveness probe')
+                try:
+                    if Birth.read(process_identity(child['birth'].pid)) != child['birth']:
+                        raise Refused('source reused probe PID')
+                except (FileNotFoundError, ProcessLookupError):
+                    pass
+                return {'ok': True, 'live': True}
             if process.exit is not None or process.terminal is not None:
                 return {'ok': True, 'live': False}
             actual = process_identity(child['birth'].pid)

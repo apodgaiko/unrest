@@ -61,7 +61,7 @@ def inventory(root):
     return hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()
 
 
-def prepare(binding, checkout, root):
+def prepare(binding, checkout, root, git=False):
     from content_manifest import capture, encode
     require(subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip()
             == binding['head'], 'source revision binding')
@@ -95,6 +95,17 @@ def prepare(binding, checkout, root):
         directory = owned / name
         directory.mkdir(mode=0o700)
         os.chown(directory, 20000, 20000)
+    if git:
+        from git_observer import HOME_CONFIG
+        os.chown(owned, 20001, 20000)
+        owned.chmod(0o1770)
+        home = owned / 'home'
+        config = home / '.gitconfig'
+        config.write_bytes(HOME_CONFIG)
+        os.chown(config, 20001, 20001)
+        config.chmod(0o444)
+        os.chown(home, 20001, 20001)
+        home.chmod(0o555)
     profiles = Path(binding['profiles'])
     require(profiles.is_dir() and profiles.stat().st_uid == 20001, 'protected profiles missing')
     raw = encode(manifest)
@@ -260,7 +271,7 @@ def drain_owned(rows):
                          'original_parent_wait_proven': False})
 
 def main():
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27')),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24')),
             'source host requires exact root Linux invocation')
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     binding_file = Path(sys.argv[1]).resolve(strict=True)
@@ -286,9 +297,10 @@ def main():
         from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE, RECORDED, FAULTS
         from cleanup_inline import NO_LAUNCH, STARTUP, CLIENT_CASES
         from cleanup_launch import SAVED
-        cleanup = {'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
+        from git_sites import CASES as GIT_CASES
+        cleanup = {'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
         cases = cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
-        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root), 'cases': list(cases)}
+        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root, git=cases == GIT_CASES), 'cases': list(cases)}
         pid = os.fork()
         if pid == 0:
             try:

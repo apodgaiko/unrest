@@ -16,11 +16,12 @@ from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_G
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES, INFLIGHT, body as inline_body
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
+from git_sites import CASES as GIT_CASES, OWNED_BODY
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'launch-intent', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'bound', 'listen', 'accepted', 'connect', 'connected',
-    'payload', 'drain_child', 'custody_signal', 'custody_close', 'guard-refusal'})
+    'payload', 'drain_child', 'custody_signal', 'custody_close', 'git-pipe', 'git-output', 'guard-refusal'})
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
     'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
@@ -65,10 +66,10 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     if (type(profile) is not dict or set(profile) != FIELDS
             or profile['schema'] != 'unrest.bootstrap-source.v1'
-            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline')
+            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, *CLEANUP_GROUPS)):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES))
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *CLEANUP_GROUPS)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -128,6 +129,13 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         if (profile['cwd'] != profile['checkout'] or script is not None or event != 'cpython.run_command' or arguments != (ROOT_COMMAND + '\n',)
                 or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
             raise Refused('source fixed root body')
+    elif role == 'workspace-owned':
+        if (profile['case'] != GIT_CASES[7] or profile['case'] not in profile['cases'] or script is not None
+                or Path(profile['cwd']).name != 'process' or Path(profile['cwd']).parent.name != 'trees'
+                or not Path(profile['cwd']).is_relative_to(Path(profile['owned']) / 'pytest')
+                or profile['argv'] != [native, '-I', '-S', '-c', OWNED_BODY]
+                or event != 'cpython.run_command' or arguments != (OWNED_BODY + '\n',)):
+            raise Refused('source exact workspace owned body')
     elif role == 'cleanup-inline':
         if (profile['case'] not in DECLARATIONS or profile['case'] not in profile['cases']
                 or (profile['cwd'] != profile['checkout'] and not (profile['case'] in INFLIGHT

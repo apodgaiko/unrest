@@ -131,7 +131,9 @@ class OriginalCases:
         from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES
         from cleanup_effects import CleanupCalls
         from cleanup_inline import NO_LAUNCH, DECLARATIONS
-        cls = CleanupCalls if item.nodeid in (*CLEANUP_CASES, *NO_LAUNCH, *DECLARATIONS) else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
+        from git_source import GitCalls
+        from git_sites import CASES as GIT_CASES
+        cls = GitCalls if item.nodeid in GIT_CASES else CleanupCalls if item.nodeid in (*CLEANUP_CASES, *NO_LAUNCH, *DECLARATIONS) else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
         policy.case, policy.calls = item.nodeid, cls(policy, item)
         policy.client.request('case-start', {'case': item.nodeid})
         yield

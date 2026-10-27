@@ -7,12 +7,11 @@ Its causal requirements must be resolved by the observer before admission.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 import hashlib
 from pathlib import PurePosixPath
 
 from content_manifest import Refused
-from git_values import digest, text
+from git_values import date_text, digest, text
 
 
 @dataclass(frozen=True)
@@ -66,12 +65,7 @@ def integration_inputs(value):
     digest(predecessor)
     text(date)
     digest(message, 64)
-    try:
-        parsed = datetime.fromisoformat(date)
-    except ValueError:
-        raise Refused('git integration date') from None
-    if parsed.tzinfo is None or parsed.isoformat() != date:
-        raise Refused('git integration date')
+    date_text(date)
     return value
 
 

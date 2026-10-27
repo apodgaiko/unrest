@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import errno
 import hashlib
+import io
 import os
 import signal as signals
 from pathlib import Path
@@ -20,6 +21,7 @@ from bootstrap_cases import BOOTSTRAP
 from ordinary_acp import CASES as ORDINARY_CASES
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, OFFLINE
 from cleanup_inline import DECLARATIONS
+from git_sites import CASES as GIT_CASES
 from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies
@@ -69,12 +71,12 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] not in ('root', 'mcp') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS):
+        if self.profile['role'] not in ('root', 'mcp') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
-        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS):
+        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES):
             if (type(executable) is not str or type(vector) is not list
                     or not 2 <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
                 raise Refused('ordinary process audit primitives')
@@ -103,6 +105,8 @@ class Policy:
         request = {'case': self.case, 'original': intent.original.wire(),
                    'translated': list(intent.translated_argv), 'source_line': intent.original_source_line,
                    'script_sha256': intent.script_sha256}
+        if self.case in GIT_CASES:
+            request['git'] = self.calls.pending[0]
         finite(request)
         answer = self.client.request('launch-intent', request)
         if set(answer) != {'ok', 'ticket', 'token'} or type(answer['ticket']) is not int or type(answer['token']) is not str:
@@ -148,6 +152,9 @@ class Policy:
     def install_process_hooks(self):
         process_class = subprocess.Popen
         original = process_class.__init__
+        self.constructor_code, self.constructor_globals = original.__code__, original.__globals__
+        original_communicate = process_class.communicate
+        communicate_code, communicate_globals = original_communicate.__code__, original_communicate.__globals__
         original_wait = os.waitpid
         original_kill, original_group = os.kill, os.killpg
         policy = self
@@ -156,6 +163,8 @@ class Policy:
             if type(process) is not process_class:
                 policy.refuse('source process constructor type')
             policy.local.launch = None
+            if original.__code__ is not policy.constructor_code or original.__globals__ is not policy.constructor_globals:
+                policy.refuse('source original process constructor changed')
             policy.local.constructing = process
             try:
                 original(process, *args, **kwargs)
@@ -166,7 +175,44 @@ class Policy:
                 policy.refuse('source constructor without admitted audit')
             policy.local.launch = None
             policy.client.request('launch-return', {'pid': process.pid, 'ticket': pending['ticket'], 'token': pending['token']})
-            policy.children[process.pid] = {'token': pending['token'], 'process': process, 'case': policy.case}
+            saved = {'token': pending['token'], 'process': process, 'case': policy.case}
+            policy.children[process.pid] = saved
+            if policy.case in GIT_CASES:
+                _, command = policy.calls.pending
+                saved['git_command'] = command
+                if command is None:
+                    policy.calls.owned_pid = process.pid
+                elif command.produces is not None:
+                    if type(process.stdout) is not io.TextIOWrapper:
+                        policy.refuse('git original stdout wrapper')
+                    fd = io.TextIOWrapper.fileno(process.stdout)
+                    info = os.fstat(fd)
+                    saved['git_stdout'], saved['git_pipe'] = process.stdout, (fd, info.st_dev, info.st_ino)
+                    policy.client.request('git-pipe', {'pid': process.pid, 'token': saved['token'],
+                        'fd': fd, 'dev': info.st_dev, 'ino': info.st_ino})
+
+        def communicate(process, *args, **kwargs):
+            saved = policy.children.get(process.pid)
+            command = None if saved is None else saved.get('git_command')
+            if command is None or command.produces is None:
+                return original_communicate(process, *args, **kwargs)
+            if (saved['process'] is not process or saved['case'] != policy.case
+                    or process.stdout is not saved['git_stdout'] or type(process.stdout) is not io.TextIOWrapper
+                    or original_communicate.__code__ is not communicate_code or original_communicate.__globals__ is not communicate_globals):
+                policy.refuse('git original communicate identity')
+            fd, dev, inode = saved['git_pipe']
+            info = os.fstat(io.TextIOWrapper.fileno(process.stdout))
+            if (info.st_dev, info.st_ino) != (dev, inode):
+                policy.refuse('git stdout descriptor generation changed')
+            result = original_communicate(process, *args, **kwargs)
+            if (original_communicate.__code__ is not communicate_code or saved.get('wait_raw') != 0
+                    or type(result) is not tuple or len(result) != 2 or type(result[0]) is not str):
+                policy.refuse('git stdout before successful actual parent wait')
+            answer = policy.client.request('git-output', {'pid': process.pid, 'token': saved['token'],
+                'pipe': [fd, dev, inode], 'stdout': result[0]})
+            if command.produces[1] == 'integration-commit':
+                policy.calls.integrations[answer['value']] = (command.produces[0], command.produces[2])
+            return result
 
         def waitpid(pid, options):
             if (type(pid) is int and pid > 0 and pid not in policy.children
@@ -225,6 +271,11 @@ class Policy:
 
         if self.profile['role'] in ('root', 'mcp'):
             setattr(subprocess.Popen, '__init__', construct)
+            setattr(subprocess.Popen, 'communicate', communicate)
+            safe = vars(subprocess).get('_del_safe')
+            if type(safe) is not type or vars(safe).get('waitpid') is not original_wait:
+                policy.refuse('source original polling wait binding')
+            setattr(safe, 'waitpid', staticmethod(waitpid))
             os.waitpid, os.kill, os.killpg = waitpid, kill, killpg
 
 

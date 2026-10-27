@@ -54,7 +54,7 @@ class Intent:
     original: Expected
     translated_argv: tuple[str, ...]
     original_source_line: int
-    script_sha256: str
+    script_sha256: str | None
 
 
 class Startup:
