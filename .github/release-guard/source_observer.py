@@ -27,6 +27,7 @@ from source_profile import METHODS, ROOT_COMMAND, digest
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
 from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, INVALID as SESSION_INVALID, INVALID_BYTES, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT, expected as session_expected
+from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, expected as fixed_expected
 from git_sites import CASES as GIT_CASES
 from git_observer import Git
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count, expected as inline_expected
@@ -103,7 +104,7 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline'}[role]
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'), expected_generation=1)
         if role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'):
@@ -127,7 +128,7 @@ class Observer:
                         self.git.reserve_helper(birth, parent)
                     candidates = [value for value in self.intents.values()
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
-                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter') or len(candidates) != 1:
+                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
@@ -160,7 +161,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
+            if role in ('git-init', 'git-commit', 'session-child') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'git-fixed')):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -234,6 +235,10 @@ class Observer:
         if actor['role'] == 'root':
             self.root_only(actor)
             return
+        if actor['role'] == 'fixed-inline' and actor['case'] == self.case and not self.finished:
+            if sum(value.get('fixed_operation') == 'check' and value['token'] == actor['token'] for value in self.intents.values()) != 1:
+                raise Refused('fixed inline has no query authority')
+            return
         if actor['role'] == 'session-adapter' and actor['case'] == self.case == SESSION_TIMEOUT and not self.finished:
             return
         if self.finished or actor['role'] not in ('root', 'mcp') or actor['role'] == 'mcp' and actor['case'] != self.case:
@@ -242,10 +247,25 @@ class Observer:
     def launch(self, actor, payload):
         self.launch_owner(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256', *(('git',) if self.case in GIT_CASES else ())))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES) or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
+        if self.case in FIXED_CASES:
+            query = actor['role'] == 'fixed-inline'
+            records = [value for value in self.intents.values() if value['case'] == self.case and value['role'] == 'fixed-inline']
+            if query:
+                operation = 'check'
+            else:
+                if len(records) >= len(FIXED_SEQUENCES[self.case]) or any(not value['consumed'] or not self.ledger.reaped(value['birth'],value['token']) for value in records):
+                    raise Refused('fixed original launch frontier')
+                operation = FIXED_SEQUENCES[self.case][len(records)]
+            environment = {**self.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':self.case+' (call)'}
+            expected = fixed_expected(self.case,operation,self.binding['entry']['path'],self.binding['entry']['sha256'],Path(self.meta['checkout']),environment,query=query)
+            vector = list(expected.argv) if query else [expected.argv[0],'-I','-S',*expected.argv[1:]]
+            answer = self.admit_launch(actor,payload,expected,'git-fixed' if query else 'fixed-inline',507 if query else 587 if operation == 'mcp' else 540,vector,expected.payload_sha256,maximum=1 if query else len(FIXED_SEQUENCES[self.case]))
+            self.intents[answer['ticket']]['fixed_operation'] = operation
+            return answer
         if self.case in SESSION_CASES:
             child = actor['role'] == 'session-adapter'
             if child and self.case != SESSION_TIMEOUT or not child and actor['role'] != 'root':
@@ -504,7 +524,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in GIT_CASES else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in GIT_CASES else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:

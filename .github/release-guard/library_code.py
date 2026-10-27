@@ -100,7 +100,7 @@ def copy_ast(value, depth=0, budget=None):
 
 
 class Computation:
-    def __init__(self, roots, entry_script=None):
+    def __init__(self, roots, entry_script=None, entry_command=None):
         if (type(roots) is not dict or set(roots) != {'source', 'dependencies', 'stdlib'}
                 or any(type(name) is not str or type(path) is not str for name, path in roots.items())):
             raise Refused('library immutable root schema')
@@ -114,6 +114,11 @@ class Computation:
             raise Refused('library canonical input roots')
         if entry_script is not None and (type(entry_script) is not str or not Path(entry_script).is_absolute()):
             raise Refused('library fixed entry script')
+        if entry_command is not None and (type(entry_command) is not str or not 0 < len(entry_command) <= 4 * 1024 * 1024 or entry_script is not None):
+            raise Refused('library fixed command entry')
+        self.entry_command = entry_command
+        self.entry_code = None if entry_command is None else compile(entry_command + '\n', '<string>', 'exec', dont_inherit=True)
+        self.entry_dispatched = False
         self.entry_script = entry_script
         self.entry_compiled = False
         self.units, self.generated, self.producer_units = {}, {}, {}
@@ -182,6 +187,11 @@ class Computation:
         raise Refused('library unprepared compiler caller')
 
     def compilation(self, data, filename, frame):
+        if self.entry_command is not None and type(filename) is str and filename == '<string>' and not self.entry_compiled:
+            if type(data) not in (str, bytes) or data not in (self.entry_command + '\n', (self.entry_command + '\n').encode()):
+                raise Refused('library fixed command bytes')
+            self.entry_compiled = True
+            return
         if data is None:
             if (type(filename) is not str or filename != self.entry_script or frame is not None
                     or self.entry_compiled):
@@ -254,6 +264,11 @@ class Computation:
         if type(code) is not types.CodeType:
             raise Refused('library execution type')
         _safe_code(code)
+        if self.entry_code is not None and not self.entry_dispatched:
+            if not self.entry_compiled or code != self.entry_code:
+                raise Refused('library fixed command dispatch')
+            self.entry_dispatched = True
+            return
         if code.co_filename.startswith('/'):
             _, original = self.body(code.co_filename)
             if code != original and code not in self.transformed.get(code.co_filename, set()):

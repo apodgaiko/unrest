@@ -23,6 +23,7 @@ from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, OFFLINE
 from cleanup_inline import DECLARATIONS
 from git_sites import CASES as GIT_CASES
 from session_launch import CASES as SESSION_CASES, INVALID as SESSION_INVALID
+from fixed_inline import CASES as FIXED_CASES
 from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies
@@ -40,11 +41,12 @@ class Policy:
         self.children: dict[int, dict] = {}
         self.local = threading.local()
         self.bodies: Any
-        if profile['role'] in ('mcp', 'cleanup-acp', 'session-adapter', 'session-child'):
+        if profile['role'] in ('mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline'):
             from library_code import Computation
             self.bodies = Computation({'source': profile['checkout'], 'dependencies': profile['dependencies'],
                                        'stdlib': str(Path(profile['runtime_root']) / 'lib/python3.13')},
-                entry_script=profile['script'] if profile['role'] in ('cleanup-acp', 'session-adapter', 'session-child') else None)
+                entry_script=profile['script'] if profile['role'] in ('cleanup-acp', 'session-adapter', 'session-child') else None,
+                entry_command=profile['argv'][4] if profile['role'] == 'fixed-inline' else None)
         else:
             self.bodies = Bodies(profile)
         self.wire_code = Client.request.__code__
@@ -72,12 +74,12 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] not in ('root', 'mcp', 'session-adapter') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES):
+        if self.profile['role'] not in ('root', 'mcp', 'session-adapter', 'fixed-inline') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
-        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES):
+        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES):
             if (type(executable) is not str or type(vector) is not list
                     or not (1 if self.case in SESSION_INVALID else 2) <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
                 raise Refused('ordinary process audit primitives')
@@ -286,7 +288,7 @@ class Policy:
         def killpg(pid, sig):
             return signal(pid, sig, group=True)
 
-        if self.profile['role'] in ('root', 'mcp', 'session-adapter'):
+        if self.profile['role'] in ('root', 'mcp', 'session-adapter', 'fixed-inline'):
             setattr(subprocess.Popen, '__init__', construct)
             setattr(subprocess.Popen, 'communicate', communicate)
             safe = vars(subprocess).get('_del_safe')
@@ -301,7 +303,7 @@ def activate(directory, profile, event, arguments):
     actual, pins = validate(profile, event, arguments)
     client = Client(directory, profile, METHODS)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child'):
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline'):
         sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
         # Only guard/locked dependencies initialize here; candidate test modules
         # are imported by the real pytest body after the native READY boundary.
@@ -313,6 +315,9 @@ def activate(directory, profile, event, arguments):
         elif profile['role'] == 'session-adapter':
             from session_calls import SessionChild
             policy.case, policy.calls = profile['case'], SessionChild(policy)
+        elif profile['role'] == 'fixed-inline':
+            from fixed_inline import FixedQuery
+            policy.case, policy.calls = profile['case'], FixedQuery(policy)
     if profile['role'] not in ('session-adapter', 'session-child'):
         from source_sockets import Hooks
         policy.sockets = Hooks(policy)

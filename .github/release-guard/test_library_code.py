@@ -246,3 +246,35 @@ def test_cpython_file_parser_is_bound_to_one_initial_script(domain):
         policy.compilation(None, str(file), None)
     with pytest.raises(Refused, match='differs from immutable'):
         policy.execution(compile('value = 8', str(file), 'exec', dont_inherit=True))
+
+
+
+def test_fixed_inline_entry_is_exact_once_and_not_a_generated_code_permission(domain):
+    inline = Computation({key:str(path) for key,path in domain.roots.items()}, entry_command='value = 7')
+    with pytest.raises(Refused, match='dispatch'):
+        inline.execution(compile('value = 7\n','<string>','exec',dont_inherit=True))
+    with pytest.raises(Refused, match='bytes'):
+        inline.compilation('value = 8\n','<string>',None)
+    inline.compilation(b'value = 7\n','<string>',None)
+    with pytest.raises(Refused, match='dispatch'):
+        inline.execution(compile('value = 8\n','<string>','exec',dont_inherit=True))
+    inline.execution(compile('value = 7\n','<string>','exec',dont_inherit=True))
+    with pytest.raises(Refused, match='without prepared compilation'):
+        inline.execution(compile('value = 7\n','<string>','exec',dont_inherit=True))
+    with pytest.raises(Refused, match='compiler caller'):
+        inline.compilation('value = 7\n','<string>',__import__('sys')._getframe())
+
+
+
+def test_fixed_inline_entry_refuses_filename_callbacks_before_equality(domain):
+    class Trap:
+        def __eq__(self, other):
+            pytest.fail('filename equality callback')
+    class StringTrap(str):
+        def __eq__(self, other):
+            pytest.fail('filename subclass equality callback')
+    inline = Computation({key:str(path) for key,path in domain.roots.items()}, entry_command='value = 7')
+    for filename in (Trap(),StringTrap('<string>')):
+        with pytest.raises(Refused):
+            inline.compilation('value = 7\n',filename,None)
+    assert not inline.entry_compiled

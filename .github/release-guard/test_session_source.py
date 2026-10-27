@@ -24,9 +24,10 @@ def test_original_session_callers_preserve_all_assertions(tmp_path):
 
 
 class Probe:
-    def __init__(self, directory, root):
+    def __init__(self, directory, root, *, pins=PINS, cases=CASES, factory=SessionCalls, limits=None):
         self.directory = directory
-        raw = encode(capture(root, sorted(PINS)))
+        self.cases, self.factory, self.limits = cases, factory, limits or {}
+        raw = encode(capture(root, sorted(pins)))
         (directory / 'source-manifest.json').write_bytes(raw)
         self.profile = {'checkout': str(root), 'owned': str(directory), 'native': sys.executable,
             'native_sha256': hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),
@@ -41,8 +42,8 @@ class Probe:
 
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_protocol(self, item, nextitem):
-        assert item.nodeid == CASES[len(self.completed)]
-        self.case, self.calls = item.nodeid, SessionCalls(self, item)
+        assert item.nodeid == self.cases[len(self.completed)]
+        self.case, self.calls = item.nodeid, self.factory(self, item)
         yield
         self.completed.append(item.nodeid)
         self.case, self.calls = None, None
@@ -54,7 +55,7 @@ class Probe:
     def audit(self, event, args):
         if event == 'subprocess.Popen':
             try:
-                if self.calls is None or self.case in self.launches:
+                if self.calls is None or self.launches.count(self.case) >= self.limits.get(self.case,1):
                     raise Refused('probe no original selected session')
                 self.calls.select(self.case, args)
                 self.launches.append(self.case)

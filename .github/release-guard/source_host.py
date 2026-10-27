@@ -61,7 +61,7 @@ def inventory(root):
     return hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()
 
 
-def prepare(binding, checkout, root, git=False):
+def prepare(binding, checkout, root, git=False, public=False):
     from content_manifest import capture, encode
     require(subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip()
             == binding['head'], 'source revision binding')
@@ -77,6 +77,13 @@ def prepare(binding, checkout, root, git=False):
         shutil.copyfile(checkout / row['path'], target)
         target.chmod(row['mode'])
     require(capture(source, sorted(names)) == manifest, 'private source copy changed')
+    if public:
+        from public_git import prepare as public_git
+        from content_manifest import _capture
+        public_git(checkout, source, binding['head'])
+        metadata_names = sorted(path.relative_to(source).as_posix() for path in (source / '.git').rglob('*') if path.is_file())
+        metadata = _capture(source, metadata_names, None, 64 * 1024 * 1024)
+        manifest['files'] = sorted([*manifest['files'], *metadata['files']], key=lambda row: row['path'])
     dependencies = root / 'dependencies'
     original = checkout / '.venv/lib/python3.13/site-packages'
     # Dereference only contained regular file aliases. Never carry host links
@@ -271,7 +278,7 @@ def drain_owned(rows):
                          'original_parent_wait_proven': False})
 
 def main():
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout')),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6')),
             'source host requires exact root Linux invocation')
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     binding_file = Path(sys.argv[1]).resolve(strict=True)
@@ -302,11 +309,12 @@ def main():
         from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE, RECORDED, FAULTS
         from cleanup_inline import NO_LAUNCH, STARTUP, CLIENT_CASES
         from cleanup_launch import SAVED
+        from fixed_inline import CASES as FIXED_CASES
         from session_launch import CASES as SESSION_CASES, TIMEOUT as SESSION_TIMEOUT
         from git_sites import CASES as GIT_CASES
-        cleanup = {'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
+        cleanup = {'imports6': FIXED_CASES, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
         cases = cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
-        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root, git=cases == GIT_CASES), 'cases': list(cases)}
+        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root, git=cases == GIT_CASES, public=cases == FIXED_CASES), 'cases': list(cases)}
         pid = os.fork()
         if pid == 0:
             try:

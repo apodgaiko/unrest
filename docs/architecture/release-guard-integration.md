@@ -2758,3 +2758,14 @@ channel; all other socket creation and network effects refuse. Async callers
 retain their original scheduler module during trusted bootstrap. A fixed-script
 child prepares its already pinned script directly instead of re-reading unrelated
 source manifests. These reductions change no product timeout or cleanup oracle.
+
+
+Fixed inline/import commands use literal script assignments acquired from exact
+pinned test bytes. Their original call sites, argument tuples, subprocess options
+and ordered case sequences remain bound independently; only the repository
+positive control can issue its one exact read-only Git query. Inline entry code
+is compiled and dispatched exactly once, independently of later read-only library
+computation. The source capsule's public Git projection contains only the closed
+public HEAD/history/tag object selection, fresh minimal metadata and no hooks,
+remotes, alternates or ambient Git configuration. Full generated metadata bytes
+join the measured source manifest before the entire input is mounted read-only.
