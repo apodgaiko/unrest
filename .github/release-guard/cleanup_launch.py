@@ -106,7 +106,7 @@ def environment(base, root_environment, *, agent, case=CASES[0]):
             UNREST_HANDOFF_PATH=str(home / 'projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json'))
     if agent:
         result.update(INITIAL_AGENT_MODE='agent', CODEX_CONFIG=json.dumps({
-            'sandbox_mode': 'workspace-write', 'approval_policy': 'on-request',
+            'sandbox_mode': 'read-only' if role == 'terminal_reviewer' else 'workspace-write', 'approval_policy': 'on-request',
             'model_reasoning_effort': 'medium'}, separators=(',', ':'), sort_keys=True))
     elif role != 'terminal_reviewer':
         result['UNREST_NODE_ASSIGNMENT'] = json.dumps({'targets': ['VAL-CLEANUP'] if recorded and role == 'validate' else [],

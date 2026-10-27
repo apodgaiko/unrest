@@ -2512,3 +2512,8 @@ case completion revokes its endpoint capabilities only when no ticket remains
 unjoined. Recorded listener/connection observations remain available as evidence;
 revocation does not assert that a file descriptor closed. A later case may bind
 a fresh listener at the same port without inheriting the old case's authority.
+
+Terminal-review cleanup retains its read-only agent sandbox configuration and
+the original lifecycle's nested cleanup closures. The shared adapter binds those
+closures in `_run_terminal_review_lifecycle`, through the active finalization
+frame, while retaining the process/transport generation checks and actual waits.

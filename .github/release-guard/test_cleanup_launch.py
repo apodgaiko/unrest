@@ -233,3 +233,68 @@ def test_cleanup_declaration_does_not_admit_adjacent_cases_or_git(tmp_path):
         if not git_completion(case):
             with pytest.raises(Refused, match='undeclared launch role'):
                 expected(case, 'git-observe', tmp_path, '/native', 'a' * 64, tmp_path, {})
+
+
+@pytest.mark.asyncio
+async def test_terminal_agent_environment_matches_original_lifecycle(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    import os
+    import sys
+    import types
+    from unrest_harness import acp_runner
+    from unrest_harness.assets import AssetLoader
+    from tests.test_provider_review import controller_fixture
+    for name in tuple(os.environ):
+        monkeypatch.delenv(name)
+    root = {'HOME': str(tmp_path / 'ambient-home'), 'TMPDIR': str(tmp_path / 'ambient-tmp'), 'PATH': '/usr/bin:/bin'}
+    for name, value in root.items():
+        monkeypatch.setenv(name, value)
+    _, store, _ = controller_fixture(tmp_path)
+    command = f'{sys.executable} {Path(__file__).resolve().parents[2] / SCRIPT} {tmp_path / "scenario.json"}'
+    config = replace(store.config, terminal_reviewer_acp_command=command)
+    runner = acp_runner.ACPNodeRunner(config, AssetLoader(config))
+    from source_calls import Sources, nested_signal
+    from source_owner import prepare, active_frames
+    from ordinary_acp import PRODUCT
+    module_file = Path(__file__).resolve().parents[2] / PRODUCT
+    unit = prepare(module_file.read_bytes(), str(module_file), acp_runner.__name__, Sources.mode(acp_runner), PINS[PRODUCT])
+    signal_calls = object.__new__(Sources)
+    signal_calls.startup = types.SimpleNamespace(module=acp_runner, unit=unit)
+    signal_calls.cleanup = ()
+    captured = {}
+    def check_signal(self, pid, sig, group):
+        assert pid == 123 and sig == 15 and group is False
+        owner = self.cleanup[-1]
+        frames = active_frames()
+        try:
+            frame = next(frame for frame in frames if frame.f_code is owner.function.__code__)
+            owner.verify(frame)
+            captured['cleanup_owner'] = owner.qualified
+        finally:
+            del frames
+    monkeypatch.setattr(Sources, 'signal', check_signal)
+    def cleanup_signal():
+        nested_signal(signal_calls, 123, 15, False)
+    class Stop(BaseException):
+        pass
+    async def start(**kwargs):
+        captured['mcp'] = kwargs['environment']
+        return types.SimpleNamespace(returncode=None, terminate=lambda: cleanup_signal())
+    async def ready(*args, **kwargs):
+        pass
+    async def close(*args, **kwargs):
+        pass
+    async def launch(plan, **kwargs):
+        captured['agent'] = dict(plan.environment)
+        raise Stop
+    monkeypatch.setattr(runner, '_find_free_port', lambda: 12345)
+    monkeypatch.setattr(runner, '_start_terminal_reviewer_mcp', start)
+    monkeypatch.setattr(runner, '_wait_for_server_ready', ready)
+    monkeypatch.setattr(runner, '_close_mcp_process', close)
+    monkeypatch.setattr(acp_runner, 'spawn_launch', launch)
+    with pytest.raises(Stop):
+        await runner.run_terminal_review('project', 'mission-001', 'attempt-1', store)
+    case = next(case for case in ALL_CASES if selection(case)[2] == 'terminal_reviewer')
+    assert captured['mcp'] == environment(tmp_path, root, agent=False, case=case)
+    assert captured['agent'] == environment(tmp_path, root, agent=True, case=case)
+    assert captured['cleanup_owner'] == 'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp'

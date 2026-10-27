@@ -64,7 +64,7 @@ class Sources:
             owner, frame = matches[0]
             owner.verify(frame)
             process = frame.f_locals.get('process')
-            if process is None and owner.qualified in ('ACPNodeRunner.run_node.<locals>.finish_mcp', 'ACPNodeRunner.run_terminal_review.<locals>.finish_mcp', 'ACPNodeRunner.run_node'):
+            if process is None and owner.qualified in ('ACPNodeRunner.run_node.<locals>.finish_mcp', 'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp', 'ACPNodeRunner.run_node'):
                 process = frame.f_locals.get('mcp_process')
             if type(process) is not self.process_class:
                 raise Refused('root original cleanup process type')
@@ -97,8 +97,8 @@ def nested_signal(self, pid, sig, group):
                 if type(step) is types.FunctionType and type(step.__qualname__) is str and step.__qualname__ in (
                         'ACPNodeRunner.run_node.<locals>.finish_mcp',
                         'ACPNodeRunner.run_node.<locals>.finish_agent',
-                        'ACPNodeRunner.run_terminal_review.<locals>.finish_mcp',
-                        'ACPNodeRunner.run_terminal_review.<locals>.finish_agent'):
+                        'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp',
+                        'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_agent'):
                     owner = self.owner(self.startup.unit, self.startup.module, step, step.__qualname__,
                                        (Link(frame, 'step', step, 'frame'),))
                     self.cleanup = (*self.cleanup, owner)
