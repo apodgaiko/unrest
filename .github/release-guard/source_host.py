@@ -292,7 +292,7 @@ def main():
         require(raw == 0, 'original bootstrap integration failed; encrypted diagnostics retained')
         success = True
     finally:
-        adopted = []
+        adopted: list[dict] = []
         try:
             drain_owned(adopted)
             if adopted:
