@@ -54,7 +54,7 @@ def prepare(body: bytes, path: str, module: str, mode: str,
             or type(path) is not str or not path.startswith('/')
             or str(PurePosixPath(path)) != path or '..' in PurePosixPath(path).parts
             or type(module) is not str or not module or type(mode) is not str
-            or mode not in ('plain', 'pytest', 'beartype-passive') or type(expected_sha256) is not str
+            or mode not in ('plain', 'pytest', 'beartype-passive', 'script') or mode == 'script' and module != '__main__' or type(expected_sha256) is not str
             or hashlib.sha256(body).hexdigest() != expected_sha256):
         raise Refused('source unit input refused')
     loader_type: type = importlib.machinery.SourceFileLoader
@@ -258,17 +258,19 @@ class Owner:
             raise Refused('live source module or function refused')
         namespace = _namespace(self.module)
         loader, spec = namespace.get('__loader__'), namespace.get('__spec__')
-        if (type(spec) is not importlib.machinery.ModuleSpec
+        if (type(namespace.get('__file__')) is not str or namespace['__file__'] != self.unit.path
+                or type(namespace.get('__name__')) is not str or namespace['__name__'] != self.unit.module):
+            raise Refused('live module origin or specification changed')
+        if self.unit.mode == 'script':
+            if self.unit.module != '__main__' or spec is not None:
+                raise Refused('live script entry specification changed')
+        elif (type(spec) is not importlib.machinery.ModuleSpec
                 or type(spec.name) is not str or spec.name != self.unit.module
-                or type(spec.origin) is not str or spec.origin != self.unit.path
-                or spec.loader is not loader or type(namespace.get('__file__')) is not str
-                or namespace['__file__'] != self.unit.path
-                or type(namespace.get('__name__')) is not str
-                or namespace['__name__'] != self.unit.module):
+                or type(spec.origin) is not str or spec.origin != self.unit.path or spec.loader is not loader):
             raise Refused('live module origin or specification changed')
         if type(loader) is not self.unit.loader_type:
             raise Refused('prepared compiler loader identity changed')
-        if self.unit.mode in ('plain', 'beartype-passive'):
+        if self.unit.mode in ('plain', 'beartype-passive', 'script'):
             loader = cast(Any, loader)
             if (type(loader.path) is not str or loader.path != self.unit.path
                     or type(loader.name) is not str or loader.name != self.unit.module):

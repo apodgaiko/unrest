@@ -2727,3 +2727,11 @@ creation with --no-checkout admits no native helper. The older update-ref/reset
 sequence is historical runtime evidence, not a requirement to wait for a process
 that the current Git image never creates. Every actual helper retains its matching
 exit, terminal and original Git-parent numeric wait. No wait exception is added.
+
+Git's foreground reset helper may route its standard descriptors to an actual
+parent-owned pipe or `/dev/null`; output files and foreign pipes refuse. Its
+exact command, original parent, repository, image, environment and numeric wait
+remain bound independently. Direct Git fixture commands retain descriptor-index
+inheritance. Prepared script owners use the actual `__main__` loader and absent
+module specification, with the same pinned source and live binding checks. This
+owner mode grants no launch permission by itself.

@@ -485,3 +485,36 @@ def test_anchored_defaults_keep_type_tags_and_global_bounds(monkeypatch, mutatio
         module.route.__defaults__ = ((None,) * 4096,)
     with pytest.raises(Refused, match='default .*bound' if mutation.startswith('aggregate-') else None):
         module.route()
+
+
+def test_actual_script_main_uses_the_same_prepared_code_and_binding_checks(tmp_path):
+    import subprocess
+    from pathlib import Path
+    script = tmp_path / 'script_owner.py'
+    body = b"""import sys, types
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from source_owner import prepare, Owner, Link
+from content_manifest import Refused
+file = str(Path(__file__).resolve())
+unit = prepare(Path(file).read_bytes(), file, '__main__', 'script', sys.argv[2])
+def route():
+    target.verify(sys._getframe())
+module = sys.modules['__main__']
+target = Owner(unit, module, route, 'route', route.__code__.co_firstlineno, (1, 1000), (Link(module, 'route', route),))
+route()
+module.__spec__ = object()
+try:
+    route()
+except Refused:
+    print('SCRIPT_OWNER_CHECKED')
+else:
+    raise AssertionError('script specification mutation accepted')
+"""
+    script.write_bytes(body)
+    result = subprocess.run([sys.executable, '-I', '-S', str(script), str(Path(owner.__file__).parent), hashlib.sha256(body).hexdigest()],
+        capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'SCRIPT_OWNER_CHECKED'
+    with pytest.raises(Refused):
+        owner.prepare(body, str(script), 'foreign', 'script', hashlib.sha256(body).hexdigest())

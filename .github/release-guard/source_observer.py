@@ -155,10 +155,15 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'git-helper') or role == 'git-command' and descriptor == 0 or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
+            if role in ('git-init', 'git-commit') or role == 'git-command' and descriptor == 0 or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
+            elif role == 'git-helper':
+                null = Path('/dev/null').stat()
+                if not ((stat.S_ISCHR(info.st_mode) and info.st_rdev == null.st_rdev)
+                        or (stat.S_ISFIFO(info.st_mode) and (info.st_dev, info.st_ino) in parent_inodes)):
+                    raise Refused('Git helper parent pipe or null descriptor')
             elif role == 'workspace-owned':
                 null = Path('/dev/null').stat()
                 if not stat.S_ISCHR(info.st_mode) or info.st_rdev != null.st_rdev:
