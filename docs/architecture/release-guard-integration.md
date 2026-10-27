@@ -2798,3 +2798,9 @@ join the original stdout pipe and successful numeric parent wait before becoming
 causal commit facts; later diff inputs require such a prior producer in that case.
 The command count follows the finite owner/turn history. Unknown native children
 remain refused; this family grants no generic Git or provider permission.
+
+A stock custody commit may create one same-image auto-maintenance child. Admission
+binds that exact parent commit, literal command/environment, native image and
+unchanged repository generation. Extra descendants and drift refuse. The helper
+still requires its actual Git-parent numeric wait; supervisor cleanup cannot
+substitute for that wait or complete a failed source case.

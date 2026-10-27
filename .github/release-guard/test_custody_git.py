@@ -109,3 +109,34 @@ def test_same_path_replacement_cannot_inherit_prior_repository_facts(monkeypatch
     monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:new)
     with pytest.raises(Refused,match='replaced repository generation'):
         custody_git.launch(host,None,{'original':{'argv':['/usr/bin/git','--no-replace-objects','rev-parse','HEAD'],'cwd':cwd}})
+
+
+@pytest.mark.parametrize('mutation',[None,'operation','second-child','image','repository'])
+def test_only_one_same_image_auto_maintenance_child_of_original_commit(monkeypatch,mutation):
+    import custody_git
+    from types import SimpleNamespace
+    parent,birth = 'original-parent','child-birth'
+    process = SimpleNamespace(token='commit',exit=None,terminal=None)
+    intent = {'case':CASE,'operation':'custody-commit','consumed':True,'cwd':'/owned/pytest/case/base',
+        'environment':custody_git.ENVIRONMENT,'executable_sha256':'1'*64}
+    identity = ((('root',1,2,20000),),(1,3,20000))
+    host = SimpleNamespace(case=CASE,meta={'owned':'/owned'},serial=0,intents={},
+        ledger=SimpleNamespace(process=lambda value:process,children={parent:[birth]}),
+        git=SimpleNamespace(commands={'commit':intent},helpers={},custody_roots={(CASE,intent['cwd']):identity}))
+    monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:identity)
+    monkeypatch.setattr(custody_git,'image',lambda path:'2'*64 if mutation == 'image' else '1'*64)
+    if mutation == 'operation':
+        intent['operation'] = 'custody-head'
+    elif mutation == 'second-child':
+        host.ledger.children[parent].append('foreign')
+    elif mutation == 'repository':
+        host.git.custody_roots.clear()
+    if mutation:
+        with pytest.raises(Refused):
+            custody_git.reserve_helper(host,birth,parent)
+        assert not host.intents
+    else:
+        custody_git.reserve_helper(host,birth,parent)
+        child = host.intents[1]
+        assert child['translated'] == ['/usr/lib/git-core/git','maintenance','run','--auto','--no-quiet']
+        assert child['parent'] == parent and not child['consumed']

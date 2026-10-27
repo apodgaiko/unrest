@@ -175,3 +175,30 @@ def launch(host,actor,payload):
     intent.update(command=result,repository=result.cwd,operation='custody-'+kind)
     host.git.commands[intent['token']] = intent
     return answer
+
+
+def reserve_helper(host,birth,parent):
+    """One stock auto-maintenance child of an already admitted commit only."""
+    import os
+    process = host.ledger.process(parent)
+    intent = host.git.commands.get(process.token)
+    if (intent is None or intent['case'] != host.case or intent['operation'] != 'custody-commit'
+            or not intent['consumed'] or process.exit is not None or process.terminal is not None
+            or list(host.ledger.children.get(parent,())) != [birth]):
+        raise Refused('custody Git helper original commit generation')
+    current = repository(intent['cwd'],Path(host.meta['owned']),initialize=False)
+    if current != host.git.custody_roots.get((host.case,intent['cwd'])):
+        raise Refused('custody Git helper replaced repository generation')
+    executable = '/usr/lib/git-core/git'
+    pin = image(executable)
+    if pin != intent['executable_sha256']:
+        raise Refused('custody Git helper same pinned image')
+    environment = {**intent['environment'],'GIT_EXEC_PATH':'/usr/lib/git-core','GIT_PREFIX':'',
+        'PATH':'/usr/lib/git-core:'+intent['environment']['PATH']}
+    host.serial += 1
+    child = {'case':host.case,'role':'git-helper','parent':parent,'environment':environment,
+        'cwd':intent['cwd'],'translated':[executable,'maintenance','run','--auto','--no-quiet'],
+        'token':os.urandom(16).hex(),'consumed':False,'pid':None,'executable':executable,
+        'executable_sha256':pin,'inherited':[],'port':None}
+    host.intents[host.serial] = child
+    host.git.helpers[birth] = child
