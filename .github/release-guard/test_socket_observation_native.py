@@ -374,3 +374,38 @@ def test_actual_unix_pair_cannot_authorize_alias_or_replacement(replacement):
             os.close(alias)
         for stream in (left, right, other_left, other_right):
             stream.close()
+
+
+def test_two_actual_clients_share_only_the_same_listener_description():
+    from endpoint_policy import Endpoints, Owner, Route
+    from linux_observation import process_identity
+    from process_ledger import Birth, Ledger
+    from socket_observation import acquire_tcp
+    actual = process_identity(os.getpid())
+    birth = Birth.read(actual)
+    ledger = Ledger('shared-listener-control')
+    ledger.kernel(0, {'kind': 'kernel_root', 'identity': actual})
+    pins = (('control', 'a' * 64),)
+    ledger.register(birth, 'owner', pins, 'seal', case='shared', command_class='socket-control')
+    ledger.control(birth, 'owner', 0, 0, 'core-ready', {'pins': pins})
+    ledger.control(birth, 'owner', 0, 1, 'body-ready', {'seal': 'seal'})
+    owner, endpoints = Owner(birth, 'owner', 0), Endpoints(ledger)
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        listener.listen(2)
+        port = listener.getsockname()[1]
+        observed = acquire_tcp(birth, listener.fileno(), retained=True)
+        for index in range(2):
+            route = Route('client-' + str(index), 'shared', owner, owner, port)
+            endpoints.declare(route, shared_listener=observed if index else None)
+            endpoints.listen(route.name, acquire_tcp(birth, listener.fileno(), retained=True))
+            with socket.socket() as client:
+                ticket = endpoints.connect(route.name, acquire_tcp(birth, listener.fileno(), retained=True),
+                                           acquire_tcp(birth, client.fileno(), retained=True))
+                client.connect(('127.0.0.1', port))
+                accepted, _ = listener.accept()
+                with accepted:
+                    connection = endpoints.accepted(ticket, acquire_tcp(birth, client.fileno(), retained=True),
+                                                    acquire_tcp(birth, accepted.fileno(), retained=True))
+                    endpoints.retained(connection, owner, acquire_tcp(birth, accepted.fileno(), retained=True))
+        assert len(endpoints.connections) == 2 and not endpoints.poison and not ledger.poison

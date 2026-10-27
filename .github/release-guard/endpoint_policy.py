@@ -129,16 +129,26 @@ class Endpoints:
             raise Refused('endpoint owner epoch or readiness')
 
     @fail_closed
-    def declare(self, route: Route) -> None:
+    def declare(self, route: Route, *, shared_listener: Socket | None = None) -> None:
         if type(route) is not Route or len(self.routes) >= 256:
             raise Refused('endpoint declaration bound')
         text(route.name)
         text(route.case)
         integer(route.port, 1, 65535)
-        if route.name in self.routes or any(item.port == route.port for item in self.routes.values()):
-            raise Refused('endpoint duplicate declaration')
         self.owner(route.server, route.case, body=False)
         self.owner(route.client, route.case, body=False)
+        duplicates = [item for item in self.routes.values() if item.port == route.port]
+        if route.name in self.routes:
+            raise Refused('endpoint duplicate declaration')
+        if duplicates:
+            if (type(shared_listener) is not Socket
+                    or any(item.case != route.case or item.server != route.server
+                           or self.listeners.get(item.name) != shared_listener for item in duplicates)):
+                raise Refused('endpoint duplicate declaration')
+            for item in duplicates:
+                self.owner(item.server, item.case, body=False)
+        elif shared_listener is not None:
+            raise Refused('endpoint shared listener without original route')
         self.routes[route.name] = route
 
     def route(self, name: str) -> Route:

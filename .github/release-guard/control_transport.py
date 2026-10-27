@@ -86,13 +86,16 @@ def fail_channel(method):
 
 
 class Frame:
-    def __init__(self, stream: socket.socket, limit: int, shared_poison: list[str]):
+    def __init__(self, stream: socket.socket, limit: int, shared_poison: list[str], *, seconds: int = 4):
         if type(limit) is not int or limit not in (REQUEST_LIMIT, RESPONSE_LIMIT):
             raise Refused('control frame limit')
         if stream.family != socket.AF_UNIX or stream.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM:
             raise Refused('control Unix stream required')
         if type(shared_poison) is not list:
             raise Refused('control shared poison sink')
+        if type(seconds) is not int or seconds not in (4, 8):
+            raise Refused('control finite deadline')
+        self.seconds = seconds
         self.shared_poison = shared_poison
         self.stream, self.limit = stream, limit
         self.started = time.monotonic()
@@ -119,7 +122,7 @@ class Frame:
         self.binding = birth, token, process.generation, process.command_class, gid
 
     def check(self) -> None:
-        if self.poison or time.monotonic() - self.started > CHANNEL_SECONDS:
+        if self.poison or time.monotonic() - self.started > self.seconds:
             self.refuse('control channel deadline or poison')
 
     def refuse(self, reason: str):

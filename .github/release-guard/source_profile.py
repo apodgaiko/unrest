@@ -1,7 +1,10 @@
-"""Closed original-bootstrap profile consumption, before any source body."""
+"""Closed source profile consumption, before any candidate body."""
 from __future__ import annotations
 
 import os
+import stat
+import fcntl
+import hashlib
 from pathlib import Path
 import sys
 
@@ -9,6 +12,7 @@ from content_manifest import Refused, capture
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
 from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, MOCK, PINS
+from cleanup_launch import CASES as CLEANUP_CASES, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 
@@ -19,11 +23,20 @@ METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'r
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
     'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
-    'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script', 'cases'}
+    'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script', 'cases', 'inherited'}
 
 
 def digest(path: Path) -> str:
     return capture(path.parent, [path.name])['files'][0]['sha256']
+
+
+def inherited_descriptor(expected, descriptor, info, flags, uid):
+    if (type(info) is not os.stat_result or type(flags) is not int or type(uid) is not int
+            or type(descriptor) is not int or not 3 <= descriptor <= 1024
+            or flags & ~os.O_CLOEXEC or not stat.S_ISFIFO(info.st_mode) or info.st_uid != uid
+            or expected != [[descriptor, info.st_dev, info.st_ino]]):
+        raise Refused('source ambient inherited descriptor')
+    return [descriptor, info.st_dev, info.st_ino]
 
 
 def readonly_mounts(expected: dict, namespace: str) -> None:
@@ -51,10 +64,10 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     if (type(profile) is not dict or set(profile) != FIELDS
             or profile['schema'] != 'unrest.bootstrap-source.v1'
-            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp')
+            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES)):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES))
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, CLEANUP_CASES)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -89,6 +102,12 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or type(profile['argv']) is not list or any(type(arg) is not str for arg in profile['argv'])
             or profile['argv'] != sys.orig_argv):
         raise Refused('source actual request binding')
+    inherited = profile['inherited']
+    if (type(inherited) is not list or (profile['role'] != 'mcp' and inherited)
+            or profile['role'] == 'mcp' and (len(inherited) != 1 or type(inherited[0]) is not list
+                or len(inherited[0]) != 3 or any(type(value) is not int or value <= 0 for value in inherited[0]))):
+        raise Refused('source finite inherited inventory')
+    seen = []
     for name in os.listdir('/proc/self/fd'):
         descriptor = int(name)
         if descriptor > 2:
@@ -96,7 +115,11 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
                 os.fstat(descriptor)
             except OSError:
                 continue
-            raise Refused('source ambient inherited descriptor')
+            info = os.fstat(descriptor)
+            seen.append(inherited_descriptor(inherited, descriptor, info,
+                                              fcntl.fcntl(descriptor, fcntl.F_GETFL), actual['uids'][0]))
+    if seen != inherited:
+        raise Refused('source missing inherited inventory')
     readonly_mounts(profile['mounts'], profile['mount_namespace'])
     native = profile['native']
     role, script = profile['role'], profile['script']
@@ -104,6 +127,29 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         if (profile['cwd'] != profile['checkout'] or script is not None or event != 'cpython.run_command' or arguments != (ROOT_COMMAND + '\n',)
                 or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
             raise Refused('source fixed root body')
+    elif role in ('mcp', 'cleanup-acp'):
+        if (profile['case'] not in CLEANUP_CASES or profile['case'] not in profile['cases']
+                or Path(profile['cwd']).name != 'workspace'
+                or Path(profile['cwd']).parent.parent != Path(profile['owned']) / 'pytest'):
+            raise Refused('source cleanup role or workspace')
+        if role == 'mcp':
+            argv = profile['argv']
+            if (script is not None or event != 'cpython.run_module' or arguments != ('unrest_harness',)
+                    or len(argv) != 15 or argv[:4] != [native, '-I', '-S', '-m'] or argv[4:12] != [
+                        'unrest_harness', '--mode', 'worker', '--transport', 'streamable-http', '--host', '127.0.0.1', '--port']
+                    or type(argv[12]) is not str or not argv[12].isdigit() or not 0 < int(argv[12]) <= 65535
+                    or argv[13:] != ['--sensitive-inventory-fd', str(inherited[0][0])]):
+                raise Refused('source exact worker module entry')
+        else:
+            expected_script = str(Path(profile['checkout']) / SCRIPT)
+            snapshot = snapshot_path(Path(__file__).parent.parent / 'profiles', profile['case'])
+            info = snapshot.stat(follow_symlinks=False)
+            if (script != expected_script or profile['argv'] != [native, '-I', '-S', expected_script, str(snapshot)]
+                    or event != 'cpython.run_file' or arguments != (expected_script,)
+                    or digest(Path(expected_script)) != CLEANUP_PINS[SCRIPT]
+                    or info.st_uid != 20001 or info.st_mode & 0o777 != 0o444 or info.st_nlink != 1
+                    or digest(snapshot) != hashlib.sha256(scenario(profile['case'], Path(profile['cwd']).parent)).hexdigest()):
+                raise Refused('source exact cleanup fixture and immutable scenario')
     elif role == 'mock-acp':
         if (profile['case'] not in ORDINARY_CASES or profile['case'] not in profile['cases']
                 or not Path(profile['cwd']).is_relative_to(Path(profile['owned']) / 'pytest')

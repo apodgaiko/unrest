@@ -21,7 +21,7 @@ assert spec is not None and spec.loader is not None
 trace = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(trace)
 
-def run_control(argv, allowed, selective):
+def run_control(argv, allowed, selective, on_tick=None):
     read, write = os.pipe()
     child = os.fork()
     if child == 0:
@@ -38,7 +38,7 @@ def run_control(argv, allowed, selective):
     os.close(read)
     try:
         observer = trace.OwnedTrace(child, allowed, timeout=30, start_write=write,
-                                   selective=selective)
+                                   selective=selective, on_tick=on_tick)
     except BaseException:
         os.close(write)
         os.waitpid(child, 0)  # The controlled child exits on startup EOF.
@@ -268,3 +268,20 @@ def test_pre_attach_refusal_closes_barrier_before_body_and_actual_parent_reaps(f
     finally:
         os.close(read)
         os.close(effect_read)
+
+
+def test_declined_birth_stays_stopped_before_child_canary(tmp_path):
+    canary = tmp_path / 'forbidden-fork-body'
+    body = "import os,sys; child=os.fork();\nif child==0:\n open(sys.argv[1],'w').write('forbidden')\n os._exit(0)\nos.waitpid(child,0)"
+    argv = [sys.executable, '-I', '-S', '-c', body, str(canary)]
+    allowed = [{'path': sys.executable, 'argv': argv, 'environment': {}, 'cwd': os.getcwd(),
+                'sha256': hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}]
+    seen = []
+    def decline(observer):
+        if any(row['kind'] == 'kernel_child' for row in observer.records):
+            seen.append(observer)
+            raise RuntimeError('control child declined before resume')
+    with pytest.raises(RuntimeError, match='child declined before resume'):
+        run_control(argv, allowed, True, on_tick=decline)
+    assert len(seen) == 1 and not seen[0].active and not canary.exists()
+    assert any(row['kind'] == 'failure_cleanup_tracer_wait' for row in seen[0].records)

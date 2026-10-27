@@ -1,4 +1,4 @@
-"""Native activation of the finite original-bootstrap root and sealed leaves."""
+"""Native activation of the finite pytest root and declared child domains."""
 from __future__ import annotations
 
 import errno
@@ -18,6 +18,7 @@ from content_manifest import Refused
 from control_transport import finite
 from bootstrap_cases import BOOTSTRAP
 from ordinary_acp import CASES as ORDINARY_CASES
+from cleanup_launch import CASES as CLEANUP_CASES, OFFLINE
 from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies
@@ -34,7 +35,13 @@ class Policy:
         self.calls: Any = None
         self.children: dict[int, dict] = {}
         self.local = threading.local()
-        self.bodies = Bodies(profile)
+        self.bodies: Any
+        if profile['role'] in ('mcp', 'cleanup-acp'):
+            from library_code import Computation
+            self.bodies = Computation({'source': profile['checkout'], 'dependencies': profile['dependencies'],
+                                       'stdlib': str(Path(profile['runtime_root']) / 'lib/python3.13')})
+        else:
+            self.bodies = Bodies(profile)
         self.wire_code = Client.request.__code__
         self.wire_globals = Client.request.__globals__
         self.sockets: Any = None
@@ -60,12 +67,12 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] != 'root' or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES):
+        if self.profile['role'] not in ('root', 'mcp') or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES, *CLEANUP_CASES):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
-        if self.case in ORDINARY_CASES:
+        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES):
             if (type(executable) is not str or type(vector) is not list
                     or not 2 <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
                 raise Refused('ordinary process audit primitives')
@@ -102,6 +109,10 @@ class Policy:
             raise Refused('source nested process constructor')
         self.local.launch = answer
         vector[:] = intent.translated_argv
+        if intent.original.rule == 'cleanup:mcp':
+            if type(environment) is not dict:
+                self.refuse('source MCP environment translation type')
+            environment.update(OFFLINE)
 
     def audit(self, event, args):
         try:
@@ -208,7 +219,7 @@ class Policy:
         def killpg(pid, sig):
             return signal(pid, sig, group=True)
 
-        if self.profile['role'] == 'root':
+        if self.profile['role'] in ('root', 'mcp'):
             setattr(subprocess.Popen, '__init__', construct)
             os.waitpid, os.kill, os.killpg = waitpid, kill, killpg
 
@@ -218,11 +229,15 @@ def activate(directory, profile, event, arguments):
     actual, pins = validate(profile, event, arguments)
     client = Client(directory, profile, METHODS)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] == 'root':
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp'):
         sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
         # Only guard/locked dependencies initialize here; candidate test modules
         # are imported by the real pytest body after the native READY boundary.
-        __import__('source_root')
+        if profile['role'] == 'root':
+            __import__('source_root')
+        elif profile['role'] == 'mcp':
+            from cleanup_effects import ModuleCalls
+            policy.case, policy.calls = profile['case'], ModuleCalls(policy, None)
     from source_sockets import Hooks
     policy.sockets = Hooks(policy)
     client.request('core-ready', {'pins': [list(pair) for pair in pins]})

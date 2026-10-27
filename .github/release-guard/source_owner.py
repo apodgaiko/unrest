@@ -184,6 +184,10 @@ class Link:
                 actual = self.container.__closure__[self.key].cell_contents
             except ValueError as error:
                 raise Refused('empty closure link') from error
+        elif self.mode == 'static-function':
+            if type(self.container) is not staticmethod or type(self.key) is not str or self.key != '__func__':
+                raise Refused('static function link refused')
+            actual = self.container.__func__
         elif self.mode == 'frame':
             if type(self.container) is not types.FrameType or type(self.key) is not str:
                 raise Refused('frame link refused')

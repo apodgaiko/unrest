@@ -10,6 +10,7 @@ import types
 
 from bootstrap_cases import declaration
 from content_manifest import Refused
+from cleanup_launch import CASES as CLEANUP_CASES
 
 TYPE = type
 
@@ -55,7 +56,7 @@ class Hooks:
             if args[1] == socket.AF_UNIX:
                 if args[3] != 0 or not (self.policy.private_call() or getattr(self.local, 'pair', None) is not None):
                     raise Refused('source Unix creation outside sealed self-pair')
-            elif (self.policy.profile['role'] not in ('root', 'acp')
+            elif (self.policy.profile['role'] not in ('root', 'acp', 'mcp', 'cleanup-acp')
                     and not declaration(self.policy.profile['case']).broker_http):
                 raise Refused('source backend network creation')
             return True
@@ -70,16 +71,24 @@ class Hooks:
         descriptor = self.descriptor(stream)
         role = self.policy.profile['role']
         if name == 'bind':
-            if role != 'root' or self.policy.calls is None or kwargs or args != (('127.0.0.1', 0),):
-                self.policy.refuse('source unknown bind')
-            source = self.policy.calls.listener()
+            if role == 'mcp':
+                if kwargs or args != (('127.0.0.1', int(self.policy.profile['argv'][12])),):
+                    self.policy.refuse('source unknown module listener')
+                source = {'tag': 'mcp', 'nonce': None}
+            else:
+                if role != 'root' or self.policy.calls is None or kwargs or args != (('127.0.0.1', 0),):
+                    self.policy.refuse('source unknown bind')
+                source = self.policy.calls.listener()
             self.rpc('bind', {'fd': descriptor, **source})
             self.local.socket = 'socket.bind', stream, args[0]
         elif name in ('connect', 'connect_ex'):
-            if (role != 'acp' and not declaration(self.policy.profile['case']).broker_http or kwargs or len(args) != 1 or type(args[0]) is not tuple
+            cleanup = self.policy.case in CLEANUP_CASES or self.policy.profile['case'] in CLEANUP_CASES
+            if ((role not in ('root', 'cleanup-acp') if cleanup else role != 'acp' and not declaration(self.policy.profile['case']).broker_http) or kwargs or len(args) != 1 or type(args[0]) is not tuple
                     or len(args[0]) != 2 or type(args[0][0]) is not str or args[0][0] != '127.0.0.1'
                     or type(args[0][1]) is not int or not 0 < args[0][1] <= 65535):
                 self.policy.refuse('source unknown connection')
+            if role == 'root':
+                self.policy.calls.connection(args[0][1])
             answer = self.rpc('connect', {'fd': descriptor, 'address': list(args[0])})
             self.local.socket = 'socket.connect', stream, args[0]
             try:
@@ -106,7 +115,7 @@ class Hooks:
                             or len(args) == 2 and (type(args[1]) is not int or args[1] < 0))):
                     self.policy.refuse('source EOF-only read flags or buffer')
         elif name == 'listen':
-            if role != 'root' or kwargs or len(args) > 1 or args and (type(args[0]) is not int or not 0 <= args[0] <= 2048):
+            if role not in ('root', 'mcp') or kwargs or len(args) > 1 or args and (type(args[0]) is not int or not 0 <= args[0] <= 2048):
                 self.policy.refuse('source listener operation')
             self.rpc('listen', {'fd': descriptor, 'stage': 'before'})
         else:

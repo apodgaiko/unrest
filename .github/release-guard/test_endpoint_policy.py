@@ -258,3 +258,41 @@ def test_pending_shared_description_cannot_reserve_through_another_owned_birth()
     with pytest.raises(Refused):
         endpoints.connect(next_route.name, listener, inherited)
     assert endpoints.poison
+
+
+def test_shared_listener_retains_different_client_births_and_tickets():
+    endpoints, route, listener = prepared()
+    ledger = endpoints.ledger
+    actual = identity(102, 100)
+    third = Birth.read(actual)
+    emit(ledger, 'kernel_child', parent=100, child=102, event=1, identity=actual)
+    ledger.register(third, 'other-client', PINS, SEAL, case=route.case, command_class='client')
+    other = ready(ledger, third)
+    second = replace(route, name='other-client-route', client=other)
+    endpoints.declare(second, shared_listener=listener)
+    endpoints.listen(second.name, listener)
+    first_ticket = endpoints.connect(route.name, listener, idle_client(route))
+    next_ticket = endpoints.connect(second.name, listener, replace(idle_client(second), inode=3000, cookie=4000))
+    assert first_ticket.serial != next_ticket.serial
+    assert first_ticket.route.client.birth != next_ticket.route.client.birth
+    assert first_ticket.listener == next_ticket.listener
+
+
+@pytest.mark.parametrize('mutation', ('case', 'server', 'cookie', 'fd', 'inode', 'missing', 'implicit'))
+def test_shared_listener_never_transfers_foreign_server_or_binding(mutation):
+    endpoints, route, listener = prepared()
+    next_route = replace(route, name='second')
+    shared = listener
+    if mutation == 'case':
+        next_route = replace(next_route, case='case[two]')
+    elif mutation == 'server':
+        next_route = replace(next_route, server=route.client)
+    elif mutation in ('cookie', 'fd', 'inode'):
+        shared = replace(listener, **{mutation: getattr(listener, mutation) + 1})
+    elif mutation == 'missing':
+        del endpoints.listeners[route.name]
+    else:
+        shared = None
+    with pytest.raises(Refused):
+        endpoints.declare(next_route, shared_listener=shared)
+    assert endpoints.poison and len(endpoints.routes) == 1

@@ -22,6 +22,8 @@ class Client:
         self.generation = integer(profile['generation'], 1)
         self.path = str(directory / 'control.sock')
         self.lock = threading.RLock()
+        from cleanup_launch import CASES as CLEANUP_CASES
+        self.seconds = 8 if profile.get('case') in CLEANUP_CASES or tuple(profile.get('cases', ())) == CLEANUP_CASES else 4
         # Payload wrappers must not mediate their own fixed private channel.
         self.socket, self.connect, self.close = socket.socket, socket.socket.connect, socket.socket.close
         self.random, self.pid, self.sleep = os.urandom, os.getpid, time.sleep
@@ -36,10 +38,10 @@ class Client:
                        'kind': kind, 'payload': payload}
             stream = self.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             try:
-                stream.settimeout(4)
+                stream.settimeout(self.seconds)
                 self.connect(stream, self.path)
                 peer(stream, self.observer, 20001)
-                frame = Frame(stream, RESPONSE_LIMIT, [])
+                frame = Frame(stream, RESPONSE_LIMIT, [], seconds=self.seconds)
                 frame.answer(request)
                 while not frame.send():
                     self.sleep(.0001)

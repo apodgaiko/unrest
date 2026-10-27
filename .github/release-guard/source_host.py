@@ -1,4 +1,4 @@
-"""Run the original bootstrap cases in a private, measured Linux generation.
+"""Run selected original cases in a private, measured Linux generation.
 
 This is a bounded integration checkpoint, not full source certification. The
 root driver only prepares inputs and settles its own children. Admission and
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import ctypes
+from dataclasses import asdict
 import fcntl
 import hashlib
 import json
@@ -84,7 +85,7 @@ def prepare(binding, checkout, root):
         target = member.resolve(strict=True)
         require(target.is_relative_to(original) and (target.is_file() or target.is_dir())
                 and not (member.is_symlink() and target.is_dir()), 'dependency alias refused')
-    shutil.copytree(original, dependencies, symlinks=False)
+    shutil.copytree(original, dependencies, symlinks=False, ignore=shutil.ignore_patterns('__pycache__'))
     for member in [dependencies, *sorted(dependencies.rglob('*'))]:
         member.chmod(0o755 if member.is_dir() or member.stat().st_mode & 0o111 else 0o644)
     owned = root / 'owned'
@@ -164,7 +165,7 @@ def worker(binding, metadata, raw_directory):
     from source_observer import Observer
     from source_profile import ROOT_COMMAND
     metadata = isolate(metadata, binding['support'])
-    timeout = 30 if len(metadata['cases']) in (3, 42) else 60 if len(metadata['cases']) == 2 else 170
+    timeout = 60 if metadata['cases'][0].startswith('tests/test_acp_cleanup.py::') else 30 if len(metadata['cases']) in (3, 42) else 60 if len(metadata['cases']) == 2 else 170
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
@@ -226,6 +227,10 @@ def worker(binding, metadata, raw_directory):
                   'result': result, 'failure': failure, 'metadata': metadata,
                   'kernel': [] if trace is None else trace.records,
                   'controls': [] if observer is None else observer.controls,
+                  'endpoint_observations': None if observer is None else {
+                      'listeners': {key: asdict(value) for key, value in observer.endpoints.listeners.items()},
+                      'routes': {key: asdict(value) for key, value in observer.endpoints.routes.items()},
+                      'connections': [asdict(value) for value in observer.endpoints.connections.values()]},
                   'interrupted_connections': [] if observer is None else observer.interrupted_records,
                   'poison': [] if observer is None else observer.ledger.poison,
                   'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
@@ -253,7 +258,7 @@ def drain_owned(rows):
                          'original_parent_wait_proven': False})
 
 def main():
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42')),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3')),
             'source host requires exact root Linux invocation')
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     binding_file = Path(sys.argv[1]).resolve(strict=True)
@@ -276,7 +281,8 @@ def main():
         from bootstrap_cases import BOOTSTRAP
         from controlled_startup import CASES
         from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES
-        cases = (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
+        from cleanup_launch import CASES as CLEANUP_CASES
+        cases = CLEANUP_CASES if len(sys.argv) == 3 and sys.argv[2] == 'cleanup3' else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
         metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root), 'cases': list(cases)}
         pid = os.fork()
         if pid == 0:
@@ -286,7 +292,7 @@ def main():
                 (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
                 os._exit(125)
             os._exit(0)
-        raw, deadline = None, time.monotonic() + (50 if len(cases) in (3, 42) else 80 if len(cases) == 2 else 190)
+        raw, deadline = None, time.monotonic() + (80 if cases == CLEANUP_CASES else 50 if len(cases) in (3, 42) else 80 if len(cases) == 2 else 190)
         try:
             while raw is None:
                 actual, status = os.waitpid(pid, os.WNOHANG)
@@ -300,7 +306,7 @@ def main():
             if raw is None:
                 raw = settle(pid, terminate=True)
             (raw_directory / 'observer-parent-wait.json').write_text(json.dumps({'actual_parent_wait': raw}))
-        require(raw == 0, 'original bootstrap integration failed; encrypted diagnostics retained')
+        require(raw == 0, 'original source integration failed; encrypted diagnostics retained')
         success = True
     finally:
         adopted: list[dict] = []

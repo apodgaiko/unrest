@@ -2428,3 +2428,48 @@ actual reap are required; guard refusal or fallback cleanup cannot pass.
 The bounded bootstrap and ordinary checkpoints are integration evidence. They
 are not the full unexcluded source checkpoint, legacy-removal proof, the final
 10,000-line count, or release certification.
+
+
+### Replacement library and cleanup domain
+
+The `ordinary42` checkpoint also preserves all 39 original command, OS-field,
+environment-name, obstruction and terminal preflight refusals. These cases have
+zero child authority. Their parameter/ID catalogue is checked against the
+original tests, and completion requires the original assertions to pass.
+
+The `cleanup3` domain runs the original worker success, malformed array-ID and
+repeated-cancellation cases. Root authority is limited to the original setup Git
+commands, the exact worker MCP module entry and the byte-pinned cleanup ACP
+fixture. The worker owns only its original `git rev-parse HEAD` completion query.
+Every process retains an independently admitted kernel birth/image and an actual
+original-parent numeric wait. Native leaves receive no fabricated Python READY,
+and a native leaf cannot fork another process. A child without a unique original
+launch intent is refused while its kernel birth stop is still held.
+
+The module inherits only its original blocking inventory read pipe. Descriptor,
+device/inode, UID and complete permitted flags are checked both before launch and
+at actual child prebody. Scenario JSON is independently reconstructed from the
+original case, then copied into an observer-owned read-only file for child use.
+The original plan remains intact. The module's fixed offline FastMCP update-check
+setting is an explicit guard translation; no external network authority follows.
+
+Library imports must compile to the actual bytes of the authenticated read-only
+source, dependency or runtime generation. Schema code generation is limited to
+the prepared standard-library and dependency compiler functions. Beartype's
+original AST compiler additionally binds its original source input, path, actual
+AST and unoptimized compile call. The guard clones the bounded AST through raw
+instance dictionaries, checks prepared class descriptors, and independently
+compiles the snapshot. Observed live code objects are not expected-code oracles.
+Generated snippets and transformed postimages share finite count/byte bounds.
+Only the fresh private dependency copy omits bytecode caches before measurement
+and read-only mounting; original source, tests and retained evidence are preserved.
+This computation domain grants no process or network operation.
+
+Readiness and ACP routes may share a port only through the same freshly acquired
+listener description, case and server epoch. Each client retains its own route,
+connect ticket and actual reciprocal accepted-FD join. The short readiness probe
+cannot close before that join. The private control window is eight seconds for
+this exact cleanup checkpoint and four for other groups. Original product clocks,
+timeouts and completion/cleanup assertions remain unchanged. Acquired endpoint
+observations are retained in the encrypted diagnostics. These bounded checkpoints
+remain separate from full source and release certification.
