@@ -294,8 +294,8 @@ def test_caught_cleanup_signal_refusal_stays_poisoned(monkeypatch):
 
 
 @pytest.mark.skipif(sys.platform != 'linux', reason='actual proc descriptor ownership')
-@pytest.mark.parametrize('role', ('git-init', 'git-helper'))
-def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_path, role):
+@pytest.mark.parametrize('role,input_pipe', (('git-init', False), ('git-helper', False), ('git-command', True)))
+def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_path, role, input_pipe):
     command_read, command_write = os.pipe()
     ready_read, ready_write = os.pipe()
     child = os.fork()
@@ -303,6 +303,10 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
         try:
             os.close(command_write)
             os.close(ready_read)
+            if input_pipe:
+                os.dup2(command_read, 0)
+                os.dup2(ready_write, 1)
+                os.dup2(ready_write, 2)
             if role == 'git-helper':
                 with open('/dev/null', 'rb') as null:
                     os.dup2(null.fileno(), 0)
@@ -320,11 +324,11 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
     try:
         assert os.read(ready_read, 1) == b'1'
         observer = object.__new__(Observer)
-        observer.stdio(child, role)
+        observer.stdio(child, role, input_pipe=input_pipe)
         os.write(command_write, b'1')
         assert os.read(ready_read, 1) == b'2'
         with pytest.raises(Refused, match='descriptor'):
-            observer.stdio(child, role)
+            observer.stdio(child, role, input_pipe=input_pipe)
     finally:
         os.close(command_write)
         os.close(ready_read)

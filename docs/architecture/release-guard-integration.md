@@ -2735,3 +2735,7 @@ remain bound independently. Direct Git fixture commands retain descriptor-index
 inheritance. Prepared script owners use the actual `__main__` loader and absent
 module specification, with the same pinned source and live binding checks. This
 owner mode grants no launch permission by itself.
+
+Git commands with a declared non-null input bind stdin to a parent-owned pipe;
+commands without input retain inherited stdin. Input text is independently
+reconstructed and compared at the original `subprocess.run` frame.

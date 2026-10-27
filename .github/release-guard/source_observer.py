@@ -136,7 +136,7 @@ class Observer:
         return {'HOME': str(owned / 'home'), 'TMPDIR': str(owned / 'tmp'), 'PATH': '/usr/bin:/bin',
                 'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
 
-    def stdio(self, pid, role):
+    def stdio(self, pid, role, *, input_pipe=False):
         parent = Path('/proc') / str(process_identity(pid)['ppid']) / 'fd'
         parent_inodes = set()
         for fd in parent.iterdir():
@@ -155,7 +155,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit') or role == 'git-command' and descriptor == 0 or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
+            if role in ('git-init', 'git-commit') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe')):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -202,7 +202,8 @@ class Observer:
         intent = matches[0]
         if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):
             return False
-        intent['stdout'] = self.stdio(pid, intent['role'])
+        intent['stdout'] = self.stdio(pid, intent['role'],
+            input_pipe=intent['role'] == 'git-command' and intent['command'].stdin is not None)
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
         if intent['role'] == 'sleep' or intent['role'].startswith('git-'):
             actual = process_identity(pid)
