@@ -55,6 +55,10 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
         'GIT_COMMITTER_NAME': 'Workspace Test', 'GIT_COMMITTER_EMAIL': 'workspace@example.test'}
     subprocess.run(['/usr/bin/git', 'init', '-b', 'main'], cwd=repository, env=environment,
         check=True, capture_output=True)
+    # Keep this controlled native helper in the foreground: detachment cannot
+    # provide its original parent's numeric wait and is not a reap exception.
+    with (repository / '.git/config').open('a') as stream:
+        stream.write('\n[maintenance]\n\tautoDetach = false\n')
     start_read, start_write = os.pipe()
     receipt_read, receipt_write = os.pipe()
     os.set_inheritable(receipt_write, True)
@@ -67,7 +71,7 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
                 'sha256': hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}]
     for path, arguments, env in (('/usr/bin/git', ['commit', '--allow-empty', '-m', 'base'], environment),
         ('/usr/bin/git', ['rev-parse', 'HEAD'], environment),
-        (helper, ['maintenance', 'run', '--auto', '--no-quiet', '--detach'], helper_environment)):
+        (helper, ['maintenance', 'run', '--auto', '--no-quiet', '--no-detach'], helper_environment)):
         allowed.append({'path': path, 'argv': [path, *arguments], 'environment': env, 'cwd': str(repository),
                         'sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()})
     child = os.fork()
