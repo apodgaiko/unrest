@@ -10,9 +10,9 @@ from pathlib import Path
 import sys
 
 from content_manifest import Refused, capture
-from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
-from controlled_cases import CASES as CONTROLLED, GROUPS as CONTROLLED_GROUPS, backend as controlled_backend, backend_path
-from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
+from bootstrap_cases import BOOTSTRAP
+from controlled_cases import CASES as CONTROLLED, GROUPS as CONTROLLED_GROUPS
+from controlled_startup import expected_entry, CASES
 from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, MOCK, PINS
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_mode, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES, INFLIGHT, body as inline_body
@@ -204,36 +204,21 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
                 or event != 'cpython.run_file' or arguments != (script,)):
             raise Refused('source original mock ACP leaf')
     else:
-        if (not Path(profile['cwd']).is_relative_to(Path(profile['owned']))
-                or Path(profile['cwd']).name not in (('worker','validator') if profile['case'] in CONTROLLED else ('worker',))
-                or profile['case'] not in profile['cases']
-                or role == 'backend' and profile['case'] not in CONTROLLED and wrapper(profile['case']) is not None
-                or role == 'delayed-backend' and wrapper(profile['case']) is None):
+        home = Path(profile['cwd'])
+        if (not home.is_relative_to(Path(profile['owned'])) or profile['case'] not in profile['cases']
+                or home.name not in (('worker','validator') if profile['case'] in CONTROLLED else ('worker',))
+                or type(script) is not str or str(Path(script).resolve()) != script):
             raise Refused('source closed leaf role or home')
-        if type(script) is not str or str(Path(script).resolve()) != script:
-            raise Refused('source leaf path')
-        if role == 'acp':
-            expected = [native, '-I', '-S', str(Path(profile['checkout']) / 'tests/fixtures/controlled_python_acp.py'), '--controlled-local-acp-v1']
-            if script != expected[3]:
-                raise Refused('source exact ACP path')
-            pin = ACP_PIN
-        else:
-            owned = Path(profile['owned'])
-            path = Path(script)
-            if not path.is_relative_to(owned) or path != (backend_path(profile['case'],Path(profile['cwd']).parent) if profile['case'] in CONTROLLED else Path(profile['cwd']).parent / 'fake-app-server'):
-                raise Refused('source backend path')
-            options, _ = configuration(Path(profile['checkout']), Path(profile['cwd'])) if profile['case'] not in CONTROLLED and declaration(profile['case']).configured else ([], None)
-            expected = [native, '-I', '-S', script, *options, 'app-server']
-            pin = controlled_backend(profile['case'])[0] if profile['case'] in CONTROLLED else BACKEND_PIN
-            if role == 'delayed-backend':
-                expected = [native, '-I', '-S', '-c', wrapper(profile['case']), script, *options, 'app-server']
-        if profile['argv'] != expected or digest(Path(script)) != pin:
-            raise Refused('source leaf bytes or vector')
-        if role == 'delayed-backend':
-            if event != 'cpython.run_command' or arguments != (str(wrapper(profile['case'])) + '\n',):
-                raise Refused('source exact delayed wrapper')
-        elif event != 'cpython.run_file' or arguments != (script,):
-            raise Refused('source exact script entry')
+        relay = json.loads(profile['environment']['SYNTHETIC_RELAY']) if role == 'acp' else None
+        expected,source,pin = expected_entry(profile['case'],Path(profile['checkout']),home,native,
+            profile['native_sha256'],backend=role != 'acp',relay=relay)
+        delayed = expected.payload_kind == 'python-command'
+        if (delayed != (role == 'delayed-backend') or script != source[1]
+                or role != 'acp' and not Path(script).is_relative_to(Path(profile['owned']))
+                or profile['argv'] != [native,'-I','-S',*expected.argv[1:]] or digest(Path(script)) != pin
+                or event != ('cpython.run_command' if delayed else 'cpython.run_file')
+                or arguments != ((expected.argv[2]+'\n',) if delayed else (script,))):
+            raise Refused('source exact controlled entry')
     pins = tuple(sorted((('entry', profile['entry_sha256']), ('native', profile['native_sha256']),
                         ('source', profile['source_sha256']), ('support', profile['support_sha256']),
                         ('runtime', profile['runtime_sha256']), ('dependency', profile['dependency_sha256']))))

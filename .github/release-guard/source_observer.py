@@ -16,12 +16,11 @@ import time
 
 from content_manifest import Refused, native_digest
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
-from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
-from controlled_cases import CASES as CONTROLLED, backend as controlled_backend, backend_path
+from bootstrap_cases import BOOTSTRAP, declaration
+from controlled_cases import CASES as CONTROLLED, backend_path
 from controlled_pairs import before_bind, before_spawn, limits as controlled_limits, scope as controlled_scope
-from controlled_startup import ACP, ACP_PIN, BACKEND_PIN, SESSION
+from controlled_startup import ACP, expected_entry
 from endpoint_policy import Endpoints, Owner, Route
-from launch_policy import Rule, render
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pair
@@ -303,75 +302,41 @@ class Observer:
                 from custody_git import launch
                 return launch(self,actor,payload)
             return self.controlled_launch(actor, payload)
-        cwd = original['cwd']
-        if type(cwd) is not str:
-            raise Refused('source launch cwd type')
-        home = Path(cwd)
-        if (not home.is_absolute() or str(home.resolve()) != cwd or not home.is_relative_to(Path(self.meta['owned']))
-                or home.name != 'worker' or home.parent.name != 'owner'):
-            raise Refused('source owned worker launch home')
-        spec = declaration(self.case)
-        if spec.children == 0:
-            raise Refused('source declared no-launch case')
-        native = self.binding['entry']['path']
-        config_argv, config_json = configuration(Path(self.meta['checkout']), home) if spec.configured else ([], None)
-        environment = {'HOME': cwd, 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'), 'PATH': '/usr/bin:/bin'}
-        if config_json is not None:
-            environment.update(CODEX_HOME=str(home.parent.parent.parent / 'subscription'), CODEX_CONFIG=config_json)
-        if payload['source_line'] == 506:
-            script = home.parent / 'fake-app-server'
-            role = 'backend' if wrapper(self.case) is None else 'delayed-backend'
-            vector: tuple[str, ...] = (native, str(script), *config_argv, 'app-server')
-            pin: str | None
-            kind, pin = 'python-script', BACKEND_PIN
-            if role == 'delayed-backend':
-                vector, kind, pin = (native, '-c', wrapper(self.case), str(script), *config_argv, 'app-server'), 'python-command', None
-            rule_name, script_pin = 'backend', BACKEND_PIN
-        elif payload['source_line'] == 553:
-            backends = [value for value in self.intents.values() if value['case'] == self.case and value['role'] in ('backend', 'delayed-backend')]
+        return self.controlled_launch(actor,payload)
+
+    def listener_key(self,case,tag,scope=None):
+        return (case,tag,scope) if case in CONTROLLED else (case,tag)
+
+    def controlled_launch(self,actor,payload):
+        cwd = payload['original']['cwd']
+        if self.case in CONTROLLED:
+            controlled_scope(self.case,'bridge',cwd,Path(self.meta['owned']))
+        elif (type(cwd) is not str or str(Path(cwd).resolve()) != cwd
+                or not Path(cwd).is_relative_to(Path(self.meta['owned']))
+                or Path(cwd).name != 'worker' or Path(cwd).parent.name != 'owner'
+                or declaration(self.case).children == 0):
+            raise Refused('source declared worker launch home')
+        role = 'backend' if payload['source_line'] == 506 else 'acp' if payload['source_line'] == 553 else None
+        if role is None:
+            raise Refused('source unknown original launch site')
+        records = [value for value in self.intents.values() if value['case'] == self.case]
+        if self.case in CONTROLLED:
+            before_spawn(self.case,cwd,role,records,self.actors)
+        elif role == 'acp':
+            backends = [v for v in records if v['role'] in ('backend','delayed-backend')]
             if len(backends) != 1 or not backends[0]['consumed'] or not self.actors[backends[0]['pid']]['returned']:
                 raise Refused('source ACP before owned backend return')
-            bridge = self.listeners[(self.case, 'bridge')]
-            lifetime = self.listeners[(self.case, 'lifetime')]
-            environment.update({'CODEX_PATH': str(home.parent / 'fixed-relay'), 'INITIAL_AGENT_MODE': 'read-only',
-                'SYNTHETIC_RELAY': json.dumps([bridge['socket'].local[1], bridge['nonce'], lifetime['socket'].local[1], lifetime['nonce']])})
-            role, rule_name, script_pin = 'acp', 'acp', ACP_PIN
-            vector = (native, str(Path(self.meta['checkout']) / ACP), '--controlled-local-acp-v1')
-            kind, pin = 'python-script', ACP_PIN
-        else:
-            raise Refused('source unknown original launch site')
-        rule = Rule('controlled-startup:' + rule_name, SESSION + ':_open_role_owned', (self.case,),
-                    native, self.binding['entry']['sha256'], vector, tuple(sorted(environment.items())), cwd, kind, pin)
-        expected = render(rule, self.case, rule.owner, {}, {})
-        translated = [native, '-I', '-S', *expected.argv[1:]]
-        return self.admit_launch(actor, payload, expected, role, payload['source_line'], translated, script_pin)
-
-    def listener_key(self, case, tag, scope=None):
-        return (case, tag, scope) if case in CONTROLLED else (case, tag)
-
-    def controlled_launch(self, actor, payload):
-        original = payload['original']
-        cwd = controlled_scope(self.case,'bridge',original['cwd'],Path(self.meta['owned']))
-        home = Path(cwd)
-        role = 'backend' if payload['source_line'] == 506 else 'acp' if payload['source_line'] == 553 else None
-        records = [v for v in self.intents.values() if v['case'] == self.case]
-        before_spawn(self.case,cwd,role,records,self.actors)
-        native, pin = self.binding['entry']['path'], self.binding['entry']['sha256']
-        backend_pin, _ = controlled_backend(self.case)
-        environment = {'HOME':cwd, 'CODEX_HOME':str(home/'codex'), 'TMPDIR':str(home/'tmp'), 'PATH':'/usr/bin:/bin'}
-        if role == 'backend':
-            script, script_pin = backend_path(self.case,home.parent), backend_pin
-            vector = (native, str(script), 'app-server')
-        else:
+        relay = None
+        if role == 'acp':
             bridge = self.listeners[self.listener_key(self.case,'bridge',cwd)]
             lifetime = self.listeners[self.listener_key(self.case,'lifetime',cwd)]
-            environment.update(CODEX_PATH=str(home.parent/'fixed-relay'),INITIAL_AGENT_MODE='read-only',
-                SYNTHETIC_RELAY=json.dumps([bridge['socket'].local[1],bridge['nonce'],lifetime['socket'].local[1],lifetime['nonce']]))
-            script, script_pin = Path(self.meta['checkout']) / ACP, ACP_PIN
-            vector = (native,str(script),'--controlled-local-acp-v1')
-        expected = render(Rule('controlled-startup:'+role,SESSION+':_open_role_owned',(self.case,),native,pin,
-            vector,tuple(sorted(environment.items())),cwd,'python-script',script_pin),self.case,SESSION+':_open_role_owned',{}, {})
-        return self.admit_launch(actor,payload,expected,role,payload['source_line'],[native,'-I','-S',*vector[1:]],script_pin)
+            relay = [bridge['socket'].local[1],bridge['nonce'],lifetime['socket'].local[1],lifetime['nonce']]
+        native = self.binding['entry']['path']
+        expected,_,script_pin = expected_entry(self.case,Path(self.meta['checkout']),Path(cwd),native,
+            self.binding['entry']['sha256'],backend=role == 'backend',relay=relay)
+        if role == 'backend' and expected.payload_kind == 'python-command':
+            role = 'delayed-backend'
+        return self.admit_launch(actor,payload,expected,role,payload['source_line'],[native,'-I','-S',*expected.argv[1:]],script_pin)
 
     def admit_launch(self, actor, payload, expected, role, site, vector, script_pin,
                      *, maximum=1, environment=None, inherited=(), port=None):

@@ -57,6 +57,36 @@ class Intent:
     script_sha256: str | None
 
 
+def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None):
+    if type(case) is not str or case not in (*BOOTSTRAP,*CONTROLLED) or type(backend) is not bool:
+        raise Refused('controlled entry declaration')
+    checkout,home = path(checkout),path(home)
+    configured = case not in CONTROLLED and declaration(case).configured
+    options,config = configuration(checkout,home) if configured else ([],None)
+    environment = {'HOME':str(home),'CODEX_HOME':str(home/'codex'),'TMPDIR':str(home/'tmp'),'PATH':'/usr/bin:/bin'}
+    if config is not None:
+        environment.update(CODEX_HOME=str(home.parent.parent.parent/'subscription'),CODEX_CONFIG=config)
+    if backend:
+        script = backend_path(case,home.parent) if case in CONTROLLED else home.parent/'fake-app-server'
+        pin = controlled_backend(case)[0] if case in CONTROLLED else BACKEND_PIN
+        source = (native,str(script),*options,'app-server')
+        delay = None if case in CONTROLLED else wrapper(case)
+        vector = (native,'-c',delay,*source[1:]) if delay is not None else source
+        kind,reference = ('python-command',None) if delay is not None else ('python-script',pin)
+    else:
+        if (type(relay) is not list or len(relay) != 4
+                or any(type(relay[i]) is not int or not 0 < relay[i] <= 65535 for i in (0,2))
+                or any(type(relay[i]) is not str or len(relay[i]) != 64
+                    or any(char not in '0123456789abcdef' for char in relay[i]) for i in (1,3))):
+            raise Refused('controlled entry acquired relay')
+        pin = ACP_PIN
+        source = vector = (native,str(checkout/ACP),'--controlled-local-acp-v1')
+        kind,reference = 'python-script',pin
+        environment.update(CODEX_PATH=str(home.parent/'fixed-relay'),INITIAL_AGENT_MODE='read-only',SYNTHETIC_RELAY=json.dumps(relay))
+    rule = Rule('controlled-startup:'+('backend' if backend else 'acp'),SESSION+':_open_role_owned',(case,),
+        native,native_pin,vector,tuple(sorted(environment.items())),str(home),kind,reference)
+    return render(rule,case,rule.owner,{},{}),source,pin
+
 class Startup:
     def __init__(self, session: types.ModuleType, tests: types.ModuleType,
                  session_unit: SourceUnit, test_unit: SourceUnit,
@@ -179,59 +209,29 @@ class Startup:
                 raise Refused('startup role home')
             self.source_file(backend, backend_pin, owned=True)
             self.source_file(self.checkout / ACP, ACP_PIN, owned=False)
-            environment = {'HOME': str(home), 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'),
-                           'PATH': '/usr/bin:/bin', 'INITIAL_AGENT_MODE': 'read-only',
-                           'CODEX_PATH': str(root / 'fixed-relay')}
-            config_argv, config_json = configuration(self.checkout, home) if configured else ([], None)
-            if config_json is not None:
-                environment.update(CODEX_HOME=str(root.parent.parent / 'subscription'), CODEX_CONFIG=config_json)
-            expected_argv: tuple[str, ...]
             backend_spawn = frame.f_lineno == 506
-            if backend_spawn:
-                expected_argv = (str(self.interpreter), str(backend), *config_argv, 'app-server')
-                if (type(local.get('argv')) is not list or any(type(arg) is not str for arg in local['argv'])
-                        or tuple(local['argv']) != expected_argv):
-                    raise Refused('startup source backend vector')
-                environment = {key: value for key, value in environment.items()
-                               if key not in ('CODEX_PATH', 'INITIAL_AGENT_MODE')}
-                source_environment = local.get('backend_environment')
-                script_pin, kind = backend_pin, 'backend'
-            else:
-                expected_argv = (str(self.interpreter), str(self.checkout / ACP), '--controlled-local-acp-v1')
-                if (type(local.get('adapter_argv')) is not tuple
-                        or any(type(arg) is not str for arg in local['adapter_argv'])
-                        or local['adapter_argv'] != expected_argv):
-                    raise Refused('startup source ACP vector')
-                bridge, lifetime = local.get('bridge'), local.get('lifetime')
+            relay = None
+            if not backend_spawn:
+                bridge,lifetime = local.get('bridge'),local.get('lifetime')
                 if type(bridge) is not self.bridge or type(lifetime) is not self.lifetime:
                     raise Refused('startup relay objects')
-                bridge_values, lifetime_values = dictionary(bridge, self.bridge), dictionary(lifetime, self.lifetime)
-                relay: list[Any] = [local.get('relay_port'), bridge_values.get('nonce'), local.get('port'), lifetime_values.get('nonce')]
-                if (any(type(relay[index]) is not int or not 0 < relay[index] <= 65535 for index in (0, 2))
-                        or any(type(relay[index]) is not str or len(relay[index]) != 64
-                               or any(char not in '0123456789abcdef' for char in relay[index]) for index in (1, 3))):
-                    raise Refused('startup relay source values')
-                environment['SYNTHETIC_RELAY'] = json.dumps(relay)
-                source_environment = local.get('environment')
-                script_pin, kind = ACP_PIN, 'acp'
+                relay = [local.get('relay_port'),dictionary(bridge,self.bridge).get('nonce'),
+                         local.get('port'),dictionary(lifetime,self.lifetime).get('nonce')]
+            expected,source_vector,script_pin = expected_entry(case,self.checkout,home,str(self.interpreter),
+                self.runtime_pin,backend=backend_spawn,relay=relay)
+            vector = local.get('argv' if backend_spawn else 'adapter_argv')
+            if (not isinstance(vector, (list, tuple)) or type(vector) is not (list if backend_spawn else tuple)
+                    or any(type(arg) is not str for arg in vector)
+                    or tuple(vector) != source_vector):
+                raise Refused('startup original source vector')
+            source_environment = local.get('backend_environment' if backend_spawn else 'environment')
             if type(source_environment) is not dict:
                 raise Refused('startup source environment type')
-            source_snapshot = _namespace(source_environment)
-            if (any(type(value) is not str for value in source_snapshot.values())
-                    or source_snapshot != environment):
+            snapshot = _namespace(source_environment)
+            if any(type(value) is not str for value in snapshot.values()) or snapshot != dict(expected.environment):
                 raise Refused('startup source environment')
-            self.constructor_frame(frames, expected_argv, source_environment, home, backend_spawn,
-                                   case)
-            if backend_spawn and case not in CONTROLLED and wrapper(case) is not None:
-                expected_argv = (expected_argv[0], '-c', wrapper(case), *expected_argv[1:])
-                script_kind, payload_pin = 'python-command', None
-            else:
-                script_kind, payload_pin = 'python-script', script_pin
-            rule = Rule('controlled-startup:' + kind, SESSION + ':_open_role_owned', (case,),
-                        str(self.interpreter), self.runtime_pin, expected_argv, tuple(sorted(environment.items())),
-                        str(home), script_kind, payload_pin)
-            expected = render(rule, case, rule.owner, {}, {})
-            match((expected,), observed, rule.owner, case)
+            self.constructor_frame(frames,source_vector,source_environment,home,backend_spawn,case)
+            match((expected,),observed,expected.owner,case)
             if self.root_key() != self.root_identity:
                 raise Refused('startup owned root replaced')
             return Intent(expected, (expected.argv[0], '-I', '-S', *expected.argv[1:]), frame.f_lineno, script_pin)
