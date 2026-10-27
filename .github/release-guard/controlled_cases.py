@@ -138,8 +138,14 @@ GROUPS = {
     'controlled-ack20': tuple(case for case in CASES if 'test_experimental_ack_durability.py::' in case),
     'controlled-bridge1': tuple(case for case in CASES if 'test_experimental_bridge_shutdown.py::' in case),
     'controlled-drain3': tuple(case for case in CASES if 'test_experimental_drain_retirement.py::' in case),
-    'controlled-orders30': tuple(case for case in CASES if 'test_experimental_finite_orders.py::' in case),
+    'controlled-capacity10': tuple(case for case in CASES if '::test_actual_capacity_and_parking[' in case),
+    'controlled-batches4': tuple(case for case in CASES if '::test_actual_simultaneous_completion_batches[' in case),
+    **{'controlled-orders-'+scripts: tuple(case for case in CASES
+        if '::test_script_order_boundaries[' in case and case.endswith('-'+scripts+']'))
+        for scripts in ('PP','RP','RC','RR')},
     'controlled-stops12': tuple(case for case in CASES if 'test_experimental_finite_stops.py::' in case),
     'controlled-halt15': tuple(case for case in CASES if 'test_experimental_first_halt.py::' in case),
-    'controlled-wrappers9': tuple(case for case in CASES if 'test_controlled_python_acp.py::' in case),
+    'controlled-cancellation4': tuple(case for case in CASES if '::test_cancel_at_actual_boundary[' in case),
+    'controlled-registration4': tuple(case for case in CASES if '::test_actual_registration[' in case),
+    'controlled-witness1': tuple(case for case in CASES if '::test_single_c1_fixed_timing_protocol_witness' in case),
 }

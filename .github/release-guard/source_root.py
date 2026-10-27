@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import importlib
+import signal
 from pathlib import Path
 import sys
 from typing import cast
@@ -16,8 +17,11 @@ from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS
 from bootstrap_configuration import Binding
 from content_manifest import Refused
 from controlled_startup import SESSION, SESSION_PIN, TEST, TEST_PIN, Startup, dictionary
-from source_owner import Link, active_frames
-from source_calls import TestSources, nested_signal
+from source_owner import Link, active_frames, _namespace
+from source_calls import Sources, TestSources, nested_signal
+
+
+USER_SIGNAL = int(signal.SIGUSR1)
 
 
 class BootstrapCalls(TestSources):
@@ -29,6 +33,30 @@ class BootstrapCalls(TestSources):
                 (*self.startup.links, Link(module, type_name, cls), Link(self.anchors, type_name + '.' + method, function)))
         return self.owner(unit, module, function, type_name + '.' + method,
                           (*self.startup.links, Link(module, type_name, cls), Link(cls, method, function)))
+
+    def signal(self,pid,sig,group):
+        case = self.policy.case
+        if case != 'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure' or sig != USER_SIGNAL:
+            return Sources.signal(self,pid,sig,group)
+        if group:
+            raise Refused('controlled teardown signal is not a group signal')
+        frames = active_frames()
+        try:
+            frame = self.test_owner.current(frames,line=41)
+            instance = frame.f_locals.get('session')
+            if type(instance) not in (self.startup.base,self.startup.synthetic):
+                raise Refused('controlled teardown original session')
+            backends = dictionary(instance,self.startup.base).get('backends')
+            cls = self.backend_type
+            Link(self.session,'_Backend',cls).check()
+            if type(backends) is not dict:
+                raise Refused('controlled teardown backend dictionary')
+            backends = _namespace(backends)
+            if type(backends.get('worker')) is not cls:
+                raise Refused('controlled teardown original worker backend')
+            self.process(dictionary(backends['worker'],cls).get('process'),pid=pid)
+        finally:
+            del frames
 
     def listener(self):
         frames = active_frames()
@@ -102,6 +130,7 @@ class BootstrapCalls(TestSources):
             self.git = Calls(self)
         checkout = Path(self.profile['checkout'])
         self.session = importlib.import_module('unrest_harness.experimental_session')
+        self.backend_type = vars(self.session)['_Backend']
         self.session_unit = self.unit(SESSION, self.session, self.mode(self.session))
         self.startup = Startup(self.session, self.tests, self.session_unit, self.test_unit,
             checkout, Path(self.profile['owned']), Path(self.profile['native']), self.profile['native_sha256'],

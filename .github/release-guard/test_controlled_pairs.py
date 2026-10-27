@@ -59,3 +59,11 @@ def test_listener_only_owner_and_role_proliferation_refuse():
     with pytest.raises(Refused):
         before_bind(case,'bridge','/owned/pytest/a/validator',records)
     before_bind(case,'bridge','/owned/pytest/a/worker',records)
+
+
+def test_finite_component_partitions_keep_every_original_case_exactly_once():
+    from controlled_cases import GROUPS
+    members = [case for group in GROUPS.values() for case in group]
+    assert len(members) == 91 and len(set(members)) == 91 and set(members) == set(CASES)
+    assert len(GROUPS['controlled-cancellation4']) == len(GROUPS['controlled-registration4']) == 4
+    assert len(GROUPS['controlled-witness1']) == 1

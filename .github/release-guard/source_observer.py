@@ -836,7 +836,9 @@ class Observer:
             child = self.actors.get(number(payload['pid'], 1))
             if (child is None or child['role'] == 'root' or child['case'] != self.case or payload['child_token'] != child['token']
                     or self.ledger.process(child['birth']).parent != actor['birth']
-                    or type(payload['signal']) is not int or payload['signal'] not in (0, 9, 15) or type(payload['group']) is not bool):
+                    or type(payload['signal']) is not int or type(payload['group']) is not bool
+                    or payload['signal'] not in (0,9,15) and not (payload['signal'] == 10 and payload['group'] is False
+                        and child['role'] == 'backend' and self.case == 'tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure')):
                 raise Refused('source exact owned signal')
             process = self.ledger.process(child['birth'])
             if payload['signal'] == 0:

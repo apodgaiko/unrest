@@ -2804,3 +2804,18 @@ its command line. These finite disposable repositories use loose objects and do
 not need background maintenance. The original helper's no-ambient-helper promise
 therefore holds without admitting detached maintenance children or substituting
 supervisor waits. Unexpected native descendants remain refused.
+
+The original bridge teardown fixture can send SIGUSR1 only at its pinned test
+call site to its retained worker backend handle. Source and observer both reject
+foreign children, generations, groups and cases. Cleanup still uses the original
+termination and numeric-wait checks.
+
+After a sealed fixture body starts, CPython's original traceback formatter may
+perform bounded AST-only parsing for diagnostic carets. The captured parser,
+formatter and compiler bindings, AST-only flags and primitive input bytes are
+checked. This permits no additional executable code or second body dispatch.
+Direct compilation, foreign parser callers and changed bindings refuse.
+
+The component groups partition the original controlled cases exactly once by
+existing histories and timer budgets. This changes neither original test timers
+nor the full unexcluded release checkpoint.

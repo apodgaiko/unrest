@@ -118,9 +118,15 @@ def toml(value):
     raise Refused('closed configuration value')
 
 
-def configuration(checkout: Path, home: Path):
+def configuration(checkout: Path, home: Path, *, servers: tuple[str,...] = (), skills: tuple[str,...] = ()):
+    if (type(servers) is not tuple or type(skills) is not tuple
+            or any(type(value) is not str for value in (*servers,*skills))
+            or len(servers) > 4 or len(skills) > 1):
+        raise Refused('closed controlled configuration declarations')
     values = {**CONTROLS, 'sqlite_home': str(home / 'sqlite'), 'log_dir': str(home / 'logs'),
-              'model_catalog_json': str(checkout / CATALOGUE), 'skills.config': [], 'mcp_servers': {}}
+              'model_catalog_json': str(checkout / CATALOGUE),
+              'skills.config': [{'path':value,'enabled':False} for value in sorted(skills)],
+              'mcp_servers': {name:{'enabled':False} for name in sorted(servers)}}
     arguments = [part for key, value in sorted(values.items()) for part in ('-c', key + '=' + toml(value))]
     nested: dict[str, Any] = {}
     for key, value in values.items():

@@ -22,6 +22,8 @@ from git_sites import OWNED_BODY
 class Bodies:
     def __init__(self, profile: dict):
         self.profile, self.next = profile, 0
+        from traceback_ast import Diagnostics
+        self.diagnostics = Diagnostics()
         self.run_code = vars(runpy)['_run_code']
         if type(self.run_code) is not types.FunctionType:
             raise Refused('sealed runpy function')
@@ -80,7 +82,10 @@ class Bodies:
             # Every privileged effect still requires independent source/host admission.
             return True
         if event == 'compile':
-            if self.next >= len(self.codes) or len(args) != 2:
+            if self.next >= len(self.codes):
+                self.module_bindings()
+                return self.diagnostics.allow(args)
+            if len(args) != 2:
                 raise Refused('sealed unexpected compilation')
             expected = self.codes[self.next]
             if args[1] != expected.co_filename:

@@ -32,6 +32,11 @@ digest, with every original target. Early evidence cannot complete that gate.
 
 ## Custody and resources
 
+Controller Git commands disable automatic maintenance and garbage collection
+explicitly. Disposable candidates use bounded loose-object storage; background
+maintenance is neither needed nor allowed to outlive the synchronous command.
+System/global Git configuration and ambient environment are excluded.
+
 Every lane has separate candidate Git storage, broker-editable files and owned
 process storage. Path identities include device/inode and canonical ancestry;
 links, unresolved paths, overlapping directories, shared caches and overlapping

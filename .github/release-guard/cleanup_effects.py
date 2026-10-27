@@ -87,16 +87,7 @@ class CleanupCalls(TestSources):
             frame = self.readiness.current(frames, reason='cleanup original readiness connection')
             if type(frame.f_locals.get('port')) is not int or frame.f_locals['port'] != port:
                 raise Refused('cleanup original readiness port')
-            process = frame.f_locals.get('process')
-            if type(process) is not self.process_class:
-                raise Refused('cleanup readiness child type')
-            transport = vars(process).get('_transport')
-            if type(transport) is not self.transport_class:
-                raise Refused('cleanup readiness transport type')
-            values = vars(transport)
-            pid = values.get('_pid')
-            if type(pid) is not int or pid not in self.policy.children or values.get('_proc') is not self.policy.children[pid]['process']:
-                raise Refused('cleanup readiness owned child')
+            self.process(frame.f_locals.get('process'))
         finally:
             del frames
 

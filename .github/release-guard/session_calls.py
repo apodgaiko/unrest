@@ -117,15 +117,7 @@ class SessionCalls(TestSources):
             owner = self.owner(self.unit, self.module, function, 'ProviderSessionRunner._stop_process_group',
                 (Link(self.module, 'ProviderSessionRunner', cls), Link(cls, '_stop_process_group', descriptor), Link(descriptor, '__func__', function, 'static-function')))
             values = frame_fields(owner.current(frames))
-            process = values.get('process')
-            if type(process) is not self.process_class:
-                raise Refused('session cleanup process type')
-            transport = instance_fields(process).get('_transport')
-            if type(transport) is not self.transport_class:
-                raise Refused('session cleanup transport type')
-            data = instance_fields(transport)
-            if pid not in self.policy.children or type(data.get('_pid')) is not int or data['_pid'] != pid or data.get('_proc') is not self.policy.children[pid]['process']:
-                raise Refused('session exact cleanup process handle')
+            self.process(values.get('process'),pid=pid)
         finally:
             del frames
 

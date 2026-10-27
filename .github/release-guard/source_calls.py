@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from content_manifest import Refused
 from control_transport import unique
-from source_owner import Link, Owner, active_frames, prepare
+from source_owner import Link, Owner, active_frames, prepare, instance_fields
 
 
 class Sources:
@@ -89,19 +89,25 @@ class Sources:
                 if type(terminal) is not self.terminal_type:
                     raise Refused('root original cleanup terminal type')
                 process = vars(terminal).get('process')
-            if type(process) is not self.process_class:
-                raise Refused('root original cleanup process type')
-            transport = vars(process).get('_transport')
-            if type(transport) is not self.transport_class:
-                raise Refused('root original cleanup transport type')
-            values = vars(transport)
-            if (type(values.get('_pid')) is not int or values['_pid'] != pid
-                    or values.get('_proc') is not self.policy.children[pid]['process']):
-                raise Refused('root original cleanup process generation')
+            self.process(process,pid=pid)
             if group and owner.function.__qualname__ != '_SessionOwner._reap':
                 raise Refused('root original group cleanup caller')
         finally:
             del frames
+
+    def process(self,process,*,pid=None):
+        if type(process) is not self.process_class:
+            raise Refused('root original cleanup process type')
+        transport = instance_fields(process).get('_transport')
+        if type(transport) is not self.transport_class:
+            raise Refused('root original cleanup transport type')
+        values = instance_fields(transport)
+        actual = values.get('_pid')
+        if (type(actual) is not int or actual not in self.policy.children
+                or pid is not None and (type(pid) is not int or actual != pid)
+                or values.get('_proc') is not self.policy.children[actual]['process']):
+            raise Refused('root original cleanup process generation')
+        return actual
 
 
 
