@@ -1,12 +1,15 @@
 """Bind the production native profile before any source body."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import json
 import os
 from pathlib import Path
 import stat
 import sys
 
+POLICY: Callable[[str, tuple], bool]
 BODY_READY = False
 
 
