@@ -2477,3 +2477,11 @@ remain separate from full source and release certification.
 Native executable measurement uses a separate 16 MiB full-byte bound; source
 manifests retain their 4 MiB member limit. Both retain nofollow acquisition,
 regular single-link file checks, and before/after identity verification.
+
+Failure cleanup accounts for kernel-reported vfork suspension: a parent with
+a queued ptrace interrupt cannot advance while its child is held at a stop.
+Cleanup kills the held child, then kills the parent at its interrupt stop and
+requires both actual numeric terminal waits. This is cleanup custody, not an
+original-parent product wait or successful-test evidence. Original fixture Git
+init/commit inherit the exact three parent standard descriptors; completion
+queries retain captured output pipes.

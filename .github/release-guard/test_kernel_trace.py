@@ -21,7 +21,7 @@ assert spec is not None and spec.loader is not None
 trace = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(trace)
 
-def run_control(argv, allowed, selective, on_tick=None):
+def run_control(argv, allowed, selective, on_tick=None, resolve_exec=None):
     read, write = os.pipe()
     child = os.fork()
     if child == 0:
@@ -38,7 +38,7 @@ def run_control(argv, allowed, selective, on_tick=None):
     os.close(read)
     try:
         observer = trace.OwnedTrace(child, allowed, timeout=30, start_write=write,
-                                   selective=selective, on_tick=on_tick)
+                                   selective=selective, on_tick=on_tick, resolve_exec=resolve_exec)
     except BaseException:
         os.close(write)
         os.waitpid(child, 0)  # The controlled child exits on startup EOF.
@@ -285,3 +285,28 @@ def test_declined_birth_stays_stopped_before_child_canary(tmp_path):
         run_control(argv, allowed, True, on_tick=decline)
     assert len(seen) == 1 and not seen[0].active and not canary.exists()
     assert any(row['kind'] == 'failure_cleanup_tracer_wait' for row in seen[0].records)
+
+
+def test_vfork_exec_admission_error_reaps_both_without_effect(tmp_path):
+    marker = tmp_path / 'forbidden-native-effect'
+    body = 'import subprocess; subprocess.run(["/usr/bin/touch", ' + repr(str(marker)) + '], check=True)'
+    argv = [sys.executable, '-I', '-S', '-c', body]
+    seen = []
+    def tick(observer):
+        if not seen:
+            seen.append(observer)
+    def resolve(pid, path, vector, environment, cwd):
+        if path == '/usr/bin/touch':
+            raise RuntimeError('controlled exec admission failure')
+        return False
+    allowed = [{'path': sys.executable, 'argv': argv, 'sha256': hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest(),
+                'environment': {}, 'cwd': str(Path.cwd())}]
+    with pytest.raises(RuntimeError, match='controlled exec admission failure'):
+        run_control(argv, allowed, True, tick, resolve)
+    observer = seen[0]
+    assert not observer.active and not observer.poison and not marker.exists()
+    births = [row for row in observer.records if row['kind'] == 'kernel_child']
+    assert len(births) == 1 and births[0]['event'] == 2
+    waits = [row for row in observer.records if row['kind'] == 'failure_cleanup_tracer_wait']
+    assert len(waits) == 2 and all(row['normalized'] == -signal.SIGKILL for row in waits)
+    assert observer.root_parent_wait == signal.SIGKILL

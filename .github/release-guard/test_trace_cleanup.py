@@ -26,6 +26,7 @@ def owned():
     value.attached = {11, 12}
     value.stopped = {}
     value.harvested = set()
+    value.vforks = {}
     value.identities = {}
     value.acquired_root = {"pid": 11, "tgid": 11, "ppid": trace.os.getpid(),
                            "start_ticks": 4, "boot_id": "boot"}
@@ -236,3 +237,31 @@ def test_post_kill_resume_disappearance_still_requires_actual_wait(monkeypatch):
                         lambda pid, flags: waits.append(pid) or (pid, signal.SIGKILL))
     assert value._cleanup() == []
     assert waits == [11] and value.root_parent_wait == signal.SIGKILL and not value.active
+
+
+def test_vfork_child_stop_settles_before_suspended_parent(monkeypatch):
+    value = owned()
+    value.vforks = {11: 12}
+    value.stopped = {12: (7 << 16) | (signal.SIGTRAP << 8) | 0x7f}
+    killed = set()
+    parent_stopped = False
+
+    def operation(op, pid, *args):
+        if op == 8:
+            assert pid == 12 or 12 not in value.active
+            killed.add(pid)
+
+    def wait(pid, flags):
+        nonlocal parent_stopped
+        if pid in killed:
+            return pid, signal.SIGKILL
+        if pid == 11 and 12 not in value.active and not parent_stopped:
+            parent_stopped = True
+            return pid, (128 << 16) | (signal.SIGTRAP << 8) | 0x7f
+        return 0, 0
+
+    monkeypatch.setattr(trace, 'ptrace', operation)
+    monkeypatch.setattr(trace.os, 'waitpid', wait)
+    assert value._cleanup() == []
+    assert killed == {11, 12} and not value.active and not value.poison
+    assert value.root_parent_wait == signal.SIGKILL

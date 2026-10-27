@@ -141,10 +141,10 @@ class Observer:
                 parent_inodes.add((info.st_dev, info.st_ino))
         for descriptor in (0, 1, 2):
             info = (Path('/proc') / str(pid) / 'fd' / str(descriptor)).stat()
-            if (role == 'mcp' or role.startswith('git-')) and descriptor == 0:
-                expected_info = (parent / '0').stat()
+            if role in ('git-init', 'git-commit') or (descriptor == 0 and (role == 'mcp' or role == 'git-observe')):
+                expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
-                    raise Refused('source inherited module stdin')
+                    raise Refused('source exact inherited descriptor')
             elif role == 'sleep' and (descriptor == 0 or self.case != ORDINARY_CASES[2]):
                 expected_fd = parent / str(descriptor) if descriptor == 0 else Path('/dev/null')
                 expected_info = expected_fd.stat()

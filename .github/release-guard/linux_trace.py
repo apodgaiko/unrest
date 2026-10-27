@@ -202,6 +202,7 @@ class OwnedTrace:
         self.attached: set[int] = set()
         self.stopped: dict[int, int] = {}
         self.harvested: set[int] = set()
+        self.vforks: dict[int, int] = {}
         self.child = child
         self.allowed = allowed
         self.timeout = timeout
@@ -370,6 +371,8 @@ class OwnedTrace:
         self.attached.add(child.value)
         self.newborn.add(child.value)
         self.harvested.add(pid)
+        if raw >> 16 == 2:
+            self.vforks[pid] = child.value
         self.identities[child.value] = self._pin(child.value)
         self.records.append({'kind': 'kernel_child', 'parent': pid,
                              'child': child.value, 'event': raw >> 16,
@@ -377,6 +380,7 @@ class OwnedTrace:
 
     def _terminal(self, pid: int, raw: int, *, cleanup: bool) -> None:
         self.active.remove(pid)
+        self._vfork_return(pid)
         self.stopped.pop(pid, None)
         self.attached.discard(pid)
         self.records.append({'kind': 'failure_cleanup_tracer_wait' if cleanup
@@ -386,6 +390,23 @@ class OwnedTrace:
                              'root_original_parent': pid == self.child})
         if pid == self.child:
             self.root_parent_wait = raw
+
+    def _vfork_return(self, child: int) -> None:
+        for parent, value in list(self.vforks.items()):
+            if value == child:
+                del self.vforks[parent]
+
+    def _blocked_vforks(self, interrupted: set[int]) -> set[int]:
+        # Kernel vfork suspension ends only at child exec/exit; the queued
+        # INTERRUPT stops the parent when that suspension ends.
+        blocked: set[int] = set()
+        while True:
+            more = {parent for parent, child in self.vforks.items()
+                    if parent in interrupted and parent in self.active
+                    and child in self.active and child in self.stopped.keys() | blocked}
+            if more <= blocked:
+                return blocked
+            blocked |= more
 
     def _cleanup(self) -> list[BaseException]:
         deadline = time.monotonic() + self.cleanup_seconds
@@ -424,16 +445,16 @@ class OwnedTrace:
                 except BaseException as error:
                     errors.append(error)
                     unavailable.add(pid)
-            if self.active - unavailable <= self.stopped.keys():
+            if self.active - unavailable <= self.stopped.keys() | self._blocked_vforks(interrupted):
                 break
             if not progressed:
                 time.sleep(0.0001)
-        frozen = self.active - unavailable <= self.stopped.keys()
+        frozen = self.active - unavailable <= self.stopped.keys() | self._blocked_vforks(interrupted)
         if not frozen or unavailable:
             self.poison.append('cleanup_freeze_incomplete')
             errors.append(RuntimeError('owned freeze census incomplete'))
         killed: set[int] = set()
-        for pid in sorted(self.attached & self.active - self.foreign):
+        for pid in sorted(self.attached & self.active & self.stopped.keys() - self.foreign):
             try:
                 # Linux's PTRACE_KILL sends SIGKILL through the existing tracer
                 # relationship. CONT(signal) from arbitrary stops is not equivalent.
@@ -443,6 +464,7 @@ class OwnedTrace:
                 self.stopped.pop(pid, None)  # Still require its actual wait below.
             except BaseException as error:
                 errors.append(error)
+                unavailable.add(pid)
         while self.active - unavailable and time.monotonic() <= deadline:
             progressed = False
             for pid in sorted(self.active - unavailable):
@@ -450,8 +472,8 @@ class OwnedTrace:
                     # EXIT events remain stops; resume only after the kill request.
                     if pid in self.stopped:
                         if pid not in killed:
-                            unavailable.add(pid)
-                            continue
+                            ptrace(8, pid)
+                            killed.add(pid)
                         try:
                             ptrace(7, pid)
                         except ProcessLookupError:
@@ -553,10 +575,12 @@ class OwnedTrace:
                 if event in (1, 2, 3):
                     self._birth(pid, raw)
                 elif event == 4:
+                    self._vfork_return(pid)
                     self.records.append({"kind": "kernel_exec", "pid": pid})
                 elif event == 7 and self.selective:
                     self.syscall(pid)
                 elif event == 5:
+                    self.vforks.pop(pid, None)
                     self.records.append({"kind": "kernel_vfork_done", "pid": pid})
                 elif event == 6:
                     terminal = ctypes.c_ulong()

@@ -291,3 +291,37 @@ def test_caught_cleanup_signal_refusal_stays_poisoned(monkeypatch):
         os.kill(123, signal.SIGTERM)
     assert policy.poison is True
     assert calls == [('guard-refusal', {'code': 'source cleanup signal refused'})]
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='actual proc descriptor ownership')
+def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_path):
+    command_read, command_write = os.pipe()
+    ready_read, ready_write = os.pipe()
+    child = os.fork()
+    if child == 0:
+        try:
+            os.close(command_write)
+            os.close(ready_read)
+            os.write(ready_write, b'1')
+            assert os.read(command_read, 1) == b'1'
+            with (tmp_path / 'foreign-output').open('wb') as stream:
+                os.dup2(stream.fileno(), 1)
+            os.write(ready_write, b'2')
+            os.read(command_read, 1)
+        finally:
+            os._exit(0)
+    os.close(command_read)
+    os.close(ready_write)
+    try:
+        assert os.read(ready_read, 1) == b'1'
+        observer = object.__new__(Observer)
+        observer.stdio(child, 'git-init')
+        os.write(command_write, b'1')
+        assert os.read(ready_read, 1) == b'2'
+        with pytest.raises(Refused, match='exact inherited descriptor'):
+            observer.stdio(child, 'git-init')
+    finally:
+        os.close(command_write)
+        os.close(ready_read)
+        actual, raw = os.waitpid(child, 0)
+        assert actual == child and raw == 0
