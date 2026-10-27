@@ -38,6 +38,7 @@ def inventory(root):
     require(len(members) <= 20000, 'input inventory bound')
     for path in members:
         before = path.lstat()
+        require(stat.S_ISDIR(before.st_mode) or stat.S_ISREG(before.st_mode), 'input member custody')
         require(not stat.S_IMODE(before.st_mode) & 0o6022, 'mutable or privileged input')
         if stat.S_ISDIR(before.st_mode):
             continue
