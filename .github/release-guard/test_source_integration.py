@@ -310,6 +310,7 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
             if role == 'git-helper':
                 with open('/dev/null', 'rb') as null:
                     os.dup2(null.fileno(), 0)
+                os.dup2(ready_write, 2)
                 os.dup2(2, 1)
             os.write(ready_write, b'1')
             assert os.read(command_read, 1) == b'1'
