@@ -2517,3 +2517,11 @@ Terminal-review cleanup retains its read-only agent sandbox configuration and
 the original lifecycle's nested cleanup closures. The shared adapter binds those
 closures in `_run_terminal_review_lifecycle`, through the active finalization
 frame, while retaining the process/transport generation checks and actual waits.
+
+The original cleanup-fault tests schedule their lifecycle in a separate Task.
+Their launch admission therefore binds the retained externally selected pytest
+item's actual fixture root and exact role/fault parameters, rather than scanning
+other tasks. This fallback exists only for those 15 declared cases. Original
+source-function bindings, constructor/options, independent launch reconstruction
+and owned roots remain mandatory. MCP finalizers always select `mcp_process`,
+even when their closure also captures the separate ACP agent as `process`.

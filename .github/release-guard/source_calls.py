@@ -64,7 +64,7 @@ class Sources:
             owner, frame = matches[0]
             owner.verify(frame)
             process = frame.f_locals.get('process')
-            if process is None and owner.qualified in ('ACPNodeRunner.run_node.<locals>.finish_mcp', 'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp', 'ACPNodeRunner.run_node'):
+            if owner.qualified in ('ACPNodeRunner.run_node.<locals>.finish_mcp', 'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp', 'ACPNodeRunner.run_node'):
                 process = frame.f_locals.get('mcp_process')
             if type(process) is not self.process_class:
                 raise Refused('root original cleanup process type')

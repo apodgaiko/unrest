@@ -13,7 +13,7 @@ from content_manifest import Refused, capture, native_digest
 from controlled_startup import Intent
 from launch_policy import Observation, Rule, match, render
 from ordinary_acp import PRODUCT, PINS as ACP_PINS, plain_environment
-from source_owner import Link, active_frames
+from source_owner import Link, active_frames, _namespace
 
 TEST = 'tests/test_acp_cleanup.py'
 SCRIPT = 'tests/fixtures/cleanup_acp_process.py'
@@ -210,9 +210,22 @@ class Launches:
             test = next((frame for frame in frames if frame.f_code is self.calls.test_owner.function.__code__
                          and frame.f_globals is vars(self.calls.tests)), None)
             if test is None:
-                raise Refused('cleanup active original case')
-            self.calls.test_owner.verify(test)
-            base_value = test.f_locals.get('tmp_path')
+                # The original fault cases intentionally launch in a separate
+                # Task. Bind its root to the retained, externally selected
+                # pytest item's actual fixture table, never another task scan.
+                if case not in FAULTS:
+                    raise Refused('cleanup active original case')
+                self.calls.test_owner.verify_binding()
+                values = _namespace(self.calls.case_item.funcargs)
+                _, variant, case_role = selection(case)
+                if (type(values) is not dict or type(values.get('fault')) is not str
+                        or values['fault'] != variant or type(values.get('role')) is not str
+                        or values['role'] != case_role):
+                    raise Refused('cleanup original scheduled case parameters')
+                base_value = values.get('tmp_path')
+            else:
+                self.calls.test_owner.verify(test)
+                base_value = test.f_locals.get('tmp_path')
             if type(base_value) is not type(Path('/')):
                 raise Refused('cleanup original tmp fixture')
             base = base_path(str(base_value), Path(self.profile['owned']))
@@ -220,7 +233,7 @@ class Launches:
             if executable == 'git':
                 role = 'git-init' if vector[1:3] == ['init', '-q'] else 'git-commit'
                 line = 123 if role == 'git-init' else 124
-                if test.f_lineno != line or env is not None:
+                if test is None or test.f_lineno != line or env is not None:
                     raise Refused('cleanup original Git call')
                 actual_env = dict(os.environ)
             else:

@@ -20,6 +20,7 @@ class CleanupCalls(Sources):
         super().__init__(policy, item)
         if any(self.pins[name] != pin for name, pin in PINS.items()):
             raise Refused('cleanup original source bytes')
+        self.case_item = item
         self.tests = item.module
         if type(self.tests) is not types.ModuleType or self.tests.__name__ != 'tests.test_acp_cleanup':
             raise Refused('cleanup original test module')

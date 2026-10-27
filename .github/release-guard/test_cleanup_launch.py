@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from cleanup_launch import ALL_CASES, RECORDED, CASES, OFFLINE, selection, child_count, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
+from cleanup_launch import ALL_CASES, RECORDED, FAULTS, CASES, OFFLINE, selection, child_count, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
 import cleanup_launch
 from content_manifest import Refused
 from source_owner import Link
@@ -167,7 +167,9 @@ async def test_original_mcp_constructor_options_without_launch(tmp_path, monkeyp
     calls.pins = PINS
     calls.tests = sys.modules[__name__]
     function = test_original_mcp_constructor_options_without_launch
-    calls.test_owner = types.SimpleNamespace(function=function, verify=lambda frame: None)
+    calls.test_owner = types.SimpleNamespace(function=function, verify=lambda frame: None, verify_binding=lambda: None)
+    _, variant, case_role = selection(case)
+    calls.case_item = types.SimpleNamespace(funcargs={'tmp_path': tmp_path, 'fault': variant, 'role': case_role})
     launches = Launches(calls)
     monkeypatch.setattr(cleanup_launch, 'base_path', lambda value, owned: Path(value))
     monkeypatch.setattr(cleanup_launch, 'read_pipe', lambda pid, fd: None)
@@ -180,24 +182,34 @@ async def test_original_mcp_constructor_options_without_launch(tmp_path, monkeyp
     monkeypatch.setattr(asyncio.get_running_loop(), 'subprocess_exec', subprocess_exec)
     env = environment(tmp_path, calls.profile['environment'], agent=False, case=case)
     recorded, _, role = selection(case)
+    async def launch_mcp():
+            if role == 'terminal_reviewer':
+                await runner._start_terminal_reviewer_mcp(project_id='project', mission_id='mission-001',
+                    report_path=env['UNREST_TERMINAL_REVIEW_PATH'], workspace_dir=str(tmp_path / 'workspace'),
+                    mcp_port=12345, sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
+            else:
+                await runner._start_worker_mcp_server(task=Task(id='w1', type=role, body='controlled',
+                    targets=['VAL-CLEANUP'] if recorded and role == 'validate' else [], skill='s'),
+                    project_id='project', mission_id='mission-001', handoff_path=env['UNREST_HANDOFF_PATH'],
+                    workspace_dir=str(tmp_path / 'workspace'), mcp_port=12345,
+                    sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
     with pytest.raises(Stop):
-        if role == 'terminal_reviewer':
-            await runner._start_terminal_reviewer_mcp(project_id='project', mission_id='mission-001',
-                report_path=env['UNREST_TERMINAL_REVIEW_PATH'], workspace_dir=str(tmp_path / 'workspace'),
-                mcp_port=12345, sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
+        if case in FAULTS:
+            await asyncio.create_task(launch_mcp())
         else:
-            await runner._start_worker_mcp_server(task=Task(id='w1', type=role, body='controlled',
-                targets=['VAL-CLEANUP'] if recorded and role == 'validate' else [], skill='s'),
-                project_id='project', mission_id='mission-001', handoff_path=env['UNREST_HANDOFF_PATH'],
-                workspace_dir=str(tmp_path / 'workspace'), mcp_port=12345,
-                sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
+            await launch_mcp()
     assert len(observed) == 1 and observed[0].original.rule == 'cleanup:mcp'
     (tmp_path / 'scenario.json').write_bytes(scenario(case, tmp_path))
     plan = acp_runner.build_launch_plan(f'{sys.executable} {checkout / SCRIPT} {tmp_path / "scenario.json"}',
         cwd=str(tmp_path / 'workspace'), environment=environment(tmp_path, calls.profile['environment'], agent=True, case=case))
+    async def launch_acp():
+        return await acp_runner.spawn_launch(plan, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                                            stderr=asyncio.subprocess.PIPE, limit=8 * 1024 * 1024)
     with pytest.raises(Stop):
-        await acp_runner.spawn_launch(plan, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                                     stderr=asyncio.subprocess.PIPE, limit=8 * 1024 * 1024)
+        if case in FAULTS:
+            await asyncio.create_task(launch_acp())
+        else:
+            await launch_acp()
     assert len(observed) == 2 and observed[1].original.rule == 'cleanup:cleanup-acp'
 
 
@@ -298,3 +310,63 @@ async def test_terminal_agent_environment_matches_original_lifecycle(tmp_path, m
     assert captured['mcp'] == environment(tmp_path, root, agent=False, case=case)
     assert captured['agent'] == environment(tmp_path, root, agent=True, case=case)
     assert captured['cleanup_owner'] == 'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp'
+
+
+@pytest.mark.parametrize('qualified', ('ACPNodeRunner.run_node.<locals>.finish_mcp',
+    'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp'))
+def test_mcp_finalizer_targets_mcp_even_when_agent_is_also_captured(qualified):
+    import asyncio
+    import asyncio.unix_events
+    import types
+    from source_calls import Sources
+    transport_type = asyncio.unix_events._UnixSubprocessTransport
+    def child(pid, original):
+        transport = object.__new__(transport_type)
+        transport._closed = True
+        transport._pid, transport._proc = pid, original
+        process = object.__new__(asyncio.subprocess.Process)
+        process._transport = transport
+        return process
+    agent_native, mcp_native = object(), object()
+    agent, mcp = child(122, agent_native), child(123, mcp_native)
+    calls = object.__new__(Sources)
+    calls.process_class, calls.transport_class = asyncio.subprocess.Process, transport_type
+    calls.policy = types.SimpleNamespace(children={123: {'process': mcp_native}})
+    def finish(process, mcp_process):
+        Sources.signal(calls, 123, 15, False)
+    calls.cleanup = (types.SimpleNamespace(function=finish, qualified=qualified, verify=lambda frame: None),)
+    finish(agent, mcp)
+    mcp._transport._proc = agent_native
+    with pytest.raises(Refused, match='process generation'):
+        finish(agent, mcp)
+
+
+@pytest.mark.parametrize('mutation', ('role', 'fault', 'root', 'type', 'key'))
+@pytest.mark.asyncio
+async def test_scheduled_fault_admission_keeps_exact_selected_fixture(mutation, tmp_path, monkeypatch):
+    from cleanup_launch import Launches
+    original = Launches.select
+    callbacks = []
+    class Collision:
+        def __hash__(self):
+            return hash('fault')
+        def __eq__(self, other):
+            callbacks.append('equality')
+            raise AssertionError('untrusted fixture-key callback')
+    def changed(self, case, audit):
+        values = self.calls.case_item.funcargs
+        if mutation == 'role':
+            values['role'] = 'terminal_reviewer'
+        elif mutation == 'fault':
+            values['fault'] = 'cancel'
+        elif mutation == 'root':
+            values['tmp_path'] = tmp_path.parent / 'foreign-case'
+        elif mutation == 'key':
+            self.calls.case_item.funcargs = {Collision(): 'reader'}
+        else:
+            values['tmp_path'] = str(tmp_path)
+        return original(self, case, audit)
+    monkeypatch.setattr(Launches, 'select', changed)
+    with pytest.raises(Refused):
+        await test_original_mcp_constructor_options_without_launch(tmp_path, monkeypatch, FAULTS[0])
+    assert callbacks == []
