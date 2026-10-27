@@ -2532,3 +2532,9 @@ three-case smoke set, all 12 recorded transports, all 15 cleanup faults, and the
 completed family when the driver reaches its aggregate deadline. Original
 per-case assertions and deadlines remain unchanged. These selections never
 substitute for the frozen release's full unexcluded source-suite checkpoint.
+
+The seven original numeric response-correlation cases have an exact no-launch
+selection. They require all original setup/call/teardown outcomes and zero child
+births; neither child profiles nor process-intent selection admit their case IDs.
+The remaining inline cleanup catalogue is declarative until its original caller,
+child-body and custody integration is completed. Templates grant no execution.
