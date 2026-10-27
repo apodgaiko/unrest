@@ -103,6 +103,13 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
                   for r in result['records'] if r['kind'] == 'exec_attempt'],
         'refused_git': [{k: r[k] for k in ('path', 'argv', 'cwd', 'environment')}
             for r in result['records'] if r['kind'] == 'exec_attempt' and r['path'] == helper and not r['accepted']]}
+    if diagnostics['refused_git']:
+        refused = diagnostics['refused_git'][0]
+        actual_env = refused['environment']
+        difference = {key: [actual_env.get(key), helper_environment.get(key)]
+            for key in sorted(set(actual_env) | set(helper_environment))
+            if actual_env.get(key) != helper_environment.get(key)}
+        pytest.fail(json.dumps({'argv': refused['argv'], 'environment_delta_actual_expected': difference}, sort_keys=True), pytrace=False)
     assert result['root_parent_wait_raw'] == 0 and not result['poison'] and data, diagnostics
     raw = json.loads(data)
     assert len(raw['receipts']) == 2
