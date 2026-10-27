@@ -109,15 +109,17 @@ pgid/sid view after matching admission, registration and lifecycle witnesses;
 original birth evidence remains intact. Socket custody and the production
 control channel remain separate integration obligations.
 
-`launch_policy.py` renders finite typed declarations and compares complete launch
-observations. Executable identity is separate from `argv[0]`. Inline hashes come
-from the exact rendered command; dynamic program holes require explicit quoting
-or bounded integers. Script/module identities still need independent file/tree
-custody. Parameter values, source owner/case and acquired-root generations must
-be authenticated before rendering; copying observed argv into expected slots is
-not validation. Exact environment pairs preserve duplicate detection, and zero
-or multiple matching declarations refuse. The library neither admits a process
-nor establishes that an observation came from the kernel.
+`launch_policy.py` validates literal closed declarations and compares complete
+launch observations. Executable identity remains separate from `argv[0]`.
+The unused expression/substitution language is retired: fields must be exact
+primitive strings and tuples, and substitution/root contexts must be empty.
+No program evaluation, expansion or callback occurs. Dynamic family builders
+must validate primitive values and any necessary quoting before constructing
+these literal declarations. Script/module identities still require independent
+file/tree custody; owner, case, state and acquired-root generation are separate
+admission prerequisites. Complete environment pairs preserve duplicate detection;
+zero or multiple matches refuse. Matching neither admits a process nor proves
+that an observation came from the kernel.
 
 `size_budget.py --root <checkout> --check` counts all maintained `.github` files,
 including both guard generations, policy/assets and full workflow text. Test
@@ -2619,3 +2621,31 @@ an accidental 126-child receipt ceiling without permitting another launch,
 duplicate receipt or missing-wait completion. Reducer controls exercise 129
 independent child joins, a missing join and duplicate receipt, while retaining
 the original 128-epoch limit; these simulations are not native wait evidence.
+
+
+### Literal policy migration
+
+The expression renderer in commit `958170c` had no active non-test consumer of
+`Choice`, `Integer`, `OwnedPath`, `Concat`, `Quoted`, `Program` or `Splice`.
+Every active builder supplied an already validated literal rule and empty
+contexts. Retiring that internal syntax changes its construction API, not the
+required admission contract. Earlier expression-feature evidence remains
+historical; it is not presented as a certificate for the literal implementation.
+The original test source remains available at that commit. Its safety controls
+are mapped below; original product/provider/caller tests remain active.
+
+| Prior internal coverage | Current coverage |
+| --- | --- |
+| Literal match, executable/argv0, every observation field | Retained exact field and payload mutation controls |
+| Choice/program/path quoting positives | Unused construction syntax retired; literal body is unchanged and contexts cannot substitute or evaluate |
+| Splice/concatenation positives | Unused syntax retired; literal flags/environment are not interpreted |
+| Invalid term types and contexts | All nonprimitive fields, string subclasses/callbacks and nonempty contexts refuse |
+| Owned-path syntax | Canonical absolute literal paths; actual owned-root custody stays in each family builder |
+| Duplicate choices/splices | Syntax retired; duplicate cases/environment, overlap and extra-argument rejection remain |
+| Size and recursion limits | Argument, text, vector, environment, field and declaration bounds remain; nested expressions refuse without recursive evaluation |
+| Payload references, changed bodies and mode/vector mismatch | Retained digest, body, script/module/native and intentional-failed-exec controls |
+
+This library still supplies no launch permission. Complete source/case/custody,
+kernel prebody, endpoint and actual-parent-wait gates remain mandatory. Any new
+dynamic family must independently prove its input bounds and provenance before
+activation; there is no generic program-hole or interpreter allowance.

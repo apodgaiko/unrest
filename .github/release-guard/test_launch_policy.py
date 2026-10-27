@@ -1,4 +1,4 @@
-"""Finite-policy unit controls, deliberately not process admission proof."""
+"""Literal policy controls; unused expression syntax is explicitly retired."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -38,25 +38,20 @@ def test_literal_exact_match_separates_image_path_and_argv0():
     assert policy.match((value,), observation(value), OWNER, CASE) == value
 
 
-def test_finite_program_holes_are_quoted_and_path_root_is_only_lexical():
-    program = policy.Program(("path=", policy.Quoted(policy.OwnedPath("work", ("file.py",)), "python"),
-                              "; role=", policy.Quoted(policy.Choice("role", ("work", "validate")),
-                                                       "json"),
-                              "; count=", policy.Integer("count", 1, 3)))
-    spec = rule(argv=("python", "-c", program))
-    root = "/owned/quote'\n;not_code"
-    value = expected(spec, {"role": "work", "count": 2}, {"work": root})
-    assert value.argv[2] == f"path={str(Path(root) / 'file.py')!r}; role=\"work\"; count=2"
-    assert value.payload_sha256 == hashlib.sha256(value.argv[2].encode()).hexdigest()
+def test_literal_program_has_no_substitution_or_evaluation():
+    body = "path=\"/owned/quote'\\n;not_code\"; role='${role}'"
+    value = expected(rule(argv=('python', '-c', body)))
+    assert value.argv[2] == body
+    assert value.payload_sha256 == hashlib.sha256(body.encode()).hexdigest()
+    with pytest.raises(policy.Refused):
+        expected(rule(argv=('python', '-c', body)), values={'role': "';forbidden()"})
 
 
-def test_splice_and_concat_environment_render_without_interpreting_them():
-    spec = rule(argv=("python", policy.Splice("flags", (("-I", "-S"), ("-B",))),
-                      "-c", "pass"), environment=(("OPTION", policy.Concat(("role=",
-                               policy.Choice("role", ("work", "validate"))))),))
-    value = expected(spec, {"flags": ("-B",), "role": "validate"})
-    assert value.argv == ("python", "-B", "-c", "pass")
-    assert value.environment == (("OPTION", "role=validate"),)
+def test_literal_flags_and_environment_are_not_interpreted():
+    value = expected(rule(argv=('python', '-B', '-c', 'pass'),
+        environment=(('OPTION', 'role=${role}; $(forbidden)'),)))
+    assert value.argv == ('python', '-B', '-c', 'pass')
+    assert value.environment == (('OPTION', 'role=${role}; $(forbidden)'),)
 
 
 @pytest.mark.parametrize("kind,argv,pin", [
@@ -78,7 +73,7 @@ def test_payload_modes_keep_external_content_and_failed_exec_distinct(kind, argv
     ("environment", (("MODE", "controlled"), ("EXTRA", "value"))),
     ("environment", (("MODE", "controlled"), ("MODE", "controlled"))),
     ("cwd", "/other"), ("payload_kind", "native"), ("payload_sha256", "c" * 64),
-    ("argv", ("python", "-c", policy.Concat(("print('finite')",)))),
+    ("argv", ("python", "-c", ("print('finite')",))),
     ("environment", (("MODE", False),))])
 def test_every_observed_field_is_checked(field, value):
     original = expected()
@@ -97,22 +92,13 @@ def test_wrong_owner_case_zero_and_multiple_matches_refuse():
         policy.match((), observation(value), OWNER, CASE)
 
 
-@pytest.mark.parametrize("term,values,roots", [
-    (policy.Integer("n", 0, 3), {"n": True}, {}),
-    (policy.Integer("n", 0, 3), {"n": 4}, {}),
-    (policy.Integer("n", 0, 3), {}, {}),
-    (policy.Choice("role", ("work",)), {"role": "work; forbidden()"}, {}),
-    (policy.Choice("role", ("work", "work")), {"role": "work"}, {}),
-    (policy.OwnedPath("work", ("..",)), {}, {"work": "/owned"}),
-    (policy.OwnedPath("work", ("a/b",)), {}, {"work": "/owned"}),
-    (policy.OwnedPath("work"), {}, {"work": "/owned/../other"}),
-    (policy.OwnedPath("work"), {}, {}),
-    (policy.Quoted("body", "shell"), {}, {}),
-    (policy.Program((policy.OwnedPath("work"),)), {}, {"work": "/owned"}),
-    (object(), {}, {})])
-def test_invalid_terms_and_context_refuse(term, values, roots):
+@pytest.mark.parametrize('field', ('argv', 'environment', 'cwd', 'executable'))
+@pytest.mark.parametrize('value', (True, 1, b'value', ('nested',), {'slot': 'value'}, object()))
+def test_nonprimitive_fields_and_expression_objects_refuse(field, value):
+    change = {'argv': ('python', '-c', value)} if field == 'argv' else (
+        {'environment': (('VALUE', value),)} if field == 'environment' else {field: value})
     with pytest.raises(policy.Refused):
-        policy.render(rule(environment=(("VALUE", term),)), CASE, OWNER, values, roots)
+        expected(rule(**change))
 
 
 @pytest.mark.parametrize("changes", [
@@ -121,7 +107,7 @@ def test_invalid_terms_and_context_refuse(term, values, roots):
     {"cases": (CASE, CASE)}, {"cases": (CASE, [])},
     {"payload_sha256": "b" * 64},
     {"payload_kind": "python-script"},
-    {"argv": ("python", "-c", policy.Concat(("pass",)))},
+    {"argv": ("python", "-c", ("pass",))},
     {"argv": ("python", "-m", "invalid/module"), "payload_kind": "python-module",
      "payload_sha256": "b" * 64},
     {"argv": ("python", "relative.py"), "payload_kind": "python-script",
@@ -131,10 +117,9 @@ def test_invalid_declarations_never_render(changes):
         policy.render(rule(**changes), CASE, OWNER, {}, {})
 
 
-def test_inline_program_cannot_be_an_unquoted_context_slot():
-    with pytest.raises(policy.Refused, match="program_position"):
-        policy.render(rule(argv=("python", "-c", policy.Choice("code", ("pass",)))),
-                      CASE, OWNER, {"code": "pass"}, {})
+def test_inline_program_cannot_be_a_context_slot():
+    with pytest.raises(policy.Refused, match='unused_context'):
+        expected(rule(argv=('python', '-c', object())), values={'code': 'pass'})
 
 
 def test_consistent_changed_inline_body_still_does_not_match_original():
@@ -155,49 +140,77 @@ def test_observed_mode_and_vector_must_agree(mode):
         policy.match((value,), replace(observation(value), payload_kind=mode), OWNER, CASE)
 
 
-def test_external_payload_reference_and_owned_absolute_root():
-    with pytest.raises(policy.Refused, match="external_payload_reference"):
-        expected(rule(argv=("python", "/source/script.py"), payload_kind="python-script",
-                      payload_sha256="not-a-digest"))
-    value = expected(rule(cwd=policy.OwnedPath("work", ("child",))), roots={"work": "/"})
-    assert value.cwd == "/child"
-    assert expected(rule(cwd=policy.OwnedPath("work")), roots={"work": "/"}).cwd == "/"
+def test_external_payload_reference_and_absolute_root():
+    with pytest.raises(policy.Refused, match='external_payload_reference'):
+        expected(rule(argv=('python', '/source/script.py'), payload_kind='python-script',
+                      payload_sha256='not-a-digest'))
+    assert expected(rule(cwd='/child')).cwd == '/child'
+    assert expected(rule(cwd='/')).cwd == '/'
 
 
-def test_splice_duplicate_selected_and_aggregate_bounds(monkeypatch):
-    duplicate = policy.Splice("flags", (("-B",), ("-B",)))
-    with pytest.raises(policy.Refused, match="splice_value"):
-        expected(rule(argv=("python", duplicate, "-c", "pass")), {"flags": ("-B",)})
-    with pytest.raises(policy.Refused, match="splice_value"):
-        expected(rule(argv=("python", policy.Splice("flags", (("-B",),)), "-c", "pass")),
-                 {"flags": ("-B",) * (policy.MAX_ARGUMENTS + 1)})
-    choices = tuple(tuple(str(i) for i in range(256)) for _ in range(5))
-    with pytest.raises(policy.Refused, match="policy_splice"):
-        expected(rule(argv=("python", policy.Splice("flags", choices), "-c", "pass")),
-                 {"flags": choices[0]})
+def test_literal_vector_environment_and_aggregate_bounds(monkeypatch):
+    with pytest.raises(policy.Refused):
+        expected(rule(argv=('python',) * (policy.MAX_ARGUMENTS + 1)))
+    with pytest.raises(policy.Refused):
+        expected(rule(environment=(('MODE', 'one'), ('MODE', 'two'))))
     with monkeypatch.context() as context:
-        context.setattr(policy, "MAX_DECLARATION_BYTES", 256)
-        with pytest.raises(policy.Refused, match="declaration_bound"):
-            expected(rule(environment=(("VALUE", policy.Choice("v", ("x" * 100, "y" * 100))),)),
-                     {"v": "x" * 100})
+        context.setattr(policy, 'MAX_DECLARATION_BYTES', 256)
+        with pytest.raises(policy.Refused, match='declaration_bound'):
+            expected(rule(environment=(('VALUE', 'x' * 200),)))
     with monkeypatch.context() as context:
-        context.setattr(policy, "MAX_TEXT_BYTES", 100)
-        with pytest.raises(policy.Refused, match="text_bound"):
-            expected(rule(environment=(("VALUE", policy.Concat(("x" * 60, "y" * 60))),)))
+        context.setattr(policy, 'MAX_TEXT_BYTES', 100)
+        with pytest.raises(policy.Refused, match='text_bound'):
+            expected(rule(environment=(('VALUE', 'x' * 101),)))
 
 
 def test_extra_context_and_all_finite_bounds_refuse(monkeypatch):
-    with pytest.raises(policy.Refused, match="unused_context"):
-        expected(values={"extra": "ignored"})
-    with pytest.raises(policy.Refused, match="unused_context"):
-        expected(roots={"extra": "/owned"})
-    for name in ("MAX_ARGUMENTS", "MAX_TEXT_BYTES", "MAX_VECTOR_BYTES", "MAX_TERMS"):
+    with pytest.raises(policy.Refused, match='unused_context'):
+        expected(values={'extra': 'ignored'})
+    with pytest.raises(policy.Refused, match='unused_context'):
+        expected(roots={'extra': '/owned'})
+    for name in ('MAX_ARGUMENTS', 'MAX_TEXT_BYTES', 'MAX_VECTOR_BYTES', 'MAX_FIELDS', 'MAX_DECLARATION_BYTES'):
         with monkeypatch.context() as context:
             context.setattr(policy, name, 1)
             with pytest.raises(policy.Refused):
                 expected()
-    nested = "value"
-    for _ in range(policy.MAX_DEPTH + 1):
-        nested = policy.Concat((nested,))
-    with pytest.raises(policy.Refused, match="term_bound"):
-        expected(rule(environment=(("MODE", nested),)))
+    nested = 'value'
+    for _ in range(100):
+        nested = (nested,)
+    with pytest.raises(policy.Refused):
+        expected(rule(environment=(('MODE', nested),)))
+
+
+@pytest.mark.parametrize('field', ('argv', 'environment', 'cwd', 'executable', 'cases'))
+def test_nonliteral_callbacks_never_run(field):
+    class Trap(str):
+        def __str__(self):
+            pytest.fail('coercion executed')
+        def __eq__(self, other):
+            pytest.fail('equality executed')
+        __hash__ = str.__hash__
+    value = Trap('value')
+    change = {'argv': ('python', '-c', value)} if field == 'argv' else (
+        {'environment': (('VALUE', value),)} if field == 'environment' else (
+        {'cases': (CASE, value)} if field == 'cases' else {field: value}))
+    with pytest.raises(policy.Refused):
+        expected(rule(**change))
+
+
+@pytest.mark.parametrize('cwd', ('relative', '//owned', '/owned//child', '/owned/../other', False, Path('/owned')))
+def test_literal_cwd_is_primitive_and_canonical(cwd):
+    with pytest.raises(policy.Refused):
+        expected(rule(cwd=cwd))
+
+
+@pytest.mark.parametrize('value', ('bad\0value', '\ud800'))
+def test_literal_text_rejects_nul_and_unencodable_values(value):
+    with pytest.raises(policy.Refused):
+        expected(rule(environment=(('VALUE', value),)))
+
+
+@pytest.mark.parametrize('context', (False, True, [], (), object(), {'extra': 'value'}))
+def test_substitution_context_types_and_nonempty_contexts_are_rejected(context):
+    with pytest.raises(policy.Refused):
+        policy.render(rule(), CASE, OWNER, context, {})
+    with pytest.raises(policy.Refused):
+        policy.render(rule(), CASE, OWNER, {}, context)
