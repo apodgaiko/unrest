@@ -201,3 +201,30 @@ def test_transformed_outputs_share_generated_count_and_byte_budget(domain, monke
     domain.generations, domain.bytes = 0, 64 * 1024 * 1024
     with pytest.raises(Refused, match='generation bound'):
         domain.transformation(tree, None, frame)
+
+
+def test_native_sysconfig_module_name_is_exact_and_readonly(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr(sys, 'abiflags', '')
+    monkeypatch.setattr(sys.implementation, '_multiarch', 'x86_64-linux-gnu')
+    roots = {key: str(tmp_path / key) for key in ('source', 'dependencies', 'stdlib')}
+    for path in roots.values():
+        Path(path).mkdir()
+    monkeypatch.setenv('_PYTHON_SYSCONFIGDATA_NAME', 'foreign-name')
+    monkeypatch.setenv('_PYTHON_SYSCONFIGDATA_PATH', str(tmp_path))
+    policy = Computation(roots)
+    name = '_sysconfigdata__linux_x86_64-linux-gnu'
+    file = policy.roots['stdlib'] / (name + '.py')
+    body = b'build_time_vars = {}\n'
+    file.write_bytes(body)
+    assert policy.audit('import', (name, None))
+    assert policy.units[str(file)][0] == body
+    for foreign in (name + '-foreign', '_sysconfigdata__linux_aarch64-linux-gnu', 'foreign-name'):
+        with pytest.raises(Refused, match='import name'):
+            policy.audit('import', (foreign, None))
+    file.unlink()
+    outside = tmp_path / 'foreign.py'
+    outside.write_bytes(body)
+    file.symlink_to(outside)
+    with pytest.raises(Refused, match='outside immutable'):
+        policy.audit('import', (name, None))

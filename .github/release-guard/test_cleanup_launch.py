@@ -192,6 +192,13 @@ async def test_original_mcp_constructor_options_without_launch(tmp_path, monkeyp
                 workspace_dir=str(tmp_path / 'workspace'), mcp_port=12345,
                 sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
     assert len(observed) == 1 and observed[0].original.rule == 'cleanup:mcp'
+    (tmp_path / 'scenario.json').write_bytes(scenario(case, tmp_path))
+    plan = acp_runner.build_launch_plan(f'{sys.executable} {checkout / SCRIPT} {tmp_path / "scenario.json"}',
+        cwd=str(tmp_path / 'workspace'), environment=environment(tmp_path, calls.profile['environment'], agent=True, case=case))
+    with pytest.raises(Stop):
+        await acp_runner.spawn_launch(plan, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                                     stderr=asyncio.subprocess.PIPE, limit=8 * 1024 * 1024)
+    assert len(observed) == 2 and observed[1].original.rule == 'cleanup:cleanup-acp'
 
 
 @pytest.mark.parametrize('case', ALL_CASES)

@@ -106,6 +106,10 @@ class Computation:
             raise Refused('library immutable root schema')
         self.roots = {name: Path(path) for name, path in roots.items()}
         self.importer = _import_util
+        runtime = (sys.abiflags, sys.platform, sys.implementation._multiarch)
+        if any(type(value) is not str or len(value) > 128 for value in runtime):
+            raise Refused('library native platform identity')
+        self.platform_import = '_sysconfigdata_' + '_'.join(runtime)
         if any(not path.is_absolute() or path.resolve(strict=True) != path for path in self.roots.values()):
             raise Refused('library canonical input roots')
         self.units, self.generated, self.producer_units = {}, {}, {}
@@ -270,8 +274,10 @@ class Computation:
             if sys.modules.get('importlib.util') is not self.importer:
                 raise Refused('library prepared importer changed')
             if (not args or type(args[0]) is not str or not 0 < len(args[0]) <= 512
-                    or not all(part.isidentifier() for part in args[0].split('.'))):
+                    or not (all(part.isidentifier() for part in args[0].split('.')) or args[0] == self.platform_import)):
                 raise Refused('library import name')
+            if args[0] == self.platform_import:
+                self.body(str(self.roots['stdlib'] / (self.platform_import + '.py')))
             if len(args) > 1 and args[1] is not None:
                 filename = args[1]
                 if type(filename) is not str or not Path(filename).is_absolute():

@@ -2494,3 +2494,8 @@ counts differ explicitly; terminal completion has no completion-Git permission.
 MCP sensitive inventory is the original retained `SensitiveValueInventory`
 class, with its live module binding and empty underlying dictionary checked for
 these credential-free cases. No arbitrary mapping callbacks authorize a launch.
+
+The library computation domain admits the exact native CPython sysconfigdata
+module name, including the Linux multiarch hyphens. It derives that one name
+from retained primitive runtime fields and measures its immutable stdlib file;
+sysconfig environment overrides and other hyphenated names grant no authority.
