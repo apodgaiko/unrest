@@ -22,8 +22,8 @@ class Client:
         self.generation = integer(profile['generation'], 1)
         self.path = str(directory / 'control.sock')
         self.lock = threading.RLock()
-        from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE
-        self.seconds = 8 if profile.get('case') in CLEANUP_CASES or tuple(profile.get('cases', ())) in (CLEANUP_CASES, CLEANUP_SMOKE) else 4
+        from cleanup_launch import ALL_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS
+        self.seconds = 8 if profile.get('case') in CLEANUP_CASES or tuple(profile.get('cases', ())) in CLEANUP_GROUPS else 4
         # Payload wrappers must not mediate their own fixed private channel.
         self.socket, self.connect, self.close = socket.socket, socket.socket.connect, socket.socket.close
         self.random, self.pid, self.sleep = os.urandom, os.getpid, time.sleep

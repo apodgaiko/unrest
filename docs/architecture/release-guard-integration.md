@@ -2525,3 +2525,10 @@ other tasks. This fallback exists only for those 15 declared cases. Original
 source-function bindings, constructor/options, independent launch reconstruction
 and owned roots remain mandatory. MCP finalizers always select `mcp_process`,
 even when their closure also captures the separate ACP agent as `process`.
+
+Cleanup development checkpoints have four closed selections: the retained
+three-case smoke set, all 12 recorded transports, all 15 cleanup faults, and their
+27-case union. Splitting these finite development checks avoids replaying a
+completed family when the driver reaches its aggregate deadline. Original
+per-case assertions and deadlines remain unchanged. These selections never
+substitute for the frozen release's full unexcluded source-suite checkpoint.

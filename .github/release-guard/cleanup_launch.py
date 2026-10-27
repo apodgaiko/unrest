@@ -35,6 +35,7 @@ FAULTS = tuple(TEST + f'::test_cleanup_faults_and_repeated_cancellation[{variant
                for variant in ('reader', 'client', 'progress', 'cancel', 'primary')
                for role in ('work', 'validate', 'terminal_reviewer'))
 ALL_CASES = (*RECORDED, *FAULTS)
+GROUPS = (CASES, RECORDED, FAULTS, ALL_CASES)
 
 
 def selection(case):

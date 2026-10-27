@@ -25,7 +25,7 @@ from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pa
 from source_profile import METHODS, ROOT_COMMAND, digest
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
 from unix_endpoints import UnixPairs
-from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE, module_site, child_count, SCRIPT, OFFLINE, base_path, read_pipe, expected as cleanup_expected, scenario, snapshot_path, translated as cleanup_translated
+from cleanup_launch import ALL_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_site, child_count, SCRIPT, OFFLINE, base_path, read_pipe, expected as cleanup_expected, scenario, snapshot_path, translated as cleanup_translated
 
 
 def shape(value, keys):
@@ -694,7 +694,7 @@ class Observer:
             if actor is None or uid != 20000 or gid != 20000:
                 stream.close()
                 raise Refused('source registered channel peer')
-            frame = Frame(stream, REQUEST_LIMIT, self.ledger.poison, seconds=8 if self.cases in (CLEANUP_CASES, CLEANUP_SMOKE) else 4)
+            frame = Frame(stream, REQUEST_LIMIT, self.ledger.poison, seconds=8 if self.cases in CLEANUP_GROUPS else 4)
             frame.capture(self.ledger, actor['birth'], actor['token'], 20000)
             self.frames.append({'frame': frame, 'actor': actor, 'request': None})
         for channel in list(self.frames):
