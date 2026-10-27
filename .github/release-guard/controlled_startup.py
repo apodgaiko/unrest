@@ -17,7 +17,7 @@ from typing import Any
 
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from content_manifest import Refused, capture
-from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, backend as controlled_backend, backend_path, configured as is_configured
+from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, backend as controlled_backend, backend_path, configuration_items, configured as is_configured
 from launch_policy import Expected, Observation, Rule, match, render
 from source_owner import Link, Owner, SourceUnit, active_frames, _namespace, _safe_code, frame_fields as frame_locals
 
@@ -62,7 +62,8 @@ def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None):
         raise Refused('controlled entry declaration')
     checkout,home = path(checkout),path(home)
     configured = is_configured(case)
-    options,config = configuration(checkout,home) if configured else ([],None)
+    servers,skills = configuration_items(case,home)
+    options,config = configuration(checkout,home,servers=servers,skills=skills) if configured else ([],None)
     environment = {'HOME':str(home),'CODEX_HOME':str(home/'codex'),'TMPDIR':str(home/'tmp'),'PATH':'/usr/bin:/bin'}
     if config is not None:
         environment.update(CODEX_HOME=str(home.parent.parent.parent/'subscription'),CODEX_CONFIG=config)
@@ -172,6 +173,9 @@ class Startup:
             if type(instance) not in (self.base, self.synthetic):
                 raise Refused('startup owner type')
             values = dictionary(instance, self.base)
+            if case in CONTROLLED:
+                from controlled_wrappers import instance_environment
+                instance_environment(instance,self.base,self.environment,values.get('provider_config'),self.checkout)
             configured = is_configured(case)
             backend_pin, backend_name = controlled_backend(case) if case in CONTROLLED else (BACKEND_PIN, 'fake-app-server')
             if (values.get('controlled') is not True or values.get('provider_package') is not None

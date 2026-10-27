@@ -71,3 +71,36 @@ def test_original_startup_environment_wrapper_retains_original(monkeypatch):
     verify(_SessionOwner, '_environment', original, Path(__file__).resolve().parents[2])
     with pytest.raises(Refused):
         verify(_SessionOwner, '_environment', lambda: None, Path(__file__).resolve().parents[2])
+
+
+@pytest.mark.parametrize('mutation', [None, 'owner', 'config', 'function'])
+def test_original_instance_environment_keeps_owner_config_and_function(monkeypatch,tmp_path,mutation):
+    import types
+    import shutil
+    monkeypatch.setattr(shutil,'which',lambda name:None)
+    from tests import test_experimental_provider_config as tests
+    from unrest_harness.experimental_session import _SessionOwner
+    from controlled_wrappers import instance_environment
+    original = _SessionOwner._environment
+    class Stopped(RuntimeError):
+        pass
+    async def inspect(instance,*args,**kwargs):
+        assert instance.adapter == Path('/missing') and instance.transport is not None
+        config = vars(instance)['provider_config']
+        live = vars(instance)['_environment']
+        values = dict(zip(live.__code__.co_freevars,live.__closure__,strict=True))
+        if mutation == 'owner':
+            values['original_environment'].cell_contents = types.MethodType(original,object())
+        elif mutation == 'config':
+            values['config'].cell_contents = object()
+        elif mutation == 'function':
+            vars(instance)['_environment'] = lambda home:{}
+        if mutation is None:
+            instance_environment(instance,_SessionOwner,original,config,Path(__file__).resolve().parents[2])
+        else:
+            with pytest.raises(Refused):
+                instance_environment(instance,_SessionOwner,original,config,Path(__file__).resolve().parents[2])
+        raise Stopped
+    monkeypatch.setattr(_SessionOwner,'start',inspect)
+    with pytest.raises(Stopped):
+        asyncio.run(tests.test_startup_and_thread_controls_through_actual_owned_adapter(tmp_path,False,False,monkeypatch))

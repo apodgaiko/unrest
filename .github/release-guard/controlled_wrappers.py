@@ -52,3 +52,33 @@ def verify(container: object, name: str, original: types.FunctionType, checkout:
         raise Refused('controlled wrapper retained original')
     Owner(unit,module,live,live.__qualname__,codes[0].co_firstlineno,(1,100000),
         (Link(container,name,live),),tuple(values[key] for key in live.__code__.co_freevars),cells).verify_binding()
+
+
+def instance_environment(instance, base, original, config, checkout):
+    descriptor = _namespace(base).get('__dict__')
+    if type(descriptor) is not types.GetSetDescriptorType:
+        raise Refused('controlled instance dictionary descriptor')
+    raw = descriptor.__get__(instance, type(instance))
+    live = _namespace(raw).get('_environment')
+    if live is None:
+        return
+    qualified = 'test_startup_and_thread_controls_through_actual_owned_adapter.<locals>.environment'
+    module_name = 'tests.test_experimental_provider_config'
+    if (type(live) is not types.FunctionType or type(live.__module__) is not str
+            or live.__module__ != module_name or type(live.__qualname__) is not str or live.__qualname__ != qualified):
+        raise Refused('controlled unprepared instance environment')
+    _safe_code(live.__code__)
+    cells = live.__closure__ or ()
+    values = dict(zip(live.__code__.co_freevars, (cell.cell_contents for cell in cells), strict=True))
+    bound = values.get('original_environment')
+    if (type(bound) is not types.MethodType or bound.__func__ is not original
+            or bound.__self__ is not instance or values.get('config') is not config):
+        raise Refused('controlled instance environment retained owner/config')
+    module = importlib.import_module(module_name)
+    file = module_name.replace('.', '/')+'.py'
+    unit = prepare((checkout/file).read_bytes(),str(checkout/file),module_name,'pytest',PINS[file])
+    codes = [code for code in unit.codes if code.co_qualname == qualified]
+    if len(codes) != 1:
+        raise Refused('controlled instance environment lexical body')
+    Owner(unit,module,live,qualified,codes[0].co_firstlineno,(1,100000),(Link(raw,'_environment',live),),
+        tuple(values[name] for name in live.__code__.co_freevars),cells).verify_binding()

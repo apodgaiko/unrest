@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from content_manifest import Refused
-from controlled_cases import CASES, FRESH, STARTUP_FAILURE
+from controlled_cases import CASES, FRESH, POPULATED, STARTUP_FAILURE
 
 
 def limits(case: str) -> tuple[int, int]:
@@ -17,6 +17,8 @@ def limits(case: str) -> tuple[int, int]:
         raise Refused('controlled pair case')
     if case == STARTUP_FAILURE or case in FRESH:
         return 1, 0
+    if case in POPULATED:
+        return (1, 3) if case.endswith('-True]') else (2, 13)
     file, name = case.split('::')
     if file.endswith('test_controlled_acp_cancel.py'):
         return 1, 3

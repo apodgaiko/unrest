@@ -9,7 +9,7 @@ from controlled_pairs import before_spawn, limits, scope
 
 
 def test_every_catalogue_case_has_a_finite_source_bound():
-    assert len(CASES) == 105
+    assert len(CASES) == 113
     assert all(1 <= limits(case)[0] <= 12 and 0 <= limits(case)[1] <= 43 for case in CASES)
 
 
@@ -28,7 +28,7 @@ def test_pair_cannot_borrow_another_owner_backend():
 
 
 def test_pair_replay_and_case_bound_refuse():
-    case = next(iter(CASES))
+    case = next(case for case in CASES if limits(case)[0] == 1)
     records = [{'cwd':'/owned/pytest/a/worker','role':'backend','consumed':True,'pid':12}]
     with pytest.raises(Refused):
         before_spawn(case,'/owned/pytest/a/worker','backend',records,{})
@@ -46,7 +46,7 @@ def test_listener_scope_refuses_foreign_paths_and_roles(value):
 
 def test_listener_only_owner_and_role_proliferation_refuse():
     from controlled_pairs import before_bind
-    case = next(iter(CASES))
+    case = next(case for case in CASES if limits(case)[0] == 1)
     records = [{'tag':'broker','scope':'/owned/pytest/a'}]
     with pytest.raises(Refused):
         before_bind(case,'broker','/owned/pytest/b',records)
@@ -64,7 +64,7 @@ def test_listener_only_owner_and_role_proliferation_refuse():
 def test_finite_component_partitions_keep_every_original_case_exactly_once():
     from controlled_cases import GROUPS
     members = [case for group in GROUPS.values() for case in group]
-    assert len(members) == 105 and len(set(members)) == 105 and set(members) == set(CASES)
+    assert len(members) == 113 and len(set(members)) == 113 and set(members) == set(CASES)
     assert len(GROUPS['controlled-cancellation4']) == len(GROUPS['controlled-registration4']) == 4
     assert len(GROUPS['controlled-witness1']) == 1
 
@@ -76,3 +76,12 @@ def test_startup_failure_cannot_start_an_adapter():
         before_spawn(STARTUP_FAILURE, '/owned/pytest/a/worker', 'acp',
                      [{'cwd':'/owned/pytest/a/worker','role':'backend','consumed':True,'pid':12}],
                      {12:{'returned':True}})
+
+
+@pytest.mark.parametrize('case', CASES)
+def test_each_case_rejects_one_more_backend_than_its_declared_bound(case):
+    maximum, _ = limits(case)
+    records = [{'cwd':f'/owned/pytest/owner{index}/worker','role':'backend','consumed':True,'pid':100+index}
+               for index in range(maximum)]
+    with pytest.raises(Refused):
+        before_spawn(case,'/owned/pytest/extra/worker','backend',records,{})

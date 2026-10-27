@@ -7,7 +7,7 @@ import types
 
 from bootstrap_cases import CATALOGUE, CATALOGUE_PIN, CONFIG_PIN, CONFIG_SOURCE
 from content_manifest import Refused
-from controlled_cases import configured
+from controlled_cases import configured, configuration_items, POPULATED
 from source_owner import Link, Owner, prepare
 from source_profile import digest
 
@@ -55,13 +55,15 @@ class Binding:
             raise Refused('bootstrap configuration class substitution')
         values = self.record(config, self.provider)
         context, probe = root.parent.parent, root.parent
-        if probe != context / 'probe':
+        populated = case in POPULATED
+        servers, skills = configuration_items(case, root/'worker')
+        if probe != context / ('campaign' if populated else 'probe'):
             raise Refused('bootstrap configuration runtime root')
         if (type(values.get('codex_home')) is not type(root) or values['codex_home'] != context / 'subscription'
                 or type(values.get('user_home')) is not type(root) or values['user_home'] != context / 'user'
-                or type(values.get('skills')) is not set or values['skills']
-                or type(values.get('servers')) is not set or values['servers']
-                or type(values.get('global_instructions')) is not str or values['global_instructions'] != 'absent'
+                or type(values.get('skills')) is not set or any(type(v) is not str for v in values['skills']) or values['skills'] != set(skills)
+                or type(values.get('servers')) is not set or any(type(v) is not str for v in values['servers']) or values['servers'] != set(servers)
+                or type(values.get('global_instructions')) is not str or values['global_instructions'] != ('default' if populated else 'absent')
                 or any(name in values for name in ('argv', 'overrides', 'thread_config'))):
             raise Refused('bootstrap fresh controlled configuration')
         inputs = values.get('inputs')
@@ -83,8 +85,22 @@ class Binding:
                          context / 'subscription/rules', context / 'system/requirements.toml', context / 'system/managed_config.toml'))
         if paths != tuple(sorted(set(expected))) or digest(catalogue) != CATALOGUE_PIN:
             raise Refused('bootstrap exact configuration footprint')
+        allowed = {}
+        if populated:
+            allowed = {context/'subscription/config.toml': '7a2eb35bea6e5e0282f5f12864519df3c9d78f349b67344c88244b040178a83c',
+                       context/'subscription/AGENTS.md': 'b5885d7026d7c855db9f9ed50b5ca08b1910de6a6df541fcb1901b6dd40ddf67'}
+        skill_root = context/'subscription/skills'
         for path in paths:
-            if path != catalogue and path.exists():
+            if path in allowed:
+                if digest(path) != allowed[path]:
+                    raise Refused('controlled populated input bytes')
+            elif path == skill_root and skills:
+                if (path.is_symlink() or not path.is_dir() or sorted(p.name for p in path.iterdir()) != ['example']
+                        or (path/'example').is_symlink() or not (path/'example').is_dir()
+                        or sorted(p.name for p in (path/'example').iterdir()) != ['SKILL.md']
+                        or digest(path/'example/SKILL.md') != '58e2c156770a078bbb226f8c8c4aa0b10cdc41b53b76d999d356de9bc72331e1'):
+                    raise Refused('controlled exact disabled skill input')
+            elif path != catalogue and path.exists():
                 raise Refused('bootstrap unexpected configuration input')
         # Execute the unchanged product's original bounded verifier as well;
         # point-in-time hashes alone never replace its membership/absence rules.

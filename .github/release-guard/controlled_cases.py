@@ -11,6 +11,7 @@ from content_manifest import Refused
 STARTUP_FAILURE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
 
 PINS = {
+    'tests/test_experimental_provider_config.py': 'e2efb30678c7372df2f69523b27573517082819b7412d7cabc604b48bf7faa6b',
     'tools/probe_v046_startup.py': 'eb26f43472ce1798d2dd066fa87d6ceb5d58d1a94abc0e9edddeb20b285dd564',
     'tests/test_experimental_config_frames.py': '2cc54ff5577127750ce01a6a08e97ec879367797aa6ab903eea5842d47bc03e7',
     'tests/test_controlled_acp_warnings.py': '8d0a9a1aa0d804357acbb267523d3d7c0b7baf37349432b0b5243e2787d6e3c7',
@@ -50,7 +51,19 @@ FRESH = {
     'tests/test_experimental_startup_diagnostics.py::test_initialization_probe_real_controlled_path_no_prompt': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
 }
 
+POPULATED = {
+    'tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-False]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-True]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_acp_warnings.py::test_original_private_configuration[True-False]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_controlled_acp_warnings.py::test_original_private_configuration[True-True]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[False-False]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[False-True]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[True-False]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+    'tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[True-True]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
+}
+
 CASES = {
+    **POPULATED,
     **FRESH,
     STARTUP_FAILURE: ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
     'tests/test_controlled_acp_cancel.py::test_owned_cancel_wire_and_cleanup[pending]': ('a10467373bda96d6e702a03e70c96ce5562082b050df668ecbc7638b5b4eaf63', 'fake-app-server'),
@@ -146,11 +159,22 @@ CASES = {
     'tests/test_controlled_python_acp.py::test_single_c1_fixed_timing_protocol_witness': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
 }
 
+SERVERS = ('external.with.dots', 'ordinary', 'quote"and\\slash', 'λ😀')
+
+
+def configuration_items(case, home):
+    if case not in POPULATED:
+        return (), ()
+    context = home.parent.parent.parent
+    skills = (str(context/'subscription/skills/example/SKILL.md'),) if case.split('[')[1].startswith('True-') else ()
+    return SERVERS, skills
+
+
 def configured(case):
     if type(case) is not str:
         raise Refused('controlled configuration case type')
     from bootstrap_cases import declaration
-    return case in FRESH if case in CASES else declaration(case).configured
+    return case in (*FRESH,*POPULATED) if case in CASES else declaration(case).configured
 
 
 def backend(case):
@@ -165,6 +189,7 @@ def backend_path(case, root):
 
 
 GROUPS = {
+    'controlled-private8': tuple(POPULATED),
     'controlled-probes4': tuple(case for case in FRESH if '::test_programmatic_private_preflight' in case or '::test_bridge_failure_preserved_through_owned_close[' in case),
     'controlled-large8': tuple(case for case in FRESH if 'large' in case),
     'controlled-initialize1': tuple(case for case in FRESH if '::test_initialization_probe_real_controlled_path_no_prompt' in case),

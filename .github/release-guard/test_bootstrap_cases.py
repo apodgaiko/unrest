@@ -120,3 +120,35 @@ def test_fresh_configuration_case_is_closed_and_callback_free():
     for case in ('foreign', Trap()):
         with pytest.raises(Refused):
             configured(case)
+
+
+@pytest.mark.parametrize('case', __import__('controlled_cases').POPULATED)
+def test_exact_populated_configuration_binds_inputs_without_reading_auth(tmp_path, monkeypatch, case):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from tests.test_experimental_provider_config import configuration as original
+    from controlled_cases import configuration_items
+    from controlled_startup import expected_entry
+    config = original(tmp_path)
+    if case.split('[')[1].startswith('True-'):
+        skill = config.codex_home/'skills/example/SKILL.md'
+        skill.parent.mkdir(parents=True)
+        skill.write_text('synthetic skill')
+        config = ProviderConfig(codex_home=config.codex_home,user_home=tmp_path/'user',
+            cwd=tmp_path/'campaign',ambient={},system=tmp_path/'system')
+    root = tmp_path/'campaign/owner'
+    home = root/'worker'
+    home.mkdir(parents=True)
+    binding = Binding(Path(__file__).resolve().parents[2])
+    read = Path.open
+    def opening(path,*args,**kwargs):
+        assert path.name != 'auth.json'
+        return read(path,*args,**kwargs)
+    monkeypatch.setattr(Path,'open',opening)
+    binding.check(config,root,case)
+    value,_,_ = expected_entry(case,binding.checkout,home,'/pinned/python','a'*64,backend=True)
+    assert value.argv[1:] == tuple(config.argv(root/'fake-app-server',home))
+    assert json.dumps(config.thread_config(home),sort_keys=True) == dict(value.environment)['CODEX_CONFIG']
+    assert configuration_items(case,home)[0] == tuple(sorted(config.servers))
+    (config.codex_home/'config.toml').write_text('mcp_servers={}\n')
+    with pytest.raises(Refused):
+        binding.check(config,root,case)

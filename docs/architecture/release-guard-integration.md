@@ -2837,3 +2837,19 @@ The 13 initialization/configuration cases grant no broker HTTP authority. Their
 original postimages and retaining wrappers are closed declarations; the separate
 root HTTP-mutation negative remains outside this admitted slice. The coordinator
 startup-failure case admits only its backend prefix and forbids an ACP launch.
+
+
+The eight populated private-configuration cases bind the exact four disabled
+server names, optional disabled synthetic skill, instruction-selection label,
+configuration/instruction/skill bytes and complete CommonInputs footprint.
+Authentication files remain excluded. An instance environment wrapper must be
+the original prepared test function, retain that exact owner and ProviderConfig,
+and forward its original bound environment method. An explicitly controlled
+fixture uses `/missing` when an unused native adapter is absent, consistently
+with the other controlled tests; it does not install, redirect or authorize a
+native transport. All assertions, parameters and refusal contexts are unchanged.
+
+Backend postimages are acquired at their own file parent. The unchanged manifest
+reader still binds full file bytes, modes, file/parent metadata and nofollow
+ancestor identity. Unrelated sibling directories can change clocks without
+invalidating that file; replacing its file, parent or ancestor still refuses.

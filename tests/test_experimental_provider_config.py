@@ -119,7 +119,7 @@ async def test_startup_and_thread_controls_through_actual_owned_adapter(tmp_path
         policy=load_capability_policy(Path(__file__).resolve().parents[1] / 'src/unrest_harness/bundled'),
         profile=SAFE_PROFILE, workspace=candidate, project_record=tmp_path)
     owner = _SessionOwner(tmp_path / 'campaign/owner', candidate, ('a',),
-        adapter=Path(shutil.which('codex-acp')).resolve(),
+        adapter=Path(shutil.which('codex-acp') or '/missing').resolve(),
         fixture=Path(__file__).parent / 'fixtures/experimental_session_app_server.py',
         policy=policy, provider_config=config, transport=controlled_transport())
     original_environment = owner._environment
