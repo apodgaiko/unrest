@@ -19,7 +19,7 @@ from typing import Any
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from content_manifest import Refused, capture
 from launch_policy import Expected, Observation, Rule, match, render
-from source_owner import Link, Owner, SourceUnit, active_frames, _namespace, _safe_code
+from source_owner import Link, Owner, SourceUnit, active_frames, _namespace, _safe_code, frame_fields as frame_locals
 
 SESSION = 'src/unrest_harness/experimental_session.py'
 TEST = 'tests/test_experimental_bootstrap.py'
@@ -47,14 +47,6 @@ def path(value: Any) -> Path:
         raise Refused('startup canonical path')
     return value
 
-
-def frame_locals(frame: types.FrameType) -> dict:
-    result: dict[str, Any] = {}
-    for key, value in frame.f_locals.items():
-        if type(key) is not str or len(result) >= 8192:
-            raise Refused('startup frame locals')
-        result[key] = value
-    return result
 
 
 @dataclass(frozen=True)

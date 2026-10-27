@@ -166,7 +166,7 @@ def test_cleanup_qualifier_subclass_never_runs_equality(monkeypatch):
     calls = object.__new__(source_root.OrdinaryCalls)
     calls.startup, calls.cleanup = SimpleNamespace(module=module), ()
     monkeypatch.setattr(__import__('source_calls'), 'active_frames', lambda: (frame,))
-    monkeypatch.setattr(source_root.Sources, 'signal', lambda *args: None)
+    monkeypatch.setattr(__import__('source_calls').Sources, 'signal', lambda *args: None)
     calls.signal(1, 15, False)
 
 

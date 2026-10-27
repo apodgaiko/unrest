@@ -15,7 +15,10 @@ from typing import Any
 from content_manifest import Refused
 
 MAX_PROCESSES = 20000
-MAX_CONTROL_ROWS = 128
+MAX_EXEC_EPOCHS = 128
+MAX_WAITID_ROWS = 128
+# Two readiness records and at most one receipt per admitted child.
+MAX_CONTROL_ROWS = MAX_PROCESSES + 2
 
 
 def fail_closed(method):
@@ -154,7 +157,7 @@ class Ledger:
         process.token, process.pins, process.expected_seal = token, pins, text(seal)
         if process.life_token is None:
             process.life_token = token
-        if expected_generation in process.epochs or len(process.epochs) >= MAX_CONTROL_ROWS:
+        if expected_generation in process.epochs or len(process.epochs) >= MAX_EXEC_EPOCHS:
             raise Refused('ledger duplicate or unbounded exec epoch')
         process.epochs[expected_generation] = Epoch(token)
         process.registered_generation = expected_generation
@@ -312,7 +315,7 @@ class Ledger:
         elif kind == 'original_parent_waitid':
             # No route can retire from waitid alone. Retain the bounded observation.
             caller = self.current.get(integer(row.get('parent'), 1))
-            if caller is None or len(self.process(caller).waitid) >= MAX_CONTROL_ROWS:
+            if caller is None or len(self.process(caller).waitid) >= MAX_WAITID_ROWS:
                 raise Refused('ledger waitid observation bound')
             self.process(caller).waitid.append(dict(row))
         elif kind == 'exec_attempt':

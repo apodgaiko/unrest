@@ -267,12 +267,8 @@ class Launches:
                 links = (Link(cls, name, function),) if role == 'mcp' else (Link(self.module, name, function),)
                 qualified = 'ACPNodeRunner.' + name if role == 'mcp' else name
                 owner = self.calls.owner(self.unit, self.module, function, qualified, links)
-                matches = [frame for frame in frames if frame.f_code is function.__code__ and frame.f_globals is vars(self.module)]
-                if len(matches) != 1:
-                    raise Refused('cleanup original product launch owner')
-                owner.verify(matches[0])
-                values = matches[0].f_locals
-                line = matches[0].f_lineno
+                frame = owner.current(frames, reason='cleanup original product launch owner')
+                values, line = frame.f_locals, frame.f_lineno
                 if role == 'mcp':
                     port, descriptor = values.get('mcp_port'), values.get('read_fd')
                     if (line != module_site(case) or type(port) is not int or type(descriptor) is not int or self.inventory_module.SensitiveValueInventory is not self.inventory_type

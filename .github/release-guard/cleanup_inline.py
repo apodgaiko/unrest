@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import os
-from typing import Any, cast
 
 from content_manifest import Refused
 from cleanup_launch import TEST, Launches as SharedLaunches
+from source_owner import frame_fields as frame_fields, instance_fields as instance_fields
 
 SLEEP = 'import time; time.sleep(30)'
 EXIT = "import sys; print('private-startup-body',file=sys.stderr); sys.exit(23)"
@@ -101,42 +101,6 @@ def options(case, local, *, terminal=False):
         raise Refused('cleanup inline initial options')
 
 
-def frame_fields(frame):
-    import types
-    if type(frame) is not types.FrameType:
-        raise Refused('cleanup inline actual frame')
-    result: dict[str, Any] = {}
-    for key, value in frame.f_locals.items():
-        if type(key) is not str or len(result) >= 8192:
-            raise Refused('cleanup inline frame fields')
-        result[key] = value
-    return result
-
-
-def instance_fields(value):
-    import types
-    from source_owner import _namespace
-    cls = type(value)
-    # Native type descriptors avoid user-defined metaclass and __dict__ access.
-    namespace_descriptor = vars(type)['__dict__']
-    lineage_descriptor = vars(type)['__mro__']
-    for parent in lineage_descriptor.__get__(cls, type(cls)):
-        namespace = namespace_descriptor.__get__(parent, type(parent))
-        fields: dict[str, Any] = {}
-        for key, item in namespace.items():
-            if type(key) is not str or len(fields) >= 8192:
-                raise Refused('cleanup inline class namespace')
-            fields[key] = item
-        descriptor = fields.get('__dict__')
-        if type(descriptor) not in (types.GetSetDescriptorType, types.MemberDescriptorType):
-            continue
-        native = cast(types.GetSetDescriptorType | types.MemberDescriptorType, descriptor)
-        if native.__objclass__ is parent and native.__name__ == '__dict__':
-            result = native.__get__(value, cls)
-            _namespace(result)
-            return result
-    raise Refused('cleanup inline instance dictionary')
-
 
 class Launches(SharedLaunches):
     """Acquire the original caller context once per finite inline launch."""
@@ -185,11 +149,8 @@ class Launches(SharedLaunches):
         function = vars(self.runner_type)[name]
         owner = self.calls.owner(self.unit, self.module, function, 'ACPNodeRunner.' + name,
                                  (Link(self.module, 'ACPNodeRunner', self.runner_type), Link(self.runner_type, name, function)))
-        matches = [frame for frame in frames if frame.f_code is function.__code__]
-        if len(matches) != 1 or matches[0].f_lineno != (1969 if role == 'terminal_reviewer' else 1481):
-            raise Refused('cleanup inline original startup invocation')
-        owner.verify(matches[0])
-        caller = frame_fields(matches[0])
+        frame = owner.current(frames, line=(1969 if role == 'terminal_reviewer' else 1481), reason='cleanup inline original startup invocation')
+        caller = frame_fields(frame)
         runner = caller.get('self')
         if (type(caller.get('workspace_dir')) is not str or caller['workspace_dir'] != str(base / 'workspace')
                 or any(type(caller.get(key)) is not str or caller[key] != value for key, value in (
@@ -213,11 +174,8 @@ class Launches(SharedLaunches):
         owner = self.calls.owner(self.calls.test_unit, self.calls.tests, start,
             'test_startup_failure_attribution_and_owned_cleanup.<locals>.start',
             (Link(fields, '_start_worker_mcp_server', start), Link(fields, '_start_terminal_reviewer_mcp', start)))
-        matches = [frame for frame in frames if frame.f_code is start.__code__]
-        if len(matches) != 1 or matches[0].f_lineno != 61:
-            raise Refused('cleanup inline active startup wrapper')
-        owner.verify(matches[0])
-        values = frame_fields(matches[0])
+        frame = owner.current(frames, line=61, reason='cleanup inline active startup wrapper')
+        values = frame_fields(frame)
         if (values.get('runner') is not runner or type(values.get('failure')) is not str
                 or values['failure'] != variant):
             raise Refused('cleanup inline startup closure values')
@@ -232,11 +190,8 @@ class Launches(SharedLaunches):
         function = vars(self.client_type)['_handle_terminal_create']
         owner = self.calls.owner(self.unit, self.module, function, 'ACPClient._handle_terminal_create',
             (Link(self.module, 'ACPClient', self.client_type), Link(self.client_type, '_handle_terminal_create', function)))
-        matches = [frame for frame in frames if frame.f_code is function.__code__]
-        if len(matches) != 1 or matches[0].f_lineno != 1034:
-            raise Refused('cleanup inline original terminal invocation')
-        owner.verify(matches[0])
-        local = frame_fields(matches[0])
+        frame = owner.current(frames, line=1034, reason='cleanup inline original terminal invocation')
+        local = frame_fields(frame)
         client = local.get('self')
         if type(client) is not self.client_type:
             raise Refused('cleanup inline original client instance')
@@ -251,11 +206,8 @@ class Launches(SharedLaunches):
         owner = self.calls.owner(self.calls.test_unit, self.calls.tests, wrapper,
             'test_inflight_terminal_registration_before_inventory.<locals>.paused_spawn',
             (Link(asyncio, 'create_subprocess_exec', wrapper),))
-        matches = [frame for frame in frames if frame.f_code is wrapper.__code__]
-        if len(matches) != 1:
-            raise Refused('cleanup inline paused constructor frame')
-        owner.verify(matches[0])
-        values = frame_fields(matches[0])
+        frame = owner.current(frames, reason='cleanup inline paused constructor frame')
+        values = frame_fields(frame)
         if values.get('spawn') is not self.constructor:
             raise Refused('cleanup inline original retained constructor')
         children = values.get('children')
@@ -309,11 +261,8 @@ class Launches(SharedLaunches):
             elif terminal:
                 self.terminal(frames)
             else:
-                matches = [frame for frame in frames if frame.f_code is self.calls.test_owner.function.__code__]
-                if len(matches) != 1 or matches[0].f_lineno != source_site(case):
-                    raise Refused('cleanup inline original direct caller')
-                self.calls.test_owner.verify(matches[0])
-                values = frame_fields(matches[0])
+                frame = self.calls.test_owner.current(frames, line=source_site(case), reason='cleanup inline original direct caller')
+                values = frame_fields(frame)
                 self.children(values.get('children', []), child_count(case) - 1)
                 if family == 'inflight' and values.get('spawn') is not self.constructor:
                     raise Refused('cleanup inline initial retained constructor')

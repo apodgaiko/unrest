@@ -292,6 +292,17 @@ class Owner:
             raise Refused('source defaults changed')
 
 
+    def current(self, frames: tuple[types.FrameType, ...], *, line: int | None = None,
+                reason: str = 'source original caller frame') -> types.FrameType:
+        if (type(frames) is not tuple or len(frames) > MAX_FRAMES
+                or any(type(frame) is not types.FrameType for frame in frames)):
+            raise Refused('source frame inventory')
+        matches = [frame for frame in frames if frame.f_code is self.function.__code__]
+        if len(matches) != 1 or line is not None and matches[0].f_lineno != line:
+            raise Refused(reason)
+        self.verify(matches[0])
+        return matches[0]
+
     def verify(self, frame: types.FrameType) -> None:
         self.verify_binding()
         if (type(frame) is not types.FrameType or frame.f_code is not self.function.__code__
@@ -299,14 +310,47 @@ class Owner:
                 or not self.call_lines[0] <= frame.f_lineno <= self.call_lines[1]):
             raise Refused('live source code, globals or callsite changed')
         if self.closure:
-            local: dict[str, object] = {}
-            for key, value in frame.f_locals.items():
-                if type(key) is not str or len(local) >= 8192:
-                    raise Refused('frame local namespace refused')
-                local[key] = value
+            local = frame_fields(frame)
             for name, expected in zip(self.function.__code__.co_freevars, self.closure, strict=True):
                 if name not in local or local[name] is not expected:
                     raise Refused('owner closure changed')
+
+
+def frame_fields(frame: types.FrameType) -> dict[str, Any]:
+    if type(frame) is not types.FrameType:
+        raise Refused('source actual frame')
+    result: dict[str, Any] = {}
+    for key, value in frame.f_locals.items():
+        if type(key) is not str or len(result) >= 8192:
+            raise Refused('source frame fields')
+        result[key] = value
+    return result
+
+
+def instance_fields(value):
+    import types
+    from source_owner import _namespace
+    cls = type(value)
+    # Native type descriptors avoid user-defined metaclass and __dict__ access.
+    namespace_descriptor = vars(type)['__dict__']
+    lineage_descriptor = vars(type)['__mro__']
+    for parent in lineage_descriptor.__get__(cls, type(cls)):
+        namespace = namespace_descriptor.__get__(parent, type(parent))
+        fields: dict[str, Any] = {}
+        for key, item in namespace.items():
+            if type(key) is not str or len(fields) >= 8192:
+                raise Refused('cleanup inline class namespace')
+            fields[key] = item
+        descriptor = fields.get('__dict__')
+        if type(descriptor) not in (types.GetSetDescriptorType, types.MemberDescriptorType):
+            continue
+        native = cast(types.GetSetDescriptorType | types.MemberDescriptorType, descriptor)
+        if native.__objclass__ is parent and native.__name__ == '__dict__':
+            result = native.__get__(value, cls)
+            _namespace(result)
+            return result
+    raise Refused('cleanup inline instance dictionary')
+
 
 
 def active_frames() -> tuple[types.FrameType, ...]:

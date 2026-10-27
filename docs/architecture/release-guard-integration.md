@@ -2603,3 +2603,19 @@ comparison, so extra entries or comparison callbacks cannot gain admission.
 The original tests remain responsible for proving that the report is saved
 before the observer callback, that cancellation/transport failures keep their
 original attribution, that redaction holds and that both children are reaped.
+
+Selected-test preparation is shared by bootstrap, ordinary ACP and cleanup
+adapters: source pins, module identity, pytest rewriting, the original function
+link and binding verification are acquired in one place. Their distinct launch,
+listener and cleanup permissions remain explicit. Current-frame selection and
+bounded primitive namespace snapshots are shared utilities; duplicate, missing,
+foreign-global, wrong-line and callback-bearing observations refuse. This
+consolidation does not grant another launch route or weaken source-owner checks.
+
+Parent control capacity follows the existing 20,000-process ceiling: at most two
+readiness facts plus one unique receipt per admitted child in an exec epoch.
+Exec-epoch and waitid-observation ceilings remain independently 128. This removes
+an accidental 126-child receipt ceiling without permitting another launch,
+duplicate receipt or missing-wait completion. Reducer controls exercise 129
+independent child joins, a missing join and duplicate receipt, while retaining
+the original 128-epoch limit; these simulations are not native wait evidence.

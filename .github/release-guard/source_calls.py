@@ -53,6 +53,15 @@ class Sources:
                      cell_anchors=function.__closure__ or (), defaults=defaults,
                      keyword_defaults=tuple(sorted((keywords or {}).items())))
 
+    def acp_cleanup(self, module, unit):
+        import asyncio
+        import asyncio.unix_events
+        self.cleanup = tuple(self.owner(unit, module, vars(module)[name], name,
+                             (Link(module, name, vars(module)[name]),))
+                             for name in ('_close_subprocess', '_wait_for_process_exit'))
+        self.process_class, self.terminal_type = asyncio.subprocess.Process, module.ManagedTerminal
+        self.transport_class = vars(asyncio.unix_events)['_UnixSubprocessTransport']
+
     def signal(self, pid, sig, group):
         if type(pid) is not int or pid not in self.policy.children or type(sig) is not int or sig not in (9, 15):
             raise Refused('root owned cleanup signal')
@@ -89,6 +98,20 @@ class Sources:
 
 
 
+class TestSources(Sources):
+    def __init__(self, policy, item, path, pins):
+        super().__init__(policy, item)
+        if any(self.pins[name] != pin for name, pin in pins.items()):
+            raise Refused('original selected source bytes')
+        self.case_item, self.tests = item, item.module
+        if type(self.tests) is not types.ModuleType or self.tests.__name__ != path.removesuffix('.py').replace('/', '.'):
+            raise Refused('original selected test module')
+        self.test_unit = self.unit(path, self.tests, 'pytest')
+        self.test_owner = self.owner(self.test_unit, self.tests, item.obj, item.originalname,
+                                    (Link(self.tests, item.originalname, item.obj),))
+        self.test_owner.verify_binding()
+
+
 def nested_signal(self, pid, sig, group):
     if group:
         raise Refused('ordinary inherited session has no group authority')
@@ -101,7 +124,7 @@ def nested_signal(self, pid, sig, group):
                     and frame.f_code.co_qualname == '_finish_owned_cleanup.<locals>.finish'):
                 step = frame.f_locals.get('step')
                 from functools import partial
-                terminal_step = type(step) is partial and type(step.func) is types.FunctionType and step.func.__qualname__ == 'ACPClient._cleanup.<locals>.finish_terminal'
+                terminal_step = type(step) is partial and type(step.func) is types.FunctionType and type(step.func.__qualname__) is str and step.func.__qualname__ == 'ACPClient._cleanup.<locals>.finish_terminal'
                 if terminal_step:
                     step = cast(partial, step)
                     original = step

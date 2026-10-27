@@ -304,3 +304,36 @@ def test_duplicate_stream_facts_and_tokens_never_replay(duplicate):
         else:
             ledger.register(child, 'root-token', PINS, SEAL, case='case[one]', command_class='child')
     assert ledger.poison and not ledger.reaped(child, 'child-token')
+
+
+@pytest.mark.parametrize('missing_wait', (False, True))
+def test_many_children_keep_individual_parent_joins_beyond_epoch_bound(missing_wait):
+    ledger, root, child = setup()
+    for index in range(129):
+        if index:
+            data = identity(101 + index, root.pid)
+            child = Birth.read(data)
+            emit(ledger, 'kernel_child', parent=root.pid, child=child.pid, event=1, identity=data)
+            ledger.register(child, f'child-{index}', PINS, SEAL, case='case[one]', command_class='child')
+        raw = (index % 2) << 8
+        terminal(ledger, child, raw)
+        if not (missing_wait and index == 128):
+            wait4(ledger, root, child, raw)
+        ledger.control(root, 'root-token', 0, index, 'parent-wait', receipt(ledger, root, child, raw))
+        assert ledger.reaped(child, ledger.process(child).life_token) == (not missing_wait or index != 128)
+    with pytest.raises(Refused, match='duplicate parent receipt'):
+        ledger.control(root, 'root-token', 0, 129, 'parent-wait', receipt(ledger, root, child, raw))
+    assert ledger.poison
+
+
+def test_exec_epoch_bound_is_independent_of_parent_receipt_capacity():
+    from process_ledger import MAX_EXEC_EPOCHS, MAX_CONTROL_ROWS
+    ledger, root, child = setup()
+    assert MAX_CONTROL_ROWS > MAX_EXEC_EPOCHS == 128
+    for generation in range(1, MAX_EXEC_EPOCHS):
+        emit(ledger, 'kernel_exec', pid=child.pid)
+        ledger.register(child, f'epoch-{generation}', PINS, SEAL, case='case[one]', command_class='child')
+    emit(ledger, 'kernel_exec', pid=child.pid)
+    with pytest.raises(Refused, match='unbounded exec epoch'):
+        ledger.register(child, 'overflow-epoch', PINS, SEAL, case='case[one]', command_class='child')
+    assert ledger.poison

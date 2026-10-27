@@ -393,3 +393,32 @@ def test_native_partial_function_link_has_no_attribute_callback():
             raise AssertionError('callback must not execute')
     with pytest.raises(Refused):
         Link(Trap(), 'func', function, 'partial-function').check()
+
+
+def test_current_owner_frame_is_the_exact_verified_frame(module):
+    unit, module = module
+    expected = bound(unit, module)
+    module.check = lambda frame: expected.current((frame,), line=frame.f_lineno) is frame
+    assert module.route() is True
+
+
+@pytest.mark.parametrize('mutation', ('empty', 'duplicate', 'bound', 'list', 'callback', 'line', 'globals'))
+def test_current_owner_rejects_ambiguous_foreign_or_unbounded_frames(module, mutation):
+    unit, module = module
+    expected = bound(unit, module)
+    class Trap:
+        @property
+        def f_code(self):
+            pytest.fail('frame inventory callback executed')
+    def check(frame):
+        frames = (() if mutation == 'empty' else (frame, frame) if mutation == 'duplicate'
+                  else (frame,) * 65 if mutation == 'bound' else [frame] if mutation == 'list'
+                  else (Trap(),) if mutation == 'callback' else (frame,))
+        return expected.current(frames, line=999 if mutation == 'line' else None)
+    module.check = check
+    route = module.route
+    if mutation == 'globals':
+        route = types.FunctionType(route.__code__, dict(vars(module)), 'route', (7,))
+        route.__kwdefaults__ = {'flag': True}
+    with pytest.raises(Refused):
+        route()

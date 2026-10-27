@@ -1,40 +1,25 @@
 """Original root cleanup callers and the worker's sole completion Git query."""
 from __future__ import annotations
 
-import asyncio
-import asyncio.unix_events
 from dataclasses import replace
 from pathlib import Path
-import types
 
 from cleanup_launch import git_completion, Launches, PINS, SERVER, TEST, base_path, expected, sys_module, translated
 from content_manifest import Refused
 from controlled_startup import Intent
 from launch_policy import Observation, match
-from source_calls import Sources, nested_signal
+from source_calls import Sources, TestSources, nested_signal
 from source_owner import Link, active_frames, _namespace
 
 
-class CleanupCalls(Sources):
+class CleanupCalls(TestSources):
     def __init__(self, policy, item):
-        super().__init__(policy, item)
-        if any(self.pins[name] != pin for name, pin in PINS.items()):
-            raise Refused('cleanup original source bytes')
-        self.case_item = item
-        self.tests = item.module
-        if type(self.tests) is not types.ModuleType or self.tests.__name__ != 'tests.test_acp_cleanup':
-            raise Refused('cleanup original test module')
-        self.test_unit = self.unit(TEST, self.tests, 'pytest')
-        self.test_owner = self.owner(self.test_unit, self.tests, item.obj, item.originalname,
-                                    (Link(self.tests, item.originalname, item.obj),))
-        self.test_owner.verify_binding()
+        super().__init__(policy, item, TEST, PINS)
         from cleanup_inline import STARTUP, DECLARATIONS, Launches as InlineLaunches
         self.startup = InlineLaunches(self) if item.nodeid in DECLARATIONS else Launches(self)
         module, unit = self.startup.module, self.startup.unit
         cls = module.ACPNodeRunner
-        self.cleanup = tuple(self.owner(unit, module, vars(module)[name], name,
-                                        (Link(module, name, vars(module)[name]),))
-                             for name in ('_close_subprocess', '_wait_for_process_exit'))
+        self.acp_cleanup(module, unit)
         function = vars(cls)['run_node']
         owner = self.owner(unit, module, function, 'ACPNodeRunner.run_node',
                            (Link(module, 'ACPNodeRunner', cls), Link(cls, 'run_node', function)))
@@ -44,9 +29,6 @@ class CleanupCalls(Sources):
             owner = self.owner(unit, module, function, 'ACPNodeRunner._close_mcp_process',
                 (Link(module, 'ACPNodeRunner', cls), Link(cls, '_close_mcp_process', function)))
             self.cleanup = (*self.cleanup, replace(owner, call_lines=(1281, 1281)))
-        self.process_class = asyncio.subprocess.Process
-        self.terminal_type = module.ManagedTerminal
-        self.transport_class = vars(asyncio.unix_events)['_UnixSubprocessTransport']
         static = vars(cls)['_find_free_port']
         if type(static) is not staticmethod:
             raise Refused('cleanup original free port descriptor')
@@ -94,10 +76,7 @@ class CleanupCalls(Sources):
     def listener(self):
         frames = active_frames()
         try:
-            matches = [frame for frame in frames if frame.f_code is self.probe.function.__code__]
-            if len(matches) != 1 or matches[0].f_lineno != 1317:
-                raise Refused('cleanup original free port probe')
-            self.probe.verify(matches[0])
+            self.probe.current(frames, line=1317, reason='cleanup original free port probe')
             return {'tag': 'mcp-probe', 'nonce': None}
         finally:
             del frames
@@ -105,11 +84,7 @@ class CleanupCalls(Sources):
     def connection(self, port):
         frames = active_frames()
         try:
-            matches = [frame for frame in frames if frame.f_code is self.readiness.function.__code__]
-            if len(matches) != 1:
-                raise Refused('cleanup original readiness connection')
-            frame = matches[0]
-            self.readiness.verify(frame)
+            frame = self.readiness.current(frames, reason='cleanup original readiness connection')
             if type(frame.f_locals.get('port')) is not int or frame.f_locals['port'] != port:
                 raise Refused('cleanup original readiness port')
             process = frame.f_locals.get('process')
@@ -144,10 +119,7 @@ class ModuleCalls(Sources):
                            (Link(module, '_completion_context', function),))
         frames = active_frames()
         try:
-            matches = [frame for frame in frames if frame.f_code is function.__code__ and frame.f_globals is vars(module)]
-            if len(matches) != 1 or matches[0].f_lineno != 266:
-                raise Refused('cleanup original completion query')
-            owner.verify(matches[0])
+            owner.current(frames, line=266, reason='cleanup original completion query')
             if (executable != 'git' or type(vector) is not list or vector != ['git', 'rev-parse', 'HEAD']
                     or type(cwd) is not type(Path('/')) or env is not None):
                 raise Refused('cleanup original Git query operands')
