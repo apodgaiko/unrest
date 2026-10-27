@@ -134,13 +134,7 @@ class Startup:
 
     def function(self, fn, qualified: str, unit: SourceUnit, module: types.ModuleType,
                  links: tuple[Link, ...], *, closure: tuple = ()) -> Owner:
-        if type(fn) is not types.FunctionType:
-            raise Refused('startup source function')
-        codes = [code for code in unit.codes if code.co_qualname == qualified]
-        if len(codes) != 1:
-            raise Refused('startup lexical function')
-        return Owner(unit, module, fn, qualified, codes[0].co_firstlineno, (1, 100000), links,
-                     closure, fn.__closure__ or ())
+        return unit.owner(module,fn,qualified,links,closure=closure)
 
     def binding(self, fn, qualified: str, cls: type, name: str) -> None:
         self.function(fn, qualified, self.unit, self.session,

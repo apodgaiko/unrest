@@ -8,7 +8,7 @@ import types
 from bootstrap_cases import CATALOGUE, CATALOGUE_PIN, CONFIG_PIN, CONFIG_SOURCE
 from content_manifest import Refused
 from controlled_cases import configured, configuration_items, POPULATED
-from source_owner import Link, Owner, prepare
+from source_owner import Link, prepare
 from source_profile import digest
 
 
@@ -28,11 +28,7 @@ class Binding:
             if type(function) is not types.FunctionType:
                 raise Refused('bootstrap configuration original method')
             qualified = name if cls is self.module else cls.__name__ + '.' + name
-            codes = [code for code in self.unit.codes if code.co_qualname == qualified]
-            if len(codes) != 1:
-                raise Refused('bootstrap configuration lexical method')
-            self.owners.append(Owner(self.unit, self.module, function, qualified, codes[0].co_firstlineno,
-                (1, 100000), (Link(cls, name, function),), defaults=function.__defaults__,
+            self.owners.append(self.unit.owner(self.module, function, qualified, (Link(cls, name, function),), defaults=function.__defaults__,
                 keyword_defaults=tuple(sorted((function.__kwdefaults__ or {}).items()))))
         self.descriptors = {cls: vars(cls)['__dict__'] for cls in (self.provider, self.inputs)}
 

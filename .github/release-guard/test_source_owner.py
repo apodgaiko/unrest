@@ -518,3 +518,22 @@ else:
     assert result.stdout.strip() == 'SCRIPT_OWNER_CHECKED'
     with pytest.raises(Refused):
         owner.prepare(body, str(script), 'foreign', 'script', hashlib.sha256(body).hexdigest())
+
+
+def test_owner_factory_preserves_explicit_default_expectations(module):
+    unit, module = module
+    function = module.route
+    links = (owner.Link(module,'route',function),)
+    value = unit.owner(module,function,'route',links,defaults=(7,),keyword_defaults=(('flag',True),))
+    value.verify_binding()
+    with pytest.raises(Refused,match='defaults changed'):
+        unit.owner(module,function,'route',links).verify_binding()
+
+
+def test_lexical_selector_rejects_callback_metadata_before_comparison(module):
+    unit, _ = module
+    class Trap(str):
+        def __eq__(self, other):
+            pytest.fail('lexical selector equality callback')
+    with pytest.raises(Refused):
+        unit.code(Trap('route'))

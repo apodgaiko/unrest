@@ -11,7 +11,7 @@ import types
 
 from content_manifest import Refused
 from controlled_cases import PINS
-from source_owner import Link, Owner, prepare, _namespace, _safe_code
+from source_owner import Link, prepare, _namespace, _safe_code
 
 WRAPPERS = {
     ('_environment', 'tests.test_controlled_python_acp', 'test_programmatic_private_preflight.<locals>.configured_home'): 'environment',
@@ -45,13 +45,12 @@ def verify(container: object, name: str, original: types.FunctionType, checkout:
     if file not in PINS or live.__globals__ is not vars(module):
         raise Refused('controlled wrapper source module')
     unit = prepare((checkout / file).read_bytes(), str(checkout / file), live.__module__, 'pytest', PINS[file])
-    codes = [code for code in unit.codes if code.co_qualname == live.__qualname__]
     cells = live.__closure__ or ()
     values = {key: cell.cell_contents for key, cell in zip(live.__code__.co_freevars,cells,strict=True)}
-    if len(codes) != 1 or values.get(retained) is not original:
+    if values.get(retained) is not original:
         raise Refused('controlled wrapper retained original')
-    Owner(unit,module,live,live.__qualname__,codes[0].co_firstlineno,(1,100000),
-        (Link(container,name,live),),tuple(values[key] for key in live.__code__.co_freevars),cells).verify_binding()
+    unit.owner(module,live,live.__qualname__,(Link(container,name,live),),
+        closure=tuple(values[key] for key in live.__code__.co_freevars)).verify_binding()
 
 
 def instance_environment(instance, base, original, config, checkout):
@@ -77,8 +76,5 @@ def instance_environment(instance, base, original, config, checkout):
     module = importlib.import_module(module_name)
     file = module_name.replace('.', '/')+'.py'
     unit = prepare((checkout/file).read_bytes(),str(checkout/file),module_name,'pytest',PINS[file])
-    codes = [code for code in unit.codes if code.co_qualname == qualified]
-    if len(codes) != 1:
-        raise Refused('controlled instance environment lexical body')
-    Owner(unit,module,live,qualified,codes[0].co_firstlineno,(1,100000),(Link(raw,'_environment',live),),
-        tuple(values[name] for name in live.__code__.co_freevars),cells).verify_binding()
+    unit.owner(module,live,qualified,(Link(raw,'_environment',live),),
+        closure=tuple(values[name] for name in live.__code__.co_freevars)).verify_binding()

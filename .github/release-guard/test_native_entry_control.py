@@ -387,10 +387,14 @@ def diagnostic_binding(production, root):
         subprocess.run(argv, check=True)
         target.chmod(0o755)
         return {'path':str(target),'sha256':hashlib.sha256(target.read_bytes()).hexdigest()}
-    return {**production,'production':production,
+    binding = {**production,'production':production,
         'bootstrap':{'path':str(bootstrap),'sha256':digest},
         'entry':compile_entry('python-unrest-guard-test',digest),
         'negative_entry':compile_entry('python-unrest-guard-test-badpin','0'*64)}
+    record = root/'test-binding.json'
+    record.write_text(json.dumps(binding,sort_keys=True)+'\n')
+    record.chmod(0o444)
+    return binding
 
 
 def main():
@@ -500,7 +504,7 @@ def main():
 def encrypt_evidence(root, binding, subprocess):
     archive = root / 'native-control-private.tar'
     with archive.open('wb') as stream:
-        subprocess.run(['/usr/bin/tar', '-C', str(root), '-cf', '-', 'profiles', 'binding.json'],
+        subprocess.run(['/usr/bin/tar', '-C', str(root), '-cf', '-', 'profiles', 'binding.json', 'test-binding.json', 'test-support'],
                        stdout=stream, check=True)
     encrypted = root / 'native-control-private.cms'
     subprocess.run(['/usr/bin/openssl', 'cms', '-encrypt', '-binary', '-aes-256-cbc', '-outform', 'DER',

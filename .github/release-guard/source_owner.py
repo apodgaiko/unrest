@@ -42,12 +42,21 @@ class SourceUnit:
     codes: tuple[types.CodeType, ...]
     loader_type: type
 
-    def code(self, qualified: str, line: int) -> types.CodeType:
+    def code(self, qualified: str, line: int | None = None) -> types.CodeType:
+        if type(qualified) is not str or line is not None and type(line) is not int:
+            raise Refused('lexical code selector type')
         found = [code for code in self.codes
-                 if code.co_qualname == qualified and code.co_firstlineno == line]
+                 if code.co_qualname == qualified and (line is None or code.co_firstlineno == line)]
         if len(found) != 1:
             raise Refused('missing or ambiguous lexical code path')
         return found[0]
+
+    def owner(self, module, function, qualified, links, *, closure=(), defaults=None,
+              keyword_defaults=(), default_objects=()) -> Owner:
+        if type(function) is not types.FunctionType:
+            raise Refused('source owner function type')
+        return Owner(self,module,function,qualified,self.code(qualified).co_firstlineno,(1,100000),links,
+            closure,function.__closure__ or (),defaults,keyword_defaults,default_objects)
 
 
 def prepare(body: bytes, path: str, module: str, mode: str,

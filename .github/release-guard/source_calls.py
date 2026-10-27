@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from content_manifest import Refused
 from control_transport import unique
-from source_owner import Link, Owner, active_frames, prepare, instance_fields
+from source_owner import Link, active_frames, prepare, instance_fields
 
 
 class Sources:
@@ -49,16 +49,12 @@ class Sources:
     def owner(unit, module, function, qualified, links, *, default_objects=()):
         if type(function) is not types.FunctionType:
             raise Refused('root original caller function')
-        codes = [code for code in unit.codes if code.co_qualname == qualified]
-        if len(codes) != 1:
-            raise Refused('root original lexical function')
         defaults = function.__defaults__
         keywords = function.__kwdefaults__
         if keywords is not None and (type(keywords) is not dict or any(type(key) is not str for key in keywords)):
             raise Refused('root function keyword defaults')
-        return Owner(unit, module, function, qualified, codes[0].co_firstlineno, (1, 100000),
-                     links, closure=tuple(cell.cell_contents for cell in (function.__closure__ or ())),
-                     cell_anchors=function.__closure__ or (), defaults=defaults,
+        return unit.owner(module, function, qualified, links, closure=tuple(cell.cell_contents for cell in (function.__closure__ or ())),
+                     defaults=defaults,
                      keyword_defaults=tuple(sorted((keywords or {}).items())), default_objects=default_objects)
 
     def acp_cleanup(self, module, unit):
