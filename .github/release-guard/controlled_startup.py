@@ -150,7 +150,7 @@ class Startup:
         file = path(file)
         if not file.is_relative_to(root):
             raise Refused('startup source file root')
-        acquired = capture(root, [file.relative_to(root).as_posix()])
+        acquired = capture(file.parent, [file.name])
         if acquired['files'][0]['sha256'] != expected:
             raise Refused('startup source file bytes')
 

@@ -329,3 +329,40 @@ def test_controlled_cleanup_keeps_live_original_method_binding(context,monkeypat
     monkeypatch.setattr(gate.base,'_reap',foreign)
     with pytest.raises(Refused):
         owner.verify_binding()
+
+
+@pytest.mark.parametrize('mutation', ['unrelated-sibling', 'file-parent', 'ancestor-replaced', 'leaf-replaced'])
+def test_owned_postimage_capture_binds_its_path_without_unrelated_subtree_clock(tmp_path, monkeypatch, mutation):
+    import os
+    import content_manifest
+    gate = object.__new__(Startup)
+    gate.owned = tmp_path
+    target = tmp_path/'common'/'owner'/'backend'
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b'pinned backend')
+    pin = hashlib.sha256(target.read_bytes()).hexdigest()
+    inode = target.stat().st_ino
+    read = os.read
+    changed = []
+    def reading(fd, count):
+        block = read(fd, count)
+        if block and os.fstat(fd).st_ino == inode and not changed:
+            changed.append(True)
+            if mutation == 'unrelated-sibling':
+                (tmp_path/'common'/'other-owner').mkdir()
+            elif mutation == 'file-parent':
+                (target.parent/'new-role').mkdir()
+            elif mutation == 'ancestor-replaced':
+                tmp_path.rename(tmp_path.with_name(tmp_path.name+'-saved'))
+                tmp_path.mkdir()
+            else:
+                target.rename(target.with_name('saved'))
+                target.write_bytes(b'pinned backend')
+        return block
+    monkeypatch.setattr(content_manifest.os, 'read', reading)
+    if mutation == 'unrelated-sibling':
+        gate.source_file(target, pin, owned=True)
+    else:
+        with pytest.raises(Refused):
+            gate.source_file(target, pin, owned=True)
+    assert changed
