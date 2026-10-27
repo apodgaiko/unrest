@@ -172,6 +172,8 @@ def launch(host,actor,payload):
     expected = render(Rule('custody:git',SOURCE+':git',(host.case,),'/usr/bin/git',image(),result.argv,
         tuple(sorted(ENVIRONMENT.items())),result.cwd,'native',None),host.case,SOURCE+':git',{}, {})
     answer = host.admit_launch(actor,payload,expected,'git-custody',38,list(result.argv),None,maximum=12+8*limits(host.case)[0])
+    if answer is None:
+        return None
     intent = host.intents[answer['ticket']]
     intent.update(command=result,repository=result.cwd,operation='custody-'+kind)
     host.git.commands[intent['token']] = intent

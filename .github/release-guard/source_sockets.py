@@ -178,8 +178,10 @@ class Hooks:
         return pair
 
     def fd_io(self, function, descriptor, *args):
-        if type(descriptor) is not int or descriptor < 0:
+        if type(descriptor) is not int:
             self.policy.refuse('source file descriptor type')
+        if descriptor < 0:
+            return function(descriptor, *args)  # Preserve the kernel's EBADF; no live FD is reachable.
         try:
             target = os.readlink('/proc/self/fd/' + str(descriptor))
         except FileNotFoundError:

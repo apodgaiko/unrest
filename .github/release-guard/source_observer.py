@@ -273,6 +273,8 @@ class Observer:
             expected = fixed_expected(self.case,operation,self.binding['entry']['path'],self.binding['entry']['sha256'],Path(self.meta['checkout']),environment,query=query)
             vector = list(expected.argv) if query else [expected.argv[0],'-I','-S',*expected.argv[1:]]
             answer = self.admit_launch(actor,payload,expected,'git-fixed' if query else 'fixed-inline',507 if query else 587 if operation == 'mcp' else 540,vector,expected.payload_sha256,maximum=1 if query else len(FIXED_SEQUENCES[self.case]))
+            if answer is None:
+                return None
             self.intents[answer['ticket']]['fixed_operation'] = operation
             return answer
         if self.case in SESSION_CASES:
@@ -417,6 +419,8 @@ class Observer:
         answer = self.admit_launch(actor, payload, result, role, site, vector, result.payload_sha256,
             environment={**dict(result.environment), **(OFFLINE if role == 'mcp' else {})},
             inherited=inherited, port=port)
+        if answer is None:
+            return None
         if role == 'cleanup-acp':
             source = base / 'scenario.json'
             body = scenario(self.case, base)

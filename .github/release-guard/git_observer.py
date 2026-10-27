@@ -166,6 +166,8 @@ class Git:
             command.argv, tuple(sorted(environment.items())), command.cwd, 'native', None)
         expected = render(rule, host.case, owner, {}, {})
         answer = host.admit_launch(actor, payload, expected, 'git-command', site[2], list(command.argv), None, maximum=128)
+        if answer is None:
+            return None
         intent = host.intents[answer['ticket']]
         intent.update(command=command, repository=str(root), operation=operation)
         self.commands[intent['token']] = intent
