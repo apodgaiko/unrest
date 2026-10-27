@@ -83,7 +83,7 @@ def prepare(binding, checkout, root, git=False, public=False):
         public_git(checkout, source, binding['head'])
         metadata_names = sorted(path.relative_to(source).as_posix() for path in (source / '.git').rglob('*') if path.is_file())
         metadata = _capture(source, metadata_names, None, 64 * 1024 * 1024)
-        manifest['files'] = sorted([*manifest['files'], *metadata['files']], key=lambda row: row['path'])
+        metadata = {'schema':'unrest.git-inputs.v1','file_bound':64 * 1024 * 1024,'files':metadata['files']}
     dependencies = root / 'dependencies'
     original = checkout / '.venv/lib/python3.13/site-packages'
     # Dereference only contained regular file aliases. Never carry host links
@@ -116,6 +116,9 @@ def prepare(binding, checkout, root, git=False, public=False):
     profiles = Path(binding['profiles'])
     require(profiles.is_dir() and profiles.stat().st_uid == 20001, 'protected profiles missing')
     raw = encode(manifest)
+    if public:
+        raw = json.dumps({'schema':'unrest.source-inputs.v1','source':manifest,'git':metadata},sort_keys=True,separators=(',',':')).encode()
+        require(len(raw) <= 16 * 1024 * 1024, 'source input manifest bound')
     target = profiles / 'source-manifest.json'
     with target.open('xb') as stream:
         stream.write(raw)

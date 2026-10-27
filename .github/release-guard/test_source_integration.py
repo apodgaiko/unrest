@@ -358,3 +358,27 @@ def test_root_completion_seal_is_bounded_and_requires_all_ordered_completions():
     observer.completed = list(cases)
     assert observer.dispatch(actor, {'kind':'root-finish','payload':seal}) == {'ok':True}
     assert observer.finished
+
+
+
+def test_public_git_manifest_envelope_preserves_the_small_source_domain(tmp_path):
+    import hashlib
+    from source_calls import Sources
+    from content_manifest import capture, encode
+    source = tmp_path/'source'
+    source.mkdir()
+    (source/'unit.py').write_bytes(b'value = 1\n')
+    small = capture(source,['unit.py'])
+    metadata = {'schema':'unrest.git-inputs.v1','file_bound':64 * 1024 * 1024,'files':[{'path':'.git/objects/pack/closed.pack','size':5*1024*1024,'mode':420,'sha256':'a'*64}]}
+    envelope = {'schema':'unrest.source-inputs.v1','source':small,'git':metadata}
+    def load(value):
+        raw = json.dumps(value,sort_keys=True,separators=(',',':')).encode()
+        (tmp_path/'source-manifest.json').write_bytes(raw)
+        policy = SimpleNamespace(directory=tmp_path,profile={'source_sha256':hashlib.sha256(raw).hexdigest()})
+        return Sources(policy,None)
+    assert load(envelope).pins == {'unit.py':small['files'][0]['sha256']}
+    for bound in (True,128*1024*1024):
+        with pytest.raises(Refused,match='Git manifest schema'):
+            load({**envelope,'git':{**metadata,'file_bound':bound}})
+    with pytest.raises(Refused,match='manifest_member'):
+        encode({'schema':small['schema'],'files':metadata['files']})

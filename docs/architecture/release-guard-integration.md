@@ -2769,3 +2769,10 @@ computation. The source capsule's public Git projection contains only the closed
 public HEAD/history/tag object selection, fresh minimal metadata and no hooks,
 remotes, alternates or ambient Git configuration. Full generated metadata bytes
 join the measured source manifest before the entire input is mounted read-only.
+
+
+The source input envelope keeps ordinary source members at 4 MiB. Closed Git
+metadata has a separate 64 MiB per-member domain, matching the existing isolated
+input inventory bound; complete pack/index/ref bytes are hashed before sealing.
+The envelope digest binds both domains and the same read-only source mount covers
+them. A Git pack is metadata, never an inline/module execution declaration.
