@@ -2710,3 +2710,10 @@ The disposable diagnostic home/configuration belongs to the observer. A sticky
 group-writable owned root permits normal temporary test directories while
 preventing the source UID from replacing that home. No user home, private
 evidence, provider permission or denied review carrier is changed.
+
+The four branch-specific v046 diagnostic workflows are retired. They targeted
+historical source-guard development branches, were not called by product code or
+source tests, and duplicated setup/control jobs. Their526 workflow lines are
+removed; historical commands and results remain in Git/CI history. The primary
+CI workflow and all product tests retain their release requirements. Development
+uses the single bounded guard-control workflow with explicit source-group input.
