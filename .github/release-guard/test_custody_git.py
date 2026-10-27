@@ -138,5 +138,7 @@ def test_only_one_same_image_auto_maintenance_child_of_original_commit(monkeypat
     else:
         custody_git.reserve_helper(host,birth,parent)
         child = host.intents[1]
-        assert child['translated'] == ['/usr/lib/git-core/git','maintenance','run','--auto','--no-quiet']
+        assert child['translated'] == ['/usr/lib/git-core/git','maintenance','run','--auto','--no-quiet','--detach']
         assert child['parent'] == parent and not child['consumed']
+        assert child['environment']['GIT_AUTHOR_DATE'] == '@946684800 +0000'
+        assert child['environment']['GIT_NO_REPLACE_OBJECTS'] == '1'

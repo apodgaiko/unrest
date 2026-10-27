@@ -194,10 +194,11 @@ def reserve_helper(host,birth,parent):
     if pin != intent['executable_sha256']:
         raise Refused('custody Git helper same pinned image')
     environment = {**intent['environment'],'GIT_EXEC_PATH':'/usr/lib/git-core','GIT_PREFIX':'',
-        'PATH':'/usr/lib/git-core:'+intent['environment']['PATH']}
+        'PATH':'/usr/lib/git-core:'+intent['environment']['PATH'],
+        'GIT_NO_REPLACE_OBJECTS':'1','GIT_AUTHOR_DATE':'@946684800 +0000'}
     host.serial += 1
     child = {'case':host.case,'role':'git-helper','parent':parent,'environment':environment,
-        'cwd':intent['cwd'],'translated':[executable,'maintenance','run','--auto','--no-quiet'],
+        'cwd':intent['cwd'],'translated':[executable,'maintenance','run','--auto','--no-quiet','--detach'],
         'token':os.urandom(16).hex(),'consumed':False,'pid':None,'executable':executable,
         'executable_sha256':pin,'inherited':[],'port':None}
     host.intents[host.serial] = child
