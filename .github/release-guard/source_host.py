@@ -164,7 +164,7 @@ def worker(binding, metadata, raw_directory):
     from source_observer import Observer
     from source_profile import ROOT_COMMAND
     metadata = isolate(metadata, binding['support'])
-    timeout = 60 if len(metadata['cases']) == 2 else 170
+    timeout = 30 if len(metadata['cases']) == 3 else 60 if len(metadata['cases']) == 2 else 170
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
@@ -286,7 +286,7 @@ def main():
                 (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
                 os._exit(125)
             os._exit(0)
-        raw, deadline = None, time.monotonic() + (80 if len(cases) == 2 else 190)
+        raw, deadline = None, time.monotonic() + (50 if len(cases) == 3 else 80 if len(cases) == 2 else 190)
         try:
             while raw is None:
                 actual, status = os.waitpid(pid, os.WNOHANG)

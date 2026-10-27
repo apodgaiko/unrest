@@ -123,7 +123,8 @@ def test_native_fixture_keeps_original_executable_and_no_python_prefix(tmp_path,
     result = expected(CASES[0], 'sleep', str(tmp_path), tmp_path, '/python', 'a' * 64, env, tmp_path)
     assert result.argv == ('/bin/sleep', '30')
     assert result.payload_kind == 'native'
-    assert dict(result.environment) == env
+    assert dict(result.environment) == {**env, 'PYTEST_VERSION': pytest.__version__,
+                                         'PYTEST_CURRENT_TEST': CASES[0] + ' (call)'}
 
 
 @pytest.mark.parametrize('field', ('key', 'stdin', 'stdout', 'stderr', 'limit', 'cwd', 'path', 'argv', 'environment'))

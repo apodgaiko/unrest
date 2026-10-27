@@ -71,7 +71,7 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
     if role == 'sleep':
         if cwd != str(checkout):
             raise Refused('ordinary inherited fixture cwd')
-        env = dict(root_environment)
+        env = {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'}
         if case == CASES[2]:
             env['ANTHROPIC_API_KEY'] = 'batch-crash-known-value'
         vector, executable, pin, kind, payload = ('/bin/sleep', '30'), '/bin/sleep', system_sleep(), 'native', None
