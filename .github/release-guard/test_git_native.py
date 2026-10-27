@@ -49,7 +49,7 @@ os.close(fd)
 def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_path):
     repository = tmp_path / 'project'
     repository.mkdir()
-    environment = {'PATH': '/usr/bin:/bin', 'HOME': str(tmp_path), 'GIT_CONFIG_NOSYSTEM': '1',
+    environment = {'LC_ALL': 'C.UTF-8', 'PATH': '/usr/bin:/bin', 'HOME': str(tmp_path), 'GIT_CONFIG_NOSYSTEM': '1',
         'GIT_AUTHOR_NAME': 'Workspace Test', 'GIT_AUTHOR_EMAIL': 'workspace@example.test',
         'GIT_AUTHOR_DATE': '@1700000000 +0000', 'GIT_COMMITTER_DATE': '@1700000000 +0000',
         'GIT_COMMITTER_NAME': 'Workspace Test', 'GIT_COMMITTER_EMAIL': 'workspace@example.test'}
@@ -95,10 +95,13 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
     try:
         result = observer.run()
         data = os.read(receipt_read, 4096)
-        assert data and os.read(receipt_read, 1) == b''
+        assert os.read(receipt_read, 1) == b''
     finally:
         os.close(receipt_read)
-    assert result['root_parent_wait_raw'] == 0 and not result['poison'], result
+    diagnostics = {'status': result['root_parent_wait_raw'], 'poison': result['poison'],
+        'execs': [(r['path'], r['accepted'], r['environment'].get('LC_CTYPE'))
+                  for r in result['records'] if r['kind'] == 'exec_attempt']}
+    assert result['root_parent_wait_raw'] == 0 and not result['poison'] and data, diagnostics
     raw = json.loads(data)
     assert len(raw['receipts']) == 2
     git_pin = hashlib.sha256(Path('/usr/bin/git').read_bytes()).hexdigest()
