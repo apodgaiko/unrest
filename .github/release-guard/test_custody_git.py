@@ -5,7 +5,7 @@ import pytest
 
 from content_manifest import Refused
 from controlled_cases import CASES
-from custody_git import command,repository
+from custody_git import command,repository,PREFIX
 
 CASE = next(case for case in CASES if 'test_ack_durability[' in case)
 
@@ -16,8 +16,8 @@ CASE = next(case for case in CASES if 'test_ack_durability[' in case)
     ('diff','--cached','--name-only','a'*40),('commit','--allow-empty','-m','sealed candidate'),
 ])
 def test_closed_original_templates(args):
-    result,_ = command(CASE,('/usr/bin/git','--no-replace-objects',*args),'/owned/pytest/case/cohort/base',Path('/owned'))
-    assert result.argv[2:] == args and result.stdin is None
+    result,_ = command(CASE,(*PREFIX,*args),'/owned/pytest/case/cohort/base',Path('/owned'))
+    assert result.argv[len(PREFIX):] == args and result.stdin is None
 
 
 @pytest.mark.parametrize('args',[
@@ -27,7 +27,7 @@ def test_closed_original_templates(args):
 ])
 def test_external_or_unbounded_commands_refuse(args):
     with pytest.raises(Refused):
-        command(CASE,('/usr/bin/git','--no-replace-objects',*args),'/owned/pytest/case/cohort/base',Path('/owned'))
+        command(CASE,(*PREFIX,*args),'/owned/pytest/case/cohort/base',Path('/owned'))
 
 
 def test_repository_cannot_leave_the_disposable_case(tmp_path):
@@ -36,7 +36,7 @@ def test_repository_cannot_leave_the_disposable_case(tmp_path):
     with pytest.raises(Refused):
         repository(str(root),tmp_path,initialize=True)
     with pytest.raises(Refused):
-        command(CASE,('/usr/bin/git','--no-replace-objects','rev-parse','HEAD'),str(root),tmp_path)
+        command(CASE,(*PREFIX,'rev-parse','HEAD'),str(root),tmp_path)
 
 
 _ACTIVE = [None]
@@ -108,37 +108,4 @@ def test_same_path_replacement_cannot_inherit_prior_repository_facts(monkeypatch
         git=SimpleNamespace(custody_roots={(CASE,cwd):old}))
     monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:new)
     with pytest.raises(Refused,match='replaced repository generation'):
-        custody_git.launch(host,None,{'original':{'argv':['/usr/bin/git','--no-replace-objects','rev-parse','HEAD'],'cwd':cwd}})
-
-
-@pytest.mark.parametrize('mutation',[None,'operation','second-child','image','repository'])
-def test_only_one_same_image_auto_maintenance_child_of_original_commit(monkeypatch,mutation):
-    import custody_git
-    from types import SimpleNamespace
-    parent,birth = 'original-parent','child-birth'
-    process = SimpleNamespace(token='commit',exit=None,terminal=None)
-    intent = {'case':CASE,'operation':'custody-commit','consumed':True,'cwd':'/owned/pytest/case/base',
-        'environment':custody_git.ENVIRONMENT,'executable_sha256':'1'*64}
-    identity = ((('root',1,2,20000),),(1,3,20000))
-    host = SimpleNamespace(case=CASE,meta={'owned':'/owned'},serial=0,intents={},
-        ledger=SimpleNamespace(process=lambda value:process,children={parent:[birth]}),
-        git=SimpleNamespace(commands={'commit':intent},helpers={},custody_roots={(CASE,intent['cwd']):identity}))
-    monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:identity)
-    monkeypatch.setattr(custody_git,'image',lambda path:'2'*64 if mutation == 'image' else '1'*64)
-    if mutation == 'operation':
-        intent['operation'] = 'custody-head'
-    elif mutation == 'second-child':
-        host.ledger.children[parent].append('foreign')
-    elif mutation == 'repository':
-        host.git.custody_roots.clear()
-    if mutation:
-        with pytest.raises(Refused):
-            custody_git.reserve_helper(host,birth,parent)
-        assert not host.intents
-    else:
-        custody_git.reserve_helper(host,birth,parent)
-        child = host.intents[1]
-        assert child['translated'] == ['/usr/lib/git-core/git','maintenance','run','--auto','--no-quiet','--detach']
-        assert child['parent'] == parent and not child['consumed']
-        assert child['environment']['GIT_AUTHOR_DATE'] == '@946684800 +0000'
-        assert child['environment']['GIT_NO_REPLACE_OBJECTS'] == '1'
+        custody_git.launch(host,None,{'original':{'argv':[*PREFIX,'rev-parse','HEAD'],'cwd':cwd}})

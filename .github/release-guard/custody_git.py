@@ -22,7 +22,7 @@ from launch_policy import Observation, Rule, match, render
 from source_owner import Link, active_frames, frame_fields, _namespace
 
 SOURCE = 'src/unrest_harness/experimental_custody.py'
-PIN = '1daba7ee49702f680d342f542f2e670fba0fb953234b7e4358a497f7abcae9a1'
+PIN = 'a6da184702daa03c9e9a7b6c5fcf22d9514901abb9112c44c8686a05880d25dc'
 ENVIRONMENT = {
     'PATH':'/usr/bin:/bin','LC_ALL':'C','GIT_CONFIG_NOSYSTEM':'1',
     'GIT_CONFIG_GLOBAL':'/dev/null','GIT_TERMINAL_PROMPT':'0',
@@ -30,6 +30,7 @@ ENVIRONMENT = {
     'GIT_COMMITTER_NAME':'Fixture','GIT_COMMITTER_EMAIL':'fixture@example.invalid',
     'GIT_AUTHOR_DATE':'2000-01-01T00:00:00+0000','GIT_COMMITTER_DATE':'2000-01-01T00:00:00+0000',
 }
+PREFIX = ('/usr/bin/git','--no-replace-objects','-c','maintenance.auto=false','-c','gc.auto=0')
 FIXED = (
     ('init','--initial-branch=main','--object-format=sha1'), ('add','.'),
     ('commit','-m','finite fixture'), ('commit','-m','base'), ('rev-parse','HEAD'),
@@ -43,9 +44,9 @@ def command(case, argv, cwd, owned):
         raise Refused('custody Git finite command primitives')
     if type(cwd) is not str or str(Path(cwd).resolve()) != cwd or not Path(cwd).is_relative_to(owned/'pytest'):
         raise Refused('custody Git owned repository')
-    if argv[:2] != ('/usr/bin/git','--no-replace-objects'):
+    if argv[:len(PREFIX)] != PREFIX:
         raise Refused('custody Git literal executable and prefix')
-    args = argv[2:]
+    args = argv[len(PREFIX):]
     if args not in FIXED:
         if args[:2] == ('add','--'):
             if args[2:] not in (('a',),('b',),('lane_a.txt',),('lane_b.txt',)):
@@ -115,7 +116,7 @@ class Calls:
             root,args = local.get('root'),local.get('arguments')
             if type(root) is not type(Path('/')) or type(args) is not tuple or any(type(v) is not str for v in args):
                 raise Refused('custody Git original helper operands')
-            result,_ = command(case,('/usr/bin/git','--no-replace-objects',*args),str(root),Path(self.calls.profile['owned']))
+            result,_ = command(case,(*PREFIX,*args),str(root),Path(self.calls.profile['owned']))
             constructors = [f for f in frames if f.f_code is self.run_code and f.f_globals is self.run_globals]
             if len(constructors) != 1 or subprocess.run is not self.run:
                 raise Refused('custody Git original subprocess caller')
@@ -158,11 +159,11 @@ def launch(host,actor,payload):
         raise Refused('custody Git finite case command bound')
     if any(not v['consumed'] or not host.ledger.reaped(v['birth'],v['token']) for v in prior):
         raise Refused('custody Git previous command actual wait')
-    if result.argv[2:5] == ('diff','--cached','--name-only') and not any(
+    if result.argv[len(PREFIX):len(PREFIX)+3] == ('diff','--cached','--name-only') and not any(
             row.case == host.case and row.kind == 'commit' and row.value == result.argv[-1]
             for row in host.git.values.values):
         raise Refused('custody Git diff without an actual prior commit producer')
-    identity = repository(result.cwd,Path(host.meta['owned']),initialize=result.argv[2] == 'init')
+    identity = repository(result.cwd,Path(host.meta['owned']),initialize=result.argv[len(PREFIX)] == 'init')
     key = host.case,result.cwd
     previous = host.git.custody_roots.get(key)
     if previous is not None and (previous[0] != identity[0] or previous[1] is not None and previous[1] != identity[1]):
@@ -175,31 +176,3 @@ def launch(host,actor,payload):
     intent.update(command=result,repository=result.cwd,operation='custody-'+kind)
     host.git.commands[intent['token']] = intent
     return answer
-
-
-def reserve_helper(host,birth,parent):
-    """One stock auto-maintenance child of an already admitted commit only."""
-    import os
-    process = host.ledger.process(parent)
-    intent = host.git.commands.get(process.token)
-    if (intent is None or intent['case'] != host.case or intent['operation'] != 'custody-commit'
-            or not intent['consumed'] or process.exit is not None or process.terminal is not None
-            or list(host.ledger.children.get(parent,())) != [birth]):
-        raise Refused('custody Git helper original commit generation')
-    current = repository(intent['cwd'],Path(host.meta['owned']),initialize=False)
-    if current != host.git.custody_roots.get((host.case,intent['cwd'])):
-        raise Refused('custody Git helper replaced repository generation')
-    executable = '/usr/lib/git-core/git'
-    pin = image(executable)
-    if pin != intent['executable_sha256']:
-        raise Refused('custody Git helper same pinned image')
-    environment = {**intent['environment'],'GIT_EXEC_PATH':'/usr/lib/git-core','GIT_PREFIX':'',
-        'PATH':'/usr/lib/git-core:'+intent['environment']['PATH'],
-        'GIT_NO_REPLACE_OBJECTS':'1','GIT_AUTHOR_DATE':'@946684800 +0000'}
-    host.serial += 1
-    child = {'case':host.case,'role':'git-helper','parent':parent,'environment':environment,
-        'cwd':intent['cwd'],'translated':[executable,'maintenance','run','--auto','--no-quiet','--detach'],
-        'token':os.urandom(16).hex(),'consumed':False,'pid':None,'executable':executable,
-        'executable_sha256':pin,'inherited':[],'port':None}
-    host.intents[host.serial] = child
-    host.git.helpers[birth] = child

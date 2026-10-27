@@ -130,14 +130,11 @@ class Observer:
                 if birth.pid == birth.tgid:
                     parent = self.ledger.process(birth).parent
                     actor = self.actors.get(parent.pid) if parent is not None else None
-                    if actor is not None and actor['role'] == 'git-custody':
-                        from custody_git import reserve_helper
-                        reserve_helper(self,birth,parent)
                     if actor is not None and actor['role'] == 'git-command':
                         self.git.reserve_helper(birth, parent)
                     candidates = [value for value in self.intents.values()
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
-                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'git-custody', 'session-adapter', 'fixed-inline') or len(candidates) != 1:
+                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')

@@ -36,7 +36,7 @@ def git(root: Path, *arguments: str) -> str:
     """Only controller-generated argument templates; no ambient Git helpers."""
     try:
         result = subprocess.run(
-            ['/usr/bin/git', '--no-replace-objects', *arguments], cwd=root,
+            ['/usr/bin/git', '--no-replace-objects', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', *arguments], cwd=root,
             env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_CONFIG_NOSYSTEM': '1',
                  'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0',
                  'GIT_AUTHOR_NAME': 'Fixture', 'GIT_AUTHOR_EMAIL': 'fixture@example.invalid',
