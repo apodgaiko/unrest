@@ -9,12 +9,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from content_manifest import Refused
-from controlled_cases import CASES
+from controlled_cases import CASES, STARTUP_FAILURE
 
 
 def limits(case: str) -> tuple[int, int]:
     if type(case) is not str or case not in CASES:
         raise Refused('controlled pair case')
+    if case == STARTUP_FAILURE:
+        return 1, 0
     file, name = case.split('::')
     if file.endswith('test_controlled_acp_cancel.py'):
         return 1, 3
@@ -52,6 +54,8 @@ def scope(case: str, tag: str, value: object, owned: Path) -> str:
 
 def before_spawn(case: str, home: str, role: str, records: list[dict], actors: dict) -> None:
     maximum, _ = limits(case)
+    if case == STARTUP_FAILURE and role != 'backend':
+        raise Refused('startup failure has no ACP launch')
     pairs = {row['cwd'] for row in records if row['role'] == 'backend'}
     pair = [row for row in records if row['cwd'] == home]
     if role == 'backend':

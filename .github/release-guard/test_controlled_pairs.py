@@ -9,7 +9,7 @@ from controlled_pairs import before_spawn, limits, scope
 
 
 def test_every_catalogue_case_has_a_finite_source_bound():
-    assert len(CASES) == 91
+    assert len(CASES) == 92
     assert all(1 <= limits(case)[0] <= 12 and 0 <= limits(case)[1] <= 43 for case in CASES)
 
 
@@ -64,6 +64,15 @@ def test_listener_only_owner_and_role_proliferation_refuse():
 def test_finite_component_partitions_keep_every_original_case_exactly_once():
     from controlled_cases import GROUPS
     members = [case for group in GROUPS.values() for case in group]
-    assert len(members) == 91 and len(set(members)) == 91 and set(members) == set(CASES)
+    assert len(members) == 92 and len(set(members)) == 92 and set(members) == set(CASES)
     assert len(GROUPS['controlled-cancellation4']) == len(GROUPS['controlled-registration4']) == 4
     assert len(GROUPS['controlled-witness1']) == 1
+
+
+def test_startup_failure_cannot_start_an_adapter():
+    from controlled_cases import STARTUP_FAILURE
+    before_spawn(STARTUP_FAILURE, '/owned/pytest/a/worker', 'backend', [], {})
+    with pytest.raises(Refused):
+        before_spawn(STARTUP_FAILURE, '/owned/pytest/a/worker', 'acp',
+                     [{'cwd':'/owned/pytest/a/worker','role':'backend','consumed':True,'pid':12}],
+                     {12:{'returned':True}})

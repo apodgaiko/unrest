@@ -61,3 +61,13 @@ def test_original_retirement_wrapper_keeps_product_start_without_launch(monkeypa
     monkeypatch.setattr(tests, 'original_stop', inspect)
     with pytest.raises(Stopped):
         asyncio.run(tests.test_original_stop_and_retired_delivery(tmp_path, monkeypatch, lambda *args: None, barrier))
+
+
+def test_original_startup_environment_wrapper_retains_original(monkeypatch):
+    from tests.test_experimental_startup_diagnostics import controlled_config_home
+    from unrest_harness.experimental_session import _SessionOwner
+    original = _SessionOwner._environment
+    controlled_config_home.__wrapped__(monkeypatch)
+    verify(_SessionOwner, '_environment', original, Path(__file__).resolve().parents[2])
+    with pytest.raises(Refused):
+        verify(_SessionOwner, '_environment', lambda: None, Path(__file__).resolve().parents[2])

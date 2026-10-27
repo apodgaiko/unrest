@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from content_manifest import Refused
 
+STARTUP_FAILURE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
+
 PINS = {
+    'tests/test_experimental_startup_diagnostics.py': 'b2b2d05a217dcd4e082e06371c00e9ae91fb99a7c50bfcec15e7e810b2b7d65f',
     'src/unrest_harness/experimental_custody.py': 'a6da184702daa03c9e9a7b6c5fcf22d9514901abb9112c44c8686a05880d25dc',
     'src/unrest_harness/experimental_cohort.py': 'd830a15c39394463022150c7b01c41e941100ae55f4eff033fc247cbf6af7c61',
     'src/unrest_harness/experimental_provider_config.py': '92c8d11fc6aedbf8a737be416387de5f0aa4a239ce8e9e048f543bb8cd4041a5',
@@ -29,6 +32,7 @@ PINS = {
 }
 
 CASES = {
+    STARTUP_FAILURE: ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
     'tests/test_controlled_acp_cancel.py::test_owned_cancel_wire_and_cleanup[pending]': ('a10467373bda96d6e702a03e70c96ce5562082b050df668ecbc7638b5b4eaf63', 'fake-app-server'),
     'tests/test_experimental_ack_durability.py::test_ack_durability[False--1-None-fsync]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
     'tests/test_experimental_ack_durability.py::test_ack_durability[False--1-None-write]': ('1dc876d29f45800ac9cad82037fdb41e9a584a0c17d39e4eb811edad6f0b8fb1', 'fake-app-server'),
@@ -134,6 +138,7 @@ def backend_path(case, root):
 
 
 GROUPS = {
+    'controlled-startup1': (STARTUP_FAILURE,),
     'controlled-cancel1': tuple(case for case in CASES if 'test_controlled_acp_cancel.py::' in case),
     'controlled-ack20': tuple(case for case in CASES if 'test_experimental_ack_durability.py::' in case),
     'controlled-bridge1': tuple(case for case in CASES if 'test_experimental_bridge_shutdown.py::' in case),

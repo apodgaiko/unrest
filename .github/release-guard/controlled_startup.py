@@ -258,12 +258,16 @@ class Startup:
                 expected_argv = (original_argv[0], '-c', delayed_wrapper, *original_argv[1:])
             self.delayed(frames, expected_argv, environment, home, backend, declaration(case).delay)
         else:
-            self.binding(self.environment, '_SessionOwner._environment', self.base, '_environment')
             if case in CONTROLLED:
                 from controlled_wrappers import verify
+                verify(self.base, '_environment', self.environment, self.checkout)
+                self.function(self.environment, '_SessionOwner._environment', self.unit, self.session,
+                    (Link(self.anchors, 'environment', self.environment),)).verify_binding()
                 verify(asyncio, 'create_subprocess_exec', self.constructor, self.checkout)
-            elif asyncio.create_subprocess_exec is not self.constructor:
-                raise Refused('startup unexpected constructor wrapper')
+            else:
+                self.binding(self.environment, '_SessionOwner._environment', self.base, '_environment')
+                if asyncio.create_subprocess_exec is not self.constructor:
+                    raise Refused('startup unexpected constructor wrapper')
         keywords = values.get('kwds')
         if type(keywords) is not dict:
             raise Refused('startup constructor keyword type')

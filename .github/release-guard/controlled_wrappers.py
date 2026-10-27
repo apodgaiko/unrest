@@ -14,6 +14,7 @@ from controlled_cases import PINS
 from source_owner import Link, Owner, prepare, _namespace, _safe_code
 
 WRAPPERS = {
+    ('_environment', 'tests.test_experimental_startup_diagnostics', 'controlled_config_home.<locals>.environment'): 'original',
     ('start', 'tests.test_experimental_drain_retirement', 'test_original_stop_and_retired_delivery.<locals>.start'): 'original_start',
     ('create_subprocess_exec', 'tests.test_controlled_acp_cancel', 'methods.<locals>.observed'): 'launch',
     ('create_subprocess_exec', 'tests.test_experimental_session', 'test_cancel_during_registration_retains_handle.<locals>.delayed'): 'original',
