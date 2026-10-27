@@ -57,7 +57,7 @@ class CleanupCalls(Sources):
         frames = active_frames()
         try:
             matches = [frame for frame in frames if frame.f_code is self.probe.function.__code__]
-            if len(matches) != 1 or matches[0].f_lineno != 1318:
+            if len(matches) != 1 or matches[0].f_lineno != 1317:
                 raise Refused('cleanup original free port probe')
             self.probe.verify(matches[0])
             return {'tag': 'mcp-probe', 'nonce': None}

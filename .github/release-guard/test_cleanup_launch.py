@@ -109,3 +109,36 @@ def test_inherited_read_pipe_flags_are_rechecked_after_parent_measurement():
     finally:
         os.close(read)
         os.close(write)
+
+
+def test_original_free_port_bind_has_its_actual_source_owner(monkeypatch):
+    import socket
+    from unrest_harness import acp_runner
+    from cleanup_effects import CleanupCalls
+    from source_calls import Sources
+    from source_owner import prepare
+    from ordinary_acp import PRODUCT
+    checkout = Path(__file__).resolve().parents[2]
+    file = checkout / PRODUCT
+    unit = prepare(file.read_bytes(), str(file), acp_runner.__name__, Sources.mode(acp_runner), PINS[PRODUCT])
+    cls = acp_runner.ACPNodeRunner
+    descriptor = vars(cls)['_find_free_port']
+    calls = object.__new__(CleanupCalls)
+    calls.probe = Sources.owner(unit, acp_runner, descriptor.__func__, 'ACPNodeRunner._find_free_port',
+        (Link(cls, '_find_free_port', descriptor), Link(descriptor, '__func__', descriptor.__func__, 'static-function')))
+    effects = []
+    class Probe:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def bind(self, address):
+            assert address == ('127.0.0.1', 0)
+            effects.append(calls.listener())
+        def getsockname(self):
+            return '127.0.0.1', 12345
+    monkeypatch.setattr(socket, 'socket', lambda *args: Probe())
+    assert cls._find_free_port() == 12345
+    assert effects == [{'tag': 'mcp-probe', 'nonce': None}]
+    with pytest.raises(Refused, match='free port probe'):
+        calls.listener()
