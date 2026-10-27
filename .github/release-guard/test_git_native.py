@@ -100,7 +100,9 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
         os.close(receipt_read)
     diagnostics = {'status': result['root_parent_wait_raw'], 'poison': result['poison'],
         'execs': [(r['path'], r['accepted'], r['environment'].get('LC_CTYPE'))
-                  for r in result['records'] if r['kind'] == 'exec_attempt']}
+                  for r in result['records'] if r['kind'] == 'exec_attempt'],
+        'refused_git': [{k: r[k] for k in ('path', 'argv', 'cwd', 'environment')}
+            for r in result['records'] if r['kind'] == 'exec_attempt' and r['path'] == helper and not r['accepted']]}
     assert result['root_parent_wait_raw'] == 0 and not result['poison'] and data, diagnostics
     raw = json.loads(data)
     assert len(raw['receipts']) == 2
