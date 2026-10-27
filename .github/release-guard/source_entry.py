@@ -189,6 +189,7 @@ class Policy:
                     policy.refuse('source nonnumeric parent wait')
                 policy.client.request('drain_child', {'pid': actual, 'requested_pid': pid, 'child_token': saved['token'],
                     'raw_status': raw, 'numeric_returncode': os.waitstatus_to_exitcode(raw), 'options': options})
+                saved['wait_raw'] = raw
             return actual, raw
 
         def signal(pid, sig, *, group):
@@ -200,6 +201,7 @@ class Policy:
             try:
                 policy.calls.signal(pid, sig, group)
             except BaseException:
+                traceback.print_exc(file=sys.stderr)  # Retained only in encrypted execution evidence.
                 policy.refuse('source cleanup signal refused')
             saved = policy.children[pid]
             answer = policy.client.request('custody_signal', {'pid': pid, 'child_token': saved['token'],

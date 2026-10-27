@@ -227,7 +227,7 @@ class Observer:
             return self.cleanup_launch(actor, payload)
         self.root_only(actor)
         if self.case in ORDINARY_CASES:
-            return self.ordinary_launch(payload)
+            return self.ordinary_launch(actor, payload)
         cwd = original['cwd']
         if type(cwd) is not str:
             raise Refused('source launch cwd type')
@@ -269,15 +269,22 @@ class Observer:
                     native, self.binding['entry']['sha256'], vector, tuple(sorted(environment.items())), cwd, kind, pin)
         expected = render(rule, self.case, rule.owner, {}, {})
         translated = [native, '-I', '-S', *expected.argv[1:]]
-        if (original != expected.wire() or payload['translated'] != translated
-                or payload['script_sha256'] != script_pin
-                or any(value['case'] == self.case and value['role'] == role for value in self.intents.values())):
-            raise Refused('source independently reconstructed launch mismatch')
+        return self.admit_launch(actor, payload, expected, role, payload['source_line'], translated, script_pin)
+
+    def admit_launch(self, actor, payload, expected, role, site, vector, script_pin,
+                     *, maximum=1, environment=None, inherited=(), port=None):
+        if (payload['original'] != expected.wire() or payload['source_line'] != site
+                or payload['translated'] != vector or payload['script_sha256'] != script_pin
+                or sum(value['case'] == self.case and value['role'] == role
+                       for value in self.intents.values()) >= maximum):
+            raise Refused('source independent launch reconstruction')
         self.serial += 1
         token = os.urandom(16).hex()
-        self.intents[self.serial] = {'case': self.case, 'role': role, 'environment': environment, 'cwd': cwd,
-            'translated': translated, 'token': token, 'consumed': False, 'pid': None,
-            'executable_sha256': self.binding['entry']['sha256']}
+        self.intents[self.serial] = {'case': self.case, 'role': role, 'parent': actor['birth'],
+            'environment': dict(expected.environment) if environment is None else environment,
+            'cwd': expected.cwd, 'translated': vector, 'token': token, 'consumed': False, 'pid': None,
+            'executable': expected.executable, 'executable_sha256': expected.executable_sha256,
+            'inherited': list(inherited), 'port': port}
         return {'ok': True, 'ticket': self.serial, 'token': token}
 
     def inline_launch(self, actor, payload):
@@ -291,36 +298,19 @@ class Observer:
         result, site = inline_expected(self.case, self.binding['entry']['path'], self.binding['entry']['sha256'],
             Path(self.meta['checkout']), self.meta_environment(), base=base, terminal=terminal)
         vector = [result.argv[0], '-I', '-S', *result.argv[1:]]
-        if (payload['original'] != result.wire() or payload['source_line'] != site
-                or payload['script_sha256'] != result.payload_sha256 or payload['translated'] != vector):
-            raise Refused('cleanup inline independent reconstruction')
-        self.serial += 1
-        token = os.urandom(16).hex()
-        self.intents[self.serial] = {'case': self.case, 'role': 'cleanup-inline', 'parent': actor['birth'],
-            'environment': dict(result.environment), 'cwd': result.cwd, 'translated': vector,
-            'token': token, 'consumed': False, 'pid': None, 'executable': result.executable,
-            'executable_sha256': result.executable_sha256}
-        return {'ok': True, 'ticket': self.serial, 'token': token}
+        return self.admit_launch(actor, payload, result, 'cleanup-inline', site, vector,
+                                 result.payload_sha256, maximum=inline_count(self.case))
 
-    def ordinary_launch(self, payload):
+    def ordinary_launch(self, actor, payload):
         original = payload['original']
         role = 'sleep' if original['executable'] == '/bin/sleep' else 'mock-acp'
         expected = ordinary_expected(self.case, role, original['cwd'], Path(self.meta['checkout']),
             self.binding['entry']['path'], self.binding['entry']['sha256'], self.meta_environment(), Path(self.meta['owned']))
         translated = list(expected.argv) if role == 'sleep' else [expected.argv[0], '-I', '-S', *expected.argv[1:]]
         maximum = 2 if self.case == ORDINARY_CASES[2] and role == 'sleep' else 1
-        site = payload['source_line']
-        allowed_site = (1383 if self.case == ORDINARY_CASES[2] else 1843) if role == 'sleep' else 409
-        if (original != expected.wire() or payload['translated'] != translated or site != allowed_site
-                or payload['script_sha256'] != expected.payload_sha256
-                or sum(v['case'] == self.case and v['role'] == role for v in self.intents.values()) >= maximum):
-            raise Refused('ordinary independent launch reconstruction')
-        self.serial += 1
-        token = os.urandom(16).hex()
-        self.intents[self.serial] = {'case': self.case, 'role': role, 'environment': dict(expected.environment),
-            'cwd': expected.cwd, 'translated': translated, 'token': token, 'consumed': False, 'pid': None,
-            'executable': expected.executable, 'executable_sha256': expected.executable_sha256}
-        return {'ok': True, 'ticket': self.serial, 'token': token}
+        site = (1383 if self.case == ORDINARY_CASES[2] else 1843) if role == 'sleep' else 409
+        return self.admit_launch(actor, payload, expected, role, site, translated,
+                                 expected.payload_sha256, maximum=maximum)
 
     def cleanup_launch(self, actor, payload):
         original = payload['original']
@@ -351,10 +341,9 @@ class Observer:
             Path(self.meta['checkout']), self.meta_environment(), port=port, descriptor=descriptor)
         site = {'mcp': module_site(self.case), 'cleanup-acp': 409, 'git-init': 131, 'git-commit': 132, 'git-observe': 266}[role]
         vector = list(cleanup_translated(result, self.directory))
-        if (original != result.wire() or payload['source_line'] != site or payload['script_sha256'] != result.payload_sha256
-                or payload['translated'] != vector
-                or any(value['case'] == self.case and value['role'] == role for value in self.intents.values())):
-            raise Refused('cleanup independent launch reconstruction')
+        answer = self.admit_launch(actor, payload, result, role, site, vector, result.payload_sha256,
+            environment={**dict(result.environment), **(OFFLINE if role == 'mcp' else {})},
+            inherited=inherited, port=port)
         if role == 'cleanup-acp':
             source = base / 'scenario.json'
             body = scenario(self.case, base)
@@ -364,13 +353,7 @@ class Observer:
             with snapshot.open('xb') as stream:
                 stream.write(body)
             snapshot.chmod(0o444)
-        self.serial += 1
-        token = os.urandom(16).hex()
-        self.intents[self.serial] = {'case': self.case, 'role': role, 'parent': actor['birth'],
-            'environment': {**dict(result.environment), **(OFFLINE if role == 'mcp' else {})},
-            'cwd': result.cwd, 'translated': vector, 'token': token, 'consumed': False, 'pid': None,
-            'executable': result.executable, 'executable_sha256': result.executable_sha256, 'inherited': inherited, 'port': port}
-        return {'ok': True, 'ticket': self.serial, 'token': token}
+        return answer
 
     def socket_payload(self, actor, payload):
         shape(payload, ('fd', 'operation', 'bytes'))

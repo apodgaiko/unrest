@@ -2579,3 +2579,16 @@ transitions and multiprocessing custody must also close. The current bounded
 runner is not the full source checkpoint. Switching primary CI and deleting the
 old guard requires that complete closure and behavioral-test migration; a
 smaller dormant replacement or a passing selected subset does not satisfy it.
+
+After CPython closes a reaped subprocess transport, `_proc` may be `None`.
+List-wide custody checks accept that state only for the previously retained
+Process and transport objects in the same case, after the observer acknowledged
+the actual original-parent wait and the raw status matches the numeric transport
+returncode. This recognizes an already-retired sibling; it does not grant signal
+authority to a process lacking its live Popen identity. Missing waits, substituted
+wrappers/transports, wrong statuses and duplicate children still refuse.
+Observer launch comparison, finite quota checking and intent registration share
+one implementation; each family still independently builds its exact expected
+command, source site, environment and causal state. Unused connected-socket census
+compatibility functions have been removed; active descriptor observations and
+endpoint policy retain their existing checks and tests.

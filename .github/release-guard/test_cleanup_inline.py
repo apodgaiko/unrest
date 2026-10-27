@@ -481,7 +481,16 @@ async def test_original_client_launch_siblings_without_process_effects(case, inl
                 failures.append(error)
                 raise
             signals.append((self.pid, sig))
-        self._transport._returncode = 0
+        self._transport._returncode = -sig
+    def close(transport):
+        if type(transport._returncode) is int:
+            saved = policy.children[transport._pid]
+            # Synthetic acknowledgement exercises source-state consumption only;
+            # the native run must still supply its actual parent wait join.
+            code = transport._returncode
+            saved['wait_raw'] = -code if code < 0 else code << 8
+            transport._proc = None
+    monkeypatch.setattr(asyncio.unix_events._UnixSubprocessTransport, 'close', close)
     monkeypatch.setattr(asyncio.subprocess.Process, 'wait', wait)
     monkeypatch.setattr(asyncio.subprocess.Process, 'terminate', terminate)
     monkeypatch.setattr(asyncio.subprocess.Process, 'kill', lambda self: terminate(self, 9))
@@ -575,3 +584,39 @@ async def test_original_client_launch_siblings_without_process_effects(case, inl
 async def test_original_client_rejects_foreign_launch_context(case, mutation, inline_context, monkeypatch):
     await test_original_client_launch_siblings_without_process_effects(
         case, inline_context, monkeypatch, 'launch', mutation)
+
+
+@pytest.mark.parametrize('mutation', (None, 'missing-wait', 'wrong-status', 'wrapper', 'transport', 'case', 'duplicate'))
+def test_reaped_inline_child_needs_original_wrapper_and_joined_wait(mutation):
+    import asyncio
+    import asyncio.unix_events
+    import types
+    from cleanup_inline import Launches
+    case = tuple(CLIENT)[1]
+    transport = object.__new__(asyncio.unix_events._UnixSubprocessTransport)
+    transport._closed, transport._pid, transport._proc, transport._returncode = True, 123, object(), None
+    process = object.__new__(asyncio.subprocess.Process)
+    process.pid, process._transport = 123, transport
+    saved = {'process': transport._proc, 'case': case}
+    policy = types.SimpleNamespace(case=case, children={123: saved})
+    launches = object.__new__(Launches)
+    launches.policy = policy
+    launches.calls = types.SimpleNamespace(policy=policy, transport_class=type(transport))
+    launches.children([process], 1)  # Establish the actual live wrapper generation.
+    transport._proc, transport._returncode, saved['wait_raw'] = None, -15, 15
+    if mutation == 'missing-wait':
+        del saved['wait_raw']
+    elif mutation == 'wrong-status':
+        saved['wait_raw'] = 0
+    elif mutation == 'wrapper':
+        saved['async_process'] = object()
+    elif mutation == 'transport':
+        saved['transport'] = object()
+    elif mutation == 'case':
+        saved['case'] = case + '-foreign'
+    children = [process, process] if mutation == 'duplicate' else [process]
+    if mutation:
+        with pytest.raises(Refused):
+            launches.children(children, 2)
+    else:
+        launches.children(children, 1)

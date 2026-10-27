@@ -1,6 +1,7 @@
 """Closed original inline cleanup cases; declarations alone grant no execution."""
 from __future__ import annotations
 
+import os
 from typing import Any, cast
 
 from content_manifest import Refused
@@ -159,9 +160,19 @@ class Launches(SharedLaunches):
                 raise Refused('cleanup inline child transport')
             pid = fields.get('pid')
             if (type(pid) is not int or pid in seen or pid not in self.calls.policy.children
-                    or self.calls.policy.children[pid].get('case') != self.policy.case
-                    or instance_fields(transport).get('_proc') is not self.calls.policy.children[pid]['process']):
+                    or self.calls.policy.children[pid].get('case') != self.policy.case):
                 raise Refused('cleanup inline child generation')
+            saved = self.calls.policy.children[pid]
+            current = instance_fields(transport)
+            if current.get('_proc') is saved['process']:
+                if saved.get('async_process', process) is not process or saved.get('transport', transport) is not transport:
+                    raise Refused('cleanup inline replaced child wrapper')
+                saved.update(async_process=process, transport=transport)
+            elif (current.get('_proc') is not None or saved.get('async_process') is not process
+                    or saved.get('transport') is not transport or type(saved.get('wait_raw')) is not int
+                    or type(current.get('_returncode')) is not int
+                    or current['_returncode'] != os.waitstatus_to_exitcode(saved['wait_raw'])):
+                raise Refused('cleanup inline missing original reap generation')
             seen.add(pid)
 
     def startup(self, case, frames, base):
