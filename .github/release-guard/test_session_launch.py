@@ -154,3 +154,12 @@ def test_invalid_image_requires_real_exec_errno_and_no_successful_exec(generatio
     observer.ledger_trace = SimpleNamespace(records=[dict(kind='exec_syscall_return',pid=2,return_value=error)])
     observer.ledger_trace.records[0]['return'] = observer.ledger_trace.records[0].pop('return_value')
     assert observer.completed_child(dict(birth=birth,role='session-invalid')) is accepted
+
+
+
+def test_fixed_descendant_site_uses_the_call_line_not_its_argument_line():
+    import ast
+    tree = ast.parse((ROOT / SCRIPT).read_bytes())
+    calls = [call for call in ast.walk(tree) if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+             and isinstance(call.func.value, ast.Name) and call.func.value.id == 'subprocess' and call.func.attr == 'Popen']
+    assert len(calls) == 1 and calls[0].lineno == 50

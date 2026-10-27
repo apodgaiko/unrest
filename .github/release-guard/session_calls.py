@@ -147,7 +147,7 @@ class SessionChild(Sources):
         try:
             function = vars(self.module).get('main')
             owner = self.owner(self.unit, self.module, function, 'main', (Link(self.module, 'main', function),))
-            owner.current(frames, line=51)
+            owner.current(frames, line=50)
             executable, vector, cwd, env = audit
             if cwd is not None or env is not None or type(vector) is not list:
                 raise Refused('session child original inherited request')
@@ -160,7 +160,7 @@ class SessionChild(Sources):
             inherited_options(options)
             if executable != result.executable or tuple(vector) != result.argv:
                 raise Refused('session child exact default operands')
-            return Intent(result, (result.argv[0], '-I', '-S', *result.argv[1:]), 51, result.payload_sha256)
+            return Intent(result, (result.argv[0], '-I', '-S', *result.argv[1:]), 50, result.payload_sha256)
         finally:
             del frames
 

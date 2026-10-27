@@ -257,7 +257,7 @@ class Observer:
                 if regular(Path(expected.executable)) != INVALID_BYTES or Path(expected.executable).stat().st_mode & 0o777 != 0o700:
                     raise Refused('session exact invalid executable fixture')
             vector = list(expected.argv) if role == 'session-invalid' else [expected.argv[0], '-I', '-S', *expected.argv[1:]]
-            return self.admit_launch(actor, payload, expected, role, 51 if child else 75, vector, expected.payload_sha256)
+            return self.admit_launch(actor, payload, expected, role, 50 if child else 75, vector, expected.payload_sha256)
         if self.case in GIT_CASES:
             return self.git.launch(actor, payload)
         if self.case in DECLARATIONS:
