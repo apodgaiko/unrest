@@ -159,7 +159,7 @@ def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypa
     def refuse(code):
         raise Refused(code)
     policy.refuse = refuse
-    for obj, name in ((subprocess.Popen, '__init__'), (os, 'waitpid'), (os, 'kill'), (os, 'killpg')):
+    for obj, name in ((subprocess.Popen, '__init__'), (subprocess.Popen, 'communicate'), (subprocess._del_safe, 'waitpid'), (os, 'waitpid'), (os, 'kill'), (os, 'killpg')):
         monkeypatch.setattr(obj, name, getattr(obj, name))  # Register restoration before installation.
     Policy.install_process_hooks(policy)
     with pytest.raises(ProcessLookupError):
@@ -284,7 +284,7 @@ def test_caught_cleanup_signal_refusal_stays_poisoned(monkeypatch):
     policy.calls = SimpleNamespace(signal=reject)
     policy.client = SimpleNamespace(request=lambda kind, payload: calls.append((kind, payload)))
     policy.children = {123: {'token': 'owned'}}
-    for obj, name in ((subprocess.Popen, '__init__'), (os, 'waitpid'), (os, 'kill'), (os, 'killpg')):
+    for obj, name in ((subprocess.Popen, '__init__'), (subprocess.Popen, 'communicate'), (subprocess._del_safe, 'waitpid'), (os, 'waitpid'), (os, 'kill'), (os, 'killpg')):
         monkeypatch.setattr(obj, name, getattr(obj, name))
     Policy.install_process_hooks(policy)
     with pytest.raises(Refused, match='cleanup signal refused'):

@@ -281,6 +281,11 @@ def main():
     for name in ('entry', 'bootstrap', 'source', 'library', 'compiler', 'runtime', 'recipient'):
         row = binding[name]
         require(hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() == row['sha256'], 'native host input drift')
+    profiles = Path(binding['profiles'])
+    if not profiles.exists() and not profiles.is_symlink():
+        profiles.mkdir(mode=0o755)
+        os.chown(profiles, 20001, 20001)
+    require(stat.S_ISDIR(profiles.lstat().st_mode) and profiles.lstat().st_uid == 20001, 'source protected profiles custody')
     require(not children(), 'source host must begin childless')
     require(ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) == 0, 'source host subreaper required')
     def interrupted(signum, frame):
