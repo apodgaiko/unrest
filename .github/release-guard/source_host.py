@@ -67,7 +67,7 @@ def inventory(root):
     return hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()
 
 
-def prepare(binding, checkout, root, git=False, public=False):
+def prepare(binding, checkout, root, git=False, public=False, native=False):
     from content_manifest import capture, encode
     require(subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip()
             == binding['head'], 'source revision binding')
@@ -121,9 +121,19 @@ def prepare(binding, checkout, root, git=False, public=False):
         home.chmod(0o555)
     profiles = Path(binding['profiles'])
     require(profiles.is_dir() and profiles.stat().st_uid == 20001, 'protected profiles missing')
+    native_input = None
+    if native:
+        from native_metadata import prepare as prepare_native
+        native_root = root/'native-metadata'
+        native_input = {'root':str(native_root),'descriptor':prepare_native(native_root)}
     raw = encode(manifest)
-    if public:
-        raw = json.dumps({'schema':'unrest.source-inputs.v1','source':manifest,'git':metadata},sort_keys=True,separators=(',',':')).encode()
+    if public or native:
+        envelope = {'schema':'unrest.source-inputs.v1','source':manifest}
+        if public:
+            envelope['git'] = metadata
+        if native_input is not None:
+            envelope['native_metadata'] = native_input['descriptor']
+        raw = json.dumps(envelope,sort_keys=True,separators=(',',':')).encode()
         require(len(raw) <= 16 * 1024 * 1024, 'source input manifest bound')
     target = profiles / 'source-manifest.json'
     with target.open('xb') as stream:
@@ -135,7 +145,8 @@ def prepare(binding, checkout, root, git=False, public=False):
     return {'checkout': str(source), 'owned': str(owned), 'dependencies': str(dependencies),
             'runtime_root': str(runtime), 'source_sha256': hashlib.sha256(raw).hexdigest(),
             'support_sha256': inventory(support), 'runtime_sha256': inventory(runtime),
-            'dependency_sha256': inventory(dependencies)}
+            'dependency_sha256': inventory(dependencies),
+            **({'_native_input':native_input} if native_input is not None else {})}
 
 
 def isolate(metadata, support):
@@ -146,11 +157,22 @@ def isolate(metadata, support):
         if libc.mount(source, target, None, ctypes.c_ulong(flags), None):
             raise OSError(ctypes.get_errno(), 'private input mount refused')
     mount(None, b'/', (1 << 18) | (1 << 14))  # private recursively
+    native_input = metadata.get('_native_input')
+    metadata = {key:value for key,value in metadata.items() if key != '_native_input'}
     points = (metadata['checkout'], metadata['dependencies'], metadata['runtime_root'], support)
     for point in points:
         encoded = os.fsencode(point)
         mount(encoded, encoded, 4096)
         mount(None, encoded, 4096 | 32 | 1 | 2 | 4)  # bind remount ro,nosuid,nodev
+    if native_input is not None:
+        from native_metadata import measure
+        target = Path('/native')
+        require(not target.exists() and not target.is_symlink(), 'private native mount target already exists')
+        target.mkdir(mode=0o755)
+        mount(os.fsencode(native_input['root']), b'/native', 4096)
+        mount(None, b'/native', 4096 | 32 | 1 | 2 | 4)
+        require(measure(target) == native_input['descriptor'], 'native readonly view bytes changed')
+        points = (*points, '/native')
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as stream:
         request = struct.pack('16sH14x', b'lo', 0)
         current = fcntl.ioctl(stream.fileno(), 0x8913, request)
@@ -197,7 +219,8 @@ def worker(binding, metadata, raw_directory):
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
     environment = {'HOME': str(Path(metadata['owned']) / 'home'), 'TMPDIR': str(Path(metadata['owned']) / 'tmp'),
-                   'PATH': '/usr/bin:/bin', 'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
+                   'PATH': ('/native/bin:' if '/native' in metadata['mounts'] else '') + '/usr/bin:/bin',
+                   'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
     vector = [binding['entry']['path'], '-I', '-S', '-c', ROOT_COMMAND]
     child = os.fork()
     if child == 0:
@@ -288,7 +311,7 @@ def drain_owned(rows):
 
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from controlled_cases import GROUPS as CONTROLLED_GROUPS
+    from controlled_cases import GROUPS as CONTROLLED_GROUPS, ADMISSION
     require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', *CONTROLLED_GROUPS)),
             'source host requires exact root Linux invocation')
     binding_file = Path(sys.argv[1]).resolve(strict=True)
@@ -325,7 +348,7 @@ def main():
         from git_sites import CASES as GIT_CASES
         cleanup = {**CONTROLLED_GROUPS, 'imports6': FIXED_CASES, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
         cases = cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
-        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root, git=cases == GIT_CASES, public=cases == FIXED_CASES), 'cases': list(cases)}
+        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root, git=cases == GIT_CASES, public=cases == FIXED_CASES, native=tuple(cases) == tuple(ADMISSION)), 'cases': list(cases)}
         pid = os.fork()
         if pid == 0:
             try:

@@ -53,7 +53,7 @@ def inherited_descriptor(expected, descriptor, info, flags, uid):
 
 
 def readonly_mounts(expected: dict, namespace: str) -> None:
-    if type(expected) is not dict or len(expected) != 4 or os.readlink('/proc/self/ns/mnt') != namespace:
+    if type(expected) is not dict or len(expected) not in (4,5) or os.readlink('/proc/self/ns/mnt') != namespace:
         raise Refused('source immutable generation')
     for point, identity in expected.items():
         if (type(point) is not str or type(identity) is not list or len(identity) != 3
@@ -93,7 +93,11 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         if type(value) is not str or len(value) != size or any(char not in '0123456789abcdef' for char in value):
             raise Refused('source profile byte identity')
     expected_mounts = {profile['checkout'], profile['dependencies'], profile['runtime_root'], str(Path(__file__).parent)}
-    if type(profile['mounts']) is not dict or set(profile['mounts']) != expected_mounts:
+    if type(profile['mounts']) is not dict:
+        raise Refused('source mounted input dictionary')
+    if '/native' in profile['mounts']:
+        expected_mounts.add('/native')
+    if set(profile['mounts']) != expected_mounts:
         raise Refused('source exact mounted input inventory')
     if Path(profile['native']) != Path(profile['runtime_root']) / 'bin/python-unrest-guard-control':
         raise Refused('source native runtime root')

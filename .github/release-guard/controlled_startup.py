@@ -169,7 +169,7 @@ class Startup:
             values = dictionary(instance, self.base)
             if case in CONTROLLED:
                 from controlled_wrappers import instance_environment
-                instance_environment(instance,self.base,self.environment,values.get('provider_config'),self.checkout)
+                instance_environment(instance,self.base,self.environment,values.get('provider_config'),self.checkout,case)
             configured = is_configured(case)
             backend_pin, backend_name = controlled_backend(case) if case in CONTROLLED else (BACKEND_PIN, 'fake-app-server')
             if (values.get('controlled') is not True or values.get('provider_package') is not None

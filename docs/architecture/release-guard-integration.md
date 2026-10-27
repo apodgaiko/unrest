@@ -2865,3 +2865,14 @@ control, unknown and malformed source schemas. Production input bytes are verifi
 before diagnostic compilation; generated test inputs are then verified separately.
 Diagnostic results establish shared native behavior; source results identify the
 production binary independently and remain necessary.
+
+
+The unchanged controlled admission-bound fixtures discover the original native
+adapter only as metadata. A separate fixed `/native` input reproduces the legacy
+byte-pinned public adapter and Darwin node data, exact graph, modes and literal
+launcher symlink. The host verifies complete archive/member bytes, remounts the
+view read-only in its private namespace and measures it again before ROOT. The
+source-input envelope binds its descriptor; each profile binds the exact mounted
+generation. Only ROOT discovery prepends `/native/bin`; controlled role PATHs
+remain `/usr/bin:/bin`. This metadata view supplies no native launch intent,
+provider selection or permission override. Unknown native execution still fails.

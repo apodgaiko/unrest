@@ -144,7 +144,8 @@ class Observer:
 
     def meta_environment(self):
         owned = Path(self.meta['owned'])
-        return {'HOME': str(owned / 'home'), 'TMPDIR': str(owned / 'tmp'), 'PATH': '/usr/bin:/bin',
+        return {'HOME': str(owned / 'home'), 'TMPDIR': str(owned / 'tmp'),
+                'PATH': ('/native/bin:' if '/native' in self.meta['mounts'] else '')+'/usr/bin:/bin',
                 'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
 
     def stdio(self, pid, role, *, input_pipe=False):

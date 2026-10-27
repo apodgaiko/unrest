@@ -10,10 +10,11 @@ from pathlib import Path
 import types
 
 from content_manifest import Refused
-from controlled_cases import PINS
+from controlled_cases import PINS, ADMISSION
 from source_owner import Link, prepare, _namespace, _safe_code
 
 WRAPPERS = {
+    ('create_subprocess_exec', 'tests.test_experimental_admission_bounds', 'test_owner_adapter_bound_privacy_first_failure_cleanup_no_send.<locals>.observed_spawn'): 'spawn',
     ('_environment', 'tests.test_controlled_python_acp', 'test_programmatic_private_preflight.<locals>.configured_home'): 'environment',
     ('_environment', 'tests.test_experimental_config_frames', 'test_pinned_adapter_large_private_and_adapter_replies.<locals>.env'): 'environment',
     ('start', 'tests.test_experimental_config_frames', 'test_pinned_adapter_large_private_and_adapter_replies.<locals>.owner_start'): 'start',
@@ -53,7 +54,9 @@ def verify(container: object, name: str, original: types.FunctionType, checkout:
         closure=tuple(values[key] for key in live.__code__.co_freevars)).verify_binding()
 
 
-def instance_environment(instance, base, original, config, checkout):
+def instance_environment(instance, base, original, config, checkout, case):
+    if type(case) is not str:
+        raise Refused('controlled instance environment case type')
     descriptor = _namespace(base).get('__dict__')
     if type(descriptor) is not types.GetSetDescriptorType:
         raise Refused('controlled instance dictionary descriptor')
@@ -61,15 +64,21 @@ def instance_environment(instance, base, original, config, checkout):
     live = _namespace(raw).get('_environment')
     if live is None:
         return
-    qualified = 'test_startup_and_thread_controls_through_actual_owned_adapter.<locals>.environment'
-    module_name = 'tests.test_experimental_provider_config'
+    if case in ADMISSION:
+        qualified = 'test_owner_adapter_bound_privacy_first_failure_cleanup_no_send.<locals>.<lambda>'
+        module_name, retained = 'tests.test_experimental_admission_bounds', 'environment'
+    elif '::test_original_private_configuration[' in case or '::test_startup_and_thread_controls_through_actual_owned_adapter[' in case:
+        qualified = 'test_startup_and_thread_controls_through_actual_owned_adapter.<locals>.environment'
+        module_name, retained = 'tests.test_experimental_provider_config', 'original_environment'
+    else:
+        raise Refused('controlled undeclared instance environment')
     if (type(live) is not types.FunctionType or type(live.__module__) is not str
             or live.__module__ != module_name or type(live.__qualname__) is not str or live.__qualname__ != qualified):
         raise Refused('controlled unprepared instance environment')
     _safe_code(live.__code__)
     cells = live.__closure__ or ()
     values = dict(zip(live.__code__.co_freevars, (cell.cell_contents for cell in cells), strict=True))
-    bound = values.get('original_environment')
+    bound = values.get(retained)
     if (type(bound) is not types.MethodType or bound.__func__ is not original
             or bound.__self__ is not instance or values.get('config') is not config):
         raise Refused('controlled instance environment retained owner/config')

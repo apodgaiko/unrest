@@ -11,6 +11,7 @@ from content_manifest import Refused
 STARTUP_FAILURE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
 
 PINS = {
+    'tests/test_experimental_admission_bounds.py': '97557e0d3bd047948cbee27aa6e5c3f30daa45ed79a4544eae19b5e22f2e6c9d',
     'tests/test_experimental_provider_config.py': 'e2efb30678c7372df2f69523b27573517082819b7412d7cabc604b48bf7faa6b',
     'tools/probe_v046_startup.py': 'eb26f43472ce1798d2dd066fa87d6ceb5d58d1a94abc0e9edddeb20b285dd564',
     'tests/test_experimental_config_frames.py': '2cc54ff5577127750ce01a6a08e97ec879367797aa6ab903eea5842d47bc03e7',
@@ -51,7 +52,17 @@ FRESH = {
     'tests/test_experimental_startup_diagnostics.py::test_initialization_probe_real_controlled_path_no_prompt': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
 }
 
+ADMISSION = {
+    'tests/test_experimental_admission_bounds.py::test_owner_adapter_bound_privacy_first_failure_cleanup_no_send[aggregate_bound]': ('c38d9a2ee1052d238ed88ea4c346c79016744bec2a3a42ecc3cfbbe5819f7bf0', 'fake-app-server'),
+    'tests/test_experimental_admission_bounds.py::test_owner_adapter_bound_privacy_first_failure_cleanup_no_send[eof]': ('4d0c740614480c5b7b01bfc89da997db653b7182acc4bfffcfb0d41d2930cfa8', 'fake-app-server'),
+    'tests/test_experimental_admission_bounds.py::test_owner_adapter_bound_privacy_first_failure_cleanup_no_send[frame_bound]': ('336b73302ee3922ea5d113bf774cdf8808528ac64b0a8f552c25777ad8c72c94', 'fake-app-server'),
+    'tests/test_experimental_admission_bounds.py::test_owner_adapter_bound_privacy_first_failure_cleanup_no_send[frame_count_bound]': ('75696a35e28b1c5a27f293c525843ee1f2e20e85bbc7c8604d5f456202ae540a', 'fake-app-server'),
+    'tests/test_experimental_admission_bounds.py::test_owner_adapter_bound_privacy_first_failure_cleanup_no_send[reader_limit]': ('5ec2d0a21fbe7dfb072bca8b477bd88bef52a6a28e779c8d79e274a942166d8c', 'fake-app-server'),
+    'tests/test_experimental_admission_bounds.py::test_owner_adapter_bound_privacy_first_failure_cleanup_no_send[unterminated_frame]': ('5f4e60fbc40b71443b6608a1fbc6756e8e8638058c8ebba49408d4d60cd898ef', 'fake-app-server'),
+}
+
 POPULATED = {
+    **ADMISSION,
     'tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-False]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
     'tests/test_controlled_acp_warnings.py::test_original_private_configuration[False-True]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
     'tests/test_controlled_acp_warnings.py::test_original_private_configuration[True-False]': ('be7847ba715816b3f0cfdc9c29087b8751a998d160f616a5c08210c6ca404f53', 'fake-app-server'),
@@ -189,7 +200,8 @@ def backend_path(case, root):
 
 
 GROUPS = {
-    'controlled-private8': tuple(POPULATED),
+    'controlled-private8': tuple(case for case in POPULATED if case not in ADMISSION),
+    'controlled-admission6': tuple(ADMISSION),
     'controlled-probes4': tuple(case for case in FRESH if '::test_programmatic_private_preflight' in case or '::test_bridge_failure_preserved_through_owned_close[' in case),
     'controlled-large8': tuple(case for case in FRESH if 'large' in case),
     'controlled-initialize1': tuple(case for case in FRESH if '::test_initialization_probe_real_controlled_path_no_prompt' in case),

@@ -96,10 +96,12 @@ def test_original_instance_environment_keeps_owner_config_and_function(monkeypat
         elif mutation == 'function':
             vars(instance)['_environment'] = lambda home:{}
         if mutation is None:
-            instance_environment(instance,_SessionOwner,original,config,Path(__file__).resolve().parents[2])
+            instance_environment(instance,_SessionOwner,original,config,Path(__file__).resolve().parents[2],
+                    'tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[False-False]')
         else:
             with pytest.raises(Refused):
-                instance_environment(instance,_SessionOwner,original,config,Path(__file__).resolve().parents[2])
+                instance_environment(instance,_SessionOwner,original,config,Path(__file__).resolve().parents[2],
+                    'tests/test_experimental_provider_config.py::test_startup_and_thread_controls_through_actual_owned_adapter[False-False]')
         raise Stopped
     monkeypatch.setattr(_SessionOwner,'start',inspect)
     with pytest.raises(Stopped):
