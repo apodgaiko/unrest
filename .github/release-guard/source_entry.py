@@ -160,7 +160,7 @@ class Policy:
             if actual:
                 if actual != pid or type(raw) is not int or not (os.WIFEXITED(raw) or os.WIFSIGNALED(raw)):
                     policy.refuse('source nonnumeric parent wait')
-                policy.client.request('parent-wait', {'pid': actual, 'requested_pid': pid, 'child_token': saved['token'],
+                policy.client.request('drain_child', {'pid': actual, 'requested_pid': pid, 'child_token': saved['token'],
                     'raw_status': raw, 'numeric_returncode': os.waitstatus_to_exitcode(raw), 'options': options})
             return actual, raw
 

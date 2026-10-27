@@ -4,7 +4,10 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import asdict, replace
 import json
+import os
 from pathlib import Path
+import signal
+import sys
 
 import pytest
 
@@ -15,6 +18,7 @@ from launch_policy import Rule, render
 from process_ledger import Birth
 from source_code import Bodies
 from source_host import inventory
+import source_host
 from source_observer import Observer
 from source_profile import ROOT_COMMAND
 import source_observer
@@ -134,3 +138,106 @@ def test_sealed_leaf_keeps_exact_fixture_execution(tmp_path):
     assert bodies.audit('exec', (compile(script.read_bytes(), str(script), 'exec', dont_inherit=True),))
     with pytest.raises(Refused, match='unknown Python execution'):
         bodies.audit('exec', (compile('print("foreign")', str(script), 'exec'),))
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='actual Linux subreaper ownership')
+def test_adopted_parent_drain_rechecks_newly_adopted_descendant():
+    import ctypes
+    import select
+    read, write = os.pipe()
+    driver = os.fork()
+    if driver == 0:
+        os.close(read)
+        try:
+            assert not source_host.children()
+            assert ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) == 0
+            ready_read, ready_write = os.pipe()
+            parent = os.fork()
+            if parent == 0:
+                os.close(ready_read)
+                descendant = os.fork()
+                if descendant == 0:
+                    os.write(ready_write, b'R')
+                # Finite failure fallback even if the dedicated driver dies.
+                __import__('time').sleep(8)
+                os._exit(125)
+            os.close(ready_write)
+            assert select.select([ready_read], [], [], 2)[0] and os.read(ready_read, 1) == b'R'
+            os.close(ready_read)
+            assert source_host.children() == [parent]
+            rows = []
+            source_host.drain_owned(rows)
+            assert len(rows) == 2 and rows[0]['pid'] == parent
+            assert all(row['actual_wait'] == signal.SIGKILL and row['original_parent_wait_proven'] is False for row in rows)
+            assert not source_host.children()
+            os.write(write, b'OK')
+        except BaseException:
+            os._exit(125)
+        os._exit(0)
+    os.close(write)
+    try:
+        assert select.select([read], [], [], 7)[0] and os.read(read, 3) == b'OK'
+        assert source_host.settle(driver) == 0
+    finally:
+        source_host.settle(driver, terminate=True)
+        os.close(read)
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='actual wait and Unix peer birth')
+def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority():
+    import socket
+    import control_transport as transport
+    from linux_observation import process_identity
+    from process_ledger import Ledger
+    ledger = Ledger('cleanup-nonce')
+    root_id = process_identity(os.getpid())
+    birth = Birth.read(root_id)
+    ledger.kernel(0, {'kind': 'kernel_root', 'identity': root_id})
+    ledger.register(birth, 'root-token', (('pin', 'a' * 64),), 'seal', case='case', command_class='bootstrap-root', expected_generation=1)
+    ledger.process(birth).generation = 1  # Reducer epoch setup, not kernel-exec evidence.
+    held_read, held_write = os.pipe()
+    child = os.fork()
+    if child == 0:
+        os.close(held_write)
+        os.read(held_read, 1)
+        os._exit(17)
+    os.close(held_read)
+    try:
+        child_id = process_identity(child)
+        child_birth = Birth.read(child_id)
+        ledger.kernel(1, {'kind': 'kernel_child', 'parent': birth.pid, 'child': child, 'event': 1, 'identity': child_id})
+        ledger.register(child_birth, 'child-token', (('pin', 'a' * 64),), 'seal', case='case', command_class='child')
+        os.close(held_write)
+        held_write = -1
+        actual, raw = os.waitpid(child, 0)
+        assert actual == child and raw == 17 << 8
+        observer = object.__new__(Observer)
+        observer.root_birth, observer.root, observer.ledger, observer.finished = birth, birth.pid, ledger, False
+        actor = {'birth': birth, 'role': 'root', 'token': 'root-token', 'sequence': 0}
+        observer.actors = {child: {'birth': child_birth, 'returned': True}}
+        payload = {'pid': child, 'requested_pid': child, 'child_token': 'child-token',
+                   'raw_status': raw, 'numeric_returncode': os.waitstatus_to_exitcode(raw), 'options': 0}
+        request = {'pid': birth.pid, 'nonce': ledger.nonce, 'token': 'root-token', 'generation': 1,
+                   'id': 'a' * 32, 'kind': 'drain_child', 'payload': payload}
+        left, right = socket.socketpair()
+        try:
+            frame = transport.Frame(right, transport.REQUEST_LIMIT, ledger.poison)
+            frame.capture(ledger, birth, 'root-token', os.getgid())
+            left.sendall(transport.encode(request, transport.REQUEST_LIMIT))
+            assert frame.read() == request
+            ledger.poison.append('preserved source refusal')
+            admission = transport.Admission(ledger, frozenset({'drain_child', 'launch-intent'}))
+            assert observer.dispatch(actor, admission.admit(frame)) == {'ok': True}
+            assert ledger.process(child_birth).receipt['raw_status'] == raw
+            assert ledger.poison == ['preserved source refusal']
+            assert not ledger.reaped(child_birth, 'child-token')  # No fabricated kernel wait joins.
+            frame.received = {**request, 'id': 'b' * 32, 'kind': 'launch-intent'}
+            with pytest.raises(Refused):
+                admission.admit(frame)
+        finally:
+            left.close()
+            right.close()
+    finally:
+        if held_write >= 0:
+            os.close(held_write)
+        source_host.settle(child, terminate=True)

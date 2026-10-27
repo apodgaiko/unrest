@@ -281,7 +281,7 @@ class Observer:
                     or intent['token'] != payload['token'] or child['returned']):
                 raise Refused('source actual constructor return binding')
             child['returned'] = True
-        elif kind == 'parent-wait':
+        elif kind == 'drain_child':
             self.root_only(actor)
             shape(payload, ('pid', 'requested_pid', 'child_token', 'raw_status', 'numeric_returncode', 'options'))
             child = self.actors.get(number(payload['pid'], 1))
@@ -290,7 +290,7 @@ class Observer:
             row = {**payload, 'nonce': self.ledger.nonce, 'owner_pid': self.root,
                    'owner_identity': self.ledger.process(self.root_birth).registered_identity,
                    'owner_token': actor['token'], 'wait_event': 'actual_os_waitpid_return'}
-            self.actor_control(actor, kind, row)
+            self.actor_control(actor, 'parent-wait', row)
         elif kind == 'pair-intent':
             shape(payload, ('site',))
             if payload['site'] != 'asyncio-self-pipe' or len(self.pair_intents) >= 32:

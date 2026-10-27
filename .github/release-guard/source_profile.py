@@ -13,7 +13,7 @@ from process_ledger import Birth, canonical
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'launch-intent', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'listen', 'accepted', 'connect', 'connected',
-    'payload', 'parent-wait', 'custody_signal', 'custody_close', 'guard-refusal'})
+    'payload', 'drain_child', 'custody_signal', 'custody_close', 'guard-refusal'})
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
     'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',

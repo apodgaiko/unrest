@@ -133,7 +133,7 @@ def isolate(metadata, support):
     return {**metadata, 'mounts': mounts}
 
 
-def settle(pid, terminate=False):
+def settle(pid, terminate=False, deadline=None):
     try:
         actual, raw = os.waitpid(pid, os.WNOHANG)
     except ChildProcessError:
@@ -142,7 +142,8 @@ def settle(pid, terminate=False):
         return raw
     if terminate:
         os.kill(pid, signal.SIGKILL)
-    deadline = time.monotonic() + 5
+    if deadline is None:
+        deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         actual, raw = os.waitpid(pid, os.WNOHANG)
         if actual:
@@ -232,6 +233,18 @@ def children():
     return sorted(int(row) for row in rows)
 
 
+
+def drain_owned(rows):
+    deadline = time.monotonic() + 5
+    while children():
+        require(time.monotonic() < deadline and len(rows) < 32, 'bounded adopted cleanup')
+        # Reaping this root may reparent its own children to the dedicated
+        # driver. Re-census until empty under the same deadline.
+        for child in children():
+            require(len(rows) < 32, 'adopted population bound')
+            rows.append({'pid': child, 'actual_wait': settle(child, terminate=True, deadline=deadline),
+                         'original_parent_wait_proven': False})
+
 def main():
     require(sys.platform == 'linux' and os.getuid() == 0 and len(sys.argv) == 2,
             'source host requires exact root Linux invocation')
@@ -280,17 +293,18 @@ def main():
         success = True
     finally:
         adopted = []
-        for child in children():
-            adopted.append({'pid': child, 'actual_wait': settle(child, terminate=True), 'original_parent_wait_proven': False})
-        (raw_directory / 'fallback-cleanup.json').write_text(json.dumps(adopted))
-        if adopted:
-            success = False
-        archive = root / 'source-private.tar'
-        with tarfile.open(archive, 'w') as stream:
-            stream.add(raw_directory, arcname='source-private', recursive=True)
-        subprocess.run(['/usr/bin/openssl', 'cms', '-encrypt', '-binary', '-aes-256-cbc', '-outform', 'DER',
-                        '-in', str(archive), '-out', str(root / 'source-private.cms'), binding['recipient']['path']], check=True)
-        archive.unlink()
+        try:
+            drain_owned(adopted)
+            if adopted:
+                success = False
+        finally:
+            (raw_directory / 'fallback-cleanup.json').write_text(json.dumps(adopted))
+            archive = root / 'source-private.tar'
+            with tarfile.open(archive, 'w') as stream:
+                stream.add(raw_directory, arcname='source-private', recursive=True)
+            subprocess.run(['/usr/bin/openssl', 'cms', '-encrypt', '-binary', '-aes-256-cbc', '-outform', 'DER',
+                            '-in', str(archive), '-out', str(root / 'source-private.cms'), binding['recipient']['path']], check=True)
+            archive.unlink()
         require(not children(), 'source host cleanup residue')
     require(success, 'original source integration did not complete')
     print('Original bootstrap integration: two original cases, actual parent waits; full source certification: false', flush=True)
