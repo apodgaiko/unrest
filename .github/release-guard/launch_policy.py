@@ -93,6 +93,13 @@ class Expected:
     payload_kind: str
     payload_sha256: str
 
+    def wire(self) -> dict:
+        """Closed JSON primitives; tuple-valued policy state stays internal."""
+        return {'rule': self.rule, 'owner': self.owner, 'case': self.case,
+                'executable': self.executable, 'executable_sha256': self.executable_sha256,
+                'argv': list(self.argv), 'environment': [list(pair) for pair in self.environment],
+                'cwd': self.cwd, 'payload_kind': self.payload_kind, 'payload_sha256': self.payload_sha256}
+
 
 @dataclass(frozen=True)
 class Observation:

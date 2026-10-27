@@ -1,7 +1,6 @@
 """Native activation of the finite original-bootstrap root and sealed leaves."""
 from __future__ import annotations
 
-from dataclasses import asdict
 import errno
 import hashlib
 import os
@@ -83,7 +82,7 @@ class Policy:
         observed = Observation(executable, digest(Path(executable)), tuple(vector),
             tuple(sorted(environment.items())), str(cwd), 'python-command' if command else 'python-script', payload)
         intent = self.calls.startup.select(self.case, observed)
-        request = {'case': self.case, 'original': asdict(intent.original),
+        request = {'case': self.case, 'original': intent.original.wire(),
                    'translated': list(intent.translated_argv), 'source_line': intent.original_source_line,
                    'script_sha256': intent.script_sha256}
         finite(request)

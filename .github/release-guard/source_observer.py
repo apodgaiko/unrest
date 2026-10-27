@@ -5,7 +5,6 @@ Kernel births/execs and actual waits remain independent of source-side reports.
 """
 from __future__ import annotations
 
-from dataclasses import asdict
 import hashlib
 import json
 import os
@@ -196,7 +195,7 @@ class Observer:
                     native, self.binding['entry']['sha256'], vector, tuple(sorted(environment.items())), cwd, kind, pin)
         expected = render(rule, self.case, rule.owner, {}, {})
         translated = [native, '-I', '-S', *expected.argv[1:]]
-        if (original != json.loads(json.dumps(asdict(expected))) or payload['translated'] != translated
+        if (original != expected.wire() or payload['translated'] != translated
                 or payload['script_sha256'] != script_pin
                 or any(value['case'] == self.case and value['role'] == role for value in self.intents.values())):
             raise Refused('source independently reconstructed launch mismatch')

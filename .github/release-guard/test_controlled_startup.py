@@ -15,6 +15,7 @@ import sys
 import pytest
 
 from content_manifest import Refused
+from control_transport import finite, encode, REQUEST_LIMIT
 from controlled_startup import Startup, CASES
 from launch_policy import Observation
 from source_owner import prepare
@@ -93,7 +94,13 @@ def test_real_product_caller_and_original_asyncio_options_select_backend_before_
         bootstrap.delayed_backend.__wrapped__(monkeypatch)(.5)
     selected = []
     def inspect(args):
-        selected.append(gate.select(case, observation(args)))
+        intent = gate.select(case, observation(args))
+        request = {'case': case, 'original': intent.original.wire(),
+                   'translated': list(intent.translated_argv), 'source_line': intent.original_source_line,
+                   'script_sha256': intent.script_sha256}
+        finite(request)
+        assert __import__('json').loads(encode(request, REQUEST_LIMIT)[4:]) == request
+        selected.append(intent)
     ACTIVE[0] = inspect
     async def run():
         try:
