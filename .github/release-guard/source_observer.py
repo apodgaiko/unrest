@@ -346,6 +346,11 @@ class Observer:
                        and (self.case not in CONTROLLED or value['cwd'] == expected.cwd)
                        for value in self.intents.values()) >= maximum):
             raise Refused('source independent launch reconstruction')
+        # Hold the next constructor until the prior child passes exact exec
+        # admission. The fork boundary keeps its unique-intent requirement.
+        if any(not value['consumed'] and value.get('parent', self.root_birth) == actor['birth']
+               for value in self.intents.values()):
+            return None
         self.serial += 1
         token = os.urandom(16).hex()
         self.intents[self.serial] = {'case': self.case, 'role': role, 'parent': actor['birth'],

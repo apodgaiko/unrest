@@ -382,3 +382,15 @@ def test_public_git_manifest_envelope_preserves_the_small_source_domain(tmp_path
             load({**envelope,'git':{**metadata,'file_bound':bound}})
     with pytest.raises(Refused,match='manifest_member'):
         encode({'schema':small['schema'],'files':metadata['files']})
+
+
+@pytest.mark.parametrize('consumed', [False, True])
+def test_constructor_window_serializes_before_second_intent(tmp_path, consumed):
+    observer, actor, request = backend_request(tmp_path)
+    observer.intents[10] = {'parent': actor['birth'], 'consumed': consumed, 'case': observer.case, 'role': 'acp'}
+    if not consumed:
+        assert observer.launch(actor, request) is None
+        assert len(observer.intents) == 1 and observer.serial == 0
+    else:
+        assert observer.launch(actor, request)['ok'] is True
+        assert len(observer.intents) == 2
