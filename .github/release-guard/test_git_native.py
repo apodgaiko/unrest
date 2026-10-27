@@ -67,7 +67,7 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
                 'sha256': hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}]
     for path, arguments, env in (('/usr/bin/git', ['commit', '--allow-empty', '-m', 'base'], environment),
         ('/usr/bin/git', ['rev-parse', 'HEAD'], environment),
-        (helper, ['maintenance', 'run', '--auto', '--no-quiet'], helper_environment)):
+        (helper, ['maintenance', 'run', '--auto', '--no-quiet', '--detach'], helper_environment)):
         allowed.append({'path': path, 'argv': [path, *arguments], 'environment': env, 'cwd': str(repository),
                         'sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()})
     child = os.fork()
