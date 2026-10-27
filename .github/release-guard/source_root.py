@@ -247,7 +247,7 @@ class OriginalCases:
         if index >= len(self.cases) or not self.items or item is not self.items[index] or item.nodeid != self.cases[index]:
             raise Refused('root original case cursor')
         policy = self.policy
-        from ordinary_acp import CASES as ORDINARY_CASES
+        from ordinary_acp import ALL_CASES as ORDINARY_CASES
         policy.case, policy.calls = item.nodeid, (OrdinaryCalls if item.nodeid in ORDINARY_CASES else Calls)(policy, item)
         policy.client.request('case-start', {'case': item.nodeid})
         yield

@@ -8,7 +8,7 @@ import sys
 from content_manifest import Refused, capture
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
-from ordinary_acp import CASES as ORDINARY_CASES, MOCK, PINS
+from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, MOCK, PINS
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 
@@ -54,7 +54,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp')
             or type(profile['case']) is not str
             or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES)):
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]

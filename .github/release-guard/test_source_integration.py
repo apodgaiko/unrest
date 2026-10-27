@@ -272,3 +272,22 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
         if held_write >= 0:
             os.close(held_write)
         source_host.settle(child, terminate=True)
+
+
+def test_caught_cleanup_signal_refusal_stays_poisoned(monkeypatch):
+    import subprocess
+    calls = []
+    policy = object.__new__(Policy)
+    policy.profile, policy.local, policy.poison = {'role': 'root'}, threading.local(), False
+    def reject(*args):
+        raise Refused('original cleanup caller')
+    policy.calls = SimpleNamespace(signal=reject)
+    policy.client = SimpleNamespace(request=lambda kind, payload: calls.append((kind, payload)))
+    policy.children = {123: {'token': 'owned'}}
+    for obj, name in ((subprocess.Popen, '__init__'), (os, 'waitpid'), (os, 'kill'), (os, 'killpg')):
+        monkeypatch.setattr(obj, name, getattr(obj, name))
+    Policy.install_process_hooks(policy)
+    with pytest.raises(Refused, match='cleanup signal refused'):
+        os.kill(123, signal.SIGTERM)
+    assert policy.poison is True
+    assert calls == [('guard-refusal', {'code': 'source cleanup signal refused'})]

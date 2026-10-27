@@ -30,6 +30,21 @@ CASES = tuple(TEST + '::' + name for name in (
     'test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling[claude]'))
 
 
+NEGATIVE_CASES = tuple(TEST + '::' + name for name in (
+    *(f'test_owned_node_local_rejection_starts_no_mcp_client_or_protocol[{command}-{role}]'
+      for command in ('empty', 'whitespace', 'tokenization', 'empty-argv0', 'missing', 'argv0-nul', 'later-argv-nul', 'unencodable')
+      for role in ('work', 'validate')),
+    *(f'test_owned_node_rejects_malformed_os_fields_before_any_launch_work[{malformation}-{field}-{role}]'
+      for malformation in ('nul', 'unencodable') for field in ('cwd', 'env_key', 'env_value', 'path')
+      for role in ('work', 'validate')),
+    *(f'test_owned_node_rejects_illegal_environment_name_before_any_launch_work[{role}]' for role in ('work', 'validate')),
+    *(f'test_owned_node_obstruction_starts_no_mcp_client_or_protocol[{fixture}-{category}-{role}]'
+      for fixture, category in (('directory', 'directory'), ('non_executable', 'not_executable')) for role in ('work', 'validate')),
+    'test_terminal_local_rejection_starts_no_mcp_client_or_protocol',
+))
+ALL_CASES = (*CASES, *NEGATIVE_CASES)
+
+
 def environment(case, base, root_environment):
     if case not in CASES:
         raise Refused('ordinary finite case')

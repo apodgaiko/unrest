@@ -179,3 +179,36 @@ def test_exception_cleanup_callsite_stays_exact_original():
     assert isinstance(call.func, ast.Attribute) and call.func.attr == 'terminate'
     assert isinstance(call.func.value, ast.Name) and call.func.value.id == 'mcp_process'
     assert call.args == [] and call.keywords == []
+
+
+def test_no_launch_catalogue_preserves_original_parameters_and_ids():
+    import ast
+    import itertools
+    from ordinary_acp import NEGATIVE_CASES, TEST
+    tree = ast.parse((Path(__file__).resolve().parents[2] / TEST).read_text())
+    names = {case.split('::')[1].split('[')[0] for case in NEGATIVE_CASES}
+    collected = []
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name not in names:
+            continue
+        dimensions = []
+        for call in reversed(node.decorator_list):
+            if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute) or call.func.attr != 'parametrize':
+                continue
+            values = ast.literal_eval(call.args[1])
+            ids = next((ast.literal_eval(key.value) for key in call.keywords if key.arg == 'ids'), None)
+            dimensions.append(ids or ['-'.join(value) if isinstance(value, tuple) else str(value) for value in values])
+        for values in itertools.product(*dimensions):
+            collected.append(TEST + '::' + node.name + ('[' + '-'.join(values) + ']' if values else ''))
+    assert tuple(collected) == NEGATIVE_CASES and len(NEGATIVE_CASES) == 39
+
+
+@pytest.mark.parametrize('case', ordinary_acp.NEGATIVE_CASES)
+def test_no_launch_cases_have_no_process_route(tmp_path, case):
+    observer = object.__new__(Observer)
+    observer.root_birth = Birth(1, 1, 1, 1, 'test-boot', 20000)
+    observer.finished, observer.case, observer.intents = False, case, {}
+    actor = {'birth': observer.root_birth, 'role': 'root'}
+    with pytest.raises(Refused, match='declared launch case'):
+        observer.launch(actor, {'case': case, 'original': {}, 'translated': [], 'source_line': 409, 'script_sha256': 'a' * 64})
+    assert observer.intents == {}

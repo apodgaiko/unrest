@@ -31,7 +31,7 @@ jobs:
       - name: Actual native prebody and caught-refusal controls
         run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 120 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_native_entry_control.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json"
       - name: Original ordinary ACP compatibility cases
-        run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 240 "$PWD/.venv/bin/python" -I -B "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/support/source_host.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json" ordinary3
+        run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 240 "$PWD/.venv/bin/python" -I -B "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/support/source_host.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json" ordinary42
       - name: Retain encrypted native control diagnostics
         if: always()
         uses: actions/upload-artifact@v4.6.2
