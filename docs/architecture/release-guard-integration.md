@@ -2789,3 +2789,12 @@ Only the exact prepared observing wrappers retaining original functions are vali
 arbitrary constructor wrappers and replaced cleanup methods refuse. The catalogue
 covers unchanged unconfigured source fixtures; configured inputs keep a separate
 binding and native/provider execution remains unverified.
+
+The controlled custody Git helper is a separate closed native family. Its fixed
+setup/seal/integration templates operate only in disposable case repositories
+with exact local configuration, no active hooks, remotes or alternates. Directory
+and Git-metadata generations remain stable across commands. Read-only HEAD values
+join the original stdout pipe and successful numeric parent wait before becoming
+causal commit facts; later diff inputs require such a prior producer in that case.
+The command count follows the finite owner/turn history. Unknown native children
+remain refused; this family grants no generic Git or provider permission.

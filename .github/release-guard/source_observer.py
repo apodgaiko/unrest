@@ -47,6 +47,10 @@ def number(value, minimum=0):
     return value
 
 
+def native_class(role):
+    return 'native-git-command' if role == 'git-custody' else 'native-' + role
+
+
 class Observer:
     def __init__(self, binding, metadata, root_pid, out_read):
         self.binding, self.meta = binding, metadata
@@ -167,6 +171,10 @@ class Observer:
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
+            elif role == 'git-custody' and descriptor in (0,2):
+                null = Path('/dev/null').stat()
+                if not stat.S_ISCHR(info.st_mode) or info.st_rdev != null.st_rdev:
+                    raise Refused('custody Git exact null descriptors')
             elif role == 'git-helper':
                 null = Path('/dev/null').stat()
                 if not ((stat.S_ISCHR(info.st_mode) and info.st_rdev == null.st_rdev)
@@ -218,7 +226,7 @@ class Observer:
             birth = Birth.read(actual)
             pins = (('native-fixture', intent['executable_sha256']),)
             self.ledger.register(birth, intent['token'], pins, intent['executable_sha256'],
-                                 case=intent['case'], command_class='native-' + intent['role'], expected_generation=0 if intent['role'] == 'session-invalid' else 1)
+                                 case=intent['case'], command_class=native_class(intent['role']), expected_generation=0 if intent['role'] == 'session-invalid' else 1)
             self.actors[pid] = {'birth': birth, 'role': intent['role'], 'case': intent['case'], 'token': intent['token'],
                 'returned': False, 'body_ready': False, 'signals': set(), 'kernel_admitted': True}
         else:
@@ -291,6 +299,9 @@ class Observer:
         if self.case in ORDINARY_CASES:
             return self.ordinary_launch(actor, payload)
         if self.case in CONTROLLED:
+            if original['rule'] == 'custody:git':
+                from custody_git import launch
+                return launch(self,actor,payload)
             return self.controlled_launch(actor, payload)
         cwd = original['cwd']
         if type(cwd) is not str:
@@ -571,7 +582,7 @@ class Observer:
                 if (payload['case'] != self.case or self.case in GIT_CASES and len(children) < 5 or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
-                        or any(not (self.git.reaped(value) if self.case in GIT_CASES else self.ledger.reaped(value['birth'], value['token'])) for value in children)
+                        or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)
                         or any(ticket.route.case == self.case for ticket in self.endpoints.tickets.values())):
                     raise Refused('source original case actual cleanup incomplete')
                 self.endpoints.retire_case(self.case)

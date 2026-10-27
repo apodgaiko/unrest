@@ -9,6 +9,7 @@ from __future__ import annotations
 from content_manifest import Refused
 
 PINS = {
+    'src/unrest_harness/experimental_custody.py': '1daba7ee49702f680d342f542f2e670fba0fb953234b7e4358a497f7abcae9a1',
     'src/unrest_harness/experimental_cohort.py': 'd830a15c39394463022150c7b01c41e941100ae55f4eff033fc247cbf6af7c61',
     'src/unrest_harness/experimental_provider_config.py': '92c8d11fc6aedbf8a737be416387de5f0aa4a239ce8e9e048f543bb8cd4041a5',
     'src/unrest_harness/experimental_session.py': '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2',

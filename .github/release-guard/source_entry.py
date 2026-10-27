@@ -80,7 +80,9 @@ class Policy:
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
-        if self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES):
+        if self.case in CONTROLLED and type(vector) is list and vector and type(vector[0]) is str and vector[0] == '/usr/bin/git':
+            intent = self.calls.git.select(self.case,args)
+        elif self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES):
             if (type(executable) is not str or type(vector) is not list
                     or not (1 if self.case in SESSION_INVALID else 2) <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
                 raise Refused('ordinary process audit primitives')
@@ -118,6 +120,7 @@ class Policy:
         if getattr(self.local, 'launch', None) is not None:
             raise Refused('source nested process constructor')
         self.local.launch = answer
+        self.local.custody = intent.original.rule == 'custody:git'
         vector[:] = intent.translated_argv
         if intent.original.rule == 'cleanup:mcp':
             if type(environment) is not dict:
@@ -189,15 +192,19 @@ class Policy:
             policy.client.request('launch-return', {'pid': process.pid, 'ticket': pending['ticket'], 'token': pending['token']})
             saved = {'token': pending['token'], 'process': process, 'case': policy.case}
             policy.children[process.pid] = saved
-            if policy.case in GIT_CASES:
-                _, command = policy.calls.pending
+            custody = getattr(policy.local,'custody',False)
+            policy.local.custody = False
+            if policy.case in GIT_CASES or custody:
+                command = policy.calls.git.pending if custody else policy.calls.pending[1]
                 saved['git_command'] = command
                 if command is None:
                     policy.calls.owned_pid = process.pid
                 elif command.produces is not None:
-                    if type(process.stdout) is not io.TextIOWrapper:
+                    stream_type = io.BufferedReader if custody else io.TextIOWrapper
+                    if type(process.stdout) is not stream_type:
                         policy.refuse('git original stdout wrapper')
-                    fd = io.TextIOWrapper.fileno(process.stdout)
+                    saved['git_stream_type'] = stream_type
+                    fd = stream_type.fileno(process.stdout)
                     info = os.fstat(fd)
                     saved['git_stdout'], saved['git_pipe'] = process.stdout, (fd, info.st_dev, info.st_ino)
                     policy.client.request('git-pipe', {'pid': process.pid, 'token': saved['token'],
@@ -209,19 +216,20 @@ class Policy:
             if command is None or command.produces is None:
                 return original_communicate(process, *args, **kwargs)
             if (saved['process'] is not process or saved['case'] != policy.case
-                    or process.stdout is not saved['git_stdout'] or type(process.stdout) is not io.TextIOWrapper
+                    or process.stdout is not saved['git_stdout'] or type(process.stdout) is not saved['git_stream_type']
                     or original_communicate.__code__ is not communicate_code or original_communicate.__globals__ is not communicate_globals):
                 policy.refuse('git original communicate identity')
             fd, dev, inode = saved['git_pipe']
-            info = os.fstat(io.TextIOWrapper.fileno(process.stdout))
+            info = os.fstat(saved['git_stream_type'].fileno(process.stdout))
             if (info.st_dev, info.st_ino) != (dev, inode):
                 policy.refuse('git stdout descriptor generation changed')
             result = original_communicate(process, *args, **kwargs)
             if (original_communicate.__code__ is not communicate_code or saved.get('wait_raw') != 0
-                    or type(result) is not tuple or len(result) != 2 or type(result[0]) is not str):
+                    or type(result) is not tuple or len(result) != 2
+                    or type(result[0]) is not (bytes if saved['git_stream_type'] is io.BufferedReader else str)):
                 policy.refuse('git stdout before successful actual parent wait')
             answer = policy.client.request('git-output', {'pid': process.pid, 'token': saved['token'],
-                'pipe': [fd, dev, inode], 'stdout': result[0]})
+                'pipe': [fd, dev, inode], 'stdout': result[0].decode('ascii') if type(result[0]) is bytes else result[0]})
             if command.produces[1] == 'integration-commit':
                 policy.calls.integrations[answer['value']] = (command.produces[0], command.produces[2])
             return result

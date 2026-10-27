@@ -60,6 +60,7 @@ class Git:
         self.values = Values(observer.ledger)
         self.repositories, self.commands, self.last = {}, {}, {}
         self.helpers, self.pin = {}, None
+        self.custody_roots = {}
 
     def repository(self, repository, operation, family):
         root = Path(repository)
@@ -251,7 +252,7 @@ class Git:
         if actor['role'] == 'git-helper':
             process = self.host.ledger.process(birth)
             return self.values.native_child_reaped(process.parent, birth, actor['case'], process.pins)
-        if actor['role'] == 'git-command':
+        if actor['role'] in ('git-command','git-custody'):
             intent = self.commands[actor['token']]
             if intent['command'].produces is not None and not intent.get('value_observed'):
                 return False

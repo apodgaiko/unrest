@@ -97,6 +97,9 @@ class BootstrapCalls(TestSources):
         super().__init__(policy, item, test, CONTROLLED_PINS if controlled else {SESSION: SESSION_PIN, TEST: TEST_PIN})
         self.anchors = {}
         self.controlled = controlled
+        if controlled:
+            from custody_git import Calls
+            self.git = Calls(self)
         checkout = Path(self.profile['checkout'])
         self.session = importlib.import_module('unrest_harness.experimental_session')
         self.session_unit = self.unit(SESSION, self.session, self.mode(self.session))

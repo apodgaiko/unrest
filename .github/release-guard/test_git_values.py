@@ -204,3 +204,16 @@ def test_actual_git_date_forms_remain_exact_and_predecessor_bound(value):
     assert record.value == value and record.inputs == (BASE,)
     with pytest.raises(Refused):
         values.require(CASE, REPO, 'parent', 'date', value, ('9' * 40,))
+
+
+@pytest.mark.parametrize('role',['git-custody','git-command','git-foreign'])
+def test_custody_native_class_joins_the_same_actual_wait_value_reducer(role):
+    from source_observer import native_class
+    ledger,root,child = setup(command_class=native_class(role))
+    token = complete(ledger,root,child,0)
+    values = Values(ledger)
+    if role == 'git-foreign':
+        with pytest.raises(Refused):
+            values.observe(child,token,CASE,REPO,REPO,'commit',BASE+'\n')
+    else:
+        assert values.observe(child,token,CASE,REPO,REPO,'commit',BASE+'\n').value == BASE
