@@ -111,11 +111,15 @@ class Policy:
                 self.local.signal = None
                 return True
             raise Refused('source unknown privileged effect')
-        except BaseException:
+        except BaseException as error:
             self.poison = True
             traceback.print_exc(file=sys.stderr)  # Owned output pipe; encrypted by the host.
+            code = (error.args[0] if type(error) is Refused and len(error.args) == 1
+                    and type(error.args[0]) is str and len(error.args[0]) <= 128
+                    and all(char.isascii() and (char.isalnum() or char in ' -_') for char in error.args[0])
+                    else 'source-audit-refused')
             try:
-                self.client.request('guard-refusal', {'code': 'source-audit-refused'})
+                self.client.request('guard-refusal', {'code': code})
             except BaseException:
                 pass
             raise

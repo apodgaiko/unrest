@@ -420,6 +420,10 @@ class Observer:
                 return {'ok': True, 'live': False}
             return {'ok': True, 'live': True}
         elif kind == 'guard-refusal':
+            shape(payload, ('code',))
+            if (type(payload['code']) is not str or not 0 < len(payload['code']) <= 128
+                    or any(not char.isascii() or not (char.isalnum() or char in ' -_') for char in payload['code'])):
+                raise Refused('source refusal code schema')
             self.ledger.poison.append('source guard refusal')
         else:
             raise Refused('source undeclared observer method')
