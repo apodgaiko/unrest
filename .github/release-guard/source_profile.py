@@ -12,7 +12,7 @@ from content_manifest import Refused, capture
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
 from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, MOCK, PINS
-from cleanup_launch import ALL_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_mode, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
+from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_mode, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES, INFLIGHT, body as inline_body
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical

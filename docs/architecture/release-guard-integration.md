@@ -2592,3 +2592,14 @@ one implementation; each family still independently builds its exact expected
 command, source site, environment and causal state. Unused connected-socket census
 compatibility functions have been removed; active descriptor observations and
 endpoint policy retain their existing checks and tests.
+
+The three saved-review cases use the same terminal-review MCP/ACP pair, with no
+Git launch permission. Their exact original scenario includes progress and a
+receipt; only the transport variant injects the original malformed response.
+The public fixture credential is admitted only as the declared agent environment
+value and as the single typed sensitive-inventory entry. It is absent from the
+MCP environment. Inventory cardinality and primitive types are checked before
+comparison, so extra entries or comparison callbacks cannot gain admission.
+The original tests remain responsible for proving that the report is saved
+before the observer callback, that cancellation/transport failures keep their
+original attribution, that redaction holds and that both children are reaped.

@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from cleanup_launch import ALL_CASES, RECORDED, FAULTS, CASES, OFFLINE, selection, child_count, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
+from test_cleanup_inline import inline_context as inline_context
+from cleanup_launch import ALL_CASES, RECORDED, FAULTS, SAVED, CREDENTIAL, CASES, OFFLINE, selection, child_count, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
 import cleanup_launch
 from content_manifest import Refused
 from source_owner import Link
@@ -144,7 +145,7 @@ def test_original_free_port_bind_has_its_actual_source_owner(monkeypatch):
         calls.listener()
 
 
-@pytest.mark.parametrize('case', ALL_CASES)
+@pytest.mark.parametrize('case', (*ALL_CASES, *SAVED))
 @pytest.mark.asyncio
 async def test_original_mcp_constructor_options_without_launch(tmp_path, monkeypatch, case):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
@@ -186,13 +187,13 @@ async def test_original_mcp_constructor_options_without_launch(tmp_path, monkeyp
             if role == 'terminal_reviewer':
                 await runner._start_terminal_reviewer_mcp(project_id='project', mission_id='mission-001',
                     report_path=env['UNREST_TERMINAL_REVIEW_PATH'], workspace_dir=str(tmp_path / 'workspace'),
-                    mcp_port=12345, sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
+                    mcp_port=12345, sensitive_inventory=acp_runner.finite_credential_values(CREDENTIAL if case in SAVED else {}), environment=env)
             else:
                 await runner._start_worker_mcp_server(task=Task(id='w1', type=role, body='controlled',
                     targets=['VAL-CLEANUP'] if recorded and role == 'validate' else [], skill='s'),
                     project_id='project', mission_id='mission-001', handoff_path=env['UNREST_HANDOFF_PATH'],
                     workspace_dir=str(tmp_path / 'workspace'), mcp_port=12345,
-                    sensitive_inventory=acp_runner.finite_credential_values({}), environment=env)
+                    sensitive_inventory=acp_runner.finite_credential_values(CREDENTIAL if case in SAVED else {}), environment=env)
     with pytest.raises(Stop):
         if case in FAULTS:
             await asyncio.create_task(launch_mcp())
@@ -238,7 +239,7 @@ def test_cleanup_declaration_preserves_every_original_role_and_payload(tmp_path,
 
 
 def test_cleanup_declaration_does_not_admit_adjacent_cases_or_git(tmp_path):
-    for case in (CASES[0] + '-foreign', 'tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[observer]', True):
+    for case in (CASES[0] + '-foreign', 'tests/test_acp_cleanup.py::test_saved_review_observer_compatibility[foreign]', True):
         with pytest.raises(Refused):
             selection(case)
     for case in ALL_CASES:
@@ -247,8 +248,9 @@ def test_cleanup_declaration_does_not_admit_adjacent_cases_or_git(tmp_path):
                 expected(case, 'git-observe', tmp_path, '/native', 'a' * 64, tmp_path, {})
 
 
+@pytest.mark.parametrize('credential', (False, True))
 @pytest.mark.asyncio
-async def test_terminal_agent_environment_matches_original_lifecycle(tmp_path, monkeypatch):
+async def test_terminal_agent_environment_matches_original_lifecycle(tmp_path, monkeypatch, credential):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
     import os
     import sys
@@ -259,6 +261,8 @@ async def test_terminal_agent_environment_matches_original_lifecycle(tmp_path, m
     for name in tuple(os.environ):
         monkeypatch.delenv(name)
     root = {'HOME': str(tmp_path / 'ambient-home'), 'TMPDIR': str(tmp_path / 'ambient-tmp'), 'PATH': '/usr/bin:/bin'}
+    if credential:
+        monkeypatch.setenv('OPENAI_API_KEY', 'controlled-secret-observer-value')
     for name, value in root.items():
         monkeypatch.setenv(name, value)
     _, store, _ = controller_fixture(tmp_path)
@@ -291,6 +295,7 @@ async def test_terminal_agent_environment_matches_original_lifecycle(tmp_path, m
         pass
     async def start(**kwargs):
         captured['mcp'] = kwargs['environment']
+        captured['inventory'] = dict(kwargs['sensitive_inventory'])
         return types.SimpleNamespace(returncode=None, terminate=lambda: cleanup_signal())
     async def ready(*args, **kwargs):
         pass
@@ -308,7 +313,11 @@ async def test_terminal_agent_environment_matches_original_lifecycle(tmp_path, m
         await runner.run_terminal_review('project', 'mission-001', 'attempt-1', store)
     case = next(case for case in ALL_CASES if selection(case)[2] == 'terminal_reviewer')
     assert captured['mcp'] == environment(tmp_path, root, agent=False, case=case)
-    assert captured['agent'] == environment(tmp_path, root, agent=True, case=case)
+    expected_agent = environment(tmp_path, root, agent=True, case=case)
+    if credential:
+        expected_agent['OPENAI_API_KEY'] = 'controlled-secret-observer-value'
+    assert captured['agent'] == expected_agent
+    assert captured['inventory'] == ({'OPENAI_API_KEY': 'controlled-secret-observer-value'} if credential else {})
     assert captured['cleanup_owner'] == 'ACPNodeRunner._run_terminal_review_lifecycle.<locals>.finish_mcp'
 
 
@@ -370,3 +379,76 @@ async def test_scheduled_fault_admission_keeps_exact_selected_fixture(mutation, 
     with pytest.raises(Refused):
         await test_original_mcp_constructor_options_without_launch(tmp_path, monkeypatch, FAULTS[0])
     assert callbacks == []
+
+
+@pytest.mark.parametrize('case', SAVED)
+def test_saved_review_scenario_and_credential_declaration(case, tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from tests.test_acp_cleanup import malformed
+    _, variant, role = selection(case)
+    assert role == 'terminal_reviewer' and child_count(case) == 2 and not git_completion(case)
+    assert json.loads(scenario(case, tmp_path)) == {'role': role, 'progress': True,
+        'receipt': str(tmp_path / 'receipt'), 'raw': malformed('array_id') if variant == 'transport' else None}
+    root = {'HOME': '/home', 'TMPDIR': '/tmp', 'PATH': '/usr/bin:/bin'}
+    assert not CREDENTIAL.keys() & environment(tmp_path, root, agent=False, case=case).keys()
+    assert {key: environment(tmp_path, root, agent=True, case=case)[key] for key in CREDENTIAL} == CREDENTIAL
+    for native_role in ('git-init', 'git-commit', 'git-observe'):
+        with pytest.raises(Refused):
+            expected(case, native_role, tmp_path, '/native', 'a' * 64, tmp_path, root)
+
+
+@pytest.mark.parametrize('case', SAVED)
+@pytest.mark.asyncio
+async def test_original_saved_review_mcp_admission_in_its_separate_task(case, inline_context, monkeypatch, caplog, mutation=None):
+    import asyncio
+    original, function, base, policy, calls = inline_context(case)
+    calls.case_item.funcargs['fault'] = selection(case)[1]
+    from unrest_harness import acp_runner
+    monkeypatch.setattr(acp_runner.ACPNodeRunner, '_find_free_port', staticmethod(lambda: 12345))
+    monkeypatch.setattr(cleanup_launch, 'read_pipe', lambda pid, fd: None)
+    observed, refused = [], []
+    class Stop(BaseException):
+        pass
+    async def constructor(factory, program, *args, **kwargs):
+        if mutation:
+            from source_owner import active_frames
+            frames = active_frames()
+            try:
+                frame = next(f for f in frames if f.f_code.co_qualname == 'ACPNodeRunner._start_terminal_reviewer_mcp')
+                inventory = frame.f_locals['sensitive_inventory']
+                if mutation == 'missing':
+                    inventory.clear()
+                elif mutation == 'extra':
+                    dict.__setitem__(inventory, 'FOREIGN', 'unapproved')
+                else:
+                    class Trap:
+                        def __eq__(self, other):
+                            raise AssertionError('inventory callback must not execute')
+                    dict.__setitem__(inventory, 'OPENAI_API_KEY', Trap())
+            finally:
+                del frames
+        try:
+            intent = calls.startup.select(case, (program, [program, *args], kwargs['cwd'], kwargs['env']))
+        except Refused as error:
+            refused.append(error)
+            raise
+        observed.append(intent)
+        raise Stop
+    monkeypatch.setattr(asyncio.get_running_loop(), 'subprocess_exec', constructor)
+    # The original test catches the injected constructor stop, then its receipt
+    # assertion stops this no-effect reproduction. The native case must pass it.
+    with pytest.raises(AssertionError) as stopped:
+        await function(base, monkeypatch, caplog, selection(case)[1])
+    if mutation:
+        assert not observed and len(refused) == 1, str(stopped.value)
+        return
+    assert len(observed) == 1 and observed[0].original.rule == 'cleanup:mcp', str(stopped.value)
+    assert not CREDENTIAL.keys() & dict(observed[0].original.environment).keys()
+
+
+@pytest.mark.parametrize('case', SAVED)
+@pytest.mark.parametrize('mutation', ('missing', 'extra', 'callback'))
+@pytest.mark.asyncio
+async def test_saved_review_inventory_is_exact_before_any_child(case, mutation, inline_context, monkeypatch, caplog):
+    await test_original_saved_review_mcp_admission_in_its_separate_task(
+        case, inline_context, monkeypatch, caplog, mutation)

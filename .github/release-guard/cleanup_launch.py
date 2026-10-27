@@ -34,13 +34,19 @@ RECORDED = tuple(TEST + f'::test_recorded_transport_failures[{variant}-{role}]'
 FAULTS = tuple(TEST + f'::test_cleanup_faults_and_repeated_cancellation[{variant}-{role}]'
                for variant in ('reader', 'client', 'progress', 'cancel', 'primary')
                for role in ('work', 'validate', 'terminal_reviewer'))
+SAVED = tuple(TEST + f'::test_saved_review_observer_compatibility[{variant}]'
+              for variant in ('observer', 'cancel', 'transport'))
 ALL_CASES = (*RECORDED, *FAULTS)
-GROUPS = (CASES, RECORDED, FAULTS, ALL_CASES)
+EXECUTION_CASES = (*ALL_CASES, *SAVED)
+GROUPS = (CASES, RECORDED, FAULTS, ALL_CASES, SAVED)
+CREDENTIAL = {'OPENAI_API_KEY': 'controlled-secret-observer-value'}
 
 
 def selection(case):
-    if type(case) is not str or case not in ALL_CASES:
+    if type(case) is not str or case not in EXECUTION_CASES:
         raise Refused('cleanup finite case declaration')
+    if case in SAVED:
+        return False, case.rsplit('[', 1)[1][:-1], 'terminal_reviewer'
     variant, role = case.rsplit('[', 1)[1][:-1].split('-', 1)
     return case in RECORDED, variant, role
 
@@ -79,7 +85,10 @@ def base_path(value, owned):
 
 def scenario(case, base):
     recorded, variant, role = selection(case)
-    if not recorded:
+    if case in SAVED:
+        record = {'role': role, 'progress': True, 'receipt': str(base / 'receipt'),
+                  'raw': json.dumps({'jsonrpc': '2.0', 'id': [], 'result': {}}) if variant == 'transport' else None}
+    elif not recorded:
         record = {'role': role, 'no_handoff': True}
     else:
         raw = (None if variant == 'success' else '[' * 10000 + '0' + ']' * 10000 if variant == 'deep_json'
@@ -89,7 +98,7 @@ def scenario(case, base):
 
 
 def snapshot_path(directory, case):
-    if case not in ALL_CASES:
+    if case not in EXECUTION_CASES:
         raise Refused('cleanup snapshot case')
     return directory / ('scenario-' + hashlib.sha256(case.encode()).hexdigest() + '.json')
 
@@ -112,6 +121,8 @@ def environment(base, root_environment, *, agent, case=CASES[0]):
     elif role != 'terminal_reviewer':
         result['UNREST_NODE_ASSIGNMENT'] = json.dumps({'targets': ['VAL-CLEANUP'] if recorded and role == 'validate' else [],
                                                      'task_type': role}, separators=(',', ':'))
+    if agent and case in SAVED:
+        result.update(CREDENTIAL)
     return result
 
 
@@ -151,7 +162,7 @@ def system_git():
 
 
 def expected(case, role, base, native, native_pin, checkout, root_environment, *, port=None, descriptor=None):
-    if case not in ALL_CASES:
+    if case not in EXECUTION_CASES:
         raise Refused('cleanup finite case')
     home = base / 'workspace'
     vector: tuple[str, ...]
@@ -214,14 +225,14 @@ class Launches:
                 # The original fault cases intentionally launch in a separate
                 # Task. Bind its root to the retained, externally selected
                 # pytest item's actual fixture table, never another task scan.
-                if case not in FAULTS:
+                if case not in (*FAULTS, *SAVED):
                     raise Refused('cleanup active original case')
                 self.calls.test_owner.verify_binding()
                 values = _namespace(self.calls.case_item.funcargs)
                 _, variant, case_role = selection(case)
                 if (type(values) is not dict or type(values.get('fault')) is not str
-                        or values['fault'] != variant or type(values.get('role')) is not str
-                        or values['role'] != case_role):
+                        or values['fault'] != variant or case not in SAVED and (type(values.get('role')) is not str
+                        or values['role'] != case_role)):
                     raise Refused('cleanup original scheduled case parameters')
                 base_value = values.get('tmp_path')
             else:
@@ -266,7 +277,9 @@ class Launches:
                     port, descriptor = values.get('mcp_port'), values.get('read_fd')
                     if (line != module_site(case) or type(port) is not int or type(descriptor) is not int or self.inventory_module.SensitiveValueInventory is not self.inventory_type
                             or type(values.get('sensitive_inventory')) is not self.inventory_type
-                            or dict.__len__(values['sensitive_inventory']) != 0
+                            or dict.__len__(values['sensitive_inventory']) != (1 if case in SAVED else 0)
+                            or any(type(key) is not str or type(value) is not str for key, value in dict.items(values['sensitive_inventory']))
+                            or dict(dict.items(values['sensitive_inventory'])) != (CREDENTIAL if case in SAVED else {})
                             or set(kw) != {'cwd', 'env', 'pass_fds'} or type(kw['pass_fds']) is not tuple
                             or len(kw['pass_fds']) != 1 or type(kw['pass_fds'][0]) is not int or kw['pass_fds'][0] != descriptor
                             or local.get('stdin') is not None or kw['env'] is not env):
