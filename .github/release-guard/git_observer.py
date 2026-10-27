@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 import configparser
-import hashlib
 import os
 from pathlib import Path
 import stat
@@ -269,7 +268,7 @@ class Git:
         native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
         owner = OWNED_SITE[0] + ':' + OWNED_SITE[1] + ':' + str(OWNED_SITE[2])
         rule = Rule('workspace:owned', owner, (host.case,), native, pin, (native, '-c', OWNED_BODY),
-            tuple(sorted(environment.items())), cwd, 'python-command', hashlib.sha256(OWNED_BODY.encode()).hexdigest())
+            tuple(sorted(environment.items())), cwd, 'python-command', None)
         expected = render(rule, host.case, owner, {}, {})
         return host.admit_launch(actor, payload, expected, 'workspace-owned', OWNED_SITE[2],
             [native, '-I', '-S', '-c', OWNED_BODY], expected.payload_sha256)

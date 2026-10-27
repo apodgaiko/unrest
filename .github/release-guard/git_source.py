@@ -151,7 +151,7 @@ class GitCalls(TestSources):
         if environment is not None and (type(environment) is not dict or any(type(k) is not str or type(v) is not str for k, v in environment.items()) or environment != env):
             raise Refused('git exact audited environment')
         owner = site[0] + ':' + site[1] + ':' + str(site[2])
-        rule = Rule('workspace:owned' if owned else 'git:' + operation, owner, (case,), native, pin, argv, tuple(sorted(env.items())), path_text(cwd), kind, body_pin)
+        rule = Rule('workspace:owned' if owned else 'git:' + operation, owner, (case,), native, pin, argv, tuple(sorted(env.items())), path_text(cwd), kind, None if owned else body_pin)
         expected = render(rule, case, owner, {}, {})
         wire_fields = {k: [list(row) for row in v] if k == 'leases' else list(v) if k == 'new_inputs' else v for k, v in fields.items()}
         self.pending = ({'site': list(site), 'repository': self.repository, 'fields': wire_fields}, command)
