@@ -6,7 +6,8 @@ from pathlib import Path
 import sys
 
 from content_manifest import Refused, capture
-from controlled_startup import ACP_PIN, BACKEND_PIN, CASES, WRAPPER
+from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
+from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 
@@ -17,7 +18,7 @@ METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'r
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
     'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
-    'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script'}
+    'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script', 'cases'}
 
 
 def digest(path: Path) -> str:
@@ -51,7 +52,8 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or profile['schema'] != 'unrest.bootstrap-source.v1'
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else CASES)):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else BOOTSTRAP)
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -104,8 +106,9 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     else:
         if (not Path(profile['cwd']).is_relative_to(Path(profile['owned']))
                 or Path(profile['cwd']).name != 'worker'
-                or role == 'backend' and profile['case'] != CASES[0]
-                or role == 'delayed-backend' and profile['case'] != CASES[1]):
+                or profile['case'] not in profile['cases']
+                or role == 'backend' and wrapper(profile['case']) is not None
+                or role == 'delayed-backend' and wrapper(profile['case']) is None):
             raise Refused('source closed leaf role or home')
         if type(script) is not str or str(Path(script).resolve()) != script:
             raise Refused('source leaf path')
@@ -119,14 +122,15 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             path = Path(script)
             if not path.is_relative_to(owned) or path != Path(profile['cwd']).parent / 'fake-app-server':
                 raise Refused('source backend path')
-            expected = [native, '-I', '-S', script, 'app-server']
+            options, _ = configuration(Path(profile['checkout']), Path(profile['cwd'])) if declaration(profile['case']).configured else ([], None)
+            expected = [native, '-I', '-S', script, *options, 'app-server']
             pin = BACKEND_PIN
             if role == 'delayed-backend':
-                expected = [native, '-I', '-S', '-c', WRAPPER, script, 'app-server']
+                expected = [native, '-I', '-S', '-c', wrapper(profile['case']), script, *options, 'app-server']
         if profile['argv'] != expected or digest(Path(script)) != pin:
             raise Refused('source leaf bytes or vector')
         if role == 'delayed-backend':
-            if event != 'cpython.run_command' or arguments != (WRAPPER + '\n',):
+            if event != 'cpython.run_command' or arguments != (str(wrapper(profile['case'])) + '\n',):
                 raise Refused('source exact delayed wrapper')
         elif event != 'cpython.run_file' or arguments != (script,):
             raise Refused('source exact script entry')

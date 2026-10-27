@@ -22,8 +22,9 @@ not establish that reference's authority, an immutable snapshot, launch permissi
 or a release certificate. The host must separately establish reference custody
 and read-only source/runtime mounts before integration.
 
-The short replacement workflow includes the two unchanged original bootstrap
-timeout cases. It is an integration checkpoint, not the release source suite.
+The short replacement workflow includes all 27 unchanged original bootstrap
+cases. Its optional two-case smoke selection preserves the original timeout
+witnesses. These are integration checkpoints, not the release source suite.
 Existing guard, product tests, review restrictions and release gates remain
 effective during construction. Removing historical implementation-shape checks requires
 an independently reviewed crosswalk preserving their behavioral mutation cases.
@@ -39,6 +40,23 @@ stop binds each finite child intent to actual executable bytes, argv,
 environment, cwd and birth before native prebody/READY admission. Cleanup
 requires both kernel terminal observations and actual original-parent waits;
 adopted fallback cleanup is retained as failure evidence.
+
+The bootstrap selection is an external closed declaration, including its
+zero-child negatives and original integer32/integer60/float0.5 wrapper delays.
+The five fresh configured probe cases bind original ProviderConfig/CommonInputs
+methods, exact roots and input membership; the observer independently renders
+their argv and environment. An owned child interrupted by an authorized signal
+before body-ready may prove cleanup through its actual terminal/parent joins;
+it is never reported as successful body execution. Native guard status86 poisons
+the whole outcome even when an original negative test catches a product error.
+
+A connected client can send bounded initial bytes against its freshly unchanged
+owned listener before application accept. The provisional ticket remains
+outstanding; only the real reciprocal accepted-FD join turns it into a retained
+connection. This preserves same-loop broker operation without fabricating accept
+proof. Reads waiting for a different process's accept remain finite control
+waits. External DNS is refused; computing a literal loopback address never
+replaces the observer's separate exact-route connect permission.
 
 The trusted root may compile ordinary in-process pytest/library code after its
 exact entry. Privileged effects still require current source-owner and finite

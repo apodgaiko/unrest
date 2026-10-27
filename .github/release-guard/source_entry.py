@@ -16,7 +16,8 @@ from typing import Any, NoReturn
 from bootstrap_wire import Client
 from content_manifest import Refused
 from control_transport import finite
-from controlled_startup import ACP, CASES
+from bootstrap_cases import BOOTSTRAP
+from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies
 from source_profile import METHODS, digest, validate
@@ -58,7 +59,7 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] != 'root' or self.calls is None or self.case not in CASES:
+        if self.profile['role'] != 'root' or self.calls is None or self.case not in BOOTSTRAP:
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')

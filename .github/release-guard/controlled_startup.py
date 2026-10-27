@@ -1,4 +1,4 @@
-"""Source-derived startup declarations for two unchanged bootstrap cases.
+"""Source-derived startup declarations for unchanged bootstrap cases.
 
 Trusted bootstrap supplies immutable source units, runtime and owned-root
 identity plus authenticated case selection. This module selects intent only;
@@ -16,6 +16,7 @@ from pathlib import Path
 import types
 from typing import Any
 
+from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from content_manifest import Refused, capture
 from launch_policy import Expected, Observation, Rule, match, render
 from source_owner import Link, Owner, SourceUnit, active_frames, _namespace, _safe_code
@@ -67,7 +68,7 @@ class Intent:
 class Startup:
     def __init__(self, session: types.ModuleType, tests: types.ModuleType,
                  session_unit: SourceUnit, test_unit: SourceUnit,
-                 checkout: Path, owned: Path, interpreter: Path, interpreter_sha256: str):
+                 checkout: Path, owned: Path, interpreter: Path, interpreter_sha256: str, *, configuration_binding=None):
         if (session_unit.source_sha256 != SESSION_PIN or test_unit.source_sha256 != TEST_PIN
                 or session_unit.path != str(checkout / SESSION) or test_unit.path != str(checkout / TEST)
                 or session_unit.module != 'unrest_harness.experimental_session'
@@ -78,6 +79,7 @@ class Startup:
             raise Refused('startup interpreter path')
         self.interpreter_path, self.interpreter = interpreter, path(interpreter.resolve())
         self.root_identity = self.root_key()
+        self.configuration = configuration_binding
         self.runtime_pin = interpreter_sha256
         if hashlib.sha256(interpreter.read_bytes()).hexdigest() != interpreter_sha256:
             raise Refused('startup runtime bytes')
@@ -129,7 +131,7 @@ class Startup:
             raise Refused('startup source file bytes')
 
     def select(self, case: str, observed: Observation) -> Intent:
-        if type(case) is not str or case not in CASES or self.root_key() != self.root_identity or os.getcwd() != str(self.checkout):
+        if type(case) is not str or case not in BOOTSTRAP or self.root_key() != self.root_identity or os.getcwd() != str(self.checkout):
             raise Refused('startup case or root generation')
         frames = active_frames()
         try:
@@ -147,7 +149,7 @@ class Startup:
                 raise Refused('startup owner type')
             values = dictionary(instance, self.base)
             if (values.get('controlled') is not True or values.get('provider_package') is not None
-                    or values.get('provider_config') is not None):
+                    or not declaration(case).configured and values.get('provider_config') is not None):
                 raise Refused('startup controlled owner configuration')
             transport = values.get('transport')
             if type(transport) is not self.transport:
@@ -172,6 +174,10 @@ class Startup:
                     or type(values.get('backend_digest')) is not str or values['backend_digest'] != BACKEND_PIN
                     or type(local.get('name')) is not str or local['name'] not in ('worker', 'validator')):
                 raise Refused('startup owner paths')
+            if declaration(case).configured:
+                if self.configuration is None:
+                    raise Refused('startup configured source boundary absent')
+                self.configuration.check(values.get('provider_config'), root, case)
             home = root / local['name']
             if path(local.get('home')) != home:
                 raise Refused('startup role home')
@@ -180,10 +186,13 @@ class Startup:
             environment = {'HOME': str(home), 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'),
                            'PATH': '/usr/bin:/bin', 'INITIAL_AGENT_MODE': 'read-only',
                            'CODEX_PATH': str(root / 'fixed-relay')}
+            config_argv, config_json = configuration(self.checkout, home) if declaration(case).configured else ([], None)
+            if config_json is not None:
+                environment.update(CODEX_HOME=str(root.parent.parent / 'subscription'), CODEX_CONFIG=config_json)
             expected_argv: tuple[str, ...]
             backend_spawn = frame.f_lineno == 506
             if backend_spawn:
-                expected_argv = (str(self.interpreter), str(backend), 'app-server')
+                expected_argv = (str(self.interpreter), str(backend), *config_argv, 'app-server')
                 if (type(local.get('argv')) is not list or any(type(arg) is not str for arg in local['argv'])
                         or tuple(local['argv']) != expected_argv):
                     raise Refused('startup source backend vector')
@@ -217,8 +226,8 @@ class Startup:
                 raise Refused('startup source environment')
             self.constructor_frame(frames, expected_argv, source_environment, home, backend_spawn,
                                    case)
-            if backend_spawn and case == CASES[1]:
-                expected_argv = (expected_argv[0], '-c', WRAPPER, *expected_argv[1:])
+            if backend_spawn and wrapper(case) is not None:
+                expected_argv = (expected_argv[0], '-c', wrapper(case), *expected_argv[1:])
                 script_kind, payload_pin = 'python-command', None
             else:
                 script_kind, payload_pin = 'python-script', script_pin
@@ -246,10 +255,11 @@ class Startup:
             raise Refused('startup actual constructor vector')
         actual_argv = (values['program'], *values['args'])
         expected_argv = original_argv
-        if case == CASES[1]:
+        delayed_wrapper = wrapper(case)
+        if delayed_wrapper is not None:
             if backend:
-                expected_argv = (original_argv[0], '-c', WRAPPER, *original_argv[1:])
-            self.delayed(frames, expected_argv, environment, home, backend)
+                expected_argv = (original_argv[0], '-c', delayed_wrapper, *original_argv[1:])
+            self.delayed(frames, expected_argv, environment, home, backend, declaration(case).delay)
         else:
             self.binding(self.environment, '_SessionOwner._environment', self.base, '_environment')
             if asyncio.create_subprocess_exec is not self.constructor:
@@ -270,7 +280,7 @@ class Startup:
                 or _namespace(self.session)['PREFLIGHT_BYTES'] != 262144):
             raise Refused('startup original process options')
 
-    def delayed(self, frames, expected_argv, environment, home, backend):
+    def delayed(self, frames, expected_argv, environment, home, backend, delay):
         if (type(self.fixture) is not self.fixture_type
                 or dictionary(self.fixture, self.fixture_type).get('_fixture_function') is not self.fixture_function):
             raise Refused('startup original delayed fixture')
@@ -286,8 +296,8 @@ class Startup:
             raise Refused('startup delayed constructor')
         cells = live.__closure__ or ()
         values = {name: cell.cell_contents for name, cell in zip(live.__code__.co_freevars, cells, strict=True)}
-        if (set(values) != {'delay', 'launch', 'observed'} or type(values['delay']) is not float
-                or values['delay'] != .5 or values['launch'] is not self.constructor or type(values['observed']) is not list):
+        if (set(values) != {'delay', 'launch', 'observed'} or type(values['delay']) is not type(delay)
+                or values['delay'] != delay or values['launch'] is not self.constructor or type(values['observed']) is not list):
             raise Refused('startup delayed closure')
         binding = self.function(live, qualified, self.test_unit, self.tests,
                                 (Link(asyncio, 'create_subprocess_exec', live),),

@@ -1,4 +1,4 @@
-"""The exact original two-case pytest root and its live privileged callers."""
+"""The exact original original-bootstrap pytest root and its live privileged callers."""
 from __future__ import annotations
 
 import asyncio
@@ -12,9 +12,12 @@ from typing import cast
 
 import pytest
 from pytest_asyncio.plugin import Coroutine
+from _pytest.python import Function
 
+from bootstrap_cases import declaration
+from bootstrap_configuration import Binding
 from content_manifest import Refused
-from controlled_startup import CASES, SESSION, SESSION_PIN, TEST, TEST_PIN, Startup, dictionary
+from controlled_startup import SESSION, SESSION_PIN, TEST, TEST_PIN, Startup, dictionary
 from control_transport import unique
 from source_owner import Link, Owner, active_frames, prepare
 
@@ -39,7 +42,8 @@ class Calls:
         self.session_unit = self.unit(SESSION, self.session, self.mode(self.session))
         self.test_unit = self.unit(TEST, self.tests, 'pytest')
         self.startup = Startup(self.session, self.tests, self.session_unit, self.test_unit,
-            checkout, Path(self.profile['owned']), Path(self.profile['native']), self.profile['native_sha256'])
+            checkout, Path(self.profile['owned']), Path(self.profile['native']), self.profile['native_sha256'],
+            configuration_binding=Binding(checkout) if declaration(item.nodeid).configured else None)
         self.test_owner = self.owner(self.test_unit, self.tests, item.obj, item.originalname,
                                      (Link(self.tests, item.originalname, item.obj),))
         self.test_owner.verify_binding()
@@ -103,14 +107,17 @@ class Calls:
                 if type(instance) is not self.startup.bridge:
                     raise Refused('root original bridge type')
             else:
-                if type(instance) is not self.startup.synthetic:
+                if type(instance) not in (self.startup.synthetic, self.startup.base):
                     raise Refused('root original session type')
                 values = dictionary(instance, self.startup.base)
                 root = values.get('root')
                 if (type(root) is not type(Path('/')) or not cast(Path, root).is_relative_to(Path(self.profile['owned']))
-                        or values.get('controlled') is not True or values.get('provider_config') is not None
+                        or values.get('controlled') is not True
+                        or not declaration(self.policy.case).configured and values.get('provider_config') is not None
                         or type(values.get('transport')) is not self.startup.transport):
                     raise Refused('root owned controlled listener')
+                if declaration(self.policy.case).configured:
+                    self.startup.configuration.check(values.get('provider_config'), root, self.policy.case)
             nonce = None
             if name == 'bridge':
                 nonce = dictionary(instance, self.startup.bridge).get('nonce')
@@ -156,17 +163,18 @@ class Calls:
 class OriginalCases:
     def __init__(self, policy):
         self.policy, self.items, self.reports, self.completed = policy, (), {}, []
+        self.cases = tuple(policy.profile['cases'])
 
     def pytest_collection_finish(self, session):
         items = tuple(session.items)
-        if tuple(item.nodeid for item in items) != CASES or any(type(item) is not Coroutine for item in items):
+        if tuple(item.nodeid for item in items) != self.cases or any(type(item) not in (Coroutine, Function) for item in items):
             raise Refused('root exact original collection')
         self.items = items
 
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_protocol(self, item, nextitem):
         index = len(self.completed)
-        if index >= 2 or not self.items or item is not self.items[index] or item.nodeid != CASES[index]:
+        if index >= len(self.cases) or not self.items or item is not self.items[index] or item.nodeid != self.cases[index]:
             raise Refused('root original case cursor')
         policy = self.policy
         policy.case, policy.calls = item.nodeid, Calls(policy, item)
@@ -180,7 +188,7 @@ class OriginalCases:
         policy.case, policy.calls = None, None
 
     def pytest_runtest_logreport(self, report):
-        if report.nodeid not in CASES or report.when not in ('setup', 'call', 'teardown'):
+        if report.nodeid not in self.cases or report.when not in ('setup', 'call', 'teardown'):
             raise Refused('root unknown test report')
         phases = self.reports.setdefault(report.nodeid, {})
         if report.when in phases:
@@ -201,8 +209,9 @@ def main():
         raise Refused('root native activation absent')
     plugin = OriginalCases(policy)
     code = pytest.main(['-q', '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
-                       '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), *CASES], plugins=[plugin])
-    if code != 0 or tuple(plugin.completed) != CASES or policy.poison:
+                       '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), '-o',
+                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *policy.profile['cases']], plugins=[plugin])
+    if code != 0 or plugin.completed != policy.profile['cases'] or policy.poison:
         raise Refused('root original source cases failed')
     policy.client.request('root-finish', {'cases': list(plugin.completed)})
     return 0

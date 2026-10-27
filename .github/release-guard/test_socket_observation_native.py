@@ -23,6 +23,52 @@ def cookie(stream):
     return struct.unpack("=Q", stream.getsockopt(socket.SOL_SOCKET, 57, 8))[0]
 
 
+def test_actual_same_loop_initial_send_precedes_accept_then_joins_real_descriptors():
+    import asyncio
+    from endpoint_policy import Endpoints, Owner, Route
+    from linux_observation import process_identity
+    from process_ledger import Birth, Ledger
+    from socket_observation import acquire_tcp
+    async def run():
+        ledger = Ledger('queued-control')
+        actual = process_identity(os.getpid())
+        birth = Birth.read(actual)
+        ledger.kernel(0, {'kind': 'kernel_root', 'identity': actual})
+        pins = (('control', 'a' * 64),)
+        ledger.register(birth, 'root', pins, 'seal', case='queued-control', command_class='socket-control')
+        ledger.control(birth, 'root', 0, 0, 'core-ready', {'pins': pins})
+        ledger.control(birth, 'root', 0, 1, 'body-ready', {'seal': 'seal'})
+        owner = Owner(birth, 'root', 0)
+        endpoints = Endpoints(ledger)
+        loop = asyncio.get_running_loop()
+        with socket.socket() as listener, socket.socket() as client:
+            listener.bind(('127.0.0.1', 0))
+            listener.listen()
+            listener.setblocking(False)
+            client.setblocking(False)
+            port = listener.getsockname()[1]
+            route = Route('queued', 'queued-control', owner, owner, port)
+            endpoints.declare(route)
+            fresh_listener = acquire_tcp(birth, listener.fileno(), retained=True)
+            endpoints.listen(route.name, fresh_listener)
+            ticket = endpoints.connect(route.name, fresh_listener, acquire_tcp(birth, client.fileno(), retained=True))
+            await loop.sock_connect(client, ('127.0.0.1', port))
+            endpoints.queued_send(ticket, acquire_tcp(birth, listener.fileno(), retained=True),
+                                  acquire_tcp(birth, client.fileno(), retained=True), 6)
+            assert client.send(b'queued') == 6
+            assert ticket.serial in endpoints.tickets and not endpoints.connections
+            accepted, _ = await asyncio.wait_for(loop.sock_accept(listener), 1)
+            with accepted:
+                accepted.setblocking(False)
+                connection = endpoints.accepted(ticket, acquire_tcp(birth, client.fileno(), retained=True),
+                                                acquire_tcp(birth, accepted.fileno(), retained=True))
+                assert not endpoints.tickets and not endpoints.queued
+                endpoints.retained(connection, owner, acquire_tcp(birth, accepted.fileno(), retained=True))
+                assert await asyncio.wait_for(loop.sock_recv(accepted, 6), 1) == b'queued'
+                assert not endpoints.poison and not ledger.poison
+    asyncio.run(run())
+
+
 def test_tcp_fd_inode_cookie_and_closed_descriptor():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

@@ -113,6 +113,7 @@ class Endpoints:
         self.listeners: dict[str, Socket] = {}
         self.tickets: dict[int, Ticket] = {}
         self.connections: dict[int, Connection] = {}
+        self.queued: dict[int, tuple[int, int]] = {}
         self.poison: list[str] = []
         self.serial = 0
 
@@ -178,6 +179,30 @@ class Endpoints:
         return ticket
 
     @fail_closed
+    def queued_send(self, ticket: Ticket, listener: Socket, client: Socket, count: int) -> None:
+        """Initial client bytes may precede application accept, never its proof.
+
+        Waiting for a same-loop server to accept here deadlocks that loop. The
+        unconsumed ticket remains mandatory until the actual accepted-FD join.
+        """
+        if type(ticket) is not Ticket or self.tickets.get(ticket.serial) is not ticket:
+            raise Refused('endpoint queued admission missing')
+        route = self.route(ticket.route.name)
+        self.owner(route.client, route.case, body=True)
+        self.owner(route.server, route.case, body=True)
+        if (route is not ticket.route or type(listener) is not Socket or listener != ticket.listener
+                or self.listeners.get(route.name) != listener or listener.state != 10
+                or type(client) is not Socket or client.binding() != ticket.client.binding()
+                or client.state != 1 or client.remote != listener.local
+                or client.local[0] != '127.0.0.1' or client.local[1] == 0):
+            raise Refused('endpoint queued live socket binding')
+        integer(count, 0, 1048576)
+        calls, size = self.queued.get(ticket.serial, (0, 0))
+        if calls >= 16 or size + count > 1048576:
+            raise Refused('endpoint queued initial send bound')
+        self.queued[ticket.serial] = calls + 1, size + count
+
+    @fail_closed
     def accepted(self, ticket: Ticket, client: Socket, server: Socket) -> Connection:
         if type(ticket) is not Ticket or self.tickets.get(ticket.serial) is not ticket:
             raise Refused('endpoint unknown or consumed ticket')
@@ -197,6 +222,7 @@ class Endpoints:
             raise Refused('endpoint reciprocal peer')
         connection = Connection(ticket, client, server)
         del self.tickets[ticket.serial]
+        self.queued.pop(ticket.serial, None)
         self.connections[ticket.serial] = connection
         return connection
 
@@ -234,4 +260,5 @@ class Endpoints:
         del self.listeners[name]
         for serial in [serial for serial, ticket in self.tickets.items() if ticket.route is route]:
             del self.tickets[serial]
+            self.queued.pop(serial, None)
         self.routes[name] = replacement

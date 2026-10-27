@@ -46,6 +46,44 @@ def connected(*, same_owner=False):
 
 
 @pytest.mark.parametrize('same_owner', [False, True])
+def test_queued_initial_send_is_not_an_accepted_connection(same_owner):
+    endpoints, ticket, client, server = connected(same_owner=same_owner)
+    endpoints.queued_send(ticket, ticket.listener, client, 128)
+    assert endpoints.tickets[ticket.serial] is ticket
+    assert endpoints.queued == {ticket.serial: (1, 128)}
+    assert not endpoints.connections
+    connection = endpoints.accepted(ticket, client, server)
+    assert not endpoints.queued and not endpoints.tickets
+    endpoints.retained(connection, ticket.route.client, client)
+
+
+@pytest.mark.parametrize('mutation', ['syn', 'listener-cookie', 'listener-missing', 'client-cookie',
+    'client-missing', 'foreign-port', 'missing-admission', 'quota'])
+def test_queued_initial_send_requires_fresh_exact_admission(mutation):
+    endpoints, ticket, client, _ = connected()
+    listener = ticket.listener
+    if mutation == 'syn':
+        client = replace(client, state=2)
+    elif mutation == 'listener-cookie':
+        listener = replace(listener, cookie=listener.cookie + 1)
+    elif mutation == 'listener-missing':
+        listener = None
+    elif mutation == 'client-cookie':
+        client = replace(client, cookie=client.cookie + 1)
+    elif mutation == 'client-missing':
+        client = None
+    elif mutation == 'foreign-port':
+        client = replace(client, remote=('127.0.0.1', 23457))
+    elif mutation == 'missing-admission':
+        del endpoints.tickets[ticket.serial]
+    else:
+        endpoints.queued_send(ticket, listener, client, 1048576)
+    with pytest.raises(Refused):
+        endpoints.queued_send(ticket, listener, client, 1)
+    assert endpoints.poison and not endpoints.connections
+
+
+@pytest.mark.parametrize('same_owner', [False, True])
 def test_accepted_peer_survives_listener_close_but_never_allows_reconnect(same_owner):
     endpoints, ticket, client, server = connected(same_owner=same_owner)
     connection = endpoints.accepted(ticket, client, server)

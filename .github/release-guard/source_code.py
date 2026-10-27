@@ -9,7 +9,8 @@ import sys
 import types
 
 from content_manifest import Refused
-from controlled_startup import ACP_PIN, BACKEND_PIN, WRAPPER
+from bootstrap_cases import wrapper
+from controlled_startup import ACP_PIN, BACKEND_PIN
 from source_owner import _safe_code
 from source_profile import ROOT_COMMAND, digest
 
@@ -29,7 +30,7 @@ class Bodies:
         else:
             names = ('asyncio', 'json', 'os', 'sys') if role == 'acp' else (
                 'copy', 'json', 'os', 'pathlib', 'sys', 'signal', 'secrets', 'time', 'tomllib', 'urllib.request')
-            for name in (*names, 'runpy', 'pkgutil'):
+            for name in (*names, 'runpy', 'pkgutil', 'encodings.ascii', 'encodings.latin_1'):
                 importlib.import_module(name)
             fixture = Path(profile['checkout']) / ('tests/fixtures/controlled_python_acp.py'
                 if role == 'acp' else 'tests/fixtures/experimental_session_app_server.py')
@@ -40,7 +41,7 @@ class Bodies:
             if hashlib.sha256(self.data).hexdigest() != self.pin:
                 raise Refused('sealed fixture source acquisition')
             script = compile(self.data, profile['script'], 'exec', dont_inherit=True)
-            self.codes = ((compile(WRAPPER + '\n', '<string>', 'exec', dont_inherit=True), script)
+            self.codes = ((compile(str(wrapper(profile['case'])) + '\n', '<string>', 'exec', dont_inherit=True), script)
                           if role == 'delayed-backend' else (script,))
         if (type(sys.modules) is not dict or len(sys.modules) > 4096
                 or any(type(name) is not str for name in sys.modules)):
@@ -76,7 +77,7 @@ class Bodies:
             if args[1] != expected.co_filename:
                 raise Refused('sealed compilation filename')
             if expected.co_filename == '<string>':
-                data = ROOT_COMMAND + '\n' if role == 'root' else WRAPPER + '\n'
+                data = ROOT_COMMAND + '\n' if role == 'root' else str(wrapper(self.profile['case'])) + '\n'
                 if type(args[0]) not in (str, bytes) or args[0] not in (data, data.encode()):
                     raise Refused('sealed inline compilation bytes')
             else:

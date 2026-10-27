@@ -1,4 +1,4 @@
-"""Independent finite observer for the two original bootstrap cases.
+"""Independent finite observer for the original bootstrap cases.
 
 No legacy resolver, arbitrary executable request, or provider permission path.
 Kernel births/execs and actual waits remain independent of source-side reports.
@@ -15,7 +15,8 @@ import struct
 
 from content_manifest import Refused
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
-from controlled_startup import ACP, ACP_PIN, BACKEND_PIN, CASES, SESSION, WRAPPER
+from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
+from controlled_startup import ACP, ACP_PIN, BACKEND_PIN, SESSION
 from endpoint_policy import Endpoints, Owner, Route
 from launch_policy import Rule, render
 from linux_observation import process_identity
@@ -39,6 +40,7 @@ def number(value, minimum=0):
 class Observer:
     def __init__(self, binding, metadata, root_pid, out_read):
         self.binding, self.meta = binding, metadata
+        self.cases = tuple(metadata['cases'])
         self.directory = Path(binding['profiles'])
         self.root = root_pid
         self.root_birth = Birth.read(process_identity(root_pid))
@@ -48,7 +50,7 @@ class Observer:
         self.pairs = UnixPairs(self.endpoints)
         self.bindings, self.listeners, self.listener_fds, self.pair_intents = {}, {}, {}, {}
         self.routes, self.connections, self.descriptors = {}, {}, {}
-        self.connected_routes = set()
+        self.connected_routes: dict[str, int] = {}
         self.frames, self.controls, self.completed = [], [], []
         self.case, self.finished, self.serial = None, False, 0
         self.out_read, self.output = out_read, bytearray()
@@ -84,7 +86,7 @@ class Observer:
             ('source', source['source_sha256']), ('support', source['support_sha256']),
             ('runtime', source['runtime_sha256']), ('dependency', source['dependency_sha256']))))
         actor = {'birth': Birth.read(actual), 'role': role, 'case': case, 'token': token,
-                 'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root'}
+                 'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper'}[role]
@@ -101,6 +103,8 @@ class Observer:
         while self.ledger.next_kernel < len(trace.records):
             row = trace.records[self.ledger.next_kernel]
             self.ledger.kernel(self.ledger.next_kernel, row)
+            if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
+                self.ledger.poison.append('native guard refusal')
             if row['kind'] == 'kernel_root':
                 self.profile(self.root, 'root', '<bootstrap>',
                     [self.binding['entry']['path'], '-I', '-S', '-c', ROOT_COMMAND],
@@ -159,7 +163,7 @@ class Observer:
     def launch(self, actor, payload):
         self.root_only(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256'))
-        if payload['case'] != self.case or self.case not in CASES or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in BOOTSTRAP or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
@@ -170,18 +174,27 @@ class Observer:
         if (not home.is_absolute() or str(home.resolve()) != cwd or not home.is_relative_to(Path(self.meta['owned']))
                 or home.name != 'worker' or home.parent.name != 'owner'):
             raise Refused('source owned worker launch home')
+        spec = declaration(self.case)
+        if spec.children == 0:
+            raise Refused('source declared no-launch case')
         native = self.binding['entry']['path']
+        config_argv, config_json = configuration(Path(self.meta['checkout']), home) if spec.configured else ([], None)
         environment = {'HOME': cwd, 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'), 'PATH': '/usr/bin:/bin'}
+        if config_json is not None:
+            environment.update(CODEX_HOME=str(home.parent.parent.parent / 'subscription'), CODEX_CONFIG=config_json)
         if payload['source_line'] == 506:
             script = home.parent / 'fake-app-server'
-            role = 'backend' if self.case == CASES[0] else 'delayed-backend'
-            vector: tuple[str, ...] = (native, str(script), 'app-server')
+            role = 'backend' if wrapper(self.case) is None else 'delayed-backend'
+            vector: tuple[str, ...] = (native, str(script), *config_argv, 'app-server')
             pin: str | None
             kind, pin = 'python-script', BACKEND_PIN
             if role == 'delayed-backend':
-                vector, kind, pin = (native, '-c', WRAPPER, str(script), 'app-server'), 'python-command', None
+                vector, kind, pin = (native, '-c', wrapper(self.case), str(script), *config_argv, 'app-server'), 'python-command', None
             rule_name, script_pin = 'backend', BACKEND_PIN
         elif payload['source_line'] == 553:
+            backends = [value for value in self.intents.values() if value['case'] == self.case and value['role'] in ('backend', 'delayed-backend')]
+            if len(backends) != 1 or not backends[0]['consumed'] or not self.actors[backends[0]['pid']]['returned']:
+                raise Refused('source ACP before owned backend return')
             bridge = self.listeners[(self.case, 'bridge')]
             lifetime = self.listeners[(self.case, 'lifetime')]
             environment.update({'CODEX_PATH': str(home.parent / 'fixed-relay'), 'INITIAL_AGENT_MODE': 'read-only',
@@ -206,8 +219,9 @@ class Observer:
         return {'ok': True, 'ticket': self.serial, 'token': token}
 
     def socket_payload(self, actor, payload):
-        shape(payload, ('fd', 'operation'))
+        shape(payload, ('fd', 'operation', 'bytes'))
         fd = number(payload['fd'])
+        count = number(payload['bytes'])
         if payload['operation'] not in ('accept', 'send', 'sendall', 'recv', 'recv_into', 'recvfrom', 'recvfrom_into', 'fd-read', 'fd-write'):
             raise Refused('source payload operation')
         key = actor['birth'], fd
@@ -225,9 +239,22 @@ class Observer:
         if connection is not None:
             self.endpoints.retained(connection, self.owner(actor), acquire_tcp(actor['birth'], fd, retained=True))
             return {'ok': True}
-        if any(ticket.client.owner == actor['birth'] and ticket.client.fd == fd for ticket in self.endpoints.tickets.values()):
-            return None  # Wait for the separate root's actual accepted-FD join.
+        tickets = [ticket for ticket in self.endpoints.tickets.values()
+                   if ticket.client.owner == actor['birth'] and ticket.client.fd == fd]
+        if len(tickets) == 1 and payload['operation'] in ('send', 'sendall', 'fd-write'):
+            ticket = tickets[0]
+            self.endpoints.queued_send(ticket,
+                acquire_tcp(ticket.listener.owner, ticket.listener.fd, retained=True),
+                acquire_tcp(actor['birth'], fd, retained=True), count)
+            return {'ok': True}
+        if len(tickets) == 1 and actor['birth'] != tickets[0].route.server.birth:
+            return None  # A different process can make the actual accept join.
         raise Refused('source unadmitted payload descriptor')
+
+    def completed_child(self, actor):
+        terminal = self.ledger.process(actor['birth']).terminal
+        return (terminal is not None and (actor['body_ready']
+                or terminal[2] in (-9, -15) and -terminal[2] in actor['signals']))
 
     def dispatch(self, actor, request):
         kind, payload = request['kind'], request['payload']
@@ -236,9 +263,11 @@ class Observer:
             if payload['pins'] != [list(pair) for pair in actor['pins']]:
                 raise Refused('source exact READY pins')
             self.actor_control(actor, kind, {'pins': actor['pins']})
-            if actor['role'] == 'acp':
+            tags = (('bridge', 'lifetime') if actor['role'] == 'acp' else
+                    ('broker',) if actor['role'] in ('backend', 'delayed-backend') and declaration(actor['case']).broker_http else ())
+            if tags:
                 root_actor = self.actors[self.root]
-                for tag in ('bridge', 'lifetime'):
+                for tag in tags:
                     slot = self.listeners[(actor['case'], tag)]
                     name = actor['token'] + ':' + tag
                     route = Route(name, actor['case'], self.owner(root_actor), self.owner(actor), slot['socket'].local[1])
@@ -247,17 +276,21 @@ class Observer:
                     self.routes[actor['birth'], route.port] = name
         elif kind == 'body-ready':
             self.actor_control(actor, kind, payload)
+            actor['body_ready'] = True
         elif kind in ('case-start', 'case-finish'):
             self.root_only(actor)
             shape(payload, ('case',))
             if kind == 'case-start':
-                if self.case is not None or len(self.completed) >= 2 or payload['case'] != CASES[len(self.completed)]:
+                if self.case is not None or len(self.completed) >= len(self.cases) or payload['case'] != self.cases[len(self.completed)]:
                     raise Refused('source exact external case frontier')
                 self.case = actor['case'] = payload['case']
                 self.ledger.process(self.root_birth).case = self.case
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
-                if (payload['case'] != self.case or len(children) != 2
+                spec = declaration(self.case)
+                if (payload['case'] != self.case or not spec.minimum_children <= len(children) <= spec.children
+                        or any(not self.completed_child(value) for value in children)
+                        or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not self.ledger.reaped(value['birth'], value['token']) for value in children)
                         or any(ticket.route.case == self.case for ticket in self.endpoints.tickets.values())):
                     raise Refused('source original case actual cleanup incomplete')
@@ -266,7 +299,7 @@ class Observer:
         elif kind == 'root-finish':
             self.root_only(actor)
             shape(payload, ('cases',))
-            if self.case is not None or payload['cases'] != list(CASES) or tuple(self.completed) != CASES:
+            if self.case is not None or payload['cases'] != list(self.cases) or tuple(self.completed) != self.cases:
                 raise Refused('source original source completion incomplete')
             self.finished = True
         elif kind == 'launch-intent':
@@ -314,7 +347,7 @@ class Observer:
             self.root_only(actor)
             shape(payload, ('fd', 'tag', 'nonce'))
             fd = number(payload['fd'])
-            if self.case not in CASES or payload['tag'] not in ('broker', 'bridge', 'lifetime'):
+            if self.case not in BOOTSTRAP or payload['tag'] not in ('broker', 'bridge', 'lifetime'):
                 raise Refused('source finite root listener')
             nonce = payload['nonce']
             if ((payload['tag'] == 'broker' and nonce is not None)
@@ -360,7 +393,7 @@ class Observer:
             else:
                 raise Refused('source listener stage')
         elif kind == 'connect':
-            if actor['role'] != 'acp':
+            if actor['role'] not in ('acp', 'backend', 'delayed-backend'):
                 raise Refused('source leaf connection role')
             shape(payload, ('fd', 'address'))
             address = payload['address']
@@ -368,12 +401,13 @@ class Observer:
                 raise Refused('source literal loopback connection')
             port = number(address[1], 1)
             name = self.routes[actor['birth'], port]
-            if name in self.connected_routes:
-                raise Refused('source one-shot ACP route')
+            maximum = 1 if actor['role'] == 'acp' else 8
+            if self.connected_routes.get(name, 0) >= maximum:
+                raise Refused('source finite connection count')
             listener = self.endpoints.listeners[name]
             ticket = self.endpoints.connect(name, acquire_tcp(self.root_birth, listener.fd, retained=True),
                                             acquire_tcp(actor['birth'], number(payload['fd']), retained=True))
-            self.connected_routes.add(name)
+            self.connected_routes[name] = self.connected_routes.get(name, 0) + 1
             self.descriptors.pop((actor['birth'], ticket.client.fd), None)
             self.connections.pop((actor['birth'], ticket.client.fd), None)
             return {'ok': True, 'ticket': ticket.serial}
@@ -417,6 +451,7 @@ class Observer:
             actual = process_identity(child['birth'].pid)
             if (Birth.read(actual) != child['birth'] or actual['pgid'] != child['birth'].pid or actual['sid'] != child['birth'].pid):
                 return {'ok': True, 'live': False}
+            child['signals'].add(payload['signal'])
             return {'ok': True, 'live': True}
         elif kind == 'guard-refusal':
             shape(payload, ('code',))

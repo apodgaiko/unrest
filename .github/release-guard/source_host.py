@@ -1,4 +1,4 @@
-"""Run the original two bootstrap cases in a private, measured Linux generation.
+"""Run the original bootstrap cases in a private, measured Linux generation.
 
 This is a bounded integration checkpoint, not full source certification. The
 root driver only prepares inputs and settles its own children. Admission and
@@ -160,11 +160,11 @@ def settle(pid, terminate=False, deadline=None):
 
 def worker(binding, metadata, raw_directory):
     from compartment import credentials
-    from controlled_startup import CASES
     from linux_trace import OwnedTrace, install_observation_filter
     from source_observer import Observer
     from source_profile import ROOT_COMMAND
     metadata = isolate(metadata, binding['support'])
+    timeout = 60 if len(metadata['cases']) == 2 else 170
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
@@ -204,14 +204,14 @@ def worker(binding, metadata, raw_directory):
         observer = Observer(binding, metadata, child, output_read)
         allowed = [{'pid': child, 'path': vector[0], 'argv': vector, 'environment': environment,
                     'cwd': metadata['checkout'], 'sha256': binding['entry']['sha256']}]
-        trace = OwnedTrace(child, allowed, 60, start_write=start_write, selective=True, cleanup_seconds=5,
+        trace = OwnedTrace(child, allowed, timeout, start_write=start_write, selective=True, cleanup_seconds=5,
                            on_attached=lambda: observer.consume(trace), on_tick=observer.tick,
                            resolve_exec=lambda *args: observer.resolve(trace, *args))
         result = trace.run()
         observer.tick(trace)
         require(result['root_parent_wait_raw'] == 0 and not result['poison'] and not observer.ledger.poison
-                and observer.finished and tuple(observer.completed) == CASES
-                and not observer.frames and not observer.pair_intents
+                and observer.finished and observer.completed == metadata['cases']
+                and not observer.frames and not observer.pair_intents and not observer.endpoints.poison
                 and all(intent['consumed'] for intent in observer.intents.values()), 'original source completion refused')
     except BaseException:
         failure = traceback.format_exc()
@@ -252,7 +252,7 @@ def drain_owned(rows):
                          'original_parent_wait_proven': False})
 
 def main():
-    require(sys.platform == 'linux' and os.getuid() == 0 and len(sys.argv) == 2,
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] == 'bootstrap27'),
             'source host requires exact root Linux invocation')
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     binding_file = Path(sys.argv[1]).resolve(strict=True)
@@ -272,7 +272,10 @@ def main():
     os.chown(raw_directory, 20001, 20001)
     success = False
     try:
-        metadata = prepare(binding, Path.cwd().resolve(strict=True), root)
+        from bootstrap_cases import BOOTSTRAP
+        from controlled_startup import CASES
+        cases = BOOTSTRAP if len(sys.argv) == 3 else CASES
+        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root), 'cases': list(cases)}
         pid = os.fork()
         if pid == 0:
             try:
@@ -281,7 +284,7 @@ def main():
                 (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
                 os._exit(125)
             os._exit(0)
-        raw, deadline = None, time.monotonic() + 80
+        raw, deadline = None, time.monotonic() + (80 if len(cases) == 2 else 190)
         try:
             while raw is None:
                 actual, status = os.waitpid(pid, os.WNOHANG)
@@ -313,7 +316,7 @@ def main():
             archive.unlink()
         require(not children(), 'source host cleanup residue')
     require(success, 'original source integration did not complete')
-    print('Original bootstrap integration: two original cases, actual parent waits; full source certification: false', flush=True)
+    print(f'Original bootstrap integration: {len(cases)} original cases, actual parent waits; full source certification: false', flush=True)
     return 0
 
 

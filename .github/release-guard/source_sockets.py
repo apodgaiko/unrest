@@ -8,6 +8,7 @@ import socket
 import sys
 import types
 
+from bootstrap_cases import declaration
 from content_manifest import Refused
 
 TYPE = type
@@ -54,7 +55,8 @@ class Hooks:
             if args[1] == socket.AF_UNIX:
                 if args[3] != 0 or not (self.policy.private_call() or getattr(self.local, 'pair', None) is not None):
                     raise Refused('source Unix creation outside sealed self-pair')
-            elif self.policy.profile['role'] not in ('root', 'acp'):
+            elif (self.policy.profile['role'] not in ('root', 'acp')
+                    and not declaration(self.policy.profile['case']).broker_http):
                 raise Refused('source backend network creation')
             return True
         pending = getattr(self.local, 'socket', None)
@@ -74,7 +76,7 @@ class Hooks:
             self.rpc('bind', {'fd': descriptor, **source})
             self.local.socket = 'socket.bind', stream, args[0]
         elif name in ('connect', 'connect_ex'):
-            if (role != 'acp' or kwargs or len(args) != 1 or type(args[0]) is not tuple
+            if (role != 'acp' and not declaration(self.policy.profile['case']).broker_http or kwargs or len(args) != 1 or type(args[0]) is not tuple
                     or len(args[0]) != 2 or type(args[0][0]) is not str or args[0][0] != '127.0.0.1'
                     or type(args[0][1]) is not int or not 0 < args[0][1] <= 65535):
                 self.policy.refuse('source unknown connection')
@@ -90,7 +92,12 @@ class Hooks:
             self.rpc('connected', {'fd': descriptor, 'ticket': answer['ticket']})
             return result
         elif name in ('send', 'sendall', 'recv', 'recv_into', 'recvfrom', 'recvfrom_into', 'accept'):
-            self.rpc('payload', {'fd': descriptor, 'operation': name})
+            count = 0
+            if name in ('send', 'sendall'):
+                if not args or type(args[0]) not in (bytes, bytearray, memoryview):
+                    self.policy.refuse('source payload buffer type')
+                count = args[0].nbytes if type(args[0]) is memoryview else len(args[0])
+            self.rpc('payload', {'fd': descriptor, 'operation': name, 'bytes': count})
         elif name == 'listen':
             if role != 'root' or kwargs or len(args) > 1 or args and (type(args[0]) is not int or not 0 <= args[0] <= 2048):
                 self.policy.refuse('source listener operation')
@@ -148,8 +155,24 @@ class Hooks:
         except FileNotFoundError:
             return function(descriptor, *args)  # Preserve the real EBADF, never claim a close/reap.
         if target.startswith('socket:['):
-            self.rpc('payload', {'fd': descriptor, 'operation': 'fd-read' if function is self.read else 'fd-write'})
+            count = 0
+            if function is self.write:
+                if not args or type(args[0]) not in (bytes, bytearray, memoryview):
+                    self.policy.refuse('source file payload buffer type')
+                count = args[0].nbytes if type(args[0]) is memoryview else len(args[0])
+            self.rpc('payload', {'fd': descriptor, 'operation': 'fd-read' if function is self.read else 'fd-write', 'bytes': count})
         return function(descriptor, *args)
+
+    def literal_address(self, host, port, family=0, type=0, proto=0, flags=0):
+        # This computes a literal tuple; it never calls a DNS resolver. The
+        # subsequent connect still needs the observer's exact live route.
+        if (TYPE(host) is not str or host != '127.0.0.1' or TYPE(port) is not int or not 0 < port <= 65535
+                or TYPE(family) not in (int, socket.AddressFamily) or family not in (0, socket.AF_INET)
+                or TYPE(type) not in (int, socket.SocketKind) or type not in (0, socket.SOCK_STREAM)
+                or TYPE(proto) is not int or proto not in (0, socket.IPPROTO_TCP)
+                or TYPE(flags) is not int or flags != 0):
+            self.policy.refuse('source nonliteral address query')
+        return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', (host, port))]
 
     def install(self):
         hooks = self
@@ -160,6 +183,7 @@ class Hooks:
         for name in self.original:
             setattr(self.socket_type, name, wrap(name))
         socket.socketpair = self.self_pair
+        socket.getaddrinfo = self.literal_address
         def read(descriptor, count):
             return hooks.fd_io(hooks.read, descriptor, count)
         def write(descriptor, data):
