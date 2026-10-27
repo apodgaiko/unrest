@@ -184,6 +184,10 @@ class Link:
                 actual = self.container.__closure__[self.key].cell_contents
             except ValueError as error:
                 raise Refused('empty closure link') from error
+        elif self.mode == 'frame':
+            if type(self.container) is not types.FrameType or type(self.key) is not str:
+                raise Refused('frame link refused')
+            actual = self.container.f_locals.get(self.key)
         elif self.mode == 'namespace':
             if type(self.key) is not str:
                 raise Refused('namespace link refused')

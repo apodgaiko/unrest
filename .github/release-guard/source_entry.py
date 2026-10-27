@@ -17,6 +17,7 @@ from bootstrap_wire import Client
 from content_manifest import Refused
 from control_transport import finite
 from bootstrap_cases import BOOTSTRAP
+from ordinary_acp import CASES as ORDINARY_CASES
 from controlled_startup import ACP
 from launch_policy import Observation
 from source_code import Bodies
@@ -59,31 +60,37 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] != 'root' or self.calls is None or self.case not in BOOTSTRAP:
+        if self.profile['role'] != 'root' or self.calls is None or self.case not in (*BOOTSTRAP, *ORDINARY_CASES):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
-        if (type(executable) is not str or type(vector) is not list or not 2 <= len(vector) <= 128
-                or any(type(arg) is not str for arg in vector)
-                or type(cwd) not in (str, PATH_TYPE) or type(environment) is not dict
-                or any(type(key) is not str or type(value) is not str for key, value in environment.items())):
-            raise Refused('source process audit primitives')
-        command = vector[1] == '-c'
-        if command:
-            if len(vector) < 3 or len(vector[2]) > 4 * 1024 * 1024:
-                raise Refused('source inline payload bound')
-            payload = hashlib.sha256(vector[2].encode()).hexdigest()
+        if self.case in ORDINARY_CASES:
+            if (type(executable) is not str or type(vector) is not list
+                    or not 2 <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
+                raise Refused('ordinary process audit primitives')
+            intent = self.calls.startup.select(self.case, args)
         else:
-            file = Path(vector[1])
-            if (not file.is_absolute() or str(file.resolve()) != str(file)
-                    or not (file.is_relative_to(Path(self.profile['owned']))
-                            or file == Path(self.profile['checkout']) / ACP)):
-                raise Refused('source script observation root')
-            payload = digest(file)
-        observed = Observation(executable, digest(Path(executable)), tuple(vector),
-            tuple(sorted(environment.items())), str(cwd), 'python-command' if command else 'python-script', payload)
-        intent = self.calls.startup.select(self.case, observed)
+            if (type(executable) is not str or type(vector) is not list or not 2 <= len(vector) <= 128
+                    or any(type(arg) is not str for arg in vector)
+                    or type(cwd) not in (str, PATH_TYPE) or type(environment) is not dict
+                    or any(type(key) is not str or type(value) is not str for key, value in environment.items())):
+                raise Refused('source process audit primitives')
+            command = vector[1] == '-c'
+            if command:
+                if len(vector) < 3 or len(vector[2]) > 4 * 1024 * 1024:
+                    raise Refused('source inline payload bound')
+                payload = hashlib.sha256(vector[2].encode()).hexdigest()
+            else:
+                file = Path(vector[1])
+                if (not file.is_absolute() or str(file.resolve()) != str(file)
+                        or not (file.is_relative_to(Path(self.profile['owned']))
+                                    or file == Path(self.profile['checkout']) / ACP)):
+                    raise Refused('source script observation root')
+                payload = digest(file)
+            observed = Observation(executable, digest(Path(executable)), tuple(vector),
+                tuple(sorted(environment.items())), str(cwd), 'python-command' if command else 'python-script', payload)
+            intent = self.calls.startup.select(self.case, observed)
         request = {'case': self.case, 'original': intent.original.wire(),
                    'translated': list(intent.translated_argv), 'source_line': intent.original_source_line,
                    'script_sha256': intent.script_sha256}

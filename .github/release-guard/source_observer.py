@@ -23,6 +23,7 @@ from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pair
 from source_profile import METHODS, ROOT_COMMAND, digest
+from ordinary_acp import CASES as ORDINARY_CASES, MOCK, expected as ordinary_expected
 from unix_endpoints import UnixPairs
 
 
@@ -77,7 +78,8 @@ class Observer:
             'nonce': self.ledger.nonce, 'token': token, 'generation': 1,
             'mount_namespace': os.readlink('/proc/self/ns/mnt'), **self.meta,
             'script': None if role == 'root' else (str(Path(self.meta['checkout']) / ACP)
-                if role == 'acp' else str(Path(cwd).parent / 'fake-app-server'))}
+                if role == 'acp' else str(Path(self.meta['checkout']) / MOCK) if role == 'mock-acp'
+                else str(Path(cwd).parent / 'fake-app-server'))}
         source['seal'] = hashlib.sha256(json.dumps(source, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         target = self.directory / (str(pid) + '.json')
         with target.open('x') as stream:
@@ -90,10 +92,10 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp'}[role]
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
-                             command_class=command_class, new_session=role != 'root', expected_generation=1)
-        if role != 'root':
+                             command_class=command_class, new_session=role not in ('root', 'mock-acp'), expected_generation=1)
+        if role not in ('root', 'mock-acp'):
             common = {'owner_pid': self.root, 'token': token, 'case': case, 'class': command_class}
             witnesses = ({'kind': 'admitted', **common}, {'kind': 'registered', 'pid': pid, 'python': True, **common},
                          {'kind': 'launch_lifecycle_binding', 'start_new_session': True, **common})
@@ -128,7 +130,12 @@ class Observer:
                 parent_inodes.add((info.st_dev, info.st_ino))
         for descriptor in (0, 1, 2):
             info = (Path('/proc') / str(pid) / 'fd' / str(descriptor)).stat()
-            if descriptor == 2 and role == 'acp':
+            if role == 'sleep' and (descriptor == 0 or self.case != ORDINARY_CASES[2]):
+                expected_fd = parent / str(descriptor) if descriptor == 0 else Path('/dev/null')
+                expected_info = expected_fd.stat()
+                if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
+                    raise Refused('source inherited native fixture descriptor')
+            elif descriptor == 2 and role == 'acp':
                 null = Path('/dev/null').stat()
                 if not stat.S_ISCHR(info.st_mode) or info.st_rdev != null.st_rdev:
                     raise Refused('source exact ACP stderr')
@@ -142,15 +149,26 @@ class Observer:
             return False
         matches = [value for value in self.intents.values() if not value['consumed']
                    and value['translated'] == vector and value['environment'] == environment
-                   and value['cwd'] == cwd and path == self.binding['entry']['path']]
-        if len(matches) != 1 or digest(Path(path)) != self.binding['entry']['sha256']:
+                   and value['cwd'] == cwd and path == value.get('executable', self.binding['entry']['path'])]
+        if len(matches) != 1:
+            return False
+        if digest(Path(path).resolve(strict=True)) != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
             return False
         intent = matches[0]
         if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):
             return False
         self.stdio(pid, intent['role'])
         intent['consumed'], intent['pid'] = True, pid
-        self.profile(pid, intent['role'], intent['case'], vector, environment, cwd, intent['token'])
+        if intent['role'] == 'sleep':
+            actual = process_identity(pid)
+            birth = Birth.read(actual)
+            pins = (('native-fixture', intent['executable_sha256']),)
+            self.ledger.register(birth, intent['token'], pins, intent['executable_sha256'],
+                                 case=intent['case'], command_class='native-sleep', expected_generation=1)
+            self.actors[pid] = {'birth': birth, 'role': 'sleep', 'case': intent['case'], 'token': intent['token'],
+                'returned': False, 'body_ready': False, 'signals': set(), 'kernel_admitted': True}
+        else:
+            self.profile(pid, intent['role'], intent['case'], vector, environment, cwd, intent['token'])
         return True
 
     def actor_control(self, actor, kind, payload):
@@ -164,10 +182,12 @@ class Observer:
     def launch(self, actor, payload):
         self.root_only(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256'))
-        if payload['case'] != self.case or self.case not in BOOTSTRAP or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *ORDINARY_CASES) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
+        if self.case in ORDINARY_CASES:
+            return self.ordinary_launch(payload)
         cwd = original['cwd']
         if type(cwd) is not str:
             raise Refused('source launch cwd type')
@@ -216,7 +236,28 @@ class Observer:
         self.serial += 1
         token = os.urandom(16).hex()
         self.intents[self.serial] = {'case': self.case, 'role': role, 'environment': environment, 'cwd': cwd,
-            'translated': translated, 'token': token, 'consumed': False, 'pid': None}
+            'translated': translated, 'token': token, 'consumed': False, 'pid': None,
+            'executable_sha256': self.binding['entry']['sha256']}
+        return {'ok': True, 'ticket': self.serial, 'token': token}
+
+    def ordinary_launch(self, payload):
+        original = payload['original']
+        role = 'sleep' if original['executable'] == '/bin/sleep' else 'mock-acp'
+        expected = ordinary_expected(self.case, role, original['cwd'], Path(self.meta['checkout']),
+            self.binding['entry']['path'], self.binding['entry']['sha256'], self.meta_environment(), Path(self.meta['owned']))
+        translated = list(expected.argv) if role == 'sleep' else [expected.argv[0], '-I', '-S', *expected.argv[1:]]
+        maximum = 2 if self.case == ORDINARY_CASES[2] and role == 'sleep' else 1
+        site = payload['source_line']
+        allowed_site = (1383 if self.case == ORDINARY_CASES[2] else 1843) if role == 'sleep' else 409
+        if (original != expected.wire() or payload['translated'] != translated or site != allowed_site
+                or payload['script_sha256'] != expected.payload_sha256
+                or sum(v['case'] == self.case and v['role'] == role for v in self.intents.values()) >= maximum):
+            raise Refused('ordinary independent launch reconstruction')
+        self.serial += 1
+        token = os.urandom(16).hex()
+        self.intents[self.serial] = {'case': self.case, 'role': role, 'environment': dict(expected.environment),
+            'cwd': expected.cwd, 'translated': translated, 'token': token, 'consumed': False, 'pid': None,
+            'executable': expected.executable, 'executable_sha256': expected.executable_sha256}
         return {'ok': True, 'ticket': self.serial, 'token': token}
 
     def socket_payload(self, actor, payload):
@@ -262,7 +303,7 @@ class Observer:
 
     def completed_child(self, actor):
         terminal = self.ledger.process(actor['birth']).terminal
-        return (terminal is not None and (actor['body_ready']
+        return (terminal is not None and (actor.get('kernel_admitted') is True or actor['body_ready']
                 or terminal[2] in (-9, -15) and -terminal[2] in actor['signals']))
 
     def interrupted_accept(self, actor, matches, server):
@@ -323,18 +364,19 @@ class Observer:
                 self.ledger.process(self.root_birth).case = self.case
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
-                spec = declaration(self.case)
+                spec = declaration(self.case) if self.case in BOOTSTRAP else None
+                count = 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:
-                        if not spec.interrupted:
+                        if spec is None or not spec.interrupted:
                             raise Refused('source aborted route in positive case')
                         self.endpoints.abort_reaped(ticket)
                         self.interrupted_records.append({'kind': 'aborted-unjoined', 'ticket': serial,
                             'actual_original_parent_reap': True, 'accepted_peer_proven': False})
                         self.eof_fds.pop((actor['birth'], drain['socket'].fd), None)
                         del self.eof_drains[serial]
-                if (payload['case'] != self.case or not spec.minimum_children <= len(children) <= spec.children
+                if (payload['case'] != self.case or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not self.ledger.reaped(value['birth'], value['token']) for value in children)
@@ -506,7 +548,7 @@ class Observer:
             if process.exit is not None or process.terminal is not None:
                 return {'ok': True, 'live': False}
             actual = process_identity(child['birth'].pid)
-            if (Birth.read(actual) != child['birth'] or actual['pgid'] != child['birth'].pid or actual['sid'] != child['birth'].pid):
+            if (Birth.read(actual) != child['birth'] or payload['group'] and (not process.new_session or actual['pgid'] != child['birth'].pid or actual['sid'] != child['birth'].pid)):
                 return {'ok': True, 'live': False}
             child['signals'].add(payload['signal'])
             return {'ok': True, 'live': True}

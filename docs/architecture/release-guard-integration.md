@@ -2406,3 +2406,25 @@ is retained, and UTF-8 mode is checked. A profile claiming the former coerced
 environment is a negative control, alongside wrong-cwd and other startup binding
 negatives. This follows the CPython initialization contract:
 https://docs.python.org/3.13/c-api/init_config.html#isolated-configuration
+
+
+### Replacement ordinary ACP slice
+
+The replacement guard's `ordinary3` checkpoint retains the two original
+same-plan worker/validator cases and the original Claude mock batch-crash case.
+The source selector binds the original `LaunchPlan` and its immutable environment,
+original process options and active source frames. The observer separately renders
+the finite mock-agent vector, environment and owned workspace. The failed sibling
+has no mock-agent launch route. This checkpoint launches no real provider.
+
+The accompanying `/bin/sleep 30` fixtures keep that original system executable,
+with the root-owned `/bin` alias and executable bytes checked independently.
+They receive kernel admission and actual original-parent wait joins, without a
+Python READY claim. Both native fixtures and mock agents inherit the root session;
+ordinary cleanup grants individual owned signals only. All test assertions and
+timeouts remain unchanged. Collection completion and every admitted child's
+actual reap are required; guard refusal or fallback cleanup cannot pass.
+
+The bounded bootstrap and ordinary checkpoints are integration evidence. They
+are not the full unexcluded source checkpoint, legacy-removal proof, the final
+10,000-line count, or release certification.

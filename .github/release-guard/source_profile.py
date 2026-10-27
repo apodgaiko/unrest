@@ -8,6 +8,7 @@ import sys
 from content_manifest import Refused, capture
 from bootstrap_cases import BOOTSTRAP, configuration, declaration, wrapper
 from controlled_startup import ACP_PIN, BACKEND_PIN, CASES
+from ordinary_acp import CASES as ORDINARY_CASES, MOCK, PINS
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 
@@ -50,10 +51,10 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     if (type(profile) is not dict or set(profile) != FIELDS
             or profile['schema'] != 'unrest.bootstrap-source.v1'
-            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend')
+            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else BOOTSTRAP)
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP)):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *ORDINARY_CASES))
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -103,6 +104,13 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         if (profile['cwd'] != profile['checkout'] or script is not None or event != 'cpython.run_command' or arguments != (ROOT_COMMAND + '\n',)
                 or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
             raise Refused('source fixed root body')
+    elif role == 'mock-acp':
+        if (profile['case'] not in ORDINARY_CASES or profile['case'] not in profile['cases']
+                or not Path(profile['cwd']).is_relative_to(Path(profile['owned']) / 'pytest')
+                or Path(profile['cwd']).name != 'workspace' or script != str(Path(profile['checkout']) / MOCK)
+                or profile['argv'] != [native, '-I', '-S', script] or digest(Path(script)) != PINS[MOCK]
+                or event != 'cpython.run_file' or arguments != (script,)):
+            raise Refused('source original mock ACP leaf')
     else:
         if (not Path(profile['cwd']).is_relative_to(Path(profile['owned']))
                 or Path(profile['cwd']).name != 'worker'

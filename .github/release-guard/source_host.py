@@ -253,7 +253,7 @@ def drain_owned(rows):
                          'original_parent_wait_proven': False})
 
 def main():
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] == 'bootstrap27'),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3')),
             'source host requires exact root Linux invocation')
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     binding_file = Path(sys.argv[1]).resolve(strict=True)
@@ -275,7 +275,8 @@ def main():
     try:
         from bootstrap_cases import BOOTSTRAP
         from controlled_startup import CASES
-        cases = BOOTSTRAP if len(sys.argv) == 3 else CASES
+        from ordinary_acp import CASES as ORDINARY_CASES
+        cases = (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
         metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root), 'cases': list(cases)}
         pid = os.fork()
         if pid == 0:
