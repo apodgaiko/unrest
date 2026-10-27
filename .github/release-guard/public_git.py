@@ -23,7 +23,7 @@ def git(repository: Path, *arguments: str, data: bytes | None = None) -> bytes:
     environment = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
     environment.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_SYSTEM=os.devnull,
                        GIT_CONFIG_GLOBAL=os.devnull, GIT_NO_LAZY_FETCH='1', GIT_TERMINAL_PROMPT='0')
-    return subprocess.run(['git', '--no-replace-objects', '-C', str(repository), *arguments],
+    return subprocess.run(['git', '--no-replace-objects', '-c', 'safe.directory=' + str(repository), '-C', str(repository), *arguments],
                           input=data, capture_output=True, check=True, env=environment).stdout
 
 

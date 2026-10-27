@@ -144,3 +144,20 @@ def test_all_required_release_binding_revisions_are_in_the_closed_projection():
     assert set(TAGS) == {'v0.2.0', 'v0.2.1', 'v0.3.0', 'v0.3.1', 'v0.4.0', 'v0.4.5'}
     assert git(ROOT, 'rev-parse', 'v0.4.5^{commit}').decode().strip() == (
         '5a3d568aa881c746432b7034597bbb8a1ffe025f')
+
+
+
+def test_git_owner_exception_is_one_exact_path_without_ambient_configuration(monkeypatch):
+    import public_git as module
+    monkeypatch.setenv('GIT_CONFIG_COUNT','1')
+    monkeypatch.setenv('GIT_CONFIG_KEY_0','unsafe-host-setting')
+    seen = []
+    def run(argv, **kwargs):
+        seen.append((argv,kwargs))
+        return type('Result',(),dict(stdout=b'closed'))()
+    monkeypatch.setattr(module.subprocess,'run',run)
+    assert module.git(ROOT,'rev-parse','HEAD') == b'closed'
+    argv, options = seen[0]
+    assert argv[:6] == ['git','--no-replace-objects','-c','safe.directory='+str(ROOT),'-C',str(ROOT)]
+    assert options['env']['GIT_CONFIG_GLOBAL'] == module.os.devnull and options['env']['GIT_CONFIG_NOSYSTEM'] == '1'
+    assert 'GIT_CONFIG_COUNT' not in options['env'] and 'GIT_CONFIG_KEY_0' not in options['env']
