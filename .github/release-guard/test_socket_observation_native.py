@@ -69,6 +69,66 @@ def test_actual_same_loop_initial_send_precedes_accept_then_joins_real_descripto
     asyncio.run(run())
 
 
+@pytest.mark.parametrize('buffered', [False, True])
+def test_actual_dead_client_before_accept_requires_empty_close_wait(buffered):
+    """Actual EOF and original-parent wait; reducer mutations are separate."""
+    import select
+    import signal
+    import time
+    from linux_observation import credential_identity
+    with socket.socket() as listener, socket.socket() as client:
+        listener.bind(('127.0.0.1', 0))
+        listener.listen()
+        address = listener.getsockname()
+        read, write = os.pipe()
+        child = os.fork()
+        if child == 0:
+            try:
+                os.close(read)
+                listener.close()
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                signal.alarm(5)
+                client.connect(address)
+                if buffered:
+                    client.sendall(b'x')
+                os.write(write, b'R')
+                while True:
+                    signal.pause()
+            finally:
+                os._exit(125)
+        os.close(write)
+        client.close()  # Do not retain the child's file description in its parent.
+        try:
+            assert select.select([read], [], [], 2)[0] and os.read(read, 1) == b'R'
+            born = credential_identity(child)
+            assert born['ppid'] == os.getpid()
+            os.kill(child, signal.SIGTERM)
+            actual, raw = os.waitpid(child, 0)
+            assert actual == child and raw == int(signal.SIGTERM)
+            server, _ = listener.accept()  # Deliberately after actual death/reap.
+            with server:
+                deadline = time.monotonic() + 1
+                while observation.retained_tcp_descriptor(os.getpid(), server.fileno())['state'] != 8:
+                    assert time.monotonic() < deadline
+                    time.sleep(.001)
+                if buffered:
+                    with pytest.raises(RuntimeError, match='empty CLOSE_WAIT EOF'):
+                        observation.retained_tcp_descriptor(os.getpid(), server.fileno(), eof_only=True)
+                    assert server.recv(1) == b'x'  # The query neither reads nor discards payload.
+                eof = observation.retained_tcp_descriptor(os.getpid(), server.fileno(), eof_only=True)
+                assert eof['state'] == 8 and eof['socket_cookie'] == cookie(server)
+                assert server.recv(1) == b''
+        finally:
+            try:
+                pending, _ = os.waitpid(child, os.WNOHANG)
+                if not pending:
+                    os.kill(child, signal.SIGKILL)
+                    os.waitpid(child, 0)
+            except ChildProcessError:
+                pass
+            os.close(read)
+
+
 def test_tcp_fd_inode_cookie_and_closed_descriptor():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

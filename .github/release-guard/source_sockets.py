@@ -97,7 +97,14 @@ class Hooks:
                 if not args or type(args[0]) not in (bytes, bytearray, memoryview):
                     self.policy.refuse('source payload buffer type')
                 count = args[0].nbytes if type(args[0]) is memoryview else len(args[0])
-            self.rpc('payload', {'fd': descriptor, 'operation': name, 'bytes': count})
+            answer = self.rpc('payload', {'fd': descriptor, 'operation': name, 'bytes': count})
+            if answer.get('eof_only') is True:
+                if (kwargs or name not in ('recv', 'recv_into') or not args
+                        or name == 'recv' and (len(args) != 1 or type(args[0]) is not int or args[0] < 0)
+                        or name == 'recv_into' and (len(args) > 2
+                            or type(args[0]) not in (bytearray, memoryview)
+                            or len(args) == 2 and (type(args[1]) is not int or args[1] < 0))):
+                    self.policy.refuse('source EOF-only read flags or buffer')
         elif name == 'listen':
             if role != 'root' or kwargs or len(args) > 1 or args and (type(args[0]) is not int or not 0 <= args[0] <= 2048):
                 self.policy.refuse('source listener operation')
@@ -160,7 +167,10 @@ class Hooks:
                 if not args or type(args[0]) not in (bytes, bytearray, memoryview):
                     self.policy.refuse('source file payload buffer type')
                 count = args[0].nbytes if type(args[0]) is memoryview else len(args[0])
-            self.rpc('payload', {'fd': descriptor, 'operation': 'fd-read' if function is self.read else 'fd-write', 'bytes': count})
+            answer = self.rpc('payload', {'fd': descriptor, 'operation': 'fd-read' if function is self.read else 'fd-write', 'bytes': count})
+            if answer.get('eof_only') is True and (function is not self.read or len(args) != 1
+                    or type(args[0]) is not int or args[0] < 0):
+                self.policy.refuse('source EOF-only file read')
         return function(descriptor, *args)
 
     def literal_address(self, host, port, family=0, type=0, proto=0, flags=0):

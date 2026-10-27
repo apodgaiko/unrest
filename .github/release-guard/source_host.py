@@ -211,7 +211,7 @@ def worker(binding, metadata, raw_directory):
         observer.tick(trace)
         require(result['root_parent_wait_raw'] == 0 and not result['poison'] and not observer.ledger.poison
                 and observer.finished and observer.completed == metadata['cases']
-                and not observer.frames and not observer.pair_intents and not observer.endpoints.poison
+                and not observer.frames and not observer.pair_intents and not observer.endpoints.poison and not observer.eof_drains
                 and all(intent['consumed'] for intent in observer.intents.values()), 'original source completion refused')
     except BaseException:
         failure = traceback.format_exc()
@@ -226,6 +226,7 @@ def worker(binding, metadata, raw_directory):
                   'result': result, 'failure': failure, 'metadata': metadata,
                   'kernel': [] if trace is None else trace.records,
                   'controls': [] if observer is None else observer.controls,
+                  'interrupted_connections': [] if observer is None else observer.interrupted_records,
                   'poison': [] if observer is None else observer.ledger.poison,
                   'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
         (raw_directory / 'source-result.json').write_text(json.dumps(record, sort_keys=True))

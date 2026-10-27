@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import ctypes
+import fcntl
 from pathlib import Path
 import socket
 import struct
@@ -232,8 +233,10 @@ def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
     return rows
 
 
-def retained_tcp_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
+def retained_tcp_descriptor(pid: int, descriptor: int, *, eof_only: bool = False) -> dict[str, Any] | None:
     """Query a retained file description even after TCP leaves the diag table."""
+    if type(eof_only) is not bool:
+        raise ValueError('exact EOF observation mode required')
     path = Path('/proc') / str(pid) / 'fd' / str(descriptor)
     try:
         target = os.readlink(path)
@@ -264,6 +267,14 @@ def retained_tcp_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
             if error.errno != errno.ENOTCONN:
                 raise
             remote = None
+        if eof_only:
+            # Query the same held file description, never a cached TCP row.
+            pending = struct.unpack('=I', fcntl.ioctl(stream.fileno(), 0x541B, b'\0' * 4))[0]
+            after = os.fstat(stream.fileno())
+            if (state != 8 or pending != 0 or stream.getsockopt(socket.IPPROTO_TCP, socket.TCP_INFO, 104)[0] != 8
+                    or struct.unpack('=Q', stream.getsockopt(socket.SOL_SOCKET, 57, 8))[0] != cookie
+                    or (info.st_dev, info.st_ino, info.st_uid) != (after.st_dev, after.st_ino, after.st_uid)):
+                raise RuntimeError('retained socket is not proven empty CLOSE_WAIT EOF')
         if (info.st_ino != before or os.readlink(path) != target
                 or cookie == (1 << 64) - 1):
             raise RuntimeError('retained descriptor changed during kernel query')
@@ -374,18 +385,19 @@ def connected_sockets(pid: int) -> list[dict[str, Any]]:
     raise RuntimeError('owned socket observation retry exhausted')
 
 
-def acquire_tcp(birth, descriptor: int, *, retained: bool = False):
+def acquire_tcp(birth, descriptor: int, *, retained: bool = False, eof_only: bool = False):
     """Return one birth-bound socket; no caller-supplied PID or cached row wins."""
     from endpoint_policy import Socket
     from process_ledger import Birth
     from linux_observation import process_identity
 
-    if type(birth) is not Birth or type(retained) is not bool:
+    if (type(birth) is not Birth or type(retained) is not bool or type(eof_only) is not bool
+            or eof_only and not retained):
         raise ValueError('exact owned birth and observation mode required')
     if Birth.read(process_identity(birth.pid)) != birth:
         raise RuntimeError('stale_or_reused_ownership')
     if retained:
-        row = retained_tcp_descriptor(birth.pid, descriptor)
+        row = retained_tcp_descriptor(birth.pid, descriptor, eof_only=eof_only)
         if row is not None:
             local, remote = row['local_address'], row['peer_address']
             row = {**row, 'local_host': local[0], 'local_port': local[1],

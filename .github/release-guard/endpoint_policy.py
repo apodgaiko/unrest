@@ -245,6 +245,18 @@ class Endpoints:
             raise Refused('endpoint retained descriptor')
 
     @fail_closed
+    def abort_reaped(self, ticket: Ticket) -> None:
+        """Retire an unfinished client, without asserting accepted peer identity."""
+        if type(ticket) is not Ticket or self.tickets.get(ticket.serial) is not ticket:
+            raise Refused('endpoint unknown aborted ticket')
+        route = self.route(ticket.route.name)
+        if route is not ticket.route or not self.ledger.reaped(route.client.birth, route.client.token):
+            raise Refused('endpoint aborted client requires actual parent reap')
+        self.owner(route.server, route.case, body=True)
+        del self.tickets[ticket.serial]
+        self.queued.pop(ticket.serial, None)
+
+    @fail_closed
     def retire(self, name: str, replacement: Route) -> None:
         route = self.route(name)
         saved = self.listeners.get(name)

@@ -58,6 +58,15 @@ proof. Reads waiting for a different process's accept remain finite control
 waits. External DNS is refused; computing a literal loopback address never
 replaces the observer's separate exact-route connect permission.
 
+Interrupted bootstrap cases can accept a late socket after their client has
+already died. An exact outstanding ticket and authorized terminal signal may
+establish a separate cleanup-only state when the root's fresh held descriptor
+is CLOSE_WAIT with FIONREAD zero. It grants at most eight ordinary EOF reads;
+flags, writes, buffered data, another descriptor and promotion to Connection
+refuse. No peer association is asserted. The ticket remains unresolved until
+its actual original-parent wait joins, then retires as aborted-unjoined.
+Positive cases continue to require the reciprocal accepted-FD join.
+
 The trusted root may compile ordinary in-process pytest/library code after its
 exact entry. Privileged effects still require current source-owner and finite
 observer admission. Sealed child compilation/imports remain closed to their

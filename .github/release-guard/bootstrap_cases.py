@@ -31,6 +31,11 @@ class Case:
         return self.name == 'test_delayed_turn_uses_only_original_remaining_time'
 
     @property
+    def interrupted(self):
+        return (self.name.startswith('test_actual_launch_lifetime_and_interruptions[')
+                or self.name.startswith('test_original_limits_refuse_before_grant_or_send['))
+
+    @property
     def minimum_children(self):
         optional = (self.name == 'test_actual_launch_lifetime_and_interruptions[near]'
                     or self.name.startswith('test_original_limits_refuse_before_grant_or_send[False-'))
