@@ -2649,3 +2649,28 @@ This library still supplies no launch permission. Complete source/case/custody,
 kernel prebody, endpoint and actual-parent-wait gates remain mandatory. Any new
 dynamic family must independently prove its input bounds and provenance before
 activation; there is no generic program-hole or interpreter allowance.
+
+The replacement Git value reducer keeps Python-parent commands and native Git
+helpers distinct. A value-producing command requires its successful first exec,
+exact case and image pin, original Python-parent receipt and actual kernel wait.
+A native helper has no Python control channel: only its exact admitted Git parent,
+case, image/epoch, matching successful exit/terminal record and actual parent wait
+with options0 settle it. Tracer reap, waitid, cached return codes and fabricated
+Python receipts cannot substitute. All descendants must settle before a producer
+value is recorded. The ledger's birth-indexed child map changes lookup cost only.
+
+The finite command builder reconstructs workspace/evolution vectors from named
+operations and primitive operands. Parent, lease, integration and evolution-only
+rollback locations are separate. Integration trees and patches retain distinct
+path shapes; promotion and rollback have opposite causal directions. Date facts
+carry their predecessor, and integration commits carry their tree, predecessor,
+date and exact ordered lease/patch-message digest. Both command building and
+value reduction are currently unactivated support: they grant no source launch
+permission and do not certify the original workspace/evolution cases. Source
+callers, owned filesystem custody and original stdout pipe generations must be
+bound before enabling this family.
+
+Development pushes run the bounded replacement control suite. Original source
+groups are explicit workflow-dispatch selections so a support edit does not
+silently replay a passing cohort. This does not change the required full,
+unexcluded release checkpoint or primary release gates.

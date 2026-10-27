@@ -122,6 +122,7 @@ class Ledger:
         self.next_kernel = 0
         self.processes: dict[Birth, Process] = {}
         self.current: dict[int, Birth] = {}
+        self.children: dict[Birth, list[Birth]] = {}
         self.tokens: set[str] = set()
         self.by_token: dict[str, Birth] = {}
         self.pending_waits: dict[tuple[int, int, int, int], list[Birth]] = {}
@@ -263,6 +264,8 @@ class Ledger:
                                              group=birth if birth.pid == birth.tgid else self.current.get(birth.tgid),
                                              registered_identity=dict(identity))
             self.current[birth.pid] = birth
+            if parent is not None:
+                self.children.setdefault(parent, []).append(birth)
         elif kind in ('kernel_exec', 'kernel_exit', 'tracer_terminal_wait', 'failure_cleanup_tracer_wait'):
             observed_birth = self.current.get(integer(row.get('pid'), 1))
             if observed_birth is None:
