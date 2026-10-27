@@ -80,7 +80,7 @@ def test_host_refuses_ordinary_request_mutations(tmp_path, mutation):
     observer = object.__new__(Observer)
     observer.root_birth = Birth(1, 1, 1, 1, 'test-boot', 20000)
     observer.finished, observer.case, observer.serial = False, CASES[0], 0
-    observer.meta = {'owned': str(tmp_path), 'checkout': str(tmp_path / 'checkout')}
+    observer.meta = {'mounts': {}, 'owned': str(tmp_path), 'checkout': str(tmp_path / 'checkout')}
     observer.binding = {'entry': {'path': '/pinned/python', 'sha256': 'a' * 64}}
     observer.intents = {}
     cwd = tmp_path / 'pytest/case/workspace'

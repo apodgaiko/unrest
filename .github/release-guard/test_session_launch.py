@@ -59,7 +59,7 @@ def test_observer_independently_reconstructs_adapter_and_rejects_mutations(tmp_p
     observer = object.__new__(Observer)
     observer.case, observer.finished, observer.serial = PLAN[0], False, 0
     observer.root_birth = Birth(1, 1, 1, 1, 'boot', 20000)
-    observer.meta = {'checkout': str(ROOT), 'owned': str(tmp_path)}
+    observer.meta = {'mounts': {}, 'checkout': str(ROOT), 'owned': str(tmp_path)}
     observer.binding = {'entry': {'path': '/native/python', 'sha256': 'a' * 64}}
     observer.intents = {}
     workspace = tmp_path / 'pytest/case/workspace'
