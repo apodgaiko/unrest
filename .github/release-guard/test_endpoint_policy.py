@@ -296,3 +296,30 @@ def test_shared_listener_never_transfers_foreign_server_or_binding(mutation):
     with pytest.raises(Refused):
         endpoints.declare(next_route, shared_listener=shared)
     assert endpoints.poison and len(endpoints.routes) == 1
+
+
+def test_retired_case_keeps_observations_but_cannot_reuse_capabilities():
+    endpoints, route, listener = prepared()
+    endpoints.retire_case(route.case)
+    assert endpoints.listeners[route.name] is listener and endpoints.routes[route.name] is route
+    with pytest.raises(Refused, match='unknown route'):
+        endpoints.route(route.name)
+    with pytest.raises(Refused, match='poisoned or unknown owner'):
+        endpoints.owner(route.client, route.case, body=True)
+    # The coordinator's next sealed case has its own route and fresh listener.
+    for owner in (route.client, route.server):
+        endpoints.ledger.process(owner.birth).case = 'case[two]'
+    next_route = replace(route, name='next-case', case='case[two]')
+    endpoints.declare(next_route)
+    fresh = replace(listener, inode=3000, cookie=4000)
+    endpoints.listen(next_route.name, fresh)
+    assert endpoints.listeners[next_route.name] is fresh
+    assert endpoints.listeners[route.name] is listener
+
+
+def test_case_retirement_never_discards_an_unjoined_ticket():
+    endpoints, route, listener = prepared()
+    ticket = endpoints.connect(route.name, listener, idle_client(route))
+    with pytest.raises(Refused, match='outstanding admission'):
+        endpoints.retire_case(route.case)
+    assert endpoints.tickets[ticket.serial] is ticket and route.case not in endpoints.retired

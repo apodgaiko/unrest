@@ -2505,3 +2505,10 @@ Only the already validated cleanup fixture entry may use that event, once, with
 its exact filename and no Python caller frame. The guard measures its immutable
 source and still requires the ensuing code object to match those bytes. This
 exception grants no subsequent parser, generated-code or process authority.
+
+Endpoint authority is scoped to the externally ordered case as well as the
+actor token. After original assertions and all required actual child reap joins,
+case completion revokes its endpoint capabilities only when no ticket remains
+unjoined. Recorded listener/connection observations remain available as evidence;
+revocation does not assert that a file descriptor closed. A later case may bind
+a fresh listener at the same port without inheriting the old case's authority.

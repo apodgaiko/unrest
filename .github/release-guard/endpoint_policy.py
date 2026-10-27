@@ -116,9 +116,10 @@ class Endpoints:
         self.queued: dict[int, tuple[int, int]] = {}
         self.poison: list[str] = []
         self.serial = 0
+        self.retired: set[str] = set()
 
     def owner(self, owner: Owner, case: str, *, body: bool) -> None:
-        if self.poison or self.ledger.poison or type(owner) is not Owner:
+        if self.poison or self.ledger.poison or type(owner) is not Owner or case in self.retired:
             raise Refused('endpoint poisoned or unknown owner')
         process = self.ledger.process(owner.birth)
         if (type(owner.token) is not str or type(owner.generation) is not int
@@ -137,7 +138,7 @@ class Endpoints:
         integer(route.port, 1, 65535)
         self.owner(route.server, route.case, body=False)
         self.owner(route.client, route.case, body=False)
-        duplicates = [item for item in self.routes.values() if item.port == route.port]
+        duplicates = [item for item in self.routes.values() if item.port == route.port and item.case not in self.retired]
         if route.name in self.routes:
             raise Refused('endpoint duplicate declaration')
         if duplicates:
@@ -151,8 +152,16 @@ class Endpoints:
             raise Refused('endpoint shared listener without original route')
         self.routes[route.name] = route
 
+    @fail_closed
+    def retire_case(self, case: str) -> None:
+        text(case)
+        if case in self.retired or any(ticket.route.case == case for ticket in self.tickets.values()):
+            raise Refused('endpoint retirement has outstanding admission')
+        # Revoke capabilities, preserving observations; this does not assert FD close.
+        self.retired.add(case)
+
     def route(self, name: str) -> Route:
-        if type(name) is not str or name not in self.routes or self.poison or self.ledger.poison:
+        if type(name) is not str or name not in self.routes or self.poison or self.ledger.poison or self.routes[name].case in self.retired:
             raise Refused('endpoint unknown route')
         return self.routes[name]
 

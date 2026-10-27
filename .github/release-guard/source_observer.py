@@ -461,6 +461,7 @@ class Observer:
                         or any(not self.ledger.reaped(value['birth'], value['token']) for value in children)
                         or any(ticket.route.case == self.case for ticket in self.endpoints.tickets.values())):
                     raise Refused('source original case actual cleanup incomplete')
+                self.endpoints.retire_case(self.case)
                 self.completed.append(self.case)
                 self.case = None
         elif kind == 'root-finish':
@@ -591,11 +592,11 @@ class Observer:
                 slot = self.listeners.get((self.case, 'mcp'))
                 if slot is None or not target['body_ready']:
                     return None  # The independent child can finish initialization.
-                name = actor['token'] + ':mcp'
+                name = actor['token'] + ':mcp:' + hashlib.sha256(self.case.encode()).hexdigest()
                 if name not in self.endpoints.routes:
                     route = Route(name, self.case, self.owner(target), self.owner(actor), port)
                     actual_listener = acquire_tcp(target['birth'], slot['socket'].fd, retained=True)
-                    sharing = actual_listener if any(value.port == port for value in self.endpoints.routes.values()) else None
+                    sharing = actual_listener if any(value.port == port and value.case not in self.endpoints.retired for value in self.endpoints.routes.values()) else None
                     self.endpoints.declare(route, shared_listener=sharing)
                     self.endpoints.listen(name, actual_listener)
                 maximum = 1 if actor['role'] == 'root' else 16
