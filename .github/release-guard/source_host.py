@@ -313,7 +313,7 @@ def drain_owned(rows):
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from controlled_cases import GROUPS as CONTROLLED_GROUPS, ADMISSION, NOTIFICATION_STARTUP, NOTIFICATION_SIGNALS, ROOT_HTTP
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', 'stdio8', 'observe1', 'preflight9', 'preflight54', *CONTROLLED_GROUPS)),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', 'stdio8', 'observe1', 'mp-status2', 'preflight9', 'preflight54', *CONTROLLED_GROUPS)),
             'source host requires exact root Linux invocation')
     binding_file = Path(sys.argv[1]).resolve(strict=True)
     binding = json.loads(binding_file.read_bytes())
@@ -339,6 +339,7 @@ def main():
     success = False
     try:
         from bootstrap_cases import BOOTSTRAP
+        from multiprocess_entry import CASES as MP_CASES
         from preflight_cases import CASES as PREFLIGHT_ALL
         from plan_launch import CASES as PLAN_CASES
         from controlled_startup import CASES
@@ -349,7 +350,7 @@ def main():
         from fixed_inline import IMPORT_CASES, STDIO, OBSERVATION_CASE
         from session_launch import CASES as SESSION_CASES, TIMEOUT as SESSION_TIMEOUT
         from git_sites import CASES as GIT_CASES
-        cleanup = {**CONTROLLED_GROUPS, 'preflight9': PLAN_CASES, 'preflight54': PREFLIGHT_ALL, 'imports6': IMPORT_CASES, 'stdio8': tuple(STDIO), 'observe1': (OBSERVATION_CASE,), 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
+        cleanup = {**CONTROLLED_GROUPS, 'preflight9': PLAN_CASES, 'preflight54': PREFLIGHT_ALL, 'imports6': IMPORT_CASES, 'stdio8': tuple(STDIO), 'observe1': (OBSERVATION_CASE,), 'mp-status2': MP_CASES, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
         cases = cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
         metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root, git=cases == GIT_CASES, public=any(case in IMPORT_CASES for case in cases), native=any(case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP) for case in cases)), 'cases': list(cases)}
         pid = os.fork()

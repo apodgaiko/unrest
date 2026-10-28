@@ -11,6 +11,7 @@ import sys
 
 from content_manifest import Refused, capture
 from preflight_cases import CASES as PREFLIGHT_ALL
+from multiprocess_entry import CASES as MP_CASES
 from plan_launch import CASES as PLAN_CASES, PYTHON as PLAN_PYTHON
 from bootstrap_cases import BOOTSTRAP
 from controlled_cases import CASES as CONTROLLED, GROUPS as CONTROLLED_GROUPS
@@ -27,7 +28,7 @@ from fixed_inline import CASES as FIXED_CASES, GROUPS as FIXED_GROUPS
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
-    'launch-proposal', 'launch-intent', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'bound', 'listen', 'accepted', 'connect', 'connected',
+    'multiprocess-proposal','launch-proposal', 'launch-intent', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'bound', 'listen', 'accepted', 'connect', 'connected',
     'root-http-open', 'root-http-close', 'payload', 'drain_child', 'custody_signal', 'custody_close', 'git-pipe', 'git-output', 'self-stop', 'guard-refusal'})
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
@@ -79,10 +80,10 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     if (type(profile) is not dict or set(profile) != FIELDS
             or profile['schema'] != 'unrest.bootstrap-source.v1'
-            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python')
+            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python','mp-child','mp-tracker')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL)):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES, *MP_CASES))
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -122,28 +123,33 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or profile['argv'] != sys.orig_argv):
         raise Refused('source actual request binding')
     inherited = profile['inherited']
-    if (type(inherited) is not list or (profile['role'] != 'mcp' and inherited)
-            or profile['role'] == 'mcp' and (len(inherited) != 1 or type(inherited[0]) is not list
-                or len(inherited[0]) != 3 or any(type(value) is not int or value <= 0 for value in inherited[0]))):
-        raise Refused('source finite inherited inventory')
-    seen = []
-    for name in os.listdir('/proc/self/fd'):
-        descriptor = int(name)
-        if descriptor > 2:
-            try:
-                os.fstat(descriptor)
-            except OSError:
-                continue
-            info = os.fstat(descriptor)
-            seen.append(inherited_descriptor(inherited, descriptor, info,
-                                              fcntl.fcntl(descriptor, fcntl.F_GETFL), actual['uids'][0]))
-    if seen != inherited:
-        raise Refused('source missing inherited inventory')
+    if profile['role'] in ('mp-child','mp-tracker'):
+        from multiprocess_entry import inherited as validate_inherited
+        validate_inherited(profile,actual)
+    else:
+        if (type(inherited) is not list or (profile['role'] != 'mcp' and inherited)
+                or profile['role'] == 'mcp' and (len(inherited) != 1 or type(inherited[0]) is not list
+                    or len(inherited[0]) != 3 or any(type(value) is not int or value <= 0 for value in inherited[0]))):
+            raise Refused('source finite inherited inventory')
+        seen = []
+        for name in os.listdir('/proc/self/fd'):
+            descriptor = int(name)
+            if descriptor > 2:
+                try:
+                    os.fstat(descriptor)
+                except OSError:
+                    continue
+                info = os.fstat(descriptor)
+                seen.append(inherited_descriptor(inherited, descriptor, info,
+                                                  fcntl.fcntl(descriptor, fcntl.F_GETFL), actual['uids'][0]))
+        if seen != inherited:
+            raise Refused('source missing inherited inventory')
     readonly_mounts(profile['mounts'], profile['mount_namespace'])
     from bootstrap_cases import wrapper
     from session_launch import LIVE, INVALID, TIMEOUT, node
     inline_session = node('clean_exit_zero_without_response_is_failed_unknown_work')
     eligible = {
+        'mp-child': MP_CASES, 'mp-tracker': MP_CASES,
         'root': ('<bootstrap>',), 'backend': (*BOOTSTRAP,*CONTROLLED), 'acp': (*BOOTSTRAP,*CONTROLLED),
         'delayed-backend': tuple(case for case in BOOTSTRAP if wrapper(case) is not None),
         'fixed-inline': FIXED_CASES, 'plan-python': (PLAN_PYTHON,),

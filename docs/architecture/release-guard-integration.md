@@ -45,6 +45,16 @@ The three observability import
 probes use the same finite fixed-inline path with their exact original script,
 arguments and trap flags; they add no generic command or nested-pytest permission.
 
+The spawn transport currently declares only the two original
+`test_original_child_status_is_preserved` cases. Each requires one owned tracker
+and one child, three distinct inherited FIFO identities for the spawn child,
+exact descriptor directions and native entry, and actual original-parent waits.
+The tracker must return zero; the child must retain its original zero or 17
+status. Target-name metadata does not authenticate pickle contents or Python
+code. No other multiprocessing case or shared-memory arena is admitted by this
+slice. A pending native READY uses the existing bounded RPC; it grants no child
+execution permission and changes no test deadline.
+
 The historical sections below describe earlier implementation stages. Their
 Python frame/closure/generated-code enforcement details are superseded by this
 scope; their passing component results retain their original limited meaning.

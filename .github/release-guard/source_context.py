@@ -32,6 +32,10 @@ class Context:
         import asyncio
         from cleanup_launch import EXECUTION_CASES
         cases=self.policy.profile['cases']
+        from multiprocess_entry import CASES as MP_CASES
+        if any(case in MP_CASES for case in cases):
+            from multiprocess_hooks import install
+            install(self.policy)
         if any(case in (*BOOTSTRAP,*CONTROLLED) for case in cases):
             import unrest_harness.experimental_session as session
             from unrest_harness.experimental_relay import Bridge

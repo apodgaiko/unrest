@@ -14,6 +14,7 @@ import stat
 import struct
 import time
 
+from multiprocess_entry import CASES as MP_CASES
 from content_manifest import Refused, native_digest
 from preflight_cases import NO_EFFECT
 from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
@@ -116,7 +117,7 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker'}[role]
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'), expected_generation=1)
         if role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'):
@@ -177,7 +178,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'git-fixed') and not input_pipe):
+            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'git-fixed') and not input_pipe):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -507,6 +508,9 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        if actor['role'] in ('mp-child','mp-tracker'):
+            status=17 if actor['role']=='mp-child' and actor['case']==MP_CASES[1] else 0
+            return terminal is not None and terminal[2]==status and actor['body_ready']
         if actor['case'] in PLAN_CASES:
             values=[value for value in self.intents.values() if value['case']==actor['case'] and value.get('pid')==actor['birth'].pid]
             if len(values)!=1 or terminal is None:
@@ -604,7 +608,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = 2 if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:
@@ -641,6 +645,9 @@ class Observer:
             return self.git.seal_pipe(actor, payload)
         elif kind == 'git-output':
             return self.git.output(actor, payload)
+        elif kind == 'multiprocess-proposal':
+            from multiprocess_entry import proposal
+            return proposal(self,actor,payload)
         elif kind == 'launch-proposal':
             from effect_proposals import proposal
             return proposal(self,actor,payload)

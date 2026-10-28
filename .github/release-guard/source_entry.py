@@ -286,7 +286,7 @@ def activate(directory, profile, event, arguments):
     actual, pins = validate(profile, event, arguments)
     client = Client(directory, profile, METHODS)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python'):
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker'):
         sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
         # Only guard/locked dependencies initialize here; candidate test modules
         # are imported by the real pytest body after the native READY boundary.
