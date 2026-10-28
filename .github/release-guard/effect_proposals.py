@@ -34,6 +34,9 @@ def proposal(host, actor, raw, *, payload=None):
             or any(type(k) is not str or type(v) is not str for k,v in raw['environment'].items())):
         raise Refused('finite process proposal operands')
     from git_sites import CASES as GIT_CASES
+    from http_cases import CASES as HTTP_CASES,proposal as http_proposal
+    if case in HTTP_CASES:
+        return http_proposal(host,actor,raw)
     if case in GIT_CASES:
         from git_proposals import prepare
         return prepare(host,actor,raw)

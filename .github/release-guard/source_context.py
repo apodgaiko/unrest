@@ -36,6 +36,17 @@ class Context:
         if any(case in MP_CASES for case in cases):
             from multiprocess_hooks import install
             install(self.policy)
+        from http_cases import CASES as HTTP_CASES
+        if any(case in HTTP_CASES for case in cases):
+            from tests import test_server
+            free = test_server._free_loopback_port
+            def port():
+                token=LISTENER.set({'tag':'mcp-probe','nonce':None})
+                try:
+                    return free()
+                finally:
+                    LISTENER.reset(token)
+            test_server._free_loopback_port=port
         if any(case in (*BOOTSTRAP,*CONTROLLED) for case in cases):
             import unrest_harness.experimental_session as session
             from unrest_harness.experimental_relay import Bridge

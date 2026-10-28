@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 
 from content_manifest import Refused, capture
+from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
 from preflight_cases import CASES as PREFLIGHT_ALL
 from multiprocess_routes import GROUPS as MP_GROUPS
 from multiprocess_entry import ALL_CASES as MP_CASES, CASES as MP_STATUS, CHILD_CASES, IPC_CASES, TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, ZERO
@@ -134,8 +135,9 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         from multiprocess_entry import inherited as validate_inherited
         validate_inherited(profile,actual)
     else:
-        if (type(inherited) is not list or (profile['role'] != 'mcp' and inherited)
-                or profile['role'] == 'mcp' and (len(inherited) != 1 or type(inherited[0]) is not list
+        mcp = profile['role']=='mcp' and profile['case'] not in HTTP_CASES
+        if (type(inherited) is not list or (not mcp and inherited)
+                or mcp and (len(inherited) != 1 or type(inherited[0]) is not list
                     or len(inherited[0]) != 3 or any(type(value) is not int or value <= 0 for value in inherited[0]))):
             raise Refused('source finite inherited inventory')
         seen = []
@@ -163,7 +165,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         'session-adapter': tuple(case for case in LIVE if case not in (*INVALID,inline_session)),
         'session-inline': (inline_session,), 'session-child': (TIMEOUT,),
         'workspace-owned': (GIT_CASES[7],), 'cleanup-inline': tuple(DECLARATIONS),
-        'mcp': CLEANUP_CASES, 'cleanup-acp': CLEANUP_CASES, 'mock-acp': ORDINARY_CASES,
+        'mcp': MCP_CASES, 'cleanup-acp': CLEANUP_CASES, 'mock-acp': ORDINARY_CASES,
     }
     if profile['case'] not in eligible[profile['role']]:
         raise Refused('source execution role and case')

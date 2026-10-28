@@ -1,0 +1,88 @@
+"""Finite real-MCP supervision fixtures; provider command strings grant no launch."""
+from pathlib import Path
+import stat
+
+from content_manifest import Refused
+from git_observer import image
+from launch_policy import Rule, render
+from multiprocess_routes import TRANSACTIONS
+from cleanup_launch import EXECUTION_CASES
+
+CASES = tuple(TRANSACTIONS)[:9]
+TRANSPORT = (*EXECUTION_CASES, *CASES)
+
+
+def expected(host, actor, raw):
+    host.root_only(actor)
+    case = host.case
+    if case not in CASES or raw['stdin'] is not None:
+        raise Refused('HTTP original case or input')
+    native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
+    checkout, owned = Path(host.meta['checkout']), Path(host.meta['owned'])
+    environment = {**host.meta_environment(), 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case+' (call)'}
+    if raw['argv'][:1] == ['ps']:
+        servers = [row for row in host.intents.values() if row['case']==case and row['role']=='mcp']
+        if len(servers)!=1 or not servers[0]['consumed'] or not host.ledger.reaped(servers[0]['birth'],servers[0]['token']):
+            raise Refused('HTTP inventory before original server wait')
+        role, executable, kind = 'ps', '/usr/bin/ps', 'native'
+        vector, cwd = ('ps', '-axo', 'pid=,ppid=,pgid='), str(checkout)
+        pin = image(executable)
+        port = None
+    else:
+        root = Path(raw['cwd'])
+        if str(root.resolve())!=raw['cwd'] or root.name!='workspace' or not root.parent.is_relative_to(owned/'pytest'):
+            raise Refused('HTTP original owned workspace')
+        base, role, executable, kind = root.parent, 'mcp', native, 'python-command'
+        subject = case.rsplit('-',1)[1][:-1]
+        mode = subject.replace('_','-')
+        probe = host.probe_ports.get(case)
+        if probe is None:
+            raise Refused('HTTP original advisory port absent')
+        port = probe['socket'].local[1]
+        code = f"import runpy; runpy.run_path({str(checkout/'tests/fixtures/supervision_role_process.py')!r}, run_name='__main__')"
+        vector = (native,'-c',code,'--mode',mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
+        environment.update(PYTHONPATH=str(checkout/'src'), UNREST_HOME=str(base/'home'),
+            UNREST_PROJECTS_DIR=str(base/'home/projects'), UNREST_PROJECT_ID='project-1',
+            UNREST_MISSION_ID='mission-001', SUPERVISION_TEST_BARRIER=str(base/'barrier'))
+        for name in ('WORKER','VALIDATOR','TERMINAL_REVIEWER'):
+            environment['UNREST_'+name+'_PROVIDER'] = 'claude'
+            environment['UNREST_'+name+'_ACP_COMMAND'] = '/bin/true'
+        runtime = base/'home/projects/project-1/.unrest-runtime/missions/mission-001'
+        if subject=='terminal_reviewer':
+            environment.update(UNREST_TERMINAL_REVIEW_ID='review-spawn-1',
+                UNREST_TERMINAL_REVIEW_PATH=str(runtime/'terminal-reviews/review-spawn-1.json'))
+        else:
+            node = 'work-1' if subject=='worker' else 'validate-1'
+            environment.update(UNREST_NODE_ID=node,
+                UNREST_HANDOFF_PATH=str(runtime/'attempts'/('attempt-'+subject+'__'+node+'.json')))
+        cwd = str(root)
+    owner = 'tests/test_server.py:'+('_process_group_inventory' if role=='ps' else '_http_server_process')
+    value = render(Rule('http:'+role,owner,(case,),executable,pin,vector,
+        tuple(sorted(environment.items())),cwd,kind),case,owner,{}, {})
+    return value, role, port
+
+
+def stdio(host,pid,row):
+    # Operands come from the independently matched kernel exec intent.
+    if host.case not in CASES or row['case']!=host.case or row['role']!='mcp':
+        raise Refused('HTTP exact prebody output intent')
+    mode = host.case.rsplit('-',1)[1][:-1].replace('_','-')
+    log = Path(row['cwd'])/('.'+mode+'-'+str(row['port'])+'.log')
+    info = log.lstat()
+    descriptors = [(Path('/proc')/str(pid)/'fd'/str(fd)).stat() for fd in (0,1,2)]
+    null = Path('/dev/null').stat()
+    if (log.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_uid!=20000 or info.st_nlink!=1
+            or not stat.S_ISCHR(descriptors[0].st_mode) or descriptors[0].st_rdev!=null.st_rdev
+            or any((value.st_dev,value.st_ino,value.st_mode,value.st_uid)!=(info.st_dev,info.st_ino,info.st_mode,info.st_uid) for value in descriptors[1:])):
+        raise Refused('HTTP exact null and owned merged log descriptors')
+    return info.st_dev,info.st_ino
+
+
+def proposal(host,actor,raw):
+    value,role,port = expected(host,actor,raw)
+    if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:
+        raise Refused('HTTP original command operands')
+    vector = [value.executable,*value.argv[1:]] if role=='ps' else [value.executable,'-I','-S',*value.argv[1:]]
+    payload = {'original':value.wire(),'source_line':0,'translated':vector,'script_sha256':None}
+    answer = host.admit_launch(actor,payload,value,role,0,vector,None,port=port)
+    return None if answer is None else {**answer,'translated':vector,'rule':value.rule}

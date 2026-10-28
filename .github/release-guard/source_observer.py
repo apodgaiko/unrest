@@ -17,6 +17,7 @@ import time
 from review_wire import CASES as REVIEW_CASES,SCRIPT as REVIEW_SCRIPT,count as review_count
 from multiprocess_entry import ALL_CASES as MP_CASES, count as mp_count
 from content_manifest import Refused, native_digest
+from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
 from preflight_cases import NO_EFFECT
 from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
@@ -123,9 +124,10 @@ class Observer:
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire'}[role]
+        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
-                             command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'), expected_generation=1)
-        if role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'):
+                             command_class=command_class, new_session=new_session, expected_generation=1)
+        if new_session:
             common = {'owner_pid': self.root, 'token': token, 'case': case, 'class': command_class}
             witnesses = ({'kind': 'admitted', **common}, {'kind': 'registered', 'pid': pid, 'python': True, **common},
                          {'kind': 'launch_lifecycle_binding', 'start_new_session': True, **common})
@@ -174,7 +176,10 @@ class Observer:
                 'PATH': ('/native/bin:' if '/native' in self.meta['mounts'] else '')+'/usr/bin:/bin',
                 'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
 
-    def stdio(self, pid, role, *, input_pipe=False):
+    def stdio(self, pid, role, *, input_pipe=False, intent=None):
+        if role=='mcp' and self.case in HTTP_CASES:
+            from http_cases import stdio
+            return stdio(self,pid,intent)
         parent = Path('/proc') / str(process_identity(pid)['ppid']) / 'fd'
         parent_inodes = set()
         for fd in parent.iterdir():
@@ -193,7 +198,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'git-fixed') and not input_pipe):
+            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'git-fixed','ps') and not input_pipe):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -251,9 +256,9 @@ class Observer:
         if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):
             return False
         intent['stdout'] = self.stdio(pid, intent['role'],
-            input_pipe=intent.get('input_pipe',False) or intent['role'] == 'git-command' and intent['command'].stdin is not None)
+            input_pipe=intent.get('input_pipe',False) or intent['role'] == 'git-command' and intent['command'].stdin is not None,intent=intent)
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
-        if intent['role'] in ('sleep', 'session-invalid') or intent['role'].startswith('git-'):
+        if intent['role'] in ('sleep', 'session-invalid','ps') or intent['role'].startswith('git-'):
             actual = process_identity(pid)
             birth = Birth.read(actual)
             pins = (('native-fixture', intent['executable_sha256']),)
@@ -385,6 +390,10 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        if actor['role']=='ps':
+            return terminal is not None and terminal[2]==0 and actor.get('kernel_admitted') is True
+        if actor['role']=='mcp' and actor['case'] in HTTP_CASES:
+            return terminal is not None and actor['body_ready'] and (terminal[2]==0 or terminal[2] in (-9,-15) and -terminal[2] in actor['signals'])
         if actor['role']=='review-wire':
             return terminal is not None and actor['body_ready'] and (terminal[2]==0 or terminal[2]==-9 and 9 in actor['signals'])
         if actor['role'] in ('mp-child','mp-tracker'):
@@ -516,7 +525,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                count = review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
                 if outcome=='failed':
                     count,spec=len(children),None
                 if skipped:
@@ -613,14 +622,14 @@ class Observer:
         elif kind == 'bind':
             if actor['role'] != 'mcp':
                 self.root_only(actor)
-            elif actor['case'] != self.case or self.case not in CLEANUP_CASES:
+            elif actor['case'] != self.case or self.case not in MCP_CASES:
                 raise Refused('source declared module listener case')
             shape(payload, ('fd', 'tag', 'nonce', *(('scope',) if self.case in CONTROLLED else ())))
             scope = controlled_scope(self.case,payload['tag'],payload.get('scope'),Path(self.meta['owned'])) if self.case in CONTROLLED else None
             fd = number(payload['fd'])
             if ((actor['role'] == 'mcp' and payload['tag'] != 'mcp')
-                    or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in (*CLEANUP_CASES, *STARTUP) else ('broker', 'bridge', 'lifetime'))
-                        or self.case not in (*BOOTSTRAP, *CONTROLLED, *CLEANUP_CASES, *STARTUP))):
+                    or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in (*MCP_CASES, *STARTUP) else ('broker', 'bridge', 'lifetime'))
+                        or self.case not in (*BOOTSTRAP, *CONTROLLED, *MCP_CASES, *STARTUP))):
                 raise Refused('source finite root listener')
             if self.case in CONTROLLED:
                 if scope is None:
@@ -648,7 +657,7 @@ class Observer:
         elif kind == 'bound':
             self.root_only(actor)
             shape(payload, ('fd',))
-            if self.case not in STARTUP or self.case in self.probe_ports:
+            if self.case not in (*STARTUP,*HTTP_CASES) or self.case in self.probe_ports:
                 raise Refused('source finite negative probe case')
             fd = number(payload['fd'])
             binding = self.bindings[actor['birth'], fd]
@@ -662,7 +671,7 @@ class Observer:
         elif kind == 'listen':
             if actor['role'] != 'mcp':
                 self.root_only(actor)
-            elif actor['case'] != self.case or self.case not in CLEANUP_CASES:
+            elif actor['case'] != self.case or self.case not in MCP_CASES:
                 raise Refused('source declared module listener case')
             shape(payload, ('fd', 'stage'))
             fd = number(payload['fd'])
@@ -716,13 +725,15 @@ class Observer:
             if root_http:
                 from root_http_observer import connection as http_connection
                 name,maximum = http_connection(self,actor,payload,port)
-            elif self.case in CLEANUP_CASES:
-                if actor['role'] not in ('root', 'cleanup-acp'):
+            elif self.case in MCP_CASES:
+                if actor['role'] not in (('root',) if self.case in HTTP_CASES else ('root', 'cleanup-acp')):
                     raise Refused('source cleanup connection role')
                 targets = [value for value in self.intents.values() if value['case'] == self.case and value['role'] == 'mcp' and value['consumed']]
                 if len(targets) != 1 or targets[0]['port'] != port:
                     raise Refused('source original owned MCP port')
                 target = self.actors[targets[0]['pid']]
+                if target['birth']!=targets[0]['birth'] or target['token']!=targets[0]['token'] or target['case']!=self.case or target['role']!='mcp':
+                    raise Refused('source MCP consumed server generation changed')
                 if self.ledger.process(target['birth']).terminal is not None:
                     raise Refused('source MCP startup ended before listening')
                 slot = self.listeners.get((self.case, 'mcp'))
@@ -735,7 +746,7 @@ class Observer:
                     sharing = actual_listener if any(value.port == port and value.case not in self.endpoints.retired for value in self.endpoints.routes.values()) else None
                     self.endpoints.declare(route, shared_listener=sharing)
                     self.endpoints.listen(name, actual_listener)
-                maximum = 1 if actor['role'] == 'root' else 16
+                maximum = 64 if self.case in HTTP_CASES else 1 if actor['role'] == 'root' else 16
             else:
                 if actor['role'] not in ('acp', 'backend', 'delayed-backend'):
                     raise Refused('source leaf connection role')
@@ -768,7 +779,7 @@ class Observer:
         elif kind == 'accepted':
             if actor['role'] != 'mcp':
                 self.root_only(actor)
-            elif actor['case'] != self.case or self.case not in CLEANUP_CASES:
+            elif actor['case'] != self.case or self.case not in MCP_CASES:
                 raise Refused('source declared module accept')
             shape(payload, ('listener', 'fd'))
             listener_fd, fd = number(payload['listener']), number(payload['fd'])

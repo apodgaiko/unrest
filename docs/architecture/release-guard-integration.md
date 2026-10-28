@@ -152,3 +152,21 @@ cannot authorize execution. Inherited descriptor classification queries the live
 file type before consulting pair history: reuse of an old socket FD for the
 current tracker FIFO cannot borrow or be rejected as the previous pair generation.
 Actual socket inheritance still requires the current original owned pair.
+
+The nine real HTTP supervision cases reuse MCP transport, as recommended by the
+Astra architecture consultation. Their separate catalogue reconstructs the exact
+local role fixture, environment, owned workspace and advisory port. These MCP
+children inherit no sensitive descriptor and start a real new session; cleanup
+MCP retains its one sensitive descriptor and existing lifecycle. HTTP output must
+be the same owned regular log on stdout/stderr with null stdin. Provider command
+strings in the fixture environment confer no provider execution authority.
+
+Each HTTP case has a 64-connection enforcement resource ceiling, not a claimed
+original or expected TCP count. Pinned MCP clients may reconnect. Every connection
+still joins the same admitted live child birth, listener generation and port,
+with reciprocal socket proof; unfinished tickets fail completion. The original
+readiness, contention and cancellation deadlines remain in the original tests.
+The exact native ps inventory runs once, only after the server's original-parent
+reap, and requires zero status. Actual server zero or recorded TERM/KILL status is
+retained. Root broker authentication contexts apply only to their separate
+broker cases, not to unrelated MCP clients.

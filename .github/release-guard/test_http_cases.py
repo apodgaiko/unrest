@@ -1,0 +1,221 @@
+"""Exact HTTP command reconstruction; no native execution is claimed here."""
+from copy import deepcopy
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from content_manifest import Refused
+import http_cases
+
+
+@pytest.fixture(params=http_cases.CASES)
+def prepared(request,tmp_path):
+    checkout=tmp_path/'source'
+    cwd=tmp_path/'pytest/case/workspace'
+    cwd.mkdir(parents=True)
+    host=SimpleNamespace(case=request.param,root_only=lambda actor:None,
+        binding={'entry':{'path':'/native','sha256':'a'*64}},
+        meta={'checkout':str(checkout),'owned':str(tmp_path)},meta_environment=lambda:{'PATH':'/usr/bin:/bin'},
+        probe_ports={request.param:{'socket':SimpleNamespace(local=('127.0.0.1',12345))}})
+    raw={'argv':['/native'], 'cwd':str(cwd), 'stdin':None}
+    return host,raw
+
+
+def test_exact_original_http_role_environment_and_program(prepared):
+    host,raw=prepared
+    value,role,port=http_cases.expected(host,{},raw)
+    subject=host.case.rsplit('-',1)[1][:-1]
+    assert role=='mcp' and port==12345
+    assert value.argv[3:] == ('--mode',subject.replace('_','-'),'--transport','streamable-http','--host','127.0.0.1','--port','12345')
+    assert str(Path(host.meta['checkout'])/'tests/fixtures/supervision_role_process.py') in value.argv[2]
+    environment=dict(value.environment)
+    assert environment['UNREST_PROJECT_ID']=='project-1'
+    assert environment['UNREST_WORKER_ACP_COMMAND']=='/bin/true'
+    assert ('UNREST_NODE_ID' in environment)==(subject!='terminal_reviewer')
+    assert ('UNREST_TERMINAL_REVIEW_ID' in environment)==(subject=='terminal_reviewer')
+
+
+@pytest.mark.parametrize('mutation',['foreign-case','outside','sibling','stdin','no-port'])
+def test_http_declarations_cannot_select_unrelated_scope(prepared,mutation):
+    host,raw=prepared
+    raw=deepcopy(raw)
+    if mutation=='foreign-case':
+        host.case='foreign'
+    elif mutation=='outside':
+        raw['cwd']='/outside/workspace'
+    elif mutation=='sibling':
+        raw['cwd']=str(Path(raw['cwd']).with_name('other'))
+    elif mutation=='stdin':
+        raw['stdin']='private input'
+    else:
+        host.probe_ports={}
+    with pytest.raises(Refused):
+        http_cases.expected(host,{},raw)
+
+
+@pytest.mark.parametrize('field', ['argv','environment','cwd'])
+def test_changed_original_operands_never_create_http_intent(prepared,field):
+    host,raw=prepared
+    value,_,_=http_cases.expected(host,{},raw)
+    raw.update(argv=list(value.argv),environment=dict(value.environment),cwd=value.cwd)
+    calls=[]
+    host.admit_launch=lambda *args,**kwargs:calls.append((args,kwargs)) or {'ticket':1,'token':'owned'}
+    changed=deepcopy(raw)
+    if field=='argv':
+        changed[field][2]+='; import os; os.system("forbidden")'
+    elif field=='environment':
+        changed[field]['UNREST_WORKER_ACP_COMMAND']='/foreign/provider'
+    else:
+        changed[field]=str(Path(raw['cwd']).with_name('other'))
+    with pytest.raises(Refused):
+        http_cases.proposal(host,{},changed)
+    assert not calls
+    answer=http_cases.proposal(host,{},raw)
+    assert answer['translated']==['/native','-I','-S',*value.argv[1:]]
+    assert len(calls)==1 and calls[0][1]['port']==12345
+
+
+@pytest.mark.parametrize('phase',['absent','unconsumed','unreaped','reaped'])
+def test_ps_inventory_is_exact_and_follows_original_server_wait(prepared,monkeypatch,phase):
+    host,raw=prepared
+    row={'case':host.case,'role':'mcp','consumed':phase!='unconsumed','birth':'birth','token':'server'}
+    host.intents={} if phase=='absent' else {1:row}
+    host.ledger=SimpleNamespace(reaped=lambda *args:phase=='reaped')
+    raw.update(argv=['ps','-axo','pid=,ppid=,pgid='],cwd=host.meta['checkout'])
+    monkeypatch.setattr(http_cases,'image',lambda path:'b'*64)
+    if phase!='reaped':
+        with pytest.raises(Refused,match='before original server wait'):
+            http_cases.expected(host,{},raw)
+    else:
+        value,role,port=http_cases.expected(host,{},raw)
+        assert role=='ps' and port is None and value.executable=='/usr/bin/ps'
+        assert value.argv==('ps','-axo','pid=,ppid=,pgid=')
+
+
+@pytest.mark.parametrize('subject',['http','foreign-mcp','http-extra-fd'])
+def test_actual_profile_validator_accepts_only_the_declared_mcp_family(tmp_path,monkeypatch,subject):
+    import os
+    import source_profile as profiles
+    from execution_spec import issue
+    from process_ledger import canonical
+    from multiprocess_routes import GROUPS
+
+    # Synthetic kernel/mount observations isolate the real role/profile validator.
+    # Native CI, not this control, proves the actual credentials and mount facts.
+    def identity(pid,uid,parent):
+        return {'pid':pid,'tgid':pid,'ppid':parent,'start_ticks':1,'boot_id':'boot',
+            'uids':[uid]*4,'gids':[uid]*4,'pgid':pid,'sid':pid,'clock_ticks_per_second':100,
+            'capabilities':{},'no_new_privs':1,'seccomp':2}
+    actual=identity(os.getpid(),20000,os.getppid())
+    parent=identity(os.getppid(),20000,1)
+    observer=identity(os.getpid()+1000,20001,1)
+    case=http_cases.CASES[0] if subject.startswith('http') else GROUPS['mp-lock3'][0]
+    runtime=tmp_path/'runtime'
+    native=str(runtime/'bin/python-unrest-guard-control')
+    vector=[native,'-I','-S','-c','pass']
+    environment={'PATH':'/usr/bin:/bin'}
+    profile={key:'a'*64 for key in profiles.FIELDS}
+    profile.update(schema='unrest.bootstrap-source.v1',role='mcp',case=case,
+        cases=list(http_cases.CASES if subject.startswith('http') else GROUPS['mp-lock3']),
+        native=native,checkout=str(tmp_path/'source'),owned=str(tmp_path/'owned'),
+        dependencies=str(tmp_path/'dependencies'),runtime_root=str(runtime),cwd=str(tmp_path),
+        identity=canonical(actual),parent=canonical(parent),observer=canonical(observer),
+        generation=1,argv=vector,environment=environment,token='a'*32,
+        mount_namespace='synthetic',script=None,inherited=[[7,1,2]] if subject in ('http-extra-fd','foreign-mcp') else [],execution=issue('mcp',vector,None,None))
+    profile['mounts']={name:[] for name in (profile['checkout'],profile['dependencies'],str(runtime),str(Path(profiles.__file__).parent))}
+    monkeypatch.setattr(profiles,'process_identity',lambda pid:actual)
+    monkeypatch.setattr(profiles,'credential_identity',lambda pid:parent)
+    monkeypatch.setattr(profiles,'digest',lambda path:'a'*64)
+    monkeypatch.setattr(profiles,'readonly_mounts',lambda *args:None)
+    monkeypatch.setattr(profiles,'sys',SimpleNamespace(executable=native,orig_argv=vector,
+        flags=SimpleNamespace(isolated=1,no_site=1,dont_write_bytecode=0,utf8_mode=1)))
+    monkeypatch.setattr(profiles,'os',SimpleNamespace(getpid=os.getpid,getppid=os.getppid,
+        getcwd=lambda:str(tmp_path),environ=environment,listdir=lambda path:['7'] if subject=='foreign-mcp' else [],fstat=lambda fd:object()))
+    monkeypatch.setattr(profiles,'fcntl',SimpleNamespace(F_GETFL=3,fcntl=lambda *args:0))
+    monkeypatch.setattr(profiles,'inherited_descriptor',lambda inherited,fd,*args:[fd,1,2])
+    if subject=='http':
+        observed,pins=profiles.validate(profile,'cpython.run_command',('pass\n',))
+        assert observed==actual and len(pins)==6
+    else:
+        with pytest.raises(Refused,match='source execution role and case' if subject=='foreign-mcp' else 'finite inherited inventory'):
+            profiles.validate(profile,'cpython.run_command',('pass\n',))
+
+
+def test_http_proposals_reject_a_leaf_even_with_the_root_birth(tmp_path):
+    from test_source_integration import backend_request
+    observer,actor,_=backend_request(tmp_path)
+    observer.case=http_cases.CASES[0]
+    with pytest.raises(Refused,match='root-only'):
+        http_cases.proposal(observer,{**actor,'role':'mcp'},{})
+    assert not observer.intents
+
+
+@pytest.mark.parametrize('mutation',[None,'stdin','stderr','owner','hardlink','symlink','foreign-case'])
+def test_http_stdio_requires_exact_null_and_owned_merged_log(prepared,monkeypatch,mutation):
+    import stat
+    host,_=prepared
+    row={'case':host.case,'role':'mcp','cwd':'/owned/workspace','port':12345}
+    log=SimpleNamespace(st_dev=1,st_ino=2,st_mode=stat.S_IFREG|0o644,
+        st_uid=20001 if mutation=='owner' else 20000,st_nlink=2 if mutation=='hardlink' else 1)
+    null=SimpleNamespace(st_mode=stat.S_IFCHR,st_rdev=123)
+    if mutation=='foreign-case':
+        row['case']='foreign'
+    monkeypatch.setattr(Path,'lstat',lambda *args,**kwargs:log)
+    monkeypatch.setattr(Path,'is_symlink',lambda path:mutation=='symlink')
+    def observed(path):
+        if str(path)=='/dev/null' or path.name=='0' and mutation!='stdin':
+            return null
+        if path.name=='2' and mutation=='stderr':
+            return SimpleNamespace(**{**vars(log),'st_ino':3})
+        return log
+    monkeypatch.setattr(Path,'stat',observed)
+    if mutation is None:
+        assert http_cases.stdio(host,123,row)==(1,2)
+    else:
+        with pytest.raises(Refused):
+            http_cases.stdio(host,123,row)
+
+
+@pytest.mark.parametrize('mutation',[None,'port','case','birth','token','terminal'])
+def test_http_connection_budget_binds_the_consumed_live_server(tmp_path,monkeypatch,mutation):
+    import hashlib
+    from test_source_integration import backend_request
+    from process_ledger import Birth
+    import source_observer
+    observer,actor,_=backend_request(tmp_path)
+    observer.case=http_cases.CASES[0]
+    actor['token']='root-token'
+    birth=Birth(2,2,1,2,'test-boot',20000)
+    intent={'case':observer.case,'role':'mcp','consumed':True,'pid':2,'port':12345,'birth':birth,'token':'server'}
+    server={'birth':birth,'token':'server','case':observer.case,'role':'mcp','body_ready':True}
+    observer.intents={1:intent}
+    observer.actors={2:server}
+    observer.ledger=SimpleNamespace(process=lambda actor:SimpleNamespace(terminal=(1,) if mutation=='terminal' else None))
+    name=actor['token']+':mcp:'+hashlib.sha256(observer.case.encode()).hexdigest()
+    listener=SimpleNamespace(owner=birth,fd=20)
+    observer.listeners={(observer.case,'mcp'):{'socket':listener}}
+    joins=[]
+    def connect(route,server,client):
+        joins.append((route,server,client))
+        return SimpleNamespace(serial=1,client=client)
+    observer.endpoints=SimpleNamespace(routes={name:object()},listeners={name:listener},connect=connect)
+    observer.connected_routes={name:63}
+    observer.descriptors,observer.connections={},{}
+    monkeypatch.setattr(source_observer,'acquire_tcp',lambda owner,fd,**kwargs:SimpleNamespace(owner=owner,fd=fd))
+    payload={'fd':30,'address':['127.0.0.1',12346 if mutation=='port' else 12345]}
+    if mutation=='case':
+        intent['case']='foreign'
+    elif mutation=='birth':
+        server['birth']=Birth(2,2,1,3,'test-boot',20000)
+    elif mutation=='token':
+        server['token']='foreign'
+    if mutation is not None:
+        with pytest.raises(Refused):
+            observer.dispatch(actor,{'kind':'connect','payload':payload})
+        assert not joins
+    else:
+        assert observer.dispatch(actor,{'kind':'connect','payload':payload})=={'ok':True,'ticket':1}
+        assert observer.connected_routes[name]==64 and len(joins)==1 and joins[0][1].owner==birth
+        with pytest.raises(Refused,match='finite connection count'):
+            observer.dispatch(actor,{'kind':'connect','payload':payload})
+        assert len(joins)==1
