@@ -80,7 +80,7 @@ def main():
     shutil.copyfile(shutil.which('uv'), runtime / 'bin/uv')
     (runtime / 'bin/uv').chmod(0o755)
     record = {'schema': 'unrest.native-control-build.v1', 'entry': pin(entry),
-              'bootstrap': pin(bootstrap), 'source': pin(support / 'native_entry.c'),
+              'bootstrap': pin(bootstrap), 'uv': pin(runtime/'bin/uv'), 'source': pin(support / 'native_entry.c'),
               'library': pin(library), 'compiler': pin(compiler),
               'recipient': pin(support / 'evidence-recipient.pem'), 'profiles': str(profiles),
               'support': str(support), 'soabi': sysconfig.get_config_var('SOABI'),

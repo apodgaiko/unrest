@@ -342,23 +342,44 @@ def test_tracker_capture_stderr_is_only_a_kernel_proven_anonymous_alias(monkeypa
 def test_tracker_only_cases_do_not_inherit_any_spawn_target_permission(case):
     from multiprocess_entry import expected, TARGET
 
-    value, role, inherited = expected(
-        case,
-        [
+    import multiprocess_entry
+
+    if case == multiprocess_entry.ZERO:
+        with pytest.raises(Refused):
+            expected(
+                case,
+                [
+                    "/fixed/python",
+                    "-S",
+                    "-I",
+                    "-c",
+                    "from multiprocessing.resource_tracker import main;main(6)",
+                ],
+                [2, 6],
+                None,
+                "/fixed/python",
+                "a" * 64,
+                "/checkout",
+                {},
+            )
+    else:
+        value, role, inherited = expected(
+            case,
+            [
+                "/fixed/python",
+                "-S",
+                "-I",
+                "-c",
+                "from multiprocessing.resource_tracker import main;main(6)",
+            ],
+            [2, 6],
+            None,
             "/fixed/python",
-            "-S",
-            "-I",
-            "-c",
-            "from multiprocessing.resource_tracker import main;main(6)",
-        ],
-        [2, 6],
-        None,
-        "/fixed/python",
-        "a" * 64,
-        "/checkout",
-        {},
-    )
-    assert value.case == case and role == "mp-tracker" and inherited == [6]
+            "a" * 64,
+            "/checkout",
+            {},
+        )
+        assert value.case == case and role == "mp-tracker" and inherited == [6]
     with pytest.raises(Refused):
         expected(
             case,

@@ -63,6 +63,7 @@ def test_fixed_uv_launcher_binds_collection_only_as_an_explicit_argument(
     tmp_path, monkeypatch, collect
 ):
     import full_launch
+    import hashlib
     from full_source import environment
 
     meta = {
@@ -70,23 +71,32 @@ def test_fixed_uv_launcher_binds_collection_only_as_an_explicit_argument(
         "owned": str(tmp_path / "owned"),
         "checkout": str(tmp_path / "source"),
     }
+    image = tmp_path / "runtime/bin/uv"
+    image.parent.mkdir(parents=True)
+    content = b"v" * (17 * 1024 * 1024)
+    image.write_bytes(content)
+    image.chmod(0o755)
+    image_pin = hashlib.sha256(content).hexdigest()
     registrations = []
     birth = object()
     host = SimpleNamespace(
         meta=meta,
         launcher=123,
-        binding={"collection_only": collect},
+        binding={"collection_only": collect, "uv": {"path": str(image), "sha256": image_pin}},
         ledger=SimpleNamespace(
             current={123: birth},
             process=lambda value: SimpleNamespace(generation=1, parent=None),
             register=lambda *args, **kwargs: registrations.append((args, kwargs)),
         ),
     )
-    monkeypatch.setattr(full_launch, "native_digest", lambda path: "a" * 64)
     vector = ["uv", "run", "pytest", "-q", *(["--collect-only"] if collect else [])]
     path = str(tmp_path / "runtime/bin/uv")
     assert full_launch.resolve(host, 123, path, vector, environment(meta), meta["checkout"])
     assert registrations[-1][1]["expected_generation"] == 2
+    host.binding["uv"]["sha256"] = "0" * 64
+    assert not full_launch.resolve(host, 123, path, vector, environment(meta), meta["checkout"])
+    assert len(registrations) == 1
+    host.binding["uv"]["sha256"] = image_pin
     assert not full_launch.resolve(
         host, 123, path, [*vector, "--ignore=tests"], environment(meta), meta["checkout"]
     )

@@ -7,7 +7,7 @@ import stat
 import subprocess
 
 from case_inventory import LIMIT,document,seal
-from content_manifest import Refused,native_digest
+from content_manifest import Refused,native_digest,_capture
 from control_transport import unique
 from full_source import environment,child_environment
 
@@ -42,7 +42,9 @@ def resolve(host,pid,path,vector,env,cwd):
     process=host.ledger.process(birth)
     if (pid==host.launcher and process.generation==1 and path==str(runtime/'bin/uv')
             and vector==['uv','run','pytest','-q',*(['--collect-only'] if host.binding.get('collection_only') else [])] and env==environment(host.meta)):
-        pin=native_digest(Path(path))
+        pin=_capture(Path(path).parent,[Path(path).name],None,64*1024*1024)['files'][0]['sha256']
+        if host.binding['uv']!={'path':path,'sha256':pin}:
+            return False
         host.ledger.register(birth,os.urandom(16).hex(),(('uv',pin),),pin,
             case='<full-launcher>',command_class='native-full-uv',expected_generation=2)
         return True

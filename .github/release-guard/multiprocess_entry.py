@@ -10,11 +10,20 @@ from control_transport import finite
 from launch_policy import Rule,render
 
 CASES=tuple('tests/test_multiprocess_resource_ownership.py::test_original_child_status_is_preserved['+str(status)+']' for status in (0,17))
-TRACKER_CASES=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
+TRACKER_SMOKE=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
     'test_parent_feeder_and_both_pipe_endpoints_are_settled',
     'test_original_failure_or_cancellation_survives_clean_teardown[error0]',
     'test_original_failure_or_cancellation_survives_clean_teardown[error1]',
 ))
+TRACKER_REMAINING=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
+    'test_preexisting_tracker_is_refused_and_left_owned_by_its_parent',
+    'test_reused_descriptor_number_has_no_pipe_authority',
+    'test_case_drift_refuses_without_releasing_owned_resources',
+    'test_unrelated_finalizer_is_not_consumed',
+    'test_altered_stdlib_stop_is_refused_before_launch',
+))
+ZERO=TRACKER_REMAINING[-1]
+TRACKER_CASES=(*TRACKER_SMOKE,*TRACKER_REMAINING)
 ALL_CASES=(*CASES,*TRACKER_CASES)
 TARGET=['tests.test_multiprocess_resource_ownership','_exit_with_status']
 
@@ -72,7 +81,7 @@ def counterpart(pid,record):
 
 def expected(case,argv,passfds,target,native,pin,checkout,environment):
     finite({'case':case,'argv':argv,'passfds':passfds,'target':target})
-    if (type(case) is not str or case not in ALL_CASES or type(argv) is not list
+    if (type(case) is not str or case not in ALL_CASES or case==ZERO or type(argv) is not list
             or any(type(arg) is not str for arg in argv) or argv[:4]!=[native,'-S','-I','-c'] or type(passfds) is not list
             or any(type(fd) is not int or not 2<=fd<=1024 for fd in passfds)
             or len(set(passfds))!=len(passfds)):
