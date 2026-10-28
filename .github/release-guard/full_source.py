@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from content_manifest import Refused
 from source_root import OriginalCases
+from case_inventory import identity
 
 
 def environment(metadata):
@@ -45,8 +46,11 @@ class FullCases(OriginalCases):
         path.chmod(0o444)
         ref=self.policy.client.request('collection',{'path':str(path),'sha256':hashlib.sha256(body).hexdigest()})
         self.cases=tuple(load(ref,self.policy.directory,profile['source_sha256'],profile['dependency_sha256'])['cases'])
-        profile['cases']=list(self.cases)
         super().pytest_collection_finish(session)
+        self.cases=tuple(identity(node) for node in self.cases)
+        if len(set(self.cases))!=len(self.cases):
+            raise Refused('full source ambiguous case references')
+        profile['cases']=list(self.cases)
         self.policy.calls.install()
 
     @pytest.hookimpl(hookwrapper=True,tryfirst=True)
@@ -55,22 +59,28 @@ class FullCases(OriginalCases):
         if index>=len(self.cases) or item is not self.items[index]:
             raise Refused('full source original cursor')
         policy=self.policy
-        policy.case=item.nodeid
-        policy.client.request('case-start',{'case':item.nodeid})
+        case=identity(item.nodeid)
+        if case!=self.cases[index]:
+            raise Refused('full source original case identity')
+        policy.case=case
+        policy.client.request('case-start',{'case':case})
         yield
-        phases=self.reports.get(item.nodeid,{})
+        phases=self.reports.get(case,{})
         skipped=phases in ({'setup':'skipped','teardown':'passed'}, {'setup':'passed','call':'skipped','teardown':'passed'})
         passed=phases=={'setup':'passed','call':'passed','teardown':'passed'}
         if policy.poison:
             raise Refused('full source forbidden effect')
         if skipped:
-            self.skips.append(item.nodeid)
+            self.skips.append(case)
         from controlled_cases import ROOT_HTTP
         if item.nodeid in ROOT_HTTP and passed:
             policy.calls.http.finish()
-        policy.client.request('case-finish',{'case':item.nodeid,'outcome':'skipped' if skipped else 'passed' if passed else 'failed','phases':phases})
-        self.completed.append(item.nodeid)
+        policy.client.request('case-finish',{'case':case,'outcome':'skipped' if skipped else 'passed' if passed else 'failed','phases':phases})
+        self.completed.append(case)
         policy.case=None
+
+    def pytest_runtest_logreport(self,report):
+        self.record(report,identity(report.nodeid))
 
     def pytest_sessionfinish(self,session,exitstatus):
         if session.config.option.collectonly:

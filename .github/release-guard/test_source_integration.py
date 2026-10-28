@@ -45,7 +45,7 @@ def backend_request(tmp_path):
     observer.full, observer.outcomes = False, []
     observer.root_birth = Birth(1, 1, 1, 1, 'test-boot', 20000)
     observer.finished, observer.case, observer.serial = False, CASES[0], 0
-    observer.meta = {'owned': str(tmp_path), 'checkout': str(tmp_path / 'checkout')}
+    observer.meta = {'mounts': {}, 'owned': str(tmp_path), 'checkout': str(tmp_path / 'checkout')}
     observer.binding = {'entry': {'path': '/pinned/python', 'sha256': 'a' * 64}}
     observer.intents = {}
     home = tmp_path / 'case' / 'owner' / 'worker'

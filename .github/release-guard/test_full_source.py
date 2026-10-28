@@ -150,3 +150,27 @@ def test_native_console_binds_actual_image_separately_from_uv_argv0(
         assert calls[0][3] == [path, "-I", "-S", "-m", "pytest", "-q"]
     else:
         assert not calls and not host.full_started
+
+
+def test_long_original_test_id_keeps_its_case_and_reports_through_compact_reference():
+    from case_inventory import identity
+
+    proof, item, calls = plugin()
+    item.nodeid = "tests/test_wire.py::test_large[" + "x" * 70000 + "]"
+    name = identity(item.nodeid)
+    proof.cases = (name,)
+    proof.policy.profile["cases"] = [name]
+    protocol = proof.pytest_runtest_protocol(item, None)
+    next(protocol)
+    report = SimpleNamespace(nodeid=item.nodeid, when="setup", outcome="passed", failed=False)
+    proof.pytest_runtest_logreport(report)
+    report.when = "call"
+    proof.pytest_runtest_logreport(report)
+    report.when = "teardown"
+    proof.pytest_runtest_logreport(report)
+    with pytest.raises(StopIteration):
+        next(protocol)
+    assert proof.completed == [name]
+    assert [
+        payload["case"] for kind, payload in calls if kind in ("case-start", "case-finish")
+    ] == [name, name]

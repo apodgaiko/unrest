@@ -145,6 +145,18 @@ class Policy:
         def construct(process, *args, **kwargs):
             if type(process) is not process_class:
                 policy.refuse('source process constructor type')
+            # CPython3.13 Popen's positional env is argument10. Only pytest's
+            # framework metadata is shortened; actual test parameters stay intact.
+            supplied=args[10] if len(args)>10 else kwargs.get('env')
+            values=dict(os.environ) if supplied is None else supplied
+            if type(values) is dict:
+                from case_inventory import environment
+                normalized=environment(values,policy.case)
+                if normalized is not values:
+                    if len(args)>10:
+                        args=(*args[:10],normalized,*args[11:])
+                    else:
+                        kwargs['env']=normalized
             policy.local.launch = None
             policy.local.constructing = process
             try:

@@ -293,7 +293,8 @@ class Ledger:
                 if kind == 'failure_cleanup_tracer_wait':
                     self.poison.append('failure-cleanup')
                 else:
-                    if (process.exit is None or process.exit[1] != raw
+                    group_exit=self.process(process.group).exit if birth.pid!=birth.tgid and process.group is not None else None
+                    if (process.exit is None or process.exit[1]!=raw and (group_exit is None or group_exit[1]!=raw)
                             or Birth.read(row.get('identity')) != birth):
                         raise Refused('ledger terminal birth or exit')
                 process.terminal = (sequence, raw, code)

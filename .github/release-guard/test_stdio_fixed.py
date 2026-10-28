@@ -37,12 +37,12 @@ def test_exact_startup_rejection_operands_and_translation(tmp_path, case):
         meta_environment=lambda: {},
     )
 
-    def launch(actor, payload):
+    def launch(actor, payload, *args, **kwargs):
         calls.append(payload)
         host.intents[1] = {}
         return {"ok": True, "ticket": 1, "token": "t"}
 
-    host.launch = launch
+    host.admit_launch = launch
     raw = {
         "case": case,
         "executable": "/native/python",

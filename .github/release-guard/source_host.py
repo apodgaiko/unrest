@@ -295,25 +295,32 @@ def worker(binding, metadata, raw_directory):
             (raw_directory / 'held-source-cleanup.json').write_text(json.dumps({'actual_parent_wait': status}))
         raise
     finally:
-        record = {'schema': 'unrest.bootstrap-source-result.v1', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
-                  'release_certified': False, 'completed': [] if observer is None else observer.completed,
-                  'result': result, 'failure': failure, 'metadata': metadata,
-                  'kernel': [] if trace is None else trace.records,
-                  'controls': [] if observer is None else observer.controls,
-                  'outcomes': [] if observer is None else observer.outcomes,
-                  'endpoint_observations': None if observer is None else {
-                      'listeners': {key: asdict(value) for key, value in observer.endpoints.listeners.items()},
-                      'routes': {key: asdict(value) for key, value in observer.endpoints.routes.items()},
-                      'connections': [asdict(value) for value in observer.endpoints.connections.values()],
-                      'negative_probes': {case: {'socket': asdict(value['socket']), 'attempts': value['attempts']}
-                          for case, value in observer.probe_ports.items()}},
-                  'plan_observations': [] if observer is None else observer.plan_records,
-                  'interrupted_connections': [] if observer is None else observer.interrupted_records,
-                  'poison': [] if observer is None else observer.ledger.poison,
-                  'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
-        (raw_directory / 'source-result.json').write_text(json.dumps(record, sort_keys=True))
-        if observer is not None:
-            observer.close()
+        try:
+            record = {'schema': 'unrest.bootstrap-source-result.v1', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
+                      'release_certified': False, 'completed': [] if observer is None else observer.completed,
+                      'result': result, 'failure': failure, 'metadata': metadata,
+                      'kernel': [] if trace is None else trace.records,
+                      'controls': [] if observer is None else observer.controls,
+                      'outcomes': [] if observer is None else observer.outcomes,
+                      'endpoint_observations': None if observer is None else {
+                          'listeners': {key: asdict(value) for key, value in observer.endpoints.listeners.items()},
+                          'routes': {key: asdict(value) for key, value in observer.endpoints.routes.items()},
+                          'connections': [asdict(value) for value in observer.endpoints.connections.values()],
+                          'negative_probes': {case: {'socket': asdict(value['socket']), 'attempts': value['attempts']}
+                              for case, value in observer.probe_ports.items()}},
+                      'plan_observations': [] if observer is None else observer.plan_records,
+                      'interrupted_connections': [] if observer is None else observer.interrupted_records,
+                      'poison': [] if observer is None else observer.ledger.poison,
+                      'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
+            if observer is not None and observer.full:
+                ref=observer.meta['cases']
+                body=Path(ref['path']).read_bytes()
+                require(len(body)<=8*1024*1024 and hashlib.sha256(body).hexdigest()==ref['sha256'],'source inventory evidence bytes')
+                (raw_directory/'collected-cases.json').write_bytes(body)
+            (raw_directory / 'source-result.json').write_text(json.dumps(record, sort_keys=True))
+        finally:
+            if observer is not None:
+                observer.close()
 
 
 def children():
@@ -426,7 +433,7 @@ def main():
             archive.unlink()
         require(not children(), 'source host cleanup residue')
     require(success, 'original source integration did not complete')
-    print(f'Original bootstrap integration: {len(cases)} original cases, actual parent waits; full source certification: false', flush=True)
+    print('Guarded source integration passed; release certification: false', flush=True)
     return 0
 
 

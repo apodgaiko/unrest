@@ -84,3 +84,44 @@ def test_inventory_reference_rejects_aliases_and_wrong_custody(tmp_path, monkeyp
         os.link(ref["path"], tmp_path / "alias")
     with pytest.raises(Refused):
         inventory.reference(bad, tmp_path)
+
+
+def test_oversized_pytest_parameter_ids_keep_parameters_out_of_control_frames():
+    from control_transport import encode, REQUEST_LIMIT
+    from source_profile import case_seal
+
+    node = "tests/test_wire.py::test_oversized[" + "x" * 70000 + "]"
+    data = {"cases": [node], "skips": [], "source": "a" * 64, "dependency": "b" * 64}
+    assert inventory.document(data)["cases"] == [node]
+    name = inventory.identity(node)
+    assert name != node and len(name) < 80
+    assert len(encode({"kind": "case-start", "payload": {"case": name}}, REQUEST_LIMIT)) < 256
+    assert case_seal([name])["count"] == 1
+    assert inventory.identity(node + "different") != name
+
+
+def test_only_framework_case_metadata_is_normalized_for_child_environment():
+    node = "tests/test_wire.py::test_oversized[" + "x" * 70000 + "]"
+    values = {"PYTEST_CURRENT_TEST": node + " (call)", "PARAMETER": "original-byte-sequence"}
+    normalized = inventory.environment(values, inventory.identity(node))
+    assert normalized is not values
+    assert normalized == {
+        "PYTEST_CURRENT_TEST": inventory.identity(node) + " (call)",
+        "PARAMETER": "original-byte-sequence",
+    }
+    assert values["PYTEST_CURRENT_TEST"] == node + " (call)"
+    assert inventory.environment(values, "foreign-case") is values
+    ordinary = {"PYTEST_CURRENT_TEST": "tests/test_small.py::test_case (call)"}
+    assert inventory.environment(ordinary, "tests/test_small.py::test_case") is ordinary
+
+
+def test_product_json_and_hash_mocks_cannot_change_framework_case_identity(monkeypatch):
+    node = "tests/test_wire.py::test_large[" + "x" * 70000 + "]"
+    expected = inventory.identity(node)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("product serializer mock leaked into framework identity")
+
+    monkeypatch.setattr(inventory.json, "dumps", forbidden)
+    monkeypatch.setattr(inventory.hashlib, "sha256", forbidden)
+    assert inventory.identity(node) == expected

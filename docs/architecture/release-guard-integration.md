@@ -17,7 +17,14 @@ generated enforcement, workflow glue and external enforcement dependencies count
 Tests are measured separately. Moving or packing code does not reduce the scope
 of this ceiling. `size_budget.py` measures the current tracked snapshot; a
 separate dependency-closure review establishes whether external support belongs
-in that inventory. A size report alone does not certify a release.
+in that inventory. The existing `tools/check_distribution.py` is retained
+release-test support: its disclosed optional runner seam requests execution but
+grants no execution authority. Its complete path, bytes, hash and line count stay
+visible through `--test-support tools/check_distribution.py`; reports separately
+show enforcement, retained test-support and their combined total. All guarded
+transport/domain code remains enforcement. Any future permission or containment
+logic in that helper must be reclassified. A size report alone does not certify
+a release.
 
 Ordinary in-process Python computation is trusted. The guard does not inspect
 Python frames, closures, globals, defaults or generated AST/code to authenticate
@@ -43,10 +50,15 @@ exec stops bind the actual child, executable bytes and operands before the child
 body runs. Endpoint permission requires the exact owned listener and reciprocal
 socket/descriptor observations. Signals require an owned live child and an
 explicit finite cleanup route. Unknown effects poison the outcome even when a
-product negative catches the exception.
+product negative catches the exception. One canonical observer-side proposal
+builder supplies each declaration and preserves the same role, sequence, quota,
+byte, descriptor and configuration checks for raw and wire requests.
 
 Actual original-parent waits and kernel terminal observations establish cleanup.
-Adopted fallback cleanup is failure evidence. An interrupted connection can
+Adopted fallback cleanup is failure evidence. A nonleader thread terminal status
+may match its own exit event or the independently observed exit of its stored
+thread-group leader. Its birth and own exit must still match; thread waits never
+enter original-parent child-reap joins. An interrupted connection can
 retire as cancelled-unjoined only after its authorized termination and actual
 parent reap; that does not prove application accept or descriptor close. Native
 status86 always retains its refusal meaning.
@@ -74,7 +86,11 @@ recorded and checked. Subsequent Python children use the canonical guarded entry
 The additive pytest plugin does not select or deselect tests. Normal discovery
 produces the complete ordered inventory, sealed into a content-addressed,
 observer-owned file bound to source and dependency hashes. Profiles carry only
-its small reference. This avoids enlarging profile or RPC limits.
+its small reference. Large parameterized nodeids remain complete in that file;
+control messages use an unambiguous SHA256 reference. Only matching oversized
+`PYTEST_CURRENT_TEST` framework metadata is shortened for children. Original
+nodeids, parameters and the root environment remain unchanged. The sealed full
+inventory is retained with encrypted evidence. This avoids enlarging profile or RPC limits.
 
 Ordinary assertion failures retain pytest's normal continuation and terminal
 failure. Every observed case retains its setup/call/teardown outcomes. Original

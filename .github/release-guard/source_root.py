@@ -47,9 +47,12 @@ class OriginalCases:
         policy.case = None
 
     def pytest_runtest_logreport(self, report):
-        if report.nodeid not in self.cases or report.when not in ('setup', 'call', 'teardown'):
+        self.record(report,report.nodeid)
+
+    def record(self, report, case):
+        if case not in self.cases or report.when not in ('setup', 'call', 'teardown'):
             raise Refused('root unknown test report')
-        phases = self.reports.setdefault(report.nodeid, {})
+        phases = self.reports.setdefault(case, {})
         if report.when in phases:
             raise Refused('root duplicate test phase')
         phases[report.when] = report.outcome

@@ -6,7 +6,7 @@ from pathlib import Path
 import stat
 import subprocess
 
-from case_inventory import LIMIT,document,seal
+from case_inventory import LIMIT,document,seal,identity
 from content_manifest import Refused,native_digest,_capture
 from control_transport import unique
 from full_source import environment,child_environment
@@ -82,7 +82,9 @@ def collection(host,actor,payload):
     if (not value['cases'] or value['skips'] or value['source']!=host.meta['source_sha256']
             or value['dependency']!=host.meta['dependency_sha256']):
         raise Refused('full source complete discovery binding')
-    host.cases=tuple(value['cases'])
+    host.cases=tuple(identity(node) for node in value['cases'])
+    if len(set(host.cases))!=len(host.cases):
+        raise Refused('full source ambiguous case references')
     host.meta['cases']=seal(value,host.directory)
     return host.meta['cases']
 

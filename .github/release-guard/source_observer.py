@@ -22,20 +22,20 @@ from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, 
 from bootstrap_cases import BOOTSTRAP, declaration
 from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP
 from controlled_pairs import before_bind, before_spawn, limits as controlled_limits, scope as controlled_scope
-from controlled_startup import ACP, expected_entry
+from controlled_startup import ACP
 from endpoint_policy import Endpoints, Owner, Route
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pair
-from source_profile import METHODS, ROOT_COMMAND, digest
-from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
+from source_profile import METHODS, ROOT_COMMAND
+from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
-from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, INVALID as SESSION_INVALID, INVALID_BYTES, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT, expected as session_expected
-from fixed_inline import CASES as FIXED_CASES, STDIO, SEQUENCES as FIXED_SEQUENCES, expected as fixed_expected, startup_expected, translated as fixed_translated
+from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT
+from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES
 from git_sites import CASES as GIT_CASES
 from git_observer import Git
-from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count, expected as inline_expected
-from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_site, child_count, SCRIPT, OFFLINE, base_path, read_pipe, expected as cleanup_expected, scenario, snapshot_path, translated as cleanup_translated
+from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count
+from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, child_count, SCRIPT, snapshot_path
 
 
 def shape(value, keys):
@@ -224,12 +224,12 @@ class Observer:
 
     def resolve(self, trace, pid, path, vector, environment, cwd):
         if self.case in PLAN_CASES:
-            from plan_observer import resolve
-            return resolve(self,trace,pid,path,vector,environment,cwd)
+            from plan_observer import resolve as plan_resolve
+            return plan_resolve(self,trace,pid,path,vector,environment,cwd)
         self.consume(trace)
         if self.full and not self.full_started:
-            from full_launch import resolve
-            return resolve(self,pid,path,vector,environment,cwd)
+            from full_launch import resolve as full_resolve
+            return full_resolve(self,pid,path,vector,environment,cwd)
         birth = self.ledger.current.get(pid)
         if birth is None:
             return False
@@ -286,100 +286,24 @@ class Observer:
     def launch(self, actor, payload):
         self.launch_owner(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256', *(('git',) if self.case in GIT_CASES else ())))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES) or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP,*CONTROLLED,*ORDINARY_CASES,*CLEANUP_CASES,*DECLARATIONS,*GIT_CASES,*SESSION_CASES,*FIXED_CASES,*PLAN_CASES) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
-        if self.case in PLAN_CASES:
-            from plan_observer import launch
-            return launch(self,actor,payload)
-        if self.case in FIXED_CASES:
-            query = actor['role'] == 'fixed-inline'
-            records = [value for value in self.intents.values() if value['case'] == self.case and value['role'] == 'fixed-inline']
-            if query:
-                operation = 'check'
-            else:
-                if len(records) >= len(FIXED_SEQUENCES[self.case]) or any(not value['consumed'] or not self.ledger.reaped(value['birth'],value['token']) for value in records):
-                    raise Refused('fixed original launch frontier')
-                operation = FIXED_SEQUENCES[self.case][len(records)]
-            environment = {**self.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':self.case+' (call)'}
-            if self.case in STDIO:
-                if query:
-                    raise Refused('fixed startup has no descendant query')
-                expected = startup_expected(self.case,self.binding['entry']['path'],self.binding['entry']['sha256'],original['cwd'],Path(self.meta['owned']))
-            else:
-                expected = fixed_expected(self.case,operation,self.binding['entry']['path'],self.binding['entry']['sha256'],Path(self.meta['checkout']),environment,query=query)
-            vector = list(expected.argv) if query else list(fixed_translated(expected))
-            answer = self.admit_launch(actor,payload,expected,'git-fixed' if query else 'fixed-inline',507 if query else 107 if self.case in STDIO else 587 if operation == 'mcp' else 540,vector,expected.payload_sha256,maximum=1 if query else len(FIXED_SEQUENCES[self.case]))
-            if answer is None:
-                return None
-            self.intents[answer['ticket']]['fixed_operation'] = operation
-            self.intents[answer['ticket']]['input_pipe'] = self.case in STDIO
-            return answer
-        if self.case in SESSION_CASES:
-            child = actor['role'] == 'session-adapter'
-            if child and self.case != SESSION_TIMEOUT or not child and actor['role'] != 'root':
-                raise Refused('session original launch parent')
-            expected = session_expected(self.case, original['cwd'], Path(self.meta['checkout']), Path(self.meta['owned']),
-                self.binding['entry']['path'], self.binding['entry']['sha256'], self.meta_environment(), child=child)
-            role = 'session-invalid' if self.case in SESSION_INVALID else 'session-child' if child else 'session-inline' if expected.payload_kind == 'python-command' else 'session-adapter'
-            if role == 'session-invalid':
-                from git_observer import regular
-                if regular(Path(expected.executable)) != INVALID_BYTES or Path(expected.executable).stat().st_mode & 0o777 != 0o700:
-                    raise Refused('session exact invalid executable fixture')
-            vector = list(expected.argv) if role == 'session-invalid' else [expected.argv[0], '-I', '-S', *expected.argv[1:]]
-            return self.admit_launch(actor, payload, expected, role, 50 if child else 75, vector, expected.payload_sha256)
         if self.case in GIT_CASES:
-            return self.git.launch(actor, payload)
-        if self.case in DECLARATIONS:
-            return self.inline_launch(actor, payload)
-        if self.case in CLEANUP_CASES:
-            return self.cleanup_launch(actor, payload)
-        self.root_only(actor)
-        if self.case in ORDINARY_CASES:
-            return self.ordinary_launch(actor, payload)
-        if self.case in CONTROLLED:
-            if original['rule'] == 'custody:git':
-                from custody_git import launch
-                return launch(self,actor,payload)
-            return self.controlled_launch(actor, payload)
-        return self.controlled_launch(actor,payload)
+            return self.git.launch(actor,payload)
+        from effect_proposals import proposal
+        try:
+            environment=dict(original['environment'])
+            executable=original['argv'][0]
+        except (TypeError,ValueError,IndexError,KeyError):
+            raise Refused('source wire process operands') from None
+        answer=proposal(self,actor,{'case':self.case,'executable':executable,
+            'argv':original['argv'],'cwd':original['cwd'],'environment':environment,'stdin':None},payload=payload)
+        return None if answer is None else {key:answer[key] for key in ('ok','ticket','token')}
 
     def listener_key(self,case,tag,scope=None):
         return (case,tag,scope) if case in CONTROLLED else (case,tag)
-
-    def controlled_launch(self,actor,payload):
-        cwd = payload['original']['cwd']
-        if self.case in CONTROLLED:
-            controlled_scope(self.case,'bridge',cwd,Path(self.meta['owned']))
-        elif (type(cwd) is not str or str(Path(cwd).resolve()) != cwd
-                or not Path(cwd).is_relative_to(Path(self.meta['owned']))
-                or Path(cwd).name != 'worker' or Path(cwd).parent.name != 'owner'
-                or declaration(self.case).children == 0):
-            raise Refused('source declared worker launch home')
-        role = 'backend' if payload['source_line'] == 506 else 'acp' if payload['source_line'] == 553 else None
-        if role is None:
-            raise Refused('source unknown original launch site')
-        records = [value for value in self.intents.values() if value['case'] == self.case]
-        if self.case in CONTROLLED:
-            before_spawn(self.case,cwd,role,records,self.actors)
-        elif role == 'acp':
-            backends = [v for v in records if v['role'] in ('backend','delayed-backend')]
-            if len(backends) != 1 or not backends[0]['consumed'] or not self.actors[backends[0]['pid']]['returned']:
-                raise Refused('source ACP before owned backend return')
-        relay = None
-        if role == 'acp':
-            bridge = self.listeners[self.listener_key(self.case,'bridge',cwd)]
-            lifetime = self.listeners[self.listener_key(self.case,'lifetime',cwd)]
-            relay = [bridge['socket'].local[1],bridge['nonce'],lifetime['socket'].local[1],lifetime['nonce']]
-        from configuration_inputs import check_inputs
-        check_inputs(Path(self.meta['checkout']),Path(cwd),self.case)
-        native = self.binding['entry']['path']
-        expected,_,script_pin = expected_entry(self.case,Path(self.meta['checkout']),Path(cwd),native,
-            self.binding['entry']['sha256'],backend=role == 'backend',relay=relay)
-        if role == 'backend' and expected.payload_kind == 'python-command':
-            role = 'delayed-backend'
-        return self.admit_launch(actor,payload,expected,role,payload['source_line'],[native,'-I','-S',*expected.argv[1:]],script_pin)
 
     def admit_launch(self, actor, payload, expected, role, site, vector, script_pin,
                      *, maximum=1, environment=None, inherited=(), port=None):
@@ -403,77 +327,6 @@ class Observer:
             'script_sha256': script_pin,
             'inherited': list(inherited), 'port': port}
         return {'ok': True, 'ticket': self.serial, 'token': token}
-
-    def inline_launch(self, actor, payload):
-        self.root_only(actor)
-        existing = [value for value in self.intents.values() if value['case'] == self.case]
-        terminal = payload['source_line'] == 1034
-        if (len(existing) >= inline_count(self.case) or terminal != (self.case in INFLIGHT and len(existing) == 2)
-                or any(not value['consumed'] or not self.actors[value['pid']]['returned'] for value in existing)):
-            raise Refused('cleanup inline original child order')
-        base = base_path(payload['original']['cwd'], Path(self.meta['owned'])) if terminal else None
-        result, site = inline_expected(self.case, self.binding['entry']['path'], self.binding['entry']['sha256'],
-            Path(self.meta['checkout']), self.meta_environment(), base=base, terminal=terminal)
-        vector = [result.argv[0], '-I', '-S', *result.argv[1:]]
-        return self.admit_launch(actor, payload, result, 'cleanup-inline', site, vector,
-                                 result.payload_sha256, maximum=inline_count(self.case))
-
-    def ordinary_launch(self, actor, payload):
-        original = payload['original']
-        role = 'sleep' if original['executable'] == '/bin/sleep' else 'mock-acp'
-        expected = ordinary_expected(self.case, role, original['cwd'], Path(self.meta['checkout']),
-            self.binding['entry']['path'], self.binding['entry']['sha256'], self.meta_environment(), Path(self.meta['owned']))
-        translated = list(expected.argv) if role == 'sleep' else [expected.argv[0], '-I', '-S', *expected.argv[1:]]
-        maximum = 2 if self.case == ORDINARY_CASES[2] and role == 'sleep' else 1
-        site = (1383 if self.case == ORDINARY_CASES[2] else 1843) if role == 'sleep' else 409
-        return self.admit_launch(actor, payload, expected, role, site, translated,
-                                 expected.payload_sha256, maximum=maximum)
-
-    def cleanup_launch(self, actor, payload):
-        original = payload['original']
-        role = original['rule']
-        if type(role) is not str or role not in ('cleanup:mcp', 'cleanup:cleanup-acp', 'cleanup:git-init', 'cleanup:git-commit', 'cleanup:git-observe'):
-            raise Refused('cleanup finite role declaration')
-        role = role.removeprefix('cleanup:')
-        if (actor['role'] == 'mcp') != (role == 'git-observe'):
-            raise Refused('cleanup original parent role')
-        argv = original['argv']
-        if type(argv) is not list or not argv or any(type(value) is not str for value in argv):
-            raise Refused('cleanup launch vector primitives')
-        if role == 'git-init':
-            base_value = str(Path(argv[-1]).parent)
-        else:
-            if type(original['cwd']) is not str:
-                raise Refused('cleanup launch cwd primitive')
-            base_value = str(Path(original['cwd']).parent)
-        base = base_path(base_value, Path(self.meta['owned']))
-        port, descriptor = None, None
-        inherited = []
-        if role == 'mcp':
-            if len(argv) != 13 or not argv[-1].isdigit() or not argv[-3].isdigit():
-                raise Refused('cleanup module operands')
-            port, descriptor = int(argv[-3]), int(argv[-1])
-            inherited = [read_pipe(actor['birth'].pid, descriptor)]
-        result = cleanup_expected(self.case, role, base, self.binding['entry']['path'], self.binding['entry']['sha256'],
-            Path(self.meta['checkout']), self.meta_environment(), port=port, descriptor=descriptor)
-        site = {'mcp': module_site(self.case), 'cleanup-acp': 409, 'git-init': 131, 'git-commit': 132, 'git-observe': 266}[role]
-        vector = list(cleanup_translated(result, self.directory))
-        answer = self.admit_launch(actor, payload, result, role, site, vector, result.payload_sha256,
-            environment={**dict(result.environment), **(OFFLINE if role == 'mcp' else {})},
-            inherited=inherited, port=port)
-        if answer is None:
-            return None
-        if role == 'cleanup-acp':
-            source = base / 'scenario.json'
-            body = scenario(self.case, base)
-            if digest(source) != hashlib.sha256(body).hexdigest():
-                raise Refused('cleanup source scenario content')
-            snapshot = snapshot_path(self.directory, self.case)
-            with snapshot.open('xb') as stream:
-                stream.write(body)
-            snapshot.chmod(0o444)
-            self.intents[answer['ticket']]['execution_data'] = [[str(snapshot),hashlib.sha256(body).hexdigest()]]
-        return answer
 
     def socket_payload(self, actor, payload):
         shape(payload, ('fd', 'operation', 'bytes'))
@@ -750,6 +603,8 @@ class Observer:
                         or self.case not in (*BOOTSTRAP, *CONTROLLED, *CLEANUP_CASES, *STARTUP))):
                 raise Refused('source finite root listener')
             if self.case in CONTROLLED:
+                if scope is None:
+                    raise Refused('controlled listener scope absent')
                 slots = [row for row in (*self.bindings.values(),*self.listeners.values()) if row['case'] == self.case]
                 before_bind(self.case,payload['tag'],scope,slots)
                 if payload['tag'] == 'bridge':
@@ -819,8 +674,8 @@ class Observer:
             else:
                 raise Refused('source listener stage')
         elif kind in ('root-http-open','root-http-close'):
-            from root_http_observer import context
-            return context(self,actor,kind,payload)
+            from root_http_observer import context as http_context
+            return http_context(self,actor,kind,payload)
         elif kind == 'connect':
             root_http = actor['role'] == 'root' and self.case in ROOT_HTTP
             shape(payload, ('fd', 'address','context') if root_http else ('fd','address'))
@@ -839,8 +694,8 @@ class Observer:
                 probe['attempts'] += 1
                 return {'ok': True, 'probe': True}  # Never creates a Route, Ticket or Connection.
             if root_http:
-                from root_http_observer import connection
-                name,maximum = connection(self,actor,payload,port)
+                from root_http_observer import connection as http_connection
+                name,maximum = http_connection(self,actor,payload,port)
             elif self.case in CLEANUP_CASES:
                 if actor['role'] not in ('root', 'cleanup-acp'):
                     raise Refused('source cleanup connection role')
@@ -997,8 +852,9 @@ class Observer:
                         elif self.ledger.process(actor['birth']).terminal is not None and actor['role'] != 'acp':
                             raise Refused('source undischarged empty control EOF')
                     continue
-                channel['request'] = self.admission.admit(frame)
-                self.controls.append({**channel['request'], 'observed_monotonic_ns': time.monotonic_ns()})
+                admitted=self.admission.admit(frame)
+                channel['request'] = admitted
+                self.controls.append({**admitted, 'observed_monotonic_ns': time.monotonic_ns()})
             if frame.output is None:
                 answer = self.dispatch(actor, channel['request'])
                 if answer is not None:

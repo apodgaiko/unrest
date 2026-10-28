@@ -21,13 +21,13 @@ def prepared(tmp_path,monkeypatch):
     (cwd/'adapter').symlink_to(native)
     model=expected(PYTHON,str(cwd),tmp_path,str(native),'a'*64)
     requests=[]
-    def launch(actor,payload):
+    def launch(actor,payload,*args,**kwargs):
         requests.append(payload)
         host.intents={1:{}}
         return {'ok':True,'ticket':1,'token':'token'}
     host=SimpleNamespace(case=PYTHON,meta={'checkout':str(tmp_path/'source'),'owned':str(tmp_path)},
         binding={'entry':{'path':str(native),'sha256':'a'*64}},launch_owner=lambda actor:None,
-        meta_environment=lambda:{'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},launch=launch)
+        meta_environment=lambda:{'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},admit_launch=launch,root_only=lambda actor:None)
     raw={'case':PYTHON,'executable':'adapter','argv':list(model.expected.argv),'cwd':str(cwd),
          'environment':dict(model.expected.environment),'stdin':None}
     return host,raw,requests,model

@@ -27,15 +27,25 @@ def test_observation_probe_has_exact_body_arguments_and_finite_ordinal(ordinal, 
         binding={"entry": {"path": "/native/python", "sha256": "a" * 64}},
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
         launch_owner=lambda actor: None,
-        intents={i: {"case": OBSERVATION_CASE, "role": "fixed-inline"} for i in range(ordinal)},
+        intents={
+            i: {
+                "case": OBSERVATION_CASE,
+                "role": "fixed-inline",
+                "consumed": True,
+                "birth": object(),
+                "token": str(i),
+            }
+            for i in range(ordinal)
+        },
+        ledger=SimpleNamespace(reaped=lambda *args: True),
     )
 
-    def launch(actor, payload):
+    def launch(actor, payload, *args, **kwargs):
         calls.append(payload)
         host.intents[100] = {}
         return {"ok": True, "ticket": 100, "token": "t"}
 
-    host.launch = launch
+    host.admit_launch = launch
     environment = {
         "PATH": "/bin:/usr/bin",
         "PYTEST_VERSION": "9.0.2",

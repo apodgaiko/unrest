@@ -337,3 +337,57 @@ def test_exec_epoch_bound_is_independent_of_parent_receipt_capacity():
     with pytest.raises(Refused, match='unbounded exec epoch'):
         ledger.register(child, 'overflow-epoch', PINS, SEAL, case='case[one]', command_class='child')
     assert ledger.poison
+
+
+@pytest.mark.parametrize(
+    "leader_status,thread_terminal,valid", [(1, 1, True), (2, 1, False), (1, 0, True)]
+)
+def test_thread_terminal_can_join_actual_group_exit_without_becoming_a_parent_reap(
+    leader_status, thread_terminal, valid
+):
+    ledger = Ledger("thread-exit")
+    leader_id, thread_id = identity(100, 99), identity(101, 99, tgid=100)
+    leader, thread = Birth.read(leader_id), Birth.read(thread_id)
+    emit(ledger, "kernel_root", identity=leader_id)
+    emit(ledger, "kernel_child", parent=100, child=101, event=3, identity=thread_id)
+    emit(ledger, "kernel_exit", pid=101, raw=0)
+    emit(ledger, "kernel_exit", pid=100, raw=leader_status << 8)
+    if valid:
+        emit(
+            ledger,
+            "tracer_terminal_wait",
+            pid=101,
+            raw=thread_terminal << 8,
+            normalized=thread_terminal,
+            identity=thread_id,
+        )
+        assert ledger.process(thread).exit[1] == 0
+        assert ledger.process(thread).terminal[1] == thread_terminal << 8
+        assert not ledger.pending_waits and ledger.process(leader).parent_wait is None
+    else:
+        with pytest.raises(Refused, match="terminal birth or exit"):
+            emit(
+                ledger,
+                "tracer_terminal_wait",
+                pid=101,
+                raw=thread_terminal << 8,
+                normalized=thread_terminal,
+                identity=thread_id,
+            )
+        assert ledger.poison
+
+
+def test_process_leader_cannot_borrow_parent_or_thread_terminal_status():
+    ledger, root, child = setup()
+    emit(ledger, "kernel_exit", pid=root.pid, raw=1 << 8)
+    emit(ledger, "kernel_exit", pid=child.pid, raw=0)
+    with pytest.raises(Refused, match="terminal birth or exit"):
+        emit(
+            ledger,
+            "tracer_terminal_wait",
+            pid=child.pid,
+            raw=1 << 8,
+            normalized=1,
+            identity=ledger.process(child).identity,
+        )
+    assert not ledger.process(child).parent_wait

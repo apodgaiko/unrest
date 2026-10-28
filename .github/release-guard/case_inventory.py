@@ -10,6 +10,24 @@ from control_transport import unique
 from native_entry import key
 
 LIMIT=8*1024*1024
+# Product monkeypatches must not rewrite framework case identities.
+_STRING,_SHA=json.dumps,hashlib.sha256
+
+
+def identity(node):
+    encoded=_STRING(node,ensure_ascii=True).encode()
+    return node if len(encoded)<=1024 else '@node:'+_SHA(encoded).hexdigest()
+
+
+def environment(values,case):
+    current=values.get('PYTEST_CURRENT_TEST')
+    if type(current) is not str or ' (' not in current:
+        return values
+    node,phase=current.rsplit(' (',1)
+    name=identity(node)
+    if name==node or name!=case or phase not in ('setup)','call)','teardown)'):
+        return values
+    return {**values,'PYTEST_CURRENT_TEST':name+' ('+phase}
 
 
 def document(value):
@@ -19,9 +37,11 @@ def document(value):
         raise Refused('inventory input binding')
     for name in ('cases','skips'):
         rows=value[name]
-        if (type(rows) is not list or len(rows)>20000 or any(type(row) is not str or not row or len(row)>4096 for row in rows)
+        if (type(rows) is not list or len(rows)>20000 or any(type(row) is not str or not row or len(row)>131071 for row in rows)
                 or len(set(rows))!=len(rows)):
             raise Refused('inventory finite nodes')
+    if sum(len(json.dumps(row)) for name in ('cases','skips') for row in value[name])>LIMIT:
+        raise Refused('inventory total node bytes')
     if not set(value['skips'])<=set(value['cases']):
         raise Refused('inventory skip subset')
     return value
