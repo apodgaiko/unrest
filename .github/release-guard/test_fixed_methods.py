@@ -57,3 +57,29 @@ def test_unlisted_methods_never_select_a_program(method):
     case = RELOAD_TEST + "::" + METHOD_NAME + "[" + method + "]"
     with pytest.raises(Refused):
         expected(case, method, "/native/python", "a" * 64, ROOT, {})
+
+
+def test_network_preflight_templates_preserve_exact_family_and_detachment():
+    from fixed_inline import NETWORK, NETWORK_NAME
+
+    tree = ast.parse((ROOT / RELOAD_TEST).read_bytes())
+    function = next(
+        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == NETWORK_NAME
+    )
+    call = next(
+        n
+        for n in ast.walk(function)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Name)
+        and n.func.id == "_isolated_python"
+    )
+    for case, (family, detached) in NETWORK.items():
+        original = eval(
+            compile(ast.Expression(call.args[0]), "<original-template>", "eval"),
+            {"family": family, "detached": detached},
+        )
+        host, calls, value, raw = fixture(case)
+        assert value.argv == ("/native/python", "-c", original)
+        assert script(ROOT, case) == original
+        assert proposal(host, {"role": "root"}, raw)["ok"] is True
+        assert len(calls) == 1

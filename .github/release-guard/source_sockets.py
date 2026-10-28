@@ -4,6 +4,7 @@ from __future__ import annotations
 import errno
 import os
 import socket
+import stat
 
 from bootstrap_cases import declaration
 from controlled_cases import CASES as CONTROLLED, ROOT_HTTP
@@ -11,6 +12,7 @@ from controlled_pairs import limits as controlled_limits
 from content_manifest import Refused
 from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
 from cleanup_inline import STARTUP
+from fixed_inline import NETWORK, NETWORK_CASES, METHOD_CASES
 
 TYPE = type
 
@@ -26,6 +28,7 @@ class Hooks:
         self.pair = socket.socketpair
         self.getaddrinfo = socket.getaddrinfo
         self.read, self.write = os.read, os.write
+        self.unbound_created = False
 
     def descriptor(self, stream):
         if type(stream) is not self.socket_type:
@@ -44,15 +47,29 @@ class Hooks:
 
     def audit(self, event, args):
         if event == 'socket.__new__':
+            adoption=getattr(self.local,'adoption',None)
+            if (len(args)==4 and adoption is not None and TYPE(args[0]) is self.socket_type and args[0] is adoption[0]
+                    and all(TYPE(value) is int and value==-1 for value in args[1:])):
+                info=os.fstat(adoption[1])
+                if (info.st_dev,info.st_ino,info.st_mode,info.st_uid)!=adoption[2]:
+                    raise Refused('source socket adoption generation')
+                self.local.adoption=None
+                return True
+            isolated = self.policy.profile['role']=='fixed-inline' and self.policy.profile['case'] in NETWORK_CASES
             if (len(args) != 4 or type(args[0]) not in (self.socket_type, self.base_type)
                     or any(type(value) is not int for value in args[1:])
-                    or args[1] not in (socket.AF_INET, socket.AF_UNIX)
+                    or args[1] not in ((socket.AF_INET, socket.AF_INET6, socket.AF_UNIX) if isolated else (socket.AF_INET, socket.AF_UNIX))
                     or args[2] & ~(socket.SOCK_CLOEXEC | socket.SOCK_NONBLOCK) != socket.SOCK_STREAM
                     or args[3] not in (0, socket.IPPROTO_TCP)):
                 raise Refused('source unknown socket constructor')
             if args[1] == socket.AF_UNIX:
                 if args[3] != 0 or not (self.policy.private_call() or getattr(self.local, 'pair', None) is not None):
                     raise Refused('source Unix creation outside sealed self-pair')
+            elif isolated:
+                family = NETWORK.get(self.policy.profile['case'],(socket.AF_INET,False))[0]
+                if args[1]!=family or self.unbound_created:
+                    raise Refused('source isolated one unbound socket family')
+                self.unbound_created=True
             elif (self.policy.profile['role'] not in ('root', 'acp', 'mcp', 'cleanup-acp')
                     and not (controlled_limits(self.policy.profile['case'])[1] > 0 if self.policy.profile['case'] in CONTROLLED else declaration(self.policy.profile['case']).broker_http)):
                 raise Refused('source backend network creation')
@@ -207,6 +224,30 @@ class Hooks:
 
     def install(self):
         hooks = self
+        original_init=hooks.socket_type.__init__
+        def initialize(stream,family=-1,type=-1,proto=-1,fileno=None):
+            adoption=None
+            if (fileno is not None and family==type==proto==-1
+                    and hooks.policy.profile['role']=='fixed-inline'
+                    and hooks.policy.profile['case'] in (*METHOD_CASES,*NETWORK_CASES)):
+                if (TYPE(stream) is not hooks.socket_type or any(TYPE(value) is not int for value in (family,type,proto))
+                        or TYPE(fileno) is not int or fileno<0 or getattr(hooks.local,'adoption',None) is not None):
+                    hooks.policy.refuse('source socket adoption operand')
+                info=os.fstat(fileno)
+                if not stat.S_ISSOCK(info.st_mode):
+                    raise OSError(errno.ENOTSOCK,'not a socket')
+                adoption=(stream,fileno,(info.st_dev,info.st_ino,info.st_mode,info.st_uid))
+                hooks.local.adoption=adoption
+            try:
+                original_init(stream,family,type,proto,fileno)
+                if adoption is not None:
+                    info=os.fstat(fileno)
+                    if hooks.local.adoption is not None or hooks.fd(stream)!=fileno or (info.st_dev,info.st_ino,info.st_mode,info.st_uid)!=adoption[2]:
+                        hooks.policy.refuse('source socket adoption completion')
+            finally:
+                if adoption is not None:
+                    hooks.local.adoption=None
+        hooks.socket_type.__init__=initialize
         def wrap(name):
             def operation(stream, *args, **kwargs):
                 return hooks.guarded(hooks.call, name, stream, *args, **kwargs)

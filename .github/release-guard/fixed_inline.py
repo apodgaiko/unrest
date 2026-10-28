@@ -44,9 +44,15 @@ METHOD_NAME = 'test_preexisting_socket_and_bound_alias_refuse_entry_before_paylo
 METHODS = ('connect','connect_ex','bind','listen','accept','send','sendall','sendto','sendmsg',
            'sendfile','recv','recv_into','recvfrom','recvfrom_into','recvmsg','recvmsg_into','makefile','shutdown')
 METHOD_CASES = tuple(RELOAD_TEST+'::'+METHOD_NAME+'['+method+']' for method in METHODS)
-ISOLATED = {RELOAD_CASE:'reload', **dict(zip(METHOD_CASES,METHODS,strict=True))}
+NETWORK_NAME = 'test_preexisting_network_socket_objects_and_descriptors_refuse_entry_once'
+NETWORK = {RELOAD_TEST+'::'+NETWORK_NAME+f'[{detached}-{family}]':(family,detached)
+           for detached in (False,True) for family in (2,10)}
+DETACHED_CASE = RELOAD_TEST+'::test_detached_socket_descriptor_is_preflight_evidence'
+NETWORK_CASES = (*NETWORK,DETACHED_CASE)
+ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CASES,METHODS,strict=True)),
+            **{case:case for case in NETWORK}}
 CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,*ISOLATED)
-GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,CASES)
+GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,CASES)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
 SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
@@ -70,32 +76,37 @@ def startup_expected(case,native,pin,cwd,owned):
 
 
 def script(checkout, operation):
-    path = RELOAD_TEST if operation in ('reload',*METHODS) else OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
+    path = RELOAD_TEST if operation in ('reload','detached',*METHODS,*NETWORK) else OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
     data = (checkout / path).read_bytes()
     if hashlib.sha256(data).hexdigest() != PINS[path]:
         raise Refused('fixed inline source bytes')
-    name = RELOAD_NAME if operation=='reload' else METHOD_NAME if operation in METHODS else 'test_fresh_entrypoint_import_boundary' if operation in OBSERVATION_OPERATIONS else 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
+    name = NETWORK_NAME if operation in NETWORK else 'test_detached_socket_descriptor_is_preflight_evidence' if operation=='detached' else RELOAD_NAME if operation=='reload' else METHOD_NAME if operation in METHODS else 'test_fresh_entrypoint_import_boundary' if operation in OBSERVATION_OPERATIONS else 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
     functions = [node for node in ast.parse(data).body if isinstance(node, ast.FunctionDef) and node.name == name]
     if len(functions) != 1:
         raise Refused('fixed inline literal owner')
-    if operation in ('reload',*METHODS):
+    if operation in ('reload','detached',*METHODS,*NETWORK):
         bodies=[node.args[0] for node in ast.walk(functions[0]) if isinstance(node,ast.Call)
                 and isinstance(node.func,ast.Name) and node.func.id=='_isolated_python'
                 and len(node.args)==1]
         if len(bodies)!=1:
             raise Refused('fixed isolated sole literal body')
         body=bodies[0]
-        if operation=='reload' and isinstance(body,ast.Constant) and type(body.value) is str:
+        if operation in ('reload','detached') and isinstance(body,ast.Constant) and type(body.value) is str:
             return body.value
-        if operation not in METHODS or not isinstance(body,ast.JoinedStr):
+        if operation not in (*METHODS,*NETWORK) or not isinstance(body,ast.JoinedStr):
             raise Refused('fixed isolated literal template')
         parts=[]
         for part in body.values:
             if isinstance(part,ast.Constant) and type(part.value) is str:
                 parts.append(part.value)
             elif (isinstance(part,ast.FormattedValue) and isinstance(part.value,ast.Name)
-                  and part.value.id=='method' and part.conversion==-1 and part.format_spec is None):
+                  and part.value.id=='method' and operation in METHODS and part.conversion==-1 and part.format_spec is None):
                 parts.append(operation)
+            elif (isinstance(part,ast.FormattedValue) and isinstance(part.value,ast.Name)
+                  and operation in NETWORK and part.format_spec is None
+                  and (part.value.id,part.conversion) in (('family',-1),('detached',114))):
+                family,detached=NETWORK[operation]
+                parts.append(str(family) if part.value.id=='family' else repr(detached))
             else:
                 raise Refused('fixed isolated template substitution')
         return ''.join(parts)

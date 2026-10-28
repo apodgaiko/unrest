@@ -11,6 +11,8 @@ import source_sockets
 @pytest.fixture
 def installed(monkeypatch):
     class Socket:
+        def __init__(self,family=-1,type=-1,proto=-1,fileno=None):
+            pass
         def bind(self,*args,**kwargs):
             return None
     policy=object.__new__(Policy)

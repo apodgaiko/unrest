@@ -244,3 +244,18 @@ the closed original tuple; the parser accepts string constants and plain
 `{method}` fields only. No evaluation, arbitrary formatting, descendant process,
 DNS or new socket route follows. Original preflight-refusal, counter, evidence
 and empty-payload assertions execute in each real isolated child.
+
+Socket-descriptor preflight inspection adopts an existing descriptor through a
+scoped Python initializer wrapper. A thread-local, single-use ticket binds the
+exact socket object, explicit nonnegative integer FD and current device/inode/
+mode/UID. The native audit callback rechecks and consumes it; initialization must
+retain that FD and identity, and pending state is always cleared. Non-socket scan
+inputs preserve `ENOTSOCK`. A bare `(-1,-1,-1)` constructor has no admission:
+CPython converts negative defaults into a new Internet socket without `fileno`.
+Adoption grants no new endpoint or payload authority.
+
+Five original descriptor-preflight cases additionally permit one unbound stream
+socket with the exact original Linux family (IPv4 or IPv6) and detachment boolean.
+Their original programs and evidence assertions remain unchanged. Bind, connect,
+DNS and transport payload still require independent existing authority. The
+failed first alias run is retained; it is not replaced by its later repair proof.
