@@ -65,6 +65,7 @@ def main():
         raise RuntimeError('native control ABI refused')
     argv = [str(compiler), '-O2', '-Wall', '-Wextra', '-Werror',
             '-I' + str(runtime / Path(sysconfig.get_path('include')).relative_to(original)), '-L' + str(library.parent),
+            '-DGUARD_PYTEST=' + json.dumps(str(runtime / 'bin/pytest')),
             '-DGUARD_BOOTSTRAP=' + json.dumps(repr(str(bootstrap))),
             '-DGUARD_PROFILES=' + json.dumps(repr(str(profiles))),
             '-DGUARD_CONTROL_SOCKET=' + json.dumps(str(profiles / 'control.sock')),
@@ -74,13 +75,17 @@ def main():
             *shlex.split(sysconfig.get_config_var('SYSLIBS') or ''), '-o', str(entry)]
     subprocess.run(argv, check=True)
     entry.chmod(0o755)
+    shutil.copyfile(entry, runtime / 'bin/pytest')
+    (runtime / 'bin/pytest').chmod(0o755)
+    shutil.copyfile(shutil.which('uv'), runtime / 'bin/uv')
+    (runtime / 'bin/uv').chmod(0o755)
     record = {'schema': 'unrest.native-control-build.v1', 'entry': pin(entry),
               'bootstrap': pin(bootstrap), 'source': pin(support / 'native_entry.c'),
               'library': pin(library), 'compiler': pin(compiler),
               'recipient': pin(support / 'evidence-recipient.pem'), 'profiles': str(profiles),
               'support': str(support), 'soabi': sysconfig.get_config_var('SOABI'),
               'runtime': pin(runtime / Path(sys.executable).resolve().relative_to(original)), 'compiler_argv': argv,
-              'head': os.environ['GITHUB_SHA'], 'run': int(os.environ['GITHUB_RUN_ID']),
+              'checkout': str(Path.cwd().resolve()), 'head': os.environ['GITHUB_SHA'], 'run': int(os.environ['GITHUB_RUN_ID']),
               'attempt': int(os.environ['GITHUB_RUN_ATTEMPT'])}
     target = root / 'binding.json'
     target.write_text(json.dumps(record, sort_keys=True) + '\n')

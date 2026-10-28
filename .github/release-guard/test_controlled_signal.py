@@ -16,6 +16,7 @@ def signal_model(monkeypatch, case):
     for birth in (root, child):
         ledger.process(birth).case = case
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.ledger, observer.root_birth, observer.finished, observer.case = (
         ledger,
         root,

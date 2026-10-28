@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import stat
 import fcntl
+import ctypes
 
 from content_manifest import Refused
 from control_transport import finite
@@ -24,6 +25,26 @@ def fd_record(pid,fd):
     if access not in (os.O_RDONLY,os.O_WRONLY):
         raise Refused('spawn FIFO direction')
     return [fd,info.st_dev,info.st_ino,access]
+
+
+def stderr_record(pid,fd):
+    if type(fd) is not int or not 3<=fd<=1024:
+        raise Refused('tracker stderr descriptor')
+    path=Path('/proc')/str(pid)/'fd'/str(fd)
+    info=path.stat()
+    stderr=path.with_name('2').stat()
+    if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o600
+            or info.st_uid!=20000 or info.st_nlink!=0
+            or (info.st_dev,info.st_ino,info.st_mode)!=(stderr.st_dev,stderr.st_ino,stderr.st_mode)):
+        raise Refused('tracker anonymous captured stderr')
+    # Linux/x86-64 KCMP_FILE proves the same open file description, not merely
+    # another descriptor pointing at the same inode.
+    if ctypes.CDLL(None,use_errno=True).syscall(312,pid,pid,0,fd,2)!=0:
+        raise Refused('tracker stderr open file identity')
+    flags=[line.split()[1] for line in (path.parent.parent/'fdinfo'/str(fd)).read_text().splitlines() if line.startswith('flags:')]
+    if len(flags)!=1 or int(flags[0],8)&os.O_ACCMODE!=os.O_RDWR:
+        raise Refused('tracker stderr access')
+    return [fd,info.st_dev,info.st_ino,int(flags[0],8)&~os.O_CLOEXEC]
 
 
 def counterpart(pid,record):
@@ -55,10 +76,10 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
         value=argv[4][len(prefix):-1]
         if not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024:
             raise Refused('tracker read descriptor')
-        if sorted(passfds)!=[2,int(value)] or target is not None:
+        if len(passfds)!=2 or int(value) not in passfds or target is not None:
             raise Refused('tracker descriptor inventory')
         role='mp-tracker'
-        descriptors=[int(value)]
+        descriptors=sorted(fd for fd in passfds if fd>2)
     else:
         prefix='from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd='
         if (len(argv)!=6 or not argv[4].startswith(prefix) or not argv[4].endswith(')')
@@ -95,24 +116,28 @@ def proposal(host,actor,raw):
     tracker=next((row for row in records if row['role']=='mp-tracker'),None)
     if role=='mp-child' and (tracker is None or not tracker['consumed'] or not host.actors[tracker['pid']]['returned']):
         raise Refused('spawn needs returned owned tracker')
-    inherited=[fd_record(actor['birth'].pid,fd) for fd in descriptors]
     if role=='mp-tracker':
-        counterpart(actor['birth'].pid,inherited[0])
-    if role=='mp-tracker' and inherited[0][3]!=os.O_RDONLY:
-        raise Refused('tracker read direction')
+        reader=int(raw['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1])
+        tracker_read=fd_record(actor['birth'].pid,reader)
+        inherited=[tracker_read if fd==reader else stderr_record(actor['birth'].pid,fd) for fd in descriptors]
+        counterpart(actor['birth'].pid,tracker_read)
+        if tracker_read[3]!=os.O_RDONLY:
+            raise Refused('tracker read direction')
+    else:
+        inherited=[fd_record(actor['birth'].pid,fd) for fd in descriptors]
     if role=='mp-child':
         if tracker is None:
             raise Refused('spawn missing owned tracker')
         tracker_fd=int(raw['argv'][4].split('tracker_fd=',1)[1].split(',',1)[0])
         tracked=next(row for row in inherited if row[0]==tracker_fd)
-        retained=fd_record(tracker['pid'],tracker['inherited'][0][0])
+        retained=fd_record(tracker['pid'],tracker['tracker_read'][0])
         from linux_observation import process_identity
         from process_ledger import Birth
         owner=host.actors[tracker['pid']]
         process=host.ledger.process(owner['birth'])
         if (process.exit is not None or process.terminal is not None
                 or Birth.read(process_identity(tracker['pid']))!=owner['birth']
-                or retained!=tracker['inherited'][0]
+                or retained!=tracker['tracker_read']
                 or tracked[1:3]!=retained[1:3] or tracked[3]!=os.O_WRONLY):
             raise Refused('spawn tracker generation')
         if not owner['body_ready']:
@@ -131,25 +156,28 @@ def proposal(host,actor,raw):
     answer=host.admit_launch(actor,payload,value,role,0,vector,None,inherited=inherited)
     if answer is None:
         return None
+    if role=='mp-tracker':
+        host.intents[answer['ticket']]['tracker_read']=tracker_read
     return {**answer,'translated':vector}
 
 
 def inherited(profile,actual):
     records=profile['inherited']
-    if (type(records) is not list or len(records)!=(1 if profile['role']=='mp-tracker' else 3)
+    if (type(records) is not list or len(records) not in ((1,2) if profile['role']=='mp-tracker' else (3,))
             or any(type(row) is not list or len(row)!=4 or any(type(value) is not int for value in row) for row in records)):
         raise Refused('spawn profile descriptor schema')
+    reader=int(profile['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1]) if profile['role']=='mp-tracker' else None
     seen=[]
     for name in os.listdir('/proc/self/fd'):
         fd=int(name)
         if fd<=2:
             continue
         try:
-            row=fd_record(actual['pid'],fd)
+            row=stderr_record(actual['pid'],fd) if reader is not None and fd!=reader else fd_record(actual['pid'],fd)
         except FileNotFoundError:
             continue
         flags=fcntl.fcntl(fd,fcntl.F_GETFL)
-        if flags&~(os.O_ACCMODE|os.O_CLOEXEC):
+        if (reader is None or fd==reader) and flags&~(os.O_ACCMODE|os.O_CLOEXEC):
             raise Refused('spawn descriptor flags')
         seen.append(row)
     if sorted(seen)!=sorted(records):

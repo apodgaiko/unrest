@@ -3,6 +3,7 @@
 #include <Python.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 #ifndef GUARD_BOOTSTRAP
 #error immutable bootstrap path required
 #endif
@@ -103,6 +104,20 @@ int main(int argc, char **argv) {
     preconfig.utf8_mode = 1;
     PyStatus startup = Py_PreInitialize(&preconfig);
     if (PyStatus_Exception(startup)) Py_ExitStatusException(startup);
+    /* Only the compiled, byte-identical console entry selects normal pytest.
+       Kernel argv stays in the trace; normalized Python argv is bound separately. */
+#ifdef GUARD_PYTEST
+    if (!strcmp(argv[0],GUARD_PYTEST)) {
+        char **normalized = calloc((size_t)argc + 5, sizeof(char *));
+        if (normalized == NULL) return 86;
+        normalized[0]=argv[0]; normalized[1]="-I"; normalized[2]="-S";
+        normalized[3]="-m"; normalized[4]="pytest";
+        for (int i=1;i<argc;i++) normalized[i+4]=argv[i];
+        int status=Py_BytesMain(argc+4,normalized);
+        free(normalized);
+        return poisoned ? 86 : status;
+    }
+#endif
     int status = Py_BytesMain(argc,argv);
     return poisoned ? 86 : status;
 }

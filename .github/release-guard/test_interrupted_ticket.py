@@ -35,6 +35,7 @@ def pending(stage="complete"):
     if stage == "complete":
         ledger.control(root, "root-token", 0, 2, "parent-wait", receipt(ledger, root, child, 15))
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.case, observer.root = case, root.pid
     observer.actors = {
         root.pid: {"birth": root, "token": "root-token"},

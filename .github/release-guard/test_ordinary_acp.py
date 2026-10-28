@@ -86,6 +86,7 @@ def test_ordinary_independent_environment_and_no_crashed_sibling_route(tmp_path,
 )
 def test_host_refuses_ordinary_request_mutations(tmp_path, mutation):
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.root_birth = Birth(1, 1, 1, 1, "test-boot", 20000)
     observer.finished, observer.case, observer.serial = False, CASES[0], 0
     observer.meta = {"mounts": {}, "owned": str(tmp_path), "checkout": str(tmp_path / "checkout")}
@@ -232,6 +233,7 @@ def test_no_launch_catalogue_preserves_original_parameters_and_ids():
 @pytest.mark.parametrize("case", ordinary_acp.NEGATIVE_CASES)
 def test_no_launch_cases_have_no_process_route(tmp_path, case):
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.root_birth = Birth(1, 1, 1, 1, "test-boot", 20000)
     observer.finished, observer.case, observer.intents = False, case, {}
     actor = {"birth": observer.root_birth, "role": "root"}

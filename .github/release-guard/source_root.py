@@ -75,6 +75,9 @@ def main():
         raise Refused('root native activation absent')
     policy.calls.install()
     plugin = OriginalCases(policy)
+    from postbuild_root import CASES as ARCHIVE_CASES, run as archive_run
+    if tuple(policy.profile['cases'])==ARCHIVE_CASES:
+        return archive_run(policy,plugin)
     code = pytest.main(['-q', '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
                        '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), '-o',
                        'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *(['tests/test_launch_preflight.py'] if tuple(policy.profile['cases']) == PREFLIGHT_ALL else policy.profile['cases'])], plugins=[plugin])

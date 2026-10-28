@@ -42,6 +42,7 @@ def test_private_input_inventory_rejects_aliases_and_writeable_members(tmp_path)
 
 def backend_request(tmp_path):
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.root_birth = Birth(1, 1, 1, 1, 'test-boot', 20000)
     observer.finished, observer.case, observer.serial = False, CASES[0], 0
     observer.meta = {'owned': str(tmp_path), 'checkout': str(tmp_path / 'checkout')}
@@ -220,6 +221,7 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
         actual, raw = os.waitpid(child, 0)
         assert actual == child and raw == 17 << 8
         observer = object.__new__(Observer)
+        observer.full, observer.outcomes = False, []
         observer.root_birth, observer.root, observer.ledger, observer.finished = birth, birth.pid, ledger, False
         actor = {'birth': birth, 'role': 'root', 'token': 'root-token', 'sequence': 0}
         observer.actors = {child: {'birth': child_birth, 'returned': True}}
@@ -306,6 +308,7 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
     try:
         assert os.read(ready_read, 1) == b'1'
         observer = object.__new__(Observer)
+        observer.full, observer.outcomes = False, []
         observer.stdio(child, role, input_pipe=input_pipe)
         os.write(command_write, b'1')
         assert os.read(ready_read, 1) == b'2'
@@ -326,6 +329,7 @@ def test_root_completion_seal_is_bounded_and_requires_all_ordered_completions():
     seal = case_seal(cases)
     assert len(encode(seal, REQUEST_LIMIT)) < 128
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.root_birth = Birth(1,1,1,1,'boot',20000)
     observer.finished, observer.case = False, None
     observer.cases, observer.completed = cases, list(cases)

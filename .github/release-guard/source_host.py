@@ -67,17 +67,21 @@ def inventory(root):
     return hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()
 
 
-def prepare(binding, checkout, root, git=False, public=False, native=False):
+def prepare(binding, checkout, root, git=False, public=False, native=False, extracted=None):
     from content_manifest import capture, encode
     require(subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip()
             == binding['head'], 'source revision binding')
     require(not subprocess.check_output(['/usr/bin/git', 'diff', '--name-only', 'HEAD'], cwd=checkout),
             'source tracked drift')
     names = subprocess.check_output(['/usr/bin/git', 'ls-files', '-z'], cwd=checkout).decode().split('\0')[:-1]
-    source = root / 'source'
-    source.mkdir(mode=0o755)
-    manifest = capture(checkout, sorted(names))
-    for row in manifest['files']:
+    source = extracted if extracted is not None else root / 'source'
+    if extracted is not None:
+        names=sorted(str(path.relative_to(source)) for path in source.rglob('*') if path.is_file())
+        source.parent.chmod(0o755)
+    else:
+        source.mkdir(mode=0o755)
+    manifest = capture(source if extracted is not None else checkout, sorted(names))
+    for row in (() if extracted is not None else manifest['files']):
         target = source / row['path']
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
         shutil.copyfile(checkout / row['path'], target)
@@ -101,6 +105,8 @@ def prepare(binding, checkout, root, git=False, public=False, native=False):
     shutil.copytree(original, dependencies, symlinks=False, ignore=shutil.ignore_patterns('__pycache__'))
     for member in [dependencies, *sorted(dependencies.rglob('*'))]:
         member.chmod(0o755 if member.is_dir() or member.stat().st_mode & 0o111 else 0o644)
+    if extracted is not None:
+        shutil.copyfile(checkout/'tools/check_distribution.py',dependencies/'release_distribution_oracle.py')
     owned = root / 'owned'
     owned.mkdir(mode=0o700)
     os.chown(owned, 20000, 20000)
@@ -136,6 +142,8 @@ def prepare(binding, checkout, root, git=False, public=False, native=False):
         raw = json.dumps(envelope,sort_keys=True,separators=(',',':')).encode()
         require(len(raw) <= 16 * 1024 * 1024, 'source input manifest bound')
     target = profiles / 'source-manifest.json'
+    if target.exists():
+        target.rename(profiles/('source-manifest-'+hashlib.sha256(target.read_bytes()).hexdigest()+'.json'))
     with target.open('xb') as stream:
         stream.write(raw)
     target.chmod(0o444)
@@ -214,14 +222,24 @@ def worker(binding, metadata, raw_directory):
     from source_observer import Observer
     from source_profile import ROOT_COMMAND
     metadata = isolate(metadata, binding['support'])
-    timeout = (170 if len(metadata['cases']) > 3 else 60) if metadata['cases'][0].startswith('tests/test_acp_cleanup.py::') else 30 if len(metadata['cases']) in (3, 42) else 60 if len(metadata['cases']) == 2 else 170
+    timeout = 1200 if type(metadata['cases']) is dict else (170 if len(metadata['cases']) > 3 else 60) if metadata['cases'][0].startswith('tests/test_acp_cleanup.py::') else 30 if len(metadata['cases']) in (3, 42) else 60 if len(metadata['cases']) == 2 else 170
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
     environment = {'HOME': str(Path(metadata['owned']) / 'home'), 'TMPDIR': str(Path(metadata['owned']) / 'tmp'),
                    'PATH': ('/native/bin:' if '/native' in metadata['mounts'] else '') + '/usr/bin:/bin',
                    'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
-    vector = [binding['entry']['path'], '-I', '-S', '-c', ROOT_COMMAND]
+    full=type(metadata['cases']) is dict
+    if full:
+        from full_source import environment as full_environment
+        environment=full_environment(metadata)
+    vector = ['/usr/bin/env','-u','CODEX_PATH','uv','run','pytest','-q'] if full else [binding['entry']['path'], '-I', '-S', '-c', ROOT_COMMAND]
+    if full and binding.get('collection_only'):
+        vector.append('--collect-only')
+    from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
+    if tuple(metadata['cases'])==ARCHIVE_CASES:
+        timeout=100
+        vector=[binding['entry']['path'],'-I','-S','-c',ARCHIVE_COMMAND,binding['checkout']]
     child = os.fork()
     if child == 0:
         try:
@@ -254,14 +272,17 @@ def worker(binding, metadata, raw_directory):
         os.close(ready_read)
         observer = Observer(binding, metadata, child, output_read)
         allowed = [{'pid': child, 'path': vector[0], 'argv': vector, 'environment': environment,
-                    'cwd': metadata['checkout'], 'sha256': binding['entry']['sha256']}]
+                    'cwd': metadata['checkout'], 'sha256': hashlib.sha256(Path(vector[0]).read_bytes()).hexdigest()}]
         trace = OwnedTrace(child, allowed, timeout, start_write=start_write, selective=True, cleanup_seconds=5,
                            on_attached=lambda: observer.consume(trace), on_tick=observer.tick,
                            resolve_exec=lambda *args: observer.resolve(trace, *args))
         result = trace.run()
         observer.tick(trace)
+        if full:
+            from full_launch import finished
+            finished(observer)
         require(result['root_parent_wait_raw'] == 0 and not result['poison'] and not observer.ledger.poison
-                and observer.finished and observer.completed == metadata['cases']
+                and observer.finished and tuple(observer.completed) == (() if binding.get('collection_only') else observer.cases)
                 and not observer.frames and not observer.pair_intents and not observer.endpoints.poison and not observer.eof_drains
                 and all(intent['consumed'] for intent in observer.intents.values()), 'original source completion refused')
     except BaseException:
@@ -272,11 +293,12 @@ def worker(binding, metadata, raw_directory):
             (raw_directory / 'held-source-cleanup.json').write_text(json.dumps({'actual_parent_wait': status}))
         raise
     finally:
-        record = {'schema': 'unrest.bootstrap-source-result.v1', 'source_checkpoint_ready': False,
+        record = {'schema': 'unrest.bootstrap-source-result.v1', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
                   'release_certified': False, 'completed': [] if observer is None else observer.completed,
                   'result': result, 'failure': failure, 'metadata': metadata,
                   'kernel': [] if trace is None else trace.records,
                   'controls': [] if observer is None else observer.controls,
+                  'outcomes': [] if observer is None else observer.outcomes,
                   'endpoint_observations': None if observer is None else {
                       'listeners': {key: asdict(value) for key, value in observer.endpoints.listeners.items()},
                       'routes': {key: asdict(value) for key, value in observer.endpoints.routes.items()},
@@ -313,7 +335,7 @@ def drain_owned(rows):
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from controlled_cases import GROUPS as CONTROLLED_GROUPS, ADMISSION, NOTIFICATION_STARTUP, NOTIFICATION_SIGNALS, ROOT_HTTP
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', 'stdio8', 'observe1', 'mp-status2', 'preflight9', 'preflight54', *CONTROLLED_GROUPS)),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv)==4 and sys.argv[2]=='archive15' or len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', 'stdio8', 'observe1', 'mp-status2', 'full', 'full-collect', 'preflight9', 'preflight54', *CONTROLLED_GROUPS)),
             'source host requires exact root Linux invocation')
     binding_file = Path(sys.argv[1]).resolve(strict=True)
     binding = json.loads(binding_file.read_bytes())
@@ -323,6 +345,7 @@ def main():
         row = binding[name]
         require(hashlib.sha256(Path(row['path']).read_bytes()).hexdigest() == row['sha256'], 'native host input drift')
     production_binding(binding)
+    binding['collection_only']=len(sys.argv)==3 and sys.argv[2]=='full-collect'
     profiles = Path(binding['profiles'])
     if not profiles.exists() and not profiles.is_symlink():
         profiles.mkdir(mode=0o755)
@@ -333,7 +356,8 @@ def main():
     def interrupted(signum, frame):
         raise TimeoutError('source host outer deadline')
     signal.signal(signal.SIGTERM, interrupted)
-    raw_directory = root / 'source-private'
+    archive=len(sys.argv)==4 and sys.argv[2]=='archive15'
+    raw_directory = root / ('archive-private' if archive else 'source-private')
     raw_directory.mkdir(mode=0o700)
     os.chown(raw_directory, 20001, 20001)
     success = False
@@ -351,8 +375,16 @@ def main():
         from session_launch import CASES as SESSION_CASES, TIMEOUT as SESSION_TIMEOUT
         from git_sites import CASES as GIT_CASES
         cleanup = {**CONTROLLED_GROUPS, 'preflight9': PLAN_CASES, 'preflight54': PREFLIGHT_ALL, 'imports6': IMPORT_CASES, 'stdio8': tuple(STDIO), 'observe1': (OBSERVATION_CASE,), 'mp-status2': MP_CASES, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
-        cases = cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
-        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root, git=cases == GIT_CASES, public=any(case in IMPORT_CASES for case in cases), native=any(case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP) for case in cases)), 'cases': list(cases)}
+        full=len(sys.argv)==3 and sys.argv[2] in ('full','full-collect')
+        from postbuild_root import CASES as ARCHIVE_CASES
+        cases = ARCHIVE_CASES if archive else () if full else cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
+        phase_root=root/'archive' if archive else root
+        if archive:
+            phase_root.mkdir(mode=0o755)
+        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), phase_root, extracted=Path(sys.argv[3]).resolve(strict=True) if archive else None, git=full or cases == GIT_CASES, public=full or any(case in IMPORT_CASES for case in cases), native=full or any(case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP) for case in cases)), 'cases': list(cases)}
+        if full:
+            from full_launch import prepare as prepare_full
+            metadata=prepare_full(binding,metadata)
         pid = os.fork()
         if pid == 0:
             try:
@@ -361,7 +393,7 @@ def main():
                 (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
                 os._exit(125)
             os._exit(0)
-        raw, deadline = None, time.monotonic() + (190 if cases == CLEANUP_CASES else 80 if cases == CLEANUP_SMOKE else 50 if len(cases) in (3, 42) else 80 if len(cases) == 2 else 190)
+        raw, deadline = None, time.monotonic() + (110 if archive else 1220 if full else 190 if cases == CLEANUP_CASES else 80 if cases == CLEANUP_SMOKE else 50 if len(cases) in (3, 42) else 80 if len(cases) == 2 else 190)
         try:
             while raw is None:
                 actual, status = os.waitpid(pid, os.WNOHANG)
@@ -385,11 +417,11 @@ def main():
                 success = False
         finally:
             (raw_directory / 'fallback-cleanup.json').write_text(json.dumps(adopted))
-            archive = root / 'source-private.tar'
+            archive = root / (raw_directory.name+'.tar')
             with tarfile.open(archive, 'w') as stream:
                 stream.add(raw_directory, arcname='source-private', recursive=True)
             subprocess.run(['/usr/bin/openssl', 'cms', '-encrypt', '-binary', '-aes-256-cbc', '-outform', 'DER',
-                            '-in', str(archive), '-out', str(root / 'source-private.cms'), binding['recipient']['path']], check=True)
+                            '-in', str(archive), '-out', str(root / (raw_directory.name+'.cms')), binding['recipient']['path']], check=True)
             archive.unlink()
         require(not children(), 'source host cleanup residue')
     require(success, 'original source integration did not complete')

@@ -43,6 +43,7 @@ def test_native_descriptor_and_readonly_generation_must_agree(tmp_path, record, 
 
 def test_metadata_changes_only_root_discovery_path():
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.meta = {"owned": "/owned", "mounts": {"/native": [1, 2, 3]}}
     assert observer.meta_environment()["PATH"] == "/native/bin:/usr/bin:/bin"
     observer.meta["mounts"] = {}
@@ -57,6 +58,7 @@ def test_actual_worker_root_environment_matches_observer_before_fork(monkeypatch
     metadata = {'owned': str(tmp_path), 'mounts': {'/native': [1, 2, 3]} if mounted else {},
                 'cases': ['tests/test_experimental_admission_bounds.py::example']}
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.meta = metadata
     descriptors = []
     original_pipe = os.pipe

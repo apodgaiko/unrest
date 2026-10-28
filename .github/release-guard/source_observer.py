@@ -56,7 +56,11 @@ def native_class(role):
 class Observer:
     def __init__(self, binding, metadata, root_pid, out_read):
         self.binding, self.meta = binding, metadata
-        self.cases = tuple(metadata['cases'])
+        self.full = type(metadata['cases']) is dict
+        self.cases = () if self.full else tuple(metadata['cases'])
+        self.launcher = root_pid if self.full else None
+        self.full_started = False
+        self.outcomes = []
         self.directory = Path(binding['profiles'])
         self.root = root_pid
         self.root_birth = Birth.read(process_identity(root_pid))
@@ -144,16 +148,24 @@ class Observer:
                         self.git.reserve_helper(birth, parent)
                     candidates = [value for value in self.intents.values()
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
+                    if self.full and parent is not None and parent.pid==self.launcher and not self.full_started:
+                        continue
                     if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
-            if row['kind'] == 'kernel_root':
+            if row['kind'] == 'kernel_root' and not self.full:
+                from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
+                vector=([self.binding['entry']['path'],'-I','-S','-c',ARCHIVE_COMMAND,self.binding['checkout']]
+                    if self.cases==ARCHIVE_CASES else [self.binding['entry']['path'],'-I','-S','-c',ROOT_COMMAND])
                 self.profile(self.root, 'root', '<bootstrap>',
-                    [self.binding['entry']['path'], '-I', '-S', '-c', ROOT_COMMAND],
+                    vector,
                     self.meta_environment(), self.meta['checkout'], os.urandom(16).hex())
 
     def meta_environment(self):
+        if self.full:
+            from full_source import child_environment
+            return child_environment(self.meta)
         owned = Path(self.meta['owned'])
         return {'HOME': str(owned / 'home'), 'TMPDIR': str(owned / 'tmp'),
                 'PATH': ('/native/bin:' if '/native' in self.meta['mounts'] else '')+'/usr/bin:/bin',
@@ -215,6 +227,9 @@ class Observer:
             from plan_observer import resolve
             return resolve(self,trace,pid,path,vector,environment,cwd)
         self.consume(trace)
+        if self.full and not self.full_started:
+            from full_launch import resolve
+            return resolve(self,pid,path,vector,environment,cwd)
         birth = self.ledger.current.get(pid)
         if birth is None:
             return False
@@ -597,9 +612,29 @@ class Observer:
         elif kind == 'body-ready':
             self.actor_control(actor, kind, payload)
             actor['body_ready'] = True
+        elif kind == 'collection-finish':
+            self.root_only(actor)
+            from source_profile import case_seal
+            if not self.binding.get('collection_only') or payload!=case_seal(self.cases) or self.completed:
+                raise Refused('full collection-only completion')
+            self.finished=True
+        elif kind == 'collection':
+            from full_launch import collection
+            return collection(self,actor,payload)
         elif kind in ('case-start', 'case-finish'):
             self.root_only(actor)
-            shape(payload, ('case',))
+            shape(payload, ('case','outcome','phases') if self.full and kind=='case-finish' else ('case',))
+            outcome=payload.get('outcome','passed')
+            skipped=outcome=='skipped'
+            if outcome not in ('passed','skipped','failed'):
+                raise Refused('full source outcome primitive')
+            if self.full and kind=='case-finish':
+                phases=payload['phases']
+                if (type(phases) is not dict or not set(phases)<= {'setup','call','teardown'}
+                        or any(type(value) is not str or value not in ('passed','skipped','failed') for value in phases.values())
+                        or outcome=='passed' and phases!={'setup':'passed','call':'passed','teardown':'passed'}
+                        or outcome=='skipped' and phases not in ({'setup':'skipped','teardown':'passed'},{'setup':'passed','call':'skipped','teardown':'passed'})):
+                    raise Refused('full source outcome phases')
             if kind == 'case-start':
                 if self.case is not None or len(self.completed) >= len(self.cases) or payload['case'] != self.cases[len(self.completed)]:
                     raise Refused('source exact external case frontier')
@@ -608,7 +643,13 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = 2 if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = 2 if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                if outcome=='failed':
+                    count,spec=len(children),None
+                if skipped:
+                    count,spec=0,None
+                    if children:
+                        raise Refused('skipped source case launched children')
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:
@@ -621,23 +662,25 @@ class Observer:
                         del self.eof_drains[serial]
                 if spec is not None and spec.interrupted:
                     self.retire_cancelled_tickets()
-                if (payload['case'] != self.case or self.case in GIT_CASES and len(children) < 5 or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
+                if (payload['case'] != self.case or outcome=='passed' and self.case in GIT_CASES and len(children) < 5 or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)
                         or any(ticket.route.case == self.case for ticket in self.endpoints.tickets.values())):
                     raise Refused('source original case actual cleanup incomplete')
-                if self.case in ROOT_HTTP and (sum(case == self.case for case,_ in self.http_contexts) != (2 if 'initialized_owner' in self.case else 1)
+                if outcome=='passed' and self.case in ROOT_HTTP and (sum(case == self.case for case,_ in self.http_contexts) != (2 if 'initialized_owner' in self.case else 1)
                         or any(state['active'] for (case,_),state in self.http_contexts.items() if case == self.case)):
                     raise Refused('root HTTP original contexts incomplete')
                 self.endpoints.retire_case(self.case)
+                if self.full:
+                    self.outcomes.append(dict(payload))
                 self.completed.append(self.case)
                 self.case = None
         elif kind == 'root-finish':
             self.root_only(actor)
             from source_profile import case_seal
             shape(payload, ('count', 'cases_sha256'))
-            if (self.case is not None or type(payload['count']) is not int or type(payload['cases_sha256']) is not str
+            if (self.case is not None or any(row['outcome']=='failed' for row in self.outcomes) or type(payload['count']) is not int or type(payload['cases_sha256']) is not str
                     or payload != case_seal(self.cases) or tuple(self.completed) != self.cases):
                 raise Refused('source original source completion incomplete')
             self.finished = True

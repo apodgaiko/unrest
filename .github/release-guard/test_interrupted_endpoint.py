@@ -27,6 +27,7 @@ def interrupted(monkeypatch):
     server = Socket(root, 9, 1002, 2002, 8, 20000, ('127.0.0.1', 12345), ('127.0.0.1', 23456))
     ticket = Ticket(1, route, listener, client)
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     process = SimpleNamespace(terminal=(10, 15, -15))
     observer.ledger = SimpleNamespace(process=lambda birth: process)
     observer.actors = {child.pid: {'birth': child, 'case': case, 'signals': {15}}}

@@ -292,6 +292,8 @@ def activate(directory, profile, event, arguments):
         # are imported by the real pytest body after the native READY boundary.
         if profile['role'] == 'root':
             __import__('source_root')
+            if type(profile['cases']) is dict:
+                sys.executable=profile['native']
         from source_context import Context
         policy.calls=Context(policy)
         if profile['role']!='root':

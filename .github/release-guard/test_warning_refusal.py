@@ -39,6 +39,7 @@ def test_original_warning_environment_is_exact(tmp_path, mutation):
     else:
         environment[0][1] = "foreign"
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.case = case
     observer.intents = {}
     with pytest.raises(Refused, match="independent launch reconstruction"):

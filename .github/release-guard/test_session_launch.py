@@ -57,6 +57,7 @@ def test_zero_launch_cases_cannot_select_any_adapter(case, tmp_path):
 
 def test_observer_independently_reconstructs_adapter_and_rejects_mutations(tmp_path):
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.case, observer.finished, observer.serial = PLAN[0], False, 0
     observer.root_birth = Birth(1, 1, 1, 1, 'boot', 20000)
     observer.meta = {'mounts': {}, 'checkout': str(ROOT), 'owned': str(tmp_path)}
@@ -78,6 +79,7 @@ def test_observer_independently_reconstructs_adapter_and_rejects_mutations(tmp_p
 
 def test_self_stop_requires_exact_case_signal_and_actual_descendant_wait():
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     observer.case = TIMEOUT
     parent, child = Birth(1, 1, 1, 1, 'boot', 20000), Birth(2, 2, 2, 2, 'boot', 20000)
     actor = {'birth': parent, 'role': 'session-adapter', 'case': TIMEOUT, 'signals': {15}}
@@ -123,6 +125,7 @@ class CallbackTrap:
 @pytest.mark.parametrize('generation,code,error,accepted', ((0,255,-8,True),(1,255,-8,False),(0,0,-8,False),(0,255,0,False),(0,255,-1,False)))
 def test_invalid_image_requires_real_exec_errno_and_no_successful_exec(generation, code, error, accepted):
     observer = object.__new__(Observer)
+    observer.full, observer.outcomes = False, []
     birth = Birth(2,2,2,2,'boot',20000)
     observer.ledger = SimpleNamespace(process=lambda value: SimpleNamespace(generation=generation, terminal=(5,code << 8,code)))
     observer.ledger_trace = SimpleNamespace(records=[dict(kind='exec_syscall_return',pid=2,return_value=error)])

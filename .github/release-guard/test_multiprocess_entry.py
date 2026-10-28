@@ -107,6 +107,11 @@ def tracker(monkeypatch):
 
     def admit(*args, **kwargs):
         calls.append((args, kwargs))
+        host.intents[1] = {
+            "case": host.case,
+            "role": "mp-tracker",
+            "inherited": kwargs["inherited"],
+        }
         return {"ok": True, "ticket": 1, "token": "t"}
 
     host.admit_launch = admit
@@ -238,6 +243,7 @@ def test_spawn_requires_distinct_bootstrap_reader_sentinel_writer_and_live_track
                 "pid": 101,
                 "consumed": True,
                 "inherited": [[5, 10, 20, 0]],
+                "tracker_read": [5, 10, 20, 0],
             }
         },
         actors={101: {"birth": birth, "returned": True, "body_ready": True}},
@@ -273,3 +279,56 @@ def test_spawn_requires_distinct_bootstrap_reader_sentinel_writer_and_live_track
         with pytest.raises(Refused):
             proposal(host, actor, raw)
         assert not calls
+
+
+@pytest.mark.parametrize("mutation", [None, "kcmp", "linked", "uid", "mode", "inode", "access"])
+def test_tracker_capture_stderr_is_only_a_kernel_proven_anonymous_alias(monkeypatch, mutation):
+    import os
+    from pathlib import Path
+    import stat
+    import multiprocess_entry as entry
+
+    original_stat, original_read = Path.stat, Path.read_text
+    mode = stat.S_IFREG | (0o644 if mutation == "mode" else 0o600)
+
+    def metadata(path, *args, **kwargs):
+        if str(path) not in ("/proc/100/fd/8", "/proc/100/fd/2"):
+            return original_stat(path, *args, **kwargs)
+        inode = 99 if mutation == "inode" and path.name == "8" else 20
+        return os.stat_result(
+            (
+                mode,
+                inode,
+                10,
+                1 if mutation == "linked" else 0,
+                500 if mutation == "uid" else 20000,
+                20000,
+                0,
+                0,
+                0,
+                0,
+            )
+        )
+
+    def reading(path, *args, **kwargs):
+        if str(path) == "/proc/100/fdinfo/8":
+            return "flags:\t" + oct(os.O_CLOEXEC | (os.O_RDONLY if mutation == "access" else os.O_RDWR))[2:] + "\n"
+        return original_read(path, *args, **kwargs)
+
+    calls = []
+
+    def syscall(*args):
+        calls.append(args)
+        return -1 if mutation == "kcmp" else 0
+
+    monkeypatch.setattr(Path, "stat", metadata)
+    monkeypatch.setattr(Path, "read_text", reading)
+    monkeypatch.setattr(
+        entry.ctypes, "CDLL", lambda *args, **kwargs: SimpleNamespace(syscall=syscall)
+    )
+    if mutation is None:
+        assert entry.stderr_record(100, 8) == [8, 10, 20, os.O_RDWR]
+        assert calls == [(312, 100, 100, 0, 8, 2)]
+    else:
+        with pytest.raises(Refused):
+            entry.stderr_record(100, 8)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 import base64
 import csv
 import hashlib
@@ -186,6 +187,7 @@ def _run_extracted_restart_oracle(
     *,
     checkout_root: Path,
     candidate_python: Path = Path(sys.executable),
+    run_process: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> dict[str, object]:
     environment = os.environ.copy()
     for name in tuple(environment):
@@ -193,7 +195,8 @@ def _run_extracted_restart_oracle(
             environment.pop(name, None)
     environment["PYTHONPATH"] = "src"
     environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
-    process = subprocess.run(
+    runner = subprocess.run if run_process is None else run_process
+    process = runner(
         [str(candidate_python), "-c", _PYTEST_PROBE, str(checkout_root.resolve())],
         cwd=extracted_root,
         env=environment,
@@ -252,13 +255,21 @@ def _run_extracted_restart_oracle(
     }
 
 
-def _check_extracted_restart_oracle(root: Path, sdist: Path) -> dict[str, object]:
+def _check_extracted_restart_oracle(
+    root: Path, sdist: Path,
+    run_process: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="unrest-sdist-check-") as temporary:
         extracted_root = _extract_sdist_safely(sdist, Path(temporary))
-        return _run_extracted_restart_oracle(extracted_root, checkout_root=root)
+        return _run_extracted_restart_oracle(
+            extracted_root, checkout_root=root, run_process=run_process
+        )
 
 
-def check_distribution(root: Path, dist: Path) -> dict[str, object]:
+def check_distribution(
+    root: Path, dist: Path, *,
+    run_process: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> dict[str, object]:
     wheels = sorted(dist.glob("*.whl"))
     sdists = sorted(dist.glob("*.tar.gz"))
     if len(wheels) != 1 or len(sdists) != 1:
@@ -320,7 +331,7 @@ def check_distribution(root: Path, dist: Path) -> dict[str, object]:
     }
     if not required_assets <= wheel.keys():
         raise RuntimeError("wheel is missing typed marker or runtime policy asset")
-    restart_oracle = _check_extracted_restart_oracle(root, sdists[0])
+    restart_oracle = _check_extracted_restart_oracle(root, sdists[0], run_process)
     return {
         "package_files": len(source),
         "restart_oracle": restart_oracle,

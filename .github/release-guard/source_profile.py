@@ -24,10 +24,11 @@ from process_ledger import Birth, canonical
 from git_sites import CASES as GIT_CASES
 from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS
 
+from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
 from fixed_inline import CASES as FIXED_CASES, GROUPS as FIXED_GROUPS
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
-METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
+METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'multiprocess-proposal','launch-proposal', 'launch-intent', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'bound', 'listen', 'accepted', 'connect', 'connected',
     'root-http-open', 'root-http-close', 'payload', 'drain_child', 'custody_signal', 'custody_close', 'git-pipe', 'git-output', 'self-stop', 'guard-refusal'})
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
@@ -78,12 +79,16 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 
 
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
+    full = type(profile) is dict and type(profile.get('cases')) is dict
+    if full:
+        from case_inventory import reference
+        reference(profile['cases'], Path(__file__).parent.parent/'profiles')
     if (type(profile) is not dict or set(profile) != FIELDS
             or profile['schema'] != 'unrest.bootstrap-source.v1'
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python','mp-child','mp-tracker')
             or type(profile['case']) is not str
             or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES, *MP_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES)):
+            or not full and (type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES, ARCHIVE_CASES))):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -108,12 +113,12 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     parent, observer = Birth.read(profile['parent']), Birth.read(profile['observer'])
     if (canonical(profile['identity']) != profile['identity'] or canonical(actual) != profile['identity'] or parent.pid != os.getppid()
             or Birth.read(credential_identity(parent.pid)) != parent or observer.uid != 20001
-            or (parent != observer if profile['role'] == 'root' else parent.uid != 20000)
+            or (parent.uid != 20000 if full and profile['role']=='root' else parent != observer if profile['role'] == 'root' else parent.uid != 20000)
             or actual['uids'] != [20000] * 4 or actual['gids'] != [20000] * 4
             or any(actual['capabilities'].values()) or actual['no_new_privs'] != 1 or actual['seccomp'] != 2
             or type(profile['generation']) is not int or profile['generation'] != 1
             or [sys.flags.isolated, sys.flags.no_site, sys.flags.dont_write_bytecode, sys.flags.utf8_mode] != [1, 1, 0, 1]
-            or profile['native'] != sys.executable or digest(Path(sys.executable)) != profile['native_sha256']
+            or (str(Path(profile['runtime_root'])/'bin/pytest') if full and profile['role']=='root' else profile['native']) != sys.executable or digest(Path(sys.executable)) != profile['native_sha256']
             or digest(Path(__file__).with_name('native_entry.py')) != profile['entry_sha256']):
         raise Refused('source actual profile binding')
     if (type(profile['environment']) is not dict
@@ -164,7 +169,18 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     validate_execution(profile,event,arguments,Path(__file__).parent.parent/'profiles')
     native = profile['native']
     role, script = profile['role'], profile['script']
-    if role == 'root':
+    if role == 'root' and full:
+        if (profile['cwd']!=profile['checkout'] or script is not None or event!='cpython.run_module'
+                or arguments!=('pytest',) or profile['argv'] not in ([str(Path(profile['runtime_root'])/'bin/pytest'),'-I','-S','-m','pytest','-q'],[str(Path(profile['runtime_root'])/'bin/pytest'),'-I','-S','-m','pytest','-q','--collect-only'])):
+            raise Refused('source normal pytest entry')
+    elif role == 'root' and tuple(profile['cases'])==ARCHIVE_CASES:
+        if (profile['cwd']!=profile['checkout'] or script is not None or event!='cpython.run_command'
+                or arguments!=(ARCHIVE_COMMAND+'\n',) or len(profile['argv'])!=6
+                or profile['argv'][:5]!=[native,'-I','-S','-c',ARCHIVE_COMMAND]
+                or not Path(profile['argv'][5]).is_absolute() or str(Path(profile['argv'][5]).resolve())!=profile['argv'][5]
+                or Path(profile['checkout']).is_relative_to(Path(profile['argv'][5]))):
+            raise Refused('archive fixed original oracle body')
+    elif role == 'root':
         if (profile['cwd'] != profile['checkout'] or script is not None or event != 'cpython.run_command' or arguments != (ROOT_COMMAND + '\n',)
                 or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
             raise Refused('source fixed root body')
