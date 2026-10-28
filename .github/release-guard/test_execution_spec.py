@@ -137,7 +137,8 @@ def test_unknown_domain_role_and_malformed_digest_refuse():
 
 
 @pytest.mark.parametrize("mutation", [None, "path", "hash", "uid", "mode", "nlink", "argv"])
-def test_cleanup_data_requires_exact_synthetic_custody_model(tmp_path, monkeypatch, mutation):
+@pytest.mark.parametrize("role", ["cleanup-acp", "review-wire"])
+def test_cleanup_data_requires_exact_synthetic_custody_model(tmp_path, monkeypatch, mutation, role):
     import os
 
     script = tmp_path / "fixture"
@@ -171,12 +172,10 @@ def test_cleanup_data_requires_exact_synthetic_custody_model(tmp_path, monkeypat
     if mutation == "argv":
         vector[-1] = str(tmp_path / "foreign")
     value = {
-        "role": "cleanup-acp",
+        "role": role,
         "argv": vector,
         "script": str(script),
-        "execution": issue(
-            "cleanup-acp", vector, str(script), hashlib.sha256(b"pass\n").hexdigest(), data
-        ),
+        "execution": issue(role, vector, str(script), hashlib.sha256(b"pass\n").hexdigest(), data),
     }
     if mutation is None:
         validate(value, "cpython.run_file", (str(script),), tmp_path)

@@ -24,6 +24,7 @@ from process_ledger import Birth, canonical
 from git_sites import CASES as GIT_CASES
 from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS
 
+from review_wire import CASES as REVIEW_CASES
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
 from fixed_inline import CASES as FIXED_CASES, GROUPS as FIXED_GROUPS
 
@@ -85,10 +86,10 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         reference(profile['cases'], Path(__file__).parent.parent/'profiles')
     if (type(profile) is not dict or set(profile) != FIELDS
             or profile['schema'] != 'unrest.bootstrap-source.v1'
-            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python','mp-child','mp-tracker')
+            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES, *MP_CASES))
-            or not full and (type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES, MP_STATUS, IPC_CASES, TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, ARCHIVE_CASES))):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES, *MP_CASES, *REVIEW_CASES))
+            or not full and (type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES, MP_STATUS, IPC_CASES, TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, REVIEW_CASES, ARCHIVE_CASES))):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -154,7 +155,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     from session_launch import LIVE, INVALID, TIMEOUT, node
     inline_session = node('clean_exit_zero_without_response_is_failed_unknown_work')
     eligible = {
-        'mp-child': CHILD_CASES, 'mp-tracker': tuple(case for case in MP_CASES if case!=ZERO),
+        'review-wire':REVIEW_CASES, 'mp-child': CHILD_CASES, 'mp-tracker': tuple(case for case in MP_CASES if case!=ZERO),
         'root': ('<bootstrap>',), 'backend': (*BOOTSTRAP,*CONTROLLED), 'acp': (*BOOTSTRAP,*CONTROLLED),
         'delayed-backend': tuple(case for case in BOOTSTRAP if wrapper(case) is not None),
         'fixed-inline': FIXED_CASES, 'plan-python': (PLAN_PYTHON,),

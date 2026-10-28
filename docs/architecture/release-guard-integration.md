@@ -123,3 +123,5 @@ checkpoint, desktop/CI evidence, publication and protected local update must all
 be verified before the release mission is complete.
 
 The two resource-ownership IPC cases retain one tracker and one child each. The Event-only child inherits the original three pipes. The Queue/Event/Value child adds exactly two opposite Queue FIFO endpoints and one anonymous 4096-byte read/write arena, all rechecked by kernel identity before the child body. Labels remain metadata; the original test owns completion, cleanup and parent waits.
+
+Controlled review-wire coverage uses the original 24 test cases and exact local approval fixture. Full pytest selectors and parameters remain intact; only transport identities are compact. Scenario acquisition is nonblocking, nofollow, descriptor-bound and byte-bounded. Its immutable snapshot allows only events, finite delay and raw protocol bytes, excluding the fixture's MCP and handoff branches. The duplicate-review case may launch two sequential, independently reaped children; all other cases may launch one. These controlled observations are not genuine provider review acceptance.

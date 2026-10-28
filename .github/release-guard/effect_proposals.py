@@ -37,6 +37,9 @@ def proposal(host, actor, raw, *, payload=None):
     if case in GIT_CASES:
         from git_proposals import prepare
         return prepare(host,actor,raw)
+    from review_wire import CASES as REVIEW_CASES,proposal as review_proposal
+    if case in REVIEW_CASES:
+        return review_proposal(host,actor,raw)
     if case not in (*BOOTSTRAP,*CONTROLLED,*ORDINARY,*CLEANUP,*DECLARATIONS,*SESSIONS,*FIXED,*PLANS):
         raise Refused('finite process proposal has no declaration')
     if raw['stdin'] is not None:

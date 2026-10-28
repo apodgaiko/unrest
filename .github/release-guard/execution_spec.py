@@ -4,7 +4,7 @@ import stat
 
 from content_manifest import Refused, capture
 
-LIBRARY = ('mcp','cleanup-acp','session-adapter','session-child','fixed-inline','plan-python','mp-child','mp-tracker')
+LIBRARY = ('mcp','cleanup-acp','session-adapter','session-child','fixed-inline','plan-python','mp-child','mp-tracker','review-wire')
 SEALED = ('backend','delayed-backend','acp','mock-acp','cleanup-inline','workspace-owned','session-inline')
 DOMAINS = {'root':'root', **dict.fromkeys(LIBRARY,'library'), **dict.fromkeys(SEALED,'sealed')}
 
@@ -37,7 +37,7 @@ def issue(role, vector, script, script_pin, data=()):
 def validate(profile,event,arguments,directory):
     value=profile['execution']
     if (type(value) is not dict or set(value)!={'domain','event','argument','script_sha256','data'}
-            or type(value['data']) is not list or len(value['data'])!=(1 if profile['role']=='cleanup-acp' else 0)
+            or type(value['data']) is not list or len(value['data'])!=(1 if profile['role'] in ('cleanup-acp','review-wire') else 0)
             or value!=issue(profile['role'],profile['argv'],profile['script'],value['script_sha256'],value['data'])
             or event!=value['event'] or arguments!=(value['argument'],)):
         raise Refused('execution specification exact body or domain')

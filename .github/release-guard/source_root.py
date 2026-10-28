@@ -12,6 +12,7 @@ from _pytest.python import Function
 from preflight_cases import CASES as PREFLIGHT_ALL
 from controlled_cases import ROOT_HTTP
 from content_manifest import Refused
+from case_inventory import identity
 
 
 USER_SIGNAL = int(signal.SIGUSR1)
@@ -24,30 +25,31 @@ class OriginalCases:
 
     def pytest_collection_finish(self, session):
         items = tuple(session.items)
-        if tuple(item.nodeid for item in items) != self.cases or any(type(item) not in (Coroutine, Function) for item in items):
+        if tuple(identity(item.nodeid) for item in items) != tuple(identity(node) for node in self.cases) or any(type(item) not in (Coroutine, Function) for item in items):
             raise Refused('root exact original collection')
         self.items = items
 
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_protocol(self, item, nextitem):
         index = len(self.completed)
-        if index >= len(self.cases) or not self.items or item is not self.items[index] or item.nodeid != self.cases[index]:
+        case = identity(item.nodeid)
+        if index >= len(self.cases) or not self.items or item is not self.items[index] or case != self.cases[index]:
             raise Refused('root original case cursor')
         policy = self.policy
-        policy.case = item.nodeid
-        policy.client.request('case-start', {'case': item.nodeid})
+        policy.case = case
+        policy.client.request('case-start', {'case': case})
         yield
-        phases = self.reports.get(item.nodeid, {})
+        phases = self.reports.get(case, {})
         if phases != {'setup': 'passed', 'call': 'passed', 'teardown': 'passed'}:
             raise Refused('root original assertions or cleanup failed')
         if item.nodeid in ROOT_HTTP:
             policy.calls.http.finish()
-        policy.client.request('case-finish', {'case': item.nodeid})
-        self.completed.append(item.nodeid)
+        policy.client.request('case-finish', {'case': case})
+        self.completed.append(case)
         policy.case = None
 
     def pytest_runtest_logreport(self, report):
-        self.record(report,report.nodeid)
+        self.record(report,identity(report.nodeid))
 
     def record(self, report, case):
         if case not in self.cases or report.when not in ('setup', 'call', 'teardown'):
@@ -74,9 +76,11 @@ def main():
     from postbuild_root import CASES as ARCHIVE_CASES, run as archive_run
     if tuple(policy.profile['cases'])==ARCHIVE_CASES:
         return archive_run(policy,plugin)
+    from review_wire import CASES as REVIEW_CASES,NODES as REVIEW_NODES
+    selected=REVIEW_NODES if tuple(policy.profile['cases'])==REVIEW_CASES else policy.profile['cases']
     code = pytest.main(['-q', '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
                        '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), '-o',
-                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *(['tests/test_launch_preflight.py'] if tuple(policy.profile['cases']) == PREFLIGHT_ALL else policy.profile['cases'])], plugins=[plugin])
+                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *(['tests/test_launch_preflight.py'] if tuple(policy.profile['cases']) == PREFLIGHT_ALL else selected)], plugins=[plugin])
     if code != 0 or plugin.completed != policy.profile['cases'] or policy.poison:
         raise Refused('root original source cases failed')
     from source_profile import case_seal

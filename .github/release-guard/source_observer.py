@@ -14,6 +14,7 @@ import stat
 import struct
 import time
 
+from review_wire import CASES as REVIEW_CASES,SCRIPT as REVIEW_SCRIPT,count as review_count
 from multiprocess_entry import ALL_CASES as MP_CASES, TRACKER_CASES, ZERO
 from content_manifest import Refused, native_digest
 from preflight_cases import NO_EFFECT
@@ -93,7 +94,7 @@ class Observer:
     def profile(self, pid, role, case, vector, environment, cwd, token, inherited=()):
         actual = process_identity(pid)
         parent = Birth.read(process_identity(actual['ppid']))
-        scripts = {'session-adapter': SESSION_SCRIPT, 'session-child': SESSION_SCRIPT,
+        scripts = {'review-wire':REVIEW_SCRIPT,'session-adapter': SESSION_SCRIPT, 'session-child': SESSION_SCRIPT,
                    'cleanup-acp': SCRIPT, 'acp': ACP, 'mock-acp': MOCK}
         script = (str(Path(self.meta['checkout']) / scripts[role]) if role in scripts else
                   str(backend_path(case,Path(cwd).parent) if case in CONTROLLED else Path(cwd).parent / 'fake-app-server') if role in ('backend', 'delayed-backend') else None)
@@ -121,7 +122,7 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire'}[role]
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'), expected_generation=1)
         if role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'):
@@ -376,6 +377,8 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        if actor['role']=='review-wire':
+            return terminal is not None and actor['body_ready'] and (terminal[2]==0 or terminal[2]==-15 and 15 in actor['signals'])
         if actor['role'] in ('mp-child','mp-tracker'):
             status=17 if actor['role']=='mp-child' and actor['case']==MP_CASES[1] else 0
             return terminal is not None and terminal[2]==status and actor['body_ready']
@@ -496,7 +499,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = 0 if self.case==ZERO else 1 if self.case in TRACKER_CASES else 2 if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                count = review_count(self.case) if self.case in REVIEW_CASES else 0 if self.case==ZERO else 1 if self.case in TRACKER_CASES else 2 if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
                 if outcome=='failed':
                     count,spec=len(children),None
                 if skipped:
