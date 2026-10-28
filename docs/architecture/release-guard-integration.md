@@ -137,3 +137,10 @@ boundary. They are used by real test barriers and grant no process, socket or
 signal authority; those effects still require their independent native and
 observer checks. The native fast-path control exercises both APIs as well as
 ordinary imports and exec.
+
+Project-lock process tests separate cold server startup from mutation latency.
+Lock-only targets do not import the MCP server. Server-based targets signal an
+explicit Event only after constructing the actual server, with a ten-second
+startup bound; the original one-second result wait, per-call latency assertions,
+lock-entry waits, child statuses and original-parent joins remain unchanged.
+This test readiness signal is not a native guard READY record or release proof.

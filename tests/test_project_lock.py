@@ -42,7 +42,6 @@ from unrest_harness.project_lock import (
     project_access_guard,
     project_lock_path,
 )
-from unrest_harness.server import create_orchestrator_server
 from unrest_harness.storage import ProjectStore
 
 
@@ -508,7 +507,10 @@ def _holder_process(
     method: str,
     entered_event: Any,
     release_event: Any,
+    ready_event: Any,
 ) -> None:
+    from unrest_harness.server import create_orchestrator_server
+
     config = _config(Path(harness_home))
     controller = _RecordingController(
         config,
@@ -517,6 +519,7 @@ def _holder_process(
         block_first=True,
     )
     server = create_orchestrator_server(config, controller)  # type: ignore[arg-type]
+    ready_event.set()
     asyncio.run(server.call_tool(method, _arguments(method, project_id)))
 
 
@@ -525,12 +528,17 @@ def _competitor_process(
     project_id: str,
     other_project_id: str,
     output: Any,
+    ready_event: Any,
 ) -> None:
+    from unrest_harness.server import create_orchestrator_server
+
     captured = io.StringIO()
     with redirect_stdout(captured), redirect_stderr(captured):
         config = _config(Path(harness_home))
         controller = _RecordingController(config)
         server = create_orchestrator_server(config, controller)  # type: ignore[arg-type]
+
+        ready_event.set()
 
         async def exercise() -> dict[str, Any]:
             results: dict[str, Any] = {}
@@ -565,10 +573,14 @@ def _single_call_process(
     project_id: str,
     method: str,
     output: Any,
+    ready_event: Any,
 ) -> None:
+    from unrest_harness.server import create_orchestrator_server
+
     config = _config(Path(harness_home))
     controller = _RecordingController(config)
     server = create_orchestrator_server(config, controller)  # type: ignore[arg-type]
+    ready_event.set()
     result = asyncio.run(server.call_tool(method, _arguments(method, project_id)))
     output.put(
         {
@@ -623,20 +635,24 @@ def test_spawned_public_mutations_are_exclusive_and_project_scoped(
         before_attempts = sorted(store.bucket_root("project-a").glob("**/attempts/*"))
 
         entered = ctx.Event()
+        ready = ctx.Event()
         release = ctx.Event()
         holder = ctx.Process(
             target=_holder_process,
-            args=(str(harness_home), "project-a", "advance_project", entered, release),
+            args=(str(harness_home), "project-a", "advance_project", entered, release, ready),
         )
         holder.start()
+        assert ready.wait(10), "holder server did not finish startup"
         assert entered.wait(2), "holder did not acquire the project lock"
 
         output = ctx.Queue()
+        ready = ctx.Event()
         competitor = ctx.Process(
             target=_competitor_process,
-            args=(str(harness_home), "project-a", "project-b", output),
+            args=(str(harness_home), "project-a", "project-b", output, ready),
         )
         competitor.start()
+        assert ready.wait(10), "competitor server did not finish startup"
         observation = output.get(timeout=1)
         competitor.join(5)
         assert competitor.exitcode == 0
@@ -673,23 +689,27 @@ def test_os_releases_lock_after_abrupt_holder_death(tmp_path: Path) -> None:
         _seed_project(_config(harness_home), workspace, "project-a")
 
         entered = ctx.Event()
+        ready = ctx.Event()
         never_release = ctx.Event()
         holder = ctx.Process(
             target=_holder_process,
-            args=(str(harness_home), "project-a", "advance_project", entered, never_release),
+            args=(str(harness_home), "project-a", "advance_project", entered, never_release, ready),
         )
         holder.start()
+        assert ready.wait(10), "holder server did not finish startup"
         assert entered.wait(2)
         holder.terminate()
         holder.join(3)
         assert holder.exitcode is not None and holder.exitcode != 0
 
         output = ctx.Queue()
+        ready = ctx.Event()
         successor = ctx.Process(
             target=_single_call_process,
-            args=(str(harness_home), "project-a", "advance_project", output),
+            args=(str(harness_home), "project-a", "advance_project", output, ready),
         )
         successor.start()
+        assert ready.wait(10), "successor server did not finish startup"
         observation = output.get(timeout=1)
         successor.join(3)
         assert successor.exitcode == 0
@@ -700,6 +720,8 @@ def test_os_releases_lock_after_abrupt_holder_death(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_same_server_calls_queue_and_release_after_exception(tmp_path: Path) -> None:
+    from unrest_harness.server import create_orchestrator_server
+
     harness_home = tmp_path / "home"
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -739,6 +761,8 @@ async def test_same_server_calls_queue_and_release_after_exception(tmp_path: Pat
 async def test_cancelled_waiter_retains_mutation_and_lock_until_normal_completion(
     tmp_path: Path,
 ) -> None:
+    from unrest_harness.server import create_orchestrator_server
+
     harness_home = tmp_path / "home"
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -804,6 +828,8 @@ async def test_cancelled_detached_exception_is_consumed_safely_and_releases_lock
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    from unrest_harness.server import create_orchestrator_server
+
     harness_home = tmp_path / "home"
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -879,6 +905,8 @@ async def test_cancelled_detached_exception_is_consumed_safely_and_releases_lock
 async def test_cancelled_public_advance_keeps_real_dispatch_exclusive_and_recovers(
     tmp_path: Path,
 ) -> None:
+    from unrest_harness.server import create_orchestrator_server
+
     started = monotonic()
     harness_home = tmp_path / "home"
     workspace = tmp_path / "workspace"
@@ -1068,6 +1096,8 @@ async def test_genuine_controllers_admit_different_projects_independently(
 async def test_uncontended_success_lock_error_and_missing_project_compatibility(
     tmp_path: Path,
 ) -> None:
+    from unrest_harness.server import create_orchestrator_server
+
     harness_home = tmp_path / "home"
     workspace = tmp_path / "workspace"
     workspace.mkdir()
