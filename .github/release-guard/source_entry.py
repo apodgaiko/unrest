@@ -313,9 +313,15 @@ def activate(directory, profile, event, arguments):
     if profile['role'] not in ('session-adapter', 'session-child'):
         from source_sockets import Hooks
         policy.sockets = Hooks(policy)
+    if profile['role']=='mp-child' and profile['case']=='tests/test_project_lock.py::test_legacy_lock_survives_nine_target_project_record_replacement':
+        import faulthandler
+        faulthandler.dump_traceback_later(1,repeat=False)
     client.request('core-ready', {'pins': [list(pair) for pair in pins]})
     if policy.sockets is not None:
-        policy.sockets.install()
+        file_io=policy.sockets.install()
+        if profile['role'] in ('root','mp-child'):
+            from multiprocess_pipe import install_io
+            install_io(*file_io)
     policy.install_process_hooks()
     client.request('body-ready', {'seal': profile['seal']})
     sys.dont_write_bytecode = True

@@ -174,8 +174,8 @@ def child_custody(case,passfds,tracker_fd,reader,inherited,target=None):
             if (len(rows)!=2 or any(len(row)!=4 for row in rows) or rows[0][1:3]!=rows[1][1:3]
                     or [row[3] for row in rows]!=[os.O_RDONLY,os.O_WRONLY]):
                 raise Refused('spawn exact Queue descriptor custody')
-        elif len(rows)!=1 or len(rows[0])!=5:
-            raise Refused('spawn exact Value descriptor custody')
+        elif len(rows)!=1 or len(rows[0])!=(7 if kind=='pipe' else 5):
+            raise Refused('spawn exact application descriptor custody')
         member=tuple(rows[0][1:3])
         if member in used:
             raise Refused('spawn aliased application descriptor')
@@ -218,7 +218,15 @@ def proposal(host,actor,raw):
         if tracker_read[3]!=os.O_RDONLY:
             raise Refused('tracker read direction')
     else:
-        inherited=[spawn_record(actor['birth'].pid,fd,host.case) for fd in descriptors]
+        if spec is None:
+            raise Refused('spawn child declaration absent')
+        inherited=[]
+        for fd in descriptors:
+            if 'pipe' in spec.resources and (actor['birth'],fd) in host.descriptors:
+                from multiprocess_pipe import parent_record
+                inherited.append(parent_record(host,actor,fd))
+            else:
+                inherited.append(spawn_record(actor['birth'].pid,fd,host.case))
     if role=='mp-child':
         if tracker is None:
             raise Refused('spawn missing owned tracker')
@@ -259,8 +267,11 @@ def inherited(profile,actual):
     records=profile['inherited']
     sizes={3+sum(2 if kind=='queue' else 1 for kind in spec.resources) for spec in ROUTES.get(profile['case'],{}).values()} if profile['case'] in ROUTES else {6 if profile['case']==IPC_CASES[0] else 3}
     if (type(records) is not list or len(records) not in ((1,2) if profile['role']=='mp-tracker' else sizes)
-            or any(type(row) is not list or len(row) not in (4,5) or any(type(value) is not int for value in row) for row in records)):
+            or any(type(row) is not list or len(row) not in (4,5,7) or any(type(value) is not int for value in row) for row in records)):
         raise Refused('spawn profile descriptor schema')
+    if any(len(row)==7 for row in records) and (profile['role']!='mp-child'
+            or not any('pipe' in spec.resources for spec in ROUTES.get(profile['case'],{}).values())):
+        raise Refused('spawn inherited Pipe outside finite case')
     reader=int(profile['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1]) if profile['role']=='mp-tracker' else None
     seen=[]
     for name in os.listdir('/proc/self/fd'):
@@ -268,7 +279,12 @@ def inherited(profile,actual):
         if fd<=2:
             continue
         try:
-            row=stderr_record(actual['pid'],fd) if reader is not None and fd!=reader else spawn_record(actual['pid'],fd,profile['case'])
+            saved=next((row for row in records if row[0]==fd and len(row)==7),None)
+            if saved is not None:
+                from multiprocess_pipe import local_record
+                row=local_record(saved)
+            else:
+                row=stderr_record(actual['pid'],fd) if reader is not None and fd!=reader else spawn_record(actual['pid'],fd,profile['case'])
         except FileNotFoundError:
             continue
         flags=fcntl.fcntl(fd,fcntl.F_GETFL)

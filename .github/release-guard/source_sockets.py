@@ -153,7 +153,7 @@ class Hooks:
         self.rpc('pair-seal', {'ticket': ticket, 'fds': [self.descriptor(stream) for stream in pair]})
         return pair
 
-    def fd_io(self, function, descriptor, *args):
+    def fd_io(self, function, descriptor, *args, writing=None):
         if type(descriptor) is not int:
             self.policy.refuse('source file descriptor type')
         if descriptor < 0:
@@ -163,12 +163,13 @@ class Hooks:
         except FileNotFoundError:
             return function(descriptor, *args)  # Preserve the real EBADF, never claim a close/reap.
         if target.startswith('socket:['):
+            is_write=(function is self.write) if writing is None else writing
             count = 0
-            if function is self.write:
+            if is_write:
                 if not args or type(args[0]) not in (bytes, bytearray, memoryview):
                     self.policy.refuse('source file payload buffer type')
                 count = args[0].nbytes if type(args[0]) is memoryview else len(args[0])
-            answer = self.rpc('payload', {'fd': descriptor, 'operation': 'fd-read' if function is self.read else 'fd-write', 'bytes': count})
+            answer = self.rpc('payload', {'fd': descriptor, 'operation':'fd-write' if is_write else 'fd-read', 'bytes': count})
             if answer.get('eof_only') is True and (function is not self.read or len(args) != 1
                     or type(args[0]) is not int or args[0] < 0):
                 self.policy.refuse('source EOF-only file read')
@@ -210,3 +211,5 @@ class Hooks:
         def write(descriptor, data):
             return hooks.fd_io(hooks.write, descriptor, data)
         os.read, os.write = read, write
+
+        return read,write,self.fd_io

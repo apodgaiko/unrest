@@ -561,7 +561,7 @@ def test_queue_family_targets_have_exact_counts_order_and_no_extra_permission(ca
                 next_fd += 2
             else:
                 fds.append(next_fd)
-                rows.append([next_fd, 1, inode, 2, 4096])
+                rows.append([next_fd, 1, inode, 2, 900, inode+1, 1] if kind=='pipe' else [next_fd, 1, inode, 2, 4096])
                 next_fd += 1
             inode += 10
         fds.extend([8, 10])

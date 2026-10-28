@@ -11,6 +11,7 @@ import sys
 
 POLICY: Callable[[str, tuple], bool]
 BODY_READY = False
+SCRIPT_TARGET: str | None
 
 
 def unique(pairs):

@@ -71,7 +71,7 @@ class Observer:
         self.endpoints, self.actors, self.intents = Endpoints(self.ledger), {}, {}
         self.pairs = UnixPairs(self.endpoints)
         self.bindings, self.listeners, self.listener_fds, self.pair_intents = {}, {}, {}, {}
-        self.routes, self.connections, self.descriptors = {}, {}, {}
+        self.routes, self.connections, self.descriptors, self.mp_pipes = {}, {}, {}, {}
         self.eof_drains, self.eof_fds, self.interrupted_records = {}, {}, []
         self.connected_routes: dict[str, int] = {}
         self.probe_ports = {}
@@ -130,6 +130,8 @@ class Observer:
             witnesses = ({'kind': 'admitted', **common}, {'kind': 'registered', 'pid': pid, 'python': True, **common},
                          {'kind': 'launch_lifecycle_binding', 'start_new_session': True, **common})
             self.ledger.session(actor['birth'], actual, witnesses)
+        if role=='mp-child':
+            self.mp_pipes.update({(actor['birth'],row[0]):row for row in inherited if len(row)==7})
         return actor
 
     def consume(self, trace):
@@ -344,6 +346,12 @@ class Observer:
                 raise Refused('source interrupted socket grants EOF reads only')
             drain['reads'] += 1
             return {'ok': True, 'eof_only': True}
+        if key in self.mp_pipes:
+            if payload['operation'] not in ('fd-read','fd-write'):
+                raise Refused('spawn Pipe permits original Connection file I/O only')
+            from multiprocess_pipe import retained as pipe_retained
+            pipe_retained(self,actor,self.mp_pipes[key],body=True)
+            return {'ok':True}
         pair = self.descriptors.get(key)
         if pair is not None:
             observed = acquire_unix_member(actor['birth'], fd, pair)
@@ -455,6 +463,11 @@ class Observer:
             if payload['pins'] != [list(pair) for pair in actor['pins']]:
                 raise Refused('source exact READY pins')
             self.actor_control(actor, kind, {'pins': actor['pins']})
+            if actor['role']=='mp-child':
+                from multiprocess_pipe import retained
+                for (birth,_),row in self.mp_pipes.items():
+                    if birth==actor['birth']:
+                        retained(self,actor,row,body=False)
             tags = (('bridge', 'lifetime') if actor['role'] == 'acp' else
                     ('broker',) if actor['role'] in ('backend', 'delayed-backend') and (controlled_limits(actor['case'])[1] > 0 if actor['case'] in CONTROLLED else declaration(actor['case']).broker_http) else ())
             if tags:
