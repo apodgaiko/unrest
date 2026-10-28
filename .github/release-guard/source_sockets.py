@@ -188,7 +188,13 @@ class Hooks:
                 or TYPE(type) not in (int, socket.SocketKind) or type not in (0, socket.SOCK_STREAM)
                 or TYPE(proto) is not int or proto not in (0, socket.IPPROTO_TCP)
                 or TYPE(flags) not in (int,socket.AddressInfo) or int.__int__(flags) not in ((0,socket.AI_PASSIVE,socket.AI_PASSIVE|socket.AI_ADDRCONFIG) if http else (0,))):
-            self.policy.refuse('source nonliteral address query')
+            def number(value):
+                if TYPE(value) not in (int,socket.AddressFamily,socket.SocketKind,socket.AddressInfo):
+                    return 'other'
+                value=int.__int__(value)
+                return str(value) if 0<=value<=65535 else 'outside'
+            label={'127.0.0.1':'ipv4','0.0.0.0':'any4','::1':'ipv6','localhost':'localhost'}.get(host,'other') if TYPE(host) is str else 'nontext'
+            self.policy.refuse('source nonliteral address query '+label+' '+' '.join(number(value) for value in (port,family,type,proto,flags)))
         return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', (host, port))]
 
     def guarded(self, function, *args, **kwargs):

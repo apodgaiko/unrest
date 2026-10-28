@@ -249,3 +249,15 @@ def test_http_literal_resolution_does_not_add_names_services_or_socket_families(
     operands[field]=value
     with pytest.raises(Refused,match='nonliteral address query'):
         hooks.literal_address(**operands)
+
+
+def test_literal_resolution_refusal_records_only_safe_operand_shapes():
+    from source_sockets import Hooks
+    hooks=object.__new__(Hooks)
+    def refuse(reason):
+        raise Refused(reason)
+    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'case':http_cases.CASES[0]},refuse=refuse)
+    with pytest.raises(Refused) as error:
+        hooks.literal_address('private-host-secret.invalid',12345,flags=2)
+    assert str(error.value)=='source nonliteral address query other 12345 0 0 0 2'
+    assert 'private-host-secret' not in str(error.value)
