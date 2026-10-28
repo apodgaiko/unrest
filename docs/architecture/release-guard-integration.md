@@ -237,3 +237,10 @@ backend tuples. This factors repeated data only: all ten prior exported mappings
 including their insertion order and group frontiers, match ordered pre-change
 fingerprints. Distinct backend postimages remain explicit. Runtime authority does
 not read the test fingerprints or discover additional cases by prefix matching.
+
+The 18 original preexisting-socket bound-alias parameters use that same isolated
+entry. The only template substitution is the literal method name selected from
+the closed original tuple; the parser accepts string constants and plain
+`{method}` fields only. No evaluation, arbitrary formatting, descendant process,
+DNS or new socket route follows. Original preflight-refusal, counter, evidence
+and empty-payload assertions execute in each real isolated child.

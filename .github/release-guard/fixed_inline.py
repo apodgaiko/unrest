@@ -40,11 +40,16 @@ RELOAD_TEST = 'tests/test_v04_speed_runner.py'
 RELOAD_NAME = 'test_process_installs_only_one_audit_hook_across_reload'
 RELOAD_CASE = RELOAD_TEST + '::' + RELOAD_NAME
 PINS[RELOAD_TEST] = 'b54e199791a0ad5e9a9e34ebc0eb6b2e93e333435faba86cb6481f502c1027c4'
-CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,RELOAD_CASE)
-GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),CASES)
+METHOD_NAME = 'test_preexisting_socket_and_bound_alias_refuse_entry_before_payload'
+METHODS = ('connect','connect_ex','bind','listen','accept','send','sendall','sendto','sendmsg',
+           'sendfile','recv','recv_into','recvfrom','recvfrom_into','recvmsg','recvmsg_into','makefile','shutdown')
+METHOD_CASES = tuple(RELOAD_TEST+'::'+METHOD_NAME+'['+method+']' for method in METHODS)
+ISOLATED = {RELOAD_CASE:'reload', **dict(zip(METHOD_CASES,METHODS,strict=True))}
+CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,*ISOLATED)
+GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,CASES)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
-SEQUENCES[RELOAD_CASE] = ('reload',)
+SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
 PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f5246105'
 
 
@@ -65,21 +70,35 @@ def startup_expected(case,native,pin,cwd,owned):
 
 
 def script(checkout, operation):
-    path = RELOAD_TEST if operation=='reload' else OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
+    path = RELOAD_TEST if operation in ('reload',*METHODS) else OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
     data = (checkout / path).read_bytes()
     if hashlib.sha256(data).hexdigest() != PINS[path]:
         raise Refused('fixed inline source bytes')
-    name = RELOAD_NAME if operation=='reload' else 'test_fresh_entrypoint_import_boundary' if operation in OBSERVATION_OPERATIONS else 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
+    name = RELOAD_NAME if operation=='reload' else METHOD_NAME if operation in METHODS else 'test_fresh_entrypoint_import_boundary' if operation in OBSERVATION_OPERATIONS else 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
     functions = [node for node in ast.parse(data).body if isinstance(node, ast.FunctionDef) and node.name == name]
     if len(functions) != 1:
         raise Refused('fixed inline literal owner')
-    if operation=='reload':
-        bodies=[node.args[0].value for node in ast.walk(functions[0]) if isinstance(node,ast.Call)
+    if operation in ('reload',*METHODS):
+        bodies=[node.args[0] for node in ast.walk(functions[0]) if isinstance(node,ast.Call)
                 and isinstance(node.func,ast.Name) and node.func.id=='_isolated_python'
-                and len(node.args)==1 and isinstance(node.args[0],ast.Constant) and type(node.args[0].value) is str]
+                and len(node.args)==1]
         if len(bodies)!=1:
-            raise Refused('fixed reload literal body')
-        return bodies[0]
+            raise Refused('fixed isolated sole literal body')
+        body=bodies[0]
+        if operation=='reload' and isinstance(body,ast.Constant) and type(body.value) is str:
+            return body.value
+        if operation not in METHODS or not isinstance(body,ast.JoinedStr):
+            raise Refused('fixed isolated literal template')
+        parts=[]
+        for part in body.values:
+            if isinstance(part,ast.Constant) and type(part.value) is str:
+                parts.append(part.value)
+            elif (isinstance(part,ast.FormattedValue) and isinstance(part.value,ast.Name)
+                  and part.value.id=='method' and part.conversion==-1 and part.format_spec is None):
+                parts.append(operation)
+            else:
+                raise Refused('fixed isolated template substitution')
+        return ''.join(parts)
     values = [node.value.value for node in functions[0].body if isinstance(node, ast.Assign)
               and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and node.targets[0].id == 'script'
               and isinstance(node.value, ast.Constant) and type(node.value.value) is str]
@@ -89,12 +108,12 @@ def script(checkout, operation):
 
 
 def expected(case, operation, native, pin, checkout, environment, *, query=False):
-    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,RELOAD_CASE) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
+    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
         raise Refused('fixed inline closed operation')
-    if case==RELOAD_CASE:
+    if case in ISOLATED:
         if query:
-            raise Refused('fixed reload has no descendant authority')
-        return build_expected('fixed:reload',case,native,pin,(native,'-c',script(checkout,'reload')),
+            raise Refused('fixed isolated has no descendant authority')
+        return build_expected('fixed:isolated',case,native,pin,(native,'-c',script(checkout,ISOLATED[case])),
                               tuple(sorted({**environment,'PYTHONDONTWRITEBYTECODE':'1'}.items())),str(checkout),'python-command')
     if case==OBSERVATION_CASE:
         if query or operation not in OBSERVATION_OPERATIONS:

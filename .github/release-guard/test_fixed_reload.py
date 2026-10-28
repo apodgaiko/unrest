@@ -9,15 +9,15 @@ import pytest
 
 from content_manifest import Refused
 from effect_proposals import proposal
-from fixed_inline import RELOAD_CASE, RELOAD_NAME, RELOAD_TEST, expected, script
+from fixed_inline import RELOAD_CASE, RELOAD_NAME, RELOAD_TEST, ISOLATED, expected, script
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").is_file())
 
 
-def fixture():
+def fixture(case=RELOAD_CASE):
     calls = []
     host = SimpleNamespace(
-        case=RELOAD_CASE,
+        case=case,
         meta={"checkout": str(ROOT), "owned": "/owned"},
         binding={"entry": {"path": "/native/python", "sha256": "a" * 64}},
         meta_environment=lambda: {"PATH": "/usr/bin:/bin"},
@@ -35,12 +35,12 @@ def fixture():
     environment = {
         **host.meta_environment(),
         "PYTEST_VERSION": "9.0.2",
-        "PYTEST_CURRENT_TEST": RELOAD_CASE + " (call)",
+        "PYTEST_CURRENT_TEST": case + " (call)",
         "PYTHONDONTWRITEBYTECODE": "1",
     }
-    value = expected(RELOAD_CASE, "reload", "/native/python", "a" * 64, ROOT, environment)
+    value = expected(case, ISOLATED[case], "/native/python", "a" * 64, ROOT, environment)
     raw = {
-        "case": RELOAD_CASE,
+        "case": case,
         "executable": value.executable,
         "argv": list(value.argv),
         "environment": environment,
