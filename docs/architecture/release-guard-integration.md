@@ -2931,3 +2931,12 @@ Installed socket operations and socketpair creation convert local policy Refused
 exceptions into sticky guard failure, even when a source negative catches them.
 Ordinary OSError and BlockingIOError retain their original behavior. An already
 recorded guard poison is not reported twice. This adds no endpoint authority.
+
+
+The complete 54-case LaunchPlan component uses ordinary module discovery and
+compares the exact external ordered collection before any body executes. Its
+nine process cases retain their finite launch admissions; the remaining 45 have
+no process, listener or signal permission and require exactly zero child actors.
+Caught guard refusals still poison the outcome. This component inventory is
+bound to the unchanged source and measured runtime/configuration/plugin inputs;
+it is neither a selected substitute for nor certification of the full suite.

@@ -12,6 +12,7 @@ import pytest
 from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
+from preflight_cases import CASES as PREFLIGHT_ALL, NO_EFFECT
 from plan_launch import CASES as PLAN_CASES
 from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP, INITIALIZED_HTTP, configured
 from bootstrap_configuration import Binding
@@ -198,6 +199,17 @@ class OrdinaryCalls(TestSources):
         raise Refused('ordinary slice has no TCP listener')
 
 
+class NoEffectCalls:
+    def __init__(self, policy, item):
+        self.policy = policy
+
+    def listener(self):
+        self.policy.refuse('source no-effect case listener')
+
+    def signal(self, *args):
+        self.policy.refuse('source no-effect case signal')
+
+
 class OriginalCases:
     def __init__(self, policy):
         self.policy, self.items, self.reports, self.completed = policy, (), {}, []
@@ -225,7 +237,7 @@ class OriginalCases:
         from session_launch import CASES as SESSION_CASES
         from git_source import GitCalls
         from git_sites import CASES as GIT_CASES
-        cls = PlanCalls if item.nodeid in PLAN_CASES else FixedCalls if item.nodeid in FIXED_CASES else SessionCalls if item.nodeid in SESSION_CASES else GitCalls if item.nodeid in GIT_CASES else CleanupCalls if item.nodeid in (*CLEANUP_CASES, *NO_LAUNCH, *DECLARATIONS) else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
+        cls = NoEffectCalls if item.nodeid in NO_EFFECT else PlanCalls if item.nodeid in PLAN_CASES else FixedCalls if item.nodeid in FIXED_CASES else SessionCalls if item.nodeid in SESSION_CASES else GitCalls if item.nodeid in GIT_CASES else CleanupCalls if item.nodeid in (*CLEANUP_CASES, *NO_LAUNCH, *DECLARATIONS) else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
         policy.case, policy.calls = item.nodeid, cls(policy, item)
         policy.client.request('case-start', {'case': item.nodeid})
         yield
@@ -261,7 +273,7 @@ def main():
     plugin = OriginalCases(policy)
     code = pytest.main(['-q', '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
                        '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), '-o',
-                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *policy.profile['cases']], plugins=[plugin])
+                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *(['tests/test_launch_preflight.py'] if tuple(policy.profile['cases']) == PREFLIGHT_ALL else policy.profile['cases'])], plugins=[plugin])
     if code != 0 or plugin.completed != policy.profile['cases'] or policy.poison:
         raise Refused('root original source cases failed')
     from source_profile import case_seal
