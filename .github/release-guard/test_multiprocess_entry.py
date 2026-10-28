@@ -252,6 +252,7 @@ def test_spawn_requires_distinct_bootstrap_reader_sentinel_writer_and_live_track
 
     def admit(*args, **kwargs):
         calls.append((args, kwargs))
+        host.intents[2] = {}
         return {"ok": True, "ticket": 2, "token": "child"}
 
     host.admit_launch = admit
@@ -540,3 +541,144 @@ def test_child_rechecks_arena_inode_instead_of_trusting_descriptor_number(monkey
     monkeypatch.setattr(entry.fcntl, "fcntl", lambda fd, op: 2 if fd == 13 else 0)
     with pytest.raises(Refused, match="generation"):
         entry.inherited(profile, {"pid": 200})
+
+
+@pytest.mark.parametrize("case", __import__("multiprocess_routes").ROUTES)
+def test_queue_family_targets_have_exact_counts_order_and_no_extra_permission(case):
+    from multiprocess_routes import ROUTES
+    from multiprocess_entry import plan, count, child_custody
+
+    entries = ROUTES[case]
+    assert count(case) == 1 + sum(spec.maximum for spec in entries.values())
+    for target, spec in entries.items():
+        fds = [6]
+        rows = [[6, 1, 20, 1]]
+        next_fd, inode = 11, 50
+        for kind in spec.resources:
+            if kind == "queue":
+                fds.extend([next_fd, next_fd + 1])
+                rows.extend([[next_fd, 1, inode, 0], [next_fd + 1, 1, inode, 1]])
+                next_fd += 2
+            else:
+                fds.append(next_fd)
+                rows.append([next_fd, 1, inode, 2, 4096])
+                next_fd += 1
+            inode += 10
+        fds.extend([8, 10])
+        rows.extend([[8, 1, 30, 0], [10, 1, 40, 1]])
+        argv = [NATIVE, "-S", "-I", "-c", SPAWN, "--multiprocessing-fork"]
+        assert plan(case, list(target)) == spec
+        assert (
+            expected(case, argv, fds, list(target), NATIVE, "a" * 64, "/source", {})[1]
+            == "mp-child"
+        )
+        child_custody(case, fds, 6, 8, rows, list(target))
+        with pytest.raises(Refused):
+            expected(case, argv, fds + [99], list(target), NATIVE, "a" * 64, "/source", {})
+        with pytest.raises(Refused):
+            expected(case, argv, fds, [target[0], "_unknown"], NATIVE, "a" * 64, "/source", {})
+        if spec.resources:
+            changed = [*fds]
+            changed[1], changed[-2] = changed[-2], changed[1]
+            with pytest.raises(Refused):
+                expected(case, argv, changed, list(target), NATIVE, "a" * 64, "/source", {})
+            changed_rows = [row[:] for row in rows]
+            changed_rows[1][2] = 20
+            with pytest.raises(Refused):
+                child_custody(case, fds, 6, 8, changed_rows, list(target))
+
+
+def test_crash_and_abrupt_holder_statuses_are_exact_case_target_dispositions():
+    from multiprocess_routes import PATCH, LOCK
+    from multiprocess_entry import plan
+
+    crash = next(case for case in PATCH if "interrupted_probe" in case)
+    holder = next(case for case in LOCK if "abrupt_holder" in case)
+    assert plan(crash, ["tests.test_patch_transaction", "_interrupt_rename_probe"]).status == 73
+    assert plan(holder, ["tests.test_project_lock", "_holder_process"]).status == -15
+    assert plan(holder, ["tests.test_project_lock", "_single_call_process"]).status == 0
+
+
+@pytest.mark.parametrize("case", [*CASES, *__import__("multiprocess_entry").IPC_CASES])
+def test_null_target_never_admits_an_original_child(case):
+    import multiprocess_entry as entry
+
+    fds = [6, 11, 12, 13, 8, 10] if case == entry.IPC_CASES[0] else [6, 8, 10]
+    with pytest.raises(Refused):
+        expected(
+            case,
+            [NATIVE, "-S", "-I", "-c", SPAWN, "--multiprocessing-fork"],
+            fds,
+            None,
+            NATIVE,
+            "a" * 64,
+            "/source",
+            {},
+        )
+
+
+@pytest.mark.parametrize("status,signal", [(73, None), (-15, 15), (-15, None), (0, None)])
+def test_spawn_completion_uses_exact_birth_token_case_and_actual_signal(status, signal):
+    from source_observer import Observer
+    from process_ledger import Birth
+
+    identity = {
+        "pid": 100,
+        "tgid": 100,
+        "ppid": 10,
+        "start_ticks": 200,
+        "boot_id": "boot",
+        "uids": [20000] * 4,
+    }
+    birth = Birth.read(identity)
+    old = Birth.read({**identity, "start_ticks": 100})
+    actor = {
+        "birth": birth,
+        "token": "current",
+        "case": "current-case",
+        "role": "mp-child",
+        "body_ready": True,
+        "signals": set() if signal is None else {signal},
+    }
+
+    def row(generation, token="current", case="current-case"):
+        return {
+            "birth": generation,
+            "pid": 100,
+            "token": token,
+            "case": case,
+            "role": "mp-child",
+            "consumed": True,
+            "mp_status": 73 if status == 73 else -15,
+        }
+
+    host = SimpleNamespace(
+        intents={
+            1: row(old),
+            2: row(birth, token="foreign"),
+            3: row(birth, case="other-case"),
+            4: row(birth),
+        },
+        ledger=SimpleNamespace(process=lambda value: SimpleNamespace(terminal=(1, 0, status))),
+    )
+    assert Observer.completed_child(host, actor) is (status == 73 or status == -15 and signal == 15)
+    del host.intents[4]
+    assert not Observer.completed_child(host, actor)
+
+
+def test_per_target_exhaustion_is_separate_from_total_case_capacity():
+    from multiprocess_entry import quota
+
+    mutator = ["tests.test_patch_transaction", "_mutator_process"]
+    inspector = ["tests.test_patch_transaction", "_inspector_process"]
+
+    def row(target):
+        return {"role": "mp-child", "mp_target": target}
+
+    quota([row(inspector), row(inspector), row(mutator)], "mp-child", mutator, 2)
+    with pytest.raises(Refused, match="quota"):
+        quota([row(mutator), row(mutator)], "mp-child", mutator, 2)
+    with pytest.raises(Refused, match="quota"):
+        quota([row(inspector), row(inspector)], "mp-child", inspector, 2)
+    with pytest.raises(Refused, match="quota"):
+        quota([{"role": "mp-tracker"}], "mp-tracker", None, 1)

@@ -8,6 +8,7 @@ import ctypes
 from content_manifest import Refused
 from control_transport import finite
 from launch_policy import Rule,render
+from multiprocess_routes import ROUTES,Spawn,plan as route_plan
 
 CASES=tuple('tests/test_multiprocess_resource_ownership.py::test_original_child_status_is_preserved['+str(status)+']' for status in (0,17))
 TRACKER_SMOKE=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
@@ -28,10 +29,24 @@ IPC_CASES=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name 
     'test_joined_spawn_queue_event_and_value_close_before_summary',
     'test_live_child_refusal_preserves_original_error_and_does_not_kill',
 ))
-CHILD_CASES=(*CASES,*IPC_CASES)
+CHILD_CASES=(*CASES,*IPC_CASES,*ROUTES)
 ALL_CASES=(*CHILD_CASES,*TRACKER_CASES)
 TARGET=['tests.test_multiprocess_resource_ownership','_exit_with_status']
 TARGETS={**dict.fromkeys(CASES,TARGET),IPC_CASES[0]:[TARGET[0],'_publish'],IPC_CASES[1]:[TARGET[0],'_wait']}
+
+
+def plan(case,target):
+    if case in TARGETS:
+        if target!=TARGETS[case]:
+            raise Refused('spawn original target metadata')
+        return Spawn(('queue','arena') if case==IPC_CASES[0] else (),status=17 if case==CASES[1] else 0)
+    return route_plan(case,target)
+
+
+def count(case):
+    if case not in ALL_CASES:
+        raise Refused('spawn unknown case count')
+    return 0 if case==ZERO else 1 if case in TRACKER_CASES else 1+sum(spec.maximum for spec in ROUTES[case].values()) if case in ROUTES else 2
 
 
 def fd_record(pid,fd):
@@ -65,7 +80,7 @@ def spawn_record(pid,fd,case):
     try:
         return fd_record(pid,fd)
     except Refused:
-        if case!=IPC_CASES[0]:
+        if case!=IPC_CASES[0] and not any('arena' in spec.resources for spec in ROUTES.get(case,{}).values()):
             raise
         return arena_record(pid,fd)
 
@@ -126,15 +141,16 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
     else:
         prefix='from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd='
         if (case not in CHILD_CASES or len(argv)!=6 or not argv[4].startswith(prefix) or not argv[4].endswith(')')
-                or argv[5]!='--multiprocessing-fork' or target!=TARGETS[case]):
+                or argv[5]!='--multiprocessing-fork'):
             raise Refused('spawn exact command and target declaration')
         parts=argv[4][len(prefix):-1].split(', pipe_handle=')
         if (len(parts)!=2 or any(not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024 for value in parts)):
             raise Refused('spawn tracker and bootstrap descriptors')
         tracker,reader=map(int,parts)
-        if (len(passfds)!=(6 if case==IPC_CASES[0] else 3) or tracker==reader
+        spec=plan(case,target)
+        if (len(passfds)!=3+sum(2 if kind=='queue' else 1 for kind in spec.resources) or tracker==reader
                 or not {tracker,reader}<=set(passfds) or 2 in passfds
-                or case in IPC_CASES and (passfds[0]!=tracker or passfds[-2]!=reader)):
+                or (passfds[0]!=tracker or passfds[-2]!=reader)):
             raise Refused('spawn inherited pipe inventory')
         role='mp-child'
         descriptors=sorted(passfds)
@@ -142,25 +158,37 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
     return value,role,descriptors
 
 
-def child_custody(case,passfds,tracker_fd,reader,inherited):
+def child_custody(case,passfds,tracker_fd,reader,inherited,target=None):
     tracked=next(row for row in inherited if row[0]==tracker_fd)
     bootstrap=next(row for row in inherited if row[0]==reader)
     sentinel=next(row for row in inherited if row[0]==passfds[-1])
-    if (bootstrap[3]!=os.O_RDONLY or sentinel[3]!=os.O_WRONLY
-            or len({tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)})!=3):
+    used={tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)}
+    if (bootstrap[3]!=os.O_RDONLY or sentinel[3]!=os.O_WRONLY or len(used)!=3):
         raise Refused('spawn distinct bootstrap reader and sentinel writer')
-    extras=[row for row in inherited if row[0] not in (tracker_fd,reader,sentinel[0])]
-    if case==IPC_CASES[0]:
-        pipes=[row for row in extras if len(row)==4]
-        arenas=[row for row in extras if len(row)==5]
-        if (len(pipes)!=2 or len(arenas)!=1 or pipes[0][1:3]!=pipes[1][1:3]
-                or [row[0] for row in pipes]!=passfds[1:3] or [row[3] for row in pipes]!=[os.O_RDONLY,os.O_WRONLY]
-                or arenas[0][0]!=passfds[3]
-                or tuple(pipes[0][1:3]) in {tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)}
-                or arenas[0][1:3] in [row[1:3] for row in (tracked,bootstrap,sentinel,*pipes)]):
-            raise Refused('spawn exact Queue and Value descriptor custody')
-    elif extras:
+    extras=[row for fd in passfds[1:-2] for row in inherited if row[0]==fd]
+    cursor=0
+    for kind in plan(case,TARGETS.get(case) if target is None else target).resources:
+        width=2 if kind=='queue' else 1
+        rows=extras[cursor:cursor+width]
+        if kind=='queue':
+            if (len(rows)!=2 or any(len(row)!=4 for row in rows) or rows[0][1:3]!=rows[1][1:3]
+                    or [row[3] for row in rows]!=[os.O_RDONLY,os.O_WRONLY]):
+                raise Refused('spawn exact Queue descriptor custody')
+        elif len(rows)!=1 or len(rows[0])!=5:
+            raise Refused('spawn exact Value descriptor custody')
+        member=tuple(rows[0][1:3])
+        if member in used:
+            raise Refused('spawn aliased application descriptor')
+        used.add(member)
+        cursor+=width
+    if cursor!=len(extras) or len(inherited)!=3+cursor:
         raise Refused('spawn unexpected extra descriptors')
+
+
+def quota(records,role,target,maximum):
+    used=sum(row['role']==role and (role!='mp-child' or row['mp_target']==target) for row in records)
+    if used>=maximum:
+        raise Refused('spawn per-case quota')
 
 
 def proposal(host,actor,raw):
@@ -177,8 +205,8 @@ def proposal(host,actor,raw):
     if raw['environment']!=dict(value.environment):
         raise Refused('spawn original environment')
     records=[row for row in host.intents.values() if row['case']==host.case]
-    if any(row['role']==role for row in records):
-        raise Refused('spawn per-case quota')
+    spec=plan(host.case,raw['target']) if role=='mp-child' else None
+    quota(records,role,raw['target'],spec.maximum if spec is not None else 1)
     tracker=next((row for row in records if row['role']=='mp-tracker'),None)
     if role=='mp-child' and (tracker is None or not tracker['consumed'] or not host.actors[tracker['pid']]['returned']):
         raise Refused('spawn needs returned owned tracker')
@@ -212,20 +240,25 @@ def proposal(host,actor,raw):
         for row in inherited:
             if row[0]!=tracker_fd and len(row)==4:
                 counterpart(actor['birth'].pid,row)
-        child_custody(host.case,raw['passfds'],tracker_fd,reader,inherited)
+        child_custody(host.case,raw['passfds'],tracker_fd,reader,inherited,raw['target'])
     vector=[native,'-I','-S',*raw['argv'][3:]]
     payload={'case':host.case,'original':value.wire(),'translated':vector,'source_line':0,'script_sha256':None}
-    answer=host.admit_launch(actor,payload,value,role,0,vector,None,inherited=inherited)
+    answer=host.admit_launch(actor,payload,value,role,0,vector,None,inherited=inherited,maximum=count(host.case)-1 if role=='mp-child' else 1)
     if answer is None:
         return None
     if role=='mp-tracker':
         host.intents[answer['ticket']]['tracker_read']=tracker_read
+    else:
+        if spec is None:
+            raise Refused('spawn child declaration absent')
+        host.intents[answer['ticket']].update(mp_target=raw['target'],mp_status=spec.status)
     return {**answer,'translated':vector}
 
 
 def inherited(profile,actual):
     records=profile['inherited']
-    if (type(records) is not list or len(records) not in ((1,2) if profile['role']=='mp-tracker' else ((6,) if profile['case']==IPC_CASES[0] else (3,)))
+    sizes={3+sum(2 if kind=='queue' else 1 for kind in spec.resources) for spec in ROUTES.get(profile['case'],{}).values()} if profile['case'] in ROUTES else {6 if profile['case']==IPC_CASES[0] else 3}
+    if (type(records) is not list or len(records) not in ((1,2) if profile['role']=='mp-tracker' else sizes)
             or any(type(row) is not list or len(row) not in (4,5) or any(type(value) is not int for value in row) for row in records)):
         raise Refused('spawn profile descriptor schema')
     reader=int(profile['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1]) if profile['role']=='mp-tracker' else None

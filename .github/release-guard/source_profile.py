@@ -11,6 +11,7 @@ import sys
 
 from content_manifest import Refused, capture
 from preflight_cases import CASES as PREFLIGHT_ALL
+from multiprocess_routes import GROUPS as MP_GROUPS
 from multiprocess_entry import ALL_CASES as MP_CASES, CASES as MP_STATUS, CHILD_CASES, IPC_CASES, TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, ZERO
 from plan_launch import CASES as PLAN_CASES, PYTHON as PLAN_PYTHON
 from bootstrap_cases import BOOTSTRAP
@@ -89,7 +90,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire')
             or type(profile['case']) is not str
             or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES, *MP_CASES, *REVIEW_CASES))
-            or not full and (type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES, MP_STATUS, IPC_CASES, TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, REVIEW_CASES, ARCHIVE_CASES))):
+            or not full and (type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES, MP_STATUS, IPC_CASES, *MP_GROUPS.values(), TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, REVIEW_CASES, ARCHIVE_CASES))):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]

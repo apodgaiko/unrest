@@ -15,7 +15,7 @@ import struct
 import time
 
 from review_wire import CASES as REVIEW_CASES,SCRIPT as REVIEW_SCRIPT,count as review_count
-from multiprocess_entry import ALL_CASES as MP_CASES, TRACKER_CASES, ZERO
+from multiprocess_entry import ALL_CASES as MP_CASES, count as mp_count
 from content_manifest import Refused, native_digest
 from preflight_cases import NO_EFFECT
 from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
@@ -378,10 +378,14 @@ class Observer:
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
         if actor['role']=='review-wire':
-            return terminal is not None and actor['body_ready'] and (terminal[2]==0 or terminal[2]==-15 and 15 in actor['signals'])
+            return terminal is not None and actor['body_ready'] and (terminal[2]==0 or terminal[2]==-9 and 9 in actor['signals'])
         if actor['role'] in ('mp-child','mp-tracker'):
-            status=17 if actor['role']=='mp-child' and actor['case']==MP_CASES[1] else 0
-            return terminal is not None and terminal[2]==status and actor['body_ready']
+            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
+                and row['case']==actor['case'] and row['role']=='mp-child' and row['consumed']]
+            if actor['role']=='mp-child' and len(rows)!=1:
+                return False
+            status=rows[0]['mp_status'] if actor['role']=='mp-child' else 0
+            return terminal is not None and terminal[2]==status and actor['body_ready'] and (status>=0 or -status in actor['signals'])
         if actor['case'] in PLAN_CASES:
             values=[value for value in self.intents.values() if value['case']==actor['case'] and value.get('pid')==actor['birth'].pid]
             if len(values)!=1 or terminal is None:
@@ -499,7 +503,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = review_count(self.case) if self.case in REVIEW_CASES else 0 if self.case==ZERO else 1 if self.case in TRACKER_CASES else 2 if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                count = review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
                 if outcome=='failed':
                     count,spec=len(children),None
                 if skipped:
