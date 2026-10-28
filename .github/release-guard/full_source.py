@@ -44,7 +44,10 @@ class FullCases(OriginalCases):
         with path.open('xb') as stream:
             stream.write(body)
         path.chmod(0o444)
-        ref=self.policy.client.request('collection',{'path':str(path),'sha256':hashlib.sha256(body).hexdigest()})
+        answer=self.policy.client.request('collection',{'path':str(path),'sha256':hashlib.sha256(body).hexdigest()})
+        if type(answer) is not dict or set(answer)!={'ok','reference'} or answer['ok'] is not True:
+            raise Refused('full source inventory acknowledgement')
+        ref=answer['reference']
         self.cases=tuple(load(ref,self.policy.directory,profile['source_sha256'],profile['dependency_sha256'])['cases'])
         super().pytest_collection_finish(session)
         self.cases=tuple(identity(node) for node in self.cases)

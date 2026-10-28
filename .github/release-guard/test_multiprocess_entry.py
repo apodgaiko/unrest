@@ -398,3 +398,126 @@ def test_tracker_only_cases_do_not_inherit_any_spawn_target_permission(case):
             "/checkout",
             {},
         )
+
+
+@pytest.mark.parametrize("case_index,count", [(0, 6), (1, 3)])
+def test_ipc_cases_have_only_their_exact_spawn_inventory(case_index, count):
+    from multiprocess_entry import IPC_CASES, TARGETS
+
+    case = IPC_CASES[case_index]
+    fds = [6, 11, 12, 13, 8, 10] if count == 6 else [6, 8, 10]
+    argv = [NATIVE, "-S", "-I", "-c", SPAWN, "--multiprocessing-fork"]
+    assert (
+        expected(case, argv, fds, TARGETS[case], NATIVE, "a" * 64, "/source", {})[1] == "mp-child"
+    )
+    for changed in (fds[:-1], fds + [14], [*fds[:-1], fds[0]], list(reversed(fds))):
+        with pytest.raises(Refused):
+            expected(case, argv, changed, TARGETS[case], NATIVE, "a" * 64, "/source", {})
+    with pytest.raises(Refused):
+        expected(case, argv, fds, TARGET, NATIVE, "a" * 64, "/source", {})
+
+
+@pytest.mark.parametrize(
+    "mutation", [None, "direction", "pair", "alias", "order", "arena-order", "extra-arena"]
+)
+def test_queue_and_arena_are_distinct_exact_posix_resources(mutation):
+    from multiprocess_entry import child_custody, IPC_CASES
+
+    fds = [6, 11, 12, 13, 8, 10]
+    rows = [
+        [6, 1, 20, 1],
+        [8, 1, 30, 0],
+        [10, 1, 40, 1],
+        [11, 1, 50, 0],
+        [12, 1, 50, 1],
+        [13, 1, 60, 2, 4096],
+    ]
+    if mutation == "direction":
+        rows[3][3], rows[4][3] = 1, 0
+    elif mutation == "pair":
+        rows[4][2] = 51
+    elif mutation == "alias":
+        rows[3][2] = rows[4][2] = 20
+    elif mutation == "order":
+        fds[1], fds[2] = fds[2], fds[1]
+    elif mutation == "arena-order":
+        fds[1], fds[3] = fds[3], fds[1]
+    elif mutation == "extra-arena":
+        rows[3] = [11, 1, 50, 2, 4096]
+    if mutation is None:
+        child_custody(IPC_CASES[0], fds, 6, 8, rows)
+        for case in (IPC_CASES[1], CASES[0]):
+            with pytest.raises(Refused, match="extra"):
+                child_custody(case, fds, 6, 8, rows)
+    else:
+        with pytest.raises(Refused):
+            child_custody(IPC_CASES[0], fds, 6, 8, rows)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [None, "linked", "uid", "mode", "size", "access", "flags", "fifo", "directory", "socket"],
+)
+def test_shared_arena_is_one_exact_anonymous_page(monkeypatch, mutation):
+    import os
+    import stat
+    from pathlib import Path
+    from multiprocess_entry import arena_record
+
+    kinds = {"fifo": stat.S_IFIFO, "directory": stat.S_IFDIR, "socket": stat.S_IFSOCK}
+    mode = kinds.get(mutation, stat.S_IFREG) | (0o644 if mutation == "mode" else 0o600)
+    info = os.stat_result(
+        (
+            mode,
+            60,
+            1,
+            1 if mutation == "linked" else 0,
+            500 if mutation == "uid" else 20000,
+            20000,
+            8192 if mutation == "size" else 4096,
+            0,
+            0,
+            0,
+        )
+    )
+    flags = (os.O_RDONLY if mutation == "access" else os.O_RDWR) | os.O_CLOEXEC | 0o100000
+    if mutation == "flags":
+        flags |= os.O_APPEND
+    monkeypatch.setattr(Path, "stat", lambda self: info)
+    monkeypatch.setattr(Path, "read_text", lambda self: "flags:\t" + oct(flags)[2:] + "\n")
+    if mutation is None:
+        assert arena_record(100, 13) == [13, 1, 60, os.O_RDWR, 4096]
+    else:
+        with pytest.raises(Refused, match="arena"):
+            arena_record(100, 13)
+
+
+def test_child_rechecks_arena_inode_instead_of_trusting_descriptor_number(monkeypatch):
+    import multiprocess_entry as entry
+
+    profile = {
+        "inherited": [
+            [6, 1, 20, 1],
+            [11, 1, 50, 0],
+            [12, 1, 50, 1],
+            [13, 1, 60, 2, 4096],
+            [8, 1, 30, 0],
+            [10, 1, 40, 1],
+        ],
+        "role": "mp-child",
+        "case": entry.IPC_CASES[0],
+    }
+    monkeypatch.setattr(
+        entry.os, "listdir", lambda path: [str(row[0]) for row in profile["inherited"]]
+    )
+
+    def record(pid, fd, case):
+        row = next(row[:] for row in profile["inherited"] if row[0] == fd)
+        if fd == 13:
+            row[2] = 99
+        return row
+
+    monkeypatch.setattr(entry, "spawn_record", record)
+    monkeypatch.setattr(entry.fcntl, "fcntl", lambda fd, op: 2 if fd == 13 else 0)
+    with pytest.raises(Refused, match="generation"):
+        entry.inherited(profile, {"pid": 200})

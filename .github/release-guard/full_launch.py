@@ -86,7 +86,7 @@ def collection(host,actor,payload):
     if len(set(host.cases))!=len(host.cases):
         raise Refused('full source ambiguous case references')
     host.meta['cases']=seal(value,host.directory)
-    return host.meta['cases']
+    return {'ok':True,'reference':host.meta['cases']}
 
 
 def finished(host):

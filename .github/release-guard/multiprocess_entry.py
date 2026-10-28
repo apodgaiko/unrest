@@ -1,4 +1,4 @@
-"""Two finite spawn cases; Python target labels are metadata, never provenance."""
+"""Finite spawn transport; target labels are metadata, never provenance."""
 from pathlib import Path
 import os
 import stat
@@ -24,8 +24,14 @@ TRACKER_REMAINING=tuple('tests/test_multiprocess_resource_ownership.py::'+name f
 ))
 ZERO=TRACKER_REMAINING[-1]
 TRACKER_CASES=(*TRACKER_SMOKE,*TRACKER_REMAINING)
-ALL_CASES=(*CASES,*TRACKER_CASES)
+IPC_CASES=tuple('tests/test_multiprocess_resource_ownership.py::'+name for name in (
+    'test_joined_spawn_queue_event_and_value_close_before_summary',
+    'test_live_child_refusal_preserves_original_error_and_does_not_kill',
+))
+CHILD_CASES=(*CASES,*IPC_CASES)
+ALL_CASES=(*CHILD_CASES,*TRACKER_CASES)
 TARGET=['tests.test_multiprocess_resource_ownership','_exit_with_status']
+TARGETS={**dict.fromkeys(CASES,TARGET),IPC_CASES[0]:[TARGET[0],'_publish'],IPC_CASES[1]:[TARGET[0],'_wait']}
 
 
 def fd_record(pid,fd):
@@ -40,6 +46,27 @@ def fd_record(pid,fd):
     if access not in (os.O_RDONLY,os.O_WRONLY):
         raise Refused('spawn FIFO direction')
     return [fd,info.st_dev,info.st_ino,access]
+
+
+def arena_record(pid,fd):
+    path=Path('/proc')/str(pid)/'fd'/str(fd)
+    info=path.stat()
+    flags=[line.split()[1] for line in (path.parent.parent/'fdinfo'/str(fd)).read_text().splitlines() if line.startswith('flags:')]
+    if (type(fd) is not int or not 3<=fd<=1024 or not stat.S_ISREG(info.st_mode)
+            or info.st_uid!=20000 or info.st_nlink!=0 or stat.S_IMODE(info.st_mode)!=0o600
+            or info.st_size!=4096 or len(flags)!=1
+            or int(flags[0],8)&~(os.O_CLOEXEC|0o100000)!=os.O_RDWR):
+        raise Refused('spawn exact anonymous shared arena')
+    return [fd,info.st_dev,info.st_ino,os.O_RDWR,4096]
+
+
+def spawn_record(pid,fd,case):
+    try:
+        return fd_record(pid,fd)
+    except Refused:
+        if case!=IPC_CASES[0]:
+            raise
+        return arena_record(pid,fd)
 
 
 def stderr_record(pid,fd):
@@ -97,19 +124,42 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
         descriptors=sorted(fd for fd in passfds if fd>2)
     else:
         prefix='from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd='
-        if (case not in CASES or len(argv)!=6 or not argv[4].startswith(prefix) or not argv[4].endswith(')')
-                or argv[5]!='--multiprocessing-fork' or target!=TARGET):
+        if (case not in CHILD_CASES or len(argv)!=6 or not argv[4].startswith(prefix) or not argv[4].endswith(')')
+                or argv[5]!='--multiprocessing-fork' or target!=TARGETS[case]):
             raise Refused('spawn exact command and target declaration')
         parts=argv[4][len(prefix):-1].split(', pipe_handle=')
         if (len(parts)!=2 or any(not value.isascii() or not value.isdigit() or str(int(value))!=value or not 3<=int(value)<=1024 for value in parts)):
             raise Refused('spawn tracker and bootstrap descriptors')
         tracker,reader=map(int,parts)
-        if len(passfds)!=3 or tracker==reader or not {tracker,reader}<=set(passfds) or 2 in passfds:
+        if (len(passfds)!=(6 if case==IPC_CASES[0] else 3) or tracker==reader
+                or not {tracker,reader}<=set(passfds) or 2 in passfds
+                or case in IPC_CASES and (passfds[0]!=tracker or passfds[-2]!=reader)):
             raise Refused('spawn inherited pipe inventory')
         role='mp-child'
         descriptors=sorted(passfds)
     value=render(Rule(role,role,(case,),native,pin,tuple(argv),tuple(sorted(environment.items())),str(checkout),'python-command'),case,role,{}, {})
     return value,role,descriptors
+
+
+def child_custody(case,passfds,tracker_fd,reader,inherited):
+    tracked=next(row for row in inherited if row[0]==tracker_fd)
+    bootstrap=next(row for row in inherited if row[0]==reader)
+    sentinel=next(row for row in inherited if row[0]==passfds[-1])
+    if (bootstrap[3]!=os.O_RDONLY or sentinel[3]!=os.O_WRONLY
+            or len({tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)})!=3):
+        raise Refused('spawn distinct bootstrap reader and sentinel writer')
+    extras=[row for row in inherited if row[0] not in (tracker_fd,reader,sentinel[0])]
+    if case==IPC_CASES[0]:
+        pipes=[row for row in extras if len(row)==4]
+        arenas=[row for row in extras if len(row)==5]
+        if (len(pipes)!=2 or len(arenas)!=1 or pipes[0][1:3]!=pipes[1][1:3]
+                or [row[0] for row in pipes]!=passfds[1:3] or [row[3] for row in pipes]!=[os.O_RDONLY,os.O_WRONLY]
+                or arenas[0][0]!=passfds[3]
+                or tuple(pipes[0][1:3]) in {tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)}
+                or arenas[0][1:3] in [row[1:3] for row in (tracked,bootstrap,sentinel,*pipes)]):
+            raise Refused('spawn exact Queue and Value descriptor custody')
+    elif extras:
+        raise Refused('spawn unexpected extra descriptors')
 
 
 def proposal(host,actor,raw):
@@ -139,7 +189,7 @@ def proposal(host,actor,raw):
         if tracker_read[3]!=os.O_RDONLY:
             raise Refused('tracker read direction')
     else:
-        inherited=[fd_record(actor['birth'].pid,fd) for fd in descriptors]
+        inherited=[spawn_record(actor['birth'].pid,fd,host.case) for fd in descriptors]
     if role=='mp-child':
         if tracker is None:
             raise Refused('spawn missing owned tracker')
@@ -159,13 +209,9 @@ def proposal(host,actor,raw):
             return None  # Existing bounded RPC waits for the native READY join.
         reader=int(raw['argv'][4].split('pipe_handle=',1)[1][:-1])
         for row in inherited:
-            if row[0]!=tracker_fd:
+            if row[0]!=tracker_fd and len(row)==4:
                 counterpart(actor['birth'].pid,row)
-        bootstrap=next(row for row in inherited if row[0]==reader)
-        sentinel=next(row for row in inherited if row[0] not in (tracker_fd,reader))
-        if (bootstrap[3]!=os.O_RDONLY or sentinel[3]!=os.O_WRONLY
-                or len({tuple(row[1:3]) for row in inherited})!=3):
-            raise Refused('spawn distinct bootstrap reader and sentinel writer')
+        child_custody(host.case,raw['passfds'],tracker_fd,reader,inherited)
     vector=[native,'-I','-S',*raw['argv'][3:]]
     payload={'case':host.case,'original':value.wire(),'translated':vector,'source_line':0,'script_sha256':None}
     answer=host.admit_launch(actor,payload,value,role,0,vector,None,inherited=inherited)
@@ -178,8 +224,8 @@ def proposal(host,actor,raw):
 
 def inherited(profile,actual):
     records=profile['inherited']
-    if (type(records) is not list or len(records) not in ((1,2) if profile['role']=='mp-tracker' else (3,))
-            or any(type(row) is not list or len(row)!=4 or any(type(value) is not int for value in row) for row in records)):
+    if (type(records) is not list or len(records) not in ((1,2) if profile['role']=='mp-tracker' else ((6,) if profile['case']==IPC_CASES[0] else (3,)))
+            or any(type(row) is not list or len(row) not in (4,5) or any(type(value) is not int for value in row) for row in records)):
         raise Refused('spawn profile descriptor schema')
     reader=int(profile['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1]) if profile['role']=='mp-tracker' else None
     seen=[]
@@ -188,11 +234,11 @@ def inherited(profile,actual):
         if fd<=2:
             continue
         try:
-            row=stderr_record(actual['pid'],fd) if reader is not None and fd!=reader else fd_record(actual['pid'],fd)
+            row=stderr_record(actual['pid'],fd) if reader is not None and fd!=reader else spawn_record(actual['pid'],fd,profile['case'])
         except FileNotFoundError:
             continue
         flags=fcntl.fcntl(fd,fcntl.F_GETFL)
-        if (reader is None or fd==reader) and flags&~(os.O_ACCMODE|os.O_CLOEXEC):
+        if (reader is None or fd==reader) and flags&~(os.O_ACCMODE|os.O_CLOEXEC|(0o100000 if len(row)==5 else 0)):
             raise Refused('spawn descriptor flags')
         seen.append(row)
     if sorted(seen)!=sorted(records):

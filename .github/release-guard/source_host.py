@@ -92,8 +92,8 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
         from content_manifest import _capture
         public_git(checkout, source, binding['head'])
         metadata_names = sorted(path.relative_to(source).as_posix() for path in (source / '.git').rglob('*') if path.is_file())
-        metadata = _capture(source, metadata_names, None, 64 * 1024 * 1024)
-        metadata = {'schema':'unrest.git-inputs.v1','file_bound':64 * 1024 * 1024,'files':metadata['files']}
+        metadata_files = _capture(source, metadata_names, None, 64 * 1024 * 1024)
+        metadata = {'schema':'unrest.git-inputs.v1','file_bound':64 * 1024 * 1024,'files':metadata_files['files']}
     dependencies = root / 'dependencies'
     original = checkout / '.venv/lib/python3.13/site-packages'
     # Dereference only contained regular file aliases. Never carry host links
@@ -167,7 +167,7 @@ def isolate(metadata, support):
     mount(None, b'/', (1 << 18) | (1 << 14))  # private recursively
     native_input = metadata.get('_native_input')
     metadata = {key:value for key,value in metadata.items() if key != '_native_input'}
-    points = (metadata['checkout'], metadata['dependencies'], metadata['runtime_root'], support)
+    points: tuple[str,...] = (metadata['checkout'], metadata['dependencies'], metadata['runtime_root'], support)
     for point in points:
         encoded = os.fsencode(point)
         mount(encoded, encoded, 4096)
@@ -343,7 +343,7 @@ def drain_owned(rows):
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from controlled_cases import GROUPS as CONTROLLED_GROUPS, ADMISSION, NOTIFICATION_STARTUP, NOTIFICATION_SIGNALS, ROOT_HTTP
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv)==4 and sys.argv[2]=='archive15' or len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', 'stdio8', 'observe1', 'mp-status2', 'mp-tracker3', 'mp-tracker5', 'full', 'full-collect', 'preflight9', 'preflight54', *CONTROLLED_GROUPS)),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv)==4 and sys.argv[2]=='archive15' or len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', 'stdio8', 'observe1', 'mp-status2', 'mp-tracker3', 'mp-tracker5', 'mp-ipc2', 'full', 'full-collect', 'preflight9', 'preflight54', *CONTROLLED_GROUPS)),
             'source host requires exact root Linux invocation')
     binding_file = Path(sys.argv[1]).resolve(strict=True)
     binding = json.loads(binding_file.read_bytes())
@@ -371,7 +371,7 @@ def main():
     success = False
     try:
         from bootstrap_cases import BOOTSTRAP
-        from multiprocess_entry import CASES as MP_CASES, TRACKER_SMOKE, TRACKER_REMAINING
+        from multiprocess_entry import CASES as MP_CASES, IPC_CASES, TRACKER_SMOKE, TRACKER_REMAINING
         from preflight_cases import CASES as PREFLIGHT_ALL
         from plan_launch import CASES as PLAN_CASES
         from controlled_startup import CASES
@@ -382,7 +382,7 @@ def main():
         from fixed_inline import IMPORT_CASES, STDIO, OBSERVATION_CASE
         from session_launch import CASES as SESSION_CASES, TIMEOUT as SESSION_TIMEOUT
         from git_sites import CASES as GIT_CASES
-        cleanup = {**CONTROLLED_GROUPS, 'preflight9': PLAN_CASES, 'preflight54': PREFLIGHT_ALL, 'imports6': IMPORT_CASES, 'stdio8': tuple(STDIO), 'observe1': (OBSERVATION_CASE,), 'mp-status2': MP_CASES, 'mp-tracker3': TRACKER_SMOKE, 'mp-tracker5': TRACKER_REMAINING, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
+        cleanup = {**CONTROLLED_GROUPS, 'preflight9': PLAN_CASES, 'preflight54': PREFLIGHT_ALL, 'imports6': IMPORT_CASES, 'stdio8': tuple(STDIO), 'observe1': (OBSERVATION_CASE,), 'mp-status2': MP_CASES, 'mp-tracker3': TRACKER_SMOKE, 'mp-tracker5': TRACKER_REMAINING, 'mp-ipc2': IPC_CASES, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
         full=len(sys.argv)==3 and sys.argv[2] in ('full','full-collect')
         from postbuild_root import CASES as ARCHIVE_CASES
         cases = ARCHIVE_CASES if archive else () if full else cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
@@ -425,12 +425,12 @@ def main():
                 success = False
         finally:
             (raw_directory / 'fallback-cleanup.json').write_text(json.dumps(adopted))
-            archive = root / (raw_directory.name+'.tar')
-            with tarfile.open(archive, 'w') as stream:
+            packed = root / (raw_directory.name+'.tar')
+            with tarfile.open(packed, 'w') as stream:
                 stream.add(raw_directory, arcname='source-private', recursive=True)
             subprocess.run(['/usr/bin/openssl', 'cms', '-encrypt', '-binary', '-aes-256-cbc', '-outform', 'DER',
-                            '-in', str(archive), '-out', str(root / (raw_directory.name+'.cms')), binding['recipient']['path']], check=True)
-            archive.unlink()
+                            '-in', str(packed), '-out', str(root / (raw_directory.name+'.cms')), binding['recipient']['path']], check=True)
+            packed.unlink()
         require(not children(), 'source host cleanup residue')
     require(success, 'original source integration did not complete')
     print('Guarded source integration passed; release certification: false', flush=True)

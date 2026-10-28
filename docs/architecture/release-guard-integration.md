@@ -121,3 +121,5 @@ source/archive diagnostics are encrypted for retention; they are not release
 assets. Native integration, final dependency-closure review, the complete source
 checkpoint, desktop/CI evidence, publication and protected local update must all
 be verified before the release mission is complete.
+
+The two resource-ownership IPC cases retain one tracker and one child each. The Event-only child inherits the original three pipes. The Queue/Event/Value child adds exactly two opposite Queue FIFO endpoints and one anonymous 4096-byte read/write arena, all rechecked by kernel identity before the child body. Labels remain metadata; the original test owns completion, cleanup and parent waits.

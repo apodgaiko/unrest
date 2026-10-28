@@ -174,3 +174,49 @@ def test_long_original_test_id_keeps_its_case_and_reports_through_compact_refere
     assert [
         payload["case"] for kind, payload in calls if kind in ("case-start", "case-finish")
     ] == [name, name]
+
+
+def test_observer_collection_reply_carries_success_and_closed_reference(tmp_path, monkeypatch):
+    import hashlib
+    import json
+    import os
+    from pathlib import Path
+    import full_launch
+    from control_transport import reply, verify_reply, encode, RESPONSE_LIMIT
+
+    original_fstat, original_lstat = os.fstat, Path.lstat
+
+    def source_owner(info):
+        row = list(info)
+        row[4] = 20000
+        return os.stat_result(row)
+
+    monkeypatch.setattr(os, "fstat", lambda fd: source_owner(original_fstat(fd)))
+    monkeypatch.setattr(Path, "lstat", lambda path: source_owner(original_lstat(path)))
+    reference = {"path": "/profiles/cases-bound.json", "sha256": "c" * 64, "count": 1}
+    monkeypatch.setattr(full_launch, "seal", lambda value, directory: dict(reference))
+    node = "tests/test_wire.py::test_large[" + "x" * 70000 + "]"
+    body = json.dumps(
+        {"cases": [node], "skips": [], "source": "a" * 64, "dependency": "b" * 64}
+    ).encode()
+    path = tmp_path / "collection.json"
+    path.write_bytes(body)
+    path.chmod(0o444)
+    host = SimpleNamespace(
+        full=True,
+        cases=(),
+        directory=Path("/profiles"),
+        meta={"owned": str(tmp_path), "source_sha256": "a" * 64, "dependency_sha256": "b" * 64},
+        root_only=lambda actor: None,
+    )
+    payload = {"path": str(path), "sha256": hashlib.sha256(body).hexdigest()}
+    answer = full_launch.collection(host, object(), payload)
+    request = {"kind": "collection", "payload": payload}
+    decoded = verify_reply(reply(request, answer), request)
+    assert decoded == {"ok": True, "reference": reference}
+    assert decoded["ok"] is True  # Native Client.request requires this before returning.
+    assert len(encode(reply(request, answer), RESPONSE_LIMIT)) < 1024
+    from case_inventory import identity
+
+    assert host.cases == (identity(node),)
+    assert host.meta["cases"] == reference
