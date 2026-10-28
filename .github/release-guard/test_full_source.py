@@ -56,3 +56,37 @@ def test_collection_only_emits_no_source_checkpoint_completion():
     )
     assert [kind for kind, _ in calls] == ["collection-finish"]
     assert not proof.completed
+
+
+@pytest.mark.parametrize("collect", [False, True])
+def test_fixed_uv_launcher_binds_collection_only_as_an_explicit_argument(
+    tmp_path, monkeypatch, collect
+):
+    import full_launch
+    from full_source import environment
+
+    meta = {
+        "runtime_root": str(tmp_path / "runtime"),
+        "owned": str(tmp_path / "owned"),
+        "checkout": str(tmp_path / "source"),
+    }
+    registrations = []
+    birth = object()
+    host = SimpleNamespace(
+        meta=meta,
+        launcher=123,
+        binding={"collection_only": collect},
+        ledger=SimpleNamespace(
+            current={123: birth},
+            process=lambda value: SimpleNamespace(generation=1, parent=None),
+            register=lambda *args, **kwargs: registrations.append((args, kwargs)),
+        ),
+    )
+    monkeypatch.setattr(full_launch, "native_digest", lambda path: "a" * 64)
+    vector = ["uv", "run", "pytest", "-q", *(["--collect-only"] if collect else [])]
+    path = str(tmp_path / "runtime/bin/uv")
+    assert full_launch.resolve(host, 123, path, vector, environment(meta), meta["checkout"])
+    assert registrations[-1][1]["expected_generation"] == 2
+    assert not full_launch.resolve(
+        host, 123, path, [*vector, "--ignore=tests"], environment(meta), meta["checkout"]
+    )

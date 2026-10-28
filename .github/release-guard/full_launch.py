@@ -41,7 +41,7 @@ def resolve(host,pid,path,vector,env,cwd):
         return False
     process=host.ledger.process(birth)
     if (pid==host.launcher and process.generation==1 and path==str(runtime/'bin/uv')
-            and vector==['uv','run','pytest','-q'] and env==environment(host.meta)):
+            and vector==['uv','run','pytest','-q',*(['--collect-only'] if host.binding.get('collection_only') else [])] and env==environment(host.meta)):
         pin=native_digest(Path(path))
         host.ledger.register(birth,os.urandom(16).hex(),(('uv',pin),),pin,
             case='<full-launcher>',command_class='native-full-uv',expected_generation=2)
