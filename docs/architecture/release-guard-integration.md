@@ -2925,3 +2925,9 @@ row does not independently prove its bare Python alias resolution. Native shell
 rows retain actual resolver behavior. This family grants no signal, listener,
 generic shell or provider authority. Component proof does not certify the source
 suite or release.
+
+
+Installed socket operations and socketpair creation convert local policy Refused
+exceptions into sticky guard failure, even when a source negative catches them.
+Ordinary OSError and BlockingIOError retain their original behavior. An already
+recorded guard poison is not reported twice. This adds no endpoint authority.

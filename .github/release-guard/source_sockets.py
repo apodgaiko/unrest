@@ -209,15 +209,25 @@ class Hooks:
             self.policy.refuse('source nonliteral address query')
         return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', (host, port))]
 
+    def guarded(self, function, *args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Refused as error:
+            if not self.policy.poison:
+                self.policy.refuse(str(error))
+            raise
+
     def install(self):
         hooks = self
         def wrap(name):
             def operation(stream, *args, **kwargs):
-                return hooks.call(name, stream, *args, **kwargs)
+                return hooks.guarded(hooks.call, name, stream, *args, **kwargs)
             return operation
         for name in self.original:
             setattr(self.socket_type, name, wrap(name))
-        socket.socketpair = self.self_pair
+        def pair(*args, **kwargs):
+            return hooks.guarded(hooks.self_pair, *args, **kwargs)
+        socket.socketpair = pair
         socket.getaddrinfo = self.literal_address
         def read(descriptor, count):
             return hooks.fd_io(hooks.read, descriptor, count)
