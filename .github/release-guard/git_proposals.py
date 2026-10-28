@@ -2,7 +2,7 @@
 import hashlib
 
 from content_manifest import Refused
-from git_commands import build,FIELDS
+from git_commands import build,FIELDS,Command
 from git_sites import CASES,OPERATIONS,OWNED_BODY
 from git_observer import SETUP,image
 from launch_policy import Rule,render
@@ -71,15 +71,25 @@ def prepare(host,actor,raw):
             raise Refused('Git proposal original executable')
         setup=0 if slot is None else slot['setup']
         operations=(SETUP[setup],) if setup<len(SETUP) else OPERATIONS[family]
-        candidates={}
+        candidates: dict[str,tuple[dict,Command]] = {}
         for operation in operations:
             try:
                 fields=operands(host,operation,raw['argv'][1:],raw,repository)
                 command=build(operation,repository,raw['cwd'],fields,family=family)
+                for location,kind,value,inputs in command.requires:
+                    host.git.values.require(case,repository,location,kind,value,inputs)
             except Refused:
                 continue
             if list(command.argv)==raw['argv'] and raw['stdin']==command.stdin:
                 candidates.setdefault(operation,(fields,command))
+        # Promotion/reset labels share argv with rollback. Prefer the complete
+        # integration provenance when both prove the same finite OS effect.
+        for canonical,rollback in (('update-parent','rollback-update'),('reset-parent','rollback-reset')):
+            if canonical in candidates and rollback in candidates:
+                strong,weak=candidates[canonical][1],candidates[rollback][1]
+                if (strong.argv,strong.cwd,strong.additions,strong.stdin)!=(weak.argv,weak.cwd,weak.additions,weak.stdin):
+                    raise Refused('Git overlapping declarations differ')
+                del candidates[rollback]
         if len(candidates)!=1:
             raise Refused('Git proposal requires one finite operation')
         operation,(fields,command)=next(iter(candidates.items()))
