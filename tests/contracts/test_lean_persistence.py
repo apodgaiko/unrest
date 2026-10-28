@@ -157,4 +157,4 @@ def test_reference_contract_scenario(
             trusted_root=tmp_path,
         )
         assert target.read_bytes() == before
-    assert lean_reference_run.returncode == 0, lean_reference_run.output
+    lean_reference_run.require_passed()

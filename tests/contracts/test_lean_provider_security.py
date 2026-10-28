@@ -219,7 +219,7 @@ def test_reference_contract_scenario(
                 (*actual, "src/unrest_harness/closed_model.py"),
                 forbidden,
             )
-    assert lean_reference_run.returncode == 0, lean_reference_run.output
+    lean_reference_run.require_passed()
 
 
 def _clean_cli_environment() -> dict[str, str]:

@@ -42,3 +42,11 @@ kill/wait cleanup, and restores SIG_DFL before signaling itself. The adapter mus
 remain externally signal-terminated (-15); child markers or PID absence do not
 substitute for a numeric owned wait. Production provider group termination and
 the original 0.3-second timeout oracle remain unchanged.
+
+Contract manifests use same-session source outcomes. A focused contract command
+must also select every external `SCENARIOS` reference (the complete bare selector,
+including every parameter expansion). Crosswalk consumers execute after source
+references; skips, xfail/xpass, missing phases, failures or deselection cannot
+satisfy them. An unrelated focused selection that deselects all contract consumers
+creates no contract obligation. Keep independent archive, installed lifecycle and
+purposeful nested-process checks as actual separate process tests.

@@ -41,4 +41,4 @@ def test_reference_contract_scenario(
 ) -> None:
     assert ASSERTION_TO_SCENARIOS[assertion_id] == (scenario_id,)
     assert reference_node in lean_reference_run.nodes
-    assert lean_reference_run.returncode == 0, lean_reference_run.output
+    lean_reference_run.require_passed()

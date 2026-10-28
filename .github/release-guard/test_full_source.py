@@ -31,9 +31,12 @@ def test_real_assertion_failure_is_retained_without_truncating_pytest():
         next(protocol)
     assert proof.completed == [item.nodeid]
     assert calls[-1][1]["outcome"] == "failed"
-    proof.pytest_sessionfinish(
-        SimpleNamespace(config=SimpleNamespace(option=SimpleNamespace(collectonly=False))), 1
+    finish = proof.pytest_sessionfinish(
+        SimpleNamespace(exitstatus=1, config=SimpleNamespace(option=SimpleNamespace(collectonly=False))), 1
     )
+    next(finish)
+    with pytest.raises(StopIteration):
+        next(finish)
     assert not any(kind == "root-finish" for kind, _ in calls)
 
 
@@ -51,9 +54,12 @@ def test_caught_forbidden_effect_still_fails_even_if_pytest_reports_pass():
 
 def test_collection_only_emits_no_source_checkpoint_completion():
     proof, _, calls = plugin()
-    proof.pytest_sessionfinish(
-        SimpleNamespace(config=SimpleNamespace(option=SimpleNamespace(collectonly=True))), 0
+    finish = proof.pytest_sessionfinish(
+        SimpleNamespace(exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=True))), 0
     )
+    next(finish)
+    with pytest.raises(StopIteration):
+        next(finish)
     assert [kind for kind, _ in calls] == ["collection-finish"]
     assert not proof.completed
 
@@ -223,3 +229,42 @@ def test_observer_collection_reply_carries_success_and_closed_reference(tmp_path
 
     assert host.cases == (identity(node),)
     assert host.meta["cases"] == reference
+
+
+@pytest.mark.parametrize("collect", [False, True])
+def test_late_session_failure_cannot_seal_success(collect):
+    proof, item, calls = plugin()
+    proof.completed = [] if collect else [item.nodeid]
+    manager = pytest.PytestPluginManager()
+    manager.register(proof)
+
+    class LateFailure:
+        def pytest_sessionfinish(self, session):
+            session.exitstatus = 1
+
+    manager.register(LateFailure())
+    session = SimpleNamespace(exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=collect)))
+    if collect:
+        with pytest.raises(Refused, match="collection failed"):
+            manager.hook.pytest_sessionfinish(session=session, exitstatus=0)
+    else:
+        manager.hook.pytest_sessionfinish(session=session, exitstatus=0)
+    assert not any(kind in ("root-finish", "collection-finish") for kind, _ in calls)
+
+
+@pytest.mark.parametrize("collect", [False, True])
+def test_raising_session_hook_cannot_seal_success(collect):
+    proof, item, calls = plugin()
+    proof.completed = [] if collect else [item.nodeid]
+    manager = pytest.PytestPluginManager()
+    manager.register(proof)
+
+    class BrokenFinalizer:
+        def pytest_sessionfinish(self):
+            raise RuntimeError("late finalizer failed")
+
+    manager.register(BrokenFinalizer())
+    session = SimpleNamespace(exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=collect)))
+    with pytest.raises(RuntimeError, match="late finalizer failed"):
+        manager.hook.pytest_sessionfinish(session=session, exitstatus=0)
+    assert not any(kind in ("root-finish", "collection-finish") for kind, _ in calls)

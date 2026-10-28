@@ -3,6 +3,7 @@
 This plugin adds inventory/outcome accounting; it never selects or deselects a
 case. Original skips remain visible and are not provider-acceptance evidence.
 """
+import pytest
 import hashlib
 import json
 from pathlib import Path
@@ -52,7 +53,10 @@ class FullCases(OriginalCases):
         profile['cases']=list(self.cases)
         self.policy.calls.install()
 
+    @pytest.hookimpl(wrapper=True,tryfirst=True)
     def pytest_sessionfinish(self,session,exitstatus):
+        yield
+        exitstatus=session.exitstatus
         if session.config.option.collectonly:
             from source_profile import case_seal
             if exitstatus!=0 or not self.cases or self.policy.poison or self.completed:

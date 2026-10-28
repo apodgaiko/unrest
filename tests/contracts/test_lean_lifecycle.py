@@ -98,4 +98,4 @@ def test_reference_contract_scenario(
         with pytest.raises(ToolError, match="requires MissionPlanning; got aborted"):
             controller.submit_plan(project_id, TaskList(tasks=[]))
         assert controller.store.load_state(project_id).state == "aborted"
-    assert lean_reference_run.returncode == 0, lean_reference_run.output
+    lean_reference_run.require_passed()

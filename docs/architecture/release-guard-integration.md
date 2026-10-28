@@ -314,10 +314,29 @@ completion additionally requires native body READY, exit zero and actual parent
 reap. It receives no descendant or release-root lifecycle authority. A fixed
 bootstrap selects locked pytest plugins and a token-specific basetemp/cache,
 preventing inherited release plugins or parent-directory cleanup from leaking
-into this child. Launch-bearing contract references still require their own
-scoped implementation; this leaf grants them no permission.
+into this child. This leaf grants contract references no launch permission.
 Nested declaration imports remain dependency-free during native `-I -S`
 bootstrap. The pytest-derived plugin class is created only after activation has
 installed the locked dependency paths; importing enforcement initializes no
 asyncio runtime. Shared digest predicates and duplicate-key decoding retain the
 same primitive and rejection semantics; inactive owner-label constants are gone.
+
+
+Contract crosswalks bind their complete external `SCENARIOS` selections to actual
+source-test reports in the same pytest session. Collection records every selected
+manifest before fixtures run and moves contract consumers after source tests,
+retaining relative order within both groups. A focused command must explicitly
+include all referenced source selectors; selecting one parameter cannot certify a
+bare-function obligation. Missing, deselected or duplicate cases, duplicate phases,
+skips, failures, xfail/xpass and incomplete setup/call/teardown fail both the
+consumer assertion and an independent session gate, including when its fixture
+never runs. The release completion hook runs after other session-finish hooks and
+checks the final session status before sealing success.
+
+This retires redundant recursive reference pytest runs and their synthetic runner
+probes. Their separate credential-filtered interpreter and 120-second subprocess
+timeout are intentionally retired properties, not claims about same-session
+execution. Real source cases and contract IDs/parameter declarations/local
+assertions remain. Candidate-process, build/archive, extracted persistence,
+installed lifecycle and the purposeful nested speed regression remain separate
+process checks with their original behavior assertions.

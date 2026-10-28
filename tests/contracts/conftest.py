@@ -11,23 +11,13 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import tarfile
-import xml.etree.ElementTree as ET
 import zipfile
 
 import pytest
 
 
-@dataclass(frozen=True)
-class ReferenceRun:
-    nodes: frozenset[str]
-    returncode: int
-    output: str
-
-
-class ReferenceRunError(AssertionError):
-    """The selected reference surface did not execute completely and cleanly."""
+from tests.reference_outcomes import ReferenceOutcomes, ReferenceSelection
 
 
 @dataclass(frozen=True)
@@ -55,10 +45,6 @@ class BuiltDistribution:
     dependency_site: Path
 
 
-_SUMMARY_FAILURE = re.compile(
-    r"\b(?:skipped|deselected|xfailed|xpassed|failed|errors?)\b",
-    re.IGNORECASE,
-)
 _CREDENTIAL_NAME = re.compile(
     r"(?:API[_-]?KEY|TOKEN|PASSWORD|CREDENTIAL|PRIVATE[_-]?KEY|ACCESS[_-]?KEY)",
     re.IGNORECASE,
@@ -124,166 +110,17 @@ def _run_checked(
     return completed.stdout
 
 
-def run_reference_nodes(
-    nodes: tuple[str, ...],
-    *,
-    repository_root: Path,
-    timeout_seconds: float = 120,
-) -> ReferenceRun:
-    """Run selected nodes and reject every incomplete pytest outcome.
-
-    Pytest's process exit status is deliberately insufficient here: a selection
-    containing only skips exits zero.  JUnit data supplies execution counts and
-    per-node outcomes; the terminal summary supplies deselection detection.
-    """
-    if not nodes:
-        raise ReferenceRunError("reference selection is empty")
-    if any(re.search(r"(?:^|[_-])(smoke|live)(?:[_-]|$)", node) for node in nodes):
-        raise ReferenceRunError("live-provider and smoke nodes are forbidden")
-
-    child_env = {
-        key: value
-        for key, value in os.environ.items()
-        if not _CREDENTIAL_NAME.search(key)
-    }
-    with tempfile.TemporaryDirectory(prefix="unrest-contract-run-") as raw_dir:
-        report_path = Path(raw_dir) / "pytest.xml"
-        command = [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-q",
-            "-ra",
-            "-p",
-            "no:cacheprovider",
-            f"--junitxml={report_path}",
-            *nodes,
-        ]
-        try:
-            completed = subprocess.run(
-                command,
-                cwd=repository_root,
-                env=child_env,
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=timeout_seconds,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ReferenceRunError(
-                f"reference selection timed out after {timeout_seconds:g}s"
-            ) from exc
-
-        output = completed.stdout
-        if not report_path.is_file():
-            raise ReferenceRunError(
-                f"pytest produced no execution report (exit {completed.returncode})\n{output}"
-            )
-        try:
-            root = ET.parse(report_path).getroot()
-        except ET.ParseError as exc:
-            raise ReferenceRunError("pytest execution report is malformed") from exc
-
-        cases = root.findall(".//testcase")
-        skipped = root.findall(".//skipped")
-        failures = root.findall(".//failure")
-        errors = root.findall(".//error")
-        if not cases:
-            raise ReferenceRunError(f"pytest executed zero tests\n{output}")
-        if skipped:
-            raise ReferenceRunError(f"pytest skipped {len(skipped)} selected tests\n{output}")
-        if failures or errors or completed.returncode != 0:
-            raise ReferenceRunError(
-                "pytest selection failed "
-                f"(exit {completed.returncode}, failures={len(failures)}, "
-                f"errors={len(errors)})\n{output}"
-            )
-        if _SUMMARY_FAILURE.search(output):
-            raise ReferenceRunError(f"pytest selection was incomplete\n{output}")
-
-    return ReferenceRun(frozenset(nodes), completed.returncode, output)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _runner_integrity_regressions(tmp_path_factory: pytest.TempPathFactory) -> None:
-    """Every aggregate fake-pass route is rejected in the current process."""
-    probe_dir = tmp_path_factory.mktemp("runner-regressions")
-    probe = probe_dir / "test_runner_outcomes.py"
-    probe.write_text(
-        "import os\n"
-        "import time\n"
-        "import pytest\n\n"
-        "def test_passes():\n"
-        "    assert 'CONTRACT_TEST_API_KEY' not in os.environ\n\n"
-        "def test_skips():\n"
-        "    pytest.skip('synthetic missing setup')\n\n"
-        "def test_fails():\n"
-        "    raise AssertionError('synthetic failure')\n\n"
-        "def test_waits():\n"
-        "    time.sleep(1)\n",
-        encoding="utf-8",
-    )
-    with pytest.raises(ReferenceRunError, match="skipped 1 selected tests"):
-        run_reference_nodes(
-            (f"{probe}::test_skips",),
-            repository_root=probe_dir,
-            timeout_seconds=10,
-        )
-    with pytest.raises(ReferenceRunError, match="reference selection is empty"):
-        run_reference_nodes((), repository_root=probe_dir)
-    with pytest.raises(ReferenceRunError, match="live-provider and smoke"):
-        run_reference_nodes(("test_live_provider",), repository_root=probe_dir)
-    with pytest.raises(ReferenceRunError, match="executed zero tests|incomplete"):
-        run_reference_nodes(
-            (f"{probe}::test_passes", "-k", "not test_passes"),
-            repository_root=probe_dir,
-        )
-    with pytest.raises(ReferenceRunError, match="failed"):
-        run_reference_nodes(
-            (f"{probe}::test_fails",),
-            repository_root=probe_dir,
-        )
-    with pytest.raises(ReferenceRunError, match="timed out"):
-        run_reference_nodes(
-            (f"{probe}::test_waits",),
-            repository_root=probe_dir,
-            timeout_seconds=0.05,
-        )
-    credential_name = "CONTRACT_TEST_API_KEY"
-    previous = os.environ.get(credential_name)
-    os.environ[credential_name] = "runner-probe-value"
-    try:
-        clean = run_reference_nodes(
-            (f"{probe}::test_passes",),
-            repository_root=probe_dir,
-        )
-    finally:
-        if previous is None:
-            os.environ.pop(credential_name, None)
-        else:
-            os.environ[credential_name] = previous
-    assert clean.returncode == 0
+def pytest_configure(config: pytest.Config) -> None:
+    config.pluginmanager.register(ReferenceOutcomes(), "contract-reference-outcomes")
 
 
 @pytest.fixture(scope="module")
-def lean_reference_run(request: pytest.FixtureRequest) -> ReferenceRun:
-    """Run the manifest's reference nodes once, without cache or live providers."""
-    scenarios = request.module.SCENARIOS
-    nodes = tuple(dict.fromkeys(scenario[2] for scenario in scenarios))
-    external_nodes = tuple(node for node in nodes if not node.startswith("local::"))
-    assert nodes, "Lean contract manifest must not have an empty scenario family"
-    assert all("test_smoke_" not in node for node in nodes), (
-        "Lean contract manifests must not require live-provider smoke tests"
-    )
-
-    repository_root = Path(__file__).resolve().parents[2]
-    assert external_nodes, "manifest must select at least one executable reference node"
-    executed = run_reference_nodes(
-        external_nodes,
-        repository_root=repository_root,
-    )
-    return ReferenceRun(frozenset(nodes), executed.returncode, executed.output)
+def lean_reference_run(request: pytest.FixtureRequest) -> ReferenceSelection:
+    """Bind the complete manifest to actual source tests in this session."""
+    nodes = frozenset(row[2] for row in request.module.SCENARIOS)
+    assert nodes and any(not node.startswith("local::") for node in nodes)
+    binder = request.config.pluginmanager.get_plugin("contract-reference-outcomes")
+    return ReferenceSelection(nodes, binder)
 
 
 @pytest.fixture(scope="session")

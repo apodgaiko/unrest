@@ -229,4 +229,4 @@ def test_reference_contract_scenario(
             for path in raw_tree
             if isinstance(path, str)
         )
-    assert lean_reference_run.returncode == 0, lean_reference_run.output
+    lean_reference_run.require_passed()

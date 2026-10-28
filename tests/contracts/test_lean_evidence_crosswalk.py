@@ -99,7 +99,7 @@ def test_crosswalk_is_complete_and_every_mapped_node_passes(lean_reference_run) 
         record["candidate_result"] == "pass"
         for record in CROSSWALK["hard_cut_results"]
     )
-    assert lean_reference_run.returncode == 0, lean_reference_run.output
+    lean_reference_run.require_passed()
 
 
 def test_v02_source_import_dependency_and_hard_cut_inventories_are_historical() -> None:

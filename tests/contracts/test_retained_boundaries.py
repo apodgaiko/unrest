@@ -143,4 +143,4 @@ def test_retained_boundary_scenario(
     assert len(catalog) == len(set(catalog)) == 17
     assert set(catalog) == {sink_id for sink_id, _node in SINK_NODES}
     assert candidate_node in lean_reference_run.nodes
-    assert lean_reference_run.returncode == 0, lean_reference_run.output
+    lean_reference_run.require_passed()
