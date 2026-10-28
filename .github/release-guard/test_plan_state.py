@@ -168,3 +168,21 @@ def test_host_accepts_preflight_selector_before_binding_and_refuses_unknown(tmp_
     monkeypatch.setattr(sys,'argv',['source_host.py',str(tmp_path/'absent.json'),'unknown'])
     with pytest.raises(RuntimeError,match='exact root Linux invocation'):
         source_host.main()
+
+
+def test_python_plan_keeps_actual_bare_executable_resolution_separate_from_translated_argv(tmp_path,monkeypatch):
+    monkeypatch.setattr(plan_launch,'OWNER',os.getuid())
+    root=tmp_path/'pytest/case'
+    root.mkdir(parents=True)
+    native=tmp_path/'fixed-python'
+    native.write_bytes(b'synthetic image')
+    alias=root/'adapter'
+    alias.symlink_to(native)
+    model=expected(plan_launch.PYTHON,str(root),tmp_path,str(native),'a'*64)
+    assert model.attempts==(str(alias),)
+    assert model.expected.argv[0]=='adapter'
+    assert model.vector[:4]==(str(native),'-I','-S','-c')
+    alias.unlink()
+    alias.symlink_to(tmp_path/'foreign')
+    with pytest.raises((Refused,FileNotFoundError)):
+        expected(plan_launch.PYTHON,str(root),tmp_path,str(native),'a'*64)

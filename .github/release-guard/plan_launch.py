@@ -117,7 +117,7 @@ def expected(case,cwd,owned,native,native_pin):
         kind='python-command'
         vector=('adapter','-c',CODE,str(root/'capture.json'),'quoted argument')
         env={'PATH':cwd,'MARKER':'exact'}
-        attempts=(native,)
+        attempts=(str(alias),)
         tool=(native,native_pin)
     elif case==CASES[7]:
         target=Path('/usr/bin/true')
