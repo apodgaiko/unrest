@@ -313,7 +313,7 @@ def drain_owned(rows):
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from controlled_cases import GROUPS as CONTROLLED_GROUPS, ADMISSION, NOTIFICATION_STARTUP, NOTIFICATION_SIGNALS, ROOT_HTTP
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', *CONTROLLED_GROUPS)),
+    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'sessions69', 'session-timeout', 'imports6', 'preflight9', *CONTROLLED_GROUPS)),
             'source host requires exact root Linux invocation')
     binding_file = Path(sys.argv[1]).resolve(strict=True)
     binding = json.loads(binding_file.read_bytes())
