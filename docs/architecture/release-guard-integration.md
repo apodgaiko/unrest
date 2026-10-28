@@ -231,3 +231,9 @@ its command, checkout cwd and inherited test environment are compared exactly,
 including the original `PYTHONDONTWRITEBYTECODE=1` addition. Exactly one child is
 permitted, with no descendant query authority, and the original assertions still
 check one product audit-hook installation and the same controller after reload.
+
+Controlled case declarations share explicit finite parameter axes and common
+backend tuples. This factors repeated data only: all ten prior exported mappings,
+including their insertion order and group frontiers, match ordered pre-change
+fingerprints. Distinct backend postimages remain explicit. Runtime authority does
+not read the test fingerprints or discover additional cases by prefix matching.
