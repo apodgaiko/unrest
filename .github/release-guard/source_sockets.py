@@ -178,11 +178,16 @@ class Hooks:
     def literal_address(self, host, port, family=0, type=0, proto=0, flags=0):
         # This computes a literal tuple; it never calls a DNS resolver. The
         # subsequent connect still needs the observer's exact live route.
+        http = self.policy.case in MCP_CASES or self.policy.profile['case'] in MCP_CASES
+        if http and TYPE(host) is bytes and host==b'127.0.0.1':
+            host='127.0.0.1'
+        if http and TYPE(port) is str and port.isascii() and port.isdigit() and 0<len(port)<=5:
+            port=int(port)
         if (TYPE(host) is not str or host != '127.0.0.1' or TYPE(port) is not int or not 0 < port <= 65535
                 or TYPE(family) not in (int, socket.AddressFamily) or family not in (0, socket.AF_INET)
                 or TYPE(type) not in (int, socket.SocketKind) or type not in (0, socket.SOCK_STREAM)
                 or TYPE(proto) is not int or proto not in (0, socket.IPPROTO_TCP)
-                or TYPE(flags) is not int or flags != 0):
+                or TYPE(flags) not in (int,socket.AddressInfo) or int.__int__(flags) not in ((0,socket.AI_PASSIVE,socket.AI_PASSIVE|socket.AI_ADDRCONFIG) if http else (0,))):
             self.policy.refuse('source nonliteral address query')
         return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', (host, port))]
 

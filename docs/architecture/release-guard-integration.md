@@ -170,3 +170,9 @@ The exact native ps inventory runs once, only after the server's original-parent
 reap, and requires zero status. Actual server zero or recorded TERM/KILL status is
 retained. Root broker authentication contexts apply only to their separate
 broker cases, not to unrelated MCP clients.
+
+The literal loopback resolver accepts MCP transport's numeric ASCII bytes and
+numeric service spelling, plus its passive/address-configuration flags. It still
+returns only the literal IPv4 loopback tuple and never calls DNS. Hostnames,
+service names, alternate families and protocols remain refused; bind/connect
+still require their independently admitted endpoint generation.

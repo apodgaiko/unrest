@@ -1,6 +1,7 @@
 """Exact HTTP command reconstruction; no native execution is claimed here."""
 from copy import deepcopy
 from pathlib import Path
+import socket
 from types import SimpleNamespace
 
 import pytest
@@ -219,3 +220,32 @@ def test_http_connection_budget_binds_the_consumed_live_server(tmp_path,monkeypa
         with pytest.raises(Refused,match='finite connection count'):
             observer.dispatch(actor,{'kind':'connect','payload':payload})
         assert len(joins)==1
+
+
+@pytest.mark.parametrize('host',['127.0.0.1',b'127.0.0.1'])
+@pytest.mark.parametrize('port',[12345,'12345'])
+@pytest.mark.parametrize('flags',[0,socket.AI_PASSIVE,socket.AI_PASSIVE|socket.AI_ADDRCONFIG])
+def test_http_literal_resolution_accepts_only_numeric_operands_without_dns(host,port,flags,monkeypatch):
+    import socket
+    from source_sockets import Hooks
+    hooks=object.__new__(Hooks)
+    def refuse(reason):
+        raise Refused(reason)
+    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'case':http_cases.CASES[0]},refuse=refuse)
+    monkeypatch.setattr(socket,'getaddrinfo',lambda *args,**kwargs:pytest.fail('DNS resolution attempted'))
+    assert hooks.literal_address(host,port,family=socket.AF_INET,type=socket.SOCK_STREAM,
+        flags=socket.AddressInfo(flags))==[(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP,'',('127.0.0.1',12345))]
+
+
+@pytest.mark.parametrize('field,value', [('host','localhost'),('host',b'example.invalid'),('port','http'),
+    ('port',True),('port',65536),('port','１２３'),('flags',2),('family',10),('proto',17),('type',2)])
+def test_http_literal_resolution_does_not_add_names_services_or_socket_families(field,value):
+    from source_sockets import Hooks
+    hooks=object.__new__(Hooks)
+    def refuse(reason):
+        raise Refused(reason)
+    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'case':http_cases.CASES[0]},refuse=refuse)
+    operands={'host':'127.0.0.1','port':12345}
+    operands[field]=value
+    with pytest.raises(Refused,match='nonliteral address query'):
+        hooks.literal_address(**operands)
