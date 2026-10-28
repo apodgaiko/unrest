@@ -2954,3 +2954,12 @@ environment, cwd, flags and inherited-FD checks, plus compact role/case eligibil
 Sealed bodies retain once-only compilation/execution, current script remeasurement,
 module bindings and exact delayed runpy dispatch. This replaces a third family
 renderer; source admission and independent observer rendering remain separate.
+
+
+An interrupted bootstrap case may retire an unfinished ACP bridge/lifetime
+connection ticket only after the exact client birth/token/case has an authorized
+terminating signal and a complete original-parent reap. The root server owner
+and token-bound route must still match. This records cancelled-unjoined, with
+accepted peer and descriptor close explicitly unproven; it creates no connection
+or payload permission. Positive cases and the separate EOF-only drain path retain
+their existing requirements.

@@ -514,6 +514,26 @@ class Observer:
         return (terminal is not None and (actor.get('kernel_admitted') is True or actor['body_ready']
                 or terminal[2] in (-9, -15) and -terminal[2] in actor['signals']))
 
+    def retire_cancelled_tickets(self):
+        if self.case not in BOOTSTRAP or not declaration(self.case).interrupted:
+            raise Refused('source cancelled ticket outside interrupted case')
+        root = self.actors[self.root]
+        for serial,ticket in sorted(list(self.endpoints.tickets.items())):
+            if ticket.route.case != self.case or serial in self.eof_drains:
+                continue
+            child = self.actors.get(ticket.route.client.birth.pid)
+            process = self.ledger.process(ticket.route.client.birth)
+            terminal = process.terminal
+            if (ticket.route.server != self.owner(root) or child is None or child['role']!='acp'
+                    or child['birth']!=ticket.route.client.birth or child['token']!=ticket.route.client.token
+                    or child['case']!=self.case or ticket.route.name not in (child['token']+':bridge',child['token']+':lifetime')
+                    or terminal is None or terminal[2] not in (-9,-15) or -terminal[2] not in child['signals']
+                    or not self.ledger.reaped(child['birth'],child['token'])):
+                raise Refused('source cancelled ticket requires exact signalled parent reap')
+            self.endpoints.abort_reaped(ticket)
+            self.interrupted_records.append({'kind':'cancelled-unjoined','ticket':serial,
+                'actual_original_parent_reap':True,'accepted_peer_proven':False,'descriptor_close_proven':False})
+
     def interrupted_accept(self, actor, matches, server):
         """No peer association is inferred from EOF; this is not a Connection."""
         if not declaration(self.case).interrupted or len(matches) != 1 or server is None:
@@ -587,6 +607,8 @@ class Observer:
                             'actual_original_parent_reap': True, 'accepted_peer_proven': False})
                         self.eof_fds.pop((actor['birth'], drain['socket'].fd), None)
                         del self.eof_drains[serial]
+                if spec is not None and spec.interrupted:
+                    self.retire_cancelled_tickets()
                 if (payload['case'] != self.case or self.case in GIT_CASES and len(children) < 5 or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
