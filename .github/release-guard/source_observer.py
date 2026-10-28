@@ -96,7 +96,7 @@ class Observer:
     def profile(self, pid, role, case, vector, environment, cwd, token, inherited=()):
         actual = process_identity(pid)
         parent = Birth.read(process_identity(actual['ppid']))
-        scripts = {'review-wire':REVIEW_SCRIPT,'session-adapter': SESSION_SCRIPT, 'session-child': SESSION_SCRIPT,
+        scripts = {'desktop':'tools/v046_desktop_fixture.py','review-wire':REVIEW_SCRIPT,'session-adapter': SESSION_SCRIPT, 'session-child': SESSION_SCRIPT,
                    'cleanup-acp': SCRIPT, 'acp': ACP, 'mock-acp': MOCK}
         script = (str(Path(self.meta['checkout']) / scripts[role]) if role in scripts else
                   str(backend_path(case,Path(cwd).parent) if case in CONTROLLED else Path(cwd).parent / 'fake-app-server') if role in ('backend', 'delayed-backend') else None)
@@ -126,7 +126,7 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop'}[role]
         new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
@@ -158,7 +158,7 @@ class Observer:
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
                     if self.full and parent is not None and parent.pid==self.launcher and not self.full_started:
                         continue
-                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline') or len(candidates) != 1:
+                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
@@ -223,6 +223,10 @@ class Observer:
                 expected_info = expected_fd.stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source inherited native fixture descriptor')
+            elif descriptor == 2 and role=='desktop':
+                other=(parent/'2').stat()
+                if (info.st_dev,info.st_ino,info.st_mode)!=(other.st_dev,other.st_ino,other.st_mode):
+                    raise Refused('desktop exact inherited stderr')
             elif descriptor == 2 and role == 'acp':
                 null = Path('/dev/null').stat()
                 if not stat.S_ISCHR(info.st_mode) or info.st_rdev != null.st_rdev:
@@ -256,6 +260,9 @@ class Observer:
         if native_digest(Path(path).resolve(strict=True)) != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
             return False
         intent = matches[0]
+        from desktop_launch import CASE as DESKTOP_CASE,retained as desktop_retained
+        if intent['case']==DESKTOP_CASE:
+            desktop_retained(self)
         if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):
             return False
         intent['stdout'] = self.stdio(pid, intent['role'],
@@ -288,6 +295,10 @@ class Observer:
         if actor['role'] == 'root':
             self.root_only(actor)
             return
+        if actor['role']=='desktop' and actor['case']==self.case and not self.finished:
+            from desktop_launch import CASE
+            if self.case==CASE:
+                return
         if actor['role'] == 'fixed-inline' and actor['case'] == self.case and not self.finished:
             if sum(value.get('fixed_operation') == 'check' and value['token'] == actor['token'] for value in self.intents.values()) != 1:
                 raise Refused('fixed inline has no query authority')
@@ -376,6 +387,8 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        if actor['role']=='desktop':
+            return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='pytest-regression':
             return terminal is not None and terminal[2]==0 and actor['body_ready'] and actor.get('preselected_complete') is True
         if actor['role']=='ps':

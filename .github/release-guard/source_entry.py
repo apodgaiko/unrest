@@ -47,7 +47,7 @@ class Policy:
         return getattr(self.client.local,'active',False) is True
 
     def popen(self, args):
-        if self.profile['role'] not in ('root','mcp','session-adapter','fixed-inline') or self.case is None:
+        if self.profile['role'] not in ('root','mcp','session-adapter','fixed-inline','desktop') or self.case is None:
             raise Refused('source undeclared process role')
         if type(args) is not tuple or len(args)!=4:
             raise Refused('source process audit schema')
@@ -285,7 +285,7 @@ class Policy:
         def killpg(pid, sig):
             return signal(pid, sig, group=True)
 
-        if self.profile['role'] in ('root', 'mcp', 'session-adapter', 'fixed-inline'):
+        if self.profile['role'] in ('root', 'mcp', 'session-adapter', 'fixed-inline','desktop'):
             subprocess.run=run
             setattr(subprocess.Popen, '__init__', construct)
             setattr(subprocess.Popen, 'communicate', communicate)
@@ -301,7 +301,7 @@ def activate(directory, profile, event, arguments):
     actual, pins = validate(profile, event, arguments)
     client = Client(directory, profile, METHODS)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression'):
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop'):
         sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
         # Only guard/locked dependencies initialize here; candidate test modules
         # are imported by the real pytest body after the native READY boundary.

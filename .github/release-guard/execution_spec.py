@@ -4,7 +4,7 @@ import stat
 
 from content_manifest import Refused, capture
 
-LIBRARY = ('mcp','cleanup-acp','session-adapter','session-child','fixed-inline','plan-python','mp-child','mp-tracker','review-wire','pytest-regression')
+LIBRARY = ('mcp','cleanup-acp','session-adapter','session-child','fixed-inline','plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop')
 SEALED = ('backend','delayed-backend','acp','mock-acp','cleanup-inline','workspace-owned','session-inline')
 DOMAINS = {'root':'root', **dict.fromkeys(LIBRARY,'library'), **dict.fromkeys(SEALED,'sealed')}
 

@@ -340,3 +340,17 @@ execution. Real source cases and contract IDs/parameter declarations/local
 assertions remain. Candidate-process, build/archive, extracted persistence,
 installed lifecycle and the purposeful nested speed regression remain separate
 process checks with their original behavior assertions.
+
+
+The original functional desktop stdio case admits one pinned fixture `serve`
+script in its canonical disposable pytest directory. Its distinct desktop role
+may issue only one process-start query for its own authenticated birth/PID/token,
+after body readiness, using the original isolated six-variable environment.
+The `/bin/ps` spelling must resolve to the pinned root-owned `/usr/bin/ps` image;
+translation preserves the exact self-PID `lstart=` operands. The server starts
+from the original HOME/PATH-only MCP environment. Directory generations are
+retained through exec, stderr is the actual inherited descriptor and stdin/stdout
+are parent-owned pipes. Both children require exit zero and actual original-parent
+waits. This grants no provider launch, TCP endpoint or generic ps/Python command.
+The original response, candidate, registration, process and cleanup assertions
+remain unchanged.
