@@ -1,14 +1,11 @@
 """Original controlled review-wire fixtures; no external reviewer is launched."""
 import hashlib
 import json
-import os
 from pathlib import Path
-import stat
 
 from case_inventory import identity
-from content_manifest import Refused
+from content_manifest import Refused, read_regular
 from control_transport import unique
-from native_entry import key
 from launch_policy import build_expected
 
 TEST='tests/test_provider_review.py'
@@ -36,19 +33,7 @@ def scenario(file,owned):
     if (str(file.resolve())!=str(file) or file.name!='scenario.json'
             or not file.parent.is_relative_to(owned/'pytest') or file.parent==owned/'pytest'):
         raise Refused('review-wire owned scenario path')
-    fd=os.open(file,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC|os.O_NONBLOCK)
-    try:
-        info=os.fstat(fd)
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid!=20000 or info.st_nlink!=1
-                or stat.S_IMODE(info.st_mode)!=0o644 or info.st_size>131072):
-            raise Refused('review-wire scenario custody')
-        with os.fdopen(fd,'rb',closefd=False) as stream:
-            body=stream.read(131073)
-        if (len(body)!=info.st_size or len(body)>131072 or key(info)!=key(os.fstat(fd))
-                or key(info)!=key(file.lstat())):
-            raise Refused('review-wire scenario current bytes')
-    finally:
-        os.close(fd)
+    body,info,_=read_regular(file,131072,uid=20000,mode=0o644)
     value=json.loads(body,object_pairs_hook=unique)
     if (len(body)!=info.st_size or type(value) is not dict or set(value)!={'events','delay','raw_frame'}
             or type(value['events']) is not list or len(value['events'])>3

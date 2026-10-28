@@ -93,7 +93,8 @@ def _root(stack: ExitStack, path: Path) -> tuple[int, list[tuple[int, str, int, 
 
 
 def _member(root: int, name: str, line_counts: dict[str, int] | None,
-            file_bound: int = MAX_FILE_BYTES) -> Member:
+            file_bound: int = MAX_FILE_BYTES, *, collected=None, uid=None, mode=None,
+            minimum=0, forbidden=0o7000) -> Member:
     parts = name.split("/")
     directories: list[tuple[int, str, int, tuple[int, ...]]] = []
     with ExitStack() as stack:
@@ -111,7 +112,9 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
             parent = child
         before = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
         if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
-                or before.st_mode & 0o7000):
+                or before.st_mode & forbidden or uid is not None and before.st_uid!=uid
+                or mode is not None and stat.S_IMODE(before.st_mode)!=mode
+                or before.st_size<minimum):
             raise Refused("nonregular_or_aliased_file")
         if before.st_size > file_bound:
             raise Refused("file_bound")
@@ -123,12 +126,12 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
         digest = hashlib.sha256()
         counted_bytes = bytearray()
         size = 0
-        while block := os.read(fd, 65536):
+        while block := os.read(fd, min(65536, file_bound-size+1)):
             size += len(block)
             if size > file_bound or size > before.st_size:
                 raise Refused("file_read_bound")
             digest.update(block)
-            if line_counts is not None:
+            if line_counts is not None or collected is not None and collected['retain']:
                 counted_bytes.extend(block)
         if (size != before.st_size or _key(before) != _key(os.fstat(fd))
                 or _key(before) != _key(os.stat(parts[-1], dir_fd=parent,
@@ -144,6 +147,8 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
                 line_counts[name] = len(counted_bytes.decode("utf-8").splitlines())
             except UnicodeError:
                 raise Refused("opaque_guard_payload") from None
+        if collected is not None:
+            collected.update(body=bytes(counted_bytes) if collected['retain'] else None,info=before)
         return {"path": name, "mode": stat.S_IMODE(before.st_mode),
                 "size": size, "sha256": digest.hexdigest()}
 
@@ -178,6 +183,21 @@ def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | Non
 def capture(root: Path, paths: Sequence[str]) -> Manifest:
     """Measure exactly the supplied inventory without importing or running it."""
     return _capture(root, paths, None)
+
+
+def read_regular(file: Path, maximum: int, *, uid=None, mode=None, minimum=0,
+                 forbidden=0o7000, retain=True) -> tuple[bytes | None, os.stat_result, str]:
+    """Acquire one complete bounded file through held nofollow directory FDs."""
+    observed = {'retain':retain}
+    with ExitStack() as stack:
+        parent, chain = _root(stack, file.parent)
+        member=_member(parent, _path(file.name), None, maximum, collected=observed,
+                uid=uid, mode=mode, minimum=minimum, forbidden=forbidden)
+        for ancestor, part, child, expected in reversed(chain):
+            if (expected != _directory_key(os.fstat(child))
+                    or expected != _directory_key(os.stat(part, dir_fd=ancestor, follow_symlinks=False))):
+                raise Refused('regular file ancestor changed')
+    return observed['body'], observed['info'], member['sha256']
 
 
 def native_digest(path: Path) -> str:

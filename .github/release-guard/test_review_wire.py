@@ -2,6 +2,7 @@
 
 import json
 import os
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,22 +13,15 @@ import review_wire as wire
 
 
 def source_files(monkeypatch):
-    original, original_fstat = Path.lstat, os.fstat
-
-    def metadata(path):
-        info = original(path)
-        row = list(info)
-        row[4] = 20000
+    original, original_fstat = os.stat, os.fstat
+    def owner(info):
+        if not stat.S_ISREG(info.st_mode):
+            return info
+        row=list(info)
+        row[4]=20000
         return os.stat_result(row)
-
-    monkeypatch.setattr(Path, "lstat", metadata)
-
-    def fstat(fd):
-        row = list(original_fstat(fd))
-        row[4] = 20000
-        return os.stat_result(row)
-
-    monkeypatch.setattr(os, "fstat", fstat)
+    monkeypatch.setattr(os,'stat',lambda *args,**kwargs:owner(original(*args,**kwargs)))
+    monkeypatch.setattr(os,'fstat',lambda fd:owner(original_fstat(fd)))
 
 
 @pytest.mark.parametrize(
@@ -170,33 +164,21 @@ def test_scenario_read_is_bounded_and_binds_opened_file_generation(tmp_path, mon
     file = base / "scenario.json"
     original = json.dumps({"events": [], "delay": 0, "raw_frame": None}).encode()
     file.write_bytes(original)
-    fdopen = os.fdopen
-    limits = []
-
-    class Stream:
-        def __init__(self, fd):
-            self.inner = fdopen(fd, "rb", closefd=False)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            self.inner.close()
-
-        def read(self, limit):
-            limits.append(limit)
-            if mutation == "growth":
-                file.write_bytes(original + b"x" * 200000)
-            result = self.inner.read(limit)
-            if mutation == "replacement":
-                file.unlink()
-                file.write_bytes(original)
-            return result
-
-    monkeypatch.setattr(os, "fdopen", lambda fd, *args, **kwargs: Stream(fd))
-    with pytest.raises(Refused, match="current bytes"):
-        wire.scenario(file, tmp_path)
-    assert limits == [131073]
+    original_read=os.read
+    limits=[]
+    def read(fd,limit):
+        limits.append(limit)
+        if mutation=='growth' and len(limits)==1:
+            file.write_bytes(original+b'x'*200000)
+        result=original_read(fd,limit)
+        if mutation=='replacement' and len(limits)==1:
+            file.unlink()
+            file.write_bytes(original)
+        return result
+    monkeypatch.setattr(os,'read',read)
+    with pytest.raises(Refused,match='file_read'):
+        wire.scenario(file,tmp_path)
+    assert limits and all(0<limit<=131073 for limit in limits) and len(limits)<=2
 
 
 def test_component_collection_and_reports_keep_actual_large_pytest_item(monkeypatch):
@@ -245,18 +227,20 @@ def test_fifo_scenario_without_writer_refuses_before_any_blocking_read(
     original_open = os.open
     calls = []
 
-    def opening(path, flags):
+    def opening(path,flags,*args,**kwargs):
+        if flags & os.O_DIRECTORY:
+            return original_open(path,flags,*args,**kwargs)
         calls.append(flags)
         assert flags & os.O_NONBLOCK and flags & os.O_NOFOLLOW
         if replace_before_open:
             file.unlink()
             os.mkfifo(file)
-        return original_open(path, flags)
-
-    monkeypatch.setattr(os, "open", opening)
-    with pytest.raises(Refused, match="custody"):
-        wire.scenario(file, tmp_path)
-    assert len(calls) == 1
+        return original_open(path,flags,*args,**kwargs)
+    monkeypatch.setattr(os,'open',opening)
+    monkeypatch.setattr(os,'read',lambda *args:pytest.fail('FIFO must refuse before read'))
+    with pytest.raises(Refused,match='nonregular|acquisition_race'):
+        wire.scenario(file,tmp_path)
+    assert len(calls)==int(replace_before_open)
 
 
 @pytest.mark.parametrize(

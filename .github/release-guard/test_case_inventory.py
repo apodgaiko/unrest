@@ -3,6 +3,7 @@
 import copy
 import json
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -38,15 +39,17 @@ def test_inventory_rejects_invalid_nodes_and_generation(mutation):
 
 
 def observer_files(monkeypatch):
-    stat, fstat = Path.lstat, os.fstat
+    original_stat, fstat = os.stat, os.fstat
 
     def owner(info):
+        if not stat.S_ISREG(info.st_mode):
+            return info
         row = list(info)
         row[4] = 20001
         return os.stat_result(row)
 
     monkeypatch.setattr(os, "chown", lambda *args: None)
-    monkeypatch.setattr(Path, "lstat", lambda path: owner(stat(path)))
+    monkeypatch.setattr(os, "stat", lambda *args, **kwargs: owner(original_stat(*args, **kwargs)))
     monkeypatch.setattr(os, "fstat", lambda fd: owner(fstat(fd)))
 
 

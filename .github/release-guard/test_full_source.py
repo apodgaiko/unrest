@@ -184,15 +184,18 @@ def test_observer_collection_reply_carries_success_and_closed_reference(tmp_path
     import full_launch
     from control_transport import reply, verify_reply, encode, RESPONSE_LIMIT
 
-    original_fstat, original_lstat = os.fstat, Path.lstat
+    import stat
+    original_fstat, original_stat = os.fstat, os.stat
 
     def source_owner(info):
+        if not stat.S_ISREG(info.st_mode):
+            return info
         row = list(info)
         row[4] = 20000
         return os.stat_result(row)
 
     monkeypatch.setattr(os, "fstat", lambda fd: source_owner(original_fstat(fd)))
-    monkeypatch.setattr(Path, "lstat", lambda path: source_owner(original_lstat(path)))
+    monkeypatch.setattr(os, "stat", lambda *args, **kwargs: source_owner(original_stat(*args, **kwargs)))
     reference = {"path": "/profiles/cases-bound.json", "sha256": "c" * 64, "count": 1}
     monkeypatch.setattr(full_launch, "seal", lambda value, directory: dict(reference))
     node = "tests/test_wire.py::test_large[" + "x" * 70000 + "]"

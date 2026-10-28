@@ -283,3 +283,12 @@ Raw marker-path substitutions additionally require the original pytest basename
 prefix with an ASCII numeric suffix and a source-safe ASCII absolute path. Quote,
 backslash, newline and foreign-name metadata are rejected before a launch intent;
 canonical inode custody alone is insufficient for unescaped string insertion.
+
+Bounded regular-file readers share the manifest acquisition implementation:
+held nofollow ancestor descriptors, nonblocking member opens, complete bounded
+reads, before/after identity checks and ancestor revalidation. Each caller keeps
+its own owner, mode, size, empty-file, location, digest and schema requirements.
+Runtime inventory still checks every directory, including empty directories,
+and retains its existing ordered row digest. Inventory-only reads stream hashes
+without retaining file bodies or hashing them twice. Native pre-profile entry
+acquisition stays self-contained.

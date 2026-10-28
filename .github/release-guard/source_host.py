@@ -53,16 +53,9 @@ def inventory(root):
                 and before.st_size <= 64 * 1024 * 1024, 'input member custody')
         total += before.st_size
         require(total <= 512 * 1024 * 1024, 'input total byte bound')
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-        with os.fdopen(fd, 'rb') as stream:
-            pin = hashlib.file_digest(stream, 'sha256').hexdigest()
-            after = os.fstat(stream.fileno())
-        # Reading can legitimately advance atime on Linux. Bind byte-affecting
-        # identity, ownership, mode, size and nanosecond change timestamps.
-        def identity(info):
-            return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
-                    info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        require(identity(before) == identity(after) == identity(path.lstat()), 'input measurement race')
+        from content_manifest import read_regular, _key
+        _,after,pin=read_regular(path,64*1024*1024,forbidden=0o6022,retain=False)
+        require(_key(before)==_key(after),'input measurement race')
         rows.append([str(path.relative_to(root)), stat.S_IMODE(before.st_mode), before.st_size, pin])
     return hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()
 

@@ -5,9 +5,8 @@ import os
 from pathlib import Path
 import stat
 
-from content_manifest import Refused
+from content_manifest import Refused, read_regular
 from control_transport import unique
-from native_entry import key
 
 LIMIT=8*1024*1024
 # Product monkeypatches must not rewrite framework case identities.
@@ -64,16 +63,9 @@ def reference(value,directory):
 def load(value,directory,source,dependency):
     reference(value,directory)
     path=Path(value['path'])
-    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
-    try:
-        before=os.fstat(fd)
-        with os.fdopen(fd,'rb',closefd=False) as stream:
-            body=stream.read(LIMIT+1)
-        if (len(body)!=before.st_size or key(before)!=key(os.fstat(fd))
-                or key(before)!=key(path.lstat()) or hashlib.sha256(body).hexdigest()!=value['sha256']):
-            raise Refused('inventory current bytes')
-    finally:
-        os.close(fd)
+    body,_,pin=read_regular(path,LIMIT,uid=20001,mode=0o444)
+    if pin!=value['sha256']:
+        raise Refused('inventory current bytes')
     result=document(json.loads(body,object_pairs_hook=unique))
     if len(result['cases'])!=value['count'] or (result['source'],result['dependency'])!=(source,dependency):
         raise Refused('inventory source generation')

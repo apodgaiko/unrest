@@ -1,13 +1,11 @@
 """Fixed env/uv/pytest launch and observer-owned full discovery inventory."""
-import hashlib
 import json
 import os
 from pathlib import Path
-import stat
 import subprocess
 
 from case_inventory import LIMIT,document,seal,identity
-from content_manifest import Refused,native_digest,_capture
+from content_manifest import Refused,native_digest,_capture,read_regular
 from control_transport import unique
 from full_source import environment,child_environment
 
@@ -64,20 +62,9 @@ def collection(host,actor,payload):
     path=Path(host.meta['owned'])/'collection.json'
     if not host.full or host.cases or payload['path']!=str(path):
         raise Refused('full source collection frontier')
-    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
-    try:
-        before=os.fstat(fd)
-        from native_entry import key
-        if (not stat.S_ISREG(before.st_mode) or before.st_uid!=20000 or before.st_nlink!=1
-                or stat.S_IMODE(before.st_mode)!=0o444 or before.st_size>LIMIT):
-            raise Refused('full source collection custody')
-        with os.fdopen(fd,'rb',closefd=False) as stream:
-            body=stream.read(LIMIT+1)
-        if (len(body)!=before.st_size or key(before)!=key(os.fstat(fd)) or key(before)!=key(path.lstat())
-                or hashlib.sha256(body).hexdigest()!=payload['sha256']):
-            raise Refused('full source collection current bytes')
-    finally:
-        os.close(fd)
+    body,_,pin=read_regular(path,LIMIT,uid=20000,mode=0o444)
+    if pin!=payload['sha256']:
+        raise Refused('full source collection current bytes')
     value=document(json.loads(body,object_pairs_hook=unique))
     if (not value['cases'] or value['skips'] or value['source']!=host.meta['source_sha256']
             or value['dependency']!=host.meta['dependency_sha256']):

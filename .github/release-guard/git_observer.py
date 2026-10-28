@@ -1,13 +1,12 @@
 """Independent Git declarations, owned metadata and causal stdout/wait joins."""
 from __future__ import annotations
 
-from contextlib import ExitStack
 import configparser
 import os
 from pathlib import Path
 import stat
 
-from content_manifest import Refused, native_digest, _root, _directory_key
+from content_manifest import Refused, native_digest, read_regular
 from git_commands import location_role
 from git_sites import CASES, OPERATIONS
 from git_values import Values
@@ -17,24 +16,7 @@ SETUP = ('init', 'config-name', 'config-email', 'stage-base', 'commit-base')
 
 
 def regular(file, maximum=4096, uid=20000):
-    with ExitStack() as stack:
-        parent, chain = _root(stack, file.parent)
-        fd = os.open(file.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
-        stack.callback(os.close, fd)
-        before = os.fstat(fd)
-        if (not stat.S_ISREG(before.st_mode) or before.st_uid != uid or before.st_nlink != 1
-                or stat.S_IMODE(before.st_mode) & 0o6022 or not 0 < before.st_size <= maximum):
-            raise Refused('git metadata custody')
-        raw = os.read(fd, maximum + 1)
-        def key(info):
-            return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        if (len(raw) != before.st_size or key(before) != key(os.fstat(fd))
-                or key(before) != key(os.stat(file.name, dir_fd=parent, follow_symlinks=False))):
-            raise Refused('git metadata read race')
-        for ancestor, part, child, expected in reversed(chain):
-            if expected != _directory_key(os.fstat(child)) or expected != _directory_key(os.stat(part, dir_fd=ancestor, follow_symlinks=False)):
-                raise Refused('git metadata ancestor changed')
-        return raw
+    return read_regular(file,maximum,uid=uid,minimum=1,forbidden=0o6022)[0]
 
 
 def image(file='/usr/bin/git'):
