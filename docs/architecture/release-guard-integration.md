@@ -259,3 +259,6 @@ socket with the exact original Linux family (IPv4 or IPv6) and detachment boolea
 Their original programs and evidence assertions remain unchanged. Bind, connect,
 DNS and transport payload still require independent existing authority. The
 failed first alias run is retained; it is not replaced by its later repair proof.
+Socket method wrappers preserve the original method name and bound receiver so
+real product preflight can identify captured aliases. Wrapper names are metadata;
+launch and transport authority remain independent of Python caller identity.

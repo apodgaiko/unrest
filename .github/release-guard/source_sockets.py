@@ -251,6 +251,7 @@ class Hooks:
         def wrap(name):
             def operation(stream, *args, **kwargs):
                 return hooks.guarded(hooks.call, name, stream, *args, **kwargs)
+            operation.__name__=name
             return operation
         for name in self.original:
             setattr(self.socket_type, name, wrap(name))

@@ -68,3 +68,9 @@ def test_existing_guard_poison_is_not_reported_twice(installed):
     with pytest.raises(Refused):
         Socket.bind(object(),('127.0.0.1',0))
     assert policy.poison and not records
+
+
+def test_wrapper_preserves_bound_method_name_and_receiver(installed):
+    _,_,_,Socket=installed
+    value=Socket()
+    assert value.bind.__name__=='bind' and value.bind.__self__ is value
