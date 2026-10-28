@@ -60,7 +60,7 @@ TERMINAL=route('test_terminal_review_report_ordering','test_crash_report_survive
 ROUTES={**ATTENTION,**PATCH,**LOCK,**SUPERVISION,**FINALIZATION,**NESTED,**PATHS,**TRANSACTIONS,**TERMINAL}
 GROUPS={'mp-attention1':tuple(ATTENTION),'mp-patch2':tuple(PATCH),'mp-lock3':tuple(LOCK),'mp-supervision3':tuple(SUPERVISION),
     'mp-finalization13':tuple(FINALIZATION),'mp-nested11':tuple(NESTED),'mp-paths11':tuple(PATHS),
-    'mp-transactions21':tuple(TRANSACTIONS),'mp-terminal1':tuple(TERMINAL)}
+    'mp-transactions21':tuple(TRANSACTIONS),'mp-transactions12':tuple(TRANSACTIONS)[9:],'mp-terminal1':tuple(TERMINAL)}
 
 
 def plan(case,target):
