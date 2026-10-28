@@ -18,7 +18,7 @@
 #endif
 static int entering = 0, entered = 0, poisoned = 0;
 static _Thread_local int checking = 0;
-static PyObject *policy = NULL;
+static PyObject *policy = NULL, *script_target = NULL;
 static int forbidden(const char *event) {
     return !strcmp(event,"subprocess.Popen") || !strcmp(event,"os.exec") ||
         !strcmp(event,"os.posix_spawn") || !strcmp(event,"os.system") ||
@@ -36,9 +36,15 @@ static int guard_audit(const char *event, PyObject *args, void *unused) {
         PyTuple_GET_SIZE(args) == 2 && PyUnicode_Check(PyTuple_GET_ITEM(args,1)) &&
         PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(args,1),GUARD_CONTROL_SOCKET) == 0)
         return 0;  /* Only the fixed protected observer channel, never a caller path. */
-    int effect = forbidden(event) || !strcmp(event,"compile") || !strcmp(event,"exec") ||
-        !strcmp(event,"os.kill") || !strcmp(event,"os.killpg") ||
-        !strcmp(event,"socket.__new__") || !strcmp(event,"import");
+    int main_compile = 0;
+    if (script_target != NULL && !strcmp(event,"compile") && PyTuple_Check(args) &&
+        PyTuple_GET_SIZE(args) == 2 && PyUnicode_Check(PyTuple_GET_ITEM(args,1))) {
+        int comparison = PyUnicode_Compare(PyTuple_GET_ITEM(args,1),script_target);
+        if (comparison == -1 && PyErr_Occurred()) { poisoned = 1; return -1; }
+        main_compile = comparison == 0;
+    }
+    int effect = forbidden(event) || main_compile || !strcmp(event,"os.kill") ||
+        !strcmp(event,"os.killpg") || !strcmp(event,"socket.__new__");
     if (entered && policy != NULL && !Py_IsFinalizing() && effect) {
         checking = 1;
         PyObject *answer = PyObject_CallFunction(policy,"sO",event,args);
@@ -86,6 +92,9 @@ static int guard_audit(const char *event, PyObject *args, void *unused) {
         PyObject *candidate = PyDict_GetItemString(globals,"POLICY");
         if (candidate != NULL) {
             if (!PyCallable_Check(candidate)) _exit(86);
+            PyObject *target = PyDict_GetItemString(globals,"SCRIPT_TARGET");
+            if (target == NULL || (target != Py_None && !PyUnicode_CheckExact(target))) _exit(86);
+            if (target != Py_None) script_target = Py_NewRef(target);
             policy = Py_NewRef(candidate);
         }
         Py_DECREF(result);

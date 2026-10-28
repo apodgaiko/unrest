@@ -19,7 +19,7 @@ import sys
 import time
 import traceback
 
-CASES = ('positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
+CASES = ('fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
          'bad-flags', 'bad-identity', 'bad-native', 'bad-entry', 'bad-nonce',
          'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap', 'bad-environment', 'bad-cwd',
          'source-reject-control', 'source-reject-unknown', 'source-reject-profile')
@@ -120,6 +120,11 @@ def worker(case, binding, output):
             profile['cwd'] = '/tmp'
         elif case == 'bad-observer':
             profile['observer']['uids'] = [0] * 4
+        if case in ('fastpath-positive','compile-bytes','compile-current'):
+            fixture=root/'compile-filter-fixture.py'
+            with fixture.open('xb') as stream:
+                stream.write(b'changed\n' if case=='compile-current' else b'pass\n')
+            fixture.chmod(0o444)
         target = root / (str(child) + '.json')
         target.write_text(json.dumps(profile, sort_keys=True))
         target.chmod(0o444)
@@ -199,13 +204,13 @@ def worker(case, binding, output):
         consume(trace)
         raw = result['root_parent_wait_raw']
         actual_ready = ledger.process(birth).stage
-        expected_status = 0 if case == 'positive' else 86 << 8
+        expected_status = 0 if case in ('positive','fastpath-positive') else 86 << 8
         if raw != expected_status or result['poison']:
             raise RuntimeError('native controlled return or trace refused')
         if case in BODIES:
             if next_control != 2 or ledger.poison:
                 raise RuntimeError('native readiness order incomplete')
-            marker = b'NATIVE_BODY_OK' if case == 'positive' else b'REFUSAL_CAUGHT'
+            marker = b'NATIVE_BODY_OK' if case in ('positive','fastpath-positive') else b'REFUSAL_CAUGHT'
             if marker not in captured:
                 raise RuntimeError('native controlled body absent')
         elif b'NATIVE_BODY_OK' in captured or b'UNAPPROVED_BODY' in captured:
@@ -221,6 +226,8 @@ def worker(case, binding, output):
             frame.stream.close()
         os.close(read)
         target.unlink(missing_ok=True)
+        if case in ('fastpath-positive','compile-bytes','compile-current'):
+            (root/'compile-filter-fixture.py').unlink(missing_ok=True)
         (root / 'control.sock').unlink(missing_ok=True)
         # Retain both successful and failed raw diagnostics outside public logs.
         (root / ('raw-' + case + '.json')).write_text(json.dumps({

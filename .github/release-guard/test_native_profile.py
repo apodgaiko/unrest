@@ -13,6 +13,9 @@ from native_entry import acquire
 
 BODY_READY = False
 BODIES = {
+    'fastpath-positive': 'import fractions\nexec(compile("print(\\"NATIVE_BODY_OK\\",flush=True)","<ordinary>","exec"))',
+    'compile-bytes': 'import sys\ntry: compile(\'changed\\n\',sys._compile_probe_file,"exec")\nexcept ValueError as error:\n assert str(error)=="source declared script bytes changed"\n print("REFUSAL_CAUGHT",flush=True)',
+    'compile-current': 'import sys\ntry: compile(\'pass\\n\',sys._compile_probe_file,"exec")\nexcept ValueError as error:\n assert str(error)=="source declared script bytes changed"\n print("REFUSAL_CAUGHT",flush=True)',
     'positive': 'print("NATIVE_BODY_OK", flush=True)',
     'caught-process': 'import subprocess\ntry: subprocess.run(["/usr/bin/true"])\nexcept RuntimeError: print("REFUSAL_CAUGHT", flush=True)',
     'caught-network': 'import socket\ns=socket.socket()\ntry: s.bind(("127.0.0.1",0))\nexcept RuntimeError: print("REFUSAL_CAUGHT", flush=True)\nfinally: s.close()',
@@ -20,7 +23,7 @@ BODIES = {
 
 
 def consume(directory, event, arguments):
-    global BODY_READY
+    global BODY_READY, POLICY, SCRIPT_TARGET
     root, profile = acquire(directory)
     fields = {'schema', 'case', 'identity', 'observer', 'argv', 'environment', 'cwd', 'flags',
               'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation', 'mount_namespace'}
@@ -88,6 +91,20 @@ def consume(directory, event, arguments):
             raise ValueError('native readiness refused')
     sys.path.pop(0)
     sys.dont_write_bytecode = True
+    if case in ('fastpath-positive','compile-bytes','compile-current'):
+        from source_entry import Policy
+        from types import SimpleNamespace
+        SCRIPT_TARGET=str(root/'compile-filter-fixture.py')
+        sys._compile_probe_file=SCRIPT_TARGET
+        production=object.__new__(Policy)
+        production.poison=False
+        production.profile={'script':SCRIPT_TARGET,'execution':{'script_sha256':hashlib.sha256(b'pass\n').hexdigest()}}
+        production.client=SimpleNamespace(request=lambda *args:{'ok':True})
+        def audit(event,args):
+            if event in ('import','exec') or event=='compile' and args[1]!=SCRIPT_TARGET:
+                raise RuntimeError('unnecessary Python audit callback')
+            return production.audit(event,args)
+        POLICY=audit
     BODY_READY = True
 
 
