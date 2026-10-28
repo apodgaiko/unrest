@@ -34,6 +34,13 @@ completion assertions and cleanup assertions remain unchanged and mandatory.
 Local guard-unit results and component review do not certify native execution,
 the full source checkpoint, the final line count, or the release.
 
+The first native checkpoints for this reduced scope pass all 54 original
+preflight cases and all eight stdio startup rejection cases, with 17 actual
+original-parent waits and no poison or fallback cleanup. These component results
+are not the full unexcluded source checkpoint. The three observability import
+probes use the same finite fixed-inline path with their exact original script,
+arguments and trap flags; they add no generic command or nested-pytest permission.
+
 The historical sections below describe earlier implementation stages. Their
 Python frame/closure/generated-code enforcement details are superseded by this
 scope; their passing component results retain their original limited meaning.

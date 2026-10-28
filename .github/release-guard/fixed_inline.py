@@ -27,9 +27,19 @@ STDIO_BODY = 'from unrest_harness.server import main; main()'
 STDIO_INVALID = ({'UNREST_CAPABILITY_POLICY_VERSION':'2'}, {'UNREST_TERMINAL_REVIEW_TIMEOUT_SECONDS':'invalid'})
 STDIO = {STDIO_TEST+'::test_real_startup_rejection_is_bounded_and_body_free[invalid'+str(index)+'-'+role+']':(role,index)
          for index in range(2) for role in ('orchestrator','worker','validator','terminal-reviewer')}
-CASES = (*IMPORT_CASES,*STDIO)
-GROUPS = (IMPORT_CASES,tuple(STDIO),CASES)
+OBSERVATION_TEST = 'tests/test_runtime_observability.py'
+OBSERVATION_CASE = OBSERVATION_TEST+'::test_fresh_entrypoint_import_boundary'
+OBSERVATION_OPERATIONS = ('observe-help','observe-list','observe-positive')
+OBSERVATION_ARGUMENTS = {
+    'observe-help': ('["--help"]','1'),
+    'observe-list': ('["list-projects"]','1'),
+    'observe-positive': ('["observe-project", "--help"]','0'),
+}
+PINS[OBSERVATION_TEST] = 'bc4977de515c9f3a3b3ccab626a245525deccd9a6449fce8ad02253d220af305'
+CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE)
+GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),CASES)
 SEQUENCES.update({case:('startup',) for case in STDIO})
+SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
 PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f5246105'
 
 
@@ -52,10 +62,11 @@ def startup_expected(case,native,pin,cwd,owned):
 
 
 def script(checkout, operation):
-    data = (checkout / TEST).read_bytes()
-    if hashlib.sha256(data).hexdigest() != PINS[TEST]:
+    path = OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
+    data = (checkout / path).read_bytes()
+    if hashlib.sha256(data).hexdigest() != PINS[path]:
         raise Refused('fixed inline source bytes')
-    name = 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
+    name = 'test_fresh_entrypoint_import_boundary' if operation in OBSERVATION_OPERATIONS else 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
     functions = [node for node in ast.parse(data).body if isinstance(node, ast.FunctionDef) and node.name == name]
     if len(functions) != 1:
         raise Refused('fixed inline literal owner')
@@ -68,8 +79,15 @@ def script(checkout, operation):
 
 
 def expected(case, operation, native, pin, checkout, environment, *, query=False):
-    if type(case) is not str or case not in IMPORT_CASES or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
+    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
         raise Refused('fixed inline closed operation')
+    if case==OBSERVATION_CASE:
+        if query or operation not in OBSERVATION_OPERATIONS:
+            raise Refused('observation probe has no query authority')
+        argv=(native,'-c',script(checkout,operation),*OBSERVATION_ARGUMENTS[operation])
+        owner=OBSERVATION_TEST+':test_fresh_entrypoint_import_boundary'
+        return render(Rule('fixed:'+operation,owner,(case,),native,pin,argv,
+            tuple(sorted(environment.items())),str(checkout),'python-command'),case,owner,{}, {})
     if query:
         if operation != 'check':
             raise Refused('fixed inline query scope')
