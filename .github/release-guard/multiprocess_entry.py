@@ -191,6 +191,15 @@ def quota(records,role,target,maximum):
         raise Refused('spawn per-case quota')
 
 
+def inherited_record(host,actor,fd,resources):
+    # Descriptor numbers can be reused after a prior case closes its pair.
+    mode=(Path('/proc')/str(actor['birth'].pid)/'fd'/str(fd)).stat().st_mode if 'pipe' in resources else 0
+    if stat.S_ISSOCK(mode):
+        from multiprocess_pipe import parent_record
+        return parent_record(host,actor,fd)
+    return spawn_record(actor['birth'].pid,fd,host.case)
+
+
 def proposal(host,actor,raw):
     from source_observer import shape
     host.root_only(actor)
@@ -222,11 +231,7 @@ def proposal(host,actor,raw):
             raise Refused('spawn child declaration absent')
         inherited=[]
         for fd in descriptors:
-            if 'pipe' in spec.resources and (actor['birth'],fd) in host.descriptors:
-                from multiprocess_pipe import parent_record
-                inherited.append(parent_record(host,actor,fd))
-            else:
-                inherited.append(spawn_record(actor['birth'].pid,fd,host.case))
+            inherited.append(inherited_record(host,actor,fd,spec.resources))
     if role=='mp-child':
         if tracker is None:
             raise Refused('spawn missing owned tracker')

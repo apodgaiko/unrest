@@ -144,3 +144,11 @@ explicit Event only after constructing the actual server, with a ten-second
 startup bound; the original one-second result wait, per-call latency assertions,
 lock-entry waits, child statuses and original-parent joins remain unchanged.
 This test readiness signal is not a native guard READY record or release proof.
+
+The retired declaration matcher and test-only Intent record are removed from
+production. Literal rendering remains bounded; mutation negatives exercise the
+actual observer's admission path. Synthetic pre-exec models remain test-only and
+cannot authorize execution. Inherited descriptor classification queries the live
+file type before consulting pair history: reuse of an old socket FD for the
+current tracker FIFO cannot borrow or be rejected as the previous pair generation.
+Actual socket inheritance still requires the current original owned pair.

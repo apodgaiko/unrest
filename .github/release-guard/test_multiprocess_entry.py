@@ -682,3 +682,29 @@ def test_per_target_exhaustion_is_separate_from_total_case_capacity():
         quota([row(inspector), row(inspector)], "mp-child", inspector, 2)
     with pytest.raises(Refused, match="quota"):
         quota([{"role": "mp-tracker"}], "mp-tracker", None, 1)
+
+
+@pytest.mark.parametrize('kind', ['fifo', 'socket'])
+def test_spawn_rechecks_fd_kind_before_using_a_previous_pair_number(monkeypatch, kind):
+    from pathlib import Path
+    import stat
+    import multiprocess_entry as entry
+    import multiprocess_pipe
+
+    from process_ledger import Birth
+    actor = {'birth': Birth(100,100,1,100,'boot',20000)}
+    host = SimpleNamespace(case='current', descriptors={(actor['birth'], 13): 'old-pair'})
+    monkeypatch.setattr(Path, 'stat', lambda path: SimpleNamespace(
+        st_mode=stat.S_IFIFO if kind=='fifo' else stat.S_IFSOCK))
+    calls=[]
+    monkeypatch.setattr(entry, 'spawn_record', lambda *args: calls.append('fifo') or [13,1,2,0])
+    def socket_record(*args):
+        calls.append('socket')
+        raise Refused('unknown or stale socket has no pair authority')
+    monkeypatch.setattr(multiprocess_pipe, 'parent_record', socket_record)
+    if kind=='fifo':
+        assert entry.inherited_record(host,actor,13,('pipe',))==[13,1,2,0]
+    else:
+        with pytest.raises(Refused, match='no pair authority'):
+            entry.inherited_record(host,actor,13,('pipe',))
+    assert calls==[kind]

@@ -1,8 +1,8 @@
-"""Finite launch rendering; successful matching is not execution authority.
+"""Finite literal launch rendering; declarations are not execution authority.
 
 The observer must authenticate the policy, original source owner, case, parameter
 values and acquired root generations independently. No value may be inferred
-from an untrusted launch vector merely to make this matcher accept that vector.
+from an untrusted launch vector merely to make a declaration accept that vector.
 """
 from __future__ import annotations
 
@@ -54,15 +54,6 @@ class Expected:
                 'cwd': self.cwd, 'payload_kind': self.payload_kind, 'payload_sha256': self.payload_sha256}
 
 
-@dataclass(frozen=True)
-class Observation:
-    executable: str
-    executable_sha256: str
-    argv: tuple[str, ...]
-    environment: tuple[tuple[str, str], ...]
-    cwd: str
-    payload_kind: str
-    payload_sha256: str
 
 
 def _text(value: object) -> str:
@@ -187,34 +178,3 @@ def render(rule: Rule, case: str, owner: str, values: dict,
     _, payload_sha256 = _payload(argv, rule.payload_kind, rule.payload_sha256, rule.executable_sha256)
     return Expected(rule.id, owner, case, executable, rule.executable_sha256, argv,
                     environment, cwd, rule.payload_kind, payload_sha256)
-
-
-def match(expected: tuple[Expected, ...], observed: Observation,
-          owner: str, case: str) -> Expected:
-    """Compare complete observations; provenance must be established by the caller."""
-    _text(owner)
-    _text(case)
-    if (type(expected) is not tuple or not expected or len(expected) > MAX_FIELDS
-            or any(type(item) is not Expected for item in expected)
-            or type(observed) is not Observation or not _sha(observed.executable_sha256)
-            or not _sha(observed.payload_sha256) or type(observed.payload_kind) is not str):
-        raise Refused("policy_observation")
-    executable = _absolute(_text(observed.executable))
-    cwd = _absolute(_text(observed.cwd))
-    budget = _Budget()
-    argv = _argv(observed.argv, budget)
-    environment = _environment(observed.environment, budget)
-    reference = (observed.payload_sha256
-                 if observed.payload_kind in {"python-script", "python-module"} else None)
-    _, payload_sha256 = _payload(argv, observed.payload_kind, reference,
-                                 observed.executable_sha256)
-    if observed.payload_sha256 != payload_sha256:
-        raise Refused("policy_observation_payload")
-    found = [item for item in expected if item.owner == owner and item.case == case
-             and item.executable == executable and item.executable_sha256 == observed.executable_sha256
-             and item.argv == argv and item.environment == tuple(sorted(environment))
-             and item.cwd == cwd and item.payload_kind == observed.payload_kind
-             and item.payload_sha256 == payload_sha256]
-    if len(found) != 1:
-        raise Refused("policy_match_cardinality")
-    return found[0]

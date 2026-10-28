@@ -7,7 +7,6 @@ separate mandatory boundaries. There is no legacy resolver fallback.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Any
@@ -15,7 +14,7 @@ from typing import Any
 from bootstrap_cases import BOOTSTRAP, configuration, wrapper
 from content_manifest import Refused
 from controlled_cases import CASES as CONTROLLED, backend as controlled_backend, backend_path, configuration_items, configured as is_configured
-from launch_policy import Expected, Rule, render
+from launch_policy import Rule, render
 
 SESSION = 'src/unrest_harness/experimental_session.py'
 TEST = 'tests/test_experimental_bootstrap.py'
@@ -35,14 +34,6 @@ def path(value: Any) -> Path:
     if type(value) is not PATH_TYPE or not value.is_absolute() or str(value.resolve()) != str(value):
         raise Refused('startup canonical path')
     return value
-
-
-@dataclass(frozen=True)
-class Intent:
-    original: Expected
-    translated_argv: tuple[str, ...]
-    original_source_line: int
-    script_sha256: str | None
 
 
 def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None):

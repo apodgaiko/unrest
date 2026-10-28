@@ -379,3 +379,45 @@ def test_constructor_window_serializes_before_second_intent(tmp_path, consumed):
     else:
         assert observer.launch(actor, request)['ok'] is True
         assert len(observer.intents) == 2
+
+
+@pytest.mark.parametrize('field,value', [
+    ('executable', '/runtime/other'), ('executable_sha256', 'b' * 64),
+    ('argv', ['/pinned/python', '-c', "print('different')"]),
+    ('argv', ['/pinned/python', '-c', "print('finite')", 'extra']),
+    ('environment', [['MODE', 'native']]),
+    ('environment', [['MODE', 'controlled'], ['EXTRA', 'value']]),
+    ('environment', [['MODE', 'controlled'], ['MODE', 'controlled']]),
+    ('cwd', '/other'), ('payload_kind', 'native'), ('payload_sha256', 'c' * 64),
+    ('argv', ['/pinned/python', '-c', ["print('finite')"]]),
+    ('environment', [['MODE', False]]),
+])
+def test_literal_field_mutations_reach_real_observer_refusal(tmp_path, field, value):
+    observer, actor, request = backend_request(tmp_path)
+    request['original'][field] = value
+    with pytest.raises(Refused):
+        observer.launch(actor, request)
+    assert not observer.intents
+
+
+@pytest.mark.parametrize('body', ['pass', "print('different')"])
+def test_consistent_inline_body_and_hash_substitution_refuses_at_real_admission(tmp_path, body):
+    import hashlib
+    from pathlib import Path
+    from cleanup_inline import STARTUP, expected
+
+    observer, actor, _ = backend_request(tmp_path)
+    observer.case = next(iter(STARTUP))
+    value, site = expected(observer.case, '/pinned/python', 'a'*64,
+        Path(observer.meta['checkout']), observer.meta_environment())
+    request = {'case': observer.case, 'original': value.wire(),
+        'translated': ['/pinned/python', '-I', '-S', *value.argv[1:]],
+        'source_line': site, 'script_sha256': value.payload_sha256}
+    changed = deepcopy(request)
+    changed['original']['argv'][-1] = changed['translated'][-1] = body
+    changed['original']['payload_sha256'] = changed['script_sha256'] = hashlib.sha256(body.encode()).hexdigest()
+    with pytest.raises(Refused):
+        observer.launch(actor, changed)
+    assert not observer.intents
+    assert observer.launch(actor, request)['ok'] is True
+    assert len(observer.intents) == 1

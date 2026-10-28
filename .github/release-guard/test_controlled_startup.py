@@ -7,7 +7,7 @@ custody, the original timing cases or source-checkpoint certification.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
+from dataclasses import dataclass, replace
 import hashlib
 from pathlib import Path
 import sys
@@ -16,10 +16,9 @@ import pytest
 
 from content_manifest import Refused
 from control_transport import finite, encode, REQUEST_LIMIT
-from controlled_startup import CASES, Intent, expected_entry, ACP
-from launch_policy import Observation
+from controlled_startup import CASES, expected_entry, ACP
+from launch_policy import Expected, Rule, render
 from content_manifest import capture
-from launch_policy import match
 
 sys.path.insert(
     0, str(next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").is_file()))
@@ -29,6 +28,26 @@ from tests import test_experimental_bootstrap as bootstrap  # noqa: E402
 from tests.test_experimental_session import session as owner_fixture  # noqa: E402
 from unrest_harness import experimental_session as session  # noqa: E402
 from unrest_harness.experimental_diagnostics import StartupDiagnostics  # noqa: E402
+
+
+@dataclass(frozen=True)
+class Observation:
+    executable: str
+    executable_sha256: str
+    argv: tuple[str, ...]
+    environment: tuple[tuple[str, str], ...]
+    cwd: str
+    payload_kind: str
+    payload_sha256: str
+
+
+@dataclass(frozen=True)
+class Intent:
+    original: Expected
+    translated_argv: tuple[str, ...]
+    original_source_line: int
+    script_sha256: str | None
+
 
 ACTIVE = [None]
 
@@ -78,7 +97,7 @@ class Server:
 
 
 class OperandModel:
-    """Test model using production render/match; never native execution proof."""
+    """Test-only operand comparison; never execution authority or native proof."""
 
     def __init__(self, owner, checkout, role="worker"):
         self.owner, self.checkout, self.home = owner, checkout, owner.root / role
@@ -106,7 +125,13 @@ class OperandModel:
             backend=backend,
             relay=relay,
         )
-        match((expected,), observed, expected.owner, case)
+        observed_rule = Rule(expected.rule, expected.owner, (case,),
+            observed.executable, observed.executable_sha256, observed.argv,
+            observed.environment, observed.cwd, observed.payload_kind,
+            None if observed.payload_kind=='python-command' else observed.payload_sha256)
+        if (type(observed.payload_sha256) is not str or observed.payload_sha256!=expected.payload_sha256
+                or render(observed_rule, case, expected.owner, {}, {}) != expected):
+            raise Refused('test model operand mismatch')
         if backend:
             file = self.owner.backend_launcher
             assert capture(file.parent, [file.name])["files"][0]["sha256"] == pin

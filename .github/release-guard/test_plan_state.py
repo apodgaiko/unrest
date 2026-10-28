@@ -98,16 +98,12 @@ def test_extra_candidate_after_real_failure_refuses(state):
     assert not resolve(host,child,model,str(Path(model.expected.cwd)/'decoy/adapter'))
 
 
-def test_empty_environment_name_is_literal_and_unknown_additions_still_refuse():
-    from dataclasses import replace
-    from launch_policy import Rule,Observation,render,match
+def test_empty_environment_name_is_literal():
+    from launch_policy import Rule,render
     rule=Rule('empty','owner',('case',),'/usr/bin/true','a'*64,('/usr/bin/true',),
               (('','empty-name'),('VALUE','before=after')),'/owned','native')
     value=render(rule,'case','owner',{}, {})
-    observed=Observation(value.executable,value.executable_sha256,value.argv,value.environment,value.cwd,value.payload_kind,value.payload_sha256)
-    assert match((value,),observed,'owner','case')==value
-    with pytest.raises(Refused):
-        match((value,),replace(observed,environment=(*observed.environment,('OTHER','value'))),'owner','case')
+    assert value.environment == (('','empty-name'),('VALUE','before=after'))
 
 
 def test_policy_popen_reaches_exact_selector_for_one_element_plan_vector():

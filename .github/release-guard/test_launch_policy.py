@@ -25,17 +25,12 @@ def expected(spec=None, values=None, roots=None):
     return policy.render(spec or rule(), CASE, OWNER, values or {}, roots or {})
 
 
-def observation(value):
-    return policy.Observation(value.executable, value.executable_sha256, value.argv,
-                              value.environment, value.cwd, value.payload_kind,
-                              value.payload_sha256)
 
 
-def test_literal_exact_match_separates_image_path_and_argv0():
+def test_literal_render_separates_image_path_and_argv0():
     value = expected()
     assert value.executable == "/runtime/python" and value.argv[0] == "python"
     assert value.payload_sha256 == hashlib.sha256(value.argv[4].encode()).hexdigest()
-    assert policy.match((value,), observation(value), OWNER, CASE) == value
 
 
 def test_literal_program_has_no_substitution_or_evaluation():
@@ -62,34 +57,10 @@ def test_literal_flags_and_environment_are_not_interpreted():
 def test_payload_modes_keep_external_content_and_failed_exec_distinct(kind, argv, pin):
     value = expected(rule(payload_kind=kind, argv=argv, payload_sha256=pin))
     assert value.payload_sha256 == (pin or IMAGE)
-    assert policy.match((value,), observation(value), OWNER, CASE) == value
 
 
-@pytest.mark.parametrize("field,value", [
-    ("executable", "/runtime/other"), ("executable_sha256", "b" * 64),
-    ("argv", ("python", "-I", "-S", "-c", "different")),
-    ("argv", ("python", "-I", "-S", "-c", "print('finite')", "extra")),
-    ("environment", (("MODE", "native"),)),
-    ("environment", (("MODE", "controlled"), ("EXTRA", "value"))),
-    ("environment", (("MODE", "controlled"), ("MODE", "controlled"))),
-    ("cwd", "/other"), ("payload_kind", "native"), ("payload_sha256", "c" * 64),
-    ("argv", ("python", "-c", ("print('finite')",))),
-    ("environment", (("MODE", False),))])
-def test_every_observed_field_is_checked(field, value):
-    original = expected()
-    with pytest.raises(policy.Refused):
-        policy.match((original,), replace(observation(original), **{field: value}), OWNER, CASE)
 
 
-def test_wrong_owner_case_zero_and_multiple_matches_refuse():
-    value = expected()
-    for owner, case in (("other", CASE), (OWNER, "other")):
-        with pytest.raises(policy.Refused):
-            policy.match((value,), observation(value), owner, case)
-    with pytest.raises(policy.Refused, match="cardinality"):
-        policy.match((value, replace(value, rule="overlap")), observation(value), OWNER, CASE)
-    with pytest.raises(policy.Refused):
-        policy.match((), observation(value), OWNER, CASE)
 
 
 @pytest.mark.parametrize('field', ('argv', 'environment', 'cwd', 'executable'))
@@ -122,22 +93,8 @@ def test_inline_program_cannot_be_a_context_slot():
         expected(rule(argv=('python', '-c', object())), values={'code': 'pass'})
 
 
-def test_consistent_changed_inline_body_still_does_not_match_original():
-    value = expected()
-    changed = "print('different')"
-    actual = replace(observation(value), argv=("python", "-c", changed),
-                     payload_sha256=hashlib.sha256(changed.encode()).hexdigest())
-    with pytest.raises(policy.Refused, match="match_cardinality"):
-        policy.match((value,), actual, OWNER, CASE)
-    with pytest.raises(policy.Refused, match="observation_payload"):
-        policy.match((value,), replace(actual, payload_sha256=value.payload_sha256), OWNER, CASE)
 
 
-@pytest.mark.parametrize("mode", ["python-module", "python-script", "unknown"])
-def test_observed_mode_and_vector_must_agree(mode):
-    value = expected()
-    with pytest.raises(policy.Refused, match="payload"):
-        policy.match((value,), replace(observation(value), payload_kind=mode), OWNER, CASE)
 
 
 def test_external_payload_reference_and_absolute_root():
