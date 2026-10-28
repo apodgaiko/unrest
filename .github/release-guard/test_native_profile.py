@@ -15,6 +15,8 @@ BODY_READY = False
 BODIES = {
     'product-order-positive': 'import os\ntry: os.system("/usr/bin/true")\nexcept RuntimeError as error:\n assert str(error)=="PRODUCT_DENIED"\n print("NATIVE_BODY_OK",flush=True)\nelse: raise AssertionError("product denial absent")',
     'product-order-fallback': 'import os\ntry: os.system("/usr/bin/true")\nexcept ValueError: print("REFUSAL_CAUGHT",flush=True)\nelse: raise AssertionError("native fallback absent")',
+    'product-order-resolver-positive': 'import socket\ntry: socket.getaddrinfo("alias-guard.invalid",443)\nexcept RuntimeError as error:\n assert str(error)=="PRODUCT_DENIED"\n print("NATIVE_BODY_OK",flush=True)\nelse: raise AssertionError("product denial absent")',
+    'product-order-resolver-fallback': 'import socket\ntry: socket.getaddrinfo("alias-guard.invalid",443)\nexcept ValueError: print("REFUSAL_CAUGHT",flush=True)\nelse: raise AssertionError("native fallback absent")',
     'fastpath-positive': 'import fractions,sys\nsys.settrace(lambda *args: None)\nsys.settrace(None)\nsys.setprofile(lambda *args: None)\nsys.setprofile(None)\nexec(compile("print(\\"NATIVE_BODY_OK\\",flush=True)","<ordinary>","exec"))',
     'compile-bytes': 'import sys\ntry: compile(\'changed\\n\',sys._compile_probe_file,"exec")\nexcept ValueError as error:\n assert str(error)=="source declared script bytes changed"\n print("REFUSAL_CAUGHT",flush=True)',
     'compile-current': 'import sys\ntry: compile(\'pass\\n\',sys._compile_probe_file,"exec")\nexcept ValueError as error:\n assert str(error)=="source declared script bytes changed"\n print("REFUSAL_CAUGHT",flush=True)',
@@ -116,7 +118,8 @@ def consume(directory, event, arguments):
         production.profile={'script':None}
         production.client=SimpleNamespace(request=lambda *args:{'ok':True})
         def product(event,args):
-            if event=='os.system' and case=='product-order-positive':
+            if (event=='os.system' and case=='product-order-positive'
+                    or event=='socket.getaddrinfo' and case=='product-order-resolver-positive'):
                 raise RuntimeError('PRODUCT_DENIED')
         sys.addaudithook(product)
         production.audit_order=Order(production)

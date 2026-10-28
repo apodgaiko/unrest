@@ -34,6 +34,12 @@ class OriginalCases:
             order.install()
             self.policy.audit_order=order
 
+    @pytest.hookimpl(tryfirst=True)
+    def pytest_runtest_call(self,item):
+        from speed_inline import CASES
+        if item.nodeid in CASES:
+            self.policy.client.request('fixture-root',{'path':str(item.funcargs['tmp_path'])})
+
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_protocol(self, item, nextitem):
         index = len(self.completed)

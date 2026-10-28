@@ -76,6 +76,7 @@ class Observer:
         self.eof_drains, self.eof_fds, self.interrupted_records = {}, {}, []
         self.connected_routes: dict[str, int] = {}
         self.probe_ports = {}
+        self.fixture_roots = {}
         self.plan_records: list[dict] = []
         self.http_contexts: dict[tuple[str,int],dict] = {}
         self.frames, self.controls, self.completed = [], [], []
@@ -267,6 +268,9 @@ class Observer:
             self.actors[pid] = {'birth': birth, 'role': intent['role'], 'case': intent['case'], 'token': intent['token'],
                 'returned': False, 'body_ready': False, 'signals': set(), 'kernel_admitted': True}
         else:
+            from speed_inline import CASES as SPEED_CASES,fixture
+            if intent['case'] in SPEED_CASES:
+                fixture(self)
             self.profile(pid, intent['role'], intent['case'], vector, environment, cwd, intent['token'], intent.get('inherited', ()))
         return True
 
@@ -553,6 +557,13 @@ class Observer:
         elif kind == 'multiprocess-proposal':
             from multiprocess_entry import proposal
             return proposal(self,actor,payload)
+        elif kind == 'fixture-root':
+            from speed_inline import CASES,directory
+            self.root_only(actor)
+            shape(payload,('path',))
+            if self.case not in CASES or self.case in self.fixture_roots:
+                raise Refused('speed fixture once per active case')
+            self.fixture_roots[self.case]=directory(payload['path'],Path(self.meta['owned']),self.case)
         elif kind == 'launch-proposal':
             from effect_proposals import proposal
             return proposal(self,actor,payload)

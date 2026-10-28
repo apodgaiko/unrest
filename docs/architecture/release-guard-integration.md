@@ -265,3 +265,21 @@ launch and transport authority remain independent of Python caller identity.
 The same ordered-parity check covers factored bootstrap expiry/boundary axes and
 preflight lookup/malformed-string axes, including every bootstrap delay and child
 count; their runtime declarations and no-effect membership remain unchanged.
+
+The remaining two formatted speed programs acquire `tmp_path` once through a
+root-only active-case metadata operation after real fixture setup. The observer
+pins the canonical owned directory identity and rechecks it at proposal and exec.
+Only the original marker paths, fixture path and source-pinned HEAD/TREE literals
+can enter the string templates. No general expression evaluator is used.
+
+Their immutable translated command prepends one fixed helper that imports the
+real product and installs product-first audit ordering, then runs the unchanged
+original body. The exact captured-resolver alias probe calls the real original
+resolver with its original operands: CPython's native audit event must reach the
+product denial or the unchanged outer refusal before libc DNS. Separate native
+positive/fallback canaries exercise that audit ordering. These are controlled
+source checks, with no provider acceptance or DNS permission claim.
+Raw marker-path substitutions additionally require the original pytest basename
+prefix with an ASCII numeric suffix and a source-safe ASCII absolute path. Quote,
+backslash, newline and foreign-name metadata are rejected before a launch intent;
+canonical inode custody alone is insufficient for unescaped string insertion.

@@ -3,12 +3,13 @@ import sys
 import threading
 
 from content_manifest import Refused
+from speed_inline import CASES as CHILD_CASES
 
 CASES=tuple('tests/test_v04_speed_runner.py::test_'+name for name in (
     'closed_socket_is_not_a_preflight_false_positive_and_audit_is_inert_after_exit',
     'audit_and_wrapper_denials_each_count_exactly_once',
-    'audit_guard_reaches_worker_threads'))
-EVENTS=frozenset(('socket.__new__','os.system','subprocess.Popen'))
+    'audit_guard_reaches_worker_threads')) + CHILD_CASES
+EVENTS=frozenset(('socket.__new__','socket.getaddrinfo','os.system','subprocess.Popen'))
 
 
 class Order:
@@ -41,3 +42,13 @@ class Order:
         if not self.ack:
             raise Refused('product audit tail was not installed')
         self.enabled=True
+
+
+def child():
+    from source_entry import ACTIVE
+    if ACTIVE is None or ACTIVE.profile['role']!='fixed-inline' or ACTIVE.case not in CHILD_CASES:
+        raise Refused('product child audit scope')
+    __import__('tools.v04_speed_runner')
+    order=Order(ACTIVE)
+    order.install()
+    ACTIVE.audit_order=order

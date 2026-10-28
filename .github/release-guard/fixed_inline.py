@@ -9,6 +9,7 @@ from pathlib import Path
 from content_manifest import Refused
 from git_observer import image
 from launch_policy import build_expected
+from speed_inline import CASES as SPEED_CASES, PRELUDE
 
 TEST = 'tests/test_repository_contract.py'
 PRODUCT = 'src/unrest_harness/repository_contract.py'
@@ -50,9 +51,9 @@ NETWORK = {RELOAD_TEST+'::'+NETWORK_NAME+f'[{detached}-{family}]':(family,detach
 DETACHED_CASE = RELOAD_TEST+'::test_detached_socket_descriptor_is_preflight_evidence'
 NETWORK_CASES = (*NETWORK,DETACHED_CASE)
 ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CASES,METHODS,strict=True)),
-            **{case:case for case in NETWORK}}
+            **{case:case for case in (*NETWORK,*SPEED_CASES)}}
 CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,*ISOLATED)
-GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,CASES)
+GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,CASES)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
 SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
@@ -60,6 +61,8 @@ PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f524
 
 
 def translated(value):
+    if value.case in SPEED_CASES:
+        return (value.argv[0],'-I','-S','-c',PRELUDE+value.argv[2])
     return (value.argv[0],'-I','-S',*value.argv[2 if value.case in STDIO else 1:])
 
 
@@ -75,11 +78,14 @@ def startup_expected(case,native,pin,cwd,owned):
     return build_expected('fixed:startup', case, native, pin, vector, tuple(sorted(environment.items())), cwd, 'python-command')
 
 
-def script(checkout, operation):
-    path = RELOAD_TEST if operation in ('reload','detached',*METHODS,*NETWORK) else OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
+def script(checkout, operation, root=None):
+    path = RELOAD_TEST if operation in ('reload','detached',*METHODS,*NETWORK,*SPEED_CASES) else OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
     data = (checkout / path).read_bytes()
     if hashlib.sha256(data).hexdigest() != PINS[path]:
         raise Refused('fixed inline source bytes')
+    if operation in SPEED_CASES:
+        from speed_inline import body
+        return body(ast.parse(data),operation,root,checkout)
     name = NETWORK_NAME if operation in NETWORK else 'test_detached_socket_descriptor_is_preflight_evidence' if operation=='detached' else RELOAD_NAME if operation=='reload' else METHOD_NAME if operation in METHODS else 'test_fresh_entrypoint_import_boundary' if operation in OBSERVATION_OPERATIONS else 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
     functions = [node for node in ast.parse(data).body if isinstance(node, ast.FunctionDef) and node.name == name]
     if len(functions) != 1:
@@ -118,13 +124,13 @@ def script(checkout, operation):
     return values[0]
 
 
-def expected(case, operation, native, pin, checkout, environment, *, query=False):
+def expected(case, operation, native, pin, checkout, environment, *, query=False, root=None):
     if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
         raise Refused('fixed inline closed operation')
     if case in ISOLATED:
         if query:
             raise Refused('fixed isolated has no descendant authority')
-        return build_expected('fixed:isolated',case,native,pin,(native,'-c',script(checkout,ISOLATED[case])),
+        return build_expected('fixed:isolated',case,native,pin,(native,'-c',script(checkout,ISOLATED[case],root)),
                               tuple(sorted({**environment,'PYTHONDONTWRITEBYTECODE':'1'}.items())),str(checkout),'python-command')
     if case==OBSERVATION_CASE:
         if query or operation not in OBSERVATION_OPERATIONS:

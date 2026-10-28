@@ -13,6 +13,7 @@ from content_manifest import Refused
 from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
 from cleanup_inline import STARTUP
 from fixed_inline import NETWORK, NETWORK_CASES, METHOD_CASES
+from speed_inline import CASES as SPEED_CASES
 
 TYPE = type
 
@@ -193,6 +194,9 @@ class Hooks:
         return function(descriptor, *args)
 
     def literal_address(self, host, port, family=0, type=0, proto=0, flags=0):
+        if (self.policy.profile['role']=='fixed-inline' and self.policy.profile['case']==SPEED_CASES[0]
+                and (host,port,family,type,proto,flags)==('alias-guard.invalid',443,0,0,0,0)):
+            return self.getaddrinfo(host,port,family,type,proto,flags)
         # This computes a literal tuple; it never calls a DNS resolver. The
         # subsequent connect still needs the observer's exact live route.
         http = self.policy.case in MCP_CASES or self.policy.profile['case'] in MCP_CASES
@@ -229,7 +233,7 @@ class Hooks:
             adoption=None
             if (fileno is not None and family==type==proto==-1
                     and hooks.policy.profile['role']=='fixed-inline'
-                    and hooks.policy.profile['case'] in (*METHOD_CASES,*NETWORK_CASES)):
+                    and hooks.policy.profile['case'] in (*METHOD_CASES,*NETWORK_CASES,*SPEED_CASES)):
                 if (TYPE(stream) is not hooks.socket_type or any(TYPE(value) is not int for value in (family,type,proto))
                         or TYPE(fileno) is not int or fileno<0 or getattr(hooks.local,'adoption',None) is not None):
                     hooks.policy.refuse('source socket adoption operand')

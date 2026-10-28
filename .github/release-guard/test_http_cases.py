@@ -233,7 +233,7 @@ def test_http_literal_resolution_accepts_only_numeric_operands_without_dns(host,
     hooks=object.__new__(Hooks)
     def refuse(reason):
         raise Refused(reason)
-    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'case':http_cases.CASES[0]},refuse=refuse)
+    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'role':'root','case':http_cases.CASES[0]},refuse=refuse)
     monkeypatch.setattr(socket,'getaddrinfo',lambda *args,**kwargs:pytest.fail('DNS resolution attempted'))
     assert hooks.literal_address(host,port,family=socket.AF_INET,type=socket.SOCK_STREAM,
         flags=socket.AddressInfo(flags))==[(socket.AF_INET,socket.SOCK_STREAM,socket.IPPROTO_TCP,'',('127.0.0.1',12345))]
@@ -246,7 +246,7 @@ def test_http_literal_resolution_does_not_add_names_services_or_socket_families(
     hooks=object.__new__(Hooks)
     def refuse(reason):
         raise Refused(reason)
-    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'case':http_cases.CASES[0]},refuse=refuse)
+    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'role':'root','case':http_cases.CASES[0]},refuse=refuse)
     operands={'host':'127.0.0.1','port':12345}
     operands[field]=value
     with pytest.raises(Refused,match='nonliteral address query'):
@@ -258,7 +258,7 @@ def test_literal_resolution_refusal_records_only_safe_operand_shapes():
     hooks=object.__new__(Hooks)
     def refuse(reason):
         raise Refused(reason)
-    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'case':http_cases.CASES[0]},refuse=refuse)
+    hooks.policy=SimpleNamespace(case=http_cases.CASES[0],profile={'role':'root','case':http_cases.CASES[0]},refuse=refuse)
     with pytest.raises(Refused) as error:
         hooks.literal_address('private-host-secret.invalid',12345,flags=2)
     assert str(error.value)=='source nonliteral address query other 12345 0 0 0 2'
