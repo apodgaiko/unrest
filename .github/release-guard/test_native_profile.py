@@ -13,7 +13,7 @@ from native_entry import acquire
 
 BODY_READY = False
 BODIES = {
-    'fastpath-positive': 'import fractions\nexec(compile("print(\\"NATIVE_BODY_OK\\",flush=True)","<ordinary>","exec"))',
+    'fastpath-positive': 'import fractions,sys\nsys.settrace(lambda *args: None)\nsys.settrace(None)\nsys.setprofile(lambda *args: None)\nsys.setprofile(None)\nexec(compile("print(\\"NATIVE_BODY_OK\\",flush=True)","<ordinary>","exec"))',
     'compile-bytes': 'import sys\ntry: compile(\'changed\\n\',sys._compile_probe_file,"exec")\nexcept ValueError as error:\n assert str(error)=="source declared script bytes changed"\n print("REFUSAL_CAUGHT",flush=True)',
     'compile-current': 'import sys\ntry: compile(\'pass\\n\',sys._compile_probe_file,"exec")\nexcept ValueError as error:\n assert str(error)=="source declared script bytes changed"\n print("REFUSAL_CAUGHT",flush=True)',
     'positive': 'print("NATIVE_BODY_OK", flush=True)',

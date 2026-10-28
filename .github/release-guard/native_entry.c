@@ -26,8 +26,7 @@ static int forbidden(const char *event) {
         !strcmp(event,"socket.bind") || !strcmp(event,"socket.connect") ||
         !strcmp(event,"socket.sendto") || !strcmp(event,"socket.sendmsg") ||
         !strcmp(event,"socket.getaddrinfo") || !strcmp(event,"socket.getnameinfo") ||
-        !strcmp(event,"socket.gethostbyname") || !strcmp(event,"socket.gethostbyaddr") ||
-        !strcmp(event,"sys.setprofile") || !strcmp(event,"sys.settrace");
+        !strcmp(event,"socket.gethostbyname") || !strcmp(event,"socket.gethostbyaddr");
 }
 static int guard_audit(const char *event, PyObject *args, void *unused) {
     (void)unused;

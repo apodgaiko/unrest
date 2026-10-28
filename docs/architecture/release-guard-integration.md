@@ -131,3 +131,9 @@ Queue-based multiprocessing declarations cover nine attention, patch, lock and s
 Duplex-Pipe spawn routes inherit one endpoint from an already admitted original-parent Unix pair. The sealed child record retains that pair generation; child bootstrap queries its held descriptor and cookie without opening a network family, and the observer independently checks peer and birth at core readiness. Later Connection file reads/writes recheck the inherited member even after the parent closes its duplicate. Explicit Connection callbacks receive the same descriptor mediation. Pair admission, socket creation/connect restrictions and original-parent reap obligations remain separate.
 
 The native audit path skips unconditional Python callbacks for ordinary import and exec events. It captures the validated script filename as an owned immutable C reference and routes only matching compile events to the existing current-file and compilation-byte checks. Privileged effects, prebody admission and sticky refusal status remain enforced.
+
+Ordinary Python tracing and profiling are permitted within the trusted in-process
+boundary. They are used by real test barriers and grant no process, socket or
+signal authority; those effects still require their independent native and
+observer checks. The native fast-path control exercises both APIs as well as
+ordinary imports and exec.

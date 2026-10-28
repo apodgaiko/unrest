@@ -313,7 +313,7 @@ def activate(directory, profile, event, arguments):
     if profile['role'] not in ('session-adapter', 'session-child'):
         from source_sockets import Hooks
         policy.sockets = Hooks(policy)
-    if profile['role']=='mp-child' and profile['case']=='tests/test_project_lock.py::test_legacy_lock_survives_nine_target_project_record_replacement':
+    if profile['role']=='mp-child' and profile['case'].startswith('tests/test_project_lock.py::'):
         import faulthandler
         faulthandler.dump_traceback_later(1,repeat=False)
     client.request('core-ready', {'pins': [list(pair) for pair in pins]})

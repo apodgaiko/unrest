@@ -78,7 +78,8 @@ def main():
         return archive_run(policy,plugin)
     from review_wire import CASES as REVIEW_CASES,NODES as REVIEW_NODES
     selected=REVIEW_NODES if tuple(policy.profile['cases'])==REVIEW_CASES else policy.profile['cases']
-    code = pytest.main(['-q', '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
+    from multiprocess_routes import LOCK
+    code = pytest.main(['-q', *(['-s'] if tuple(policy.profile['cases'])==tuple(LOCK) else []), '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
                        '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), '-o',
                        'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *(['tests/test_launch_preflight.py'] if tuple(policy.profile['cases']) == PREFLIGHT_ALL else selected)], plugins=[plugin])
     if code != 0 or plugin.completed != policy.profile['cases'] or policy.poison:
