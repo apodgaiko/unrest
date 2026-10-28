@@ -292,3 +292,11 @@ Runtime inventory still checks every directory, including empty directories,
 and retains its existing ordered row digest. Inventory-only reads stream hashes
 without retaining file bodies or hashing them twice. Native pre-profile entry
 acquisition stays self-contained.
+
+The speed result module fixture permits exactly five sequential pinned script
+runs during its first original consuming case. Their four-variable environment,
+fixture/schema inputs, candidate IDs and run-0 through run-4 output arguments
+match the original fixture. The acquired `v04-speed-runs<digits>` directory keeps
+one generation across all commands and is rechecked at exec. Later consumers
+reuse the original module fixture; they receive no additional launch permission.
+The real script, result schema, timing gates and actual parent waits remain.

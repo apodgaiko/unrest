@@ -95,8 +95,14 @@ def proposal(host, actor, raw):
                 raise Refused('fixed startup has no descendant query')
             expected = startup_expected(case,native,pin,cwd,owned)
         else:
-            from speed_inline import CASES as SPEED_CASES,fixture
-            root=fixture(host) if case in SPEED_CASES else None
+            from speed_inline import CASES as SPEED_CASES,fixture,CLI_CASE,directory
+            if case==CLI_CASE:
+                if len(argv)!=14:
+                    raise Refused('speed CLI original argument count')
+                value=directory(str(Path(argv[7]).parent.parent),owned,case)
+                if host.fixture_roots.setdefault(case,value)!=value:
+                    raise Refused('speed CLI fixture reuse generation')
+            root=fixture(host) if case in (*SPEED_CASES,CLI_CASE) else None
             expected = fixed_expected(case,operation,native,pin,checkout,environment,query=query,root=root)
         script_pin = expected.payload_sha256
         vector = list(expected.argv) if query else list(fixed_translated(expected))

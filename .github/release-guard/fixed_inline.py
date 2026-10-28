@@ -9,7 +9,7 @@ from pathlib import Path
 from content_manifest import Refused
 from git_observer import image
 from launch_policy import build_expected
-from speed_inline import CASES as SPEED_CASES, PRELUDE
+from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 
 TEST = 'tests/test_repository_contract.py'
 PRODUCT = 'src/unrest_harness/repository_contract.py'
@@ -52,10 +52,11 @@ DETACHED_CASE = RELOAD_TEST+'::test_detached_socket_descriptor_is_preflight_evid
 NETWORK_CASES = (*NETWORK,DETACHED_CASE)
 ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CASES,METHODS,strict=True)),
             **{case:case for case in (*NETWORK,*SPEED_CASES)}}
-CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,*ISOLATED)
-GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,CASES)
+CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*ISOLATED)
+GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,(CLI_CASE,),CASES)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
+SEQUENCES[CLI_CASE] = tuple('run-'+str(i) for i in range(5))
 SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
 PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f5246105'
 
@@ -125,8 +126,10 @@ def script(checkout, operation, root=None):
 
 
 def expected(case, operation, native, pin, checkout, environment, *, query=False, root=None):
-    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
+    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
         raise Refused('fixed inline closed operation')
+    if case==CLI_CASE and not query:
+        return cli_expected(native,pin,checkout,root,operation)
     if case in ISOLATED:
         if query:
             raise Refused('fixed isolated has no descendant authority')

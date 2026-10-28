@@ -9,15 +9,18 @@ NAMES = ('test_precaptured_constructor_resolver_and_command_aliases_are_audit_de
          'test_local_control_sockets_and_event_loop_survive_guard_and_runner')
 CASES = tuple('tests/test_v04_speed_runner.py::'+name for name in NAMES)
 OWNER = 20000
+CLI_CASE = 'tests/test_v04_speed_runner.py::test_result_schema_closes_every_declared_object_and_accepts_real_result'
+CLI_TOOL = 'tools/v04_speed_runner.py'
+CLI_PIN = '65fe88a826aef366009d272ec30875a99e38a1a4b920d09329f333868915b474'
 PRELUDE = 'from product_audit import child;child();'
 
 
 def directory(path, owned, case):
-    if type(path) is not str or case not in CASES:
+    if type(path) is not str or case not in (*CASES,CLI_CASE):
         raise Refused('speed fixture path primitive')
     root=Path(path)
     info=root.stat(follow_symlinks=False)
-    prefix=NAMES[CASES.index(case)][:30]
+    prefix='v04-speed-runs' if case==CLI_CASE else NAMES[CASES.index(case)][:30]
     if (str(root.resolve())!=path or root.parent!=owned/'pytest'
             or not stat.S_ISDIR(info.st_mode) or info.st_uid!=OWNER
             or not root.name.startswith(prefix) or not root.name[len(prefix):].isascii() or not root.name[len(prefix):].isdigit()
@@ -60,3 +63,19 @@ def body(tree, operation, root, checkout):
         else:
             raise Refused('speed string template shape')
     return ''.join(result)
+
+
+def cli_expected(native,pin,checkout,root,operation):
+    from launch_policy import build_expected
+    if root is None or operation not in tuple('run-'+str(i) for i in range(5)):
+        raise Refused('speed CLI finite run')
+    run=root/operation
+    if run.resolve()!=run:
+        raise Refused('speed CLI output alias')
+    vector=(native,str(checkout/CLI_TOOL),'--fixture',str(checkout/'tests/fixtures/v04_speed_workloads.v2.json'),
+            '--schema',str(checkout/'src/unrest_harness/schemas/v04-speed-result.v2.schema.json'),
+            '--result-root',str(run/'artifacts'),'--output',str(run/'speed-result.json'),
+            '--candidate-head','c90a98626d7d595b40a3ac0d1ac954f24e1e12ad',
+            '--candidate-tree','d05eec79be56cfa8a9011bfa8859e0a65bfc05ad')
+    environment=(('LANG','C'),('LC_ALL','C'),('PYTHONUTF8','1'),('TZ','UTC'))
+    return build_expected('speed-cli',CLI_CASE,native,pin,vector,environment,str(checkout),'python-script',CLI_PIN)

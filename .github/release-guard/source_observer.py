@@ -33,7 +33,7 @@ from source_profile import METHODS, ROOT_COMMAND
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT
-from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES
+from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE
 from git_sites import CASES as GIT_CASES
 from git_observer import Git
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count
@@ -100,6 +100,8 @@ class Observer:
                    'cleanup-acp': SCRIPT, 'acp': ACP, 'mock-acp': MOCK}
         script = (str(Path(self.meta['checkout']) / scripts[role]) if role in scripts else
                   str(backend_path(case,Path(cwd).parent) if case in CONTROLLED else Path(cwd).parent / 'fake-app-server') if role in ('backend', 'delayed-backend') else None)
+        if role=='fixed-inline' and case==CLI_CASE:
+            script=str(Path(self.meta['checkout'])/'tools/v04_speed_runner.py')
         source = {'schema': 'unrest.bootstrap-source.v1', 'role': role, 'case': case,
             'identity': canonical(actual), 'parent': canonical(process_identity(parent.pid)),
             'observer': canonical(process_identity(os.getpid())), 'argv': vector,
@@ -269,7 +271,7 @@ class Observer:
                 'returned': False, 'body_ready': False, 'signals': set(), 'kernel_admitted': True}
         else:
             from speed_inline import CASES as SPEED_CASES,fixture
-            if intent['case'] in SPEED_CASES:
+            if intent['case'] in (*SPEED_CASES,CLI_CASE):
                 fixture(self)
             self.profile(pid, intent['role'], intent['case'], vector, environment, cwd, intent['token'], intent.get('inherited', ()))
         return True
