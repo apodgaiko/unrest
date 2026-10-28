@@ -115,7 +115,7 @@ def _environment(value, budget):
         if type(pair) is not tuple or len(pair) != 2:
             raise Refused('policy_environment')
         key, item = budget.text(pair[0]), budget.text(pair[1])
-        if not key or '=' in key:
+        if '=' in key:
             raise Refused('policy_environment_key')
         result.append((key, item))
     if len({key for key, _ in result}) != len(result):

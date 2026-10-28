@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 
 from content_manifest import Refused, capture
+from plan_launch import CASES as PLAN_CASES, PYTHON as PLAN_PYTHON, expected as plan_expected
 from bootstrap_cases import BOOTSTRAP
 from controlled_cases import CASES as CONTROLLED, GROUPS as CONTROLLED_GROUPS
 from controlled_startup import expected_entry, CASES
@@ -77,10 +78,10 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     if (type(profile) is not dict or set(profile) != FIELDS
             or profile['schema'] != 'unrest.bootstrap-source.v1'
-            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline')
+            or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python')
             or type(profile['case']) is not str
-            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, FIXED_CASES, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values())):
+            or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES))
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, FIXED_CASES, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
@@ -144,6 +145,12 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         if (profile['cwd'] != profile['checkout'] or script is not None or event != 'cpython.run_command' or arguments != (ROOT_COMMAND + '\n',)
                 or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
             raise Refused('source fixed root body')
+    elif role == 'plan-python':
+        result=plan_expected(profile['case'],profile['cwd'],Path(profile['owned']),native,profile['native_sha256'])
+        if (profile['case']!=PLAN_PYTHON or profile['case'] not in profile['cases'] or script is not None
+                or profile['argv']!=list(result.vector) or event!='cpython.run_command'
+                or arguments!=(result.expected.argv[2]+'\n',)):
+            raise Refused('preflight fixed controlled Python entry')
     elif role == 'fixed-inline':
         if profile['case'] not in FIXED_CASES or profile['case'] not in profile['cases'] or script is not None:
             raise Refused('source fixed inline case')

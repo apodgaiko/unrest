@@ -283,6 +283,7 @@ def worker(binding, metadata, raw_directory):
                       'connections': [asdict(value) for value in observer.endpoints.connections.values()],
                       'negative_probes': {case: {'socket': asdict(value['socket']), 'attempts': value['attempts']}
                           for case, value in observer.probe_ports.items()}},
+                  'plan_observations': [] if observer is None else observer.plan_records,
                   'interrupted_connections': [] if observer is None else observer.interrupted_records,
                   'poison': [] if observer is None else observer.ledger.poison,
                   'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
@@ -338,6 +339,7 @@ def main():
     success = False
     try:
         from bootstrap_cases import BOOTSTRAP
+        from plan_launch import CASES as PLAN_CASES
         from controlled_startup import CASES
         from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES
         from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE, RECORDED, FAULTS
@@ -346,7 +348,7 @@ def main():
         from fixed_inline import CASES as FIXED_CASES
         from session_launch import CASES as SESSION_CASES, TIMEOUT as SESSION_TIMEOUT
         from git_sites import CASES as GIT_CASES
-        cleanup = {**CONTROLLED_GROUPS, 'imports6': FIXED_CASES, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
+        cleanup = {**CONTROLLED_GROUPS, 'preflight9': PLAN_CASES, 'imports6': FIXED_CASES, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES, 'workspaces24': GIT_CASES, 'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
         cases = cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
         metadata = {**prepare(binding, Path.cwd().resolve(strict=True), root, git=cases == GIT_CASES, public=cases == FIXED_CASES, native=any(case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP) for case in cases)), 'cases': list(cases)}
         pid = os.fork()

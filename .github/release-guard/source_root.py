@@ -12,6 +12,7 @@ import pytest
 from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
+from plan_launch import CASES as PLAN_CASES
 from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP, INITIALIZED_HTTP, configured
 from bootstrap_configuration import Binding
 from content_manifest import Refused
@@ -219,11 +220,12 @@ class OriginalCases:
         from cleanup_effects import CleanupCalls
         from cleanup_inline import NO_LAUNCH, DECLARATIONS
         from fixed_inline import FixedCalls, CASES as FIXED_CASES
+        from plan_calls import Calls as PlanCalls
         from session_calls import SessionCalls
         from session_launch import CASES as SESSION_CASES
         from git_source import GitCalls
         from git_sites import CASES as GIT_CASES
-        cls = FixedCalls if item.nodeid in FIXED_CASES else SessionCalls if item.nodeid in SESSION_CASES else GitCalls if item.nodeid in GIT_CASES else CleanupCalls if item.nodeid in (*CLEANUP_CASES, *NO_LAUNCH, *DECLARATIONS) else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
+        cls = PlanCalls if item.nodeid in PLAN_CASES else FixedCalls if item.nodeid in FIXED_CASES else SessionCalls if item.nodeid in SESSION_CASES else GitCalls if item.nodeid in GIT_CASES else CleanupCalls if item.nodeid in (*CLEANUP_CASES, *NO_LAUNCH, *DECLARATIONS) else OrdinaryCalls if item.nodeid in ORDINARY_CASES else BootstrapCalls
         policy.case, policy.calls = item.nodeid, cls(policy, item)
         policy.client.request('case-start', {'case': item.nodeid})
         yield

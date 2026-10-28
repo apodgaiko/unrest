@@ -15,6 +15,7 @@ import struct
 import time
 
 from content_manifest import Refused, native_digest
+from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, declaration
 from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP
@@ -67,6 +68,7 @@ class Observer:
         self.eof_drains, self.eof_fds, self.interrupted_records = {}, {}, []
         self.connected_routes: dict[str, int] = {}
         self.probe_ports = {}
+        self.plan_records: list[dict] = []
         self.http_contexts: dict[tuple[str,int],dict] = {}
         self.frames, self.controls, self.completed = [], [], []
         self.case, self.finished, self.serial = None, False, 0
@@ -110,7 +112,7 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python'}[role]
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'), expected_generation=1)
         if role in ('backend', 'delayed-backend', 'acp', 'workspace-owned', 'session-adapter', 'session-inline'):
@@ -125,6 +127,9 @@ class Observer:
         while self.ledger.next_kernel < len(trace.records):
             row = trace.records[self.ledger.next_kernel]
             self.ledger.kernel(self.ledger.next_kernel, row)
+            if self.case in PLAN_CASES:
+                from plan_observer import consume
+                consume(self,row)
             if row['kind'] == 'kernel_child':
                 birth = Birth.read(row['identity'])
                 if birth.pid == birth.tgid:
@@ -201,6 +206,9 @@ class Observer:
         return (output.st_dev, output.st_ino)
 
     def resolve(self, trace, pid, path, vector, environment, cwd):
+        if self.case in PLAN_CASES:
+            from plan_observer import resolve
+            return resolve(self,trace,pid,path,vector,environment,cwd)
         self.consume(trace)
         birth = self.ledger.current.get(pid)
         if birth is None:
@@ -258,10 +266,13 @@ class Observer:
     def launch(self, actor, payload):
         self.launch_owner(actor)
         shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256', *(('git',) if self.case in GIT_CASES else ())))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES) or type(payload['source_line']) is not int:
+        if payload['case'] != self.case or self.case not in (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES) or type(payload['source_line']) is not int:
             raise Refused('source declared launch case')
         original = payload['original']
         shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
+        if self.case in PLAN_CASES:
+            from plan_observer import launch
+            return launch(self,actor,payload)
         if self.case in FIXED_CASES:
             query = actor['role'] == 'fixed-inline'
             records = [value for value in self.intents.values() if value['case'] == self.case and value['role'] == 'fixed-inline']
@@ -482,6 +493,15 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        if actor['case'] in PLAN_CASES:
+            values=[value for value in self.intents.values() if value['case']==actor['case'] and value.get('pid')==actor['birth'].pid]
+            if len(values)!=1 or terminal is None:
+                return False
+            value=values[0]
+            if actor['case']==PLAN_INVALID:
+                return process.generation==0 and terminal[2]==255 and value.get('plan_failed') is True and not actor['body_ready']
+            return (process.generation==1 and terminal[2]==0 and value.get('plan_exec_verified') is True
+                    and (actor['body_ready'] if actor['case']==PLAN_PYTHON else actor.get('kernel_admitted') is True))
         if actor['role'] == 'session-invalid':
             failures = [row for row in self.ledger_trace.records if row['kind'] == 'exec_syscall_return' and row['pid'] == actor['birth'].pid]
             return process.generation == 0 and terminal is not None and terminal[2] == 255 and len(failures) == 1 and failures[0]['return'] == -8
@@ -550,7 +570,7 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
+                count = 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2
                 for serial, drain in list(self.eof_drains.items()):
                     ticket = drain['ticket']
                     if ticket.route.case == self.case:

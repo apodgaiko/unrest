@@ -2911,3 +2911,17 @@ initialization. It grants no GET/DELETE/reconnect allowance. Backend RPC limits
 remain separate. The observer reacquires the original listener and requires real
 reciprocal socket joins; context propagation grants no generic ROOT loopback
 authority, native execution or genuine-provider acceptance.
+
+
+The nine original LaunchPlan process cases preserve native PATH attempts, shell
+shebang handling, argv0, immutable plan fields and legal empty environment names.
+Each intent binds the original prepared test and spawn constructor, literal
+operands, owned script bytes and generation. The blocked PATH candidate requires
+its actual EACCES before the selected candidate; invalid format requires actual
+ENOEXEC and a generation-zero parent wait, without a READY claim. Native success
+requires the post-exec executable and argument vector plus original-parent wait.
+The one controlled Python fields probe uses the fixed guarded interpreter; that
+row does not independently prove its bare Python alias resolution. Native shell
+rows retain actual resolver behavior. This family grants no signal, listener,
+generic shell or provider authority. Component proof does not certify the source
+suite or release.

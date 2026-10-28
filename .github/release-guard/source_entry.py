@@ -16,6 +16,7 @@ from typing import Any, NoReturn
 
 from bootstrap_wire import Client
 from content_manifest import Refused
+from plan_launch import CASES as PLAN_CASES
 from control_transport import finite
 from bootstrap_cases import BOOTSTRAP
 from controlled_cases import CASES as CONTROLLED
@@ -42,12 +43,12 @@ class Policy:
         self.children: dict[int, dict] = {}
         self.local = threading.local()
         self.bodies: Any
-        if profile['role'] in ('mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline'):
+        if profile['role'] in ('mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python'):
             from library_code import Computation
             self.bodies = Computation({'source': profile['checkout'], 'dependencies': profile['dependencies'],
                                        'stdlib': str(Path(profile['runtime_root']) / 'lib/python3.13')},
                 entry_script=profile['script'] if profile['role'] in ('cleanup-acp', 'session-adapter', 'session-child') else None,
-                entry_command=profile['argv'][4] if profile['role'] == 'fixed-inline' else None)
+                entry_command=profile['argv'][4] if profile['role'] in ('fixed-inline','plan-python') else None)
         else:
             self.bodies = Bodies(profile)
         self.wire_code = Client.request.__code__
@@ -75,16 +76,16 @@ class Policy:
         return False
 
     def popen(self, args):
-        if self.profile['role'] not in ('root', 'mcp', 'session-adapter', 'fixed-inline') or self.calls is None or self.case not in (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES):
+        if self.profile['role'] not in ('root', 'mcp', 'session-adapter', 'fixed-inline') or self.calls is None or self.case not in (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES):
             raise Refused('source undeclared process caller')
         if type(args) is not tuple or len(args) != 4:
             raise Refused('source process audit schema')
         executable, vector, cwd, environment = args
         if self.case in CONTROLLED and type(vector) is list and vector and type(vector[0]) is str and vector[0] == '/usr/bin/git':
             intent = self.calls.git.select(self.case,args)
-        elif self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES):
+        elif self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES):
             if (type(executable) is not str or type(vector) is not list
-                    or not (1 if self.case in SESSION_INVALID else 2) <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
+                    or not (1 if self.case in (*SESSION_INVALID,*PLAN_CASES) else 2) <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
                 raise Refused('ordinary process audit primitives')
             intent = self.calls.startup.select(self.case, args)
         else:
@@ -312,7 +313,7 @@ def activate(directory, profile, event, arguments):
     actual, pins = validate(profile, event, arguments)
     client = Client(directory, profile, METHODS)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline'):
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python'):
         sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
         # Only guard/locked dependencies initialize here; candidate test modules
         # are imported by the real pytest body after the native READY boundary.

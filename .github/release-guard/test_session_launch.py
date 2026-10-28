@@ -153,7 +153,7 @@ def test_invalid_image_requires_real_exec_errno_and_no_successful_exec(generatio
     observer.ledger = SimpleNamespace(process=lambda value: SimpleNamespace(generation=generation, terminal=(5,code << 8,code)))
     observer.ledger_trace = SimpleNamespace(records=[dict(kind='exec_syscall_return',pid=2,return_value=error)])
     observer.ledger_trace.records[0]['return'] = observer.ledger_trace.records[0].pop('return_value')
-    assert observer.completed_child(dict(birth=birth,role='session-invalid')) is accepted
+    assert observer.completed_child(dict(birth=birth,role='session-invalid',case=INVALID[0])) is accepted
 
 
 

@@ -20,7 +20,7 @@ def plan_fields(plan):
     p = {key: object.__getattribute__(plan, key) for key in ('argv', 'cwd', 'environment', 'path')}
     if (type(p['argv']) is not tuple or not p['argv'] or any(type(v) is not str for v in p['argv'])
             or type(p['cwd']) is not str or type(p['environment']) is not types.MappingProxyType
-            or type(p['path']) is not str):
+            or p['path'] is not None and type(p['path']) is not str):
         raise Refused('session immutable plan fields')
     environment = plain_environment(p['environment'])
     if p['path'] != environment.get('PATH'):
@@ -28,12 +28,12 @@ def plan_fields(plan):
     return p, environment
 
 
-def constructor_options(options, plan, limit):
+def constructor_options(options, plan, limit, *, session=True):
     kw = _namespace(options.get('kwds'))
     args = options.get('args')
-    if (set(kw) != {'cwd', 'env', 'start_new_session'} or type(kw['cwd']) is not str
+    if (type(session) is not bool or set(kw) != ({'cwd','env','start_new_session'} if session else {'cwd','env'}) or type(kw['cwd']) is not str
             or kw['cwd'] != plan['cwd'] or kw['env'] is not plan['environment']
-            or kw['start_new_session'] is not True or type(options.get('program')) is not str
+            or session and kw['start_new_session'] is not True or type(options.get('program')) is not str
             or options['program'] != plan['argv'][0] or type(args) is not tuple
             or any(type(v) is not str for v in args) or args != plan['argv'][1:]
             or any(type(options.get(k)) is not int or options[k] != -1 for k in ('stdin', 'stdout', 'stderr'))
