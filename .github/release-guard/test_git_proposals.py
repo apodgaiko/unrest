@@ -213,3 +213,60 @@ def test_owned_process_refuses_undeclared_stdin_before_admission():
     with pytest.raises(Refused, match="owned process scope"):
         prepare(host, {}, raw)
     assert not calls
+
+
+def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypatch):
+    import git_proposals
+
+    monkeypatch.setattr(git_proposals, "image", lambda: "a" * 64)
+    case = CASES[13]
+    calls = []
+    host = SimpleNamespace(
+        case=case,
+        git=SimpleNamespace(repositories={case: {"path": REPO, "setup": 5}}),
+        binding={"entry": {"path": "/native/python", "sha256": "b" * 64}},
+        meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
+    )
+
+    def launch(actor, payload):
+        calls.append(payload)
+        return {"ok": True, "ticket": 1, "token": "t"}
+
+    host.launch = launch
+    raw = {
+        "case": case,
+        "executable": "git",
+        "argv": ["git", "rev-parse", "--is-inside-work-tree"],
+        "cwd": REPO,
+        "environment": {
+            "PATH": "/bin:/usr/bin",
+            "PYTEST_VERSION": "9.0.2",
+            "PYTEST_CURRENT_TEST": case + " (call)",
+        },
+        "stdin": None,
+    }
+    answer = prepare(host, {}, raw)
+    assert answer["translated"] == raw["argv"]
+    assert calls[0]["git"] == {"operation": "inside", "repository": REPO, "fields": {}}
+    assert calls[0]["original"]["owner"] == "git:inside"
+    raw["argv"] = ["git", "commit", "-m", "child self commit"]
+    with pytest.raises(Refused):
+        prepare(host, {}, raw)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("family", ["workspaces", "evolution"])
+@pytest.mark.parametrize(
+    "operation", ["inside", "head", "parent-ref", "clean", "top", "verify-base"]
+)
+def test_shared_repository_operations_exist_for_both_product_families(family, operation):
+    from git_sites import OPERATIONS
+
+    fields = {"revision": REV} if operation == "verify-base" else {}
+    assert operation in OPERATIONS[family]
+    value = build(operation, REPO, REPO, fields, family=family)
+    host = SimpleNamespace()
+    recovered = operands(
+        host, operation, list(value.argv[1:]), {"stdin": None, "environment": {}}, REPO
+    )
+    assert build(operation, REPO, REPO, recovered, family=family) == value

@@ -37,7 +37,11 @@ the full source checkpoint, the final line count, or the release.
 The first native checkpoints for this reduced scope pass all 54 original
 preflight cases and all eight stdio startup rejection cases, with 17 actual
 original-parent waits and no poison or fallback cleanup. These component results
-are not the full unexcluded source checkpoint. The three observability import
+are not the full unexcluded source checkpoint. The 27 bootstrap and seven HTTP
+context cases also pass under the reduced scope, with 50 further original-parent
+waits. The Git component retains its original failed evolution result; its repair
+restores shared production operations without widening the finite templates.
+The three observability import
 probes use the same finite fixed-inline path with their exact original script,
 arguments and trap flags; they add no generic command or nested-pytest permission.
 
