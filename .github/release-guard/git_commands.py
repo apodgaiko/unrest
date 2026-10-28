@@ -1,7 +1,7 @@
-"""Closed Git commands for original workspace/evolution call sites.
+"""Closed Git commands for the workspace/evolution launch families.
 
-Call-site ownership, original subprocess options and filesystem custody belong to
-source selection. This builder interprets no expressions and accepts no argv.
+The independent observer validates filesystem custody and process state.
+This builder interprets no expressions and accepts no argv.
 Its causal requirements must be resolved by the observer before admission.
 """
 from __future__ import annotations
@@ -104,7 +104,11 @@ def build(operation, repository, location, fields, *, family):
     for key, value in fields.items():
         if key not in ('leases', 'new_inputs'):
             text(value)
-    args, requirements, output, additions, stdin = (), (), None, (), None
+    args: tuple[str,...] = ()
+    requirements: tuple[tuple[str,str,str,tuple[str,...]],...] = ()
+    output: tuple[str,str,tuple[str,...]] | None = None
+    additions: tuple[tuple[str,str],...] = ()
+    stdin: str | None = None
     origin = 'parent' if role == 'parent' else str(cwd)
     if operation in ('rollback-add', 'rollback-update', 'rollback-reset') and family != 'evolution':
         raise Refused('git rollback family')

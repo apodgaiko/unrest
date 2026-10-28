@@ -30,7 +30,7 @@ from source_profile import METHODS, ROOT_COMMAND, digest
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES, expected as ordinary_expected
 from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, INVALID as SESSION_INVALID, INVALID_BYTES, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT, expected as session_expected
-from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, expected as fixed_expected
+from fixed_inline import CASES as FIXED_CASES, STDIO, SEQUENCES as FIXED_SEQUENCES, expected as fixed_expected, startup_expected, translated as fixed_translated
 from git_sites import CASES as GIT_CASES
 from git_observer import Git
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_count as inline_count, expected as inline_expected
@@ -177,7 +177,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'git-fixed')):
+            if role in ('git-init', 'git-commit', 'session-child') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'git-fixed') and not input_pipe):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -232,7 +232,7 @@ class Observer:
         if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):
             return False
         intent['stdout'] = self.stdio(pid, intent['role'],
-            input_pipe=intent['role'] == 'git-command' and intent['command'].stdin is not None)
+            input_pipe=intent.get('input_pipe',False) or intent['role'] == 'git-command' and intent['command'].stdin is not None)
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
         if intent['role'] in ('sleep', 'session-invalid') or intent['role'].startswith('git-'):
             actual = process_identity(pid)
@@ -287,12 +287,18 @@ class Observer:
                     raise Refused('fixed original launch frontier')
                 operation = FIXED_SEQUENCES[self.case][len(records)]
             environment = {**self.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':self.case+' (call)'}
-            expected = fixed_expected(self.case,operation,self.binding['entry']['path'],self.binding['entry']['sha256'],Path(self.meta['checkout']),environment,query=query)
-            vector = list(expected.argv) if query else [expected.argv[0],'-I','-S',*expected.argv[1:]]
-            answer = self.admit_launch(actor,payload,expected,'git-fixed' if query else 'fixed-inline',507 if query else 587 if operation == 'mcp' else 540,vector,expected.payload_sha256,maximum=1 if query else len(FIXED_SEQUENCES[self.case]))
+            if self.case in STDIO:
+                if query:
+                    raise Refused('fixed startup has no descendant query')
+                expected = startup_expected(self.case,self.binding['entry']['path'],self.binding['entry']['sha256'],original['cwd'],Path(self.meta['owned']))
+            else:
+                expected = fixed_expected(self.case,operation,self.binding['entry']['path'],self.binding['entry']['sha256'],Path(self.meta['checkout']),environment,query=query)
+            vector = list(expected.argv) if query else list(fixed_translated(expected))
+            answer = self.admit_launch(actor,payload,expected,'git-fixed' if query else 'fixed-inline',507 if query else 107 if self.case in STDIO else 587 if operation == 'mcp' else 540,vector,expected.payload_sha256,maximum=1 if query else len(FIXED_SEQUENCES[self.case]))
             if answer is None:
                 return None
             self.intents[answer['ticket']]['fixed_operation'] = operation
+            self.intents[answer['ticket']]['input_pipe'] = self.case in STDIO
             return answer
         if self.case in SESSION_CASES:
             child = actor['role'] == 'session-adapter'
@@ -350,6 +356,8 @@ class Observer:
             bridge = self.listeners[self.listener_key(self.case,'bridge',cwd)]
             lifetime = self.listeners[self.listener_key(self.case,'lifetime',cwd)]
             relay = [bridge['socket'].local[1],bridge['nonce'],lifetime['socket'].local[1],lifetime['nonce']]
+        from configuration_inputs import check_inputs
+        check_inputs(Path(self.meta['checkout']),Path(cwd),self.case)
         native = self.binding['entry']['path']
         expected,_,script_pin = expected_entry(self.case,Path(self.meta['checkout']),Path(cwd),native,
             self.binding['entry']['sha256'],backend=role == 'backend',relay=relay)
@@ -633,6 +641,9 @@ class Observer:
             return self.git.seal_pipe(actor, payload)
         elif kind == 'git-output':
             return self.git.output(actor, payload)
+        elif kind == 'launch-proposal':
+            from effect_proposals import proposal
+            return proposal(self,actor,payload)
         elif kind == 'launch-intent':
             return self.launch(actor, payload)
         elif kind == 'launch-return':
@@ -657,7 +668,7 @@ class Observer:
             self.actor_control(actor, 'parent-wait', row)
         elif kind == 'pair-intent':
             shape(payload, ('site',))
-            if payload['site'] != 'asyncio-self-pipe' or len(self.pair_intents) >= 32:
+            if payload['site'] != 'local-stream-pair' or len(self.pair_intents) >= 32:
                 raise Refused('source finite self-pipe intent')
             self.serial += 1
             self.pair_intents[self.serial] = actor['birth']

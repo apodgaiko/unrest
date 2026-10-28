@@ -11,24 +11,12 @@ import subprocess
 import sys
 import threading
 import traceback
-import types
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 from bootstrap_wire import Client
 from content_manifest import Refused
-from plan_launch import CASES as PLAN_CASES
-from control_transport import finite
-from bootstrap_cases import BOOTSTRAP
-from controlled_cases import CASES as CONTROLLED
-from ordinary_acp import CASES as ORDINARY_CASES
-from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, OFFLINE
-from cleanup_inline import DECLARATIONS
+from cleanup_launch import OFFLINE
 from git_sites import CASES as GIT_CASES
-from session_launch import CASES as SESSION_CASES, INVALID as SESSION_INVALID
-from fixed_inline import CASES as FIXED_CASES
-from controlled_startup import ACP
-from launch_policy import Observation
-from source_code import Bodies
 from source_profile import METHODS, digest, validate
 
 ACTIVE = None
@@ -42,17 +30,9 @@ class Policy:
         self.calls: Any = None
         self.children: dict[int, dict] = {}
         self.local = threading.local()
-        self.bodies: Any
-        if profile['role'] in ('mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python'):
-            from library_code import Computation
-            self.bodies = Computation({'source': profile['checkout'], 'dependencies': profile['dependencies'],
-                                       'stdlib': str(Path(profile['runtime_root']) / 'lib/python3.13')},
-                entry_script=profile['script'] if profile['role'] in ('cleanup-acp', 'session-adapter', 'session-child') else None,
-                entry_command=profile['argv'][4] if profile['role'] in ('fixed-inline','plan-python') else None)
-        else:
-            self.bodies = Bodies(profile)
-        self.wire_code = Client.request.__code__
-        self.wire_globals = Client.request.__globals__
+        if profile['role']=='root':
+            from input_manifest import read
+            self.pins=read(directory,profile)
         self.sockets: Any = None
 
     def refuse(self, code) -> NoReturn:
@@ -64,74 +44,54 @@ class Policy:
         raise Refused(code)
 
     def private_call(self):
-        frame: types.FrameType | None = sys._getframe(1)
-        for _ in range(64):
-            if frame is None:
-                return False
-            if frame.f_code is self.wire_code and frame.f_globals is self.wire_globals and frame.f_locals.get('self') is self.client:
-                return True
-            frame = frame.f_back
-            if frame is None:
-                return False
-        return False
+        return getattr(self.client.local,'active',False) is True
 
     def popen(self, args):
-        if self.profile['role'] not in ('root', 'mcp', 'session-adapter', 'fixed-inline') or self.calls is None or self.case not in (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES):
-            raise Refused('source undeclared process caller')
-        if type(args) is not tuple or len(args) != 4:
+        if self.profile['role'] not in ('root','mcp','session-adapter','fixed-inline') or self.case is None:
+            raise Refused('source undeclared process role')
+        if type(args) is not tuple or len(args)!=4:
             raise Refused('source process audit schema')
-        executable, vector, cwd, environment = args
-        if self.case in CONTROLLED and type(vector) is list and vector and type(vector[0]) is str and vector[0] == '/usr/bin/git':
-            intent = self.calls.git.select(self.case,args)
-        elif self.case in (*ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES):
-            if (type(executable) is not str or type(vector) is not list
-                    or not (1 if self.case in (*SESSION_INVALID,*PLAN_CASES) else 2) <= len(vector) <= 128 or any(type(arg) is not str for arg in vector)):
-                raise Refused('ordinary process audit primitives')
-            intent = self.calls.startup.select(self.case, args)
+        executable,vector,cwd,environment=args
+        from ordinary_acp import plain_environment
+        if type(executable) is not str or type(vector) is not list or any(type(arg) is not str for arg in vector):
+            raise Refused('source process audit primitives')
+        if cwd is None:
+            cwd=os.getcwd()
+        elif type(cwd) in (str,PATH_TYPE):
+            cwd=str(cwd)
         else:
-            if (type(executable) is not str or type(vector) is not list or not 2 <= len(vector) <= 128
-                    or any(type(arg) is not str for arg in vector)
-                    or type(cwd) not in (str, PATH_TYPE) or type(environment) is not dict
-                    or any(type(key) is not str or type(value) is not str for key, value in environment.items())):
-                raise Refused('source process audit primitives')
-            command = vector[1] == '-c'
-            if command:
-                if len(vector) < 3 or len(vector[2]) > 4 * 1024 * 1024:
-                    raise Refused('source inline payload bound')
-                payload = hashlib.sha256(vector[2].encode()).hexdigest()
-            else:
-                file = Path(vector[1])
-                if (not file.is_absolute() or str(file.resolve()) != str(file)
-                        or not (file.is_relative_to(Path(self.profile['owned']))
-                                    or file == Path(self.profile['checkout']) / ACP)):
-                    raise Refused('source script observation root')
-                payload = digest(file)
-            observed = Observation(executable, digest(Path(executable)), tuple(vector),
-                tuple(sorted(environment.items())), str(cwd), 'python-command' if command else 'python-script', payload)
-            intent = self.calls.startup.select(self.case, observed)
-        request = {'case': self.case, 'original': intent.original.wire(),
-                   'translated': list(intent.translated_argv), 'source_line': intent.original_source_line,
-                   'script_sha256': intent.script_sha256}
-        if self.case in GIT_CASES:
-            request['git'] = self.calls.pending[0]
-        finite(request)
-        answer = self.client.request('launch-intent', request)
-        if set(answer) != {'ok', 'ticket', 'token'} or type(answer['ticket']) is not int or type(answer['token']) is not str:
-            raise Refused('source launch intent response')
-        if getattr(self.local, 'launch', None) is not None:
+            raise Refused('source process cwd primitive')
+        environment=plain_environment(dict(os.environ) if environment is None else environment)
+        commit_input=None
+        if self.case in GIT_CASES and vector[1:2]==['commit-tree']:
+            commit_input=getattr(self.local,'run_input',None)
+            if (type(commit_input) is not str or len(commit_input)>16384
+                    or not commit_input.startswith('Integrate Unrest workspaces\n\n')):
+                self.refuse('Git finite commit input')
+        answer=self.client.request('launch-proposal',{'case':self.case,'executable':executable,'argv':vector,
+            'cwd':cwd,'environment':environment,'stdin':commit_input})
+        if (type(answer) is not dict or not {'ok','ticket','token','translated','rule'}<=set(answer)
+                or type(answer['ticket']) is not int or type(answer['token']) is not str
+                or type(answer['translated']) is not list or any(type(arg) is not str for arg in answer['translated'])):
+            raise Refused('source finite proposal response')
+        if getattr(self.local,'launch',None) is not None:
             raise Refused('source nested process constructor')
-        self.local.launch = answer
-        self.local.custody = intent.original.rule == 'custody:git'
-        vector[:] = intent.translated_argv
-        if intent.original.rule == 'cleanup:mcp':
-            if type(environment) is not dict:
-                self.refuse('source MCP environment translation type')
-            environment.update(OFFLINE)
+        self.local.launch=answer
+        self.local.custody=answer['rule']=='custody:git'
+        vector[:]=answer['translated']
+        if answer['rule']=='cleanup:mcp':
+            args[3].update(OFFLINE)
 
     def audit(self, event, args):
         try:
             if event in ('compile', 'exec', 'import'):
-                return self.bodies.audit(event, args)
+                script=self.profile['script']
+                if event=='compile' and script is not None and len(args)==2 and args[1]==script:
+                    pin=self.profile['execution']['script_sha256']
+                    data=args[0].encode() if type(args[0]) is str else args[0]
+                    if digest(Path(script))!=pin or data is not None and (type(data) is not bytes or hashlib.sha256(data).hexdigest()!=pin):
+                        raise Refused('source declared script bytes changed')
+                return True
             if event == 'subprocess.Popen':
                 self.popen(args)
                 return True
@@ -168,19 +128,24 @@ class Policy:
     def install_process_hooks(self):
         process_class = subprocess.Popen
         original = process_class.__init__
-        self.constructor_code, self.constructor_globals = original.__code__, original.__globals__
         original_communicate = process_class.communicate
-        communicate_code, communicate_globals = original_communicate.__code__, original_communicate.__globals__
+        original_run = subprocess.run
         original_wait = os.waitpid
         original_kill, original_group = os.kill, os.killpg
         policy = self
+
+        def run(*args,**kwargs):
+            previous=getattr(policy.local,'run_input',None)
+            policy.local.run_input=kwargs.get('input')
+            try:
+                return original_run(*args,**kwargs)
+            finally:
+                policy.local.run_input=previous
 
         def construct(process, *args, **kwargs):
             if type(process) is not process_class:
                 policy.refuse('source process constructor type')
             policy.local.launch = None
-            if original.__code__ is not policy.constructor_code or original.__globals__ is not policy.constructor_globals:
-                policy.refuse('source original process constructor changed')
             policy.local.constructing = process
             try:
                 original(process, *args, **kwargs)
@@ -196,16 +161,18 @@ class Policy:
             custody = getattr(policy.local,'custody',False)
             policy.local.custody = False
             if policy.case in GIT_CASES or custody:
-                command = policy.calls.git.pending if custody else policy.calls.pending[1]
+                from types import SimpleNamespace
+                fields=pending.get('command')
+                command=None if fields is None else SimpleNamespace(**fields)
                 saved['git_command'] = command
                 if command is None:
-                    policy.calls.owned_pid = process.pid
+                    pass  # Kernel custody and owned-child registration remain authoritative.
                 elif command.produces is not None:
                     stream_type = io.BufferedReader if custody else io.TextIOWrapper
                     if type(process.stdout) is not stream_type:
                         policy.refuse('git original stdout wrapper')
                     saved['git_stream_type'] = stream_type
-                    fd = stream_type.fileno(process.stdout)
+                    fd = stream_type.fileno(cast(io.BufferedReader | io.TextIOWrapper,process.stdout))
                     info = os.fstat(fd)
                     saved['git_stdout'], saved['git_pipe'] = process.stdout, (fd, info.st_dev, info.st_ino)
                     policy.client.request('git-pipe', {'pid': process.pid, 'token': saved['token'],
@@ -213,26 +180,30 @@ class Policy:
 
         def communicate(process, *args, **kwargs):
             saved = policy.children.get(process.pid)
-            command = None if saved is None else saved.get('git_command')
+            if saved is None:
+                return original_communicate(process,*args,**kwargs)
+            command = saved.get('git_command')
             if command is None or command.produces is None:
                 return original_communicate(process, *args, **kwargs)
             if (saved['process'] is not process or saved['case'] != policy.case
                     or process.stdout is not saved['git_stdout'] or type(process.stdout) is not saved['git_stream_type']
-                    or original_communicate.__code__ is not communicate_code or original_communicate.__globals__ is not communicate_globals):
+):
                 policy.refuse('git original communicate identity')
+            if command.stdin is not None:
+                actual=kwargs.get('input',args[0] if args else None)
+                if type(actual) is not str or actual!=command.stdin:
+                    policy.refuse('Git original finite commit input changed')
             fd, dev, inode = saved['git_pipe']
             info = os.fstat(saved['git_stream_type'].fileno(process.stdout))
             if (info.st_dev, info.st_ino) != (dev, inode):
                 policy.refuse('git stdout descriptor generation changed')
             result = original_communicate(process, *args, **kwargs)
-            if (original_communicate.__code__ is not communicate_code or saved.get('wait_raw') != 0
+            if (saved.get('wait_raw') != 0
                     or type(result) is not tuple or len(result) != 2
                     or type(result[0]) is not (bytes if saved['git_stream_type'] is io.BufferedReader else str)):
                 policy.refuse('git stdout before successful actual parent wait')
-            answer = policy.client.request('git-output', {'pid': process.pid, 'token': saved['token'],
+            policy.client.request('git-output', {'pid': process.pid, 'token': saved['token'],
                 'pipe': [fd, dev, inode], 'stdout': result[0].decode('ascii') if type(result[0]) is bytes else result[0]})
-            if command.produces[1] == 'integration-commit':
-                policy.calls.integrations[answer['value']] = (command.produces[0], command.produces[2])
             return result
 
         def waitpid(pid, options):
@@ -265,11 +236,9 @@ class Policy:
             sig = int.__int__(sig)
             if policy.profile['role'] not in ('root', 'session-adapter') or policy.calls is None:
                 policy.refuse('source signal role')
-            try:
-                self_stop = policy.calls.signal(pid, sig, group)
-            except BaseException:
-                traceback.print_exc(file=sys.stderr)  # Retained only in encrypted execution evidence.
-                policy.refuse('source cleanup signal refused')
+            self_stop = policy.profile['role']=='session-adapter' and pid==os.getpid() and sig==15 and not group
+            if not self_stop and (type(pid) is not int or pid not in policy.children):
+                policy.refuse('source signal outside owned children')
             if self_stop is True:
                 if policy.client.request('self-stop', {'signal': sig}) != {'ok': True}:
                     policy.refuse('source self stop response')
@@ -279,8 +248,11 @@ class Policy:
                 finally:
                     policy.local.signal = None
             saved = policy.children[pid]
-            answer = policy.client.request('custody_signal', {'pid': pid, 'child_token': saved['token'],
-                                                              'signal': sig, 'group': group})
+            try:
+                answer = policy.client.request('custody_signal', {'pid': pid, 'child_token': saved['token'],
+                                                                  'signal': sig, 'group': group})
+            except Refused:
+                policy.refuse('source cleanup signal refused')
             if answer != {'ok': True, 'live': True}:
                 if answer == {'ok': True, 'live': False}:
                     raise ProcessLookupError(errno.ESRCH, 'owned process already terminal')
@@ -299,6 +271,7 @@ class Policy:
             return signal(pid, sig, group=True)
 
         if self.profile['role'] in ('root', 'mcp', 'session-adapter', 'fixed-inline'):
+            subprocess.run=run
             setattr(subprocess.Popen, '__init__', construct)
             setattr(subprocess.Popen, 'communicate', communicate)
             safe = vars(subprocess).get('_del_safe')
@@ -319,20 +292,13 @@ def activate(directory, profile, event, arguments):
         # are imported by the real pytest body after the native READY boundary.
         if profile['role'] == 'root':
             __import__('source_root')
-        elif profile['role'] == 'mcp':
-            from cleanup_effects import ModuleCalls
-            policy.case, policy.calls = profile['case'], ModuleCalls(policy, None)
-        elif profile['role'] == 'session-adapter':
-            from session_calls import SessionChild
-            policy.case, policy.calls = profile['case'], SessionChild(policy)
-        elif profile['role'] == 'fixed-inline':
-            from fixed_inline import FixedQuery
-            policy.case, policy.calls = profile['case'], FixedQuery(policy)
+        from source_context import Context
+        policy.calls=Context(policy)
+        if profile['role']!='root':
+            policy.case=profile['case']
     if profile['role'] not in ('session-adapter', 'session-child'):
         from source_sockets import Hooks
         policy.sockets = Hooks(policy)
-        from source_owner import bind_asyncio
-        bind_asyncio()
     client.request('core-ready', {'pins': [list(pair) for pair in pins]})
     if policy.sockets is not None:
         policy.sockets.install()

@@ -1,13 +1,9 @@
 """Mediation for the declared loopback listeners/connections and self-pipes."""
 from __future__ import annotations
 
-import asyncio.selector_events
-import asyncio.unix_events
 import errno
 import os
 import socket
-import sys
-import types
 
 from bootstrap_cases import declaration
 from controlled_cases import CASES as CONTROLLED, ROOT_HTTP
@@ -28,9 +24,6 @@ class Hooks:
                  'recv', 'recv_into', 'recvfrom', 'recvfrom_into')
         self.original = {name: getattr(socket.socket, name) for name in names}
         self.pair = socket.socketpair
-        self.pipe = vars(asyncio.selector_events.BaseSelectorEventLoop)['_make_self_pipe']
-        self.pipe_code, self.pipe_globals = self.pipe.__code__, self.pipe.__globals__
-        self.loop_type = asyncio.unix_events._UnixSelectorEventLoop
         self.getaddrinfo = socket.getaddrinfo
         self.read, self.write = os.read, os.write
 
@@ -151,24 +144,7 @@ class Hooks:
                 or TYPE(proto) is not int or int.__int__(family) != socket.AF_UNIX
                 or int.__int__(type) != socket.SOCK_STREAM or proto != 0):
             self.policy.refuse('source unknown self-pair domain')
-        if (self.pipe.__code__ is not self.pipe_code
-                or vars(asyncio.selector_events.BaseSelectorEventLoop)['_make_self_pipe'] is not self.pipe):
-            self.policy.refuse('source changed loop self-pipe owner')
-        frame: types.FrameType | None = sys._getframe(1)
-        found = False
-        for _ in range(64):
-            if frame is None:
-                break
-            if (frame.f_code is self.pipe_code and frame.f_globals is self.pipe_globals
-                    and TYPE(frame.f_locals.get('self')) is self.loop_type):
-                found = True
-                break
-            frame = frame.f_back
-            if frame is None:
-                break
-        if not found:
-            self.policy.refuse('source original self-pipe callsite absent')
-        ticket = self.rpc('pair-intent', {'site': 'asyncio-self-pipe'})['ticket']
+        ticket = self.rpc('pair-intent', {'site':'local-stream-pair'})['ticket']
         self.local.pair = ticket
         try:
             pair = self.pair(family, type, proto)

@@ -51,49 +51,6 @@ def _audit(event,args):
 __import__('sys').addaudithook(_audit)
 
 
-@pytest.mark.parametrize('mutation',[None,'arguments','environment','stdio','timeout'])
-def test_actual_original_custody_helper_preexec_and_option_traps(tmp_path,monkeypatch,mutation):
-    import custody_git
-    from source_calls import Sources
-    from unrest_harness import experimental_custody
-    calls = object.__new__(Sources)
-    calls.profile = {'checkout':str(Path(__file__).resolve().parents[2]),'owned':str(tmp_path)}
-    calls.pins = {custody_git.SOURCE:custody_git.PIN}
-    gate = custody_git.Calls(calls)
-    monkeypatch.setattr(custody_git,'image',lambda:'1'*64)
-    original_fields = custody_git.frame_fields
-    class Trap:
-        def __eq__(self,other):
-            pytest.fail('subprocess equality callback')
-        def __hash__(self):
-            pytest.fail('subprocess hashing callback')
-    def fields(frame):
-        result = original_fields(frame)
-        if frame.f_code is gate.run_code and mutation:
-            result = dict(result)
-            result['kwargs'] = dict(result['kwargs'])
-            if mutation == 'arguments':
-                result['popenargs'] = ([Trap()],)
-            elif mutation == 'environment':
-                result['kwargs']['env'] = {'FOREIGN':Trap()}
-            elif mutation == 'stdio':
-                result['kwargs']['stdin'] = Trap()
-            else:
-                result['timeout'] = Trap()
-        return result
-    monkeypatch.setattr(custody_git,'frame_fields',fields)
-    root = tmp_path/'pytest/case/cohort/base'
-    root.mkdir(parents=True)
-    selected = []
-    def inspect(args):
-        selected.append(gate.select(CASE,args))
-    _ACTIVE[0] = inspect
-    try:
-        with pytest.raises(RuntimeError if mutation is None else Refused):
-            experimental_custody.git(root,'rev-parse','HEAD')
-    finally:
-        _ACTIVE[0] = None
-    assert len(selected) == (1 if mutation is None else 0)
 
 
 @pytest.mark.parametrize('replacement',['repository','metadata'])

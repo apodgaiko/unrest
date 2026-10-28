@@ -10,7 +10,7 @@ from session_launch import ARGS, CASES, LIVE, INVALID, INVALID_BYTES, PINS, PLAN
 from source_observer import Observer
 from process_ledger import Birth
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
 def test_original_session_source_pins_and_all_collected_cases():
@@ -114,36 +114,10 @@ class CallbackTrap:
         return 1
 
 
-@pytest.mark.parametrize('field', ('argv', 'cwd', 'environment', 'path'))
-def test_session_plan_fields_refuse_callbacks_first(field):
-    from types import MappingProxyType
-    from session_calls import plan_fields
-    values = dict(argv=('/native/python', '/fixed.py'), cwd='/workspace', environment=MappingProxyType({'PATH': '/bin'}), path='/bin')
-    values[field] = CallbackTrap()
-    with pytest.raises(Refused):
-        plan_fields(SimpleNamespace(**values))
 
 
-@pytest.mark.parametrize('field', ('program', 'args', 'kwds', 'stdin', 'limit'))
-def test_session_constructor_fields_refuse_callbacks_first(field):
-    from types import MappingProxyType
-    from session_calls import constructor_options
-    environment = MappingProxyType({'PATH': '/bin'})
-    plan = dict(argv=('/native/python', '/fixed.py'), cwd='/workspace', environment=environment, path='/bin')
-    options = dict(program='/native/python', args=('/fixed.py',), kwds=dict(cwd='/workspace', env=environment, start_new_session=True), stdin=-1, stdout=-1, stderr=-1, limit=196608)
-    options[field] = CallbackTrap()
-    with pytest.raises(Refused):
-        constructor_options(options, plan, 196608)
-    options['kwds'] = {CallbackTrap(): 1}
-    with pytest.raises(Refused):
-        constructor_options(options, plan, 196608)
 
 
-def test_session_child_descriptor_options_refuse_callbacks_first():
-    from session_calls import inherited_options
-    options = dict(stdin=None, stdout=None, stderr=None, preexec_fn=None, shell=False, start_new_session=False, pass_fds=CallbackTrap())
-    with pytest.raises(Refused):
-        inherited_options(options)
 
 
 @pytest.mark.parametrize('generation,code,error,accepted', ((0,255,-8,True),(1,255,-8,False),(0,0,-8,False),(0,255,0,False),(0,255,-1,False)))
@@ -157,12 +131,6 @@ def test_invalid_image_requires_real_exec_errno_and_no_successful_exec(generatio
 
 
 
-def test_fixed_descendant_site_uses_the_call_line_not_its_argument_line():
-    import ast
-    tree = ast.parse((ROOT / SCRIPT).read_bytes())
-    calls = [call for call in ast.walk(tree) if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
-             and isinstance(call.func.value, ast.Name) and call.func.value.id == 'subprocess' and call.func.attr == 'Popen']
-    assert len(calls) == 1 and calls[0].lineno == 50
 
 
 def test_synchronous_guard_import_does_not_initialize_asyncio():

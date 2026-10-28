@@ -91,7 +91,7 @@ def test_retirement_requires_real_reciprocal_join_not_just_connect(model):
 def test_copied_task_context_loses_authority_after_registry_retirement():
     manager = object.__new__(Contexts)
     case = next(iter(ROOT_HTTP))
-    manager.calls=SimpleNamespace(policy=policy(case,lambda *args:{'ok':True}))
+    manager.context=SimpleNamespace(policy=policy(case,lambda *args:{'ok':True}))
     record={'client':object(),'owner':object(),'case':case,'ordinal':1,'port':12345,'active':True}
     manager.records=[record]
     async def run():
@@ -117,7 +117,7 @@ def test_copied_task_context_loses_authority_after_registry_retirement():
 @pytest.mark.parametrize('scope',[None,(object(),1),(object(),True)])
 def test_foreign_task_scope_never_authorizes_connection(scope):
     manager=object.__new__(Contexts)
-    manager.calls=SimpleNamespace(policy=policy('foreign',lambda *args:None))
+    manager.context=SimpleNamespace(policy=policy('foreign',lambda *args:None))
     token=SCOPE.set(scope)
     try:
         with pytest.raises(Refused):
@@ -128,42 +128,23 @@ def test_foreign_task_scope_never_authorizes_connection(scope):
 
 @pytest.mark.parametrize('mutation',[None,'auth','url','headers','factory','owner','grant'])
 def test_capture_checks_actual_locked_client_transport_without_network(tmp_path,mutation):
-    import hashlib
-    import sys
-    from pathlib import Path
     from fastmcp import Client
     from unrest_harness import experimental_session as session
-    from source_calls import Sources
-    from source_owner import prepare
-    from tests import test_experimental_notifications as tests
     case=next(case for case in ROOT_HTTP if case!=INITIALIZED_HTTP and case.startswith('tests/test_experimental_notifications.py'))
-    when,status=case.rsplit('[',1)[1][:-1].rsplit('-',1)
     root=tmp_path/'pytest/case/campaign/owner'
     owner=object.__new__(session._SessionOwner)
     broker=object.__new__(session.TurnBroker)
     broker._active=object() if mutation=='grant' else None
     vars(owner).update(root=root,broker=broker,url='http://127.0.0.1:12345/mcp',_connection='synthetic-token',_listener=object())
-    def current(*args,**kwargs):
-        frame=sys._getframe(1)
-        while frame.f_code is not test_capture_checks_actual_locked_client_transport_without_network.__code__:
-            frame=frame.f_back
-        return frame
-    source=SimpleNamespace(current=current)
-    file=Path(session.__file__)
-    unit=prepare(file.read_bytes(),str(file),session.__name__,Sources.mode(session),hashlib.sha256(file.read_bytes()).hexdigest())
     requests=[]
     def request(kind,payload):
         requests.append((kind,payload))
         return {'ok':True,'port':12345}
-    calls=SimpleNamespace(session=session,session_unit=unit,owner=Sources.owner,mode=Sources.mode,
-        profile={'dependencies':str(Path(__import__('fastmcp').__file__).parents[1]),'owned':str(tmp_path)},
-        startup=SimpleNamespace(base=session._SessionOwner,case=case,owners={str(root):object() if mutation=='owner' else owner},root_key=lambda:1,root_identity=1),
-        notification=(tests,None,source,None,None,None,None),test_owner=source,tests=tests,
+    context=SimpleNamespace(owners=[(case,object() if mutation=='owner' else owner)],
         policy=policy(case,request,sockets=SimpleNamespace(descriptor=lambda stream:7)))
-    manager=Contexts(calls)
+    original_enter,original_exit=Client.__aenter__,Client.__aexit__
+    manager=Contexts(context)
     try:
-        manager.enter_owner.verify_binding()
-        manager.exit_owner.verify_binding()
         client=Client('http://127.0.0.1:9999/mcp' if mutation=='url' else owner.url,
                       auth='wrong' if mutation=='auth' else owner._connection)
         if mutation=='headers':
@@ -172,7 +153,7 @@ def test_capture_checks_actual_locked_client_transport_without_network(tmp_path,
             client.transport.httpx_client_factory=lambda **kwargs:None
         if mutation is None:
             record=manager.capture(client)
-            assert record['client'] is client and record['owner'] is owner and record['ordinal']==1
+            assert record['client'] is client and record['case']==case and record['ordinal']==1 and record['port']==12345
             manager.retire(record)
             manager.finish()
         else:
@@ -180,7 +161,7 @@ def test_capture_checks_actual_locked_client_transport_without_network(tmp_path,
                 manager.capture(client)
             assert not requests
     finally:
-        Client.__aenter__,Client.__aexit__=manager.anchors['enter'],manager.anchors['exit']
+        Client.__aenter__,Client.__aexit__=original_enter,original_exit
 
 
 def test_retired_context_revokes_retained_client_payload_but_preserves_server_drain():
@@ -197,10 +178,11 @@ def test_retired_context_revokes_retained_client_payload_but_preserves_server_dr
 def test_caught_extra_context_attempt_is_sticky_before_original_enter():
     manager=object.__new__(Contexts)
     manager.client_type=object
-    manager.calls=SimpleNamespace(policy=policy(next(iter(ROOT_HTTP)),lambda *args:None))
-    manager.records=[{'client':object(),'active':False} for _ in range(2)]
+    manager.context=SimpleNamespace(policy=policy(next(iter(ROOT_HTTP)),lambda *args:None))
+    manager.records=[{'client':object(),'active':False,'case':manager.context.policy.case} for _ in range(2)]
+    manager.context.owners=[]
     with pytest.raises(Refused):
         manager.capture(object())
-    assert manager.calls.policy.poison
+    assert manager.context.policy.poison
     with pytest.raises(Refused):
         manager.finish()

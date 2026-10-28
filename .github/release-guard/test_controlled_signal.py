@@ -1,69 +1,92 @@
-"""Original teardown caller/handle selection, stopped before any OS signal."""
-import hashlib
-from pathlib import Path
-from types import SimpleNamespace
+"""Owned-signal mutation controls at the independent observer boundary."""
+
+from dataclasses import replace
 
 import pytest
 
 from content_manifest import Refused
-from source_calls import Sources
-from source_owner import Link,prepare
-from source_root import BootstrapCalls
+from controlled_cases import WARNING_REFUSALS
+from source_observer import Observer
+import source_observer
+from test_process_ledger import setup, identity
 
 
-@pytest.mark.parametrize('mutation',[None,'group','pid','generation','backend-key'])
-def test_original_teardown_signal_requires_its_exact_owned_backend(tmp_path,monkeypatch,mutation):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
-    from tests import test_experimental_bridge_shutdown as tests
-    from tests.test_experimental_session import session as fixture
-    from unrest_harness import experimental_session as module
-    import asyncio.unix_events
-    owner = fixture.__wrapped__(tmp_path,None)
-    source = Path(tests.__file__)
-    unit = prepare(source.read_bytes(),str(source),tests.__name__,'pytest',hashlib.sha256(source.read_bytes()).hexdigest())
-    fn = tests.test_owned_teardown_completes_after_native_drain_failure
-    calls = object.__new__(BootstrapCalls)
-    calls.test_owner = Sources.owner(unit,tests,fn,fn.__qualname__,(Link(tests,fn.__name__,fn),))
-    calls.startup = SimpleNamespace(base=module._SessionOwner,synthetic=module.SyntheticSession)
-    calls.session = module
-    calls.backend_type = module._Backend
-    calls.process_class = asyncio.subprocess.Process
-    calls.transport_class = asyncio.unix_events._UnixSubprocessTransport
-    marker = object()
-    calls.policy = SimpleNamespace(case='tests/test_experimental_bridge_shutdown.py::'+fn.__name__,children={123:{'process':marker}})
-    transport = object.__new__(calls.transport_class)
-    vars(transport).update(_pid=123,_proc=object() if mutation == 'generation' else marker,_closed=True,_returncode=0)
-    process = object.__new__(calls.process_class)
-    process._transport = transport
-    process.pid = 123
-    async def nothing(*args,**kwargs):
-        pass
-    writer = SimpleNamespace(drain=nothing)
-    owner.backends['worker'] = module._Backend(process,None,SimpleNamespace(writer=writer))
-    original_close = owner.close
-    monkeypatch.setattr(owner,'start',nothing)
-    monkeypatch.setattr(owner,'initialize_only',nothing)
-    monkeypatch.setattr(owner,'close',nothing)
-    class Selected(RuntimeError):
-        pass
-    selected = []
-    def send(sig):
-        if mutation == 'backend-key':
-            class Trap:
-                def __hash__(self):
-                    return hash('worker')
-                def __eq__(self,other):
-                    pytest.fail('backend lookup equality callback')
-            backend = owner.backends.pop('worker')
-            owner.backends[Trap()] = backend
-        calls.signal(124 if mutation == 'pid' else 123,int(sig),mutation == 'group')
-        selected.append(True)
-        raise Selected
-    monkeypatch.setattr(process,'send_signal',send)
-    try:
-        with pytest.raises(Selected if mutation is None else Refused):
-            asyncio.run(fn(owner,monkeypatch,tmp_path))
-        assert selected == ([True] if mutation is None else [])
-    finally:
-        owner.backends.clear()
-        asyncio.run(original_close())
+def signal_model(monkeypatch, case):
+    ledger, root, child = setup()
+    for birth in (root, child):
+        ledger.process(birth).case = case
+    observer = object.__new__(Observer)
+    observer.ledger, observer.root_birth, observer.finished, observer.case = (
+        ledger,
+        root,
+        False,
+        case,
+    )
+    parent = {"role": "root", "case": case, "birth": root, "token": "root-token"}
+    backend = {
+        "role": "backend",
+        "case": case,
+        "birth": child,
+        "token": "child-token",
+        "signals": set(),
+    }
+    observer.actors = {root.pid: parent, child.pid: backend}
+    monkeypatch.setattr(
+        source_observer, "process_identity", lambda pid: identity(child.pid, root.pid)
+    )
+    payload = {"pid": child.pid, "child_token": "child-token", "signal": 10, "group": False}
+    return observer, parent, backend, payload
+
+
+@pytest.mark.parametrize(
+    "mutation", [None, "group", "pid", "generation", "token", "parent", "case", "signal", "boolean"]
+)
+def test_original_teardown_signal_requires_its_exact_owned_backend(monkeypatch, mutation):
+    case = "tests/test_experimental_bridge_shutdown.py::test_owned_teardown_completes_after_native_drain_failure"
+    observer, parent, backend, payload = signal_model(monkeypatch, case)
+    if mutation == "group":
+        payload["group"] = True
+    elif mutation == "pid":
+        payload["pid"] += 1
+    elif mutation == "generation":
+        monkeypatch.setattr(
+            source_observer,
+            "process_identity",
+            lambda pid: {**identity(101, 100), "start_ticks": 99999},
+        )
+    elif mutation == "token":
+        payload["child_token"] = "foreign"
+    elif mutation == "parent":
+        observer.ledger.process(backend["birth"]).parent = replace(parent["birth"], ticks=99999)
+    elif mutation == "case":
+        backend["case"] = "foreign"
+    elif mutation == "signal":
+        payload["signal"] = 12
+    elif mutation == "boolean":
+        payload["signal"] = True
+    if mutation == "generation":
+        assert observer.dispatch(parent, {"kind": "custody_signal", "payload": payload}) == {
+            "ok": True,
+            "live": False,
+        }
+    elif mutation is None:
+        assert observer.dispatch(parent, {"kind": "custody_signal", "payload": payload}) == {
+            "ok": True,
+            "live": True,
+        }
+        assert backend["signals"] == {10}
+    else:
+        with pytest.raises(Refused):
+            observer.dispatch(parent, {"kind": "custody_signal", "payload": payload})
+        assert not backend["signals"]
+
+
+@pytest.mark.parametrize("case", WARNING_REFUSALS)
+def test_warning_signal_is_case_bound_and_cannot_be_replayed(monkeypatch, case):
+    observer, parent, backend, payload = signal_model(monkeypatch, case)
+    assert observer.dispatch(parent, {"kind": "custody_signal", "payload": payload}) == {
+        "ok": True,
+        "live": True,
+    }
+    with pytest.raises(Refused, match="replay"):
+        observer.dispatch(parent, {"kind": "custody_signal", "payload": payload})

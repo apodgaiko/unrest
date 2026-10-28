@@ -110,46 +110,38 @@ def test_empty_environment_name_is_literal_and_unknown_additions_still_refuse():
         match((value,),replace(observed,environment=(*observed.environment,('OTHER','value'))),'owner','case')
 
 
-def test_constructor_no_session_variant_requires_key_absence():
-    from session_calls import constructor_options
-    environment=object()
-    plan={'cwd':'/owned','argv':('adapter',),'environment':environment}
-    values={'program':'adapter','args':(),'kwds':{'cwd':'/owned','env':environment},
-            'stdin':-1,'stdout':-1,'stderr':-1,'limit':65536}
-    constructor_options(values,plan,65536,session=False)
-    values['kwds']['start_new_session']=False
-    with pytest.raises(Refused):
-        constructor_options(values,plan,65536,session=False)
-
-
 def test_policy_popen_reaches_exact_selector_for_one_element_plan_vector():
     from source_entry import Policy
     class Reached(RuntimeError):
         pass
     selected=[]
-    def select(case,arguments):
-        selected.append((case,arguments))
+    def request(kind,payload):
+        assert kind=='launch-proposal'
+        selected.append(payload)
         raise Reached
     policy=object.__new__(Policy)
     policy.profile={'role':'root'}
     policy.case=CASES[0]
-    policy.calls=SimpleNamespace(startup=SimpleNamespace(select=select))
+    policy.local=__import__('threading').local()
+    policy.client=SimpleNamespace(request=request)
     with pytest.raises(Reached):
         policy.popen(('adapter',['adapter'],'/owned',{}))
-    assert len(selected)==1 and selected[0][0]==CASES[0]
+    assert len(selected)==1 and selected[0]['case']==CASES[0] and selected[0]['argv']==['adapter']
 
 
 def test_unknown_one_element_vector_is_sticky_after_exact_selector_refusal():
     from source_entry import Policy
     calls=[]
-    def select(case,arguments):
-        assert arguments[1]==['foreign']
-        raise Refused('synthetic exact selector rejects vector')
+    def request(kind,payload):
+        if kind=='launch-proposal':
+            assert payload['argv']==['foreign']
+            raise Refused('finite declaration rejects vector')
+        calls.append(kind)
     policy=object.__new__(Policy)
     policy.profile={'role':'root'}
     policy.case=CASES[0]
-    policy.calls=SimpleNamespace(startup=SimpleNamespace(select=select))
-    policy.client=SimpleNamespace(request=lambda kind,payload:calls.append(kind))
+    policy.local=__import__('threading').local()
+    policy.client=SimpleNamespace(request=request)
     policy.poison=False
     with pytest.raises(Refused):
         policy.audit('subprocess.Popen',('foreign',['foreign'],'/owned',{}))

@@ -9,7 +9,7 @@ import pytest
 from public_git import FM000, TAGS, git, prepare, projection
 
 SUPPORT = Path(__file__).resolve().parent
-ROOT = SUPPORT.parent.parent
+ROOT = next(p for p in SUPPORT.parents if (p/'pyproject.toml').is_file())
 
 
 @pytest.fixture

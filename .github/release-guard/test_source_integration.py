@@ -5,7 +5,6 @@ from copy import deepcopy
 from dataclasses import asdict, replace
 import json
 import os
-from pathlib import Path
 import signal
 import sys
 import threading
@@ -18,12 +17,10 @@ from controlled_startup import BACKEND_PIN, CASES, SESSION
 from endpoint_policy import Socket
 from launch_policy import Rule, render
 from process_ledger import Birth
-from source_code import Bodies
 from source_host import inventory
 import source_host
 from source_entry import Policy
 from source_observer import Observer
-from source_profile import ROOT_COMMAND
 import source_observer
 
 
@@ -95,15 +92,6 @@ def test_host_reconstructs_exact_original_launch(tmp_path, mutation):
         observer.launch(actor, request)
 
 
-def test_fixed_root_entry_precedes_ordinary_inprocess_computation():
-    bodies = Bodies({'role': 'root', 'execution':{'event':'cpython.run_command','argument':ROOT_COMMAND+'\n'}})
-    with pytest.raises(Refused, match='unknown Python execution'):
-        bodies.audit('exec', (compile('print("foreign")', '<string>', 'exec'),))
-    assert bodies.next == 0
-    assert bodies.audit('compile', ((ROOT_COMMAND + '\n').encode(), '<string>'))
-    assert bodies.audit('exec', (compile(ROOT_COMMAND + '\n', '<string>', 'exec', dont_inherit=True),))
-    assert bodies.audit('compile', (b'value = 1', '<ordinary-library-code>'))
-    assert bodies.audit('exec', (compile('value = 1', '<ordinary-library-code>', 'exec'),))
 
 
 def test_existing_listener_can_relisten_without_new_endpoint_authority(tmp_path, monkeypatch):
@@ -129,18 +117,6 @@ def test_existing_listener_can_relisten_without_new_endpoint_authority(tmp_path,
         stage('before')
 
 
-def test_sealed_leaf_keeps_exact_fixture_execution(tmp_path):
-    checkout = Path(__file__).resolve().parents[2]
-    fixture = checkout / 'tests/fixtures/experimental_session_app_server.py'
-    script = tmp_path / 'fake-app-server'
-    script.write_bytes(fixture.read_bytes())
-    bodies = Bodies({'role': 'backend', 'case':CASES[0], 'checkout': str(checkout), 'script': str(script), 'execution':{'event':'cpython.run_file','argument':str(script),'script_sha256':BACKEND_PIN}})
-    with pytest.raises(Refused, match='compilation bytes'):
-        bodies.audit('compile', (b'print("foreign")', str(script)))
-    assert bodies.audit('compile', (script.read_bytes(), str(script)))
-    assert bodies.audit('exec', (compile(script.read_bytes(), str(script), 'exec', dont_inherit=True),))
-    with pytest.raises(Refused, match='unknown Python execution'):
-        bodies.audit('exec', (compile('print("foreign")', str(script), 'exec'),))
 
 
 @pytest.mark.parametrize('sig', [signal.SIGTERM, 15])
@@ -164,7 +140,8 @@ def test_original_signal_enum_is_normalized_without_signal_substitution(monkeypa
     Policy.install_process_hooks(policy)
     with pytest.raises(ProcessLookupError):
         os.killpg(123, sig)
-    assert checked == [(123, 15, True)]
+    assert checked == []
+    assert type(requested[0][1]['signal']) is int
     assert requested == [('custody_signal', {'pid': 123, 'child_token': 'owned', 'signal': 15, 'group': True})]
     with pytest.raises(Refused, match='nonnumeric'):
         os.killpg(123, True)
@@ -281,8 +258,12 @@ def test_caught_cleanup_signal_refusal_stays_poisoned(monkeypatch):
     policy.profile, policy.local, policy.poison = {'role': 'root'}, threading.local(), False
     def reject(*args):
         raise Refused('original cleanup caller')
-    policy.calls = SimpleNamespace(signal=reject)
-    policy.client = SimpleNamespace(request=lambda kind, payload: calls.append((kind, payload)))
+    policy.calls = object()
+    def request(kind,payload):
+        if kind=='custody_signal':
+            raise Refused('observer refused signal')
+        calls.append((kind,payload))
+    policy.client = SimpleNamespace(request=request)
     policy.children = {123: {'token': 'owned'}}
     for obj, name in ((subprocess.Popen, '__init__'), (subprocess.Popen, 'communicate'), (subprocess._del_safe, 'waitpid'), (os, 'waitpid'), (os, 'kill'), (os, 'killpg')):
         monkeypatch.setattr(obj, name, getattr(obj, name))
@@ -363,7 +344,7 @@ def test_root_completion_seal_is_bounded_and_requires_all_ordered_completions():
 
 def test_public_git_manifest_envelope_preserves_the_small_source_domain(tmp_path):
     import hashlib
-    from source_calls import Sources
+    from input_manifest import read
     from content_manifest import capture, encode
     source = tmp_path/'source'
     source.mkdir()
@@ -375,8 +356,8 @@ def test_public_git_manifest_envelope_preserves_the_small_source_domain(tmp_path
         raw = json.dumps(value,sort_keys=True,separators=(',',':')).encode()
         (tmp_path/'source-manifest.json').write_bytes(raw)
         policy = SimpleNamespace(directory=tmp_path,profile={'source_sha256':hashlib.sha256(raw).hexdigest()})
-        return Sources(policy,None)
-    assert load(envelope).pins == {'unit.py':small['files'][0]['sha256']}
+        return read(policy.directory,policy.profile)
+    assert load(envelope) == {'unit.py':small['files'][0]['sha256']}
     for bound in (True,128*1024*1024):
         with pytest.raises(Refused,match='Git manifest schema'):
             load({**envelope,'git':{**metadata,'file_bound':bound}})

@@ -1,70 +1,46 @@
-"""Original warning caller and retained owner; stopped before any child or signal."""
-import asyncio
-import asyncio.unix_events
-import hashlib
+"""Warning fixture environments remain exact after caller policing retirement."""
+
+from copy import deepcopy
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from content_manifest import Refused
-from controlled_wrappers import instance_environment
-from source_calls import Sources
-from source_owner import Link, prepare
-from source_root import BootstrapCalls
+from controlled_cases import WARNING_REFUSALS
+from controlled_startup import expected_entry
+from source_observer import Observer
+
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").is_file())
 
 
-@pytest.mark.parametrize('mutation', [None, 'group', 'pid', 'generation', 'owner', 'config'])
-def test_original_warning_signal_and_environment_are_owned(tmp_path, monkeypatch, mutation):
-    from tests import test_controlled_acp_warnings as tests
-    from unrest_harness import experimental_session as module
-    source = Path(tests.__file__)
-    unit = prepare(source.read_bytes(), str(source), tests.__name__, 'pytest', hashlib.sha256(source.read_bytes()).hexdigest())
-    fn = tests.test_owned_warning_refusal_and_cleanup
-    calls = object.__new__(BootstrapCalls)
-    calls.test_owner = Sources.owner(unit, tests, fn, fn.__qualname__, (Link(tests, fn.__name__, fn),))
-    calls.startup = SimpleNamespace(base=module._SessionOwner, synthetic=module.SyntheticSession)
-    calls.session = module
-    calls.backend_type = module._Backend
-    calls.process_class = asyncio.subprocess.Process
-    calls.transport_class = asyncio.unix_events._UnixSubprocessTransport
-    marker = object()
-    case = 'tests/test_controlled_acp_warnings.py::test_owned_warning_refusal_and_cleanup[malformed]'
-    calls.policy = SimpleNamespace(case=case, children={123: {'process': marker}})
-    transport = object.__new__(calls.transport_class)
-    vars(transport).update(_pid=123, _proc=object() if mutation == 'generation' else marker, _closed=True, _returncode=0)
-    process = object.__new__(calls.process_class)
-    process._transport = transport
-    process.pid = 123
-    original_environment = module._SessionOwner._environment
-    retained = []
-    class Selected(RuntimeError):
-        pass
-    async def start(owner):
-        retained.append(owner)
-        config = vars(owner)['provider_config']
-        if mutation in ('owner', 'config'):
-            live = vars(owner)['_environment']
-            cells = dict(zip(live.__code__.co_freevars, live.__closure__, strict=True))
-            if mutation == 'owner':
-                import types
-                cells['environment'].cell_contents = types.MethodType(original_environment, object())
-            else:
-                cells['config'].cell_contents = object()
-        instance_environment(owner, module._SessionOwner, original_environment, config, Path.cwd(), case)
-        owner.backends['worker'] = module._Backend(process, None, None)
-    async def nothing(*args, **kwargs):
-        pass
-    def send(sig):
-        calls.signal(124 if mutation == 'pid' else 123, int(sig), mutation == 'group')
-        raise Selected
-    monkeypatch.setattr(module._SessionOwner, 'start', start)
-    monkeypatch.setattr(module._SessionOwner, 'initialize_only', nothing)
-    monkeypatch.setattr(module._SessionOwner, 'close', nothing)
-    monkeypatch.setattr(process, 'send_signal', send)
-    try:
-        with pytest.raises(Selected if mutation is None else Refused):
-            asyncio.run(fn(tmp_path, monkeypatch, 'malformed'))
-    finally:
-        for owner in retained:
-            owner.backends.clear()
+@pytest.mark.parametrize("mutation", ["home", "extra", "missing", "value"])
+def test_original_warning_environment_is_exact(tmp_path, mutation):
+    case = next(iter(WARNING_REFUSALS))
+    home = tmp_path / "campaign/owner/worker"
+    home.mkdir(parents=True)
+    expected, _, pin = expected_entry(case, ROOT, home, "/native/python", "a" * 64, backend=True)
+    request = {
+        "case": case,
+        "original": expected.wire(),
+        "translated": ["/native/python", "-I", "-S", *expected.argv[1:]],
+        "source_line": 506,
+        "script_sha256": pin,
+    }
+    changed = deepcopy(request)
+    environment = changed["original"]["environment"]
+    if mutation == "home":
+        environment[:] = [
+            [key, "/foreign" if key == "HOME" else value] for key, value in environment
+        ]
+    elif mutation == "extra":
+        environment.append(["FOREIGN", "1"])
+    elif mutation == "missing":
+        environment.pop()
+    else:
+        environment[0][1] = "foreign"
+    observer = object.__new__(Observer)
+    observer.case = case
+    observer.intents = {}
+    with pytest.raises(Refused, match="independent launch reconstruction"):
+        observer.admit_launch({}, changed, expected, "backend", 506, request["translated"], pin)
+    assert not observer.intents

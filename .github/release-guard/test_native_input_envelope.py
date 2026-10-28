@@ -8,7 +8,7 @@ import pytest
 
 from content_manifest import Refused
 from native_metadata import descriptor
-from source_calls import Sources
+from input_manifest import read
 from source_observer import Observer
 
 
@@ -35,10 +35,10 @@ def test_native_descriptor_and_readonly_generation_must_agree(tmp_path, record, 
         },
     )
     if record == mounted:
-        assert Sources(policy, None).pins == {"module.py": "a" * 64}
+        assert read(policy.directory,policy.profile) == {"module.py": "a" * 64}
     else:
         with pytest.raises(Refused):
-            Sources(policy, None)
+            read(policy.directory,policy.profile)
 
 
 def test_metadata_changes_only_root_discovery_path():

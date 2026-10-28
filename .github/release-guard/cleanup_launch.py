@@ -6,13 +6,10 @@ import json
 import os
 from pathlib import Path
 import stat
-import types
 
 from content_manifest import Refused, capture, native_digest
-from controlled_startup import Intent
-from launch_policy import Observation, Rule, match, render
-from ordinary_acp import PRODUCT, PINS as ACP_PINS, plain_environment
-from source_owner import Link, active_frames, _namespace
+from launch_policy import Rule, render
+from ordinary_acp import PRODUCT, PINS as ACP_PINS
 
 TEST = 'tests/test_acp_cleanup.py'
 SCRIPT = 'tests/fixtures/cleanup_acp_process.py'
@@ -202,116 +199,3 @@ def translated(result, directory):
     if result.rule == 'cleanup:cleanup-acp':
         argv = (*argv[:-1], str(snapshot_path(directory, result.case)))
     return argv
-
-
-class Launches:
-    def __init__(self, calls):
-        import asyncio
-        self.calls, self.policy, self.profile = calls, calls.policy, calls.profile
-        self.module = sys_module('unrest_harness.acp_runner')
-        self.unit = calls.unit(PRODUCT, self.module, calls.mode(self.module))
-        self.constructor, self.constructor_code = asyncio.create_subprocess_exec, asyncio.create_subprocess_exec.__code__
-        self.plan_type = self.module.LaunchPlan
-        self.inventory_module = sys_module('unrest_harness.capability_policy')
-        self.inventory_type = self.inventory_module.SensitiveValueInventory
-
-    def select(self, case, audit):
-        executable, vector, cwd, env = audit
-        frames = active_frames()
-        try:
-            test = next((frame for frame in frames if frame.f_code is self.calls.test_owner.function.__code__
-                         and frame.f_globals is vars(self.calls.tests)), None)
-            if test is None:
-                # The original fault cases intentionally launch in a separate
-                # Task. Bind its root to the retained, externally selected
-                # pytest item's actual fixture table, never another task scan.
-                if case not in (*FAULTS, *SAVED):
-                    raise Refused('cleanup active original case')
-                self.calls.test_owner.verify_binding()
-                values = _namespace(self.calls.case_item.funcargs)
-                _, variant, case_role = selection(case)
-                if (type(values) is not dict or type(values.get('fault')) is not str
-                        or values['fault'] != variant or case not in SAVED and (type(values.get('role')) is not str
-                        or values['role'] != case_role)):
-                    raise Refused('cleanup original scheduled case parameters')
-                base_value = values.get('tmp_path')
-            else:
-                self.calls.test_owner.verify(test)
-                base_value = test.f_locals.get('tmp_path')
-            if type(base_value) is not type(Path('/')):
-                raise Refused('cleanup original tmp fixture')
-            base = base_path(str(base_value), Path(self.profile['owned']))
-            expected_env, port, descriptor = None, None, None
-            if executable == 'git':
-                role = 'git-init' if vector[1:3] == ['init', '-q'] else 'git-commit'
-                line = 131 if role == 'git-init' else 132
-                if test is None or test.f_lineno != line or env is not None:
-                    raise Refused('cleanup original Git call')
-                actual_env = dict(os.environ)
-            else:
-                constructors = [frame for frame in frames if frame.f_code is self.constructor_code
-                                and frame.f_globals is self.constructor.__globals__]
-                if len(constructors) != 1:
-                    raise Refused('cleanup original asyncio constructor')
-                local = constructors[0].f_locals
-                if (type(local.get('kwds')) is not dict or any(type(k) is not str for k in local['kwds'])
-                        or type(local.get('stdout')) is not int or local['stdout'] != -1
-                        or type(local.get('stderr')) is not int or local['stderr'] != -1
-                        or type(local.get('limit')) is not int or local['limit'] != 8 * 1024 * 1024):
-                    raise Refused('cleanup original constructor options')
-                kw = local['kwds']
-                role = 'mcp' if vector[1:3] == ['-m', 'unrest_harness'] else 'cleanup-acp'
-                name = ('_start_terminal_reviewer_mcp' if module_site(case) == 2247 else '_start_worker_mcp_server') if role == 'mcp' else 'spawn_launch'
-                cls = self.module.ACPNodeRunner
-                function = vars(cls)[name] if role == 'mcp' else vars(self.module)[name]
-                links = (Link(cls, name, function),) if role == 'mcp' else (Link(self.module, name, function),)
-                qualified = 'ACPNodeRunner.' + name if role == 'mcp' else name
-                owner = self.calls.owner(self.unit, self.module, function, qualified, links)
-                frame = owner.current(frames, reason='cleanup original product launch owner')
-                values, line = frame.f_locals, frame.f_lineno
-                if role == 'mcp':
-                    port, descriptor = values.get('mcp_port'), values.get('read_fd')
-                    if (line != module_site(case) or type(port) is not int or type(descriptor) is not int or self.inventory_module.SensitiveValueInventory is not self.inventory_type
-                            or type(values.get('sensitive_inventory')) is not self.inventory_type
-                            or dict.__len__(values['sensitive_inventory']) != (1 if case in SAVED else 0)
-                            or any(type(key) is not str or type(value) is not str for key, value in dict.items(values['sensitive_inventory']))
-                            or dict(dict.items(values['sensitive_inventory'])) != (CREDENTIAL if case in SAVED else {})
-                            or set(kw) != {'cwd', 'env', 'pass_fds'} or type(kw['pass_fds']) is not tuple
-                            or len(kw['pass_fds']) != 1 or type(kw['pass_fds'][0]) is not int or kw['pass_fds'][0] != descriptor
-                            or local.get('stdin') is not None or kw['env'] is not env):
-                        raise Refused('cleanup original MCP inventory and options')
-                    read_pipe(os.getpid(), descriptor)
-                else:
-                    from ordinary_acp import options
-                    plan = values.get('plan')
-                    if type(plan) is not self.plan_type or self.module.LaunchPlan is not self.plan_type:
-                        raise Refused('cleanup actual LaunchPlan')
-                    fields = {key: object.__getattribute__(plan, key) for key in ('argv', 'cwd', 'environment', 'path')}
-                    expected_env = options(local, 'mock-acp', fields)
-                    if env is not fields['environment'] or type(fields['argv']) is not tuple or tuple(vector) != fields['argv']:
-                        raise Refused('cleanup identical launch plan')
-                    body = scenario(case, base)
-                    if digest(base / 'scenario.json') != hashlib.sha256(body).hexdigest():
-                        raise Refused('cleanup original scenario bytes')
-                actual_env = plain_environment(env)
-                if expected_env is not None and actual_env != expected_env:
-                    raise Refused('cleanup original plan environment')
-            result = expected(case, role, base, self.profile['native'], self.profile['native_sha256'],
-                              Path(self.profile['checkout']), self.profile['environment'], port=port, descriptor=descriptor)
-            actual_cwd = self.profile['checkout'] if cwd is None else str(cwd) if (type(cwd) is str or type(cwd) is type(Path('/'))) else None
-            if actual_cwd != result.cwd or (executable != 'git' and executable != result.executable):
-                raise Refused('cleanup actual executable or cwd')
-            observation = Observation(result.executable, result.executable_sha256, tuple(vector),
-                                      tuple(sorted(actual_env.items())), actual_cwd, result.payload_kind, result.payload_sha256)
-            match((result,), observation, result.owner, case)
-            return Intent(result, translated(result, self.policy.directory), line, result.payload_sha256)
-        finally:
-            del frames
-
-
-def sys_module(name):
-    import sys
-    module = sys.modules.get(name)
-    if type(module) is not types.ModuleType:
-        raise Refused('cleanup original module absent')
-    return module

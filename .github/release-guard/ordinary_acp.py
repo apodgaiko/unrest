@@ -6,16 +6,13 @@ fabricated Python READY. Source selection does not grant group-signal authority.
 from __future__ import annotations
 
 import gc
-import importlib
 import os
 from pathlib import Path
 import stat
 import types
 
 from content_manifest import Refused
-from controlled_startup import Intent
-from launch_policy import Observation, Rule, match, render
-from source_owner import Link, active_frames
+from launch_policy import Rule, render
 
 PRODUCT = 'src/unrest_harness/acp_runner.py'
 TEST = 'tests/test_acp_runner.py'
@@ -113,113 +110,3 @@ def plain_environment(value):
     if type(value) is not dict or any(type(k) is not str or type(v) is not str for k, v in value.items()):
         raise Refused('ordinary environment primitives')
     return dict(value)
-
-
-def options(values, role, plan=None):
-    kw = values.get('kwds')
-    if type(kw) is not dict or any(type(key) is not str for key in kw):
-        raise Refused('ordinary constructor keyword names')
-    for key in ('stdout', 'stderr', 'limit'):
-        if type(values.get(key)) is not int:
-            raise Refused('ordinary constructor integer options')
-    if role == 'mock-acp':
-        if (type(plan) is not dict or set(plan) != {'argv', 'cwd', 'environment', 'path'}
-                or type(plan['argv']) is not tuple or any(type(arg) is not str for arg in plan['argv'])
-                or type(plan['cwd']) is not str or type(plan['environment']) is not types.MappingProxyType
-                or type(plan['path']) not in (str, type(None))
-                or set(kw) != {'cwd', 'env'} or type(kw['cwd']) is not str
-                or kw['cwd'] != plan['cwd'] or kw['env'] is not plan['environment']
-                or type(values.get('stdin')) is not int or values['stdin'] != -1
-                or values['stdout'] != -1 or values['stderr'] != -1 or values['limit'] != 8 * 1024 * 1024):
-            raise Refused('ordinary identical plan and original options')
-        env = plain_environment(plan['environment'])
-        if plan['path'] != env.get('PATH'):
-            raise Refused('ordinary plan PATH snapshot')
-        return env
-    if role != 'sleep' or kw or values.get('stdin') is not None:
-        raise Refused('ordinary native fixture original options')
-    return None
-
-
-class Ordinary:
-    def __init__(self, calls):
-        import asyncio
-        self.calls, self.profile = calls, calls.profile
-        self.module = importlib.import_module('unrest_harness.acp_runner')
-        self.unit = calls.unit(PRODUCT, self.module, calls.mode(self.module))
-        self.plan_type = self.module.LaunchPlan
-        self.constructor = asyncio.create_subprocess_exec
-        self.constructor_code = self.constructor.__code__
-
-    def select(self, case, audit):
-        import asyncio
-        executable, vector, cwd, env = audit
-        frames = active_frames()
-        try:
-            test_frames = [f for f in frames if f.f_code is self.calls.test_owner.function.__code__
-                           and f.f_globals is vars(self.calls.tests)]
-            if len(test_frames) != 1:
-                raise Refused('ordinary active original test')
-            test_frame = test_frames[0]
-            self.calls.test_owner.verify(test_frame)
-            constructors = [f for f in frames if f.f_code is self.constructor_code
-                            and f.f_globals is self.constructor.__globals__]
-            if len(constructors) != 1 or asyncio.create_subprocess_exec is not self.constructor:
-                raise Refused('ordinary original asyncio constructor')
-            values = constructors[0].f_locals
-            if type(values.get('args')) is not tuple or type(values.get('kwds')) is not dict:
-                raise Refused('ordinary constructor fields')
-            kw = values['kwds']
-            role = 'sleep' if executable == '/bin/sleep' else 'mock-acp'
-            if role == 'mock-acp':
-                fn = test_frame.f_locals.get('actual_spawn') if case != CASES[2] else vars(self.module).get('spawn_launch')
-                if type(fn) is not types.FunctionType:
-                    raise Refused('ordinary original spawn function')
-                link = Link(self.module, 'spawn_launch', fn) if case == CASES[2] else Link(test_frame, 'actual_spawn', fn, 'frame')
-                owner = self.calls.owner(self.unit, self.module, fn, 'spawn_launch', (link,))
-                matches = [f for f in frames if f.f_code is fn.__code__ and f.f_globals is vars(self.module) and f.f_lineno == 409]
-                if len(matches) != 1:
-                    raise Refused('ordinary original LaunchPlan spawn')
-                frame = matches[0]
-                owner.verify(frame)
-                plan = frame.f_locals.get('plan')
-                if type(plan) is not self.plan_type or self.module.LaunchPlan is not self.plan_type:
-                    raise Refused('ordinary exact plan type')
-                p = {key: object.__getattribute__(plan, key) for key in ('argv', 'cwd', 'environment', 'path')}
-                environment_snapshot = options(values, role, p)
-                if (type(cwd) is not str or tuple(vector) != p['argv'] or cwd != p['cwd'] or env is not p['environment']):
-                    raise Refused('ordinary original audit plan identity')
-                actual_cwd = cwd
-                site = 409
-            else:
-                name = '_start_fixture' if case == CASES[2] else 'no_op_server'
-                fn = test_frame.f_locals.get(name)
-                if type(fn) is not types.FunctionType:
-                    raise Refused('ordinary original fixture function')
-                qualified = self.calls.test_owner.qualified + '.<locals>.' + name
-                # This test-created fixture is retained by its still-active
-                # original test frame; its captured values are frozen here.
-                owner = self.calls.owner(self.calls.test_unit, self.calls.tests, fn, qualified,
-                                         (Link(test_frame, name, fn, 'frame'),))
-                matches = [f for f in frames if f.f_code is fn.__code__ and f.f_globals is vars(self.calls.tests)]
-                if len(matches) != 1 or cwd is not None or env is not None or values.get('stdin') is not None or kw:
-                    raise Refused('ordinary original native fixture caller')
-                owner.verify(matches[0])
-                options(values, role)
-                mode = -1 if case == CASES[2] else -3
-                if values.get('stdout') != mode or values.get('stderr') != mode or values.get('limit') != 65536:
-                    raise Refused('ordinary native fixture pipe options')
-                actual_cwd = self.profile['checkout']
-                environment_snapshot = plain_environment(dict(os.environ))
-                site = matches[0].f_lineno
-            result = expected(case, role, actual_cwd, Path(self.profile['checkout']), self.profile['native'],
-                self.profile['native_sha256'], self.profile['environment'], Path(self.profile['owned']))
-            if executable != result.executable or tuple(vector) != result.argv:
-                raise Refused('ordinary original vector')
-            observed = Observation(executable, result.executable_sha256, tuple(vector),
-                tuple(sorted(environment_snapshot.items())), actual_cwd, result.payload_kind, result.payload_sha256)
-            match((result,), observed, result.owner, case)
-            translated = result.argv if role == 'sleep' else (result.argv[0], '-I', '-S', *result.argv[1:])
-            return Intent(result, translated, site, result.payload_sha256)
-        finally:
-            del frames

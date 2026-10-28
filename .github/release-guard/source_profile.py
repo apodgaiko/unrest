@@ -23,11 +23,11 @@ from process_ledger import Birth, canonical
 from git_sites import CASES as GIT_CASES
 from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS
 
-from fixed_inline import CASES as FIXED_CASES
+from fixed_inline import CASES as FIXED_CASES, GROUPS as FIXED_GROUPS
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
-    'launch-intent', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'bound', 'listen', 'accepted', 'connect', 'connected',
+    'launch-proposal', 'launch-intent', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'bound', 'listen', 'accepted', 'connect', 'connected',
     'root-http-open', 'root-http-close', 'payload', 'drain_child', 'custody_signal', 'custody_close', 'git-pipe', 'git-output', 'self-stop', 'guard-refusal'})
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
@@ -82,7 +82,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python')
             or type(profile['case']) is not str
             or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES))
-            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, FIXED_CASES, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL)):
+            or type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL)):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]

@@ -131,9 +131,9 @@ def test_rollback_execution_and_target_locations_are_evolution_only(operation, c
 
 def test_owned_workspace_literal_command_derives_its_inline_digest():
     import hashlib
-    from git_sites import OWNED_BODY, CASES, OWNED_SITE
+    from git_sites import OWNED_BODY, CASES
     from launch_policy import Rule, render
-    owner = OWNED_SITE[0] + ':' + OWNED_SITE[1] + ':' + str(OWNED_SITE[2])
+    owner = 'workspace:owned'
     rule = Rule('workspace:owned', owner, (CASES[7],), '/native/python', 'a' * 64,
         ('/native/python', '-c', OWNED_BODY), (), REPO, 'python-command', None)
     assert render(rule, CASES[7], owner, {}, {}).payload_sha256 == hashlib.sha256(OWNED_BODY.encode()).hexdigest()

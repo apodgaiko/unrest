@@ -13,6 +13,31 @@ code, generators, generated enforcement and workflow glue. Relocating, packing
 or delegating enforcement does not remove it from the count. Obsolete guard
 implementation counts until removed. This ceiling is not yet satisfied.
 
+### Current reduced enforcement scope
+
+The accepted replacement keeps the 10,000-line enforcement ceiling and retires
+Python frame, closure, global/default binding and generated-AST/code policing.
+Ordinary in-process Python computation is trusted. Host-selected case and owner
+labels identify finite declarations; they do not authenticate executing Python
+callers. Hostile-Python isolation is not claimed.
+
+Execution permission still requires an independently reconstructed finite
+byte/argv/environment/cwd declaration, kernel process identity, native prebody
+registration, authenticated endpoint custody, and actual parent waits and
+cleanup. Unknown effects remain fatal even when a test catches the exception.
+Configured fixtures retain an independent filesystem input census and exact
+populated-input hashes. Native provider review restrictions remain unchanged.
+
+Guard tests for the retired Python provenance policy are removed or rewritten
+against those retained effect boundaries. Original product tests, parameters,
+completion assertions and cleanup assertions remain unchanged and mandatory.
+Local guard-unit results and component review do not certify native execution,
+the full source checkpoint, the final line count, or the release.
+
+The historical sections below describe earlier implementation stages. Their
+Python frame/closure/generated-code enforcement details are superseded by this
+scope; their passing component results retain their original limited meaning.
+
 `.github/release-guard/content_manifest.py` is the first standalone replacement
 component. It measures an independently enumerated file inventory through bounded
 nofollow descriptor reads, binds complete bytes and permission modes, and rejects

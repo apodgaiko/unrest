@@ -6,20 +6,16 @@ are valid. No remote, URL, external diff, hook or user configuration is admitted
 from __future__ import annotations
 
 import configparser
-import importlib
 from pathlib import Path
 import stat
-import subprocess
 
 from content_manifest import Refused
 from controlled_cases import CASES
 from controlled_pairs import limits
-from controlled_startup import Intent
 from git_commands import Command
 from git_observer import image, regular
 from git_values import digest
-from launch_policy import Observation, Rule, match, render
-from source_owner import Link, active_frames, frame_fields, _namespace
+from launch_policy import Rule, render
 
 SOURCE = 'src/unrest_harness/experimental_custody.py'
 PIN = 'a6da184702daa03c9e9a7b6c5fcf22d9514901abb9112c44c8686a05880d25dc'
@@ -96,58 +92,6 @@ def repository(cwd, owned, *, initialize):
     return tuple(identities),metadata_identity
 
 
-class Calls:
-    def __init__(self,calls):
-        self.calls = calls
-        self.module = importlib.import_module('unrest_harness.experimental_custody')
-        if calls.pins[SOURCE] != PIN:
-            raise Refused('custody Git original source bytes')
-        unit = calls.unit(SOURCE,self.module,calls.mode(self.module))
-        self.function = vars(self.module)['git']
-        self.owner = calls.owner(unit,self.module,self.function,'git',(Link(self.module,'git',self.function),))
-        self.run,self.run_code,self.run_globals = subprocess.run,subprocess.run.__code__,subprocess.run.__globals__
-        self.pending = None
-
-    def select(self,case,arguments):
-        executable,vector,cwd,environment = arguments
-        frames = active_frames()
-        try:
-            local = frame_fields(self.owner.current(frames,line=38))
-            root,args = local.get('root'),local.get('arguments')
-            if type(root) is not type(Path('/')) or type(args) is not tuple or any(type(v) is not str for v in args):
-                raise Refused('custody Git original helper operands')
-            result,_ = command(case,(*PREFIX,*args),str(root),Path(self.calls.profile['owned']))
-            constructors = [f for f in frames if f.f_code is self.run_code and f.f_globals is self.run_globals]
-            if len(constructors) != 1 or subprocess.run is not self.run:
-                raise Refused('custody Git original subprocess caller')
-            options = frame_fields(constructors[0])
-            popenargs,keywords = options.get('popenargs'),options.get('kwargs')
-            if (type(popenargs) is not tuple or len(popenargs) != 1 or type(popenargs[0]) is not list
-                    or any(type(value) is not str for value in popenargs[0]) or tuple(popenargs[0]) != result.argv
-                    or type(keywords) is not dict):
-                raise Refused('custody Git original subprocess containers')
-            keywords = _namespace(keywords)
-            env = keywords.get('env')
-            if (set(keywords) != {'cwd','env','stdin','stdout','stderr'} or type(keywords['cwd']) is not type(root)
-                    or keywords['cwd'] != root or type(env) is not dict
-                    or any(type(key) is not str or type(value) is not str for key,value in env.items())
-                    or env != ENVIRONMENT
-                    or any(type(keywords[key]) is not int or keywords[key] != value
-                        for key,value in (('stdin',-3),('stdout',-1),('stderr',-3)))
-                    or type(options.get('timeout')) is not int or options['timeout'] != 5
-                    or options.get('check') is not True or options.get('input') is not None):
-                raise Refused('custody Git original subprocess options')
-            expected = render(Rule('custody:git',SOURCE+':git',(case,),'/usr/bin/git',image(),result.argv,
-                tuple(sorted(ENVIRONMENT.items())),str(root),'native',None),case,SOURCE+':git',{}, {})
-            if (type(executable) is not str or type(vector) is not list or any(type(value) is not str for value in vector)
-                    or type(environment) is not dict or type(cwd) is not type(root)
-                    or any(type(key) is not str or type(value) is not str for key,value in environment.items())):
-                raise Refused('custody Git audit primitives')
-            match((expected,),Observation(executable,image(),tuple(vector),tuple(sorted(environment.items())),str(cwd),'native',expected.payload_sha256),expected.owner,case)
-            self.pending = result
-            return Intent(expected,expected.argv,38,None)
-        finally:
-            del frames
 
 
 def launch(host,actor,payload):

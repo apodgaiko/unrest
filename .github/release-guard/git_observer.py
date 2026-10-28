@@ -9,7 +9,7 @@ import stat
 
 from content_manifest import Refused, native_digest, _root, _directory_key
 from git_commands import build, location_role
-from git_sites import CASES, SITES, OWNED_SITE, OWNED_BODY
+from git_sites import CASES, OPERATIONS, OWNED_BODY
 from git_values import Values
 from launch_policy import Rule, render
 
@@ -119,18 +119,16 @@ class Git:
         host = self.host
         host.root_only(actor)
         info = payload['git']
-        if type(info) is not dict or set(info) != {'site', 'repository', 'fields'} or host.case not in CASES:
+        if type(info) is not dict or set(info) != {'operation', 'repository', 'fields'} or host.case not in CASES:
             raise Refused('git source declaration schema')
-        site = info['site']
-        if site == list(OWNED_SITE):
-            return self.owned_launch(actor, payload)
-        if (type(site) is not list or len(site) != 3 or any(type(v) is not str for v in site[:2])
-                or type(site[2]) is not int or tuple(site) not in SITES):
-            raise Refused('git exact original source site')
-        site = tuple(site)
-        if site[0].startswith('tests/') and (host.case.split('::')[0] != site[0]
-                or site[1].startswith('test_') and host.case.split('::')[1].split('[')[0] != site[1]):
-            raise Refused('git source case linkage')
+        operation=info['operation']
+        if operation=='owned-process':
+            return self.owned_launch(actor,payload)
+        family='workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
+        if type(operation) is not str or operation not in OPERATIONS[family]:
+            raise Refused('Git finite operation declaration')
+        setup=self.repositories.get(host.case,{}).get('setup',0)
+        phase='setup' if setup<len(SETUP) else 'call'
         fields = info['fields']
         if type(fields) is not dict or any(type(k) is not str for k in fields):
             raise Refused('git source operand dictionary')
@@ -142,7 +140,6 @@ class Git:
                 if name == 'leases' and any(type(v) is not list or len(v) != 2 for v in fields[name]):
                     raise Refused('git serialized lease tuple')
                 fields[name] = tuple(tuple(v) for v in fields[name]) if name == 'leases' else tuple(fields[name])
-        operation = SITES[site]
         family = 'workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
         command = build(operation, info['repository'], payload['original']['cwd'], fields, family=family)
         previous = self.last.get(host.case)
@@ -151,21 +148,18 @@ class Git:
                 or previous['command'].produces is not None and not previous.get('value_observed')):
             raise Refused('git next command before original parent/output join')
         root = self.repository(info['repository'], operation, family)
-        if site[1] == 'repository' and operation not in SETUP:
-            raise Refused('git original fixture declaration')
         self.location(root, command.cwd)
         for location, kind, value, inputs in command.requires:
             self.values.require(host.case, str(root), location, kind, value, inputs)
-        phase = 'setup' if site[1] == 'repository' else 'call'
         environment = {**host.meta_environment(), 'PYTEST_VERSION': '9.0.2',
             'PYTEST_CURRENT_TEST': host.case + ' (' + phase + ')', **dict(command.additions)}
-        owner = site[0] + ':' + site[1] + ':' + str(site[2])
+        owner = 'git:'+operation
         if self.pin is None:
             self.pin = image()
         rule = Rule('git:' + operation, owner, (host.case,), '/usr/bin/git', self.pin,
             command.argv, tuple(sorted(environment.items())), command.cwd, 'native', None)
         expected = render(rule, host.case, owner, {}, {})
-        answer = host.admit_launch(actor, payload, expected, 'git-command', site[2], list(command.argv), None, maximum=128)
+        answer = host.admit_launch(actor, payload, expected, 'git-command', 0, list(command.argv), None, maximum=128)
         if answer is None:
             return None
         intent = host.intents[answer['ticket']]
@@ -269,9 +263,9 @@ class Git:
         self.location(Path(info['repository']), cwd)
         environment = {**host.meta_environment(), 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': host.case + ' (call)'}
         native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
-        owner = OWNED_SITE[0] + ':' + OWNED_SITE[1] + ':' + str(OWNED_SITE[2])
+        owner = 'workspace:owned'
         rule = Rule('workspace:owned', owner, (host.case,), native, pin, (native, '-c', OWNED_BODY),
             tuple(sorted(environment.items())), cwd, 'python-command', None)
         expected = render(rule, host.case, owner, {}, {})
-        return host.admit_launch(actor, payload, expected, 'workspace-owned', OWNED_SITE[2],
+        return host.admit_launch(actor, payload, expected, 'workspace-owned', 0,
             [native, '-I', '-S', '-c', OWNED_BODY], expected.payload_sha256)
