@@ -49,7 +49,7 @@ def resolve(host,pid,path,vector,env,cwd):
             case='<full-launcher>',command_class='native-full-uv',expected_generation=2)
         return True
     if (process.parent is None or process.parent.pid!=host.launcher or process.generation!=0
-            or path!=str(runtime/'bin/pytest') or vector!=[path,'-q',*(['--collect-only'] if host.binding.get('collection_only') else [])]
+            or path!=str(runtime/'bin/pytest') or vector!=['pytest','-q',*(['--collect-only'] if host.binding.get('collection_only') else [])]
             or env!=child_environment(host.meta) or native_digest(Path(path))!=host.binding['entry']['sha256']):
         return False
     host.root,host.root_birth,host.full_started=pid,birth,True

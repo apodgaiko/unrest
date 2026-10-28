@@ -107,10 +107,14 @@ int main(int argc, char **argv) {
     /* Only the compiled, byte-identical console entry selects normal pytest.
        Kernel argv stays in the trace; normalized Python argv is bound separately. */
 #ifdef GUARD_PYTEST
-    if (!strcmp(argv[0],GUARD_PYTEST)) {
+    char image[4096];
+    ssize_t size=readlink("/proc/self/exe",image,sizeof(image)-1);
+    if (size<=0 || size>=(ssize_t)sizeof(image)-1) return 86;
+    image[size]='\0';
+    if (!strcmp(image,GUARD_PYTEST)) {
         char **normalized = calloc((size_t)argc + 5, sizeof(char *));
         if (normalized == NULL) return 86;
-        normalized[0]=argv[0]; normalized[1]="-I"; normalized[2]="-S";
+        normalized[0]=GUARD_PYTEST; normalized[1]="-I"; normalized[2]="-S";
         normalized[3]="-m"; normalized[4]="pytest";
         for (int i=1;i<argc;i++) normalized[i+4]=argv[i];
         int status=Py_BytesMain(argc+4,normalized);

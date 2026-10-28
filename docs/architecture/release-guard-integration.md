@@ -66,8 +66,9 @@ The fixed outer command is `env -u CODEX_PATH uv run pytest -q`. Stock uv0.11.8
 consumes the independently locked dependency generation without resolving a new
 environment during candidate execution. Its exact environment and executable
 bytes are bound; a missing interpreter-metadata cache grants no helper launch.
-The native `pytest` console entry normalizes Python startup to isolated
-`-I -S -m pytest`; both the original kernel argv and normalized Python argv are
+The native `pytest` console entry identifies its actual `/proc/self/exe` image,
+independently of uv's bare `pytest` argv0, and normalizes Python startup to
+canonical-entry `-I -S -m pytest`; both the original kernel argv and normalized Python argv are
 recorded and checked. Subsequent Python children use the canonical guarded entry.
 
 The additive pytest plugin does not select or deselect tests. Normal discovery

@@ -100,3 +100,53 @@ def test_fixed_uv_launcher_binds_collection_only_as_an_explicit_argument(
     assert not full_launch.resolve(
         host, 123, path, [*vector, "--ignore=tests"], environment(meta), meta["checkout"]
     )
+
+
+@pytest.mark.parametrize(
+    "mutation", [None, "argv0", "arguments", "path", "environment", "pin", "parent"]
+)
+def test_native_console_binds_actual_image_separately_from_uv_argv0(
+    tmp_path, monkeypatch, mutation
+):
+    import full_launch
+    from full_source import child_environment
+
+    meta = {
+        "runtime_root": str(tmp_path / "runtime"),
+        "owned": str(tmp_path / "owned"),
+        "checkout": str(tmp_path / "source"),
+    }
+    child, parent = object(), SimpleNamespace(pid=123)
+    calls = []
+    host = SimpleNamespace(
+        meta=meta,
+        launcher=123,
+        binding={"entry": {"sha256": "a" * 64}},
+        ledger=SimpleNamespace(
+            current={124: child}, process=lambda birth: SimpleNamespace(parent=parent, generation=0)
+        ),
+        profile=lambda *args: calls.append(args),
+        full_started=False,
+    )
+    path = str(tmp_path / "runtime/bin/pytest")
+    vector = ["pytest", "-q"]
+    env = child_environment(meta)
+    if mutation == "argv0":
+        vector[0] = path
+    elif mutation == "arguments":
+        vector.append("--ignore=tests")
+    elif mutation == "path":
+        path = str(tmp_path / "other")
+    elif mutation == "environment":
+        env["EXTRA"] = "forbidden"
+    elif mutation == "parent":
+        parent.pid = 999
+    monkeypatch.setattr(
+        full_launch, "native_digest", lambda p: "b" * 64 if mutation == "pin" else "a" * 64
+    )
+    assert full_launch.resolve(host, 124, path, vector, env, meta["checkout"]) is (mutation is None)
+    if mutation is None:
+        assert host.root == 124 and host.full_started
+        assert calls[0][3] == [path, "-I", "-S", "-m", "pytest", "-q"]
+    else:
+        assert not calls and not host.full_started
