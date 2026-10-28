@@ -55,7 +55,7 @@ def arena_record(pid,fd):
     if (type(fd) is not int or not 3<=fd<=1024 or not stat.S_ISREG(info.st_mode)
             or info.st_uid!=20000 or info.st_nlink!=0 or stat.S_IMODE(info.st_mode)!=0o600
             or info.st_size!=4096 or len(flags)!=1
-            or int(flags[0],8)&~(os.O_CLOEXEC|0o100000)!=os.O_RDWR):
+            or int(flags[0],8)&~(os.O_CLOEXEC|0o100000)!=(os.O_RDWR|os.O_NOFOLLOW)):
         raise Refused('spawn exact anonymous shared arena', {'fd':fd,'mode':info.st_mode,'uid':info.st_uid,
             'links':info.st_nlink,'size':info.st_size,'flags':flags})
     return [fd,info.st_dev,info.st_ino,os.O_RDWR,4096]
@@ -239,7 +239,7 @@ def inherited(profile,actual):
         except FileNotFoundError:
             continue
         flags=fcntl.fcntl(fd,fcntl.F_GETFL)
-        if (reader is None or fd==reader) and flags&~(os.O_ACCMODE|os.O_CLOEXEC|(0o100000 if len(row)==5 else 0)):
+        if (reader is None or fd==reader) and flags&~(os.O_ACCMODE|os.O_CLOEXEC|((0o100000|os.O_NOFOLLOW) if len(row)==5 else 0)):
             raise Refused('spawn descriptor flags')
         seen.append(row)
     if sorted(seen)!=sorted(records):

@@ -456,7 +456,19 @@ def test_queue_and_arena_are_distinct_exact_posix_resources(mutation):
 
 @pytest.mark.parametrize(
     "mutation",
-    [None, "linked", "uid", "mode", "size", "access", "flags", "fifo", "directory", "socket"],
+    [
+        None,
+        "linked",
+        "uid",
+        "mode",
+        "size",
+        "access",
+        "flags",
+        "nofollow",
+        "fifo",
+        "directory",
+        "socket",
+    ],
 )
 def test_shared_arena_is_one_exact_anonymous_page(monkeypatch, mutation):
     import os
@@ -480,9 +492,16 @@ def test_shared_arena_is_one_exact_anonymous_page(monkeypatch, mutation):
             0,
         )
     )
-    flags = (os.O_RDONLY if mutation == "access" else os.O_RDWR) | os.O_CLOEXEC | 0o100000
+    flags = (
+        (os.O_RDONLY if mutation == "access" else os.O_RDWR)
+        | os.O_CLOEXEC
+        | 0o100000
+        | os.O_NOFOLLOW
+    )
     if mutation == "flags":
         flags |= os.O_APPEND
+    elif mutation == "nofollow":
+        flags &= ~os.O_NOFOLLOW
     monkeypatch.setattr(Path, "stat", lambda self: info)
     monkeypatch.setattr(Path, "read_text", lambda self: "flags:\t" + oct(flags)[2:] + "\n")
     if mutation is None:
