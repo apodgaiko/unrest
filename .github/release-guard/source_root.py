@@ -28,8 +28,8 @@ class OriginalCases:
         if tuple(identity(item.nodeid) for item in items) != tuple(identity(node) for node in self.cases) or any(type(item) not in (Coroutine, Function) for item in items):
             raise Refused('root exact original collection')
         self.items = items
-        from product_audit import CASES,Order
-        if any(case in CASES for case in self.cases) and getattr(self.policy,'audit_order',None) is None:
+        from product_audit import CASES,CHILD_CASES,Order
+        if any(case in (*CASES,*CHILD_CASES) for case in self.cases) and getattr(self.policy,'audit_order',None) is None:
             order=Order(self.policy)
             order.install()
             self.policy.audit_order=order

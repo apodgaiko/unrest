@@ -72,3 +72,9 @@ def test_recheck_state_is_thread_local():
     thread.join(2)
     assert not thread.is_alive() and observed==[True]
     assert not order.deferred('os.system')
+
+
+def test_root_audit_group_keeps_its_three_original_cases():
+    from product_audit import CHILD_CASES
+    assert len(CASES)==3 and len(CHILD_CASES)==2
+    assert not set(CASES)&set(CHILD_CASES)

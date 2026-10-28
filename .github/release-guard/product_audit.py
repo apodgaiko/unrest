@@ -8,7 +8,7 @@ from speed_inline import CASES as CHILD_CASES
 CASES=tuple('tests/test_v04_speed_runner.py::test_'+name for name in (
     'closed_socket_is_not_a_preflight_false_positive_and_audit_is_inert_after_exit',
     'audit_and_wrapper_denials_each_count_exactly_once',
-    'audit_guard_reaches_worker_threads')) + CHILD_CASES
+    'audit_guard_reaches_worker_threads'))
 EVENTS=frozenset(('socket.__new__','socket.getaddrinfo','os.system','subprocess.Popen'))
 
 
@@ -19,7 +19,7 @@ class Order:
         self.probe=object()
 
     def deferred(self,event):
-        return (self.enabled and self.policy.case in CASES and event in EVENTS
+        return (self.enabled and self.policy.case in (*CASES,*CHILD_CASES) and event in EVENTS
                 and not getattr(self.local,'recheck',False))
 
     def tail(self,event,args):
