@@ -56,7 +56,8 @@ def arena_record(pid,fd):
             or info.st_uid!=20000 or info.st_nlink!=0 or stat.S_IMODE(info.st_mode)!=0o600
             or info.st_size!=4096 or len(flags)!=1
             or int(flags[0],8)&~(os.O_CLOEXEC|0o100000)!=os.O_RDWR):
-        raise Refused('spawn exact anonymous shared arena')
+        raise Refused('spawn exact anonymous shared arena', {'fd':fd,'mode':info.st_mode,'uid':info.st_uid,
+            'links':info.st_nlink,'size':info.st_size,'flags':flags})
     return [fd,info.st_dev,info.st_ino,os.O_RDWR,4096]
 
 
