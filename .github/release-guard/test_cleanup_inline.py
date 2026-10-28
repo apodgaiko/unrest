@@ -353,7 +353,7 @@ def test_negative_probe_socket_hook_never_reports_a_connection(outcome):
 @pytest.mark.parametrize('case', tuple(STARTUP))
 def test_inline_leaf_accepts_only_its_exact_once_command(case):
     from source_code import Bodies
-    policy = Bodies({'role': 'cleanup-inline', 'case': case})
+    policy = Bodies({'role': 'cleanup-inline', 'case': case, 'execution':{'event':'cpython.run_command','argument':body(case)+'\n'}})
     text = body(case) + '\n'
     with pytest.raises(Refused):
         policy.audit('compile', (b'pass\n', '<string>'))

@@ -101,6 +101,9 @@ class Observer:
             'mount_namespace': os.readlink('/proc/self/ns/mnt'), **self.meta,
             'inherited': list(inherited),
             'script': script}
+        from execution_spec import issue, admitted
+        source['execution'] = (issue(role,vector,None,None) if role=='root' else
+            admitted(self.intents,role,case,pid,token,vector,environment,cwd,script))
         source['seal'] = hashlib.sha256(json.dumps(source, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         target = self.directory / (str(pid) + '.json')
         with target.open('x') as stream:
@@ -373,6 +376,7 @@ class Observer:
             'environment': dict(expected.environment) if environment is None else environment,
             'cwd': expected.cwd, 'translated': vector, 'token': token, 'consumed': False, 'pid': None,
             'executable': expected.executable, 'executable_sha256': expected.executable_sha256,
+            'script_sha256': script_pin,
             'inherited': list(inherited), 'port': port}
         return {'ok': True, 'ticket': self.serial, 'token': token}
 
@@ -444,6 +448,7 @@ class Observer:
             with snapshot.open('xb') as stream:
                 stream.write(body)
             snapshot.chmod(0o444)
+            self.intents[answer['ticket']]['execution_data'] = [[str(snapshot),hashlib.sha256(body).hexdigest()]]
         return answer
 
     def socket_payload(self, actor, payload):

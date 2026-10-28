@@ -96,7 +96,7 @@ def test_host_reconstructs_exact_original_launch(tmp_path, mutation):
 
 
 def test_fixed_root_entry_precedes_ordinary_inprocess_computation():
-    bodies = Bodies({'role': 'root'})
+    bodies = Bodies({'role': 'root', 'execution':{'event':'cpython.run_command','argument':ROOT_COMMAND+'\n'}})
     with pytest.raises(Refused, match='unknown Python execution'):
         bodies.audit('exec', (compile('print("foreign")', '<string>', 'exec'),))
     assert bodies.next == 0
@@ -134,7 +134,7 @@ def test_sealed_leaf_keeps_exact_fixture_execution(tmp_path):
     fixture = checkout / 'tests/fixtures/experimental_session_app_server.py'
     script = tmp_path / 'fake-app-server'
     script.write_bytes(fixture.read_bytes())
-    bodies = Bodies({'role': 'backend', 'case':CASES[0], 'checkout': str(checkout), 'script': str(script)})
+    bodies = Bodies({'role': 'backend', 'case':CASES[0], 'checkout': str(checkout), 'script': str(script), 'execution':{'event':'cpython.run_file','argument':str(script),'script_sha256':BACKEND_PIN}})
     with pytest.raises(Refused, match='compilation bytes'):
         bodies.audit('compile', (b'print("foreign")', str(script)))
     assert bodies.audit('compile', (script.read_bytes(), str(script)))

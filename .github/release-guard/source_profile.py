@@ -11,19 +11,19 @@ import sys
 
 from content_manifest import Refused, capture
 from preflight_cases import CASES as PREFLIGHT_ALL
-from plan_launch import CASES as PLAN_CASES, PYTHON as PLAN_PYTHON, expected as plan_expected
+from plan_launch import CASES as PLAN_CASES, PYTHON as PLAN_PYTHON
 from bootstrap_cases import BOOTSTRAP
 from controlled_cases import CASES as CONTROLLED, GROUPS as CONTROLLED_GROUPS
-from controlled_startup import expected_entry, CASES
-from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, MOCK, PINS
-from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, module_mode, SCRIPT, PINS as CLEANUP_PINS, scenario, snapshot_path
-from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES, INFLIGHT, body as inline_body
+from controlled_startup import CASES
+from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES
+from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS
+from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
-from git_sites import CASES as GIT_CASES, OWNED_BODY
-from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS, SCRIPT as SESSION_SCRIPT, PINS as SESSION_PINS, expected as session_expected
+from git_sites import CASES as GIT_CASES
+from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS
 
-from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, expected as fixed_expected
+from fixed_inline import CASES as FIXED_CASES
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
@@ -32,7 +32,7 @@ METHODS = frozenset({'core-ready', 'body-ready', 'case-start', 'case-finish', 'r
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
     'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
-    'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script', 'cases', 'inherited'}
+    'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script', 'cases', 'inherited', 'execution'}
 
 
 def case_seal(cases):
@@ -140,97 +140,28 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     if seen != inherited:
         raise Refused('source missing inherited inventory')
     readonly_mounts(profile['mounts'], profile['mount_namespace'])
+    from bootstrap_cases import wrapper
+    from session_launch import LIVE, INVALID, TIMEOUT, node
+    inline_session = node('clean_exit_zero_without_response_is_failed_unknown_work')
+    eligible = {
+        'root': ('<bootstrap>',), 'backend': (*BOOTSTRAP,*CONTROLLED), 'acp': (*BOOTSTRAP,*CONTROLLED),
+        'delayed-backend': tuple(case for case in BOOTSTRAP if wrapper(case) is not None),
+        'fixed-inline': FIXED_CASES, 'plan-python': (PLAN_PYTHON,),
+        'session-adapter': tuple(case for case in LIVE if case not in (*INVALID,inline_session)),
+        'session-inline': (inline_session,), 'session-child': (TIMEOUT,),
+        'workspace-owned': (GIT_CASES[7],), 'cleanup-inline': tuple(DECLARATIONS),
+        'mcp': CLEANUP_CASES, 'cleanup-acp': CLEANUP_CASES, 'mock-acp': ORDINARY_CASES,
+    }
+    if profile['case'] not in eligible[profile['role']]:
+        raise Refused('source execution role and case')
+    from execution_spec import validate as validate_execution
+    validate_execution(profile,event,arguments,Path(__file__).parent.parent/'profiles')
     native = profile['native']
     role, script = profile['role'], profile['script']
     if role == 'root':
         if (profile['cwd'] != profile['checkout'] or script is not None or event != 'cpython.run_command' or arguments != (ROOT_COMMAND + '\n',)
                 or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
             raise Refused('source fixed root body')
-    elif role == 'plan-python':
-        result=plan_expected(profile['case'],profile['cwd'],Path(profile['owned']),native,profile['native_sha256'])
-        if (profile['case']!=PLAN_PYTHON or profile['case'] not in profile['cases'] or script is not None
-                or profile['argv']!=list(result.vector) or event!='cpython.run_command'
-                or arguments!=(result.expected.argv[2]+'\n',)):
-            raise Refused('preflight fixed controlled Python entry')
-    elif role == 'fixed-inline':
-        if profile['case'] not in FIXED_CASES or profile['case'] not in profile['cases'] or script is not None:
-            raise Refused('source fixed inline case')
-        choices = [fixed_expected(profile['case'], operation, native, profile['native_sha256'], Path(profile['checkout']), profile['environment']) for operation in FIXED_SEQUENCES[profile['case']]]
-        matches = [value for value in choices if profile['argv'] == [native,'-I','-S',*value.argv[1:]]]
-        if len(matches) != 1 or event != 'cpython.run_command' or arguments != (matches[0].argv[2] + '\n',):
-            raise Refused('source fixed inline exact entry')
-    elif role.startswith('session-'):
-        result = session_expected(profile['case'], profile['cwd'], Path(profile['checkout']), Path(profile['owned']),
-            native, profile['native_sha256'], profile['environment'], child=role == 'session-child')
-        inline = result.payload_kind == 'python-command'
-        if (profile['case'] not in profile['cases'] or inline != (role == 'session-inline')
-                or script != (None if inline else str(Path(profile['checkout']) / SESSION_SCRIPT))
-                or profile['argv'] != [native, '-I', '-S', *result.argv[1:]]
-                or event != ('cpython.run_command' if inline else 'cpython.run_file')
-                or arguments != (('pass\n',) if inline else (script,))
-                or not inline and digest(Path(script)) != SESSION_PINS[SESSION_SCRIPT]):
-            raise Refused('source exact session entry')
-    elif role == 'workspace-owned':
-        if (profile['case'] != GIT_CASES[7] or profile['case'] not in profile['cases'] or script is not None
-                or Path(profile['cwd']).name != 'process' or Path(profile['cwd']).parent.name != 'trees'
-                or not Path(profile['cwd']).is_relative_to(Path(profile['owned']) / 'pytest')
-                or profile['argv'] != [native, '-I', '-S', '-c', OWNED_BODY]
-                or event != 'cpython.run_command' or arguments != (OWNED_BODY + '\n',)):
-            raise Refused('source exact workspace owned body')
-    elif role == 'cleanup-inline':
-        if (profile['case'] not in DECLARATIONS or profile['case'] not in profile['cases']
-                or (profile['cwd'] != profile['checkout'] and not (profile['case'] in INFLIGHT
-                    and Path(profile['cwd']).parent == Path(profile['owned']) / 'pytest'
-                    and profile['environment'] == {})) or script is not None
-                or profile['argv'] != [native, '-I', '-S', '-c', inline_body(profile['case'])]
-                or event != 'cpython.run_command' or arguments != (inline_body(profile['case']) + '\n',)):
-            raise Refused('source exact inline cleanup body')
-    elif role in ('mcp', 'cleanup-acp'):
-        if (profile['case'] not in CLEANUP_CASES or profile['case'] not in profile['cases']
-                or Path(profile['cwd']).name != 'workspace'
-                or Path(profile['cwd']).parent.parent != Path(profile['owned']) / 'pytest'):
-            raise Refused('source cleanup role or workspace')
-        if role == 'mcp':
-            argv = profile['argv']
-            if (script is not None or event != 'cpython.run_module' or arguments != ('unrest_harness',)
-                    or len(argv) != 15 or argv[:4] != [native, '-I', '-S', '-m'] or argv[4:12] != [
-                        'unrest_harness', '--mode', module_mode(profile['case']), '--transport', 'streamable-http', '--host', '127.0.0.1', '--port']
-                    or type(argv[12]) is not str or not argv[12].isdigit() or not 0 < int(argv[12]) <= 65535
-                    or argv[13:] != ['--sensitive-inventory-fd', str(inherited[0][0])]):
-                raise Refused('source exact worker module entry')
-        else:
-            expected_script = str(Path(profile['checkout']) / SCRIPT)
-            snapshot = snapshot_path(Path(__file__).parent.parent / 'profiles', profile['case'])
-            info = snapshot.stat(follow_symlinks=False)
-            if (script != expected_script or profile['argv'] != [native, '-I', '-S', expected_script, str(snapshot)]
-                    or event != 'cpython.run_file' or arguments != (expected_script,)
-                    or digest(Path(expected_script)) != CLEANUP_PINS[SCRIPT]
-                    or info.st_uid != 20001 or info.st_mode & 0o777 != 0o444 or info.st_nlink != 1
-                    or digest(snapshot) != hashlib.sha256(scenario(profile['case'], Path(profile['cwd']).parent)).hexdigest()):
-                raise Refused('source exact cleanup fixture and immutable scenario')
-    elif role == 'mock-acp':
-        if (profile['case'] not in ORDINARY_CASES or profile['case'] not in profile['cases']
-                or not Path(profile['cwd']).is_relative_to(Path(profile['owned']) / 'pytest')
-                or Path(profile['cwd']).name != 'workspace' or script != str(Path(profile['checkout']) / MOCK)
-                or profile['argv'] != [native, '-I', '-S', script] or digest(Path(script)) != PINS[MOCK]
-                or event != 'cpython.run_file' or arguments != (script,)):
-            raise Refused('source original mock ACP leaf')
-    else:
-        home = Path(profile['cwd'])
-        if (not home.is_relative_to(Path(profile['owned'])) or profile['case'] not in profile['cases']
-                or home.name not in (('worker','validator') if profile['case'] in CONTROLLED else ('worker',))
-                or type(script) is not str or str(Path(script).resolve()) != script):
-            raise Refused('source closed leaf role or home')
-        relay = json.loads(profile['environment']['SYNTHETIC_RELAY']) if role == 'acp' else None
-        expected,source,pin = expected_entry(profile['case'],Path(profile['checkout']),home,native,
-            profile['native_sha256'],backend=role != 'acp',relay=relay)
-        delayed = expected.payload_kind == 'python-command'
-        if (delayed != (role == 'delayed-backend') or script != source[1]
-                or role != 'acp' and not Path(script).is_relative_to(Path(profile['owned']))
-                or profile['argv'] != [native,'-I','-S',*expected.argv[1:]] or digest(Path(script)) != pin
-                or event != ('cpython.run_command' if delayed else 'cpython.run_file')
-                or arguments != ((expected.argv[2]+'\n',) if delayed else (script,))):
-            raise Refused('source exact controlled entry')
     pins = tuple(sorted((('entry', profile['entry_sha256']), ('native', profile['native_sha256']),
                         ('source', profile['source_sha256']), ('support', profile['support_sha256']),
                         ('runtime', profile['runtime_sha256']), ('dependency', profile['dependency_sha256']))))

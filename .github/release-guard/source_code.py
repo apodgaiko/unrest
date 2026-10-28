@@ -9,14 +9,8 @@ import sys
 import types
 
 from content_manifest import Refused
-from bootstrap_cases import wrapper
-from controlled_startup import ACP_PIN, BACKEND_PIN
-from controlled_cases import CASES as CONTROLLED, backend as controlled_backend
-from ordinary_acp import MOCK, PINS
 from source_owner import _safe_code
-from source_profile import ROOT_COMMAND, digest
-from cleanup_inline import body as inline_body
-from git_sites import OWNED_BODY
+from source_profile import digest
 
 
 class Bodies:
@@ -30,29 +24,29 @@ class Bodies:
         self.run_code_object = self.run_code.__code__
         self.run_globals = vars(runpy)
         role = profile['role']
+        self.command: str = profile['execution']['argument'] if profile['execution']['event']=='cpython.run_command' else ''
+        if type(self.command) is not str:
+            raise Refused('sealed command bytes schema')
         self.codes: tuple[types.CodeType, ...]
         if role == 'root':
-            self.codes = (compile(ROOT_COMMAND + '\n', '<string>', 'exec', dont_inherit=True),)
+            self.codes = (compile(self.command, '<string>', 'exec', dont_inherit=True),)
         elif role in ('cleanup-inline', 'workspace-owned', 'session-inline'):
             importlib.import_module('time')
-            self.codes = (compile(('pass' if role == 'session-inline' else OWNED_BODY if role == 'workspace-owned' else inline_body(profile['case'])) + '\n', '<string>', 'exec', dont_inherit=True),)
+            self.codes = (compile(self.command, '<string>', 'exec', dont_inherit=True),)
         else:
             names = ('asyncio', 'json', 'os', 'sys') if role == 'acp' else (
                 'copy', 'json', 'os', 'pathlib', 'sys', 'signal', 'secrets', 'time', 'tomllib', 'urllib.request')
             for name in (*names, 'runpy', 'pkgutil', 'encodings.ascii', 'encodings.latin_1'):
                 importlib.import_module(name)
-            fixture = Path(profile['checkout']) / ('tests/fixtures/controlled_python_acp.py'
-                if role == 'acp' else MOCK if role == 'mock-acp' else 'tests/fixtures/experimental_session_app_server.py')
-            if role == 'backend' and profile['case'] in CONTROLLED:
-                fixture = Path(profile['script'])
-            self.pin = ACP_PIN if role == 'acp' else PINS[MOCK] if role == 'mock-acp' else controlled_backend(profile['case'])[0] if profile['case'] in CONTROLLED else BACKEND_PIN
+            fixture = Path(profile['script'])
+            self.pin = profile['execution']['script_sha256']
             if digest(fixture) != self.pin:
                 raise Refused('sealed fixture source bytes')
             self.data = fixture.read_bytes()
             if hashlib.sha256(self.data).hexdigest() != self.pin:
                 raise Refused('sealed fixture source acquisition')
             script = compile(self.data, profile['script'], 'exec', dont_inherit=True)
-            self.codes = ((compile(str(wrapper(profile['case'])) + '\n', '<string>', 'exec', dont_inherit=True), script)
+            self.codes = ((compile(self.command, '<string>', 'exec', dont_inherit=True), script)
                           if role == 'delayed-backend' else (script,))
         if (type(sys.modules) is not dict or len(sys.modules) > 4096
                 or any(type(name) is not str for name in sys.modules)):
@@ -91,7 +85,7 @@ class Bodies:
             if args[1] != expected.co_filename:
                 raise Refused('sealed compilation filename')
             if expected.co_filename == '<string>':
-                data = (ROOT_COMMAND if role == 'root' else 'pass' if role == 'session-inline' else OWNED_BODY if role == 'workspace-owned' else inline_body(self.profile['case']) if role == 'cleanup-inline' else str(wrapper(self.profile['case']))) + '\n'
+                data = self.command
                 if type(args[0]) not in (str, bytes) or args[0] not in (data, data.encode()):
                     raise Refused('sealed inline compilation bytes')
             else:

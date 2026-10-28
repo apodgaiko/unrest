@@ -2940,3 +2940,17 @@ no process, listener or signal permission and require exactly zero child actors.
 Caught guard refusals still poison the outcome. This component inventory is
 bound to the unchanged source and measured runtime/configuration/plugin inputs;
 it is neither a selected substitute for nor certification of the full suite.
+
+
+Native profiles carry a closed execution specification issued by the independent
+observer from the uniquely consumed intent: exact token, case, role, PID, vector,
+environment and cwd must join. The specification binds the execution domain and
+actual command/module/file event. Script pins come from independent admission,
+not candidate files. Immutable cleanup scenario records also bind expected
+content, UID20001, mode0444, one link, protected parent and final argv.
+
+The consumer retains actual process/parent/credential, mount, runtime, argv,
+environment, cwd, flags and inherited-FD checks, plus compact role/case eligibility.
+Sealed bodies retain once-only compilation/execution, current script remeasurement,
+module bindings and exact delayed runpy dispatch. This replaces a third family
+renderer; source admission and independent observer rendering remain separate.
