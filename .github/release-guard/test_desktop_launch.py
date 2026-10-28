@@ -57,8 +57,9 @@ def test_exact_original_fixture_script_and_self_query(tmp_path, monkeypatch):
                            "UNREST_HOME": str(root / "home"), "UNREST_PROJECTS_DIR": str(root / "home/projects"),
                            "PYTHONDONTWRITEBYTECODE": "1"}}
     result = proposal(host, actor, raw)
-    assert result["translated"] == ["/usr/bin/ps", "-p", "123", "-o", "lstart="]
+    assert result["translated"] == ["/bin/ps", "-p", "123", "-o", "lstart="]
     assert calls[-1][1] == "ps" and calls[-1][0].executable_sha256 == "b" * 64
+    assert calls[-1][0].executable == raw["executable"] == "/bin/ps"
     with pytest.raises(Refused, match="sole responding"):
         proposal(host, actor, raw)
     assert len(calls) == 2

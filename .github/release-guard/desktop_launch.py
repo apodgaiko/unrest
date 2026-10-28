@@ -54,7 +54,7 @@ def proposal(host,actor,raw):
             raise Refused('desktop sole responding process query')
         if str(Path('/bin/ps').resolve(strict=True))!='/usr/bin/ps':
             raise Refused('desktop system ps alias changed')
-        role,exe,pin,kind='ps','/usr/bin/ps',image('/usr/bin/ps'),'native'
+        role,exe,pin,kind='ps','/bin/ps',image('/usr/bin/ps'),'native'
         argv=('/bin/ps','-p',str(actor['birth'].pid),'-o','lstart=')
         environment={'HOME':str(root/'user'),'PATH':'/usr/bin:/bin','LANG':'C.UTF-8',
             'UNREST_HOME':str(root/'home'),'UNREST_PROJECTS_DIR':str(root/'home/projects'),'PYTHONDONTWRITEBYTECODE':'1'}

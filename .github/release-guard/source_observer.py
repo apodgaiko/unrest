@@ -263,6 +263,8 @@ class Observer:
         from desktop_launch import CASE as DESKTOP_CASE,retained as desktop_retained
         if intent['case']==DESKTOP_CASE:
             desktop_retained(self)
+            if intent['role']=='ps' and str(Path(path).resolve(strict=True))!='/usr/bin/ps':
+                raise Refused('desktop retained system ps alias')
         if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):
             return False
         intent['stdout'] = self.stdio(pid, intent['role'],
