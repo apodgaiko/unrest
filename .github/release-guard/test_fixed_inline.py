@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from content_manifest import Refused
-from fixed_inline import ARGUMENTS, IMPORT_CASES, PINS, PRODUCT, SEQUENCES, TEST, expected, script
+from fixed_inline import ARGUMENTS, IMPORT_CASES, PINS, SEQUENCES, TEST, expected, script
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
@@ -25,7 +25,6 @@ def test_literal_sources_and_exact_call_sites_are_pinned():
             found[function.name] = calls[0].lineno
     assert found == {'_import_probe':540,'test_mcp_help_does_not_import_repository_modules':587}
     assert script(ROOT,'help') == script(ROOT,'check') and script(ROOT,'mcp') != script(ROOT,'help')
-    assert PRODUCT.startswith('src/')
 
 
 @pytest.mark.parametrize('case',IMPORT_CASES)

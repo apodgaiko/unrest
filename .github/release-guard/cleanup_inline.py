@@ -42,7 +42,6 @@ def child_count(case):
 
 def expected(case, native, native_pin, checkout, root_environment, *, base=None, terminal=False):
     from launch_policy import build_expected
-    family, _, _ = declaration(case)
     if terminal and case not in INFLIGHT:
         raise Refused('cleanup inline terminal outside inflight case')
     if terminal:

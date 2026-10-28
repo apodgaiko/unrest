@@ -9,7 +9,7 @@ import hashlib
 from content_manifest import Refused
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
-from fixed_inline import CASES as FIXED, SEQUENCES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
+from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASE, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
 from ordinary_acp import CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
@@ -106,7 +106,7 @@ def proposal(host, actor, raw):
             expected = fixed_expected(case,operation,native,pin,checkout,environment,query=query,root=root)
         script_pin = expected.payload_sha256
         vector = list(expected.argv) if query else list(fixed_translated(expected))
-        role,maximum='git-fixed' if query else 'fixed-inline',1 if query else len(SEQUENCES[case])
+        role,maximum='git-fixed' if query else 'pytest-regression' if case==NESTED_CASE else 'fixed-inline',1 if query else len(SEQUENCES[case])
     elif case in ORDINARY:
         host.root_only(actor)
         role='sleep' if argv[0]=='/bin/sleep' else 'mock-acp'

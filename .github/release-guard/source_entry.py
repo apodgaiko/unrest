@@ -301,7 +301,7 @@ def activate(directory, profile, event, arguments):
     actual, pins = validate(profile, event, arguments)
     client = Client(directory, profile, METHODS)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire'):
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression'):
         sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
         # Only guard/locked dependencies initialize here; candidate test modules
         # are imported by the real pytest body after the native READY boundary.
@@ -313,6 +313,9 @@ def activate(directory, profile, event, arguments):
         policy.calls=Context(policy)
         if profile['role']!='root':
             policy.case=profile['case']
+    if profile['role']=='pytest-regression':
+        temp=str(Path(profile['owned'])/('nested-'+profile['token']))
+        os.environ.update(PYTEST_DISABLE_PLUGIN_AUTOLOAD='1',PYTEST_PLUGINS='nested_pytest,pytest_asyncio.plugin,pytest_mock',PYTEST_ADDOPTS='--basetemp='+temp+' -o cache_dir='+temp+'-cache')
     if profile['role'] not in ('session-adapter', 'session-child'):
         from source_sockets import Hooks
         policy.sockets = Hooks(policy)

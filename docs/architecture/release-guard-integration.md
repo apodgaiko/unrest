@@ -300,3 +300,24 @@ match the original fixture. The acquired `v04-speed-runs<digits>` directory keep
 one generation across all commands and is rechecked at exec. Later consumers
 reuse the original module fixture; they receive no additional launch permission.
 The real script, result schema, timing gates and actual parent waits remain.
+
+Strict selected cases and normal full discovery share cursor, report and phase
+accounting. Their outcome dispositions remain distinct: selected source checks
+require every phase to pass; full discovery retains normal failed/skipped
+reporting. Only the full release root can seal release completion.
+
+The original two-node nested speed regression has a separate non-launching
+`pytest-regression` role. It retains its enclosing process/case context and uses a
+local cursor solely to verify the exact original selection and all six phase
+outcomes. Its one-time child seal binds the consumed birth/token intent; parent
+completion additionally requires native body READY, exit zero and actual parent
+reap. It receives no descendant or release-root lifecycle authority. A fixed
+bootstrap selects locked pytest plugins and a token-specific basetemp/cache,
+preventing inherited release plugins or parent-directory cleanup from leaking
+into this child. Launch-bearing contract references still require their own
+scoped implementation; this leaf grants them no permission.
+Nested declaration imports remain dependency-free during native `-I -S`
+bootstrap. The pytest-derived plugin class is created only after activation has
+installed the locked dependency paths; importing enforcement initializes no
+asyncio runtime. Shared digest predicates and duplicate-key decoding retain the
+same primitive and rejection semantics; inactive owner-label constants are gone.

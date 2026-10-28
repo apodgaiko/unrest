@@ -126,7 +126,7 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression'}[role]
         new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
@@ -201,7 +201,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'git-fixed','ps') and not input_pipe):
+            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps') and not input_pipe):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -376,6 +376,8 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        if actor['role']=='pytest-regression':
+            return terminal is not None and terminal[2]==0 and actor['body_ready'] and actor.get('preselected_complete') is True
         if actor['role']=='ps':
             return terminal is not None and terminal[2]==0 and actor.get('kernel_admitted') is True
         if actor['role']=='mcp' and actor['case'] in HTTP_CASES:
@@ -559,6 +561,15 @@ class Observer:
         elif kind == 'multiprocess-proposal':
             from multiprocess_entry import proposal
             return proposal(self,actor,payload)
+        elif kind == 'preselected-finish':
+            from nested_pytest import CASE,NODES
+            from source_profile import case_seal
+            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
+                  and row['consumed'] and row['role']==actor['role'] and row['case']==self.case]
+            if (actor['role']!='pytest-regression' or actor['case']!=self.case or self.case!=CASE
+                    or not actor['body_ready'] or actor.get('preselected_complete') or payload!=case_seal(NODES) or len(rows)!=1):
+                raise Refused('preselected child completion scope')
+            actor['preselected_complete']=True
         elif kind == 'fixture-root':
             from speed_inline import CASES,directory
             self.root_only(actor)

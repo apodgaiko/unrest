@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import hashlib
 from pathlib import PurePosixPath
 
-from content_manifest import Refused
+from content_manifest import Refused, is_sha256
 
 MAX_ARGUMENTS = 256
 MAX_TEXT_BYTES = 131_071
@@ -91,11 +91,6 @@ def _environment(value, budget):
     return tuple(sorted(result))
 
 
-def _sha(value: object) -> bool:
-    return (type(value) is str and len(value) == 64
-            and all(c in "0123456789abcdef" for c in value))
-
-
 def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
              executable_sha256: str) -> tuple[int | None, str]:
     if kind in {"native", "expected-exec-failure"}:
@@ -124,7 +119,7 @@ def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
         _absolute(argv[index])
     elif not all(part.isidentifier() for part in argv[index].split(".")):
         raise Refused("policy_module_name")
-    if reference is None or not _sha(reference):
+    if reference is None or not is_sha256(reference):
         raise Refused("policy_external_payload_reference")
     return index, reference
 
@@ -133,7 +128,7 @@ def build_expected(rule: str, case: str, executable: str, executable_sha256: str
                    argv: tuple[str, ...], environment: tuple[tuple[str, str], ...],
                    cwd: str, payload_kind: str, reference: str | None = None) -> Expected:
     """Validate the observer-selected declaration without an intermediate policy."""
-    if not _sha(executable_sha256) or type(payload_kind) is not str:
+    if not is_sha256(executable_sha256) or type(payload_kind) is not str:
         raise Refused('policy_rule')
     budget = _Budget()
     for item in (rule, case):

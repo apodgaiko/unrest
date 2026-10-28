@@ -211,7 +211,7 @@ def measure_lines(root: Path, paths: Sequence[str]) -> tuple[Manifest, dict[str,
     return _capture(root, paths, counts), counts
 
 
-def _digest(value: object) -> bool:
+def is_sha256(value: object) -> bool:
     return (type(value) is str and len(value) == 64
             and all(c in "0123456789abcdef" for c in value))
 
@@ -229,7 +229,7 @@ def validate(value: object, paths: Sequence[str]) -> Manifest:
                 or member["path"] != name or type(member["mode"]) is not int
                 or not 0 <= member["mode"] <= 0o777 or type(member["size"]) is not int
                 or not 0 <= member["size"] <= MAX_FILE_BYTES
-                or not _digest(member["sha256"])):
+                or not is_sha256(member["sha256"])):
             raise Refused("manifest_member")
         files.append({"path": name, "mode": member["mode"], "size": member["size"],
                       "sha256": member["sha256"]})
@@ -255,25 +255,17 @@ def encode(manifest: Manifest) -> bytes:
     return bytes(result) + b"\n"
 
 
-def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise Refused("duplicate_json_key")
-        result[key] = value
-    return result
-
-
 def verify(root: Path, body: bytes, expected_sha256: str,
            paths: Sequence[str]) -> Manifest:
     """Require an external digest and inventory, then remeasure current files."""
+    from control_transport import unique
     names = _inventory(paths)
     if (type(body) is not bytes or len(body) > MAX_MANIFEST_BYTES
-            or not _digest(expected_sha256)
+            or not is_sha256(expected_sha256)
             or hashlib.sha256(body).hexdigest() != expected_sha256):
         raise Refused("manifest_reference")
     try:
-        value = json.loads(body, object_pairs_hook=_object)
+        value = json.loads(body, object_pairs_hook=unique)
     except Refused:
         raise
     except (UnicodeError, ValueError, RecursionError):

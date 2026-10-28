@@ -13,8 +13,6 @@ from typing import Any
 from content_manifest import Refused
 
 TEST = 'tests/test_experimental_bootstrap.py'
-CONFIG_SOURCE = 'src/unrest_harness/experimental_provider_config.py'
-CONFIG_PIN = '92c8d11fc6aedbf8a737be416387de5f0aa4a239ce8e9e048f543bb8cd4041a5'
 CATALOGUE = 'src/unrest_harness/provider_data/codex-rust-v0.160.1-models.json'
 CATALOGUE_PIN = 'fd219bd9f061278275f528939f82f54d2eb97df4b25c23b022adbe48813d920b'
 

@@ -8,7 +8,6 @@ from content_manifest import Refused
 from launch_policy import build_expected
 
 TEST = 'tests/test_provider_sessions.py'
-PRODUCT = 'src/unrest_harness/provider_sessions.py'
 SCRIPT = 'tests/mock_provider_session_acp.py'
 ROLES = ('inquiry_branch', 'inquiry_synthesis', 'candidate_author', 'independent_evaluator', 'independent_reviewer')
 

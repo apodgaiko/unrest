@@ -13,7 +13,6 @@ from launch_policy import Expected, build_expected
 
 OWNER = 20000
 TEST = 'tests/test_launch_preflight.py'
-PRODUCT = 'src/unrest_harness/acp_runner.py'
 NAMES = (
     'test_relative_and_empty_path_entries_use_launch_cwd[tools]',
     'test_relative_and_empty_path_entries_use_launch_cwd[]',

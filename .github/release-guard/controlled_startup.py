@@ -16,7 +16,6 @@ from content_manifest import Refused
 from controlled_cases import CASES as CONTROLLED, backend as controlled_backend, backend_path, configuration_items, configured as is_configured
 from launch_policy import build_expected
 
-SESSION = 'src/unrest_harness/experimental_session.py'
 TEST = 'tests/test_experimental_bootstrap.py'
 ACP = 'tests/fixtures/controlled_python_acp.py'
 SESSION_PIN = '7a3df1d049cd8a72aac48bc376154f7701335397ad8a0e0634cf2d0a9509cbd2'

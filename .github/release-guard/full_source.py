@@ -7,7 +7,6 @@ import hashlib
 import json
 from pathlib import Path
 
-import pytest
 from content_manifest import Refused
 from source_root import OriginalCases
 from case_inventory import identity
@@ -30,10 +29,7 @@ def child_environment(metadata):
 
 
 class FullCases(OriginalCases):
-    def __init__(self,policy):
-        super().__init__(policy)
-        self.skips=[]
-
+    normal_outcomes = True
     def pytest_collection_finish(self,session):
         from case_inventory import document,load
         nodes=[item.nodeid for item in session.items]
@@ -55,35 +51,6 @@ class FullCases(OriginalCases):
             raise Refused('full source ambiguous case references')
         profile['cases']=list(self.cases)
         self.policy.calls.install()
-
-    @pytest.hookimpl(hookwrapper=True,tryfirst=True)
-    def pytest_runtest_protocol(self,item,nextitem):
-        index=len(self.completed)
-        if index>=len(self.cases) or item is not self.items[index]:
-            raise Refused('full source original cursor')
-        policy=self.policy
-        case=identity(item.nodeid)
-        if case!=self.cases[index]:
-            raise Refused('full source original case identity')
-        policy.case=case
-        policy.client.request('case-start',{'case':case})
-        yield
-        phases=self.reports.get(case,{})
-        skipped=phases in ({'setup':'skipped','teardown':'passed'}, {'setup':'passed','call':'skipped','teardown':'passed'})
-        passed=phases=={'setup':'passed','call':'passed','teardown':'passed'}
-        if policy.poison:
-            raise Refused('full source forbidden effect')
-        if skipped:
-            self.skips.append(case)
-        from controlled_cases import ROOT_HTTP
-        if item.nodeid in ROOT_HTTP and passed:
-            policy.calls.http.finish()
-        policy.client.request('case-finish',{'case':case,'outcome':'skipped' if skipped else 'passed' if passed else 'failed','phases':phases})
-        self.completed.append(case)
-        policy.case=None
-
-    def pytest_runtest_logreport(self,report):
-        self.record(report,identity(report.nodeid))
 
     def pytest_sessionfinish(self,session,exitstatus):
         if session.config.option.collectonly:

@@ -14,6 +14,7 @@ from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
 from cleanup_inline import STARTUP
 from fixed_inline import NETWORK, NETWORK_CASES, METHOD_CASES
 from speed_inline import CASES as SPEED_CASES, CLI_CASE
+from nested_pytest import CASE as NESTED_CASE
 
 TYPE = type
 
@@ -232,8 +233,8 @@ class Hooks:
         def initialize(stream,family=-1,type=-1,proto=-1,fileno=None):
             adoption=None
             if (fileno is not None and family==type==proto==-1
-                    and hooks.policy.profile['role']=='fixed-inline'
-                    and hooks.policy.profile['case'] in (*METHOD_CASES,*NETWORK_CASES,*SPEED_CASES,CLI_CASE)):
+                    and hooks.policy.profile['role'] in ('fixed-inline','pytest-regression')
+                    and hooks.policy.profile['case'] in (*METHOD_CASES,*NETWORK_CASES,*SPEED_CASES,CLI_CASE,NESTED_CASE)):
                 if (TYPE(stream) is not hooks.socket_type or any(TYPE(value) is not int for value in (family,type,proto))
                         or TYPE(fileno) is not int or fileno<0 or getattr(hooks.local,'adoption',None) is not None):
                     hooks.policy.refuse('source socket adoption operand')

@@ -149,7 +149,7 @@ def test_digest_inventory_duplicates_and_encoding_are_independently_bound(source
     with pytest.raises(content.Refused, match="noncanonical_manifest"):
         content.verify(source, noncanonical, hashlib.sha256(noncanonical).hexdigest(), NAMES)
     duplicate = body.replace(b'{"files":', b'{"schema":"duplicate","files":', 1)
-    with pytest.raises(content.Refused, match="duplicate_json_key"):
+    with pytest.raises(content.Refused, match="duplicate field"):
         content.verify(source, duplicate, hashlib.sha256(duplicate).hexdigest(), NAMES)
 
 

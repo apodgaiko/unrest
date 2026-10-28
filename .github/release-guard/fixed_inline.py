@@ -10,9 +10,9 @@ from content_manifest import Refused
 from git_observer import image
 from launch_policy import build_expected
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
+from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN
 
 TEST = 'tests/test_repository_contract.py'
-PRODUCT = 'src/unrest_harness/repository_contract.py'
 REMOVED = ('unrest_harness.baseline', 'unrest_harness.governance', 'unrest_harness.repository_contract')
 ARGUMENTS = {'help': ('--help',), 'init': ('init', '--help'), 'list': ('list-projects',), 'check': ('check-repository',)}
 IMPORT_CASES = tuple(TEST + '::' + name for name in (
@@ -41,6 +41,7 @@ RELOAD_TEST = 'tests/test_v04_speed_runner.py'
 RELOAD_NAME = 'test_process_installs_only_one_audit_hook_across_reload'
 RELOAD_CASE = RELOAD_TEST + '::' + RELOAD_NAME
 PINS[RELOAD_TEST] = 'b54e199791a0ad5e9a9e34ebc0eb6b2e93e333435faba86cb6481f502c1027c4'
+PINS['tests/test_task_adapter.py'] = '3adc28c5825c8f9c83c79e36193941490f362aaef259088b4a81e777c54d84f3'
 METHOD_NAME = 'test_preexisting_socket_and_bound_alias_refuse_entry_before_payload'
 METHODS = ('connect','connect_ex','bind','listen','accept','send','sendall','sendto','sendmsg',
            'sendfile','recv','recv_into','recvfrom','recvfrom_into','recvmsg','recvmsg_into','makefile','shutdown')
@@ -52,11 +53,12 @@ DETACHED_CASE = RELOAD_TEST+'::test_detached_socket_descriptor_is_preflight_evid
 NETWORK_CASES = (*NETWORK,DETACHED_CASE)
 ISOLATED = {RELOAD_CASE:'reload', DETACHED_CASE:'detached', **dict(zip(METHOD_CASES,METHODS,strict=True)),
             **{case:case for case in (*NETWORK,*SPEED_CASES)}}
-CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,*ISOLATED)
-GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,(CLI_CASE,),CASES)
+CASES = (*IMPORT_CASES,*STDIO,OBSERVATION_CASE,CLI_CASE,NESTED_CASE,*ISOLATED)
+GROUPS = (IMPORT_CASES,tuple(STDIO),(OBSERVATION_CASE,),(RELOAD_CASE,),METHOD_CASES,NETWORK_CASES,SPEED_CASES,(CLI_CASE,),(NESTED_CASE,),CASES)
 SEQUENCES.update({case:('startup',) for case in STDIO})
 SEQUENCES[OBSERVATION_CASE] = OBSERVATION_OPERATIONS
 SEQUENCES[CLI_CASE] = tuple('run-'+str(i) for i in range(5))
+SEQUENCES[NESTED_CASE] = ('pytest',)
 SEQUENCES.update({case:(operation,) for case,operation in ISOLATED.items()})
 PINS[STDIO_TEST] = '588e6f2128c32f4020cae0dfaf00182bdc117ea640760da1790dd687f5246105'
 
@@ -126,8 +128,14 @@ def script(checkout, operation, root=None):
 
 
 def expected(case, operation, native, pin, checkout, environment, *, query=False, root=None):
-    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
+    if type(case) is not str or case not in (*IMPORT_CASES,OBSERVATION_CASE,CLI_CASE,NESTED_CASE,*ISOLATED) or type(operation) is not str or operation not in SEQUENCES[case] or type(query) is not bool:
         raise Refused('fixed inline closed operation')
+    if case==NESTED_CASE and not query:
+        for path in ('tests/test_task_adapter.py',RELOAD_TEST):
+            if hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=PINS[path]:
+                raise Refused('preselected original source bytes')
+        return build_expected('fixed:pytest',case,native,pin,(native,'-m','pytest','-q',*NODES),
+            tuple(sorted({**environment,'PYTHONDONTWRITEBYTECODE':'1'}.items())),str(checkout),'python-module',PYTEST_PIN)
     if case==CLI_CASE and not query:
         return cli_expected(native,pin,checkout,root,operation)
     if case in ISOLATED:

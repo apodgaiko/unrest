@@ -1,7 +1,6 @@
 """Pinned original pytest cases and their privileged source callers."""
 from __future__ import annotations
 
-import signal
 from pathlib import Path
 import sys
 
@@ -15,13 +14,12 @@ from content_manifest import Refused
 from case_inventory import identity
 
 
-USER_SIGNAL = int(signal.SIGUSR1)
-
-
 class OriginalCases:
+    normal_outcomes = False
     def __init__(self, policy):
         self.policy, self.items, self.reports, self.completed = policy, (), {}, []
         self.cases = tuple(policy.profile['cases'])
+        self.skips=[]
 
     def pytest_collection_finish(self, session):
         items = tuple(session.items)
@@ -40,24 +38,37 @@ class OriginalCases:
         if item.nodeid in CASES:
             self.policy.client.request('fixture-root',{'path':str(item.funcargs['tmp_path'])})
 
+    def enter(self,case):
+        self.policy.case=case
+        self.policy.client.request('case-start',{'case':case})
+
+    def leave(self,case,outcome,phases):
+        payload={'case':case,'outcome':outcome,'phases':phases} if self.normal_outcomes else {'case':case}
+        self.policy.client.request('case-finish',payload)
+        self.policy.case=None
+
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_protocol(self, item, nextitem):
-        index = len(self.completed)
-        case = identity(item.nodeid)
-        if index >= len(self.cases) or not self.items or item is not self.items[index] or case != self.cases[index]:
+        index=len(self.completed)
+        case=identity(item.nodeid)
+        if index>=len(self.cases) or not self.items or item is not self.items[index] or case!=self.cases[index]:
             raise Refused('root original case cursor')
-        policy = self.policy
-        policy.case = case
-        policy.client.request('case-start', {'case': case})
+        self.enter(case)
         yield
-        phases = self.reports.get(case, {})
-        if phases != {'setup': 'passed', 'call': 'passed', 'teardown': 'passed'}:
+        phases=self.reports.get(case,{})
+        skipped=phases in ({'setup':'skipped','teardown':'passed'},{'setup':'passed','call':'skipped','teardown':'passed'})
+        passed=phases=={'setup':'passed','call':'passed','teardown':'passed'}
+        if self.normal_outcomes:
+            if self.policy.poison:
+                raise Refused('full source forbidden effect')
+            if skipped:
+                self.skips.append(case)
+        elif not passed:
             raise Refused('root original assertions or cleanup failed')
-        if item.nodeid in ROOT_HTTP:
-            policy.calls.http.finish()
-        policy.client.request('case-finish', {'case': case})
+        if item.nodeid in ROOT_HTTP and passed:
+            self.policy.calls.http.finish()
+        self.leave(case,'skipped' if skipped else 'passed' if passed else 'failed',phases)
         self.completed.append(case)
-        policy.case = None
 
     def pytest_runtest_logreport(self, report):
         self.record(report,identity(report.nodeid))
