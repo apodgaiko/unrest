@@ -262,3 +262,6 @@ failed first alias run is retained; it is not replaced by its later repair proof
 Socket method wrappers preserve the original method name and bound receiver so
 real product preflight can identify captured aliases. Wrapper names are metadata;
 launch and transport authority remain independent of Python caller identity.
+The same ordered-parity check covers factored bootstrap expiry/boundary axes and
+preflight lookup/malformed-string axes, including every bootstrap delay and child
+count; their runtime declarations and no-effect membership remain unchanged.

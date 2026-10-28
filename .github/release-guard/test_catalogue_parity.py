@@ -26,3 +26,17 @@ PINS = {
 def test_complete_ordered_mapping_is_identical(name):
     body = json.dumps(list(getattr(catalogue, name).items()), separators=(',', ':')).encode()
     assert hashlib.sha256(body).hexdigest() == PINS[name]
+
+
+def test_preflight_and_bootstrap_ordered_axes_are_identical():
+    from dataclasses import asdict
+    from preflight_cases import CASES
+    from bootstrap_cases import DECLARATIONS
+    snapshots = (
+        (CASES, 'decd3ed6e0c3435bfc8ff57adcd5fd28cc51804ad21d9894a47f68d3134088be'),
+        ([asdict(value) for value in DECLARATIONS],
+         '48fb21f65e272f2f709b5ecc6b9ff98c8be8762b00b34e05c58a56b187fa61cf'),
+    )
+    for value, pin in snapshots:
+        body = json.dumps(value, separators=(',', ':')).encode()
+        assert hashlib.sha256(body).hexdigest() == pin
