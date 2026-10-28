@@ -204,7 +204,8 @@ class Git:
         if regular(root / '.git/worktrees' / worktree.name / 'HEAD', 64) != expected_head:
             raise Refused('git helper detached HEAD phase')
         executable = '/usr/lib/git-core/git'
-        if image(executable) != self.pin:
+        pin=intent['executable_sha256']
+        if image(executable) != pin:
             raise Refused('git helper exact native image')
         environment = {**intent['environment'], 'GIT_DIR': str(worktree / '.git'), 'GIT_WORK_TREE': tree,
             'GIT_EXEC_PATH': '/usr/lib/git-core', 'GIT_PREFIX': '',
@@ -213,7 +214,7 @@ class Git:
         host.serial += 1
         child = {'case': host.case, 'role': 'git-helper', 'parent': parent, 'environment': environment,
             'cwd': intent['cwd'], 'translated': vector, 'token': os.urandom(16).hex(), 'consumed': False,
-            'pid': None, 'executable': executable, 'executable_sha256': self.pin, 'inherited': [], 'port': None}
+            'pid': None, 'executable': executable, 'executable_sha256': pin, 'inherited': [], 'port': None}
         host.intents[host.serial] = child
         self.helpers[birth] = child
 

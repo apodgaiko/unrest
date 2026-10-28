@@ -198,3 +198,19 @@ setting as cleanup MCP. This disables the pinned dependency's unrelated PyPI
 banner update query. The original caller environment and the resulting execution
 environment are separately observed and bound. No external DNS, connection,
 provider process or update download is authorized by this setting.
+
+Three original speed-runner counter cases use product-first audit sequencing.
+After normal collection imports the real product hook, a guard-owned Python tail
+hook must acknowledge installation before native deferral is armed. In those
+exact cases, the real product denial may raise and increment its own counter
+before any effect. If it does not deny, the tail reissues the same event and
+argument objects, with a thread-local recheck flag that forces unchanged native
+policy first. Other cases/events retain native-first checks. No permission is
+inferred from a counter or exception. Synthetic native controls require either
+normal product-denial exit or caught fallback plus sticky86, with only the initial
+exec observed; the original cases separately establish real product behavior.
+
+Git checkout helpers compare their current image with the consumed original
+parent command's executable pin. A removed process-global cache is not an input
+to this proof. The helper retains its own birth, worktree/HEAD phase, actual native
+parent wait and subsequent Python-parent/output join requirements.

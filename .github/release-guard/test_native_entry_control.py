@@ -19,7 +19,7 @@ import sys
 import time
 import traceback
 
-CASES = ('fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
+CASES = ('product-order-positive', 'product-order-fallback', 'fastpath-positive', 'compile-bytes', 'compile-current', 'positive', 'caught-process', 'caught-network', 'bad-case', 'bad-argv',
          'bad-flags', 'bad-identity', 'bad-native', 'bad-entry', 'bad-nonce',
          'bad-token', 'bad-observer', 'extra-fd', 'bad-bootstrap', 'bad-environment', 'bad-cwd',
          'source-reject-control', 'source-reject-unknown', 'source-reject-profile')
@@ -204,13 +204,13 @@ def worker(case, binding, output):
         consume(trace)
         raw = result['root_parent_wait_raw']
         actual_ready = ledger.process(birth).stage
-        expected_status = 0 if case in ('positive','fastpath-positive') else 86 << 8
+        expected_status = 0 if case in ('positive','fastpath-positive','product-order-positive') else 86 << 8
         if raw != expected_status or result['poison']:
             raise RuntimeError('native controlled return or trace refused')
         if case in BODIES:
             if next_control != 2 or ledger.poison:
                 raise RuntimeError('native readiness order incomplete')
-            marker = b'NATIVE_BODY_OK' if case in ('positive','fastpath-positive') else b'REFUSAL_CAUGHT'
+            marker = b'NATIVE_BODY_OK' if case in ('positive','fastpath-positive','product-order-positive') else b'REFUSAL_CAUGHT'
             if marker not in captured:
                 raise RuntimeError('native controlled body absent')
         elif b'NATIVE_BODY_OK' in captured or b'UNAPPROVED_BODY' in captured:

@@ -13,6 +13,8 @@ from native_entry import acquire
 
 BODY_READY = False
 BODIES = {
+    'product-order-positive': 'import os\ntry: os.system("/usr/bin/true")\nexcept RuntimeError as error:\n assert str(error)=="PRODUCT_DENIED"\n print("NATIVE_BODY_OK",flush=True)\nelse: raise AssertionError("product denial absent")',
+    'product-order-fallback': 'import os\ntry: os.system("/usr/bin/true")\nexcept ValueError: print("REFUSAL_CAUGHT",flush=True)\nelse: raise AssertionError("native fallback absent")',
     'fastpath-positive': 'import fractions,sys\nsys.settrace(lambda *args: None)\nsys.settrace(None)\nsys.setprofile(lambda *args: None)\nsys.setprofile(None)\nexec(compile("print(\\"NATIVE_BODY_OK\\",flush=True)","<ordinary>","exec"))',
     'compile-bytes': 'import sys\ntry: compile(\'changed\\n\',sys._compile_probe_file,"exec")\nexcept ValueError as error:\n assert str(error)=="source declared script bytes changed"\n print("REFUSAL_CAUGHT",flush=True)',
     'compile-current': 'import sys\ntry: compile(\'pass\\n\',sys._compile_probe_file,"exec")\nexcept ValueError as error:\n assert str(error)=="source declared script bytes changed"\n print("REFUSAL_CAUGHT",flush=True)',
@@ -105,6 +107,21 @@ def consume(directory, event, arguments):
                 raise RuntimeError('unnecessary Python audit callback')
             return production.audit(event,args)
         POLICY=audit
+    if case.startswith('product-order-'):
+        from source_entry import Policy
+        from product_audit import CASES,Order
+        from types import SimpleNamespace
+        production=object.__new__(Policy)
+        production.case,production.poison=CASES[1],False
+        production.profile={'script':None}
+        production.client=SimpleNamespace(request=lambda *args:{'ok':True})
+        def product(event,args):
+            if event=='os.system' and case=='product-order-positive':
+                raise RuntimeError('PRODUCT_DENIED')
+        sys.addaudithook(product)
+        production.audit_order=Order(production)
+        production.audit_order.install()
+        POLICY,SCRIPT_TARGET=production.audit,None
     BODY_READY = True
 
 

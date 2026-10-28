@@ -83,6 +83,9 @@ class Policy:
             args[3].update(OFFLINE)
 
     def audit(self, event, args):
+        order=getattr(self,'audit_order',None)
+        if order is not None and order.deferred(event):
+            return True
         try:
             if event in ('compile', 'exec', 'import'):
                 script=self.profile['script']

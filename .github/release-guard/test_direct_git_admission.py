@@ -57,3 +57,33 @@ def test_selected_git_command_still_requires_every_custody_and_causal_join(failu
         assert calls[3][1]==(value,'git-command',list(command.argv),None)
         assert git.commands['new'] is git.last[host.case] is host.intents[1]
         assert host.intents[1]['command'] is command
+
+
+@pytest.mark.parametrize('matching',[False,True])
+def test_checkout_helper_uses_its_consumed_parent_image_pin(monkeypatch,matching):
+    import git_observer
+    from process_ledger import Birth
+    parent=Birth(20,20,1,100,'boot',20000)
+    child=Birth(21,21,20,101,'boot',20000)
+    tree='/owned/project/tree'
+    revision='c'*40
+    intent={'consumed':True,'case':CASES[0],'operation':'integration-add',
+        'command':Command(('git','worktree','add','--detach',tree,revision),'/owned/project'),
+        'repository':'/owned/project','environment':{'PATH':'/usr/bin:/bin'},'cwd':'/owned/project',
+        'executable_sha256':'a'*64}
+    host=SimpleNamespace(case=CASES[0],serial=0,intents={},
+        ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(token='parent',exit=None,terminal=None),
+            children={parent:[child]}))
+    git=object.__new__(Git)
+    git.host,git.commands,git.helpers=host,{'parent':intent},{}
+    git.location=lambda *args:None
+    monkeypatch.setattr(git_observer,'regular',lambda *args:revision.encode()+b'\n')
+    monkeypatch.setattr(git_observer,'image',lambda executable:('a' if matching else 'b')*64)
+    if matching:
+        git.reserve_helper(child,parent)
+        assert host.intents[1]['executable_sha256']==intent['executable_sha256']
+        assert host.intents[1]['parent']==parent and git.helpers[child] is host.intents[1]
+    else:
+        with pytest.raises(Refused,match='exact native image'):
+            git.reserve_helper(child,parent)
+        assert not host.intents and not git.helpers
