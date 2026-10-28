@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-from session_launch import ARGS, CASES, LIVE, INVALID, INVALID_BYTES, PINS, PLAN, SCRIPT, TIMEOUT, expected, node, stream_limit
+from session_launch import ARGS, CASES, LIVE, INVALID, INVALID_BYTES, PINS, PLAN, SCRIPT, TIMEOUT, expected, node
 from source_observer import Observer
 from process_ledger import Birth
 
@@ -40,7 +40,6 @@ def test_one_closed_adapter_declaration_and_exact_timeout_child(case, tmp_path):
     else:
         assert result.argv[0] == '/native/python'
     assert result.payload_kind in ('python-command', 'python-script', 'expected-exec-failure')
-    assert stream_limit(case) in (196608, 67584, 65792)
     if case == TIMEOUT:
         child = expected(case, str(workspace), ROOT, owned, '/native/python', 'a' * 64, environment, child=True)
         assert child.argv == ('/native/python', str(ROOT / SCRIPT), '--child', str(workspace.parent / 'child.stopped'))
@@ -97,10 +96,12 @@ def test_self_stop_requires_exact_case_signal_and_actual_descendant_wait():
             observer.dispatch(changed, request)
 
 
-def test_stream_limits_keep_original_parameter_cases():
-    assert stream_limit(tuple(ARGS)[4]) == 67584
-    assert stream_limit(tuple(ARGS)[5]) == 65792
-    assert stream_limit(node('timeout_kills_adapter_process_group')) == 196608
+def test_response_parameters_keep_original_case_and_argv_identity():
+    assert '--invalid-1024-invalid_structured_output' in tuple(ARGS)[4]
+    assert ARGS[tuple(ARGS)[4]] == ('--invalid',)
+    assert '--payload-size 4096-128-output_limit_exceeded' in tuple(ARGS)[5]
+    assert ARGS[tuple(ARGS)[5]] == ('--payload-size', '4096')
+    assert ARGS[node('timeout_kills_adapter_process_group')] == ('--sleep', '30')
 
 
 class CallbackTrap:

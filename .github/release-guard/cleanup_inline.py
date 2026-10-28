@@ -51,9 +51,6 @@ def source_site(case, terminal=False):
     return 61 if family == 'startup' else 429 if family == 'inflight' else 269 if variant == 'reader' else 299
 
 
-def scheduling_site(case):
-    family, variant, _ = declaration(case)
-    return 92 if family == 'startup' else 478 if family == 'inflight' else 321 if family == 'client' and variant != 'reader' else None
 
 
 def expected(case, native, native_pin, checkout, root_environment, *, base=None, terminal=False):

@@ -79,10 +79,3 @@ def expected(case, cwd, checkout, owned, native, pin, root_environment, *, child
     rule = Rule('session:' + ('child' if child else 'adapter'), owner, (case,), argv[0], pin,
         argv, tuple(sorted(environment.items())), cwd, 'expected-exec-failure' if invalid else 'python-command' if inline else 'python-script', None if inline or invalid else PINS[SCRIPT])
     return render(rule, case, owner, {}, {})
-
-
-def stream_limit(case):
-    if case not in LIVE:
-        raise Refused('session stream case')
-    response = 1024 if case == tuple(ARGS)[4] else 128 if case == tuple(ARGS)[5] else 65536
-    return max(65536, response * 2 + 65536)

@@ -19,7 +19,6 @@ from cleanup_inline import (
     body,
     child_count,
     source_site,
-    scheduling_site,
 )
 from cleanup_launch import TEST
 
@@ -45,7 +44,7 @@ def test_inline_bodies_and_effect_lines_are_original_source():
 @pytest.mark.parametrize("case", CASES)
 def test_inline_parameters_keep_original_effect_counts_and_source_sites(case):
     if case in NO_LAUNCH:
-        assert child_count(case) == 0 and scheduling_site(case) is None
+        assert child_count(case) == 0
         with pytest.raises(Refused):
             body(case)
         with pytest.raises(Refused):
@@ -57,7 +56,7 @@ def test_inline_parameters_keep_original_effect_counts_and_source_sites(case):
         )
         assert source_site(case) in (61, 269, 299, 429)
     if case in INFLIGHT:
-        assert source_site(case, terminal=True) == 1034 and scheduling_site(case) == 478
+        assert source_site(case, terminal=True) == 1034
     else:
         with pytest.raises(Refused):
             source_site(case, terminal=True)

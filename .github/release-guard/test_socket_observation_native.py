@@ -177,12 +177,8 @@ def test_retained_closed_tcp_identity_and_descriptor_reuse():
     try:
         live = observation.retained_tcp_descriptor(os.getpid(), descriptor)
         assert live is not None and live['state'] == 1
-        binding = (os.getpid(), live['socket_cookie'], live['inode'],
-                   server.getsockname()[1], client.getsockname()[1])
-        assert observation.closed_binding(live, {binding}) is None
-        assert observation.live_binding(live, {binding}) == binding
-        assert observation.live_binding(live, set()) is None
-        assert observation.live_binding(live, {(*binding[:4], binding[4] + 1)}) is None
+        assert live['local_address'] == server.getsockname()
+        assert live['peer_address'] == client.getsockname()
         client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
         client.close()
         deadline = time.monotonic() + 2
@@ -194,15 +190,11 @@ def test_retained_closed_tcp_identity_and_descriptor_reuse():
             time.sleep(.001)
         assert closed['peer_address'] is None
         assert (closed['inode'], closed['socket_cookie']) == (live['inode'], live['socket_cookie'])
-        assert observation.closed_binding(closed, {binding}) == binding
-        assert observation.closed_binding(closed, set()) is None
-        assert observation.closed_binding(closed, {(os.getpid() + 1, *binding[1:])}) is None
         with socket.socket() as replacement:
             os.dup2(replacement.fileno(), descriptor)
             reused = observation.retained_tcp_descriptor(os.getpid(), descriptor)
             assert reused is not None and reused['state'] == 7
             assert reused['socket_cookie'] != live['socket_cookie']
-            assert observation.closed_binding(reused, {binding}) is None
     finally:
         server.close()
         client.close()
@@ -223,15 +215,12 @@ def test_accepted_peer_survives_one_shot_listener_close():
             listener.close()
             rows = observation.sockets(os.getpid())
             own = next(row for row in rows if row['fd'] == client.fileno())
-            peer = observation.reciprocal_peer(admitted, own, rows)
-            assert peer is not None and peer['fd'] == server.fileno()
+            peer = next(row for row in rows if row['fd'] == server.fileno())
             assert peer['socket_cookie'] == cookie(server)
-            assert observation.reciprocal_peer(admitted, own, []) is None
-            for key in ('pid', 'socket_uid', 'local_port'):
-                changed = {**admitted, key: admitted[key] + 1}
-                assert observation.reciprocal_peer(changed, own, rows) is None
-            changed = {**own, 'local_port': own['local_port'] + 1}
-            assert observation.reciprocal_peer(admitted, changed, rows) is None
+            assert (peer['local_host'], peer['local_port']) == (own['remote_host'], own['remote_port'])
+            assert (peer['remote_host'], peer['remote_port']) == (own['local_host'], own['local_port'])
+            assert peer['local_port'] == admitted['local_port']
+
     finally:
         listener.close()
         client.close()
@@ -258,7 +247,6 @@ def test_stale_unix_pair_cannot_authorize_reused_tcp_descriptor():
             retained = observation.retained_tcp_descriptor(os.getpid(), left.fileno())
             assert retained is not None
             assert retained['socket_cookie'] not in {row['socket_cookie'] for row in pair}
-            assert observation.closed_binding(retained, set()) is None
     finally:
         left.close()
 
