@@ -185,7 +185,7 @@ def test_producer_reply_is_recursively_json_finite(monkeypatch):
         },
         "stdin": None,
     }
-    host.git.launch = host.launch
+    host.git.launch = lambda *args: host.launch(None,None)
     # Use the real fixed producer template rather than a fabricated stdout value.
     raw["argv"] = ["git", "rev-parse", "HEAD"]
     answer = prepare(host, {}, raw)
@@ -229,8 +229,8 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
     )
 
-    def launch(actor, payload):
-        calls.append(payload)
+    def launch(actor, operation, repository, command, expected, vector):
+        calls.append((operation,repository,command,expected,vector))
         return {"ok": True, "ticket": 1, "token": "t"}
 
     host.git.launch = launch
@@ -248,8 +248,9 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     }
     answer = prepare(host, {}, raw)
     assert answer["translated"] == raw["argv"]
-    assert calls[0]["git"] == {"operation": "inside", "repository": REPO, "fields": {}}
-    assert calls[0]["original"]["owner"] == "git:inside"
+    assert calls[0][:2] == ("inside", REPO)
+    assert calls[0][2].argv == tuple(raw["argv"])
+    assert calls[0][3].owner == "git:inside"
     raw["argv"] = ["git", "commit", "-m", "child self commit"]
     with pytest.raises(Refused):
         prepare(host, {}, raw)
@@ -310,8 +311,8 @@ def test_effect_selection_retains_integration_provenance_when_rollback_argv_over
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
     )
 
-    def launch(actor, payload):
-        calls.append(payload)
+    def launch(actor, operation, repository, command, expected, vector):
+        calls.append((operation,repository,command,expected,vector))
         return {"ok": True, "ticket": 1, "token": "t"}
 
     host.git.launch = launch
@@ -333,7 +334,7 @@ def test_effect_selection_retains_integration_provenance_when_rollback_argv_over
         "stdin": None,
     }
     assert prepare(host, {}, raw)["translated"] == argv
-    assert calls[0]["git"]["operation"] == operation
+    assert calls[0][0] == operation
     host.git.values.values = []
     with pytest.raises(Refused):
         prepare(host, {}, raw)
@@ -371,8 +372,8 @@ def test_rollback_to_prior_integration_keeps_actual_current_predecessor(monkeypa
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
     )
 
-    def launch(actor, payload):
-        calls.append(payload)
+    def launch(actor, operation, repository, command, expected, vector):
+        calls.append((operation,repository,command,expected,vector))
         return {"ok": True, "ticket": 1, "token": "t"}
 
     host.git.launch = launch
@@ -390,4 +391,4 @@ def test_rollback_to_prior_integration_keeps_actual_current_predecessor(monkeypa
         "stdin": None,
     }
     assert prepare(host, {}, raw)["translated"] == argv
-    assert calls[0]["git"]["operation"] == "rollback-update"
+    assert calls[0][0] == "rollback-update"

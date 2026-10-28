@@ -184,3 +184,17 @@ observer reconstructs those declarations independently. Former wire mutation
 controls now exercise actual proposals, including consistent inline-body changes,
 unknown authority fields and zero-intent refusal. The small proposal test-data
 builder is not imported by production and performs no enforcement.
+
+The observer now carries its selected immutable command/declaration directly
+through admission. It does not serialize and reconstruct the same Git, preflight
+or custody command a second time, or compare its own generated source-line wire
+fields. Git repository/worktree custody, causal input values, previous parent and
+descendant reaps, stdout joins and producers remain mandatory. Preflight still
+remeasures mutable owned scripts at each actual exec attempt. Kernel execution
+matching, immutable profiles and parent waits remain independent checks.
+
+HTTP fixtures use the same explicit `FASTMCP_CHECK_FOR_UPDATES=off` execution
+setting as cleanup MCP. This disables the pinned dependency's unrelated PyPI
+banner update query. The original caller environment and the resulting execution
+environment are separately observed and bound. No external DNS, connection,
+provider process or update download is authorized by this setting.

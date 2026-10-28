@@ -147,7 +147,7 @@ def test_wire_proposal_is_fixed_and_snapshot_is_byte_current(tmp_path, monkeypat
         assert host.intents[answer["ticket"]]["execution_data"][0][0] == str(snapshot)
         file.write_text("changed original")
         assert json.loads(snapshot.read_bytes()) == {"events": [], "delay": 0, "raw_frame": None}
-        assert calls[0][0][3:5] == ("review-wire", 56)
+        assert calls[0][0][2] == "review-wire"
         assert calls[0][1]["maximum"] == wire.count(case)
         if mutation == "second":
             host.intents[2].update(

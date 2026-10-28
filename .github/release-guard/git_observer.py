@@ -8,10 +8,9 @@ from pathlib import Path
 import stat
 
 from content_manifest import Refused, native_digest, _root, _directory_key
-from git_commands import build, location_role
-from git_sites import CASES, OPERATIONS, OWNED_BODY
+from git_commands import location_role
+from git_sites import CASES, OPERATIONS
 from git_values import Values
-from launch_policy import Rule, render
 
 HOME_CONFIG = b'[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n'
 SETUP = ('init', 'config-name', 'config-email', 'stage-base', 'commit-base')
@@ -59,7 +58,7 @@ class Git:
         self.host = observer
         self.values = Values(observer.ledger)
         self.repositories, self.commands, self.last = {}, {}, {}
-        self.helpers, self.pin = {}, None
+        self.helpers = {}
         self.custody_roots = {}
 
     def repository(self, repository, operation, family):
@@ -115,51 +114,26 @@ class Git:
                 or regular(admin / 'commondir') != b'../..\n' or common.resolve(strict=True) != common):
             raise Refused('git linked worktree backlinks')
 
-    def launch(self, actor, payload):
+    def launch(self, actor, operation, repository, command, expected, vector):
         host = self.host
         host.root_only(actor)
-        info = payload['git']
-        if type(info) is not dict or set(info) != {'operation', 'repository', 'fields'} or host.case not in CASES:
-            raise Refused('git source declaration schema')
-        operation=info['operation']
+        if host.case not in CASES:
+            raise Refused('Git finite case')
         if operation=='owned-process':
-            return self.owned_launch(actor,payload)
+            return self.owned_launch(actor,repository,expected,vector)
         family='workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
-        if type(operation) is not str or operation not in OPERATIONS[family]:
+        if operation not in OPERATIONS[family]:
             raise Refused('Git finite operation declaration')
-        setup=self.repositories.get(host.case,{}).get('setup',0)
-        phase='setup' if setup<len(SETUP) else 'call'
-        fields = info['fields']
-        if type(fields) is not dict or any(type(k) is not str for k in fields):
-            raise Refused('git source operand dictionary')
-        fields = dict(fields)
-        for name in ('new_inputs', 'leases'):
-            if name in fields:
-                if type(fields[name]) is not list or len(fields[name]) > 128:
-                    raise Refused('git serialized operand tuple')
-                if name == 'leases' and any(type(v) is not list or len(v) != 2 for v in fields[name]):
-                    raise Refused('git serialized lease tuple')
-                fields[name] = tuple(tuple(v) for v in fields[name]) if name == 'leases' else tuple(fields[name])
-        family = 'workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
-        command = build(operation, info['repository'], payload['original']['cwd'], fields, family=family)
         previous = self.last.get(host.case)
         if previous is not None and (not previous['consumed'] or not host.ledger.reaped(previous['birth'], previous['token'])
                 or not self.values.descendants_reaped(previous['birth'])
                 or previous['command'].produces is not None and not previous.get('value_observed')):
             raise Refused('git next command before original parent/output join')
-        root = self.repository(info['repository'], operation, family)
+        root = self.repository(repository, operation, family)
         self.location(root, command.cwd)
         for location, kind, value, inputs in command.requires:
             self.values.require(host.case, str(root), location, kind, value, inputs)
-        environment = {**host.meta_environment(), 'PYTEST_VERSION': '9.0.2',
-            'PYTEST_CURRENT_TEST': host.case + ' (' + phase + ')', **dict(command.additions)}
-        owner = 'git:'+operation
-        if self.pin is None:
-            self.pin = image()
-        rule = Rule('git:' + operation, owner, (host.case,), '/usr/bin/git', self.pin,
-            command.argv, tuple(sorted(environment.items())), command.cwd, 'native', None)
-        expected = render(rule, host.case, owner, {}, {})
-        answer = host.admit_launch(actor, payload, expected, 'git-command', 0, list(command.argv), None, maximum=128)
+        answer = host.admit_launch(actor,expected,'git-command',vector,None,maximum=128)
         if answer is None:
             return None
         intent = host.intents[answer['ticket']]
@@ -255,17 +229,10 @@ class Git:
         return self.host.ledger.reaped(birth, actor['token'])
 
 
-    def owned_launch(self, actor, payload):
-        host, info = self.host, payload['git']
-        if host.case != CASES[7] or info['fields'] != {} or self.repositories.get(host.case, {}).get('path') != info['repository']:
+    def owned_launch(self, actor, repository, expected, vector):
+        host = self.host
+        if host.case != CASES[7] or self.repositories.get(host.case, {}).get('path') != repository:
             raise Refused('workspace owned launch scope')
-        cwd = info['repository'] + '/.unrest-runtime/workspaces/trees/process'
-        self.location(Path(info['repository']), cwd)
-        environment = {**host.meta_environment(), 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': host.case + ' (call)'}
-        native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
-        owner = 'workspace:owned'
-        rule = Rule('workspace:owned', owner, (host.case,), native, pin, (native, '-c', OWNED_BODY),
-            tuple(sorted(environment.items())), cwd, 'python-command', None)
-        expected = render(rule, host.case, owner, {}, {})
-        return host.admit_launch(actor, payload, expected, 'workspace-owned', 0,
-            [native, '-I', '-S', '-c', OWNED_BODY], expected.payload_sha256)
+        cwd = repository + '/.unrest-runtime/workspaces/trees/process'
+        self.location(Path(repository), cwd)
+        return host.admit_launch(actor,expected,'workspace-owned',vector,expected.payload_sha256)

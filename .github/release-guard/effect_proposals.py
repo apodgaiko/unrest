@@ -11,14 +11,14 @@ from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
 from fixed_inline import CASES as FIXED, SEQUENCES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
 from ordinary_acp import CASES as ORDINARY, expected as ordinary_expected
-from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, module_site, translated as cleanup_vector
+from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
 from controlled_startup import expected_entry, ACP
 from controlled_cases import CASES as CONTROLLED
 from bootstrap_cases import BOOTSTRAP
 
 
-def proposal(host, actor, raw, *, payload=None):
+def proposal(host, actor, raw):
     from source_observer import shape
     host.launch_owner(actor)
     from control_transport import finite
@@ -57,12 +57,12 @@ def proposal(host, actor, raw, *, payload=None):
         from custody_git import command as custody_command,ENVIRONMENT,SOURCE
         from git_observer import image
         from launch_policy import Rule,render
-        value,_=custody_command(case,tuple(argv),cwd,owned)
+        value,custody_kind=custody_command(case,tuple(argv),cwd,owned)
         expected=render(Rule('custody:git',SOURCE+':git',(case,),'/usr/bin/git',image(),value.argv,tuple(sorted(ENVIRONMENT.items())),cwd,'native'),case,SOURCE+':git',{}, {})
-        site,script_pin,vector=38,None,list(value.argv)
+        script_pin,vector=None,list(value.argv)
     elif case in PLANS:
         model = plan_expected(case,cwd,owned,native,pin)
-        expected, site, vector = model.expected,409,list(model.vector)
+        expected, vector = model.expected,list(model.vector)
         script_pin = expected.payload_sha256
     elif case in SESSIONS:
         from session_launch import TIMEOUT,INVALID,INVALID_BYTES
@@ -70,7 +70,7 @@ def proposal(host, actor, raw, *, payload=None):
         if child and case!=TIMEOUT or not child and actor['role']!='root':
             raise Refused('session original launch parent')
         expected = session_expected(case,cwd,checkout,owned,native,pin,root_environment,child=child)
-        site,script_pin = (50 if child else 75),expected.payload_sha256
+        script_pin = expected.payload_sha256
         role='session-invalid' if case in INVALID else 'session-child' if child else 'session-inline' if expected.payload_kind=='python-command' else 'session-adapter'
         if role=='session-invalid':
             from git_observer import regular
@@ -90,7 +90,7 @@ def proposal(host, actor, raw, *, payload=None):
             expected = startup_expected(case,native,pin,cwd,owned)
         else:
             expected = fixed_expected(case,operation,native,pin,checkout,environment,query=query)
-        site,script_pin = (507 if query else 107 if case in STDIO else 587 if operation=='mcp' else 540),expected.payload_sha256
+        script_pin = expected.payload_sha256
         vector = list(expected.argv) if query else list(fixed_translated(expected))
         role,maximum='git-fixed' if query else 'fixed-inline',1 if query else len(SEQUENCES[case])
     elif case in ORDINARY:
@@ -98,7 +98,6 @@ def proposal(host, actor, raw, *, payload=None):
         role='sleep' if argv[0]=='/bin/sleep' else 'mock-acp'
         maximum=2 if case==ORDINARY[2] and role=='sleep' else 1
         expected = ordinary_expected(case,'sleep' if argv[0]=='/bin/sleep' else 'mock-acp',cwd,checkout,native,pin,root_environment,owned)
-        site = 409 if expected.rule=='ordinary:mock-acp' else 1383 if case==ORDINARY[2] else 1843
         script_pin = expected.payload_sha256
         vector = list(expected.argv) if expected.rule=='ordinary:sleep' else [native,'-I','-S',*expected.argv[1:]]
     elif case in DECLARATIONS:
@@ -109,7 +108,7 @@ def proposal(host, actor, raw, *, payload=None):
         if len(records)>=child_count(case) or any(not row['consumed'] or not host.actors[row['pid']]['returned'] for row in records):
             raise Refused('cleanup inline original child order')
         role,maximum='cleanup-inline',child_count(case)
-        expected,site = inline_expected(case,native,pin,checkout,root_environment,base=base_path(cwd,owned) if terminal else None,terminal=terminal)
+        expected,_ = inline_expected(case,native,pin,checkout,root_environment,base=base_path(cwd,owned) if terminal else None,terminal=terminal)
         script_pin,vector = expected.payload_sha256,[native,'-I','-S',*expected.argv[1:]]
     elif case in CLEANUP:
         port,descriptor = None,None
@@ -128,7 +127,6 @@ def proposal(host, actor, raw, *, payload=None):
             from cleanup_launch import read_pipe,OFFLINE
             inherited=[read_pipe(actor['birth'].pid,descriptor)]
         expected = cleanup_expected(case,role,base,native,pin,checkout,root_environment,port=port,descriptor=descriptor)
-        site = {'mcp':module_site(case),'cleanup-acp':409,'git-init':131,'git-commit':132,'git-observe':266}[role]
         script_pin,vector = expected.payload_sha256,list(cleanup_vector(expected,host.directory))
         from cleanup_launch import OFFLINE
         extra_environment={**dict(expected.environment),**(OFFLINE if role=='mcp' else {})}
@@ -158,23 +156,21 @@ def proposal(host, actor, raw, *, payload=None):
             lifetime = host.listeners[host.listener_key(case,'lifetime',cwd)]
             relay = [bridge['socket'].local[1],bridge['nonce'],lifetime['socket'].local[1],lifetime['nonce']]
         expected,_,script_pin = expected_entry(case,checkout,Path(cwd),native,pin,backend=backend,relay=relay)
-        site,vector = (506 if backend else 553),[native,'-I','-S',*expected.argv[1:]]
+        vector = [native,'-I','-S',*expected.argv[1:]]
         if backend and expected.payload_kind=='python-command':
             role='delayed-backend'
     else:
         raise Refused('finite process proposal has no declaration')
     if (tuple(argv)!=expected.argv or cwd!=expected.cwd or raw['environment']!=dict(expected.environment)):
         raise Refused('finite process proposal differs from declaration')
-    if payload is None:
-        payload={'case':case,'original':expected.wire(),'translated':vector,'source_line':site,'script_sha256':script_pin}
     if case in PLANS:
         from plan_observer import launch
-        answer=launch(host,actor,payload)
+        answer=launch(host,actor,model)
     elif custody:
         from custody_git import launch
-        answer=launch(host,actor,payload)
+        answer=launch(host,actor,value,custody_kind,expected)
     else:
-        answer=host.admit_launch(actor,payload,expected,role,site,vector,script_pin,
+        answer=host.admit_launch(actor,expected,role,vector,script_pin,
             maximum=maximum,environment=extra_environment,inherited=inherited,port=port)
     if answer is not None and case in FIXED:
         host.intents[answer['ticket']].update(fixed_operation=operation,input_pipe=case in STDIO)

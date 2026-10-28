@@ -6,7 +6,7 @@ from content_manifest import Refused
 from git_observer import image
 from launch_policy import Rule, render
 from multiprocess_routes import TRANSACTIONS
-from cleanup_launch import EXECUTION_CASES
+from cleanup_launch import EXECUTION_CASES, OFFLINE
 
 CASES = tuple(TRANSACTIONS)[:9]
 TRANSPORT = (*EXECUTION_CASES, *CASES)
@@ -83,6 +83,6 @@ def proposal(host,actor,raw):
     if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:
         raise Refused('HTTP original command operands')
     vector = [value.executable,*value.argv[1:]] if role=='ps' else [value.executable,'-I','-S',*value.argv[1:]]
-    payload = {'original':value.wire(),'source_line':0,'translated':vector,'script_sha256':None}
-    answer = host.admit_launch(actor,payload,value,role,0,vector,None,port=port)
+    answer = host.admit_launch(actor,value,role,vector,None,port=port,
+        environment={**dict(value.environment),**OFFLINE} if role=='mcp' else None)
     return None if answer is None else {**answer,'translated':vector,'rule':value.rule}

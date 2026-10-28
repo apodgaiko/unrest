@@ -1,5 +1,4 @@
 """Inverse finite Git templates, retaining kernel-wait and value dependencies."""
-import hashlib
 
 from content_manifest import Refused
 from git_commands import build,FIELDS,Command
@@ -100,11 +99,7 @@ def prepare(host,actor,raw):
         vector=list(command.argv)
     if raw['environment']!=dict(expected.environment) or raw['cwd']!=expected.cwd:
         raise Refused('Git proposal environment or cwd differs')
-    fields={key:[list(row) for row in value] if key=='leases' else list(value) if key=='new_inputs' else value for key,value in fields.items()}
-    payload={'case':case,'original':expected.wire(),'translated':vector,'source_line':0,
-             'script_sha256':hashlib.sha256(OWNED_BODY.encode()).hexdigest() if owned else None,
-             'git':{'operation':operation,'repository':repository,'fields':fields}}
-    answer=host.git.launch(actor,payload)
+    answer=host.git.launch(actor,operation,repository,command,expected,vector)
     if answer is None:
         return None
     return {**answer,'translated':vector,'rule':expected.rule,

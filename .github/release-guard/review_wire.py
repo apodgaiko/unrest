@@ -80,8 +80,7 @@ def proposal(host,actor,raw):
         raise Refused('review-wire original environment')
     snapshot=host.directory/('review-wire-'+hashlib.sha256((case+str(len(records))).encode()).hexdigest()+'.json')
     vector=[native,'-I','-S',argv[1],str(snapshot)]
-    payload={'case':case,'original':value.wire(),'translated':vector,'source_line':56,'script_sha256':PIN}
-    answer=host.admit_launch(actor,payload,value,'review-wire',56,vector,PIN,maximum=count(case))
+    answer=host.admit_launch(actor,value,'review-wire',vector,PIN,maximum=count(case))
     if answer is None:
         return None
     with snapshot.open('xb') as stream:

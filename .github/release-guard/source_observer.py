@@ -295,11 +295,9 @@ class Observer:
     def listener_key(self,case,tag,scope=None):
         return (case,tag,scope) if case in CONTROLLED else (case,tag)
 
-    def admit_launch(self, actor, payload, expected, role, site, vector, script_pin,
+    def admit_launch(self, actor, expected, role, vector, script_pin,
                      *, maximum=1, environment=None, inherited=(), port=None):
-        if (payload['original'] != expected.wire() or payload['source_line'] != site
-                or payload['translated'] != vector or payload['script_sha256'] != script_pin
-                or sum(value['case'] == self.case and value['role'] == role
+        if (expected.case != self.case or sum(value['case'] == self.case and value['role'] == role
                        and (self.case not in CONTROLLED or value['cwd'] == expected.cwd)
                        for value in self.intents.values()) >= maximum):
             raise Refused('source independent launch reconstruction')

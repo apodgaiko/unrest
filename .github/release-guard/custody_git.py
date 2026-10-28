@@ -13,9 +13,8 @@ from content_manifest import Refused
 from controlled_cases import CASES
 from controlled_pairs import limits
 from git_commands import Command
-from git_observer import image, regular
+from git_observer import regular
 from git_values import digest
-from launch_policy import Rule, render
 
 SOURCE = 'src/unrest_harness/experimental_custody.py'
 PIN = 'a6da184702daa03c9e9a7b6c5fcf22d9514901abb9112c44c8686a05880d25dc'
@@ -92,10 +91,8 @@ def repository(cwd, owned, *, initialize):
     return tuple(identities),metadata_identity
 
 
-def launch(host,actor,payload):
+def launch(host,actor,result,kind,expected):
     host.root_only(actor)
-    original = payload['original']
-    result,kind = command(host.case,tuple(original['argv']),original['cwd'],Path(host.meta['owned']))
     prior = [v for v in host.intents.values() if v['case'] == host.case and v['role'] == 'git-custody']
     if len(prior) >= 12+8*limits(host.case)[0]:
         raise Refused('custody Git finite case command bound')
@@ -111,9 +108,7 @@ def launch(host,actor,payload):
     if previous is not None and (previous[0] != identity[0] or previous[1] is not None and previous[1] != identity[1]):
         raise Refused('custody Git replaced repository generation')
     host.git.custody_roots[key] = identity
-    expected = render(Rule('custody:git',SOURCE+':git',(host.case,),'/usr/bin/git',image(),result.argv,
-        tuple(sorted(ENVIRONMENT.items())),result.cwd,'native',None),host.case,SOURCE+':git',{}, {})
-    answer = host.admit_launch(actor,payload,expected,'git-custody',38,list(result.argv),None,maximum=12+8*limits(host.case)[0])
+    answer = host.admit_launch(actor,expected,'git-custody',list(result.argv),None,maximum=12+8*limits(host.case)[0])
     if answer is None:
         return None
     intent = host.intents[answer['ticket']]

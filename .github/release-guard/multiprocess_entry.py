@@ -255,8 +255,7 @@ def proposal(host,actor,raw):
                 counterpart(actor['birth'].pid,row)
         child_custody(host.case,raw['passfds'],tracker_fd,reader,inherited,raw['target'])
     vector=[native,'-I','-S',*raw['argv'][3:]]
-    payload={'case':host.case,'original':value.wire(),'translated':vector,'source_line':0,'script_sha256':None}
-    answer=host.admit_launch(actor,payload,value,role,0,vector,None,inherited=inherited,maximum=count(host.case)-1 if role=='mp-child' else 1)
+    answer=host.admit_launch(actor,value,role,vector,None,inherited=inherited,maximum=count(host.case)-1 if role=='mp-child' else 1)
     if answer is None:
         return None
     if role=='mp-tracker':

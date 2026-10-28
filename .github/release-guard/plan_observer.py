@@ -19,11 +19,9 @@ def key(file):
     return [info.st_dev,info.st_ino,info.st_mode,info.st_uid,info.st_gid,info.st_nlink,info.st_size,info.st_mtime_ns,info.st_ctime_ns]
 
 
-def launch(host,actor,payload):
+def launch(host,actor,result):
     host.root_only(actor)
-    result=expected(host.case,payload['original']['cwd'],Path(host.meta['owned']),
-                    host.binding['entry']['path'],host.binding['entry']['sha256'])
-    answer=host.admit_launch(actor,payload,result.expected,result.role,409,list(result.vector),result.expected.payload_sha256)
+    answer=host.admit_launch(actor,result.expected,result.role,list(result.vector),result.expected.payload_sha256)
     if answer is not None:
         value=host.intents[answer['ticket']]
         value['plan']=result

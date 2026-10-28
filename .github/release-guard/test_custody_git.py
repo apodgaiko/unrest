@@ -65,7 +65,7 @@ def test_same_path_replacement_cannot_inherit_prior_repository_facts(monkeypatch
         git=SimpleNamespace(custody_roots={(CASE,cwd):old}))
     monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:new)
     with pytest.raises(Refused,match='replaced repository generation'):
-        custody_git.launch(host,None,{'original':{'argv':[*PREFIX,'rev-parse','HEAD'],'cwd':cwd}})
+        custody_git.launch(host,None,*custody_git.command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),None)
 
 
 def test_deferred_constructor_does_not_consume_a_git_command(monkeypatch):
@@ -76,6 +76,5 @@ def test_deferred_constructor_does_not_consume_a_git_command(monkeypatch):
         admit_launch=lambda *args,**kwargs:None,
         git=SimpleNamespace(custody_roots={},commands={}))
     monkeypatch.setattr(custody_git,'repository',lambda *args,**kwargs:(((cwd,1,10,20000),),(1,20,20000)))
-    monkeypatch.setattr(custody_git,'image',lambda:'1'*64)
-    assert custody_git.launch(host,None,{'original':{'argv':[*PREFIX,'rev-parse','HEAD'],'cwd':cwd}}) is None
+    assert custody_git.launch(host,None,*custody_git.command(CASE,tuple([*PREFIX,'rev-parse','HEAD']),cwd,Path('/owned')),None) is None
     assert not host.intents and not host.git.commands

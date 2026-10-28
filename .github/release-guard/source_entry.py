@@ -79,7 +79,7 @@ class Policy:
         self.local.launch=answer
         self.local.custody=answer['rule']=='custody:git'
         vector[:]=answer['translated']
-        if answer['rule']=='cleanup:mcp':
+        if answer['rule'] in ('cleanup:mcp','http:mcp'):
             args[3].update(OFFLINE)
 
     def audit(self, event, args):

@@ -37,8 +37,8 @@ def test_exact_startup_rejection_operands_and_translation(tmp_path, case):
         meta_environment=lambda: {},
     )
 
-    def launch(actor, payload, *args, **kwargs):
-        calls.append(payload)
+    def launch(actor, declaration, *args, **kwargs):
+        calls.append((declaration,args))
         host.intents[1] = {}
         return {"ok": True, "ticket": 1, "token": "t"}
 
@@ -57,8 +57,8 @@ def test_exact_startup_rejection_operands_and_translation(tmp_path, case):
         == list(translated(expected))
         == ["/native/python", "-I", "-S", "-c", STDIO_BODY, "--mode", role]
     )
-    assert calls[0]["original"] == expected.wire()
-    assert calls[0]["source_line"] == 107  # Declaration tag, not authenticated caller provenance.
+    assert calls[0][0] == expected
+    assert calls[0][1][0] == "fixed-inline"
     host.intents.clear()
     raw["environment"]["FOREIGN"] = "1"
     with pytest.raises(Refused):

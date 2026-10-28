@@ -21,8 +21,8 @@ def prepared(tmp_path,monkeypatch):
     (cwd/'adapter').symlink_to(native)
     model=expected(PYTHON,str(cwd),tmp_path,str(native),'a'*64)
     requests=[]
-    def launch(actor,payload,*args,**kwargs):
-        requests.append(payload)
+    def launch(actor,declaration,*args,**kwargs):
+        requests.append((declaration,args))
         host.intents={1:{}}
         return {'ok':True,'ticket':1,'token':'token'}
     host=SimpleNamespace(case=PYTHON,meta={'checkout':str(tmp_path/'source'),'owned':str(tmp_path)},
@@ -37,8 +37,8 @@ def test_finite_exact_proposal_retains_guarded_vector_and_script_hash(prepared):
     host,raw,requests,model=prepared
     answer=proposal(host,{},raw)
     assert answer['translated']==list(model.vector)
-    assert requests[0]['original']==model.expected.wire()
-    assert requests[0]['script_sha256']==model.expected.payload_sha256
+    assert requests[0][0]==model.expected
+    assert requests[0][1][-1]==model.expected.payload_sha256
 
 
 @pytest.mark.parametrize('field,value',[('case','foreign'),('executable','foreign'),('argv',['foreign']),

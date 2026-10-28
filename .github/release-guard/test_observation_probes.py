@@ -40,8 +40,8 @@ def test_observation_probe_has_exact_body_arguments_and_finite_ordinal(ordinal, 
         ledger=SimpleNamespace(reaped=lambda *args: True),
     )
 
-    def launch(actor, payload, *args, **kwargs):
-        calls.append(payload)
+    def launch(actor, declaration, *args, **kwargs):
+        calls.append(declaration)
         host.intents[100] = {}
         return {"ok": True, "ticket": 100, "token": "t"}
 
@@ -72,7 +72,7 @@ def test_observation_probe_has_exact_body_arguments_and_finite_ordinal(ordinal, 
         "-S",
         *value.argv[1:],
     ]
-    assert calls[0]["original"] == value.wire()
+    assert calls[0] == value
     host.intents.pop(100)
     raw["argv"][-1] = "foreign"
     with pytest.raises(Refused):
