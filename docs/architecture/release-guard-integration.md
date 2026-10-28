@@ -224,3 +224,10 @@ process-custody checks remain unchanged. The external payload reference is an
 input distinct from the derived payload digest, including delayed wrappers whose
 inline body and auxiliary script have separate pins. Cleanup terminal selection
 still requires an inflight case; historical source-line numbers grant no authority.
+
+The original speed-runner import/reload regression uses the existing fixed-inline
+path. Its sole literal body is extracted from the byte-pinned original function;
+its command, checkout cwd and inherited test environment are compared exactly,
+including the original `PYTHONDONTWRITEBYTECODE=1` addition. Exactly one child is
+permitted, with no descendant query authority, and the original assertions still
+check one product audit-hook installation and the same controller after reload.
