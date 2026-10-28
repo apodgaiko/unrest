@@ -31,13 +31,10 @@ WRAPPER = 'import runpy,sys,time; p=sys.argv.pop(1); time.sleep(0.5); runpy.run_
 PATH_TYPE = type(Path('/'))
 
 
-
-
 def path(value: Any) -> Path:
     if type(value) is not PATH_TYPE or not value.is_absolute() or str(value.resolve()) != str(value):
         raise Refused('startup canonical path')
     return value
-
 
 
 @dataclass(frozen=True)

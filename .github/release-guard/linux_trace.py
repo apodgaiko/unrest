@@ -181,13 +181,13 @@ class OwnedTrace:
     def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float,
                  *, on_tick: Any = None, resolve_exec: Any = None,
                  start_write: int, on_attached: Any = None, selective: bool = False,
-                 cleanup_seconds: float = 60):
+                 cleanup_seconds: float = 60, full_source: bool = False):
         if sys.platform != "linux" or os.uname().machine != "x86_64":
             raise RuntimeError("unsupported trace ABI")
         if (child <= 0 or type(timeout) not in (int, float)
                 or (type(timeout) is float and not math.isfinite(timeout)) or timeout <= 0):
             raise ValueError("bounded owned trace required")
-        if (type(child) is not int or timeout > 180
+        if (type(child) is not int or type(full_source) is not bool or timeout > (1200 if full_source else 180)
                 or type(cleanup_seconds) not in (int, float)
                 or not math.isfinite(cleanup_seconds) or not 0 < cleanup_seconds <= 60):
             raise ValueError("bounded owned trace required")
@@ -334,7 +334,7 @@ class OwnedTrace:
                 before[field] != self.acquired_root[field] for field in fields)):
             self.foreign.add(pid)
             raise RuntimeError('original root birth changed before acquisition')
-        fd = os.pidfd_open(before['tgid'], 0)
+        fd = _observation.pidfd_open(before['tgid'], 0)
         try:
             after = _observation.process_identity(pid)
             if any(before[field] != after[field] for field in fields):

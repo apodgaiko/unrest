@@ -14,6 +14,7 @@ import struct
 from typing import Any
 
 from linux_identity import identity
+from linux_observation import pidfd_open
 
 
 def duplicate_descriptor(pid: int, descriptor: int) -> int:
@@ -21,7 +22,7 @@ def duplicate_descriptor(pid: int, descriptor: int) -> int:
         raise ValueError('finite process descriptor required')
     if pid == os.getpid():
         return os.dup(descriptor)
-    pidfd = os.pidfd_open(pid, 0)
+    pidfd = pidfd_open(pid, 0)
     try:
         libc = ctypes.CDLL(None, use_errno=True)
         result = libc.syscall(438, pidfd, descriptor, 0)  # x86-64 pidfd_getfd
@@ -331,10 +332,6 @@ def retained_unix_member(pid: int, descriptor: int,
             or current.get('peer_inode', 0) not in (0, saved['peer_inode'])):
         return None
     return {'fd': descriptor, **current}
-
-
-
-
 
 
 def acquire_tcp(birth, descriptor: int, *, retained: bool = False, eof_only: bool = False):

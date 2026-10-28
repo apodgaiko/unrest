@@ -3,7 +3,7 @@ import os
 import types
 
 from content_manifest import Refused
-from multiprocess_entry import CASES
+from multiprocess_entry import ALL_CASES as CASES
 
 
 def install(policy):

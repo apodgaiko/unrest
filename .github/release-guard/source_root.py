@@ -17,13 +17,6 @@ from content_manifest import Refused
 USER_SIGNAL = int(signal.SIGUSR1)
 
 
-
-
-
-
-
-
-
 class OriginalCases:
     def __init__(self, policy):
         self.policy, self.items, self.reports, self.completed = policy, (), {}, []

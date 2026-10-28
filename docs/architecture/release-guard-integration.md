@@ -51,8 +51,9 @@ retire as cancelled-unjoined only after its authorized termination and actual
 parent reap; that does not prove application accept or descriptor close. Native
 status86 always retains its refusal meaning.
 
-Multiprocessing declarations currently cover only the two original numeric-exit
-cases. Their tracker and child retain distinct FIFO identities, directions,
+Multiprocessing declarations cover the two original numeric-exit cases and
+three tracker-only feeder/pipe and original-error/cancellation cases. The latter
+permit one tracker and no spawn target. Their tracker and child retain distinct FIFO identities, directions,
 parent counterparts, native READY and actual waits. A captured stderr descriptor
 is admitted only as a kernel-proven alias of FD2's anonymous mode0600 file;
 inode equality alone is insufficient. No shared-memory arena or additional

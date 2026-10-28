@@ -92,8 +92,6 @@ def repository(cwd, owned, *, initialize):
     return tuple(identities),metadata_identity
 
 
-
-
 def launch(host,actor,payload):
     host.root_only(actor)
     original = payload['original']

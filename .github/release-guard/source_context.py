@@ -32,7 +32,7 @@ class Context:
         import asyncio
         from cleanup_launch import EXECUTION_CASES
         cases=self.policy.profile['cases']
-        from multiprocess_entry import CASES as MP_CASES
+        from multiprocess_entry import ALL_CASES as MP_CASES
         if any(case in MP_CASES for case in cases):
             from multiprocess_hooks import install
             install(self.policy)

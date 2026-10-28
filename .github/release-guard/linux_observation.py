@@ -6,6 +6,7 @@ This module does not admit launches or activate the finite source guard.
 from __future__ import annotations
 
 import os
+import ctypes
 import importlib.util
 import hashlib
 from pathlib import Path
@@ -15,6 +16,19 @@ import struct
 from typing import Any
 
 NAMESPACES = ("ipc", "mnt", "net", "pid", "user", "uts", "cgroup")
+
+
+def pidfd_open(pid: int, flags: int = 0) -> int:
+    if type(pid) is not int or not 0<pid<=(1<<31)-1 or type(flags) is not int or flags!=0:
+        raise ValueError('exact pidfd operands required')
+    if hasattr(os,'pidfd_open'):
+        return os.pidfd_open(pid,flags)
+    if platform.system()!='Linux' or platform.machine()!='x86_64':
+        raise RuntimeError('unsupported pidfd ABI')
+    fd=ctypes.CDLL(None,use_errno=True).syscall(434,pid,0)
+    if fd<0:
+        raise OSError(ctypes.get_errno(),'kernel pidfd acquisition refused')
+    return fd
 
 
 def process_identity(pid: int) -> dict[str, Any]:
@@ -106,7 +120,7 @@ def require_linux_abi() -> dict[str, Any]:
     if platform.system() != "Linux" or platform.machine() != "x86_64":
         raise RuntimeError("unsupported observer ABI")
     identity = process_identity(os.getpid())
-    fd = os.pidfd_open(os.getpid(), 0)
+    fd = pidfd_open(os.getpid(), 0)
     try:
         if not os.readlink(f"/proc/self/fd/{fd}").startswith("anon_inode:[pidfd]"):
             raise RuntimeError("kernel pidfd identity unavailable")

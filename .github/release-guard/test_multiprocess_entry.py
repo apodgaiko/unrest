@@ -312,7 +312,11 @@ def test_tracker_capture_stderr_is_only_a_kernel_proven_anonymous_alias(monkeypa
 
     def reading(path, *args, **kwargs):
         if str(path) == "/proc/100/fdinfo/8":
-            return "flags:\t" + oct(os.O_CLOEXEC | (os.O_RDONLY if mutation == "access" else os.O_RDWR))[2:] + "\n"
+            return (
+                "flags:\t"
+                + oct(os.O_CLOEXEC | (os.O_RDONLY if mutation == "access" else os.O_RDWR))[2:]
+                + "\n"
+            )
         return original_read(path, *args, **kwargs)
 
     calls = []
@@ -332,3 +336,44 @@ def test_tracker_capture_stderr_is_only_a_kernel_proven_anonymous_alias(monkeypa
     else:
         with pytest.raises(Refused):
             entry.stderr_record(100, 8)
+
+
+@pytest.mark.parametrize("case", __import__("multiprocess_entry").TRACKER_CASES)
+def test_tracker_only_cases_do_not_inherit_any_spawn_target_permission(case):
+    from multiprocess_entry import expected, TARGET
+
+    value, role, inherited = expected(
+        case,
+        [
+            "/fixed/python",
+            "-S",
+            "-I",
+            "-c",
+            "from multiprocessing.resource_tracker import main;main(6)",
+        ],
+        [2, 6],
+        None,
+        "/fixed/python",
+        "a" * 64,
+        "/checkout",
+        {},
+    )
+    assert value.case == case and role == "mp-tracker" and inherited == [6]
+    with pytest.raises(Refused):
+        expected(
+            case,
+            [
+                "/fixed/python",
+                "-S",
+                "-I",
+                "-c",
+                "from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=6, pipe_handle=8)",
+                "--multiprocessing-fork",
+            ],
+            [6, 8, 10],
+            TARGET,
+            "/fixed/python",
+            "a" * 64,
+            "/checkout",
+            {},
+        )

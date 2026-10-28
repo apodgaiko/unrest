@@ -151,7 +151,7 @@ def main():
                 traceback.print_exc()
                 os._exit(1)
             os._exit(0)
-        fd = os.pidfd_open(child, 0)
+        fd = trace._observation.pidfd_open(child, 0)
         try:
             deadline = time.monotonic() + 10
             while True:

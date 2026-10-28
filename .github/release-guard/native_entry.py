@@ -13,7 +13,6 @@ POLICY: Callable[[str, tuple], bool]
 BODY_READY = False
 
 
-
 def unique(pairs):
     value = {}
     for key, item in pairs:

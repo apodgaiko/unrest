@@ -60,7 +60,6 @@ def startup_expected(case,native,pin,cwd,owned):
     return render(Rule('fixed:startup',owner,(case,),native,pin,vector,tuple(sorted(environment.items())),cwd,'python-command'),case,owner,{}, {})
 
 
-
 def script(checkout, operation):
     path = OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
     data = (checkout / path).read_bytes()
