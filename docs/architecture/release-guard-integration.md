@@ -176,3 +176,11 @@ numeric service spelling, plus its passive/address-configuration flags. It still
 returns only the literal IPv4 loopback tuple and never calls DNS. Hostnames,
 service names, alternate families and protocols remain refused; bind/connect
 still require their independently admitted endpoint generation.
+
+Only `launch-proposal` accepts process operands. The obsolete `launch-intent`
+method and observer wire adapter are removed; callers cannot submit authority
+claims such as source lines, owners, image hashes or translated commands. The
+observer reconstructs those declarations independently. Former wire mutation
+controls now exercise actual proposals, including consistent inline-body changes,
+unknown authority fields and zero-intent refusal. The small proposal test-data
+builder is not imported by production and performs no enforcement.

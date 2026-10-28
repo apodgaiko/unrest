@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from effect_proposals import proposal
+from test_proposal_support import operands
 from content_manifest import Refused
 from session_launch import ARGS, CASES, LIVE, INVALID, INVALID_BYTES, PINS, PLAN, SCRIPT, TIMEOUT, expected, node
 from source_observer import Observer
@@ -66,14 +68,13 @@ def test_observer_independently_reconstructs_adapter_and_rejects_mutations(tmp_p
     workspace.mkdir(parents=True)
     actor = {'birth': observer.root_birth, 'role': 'root'}
     result = expected(PLAN[0], str(workspace), ROOT, tmp_path, '/native/python', 'a' * 64, observer.meta_environment())
-    payload = {'case': PLAN[0], 'original': result.wire(), 'translated': ['/native/python', '-I', '-S', *result.argv[1:]],
-               'source_line': 75, 'script_sha256': result.payload_sha256}
+    payload = operands(result)
     for key, value in (('source_line', 76), ('script_sha256', 'b' * 64), ('translated', ['/native/python', '-c', 'pass'])):
-        with pytest.raises(Refused, match='independent'):
-            observer.launch(actor, {**payload, key: value})
-    assert observer.launch(actor, payload)['ok']
-    with pytest.raises(Refused, match='independent'):
-        observer.launch(actor, payload)
+        with pytest.raises(Refused):
+            proposal(observer, actor, {**payload, key: value})
+    assert proposal(observer, actor, payload)['ok']
+    with pytest.raises(Refused):
+        proposal(observer, actor, payload)
 
 
 def test_self_stop_requires_exact_case_signal_and_actual_descendant_wait():

@@ -104,7 +104,7 @@ def prepare(host,actor,raw):
     payload={'case':case,'original':expected.wire(),'translated':vector,'source_line':0,
              'script_sha256':hashlib.sha256(OWNED_BODY.encode()).hexdigest() if owned else None,
              'git':{'operation':operation,'repository':repository,'fields':fields}}
-    answer=host.launch(actor,payload)
+    answer=host.git.launch(actor,payload)
     if answer is None:
         return None
     return {**answer,'translated':vector,'rule':expected.rule,

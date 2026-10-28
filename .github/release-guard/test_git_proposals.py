@@ -185,6 +185,7 @@ def test_producer_reply_is_recursively_json_finite(monkeypatch):
         },
         "stdin": None,
     }
+    host.git.launch = host.launch
     # Use the real fixed producer template rather than a fabricated stdout value.
     raw["argv"] = ["git", "rev-parse", "HEAD"]
     answer = prepare(host, {}, raw)
@@ -232,7 +233,7 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
         calls.append(payload)
         return {"ok": True, "ticket": 1, "token": "t"}
 
-    host.launch = launch
+    host.git.launch = launch
     raw = {
         "case": case,
         "executable": "git",
@@ -313,7 +314,7 @@ def test_effect_selection_retains_integration_provenance_when_rollback_argv_over
         calls.append(payload)
         return {"ok": True, "ticket": 1, "token": "t"}
 
-    host.launch = launch
+    host.git.launch = launch
     argv = (
         ["git", "update-ref", "refs/heads/main", new, REV]
         if operation == "update-parent"
@@ -374,7 +375,7 @@ def test_rollback_to_prior_integration_keeps_actual_current_predecessor(monkeypa
         calls.append(payload)
         return {"ok": True, "ticket": 1, "token": "t"}
 
-    host.launch = launch
+    host.git.launch = launch
     argv = ["git", "update-ref", "refs/heads/main", new, current]
     raw = {
         "case": case,

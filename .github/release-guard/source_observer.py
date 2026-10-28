@@ -291,24 +291,6 @@ class Observer:
         if self.finished or actor['role'] not in ('root', 'mcp') or actor['role'] == 'mcp' and actor['case'] != self.case:
             raise Refused('source original launch owner')
 
-    def launch(self, actor, payload):
-        self.launch_owner(actor)
-        shape(payload, ('case', 'original', 'translated', 'source_line', 'script_sha256', *(('git',) if self.case in GIT_CASES else ())))
-        if payload['case'] != self.case or self.case not in (*BOOTSTRAP,*CONTROLLED,*ORDINARY_CASES,*CLEANUP_CASES,*DECLARATIONS,*GIT_CASES,*SESSION_CASES,*FIXED_CASES,*PLAN_CASES) or type(payload['source_line']) is not int:
-            raise Refused('source declared launch case')
-        original = payload['original']
-        shape(original, ('rule', 'owner', 'case', 'executable', 'executable_sha256', 'argv', 'environment', 'cwd', 'payload_kind', 'payload_sha256'))
-        if self.case in GIT_CASES:
-            return self.git.launch(actor,payload)
-        from effect_proposals import proposal
-        try:
-            environment=dict(original['environment'])
-            executable=original['argv'][0]
-        except (TypeError,ValueError,IndexError,KeyError):
-            raise Refused('source wire process operands') from None
-        answer=proposal(self,actor,{'case':self.case,'executable':executable,
-            'argv':original['argv'],'cwd':original['cwd'],'environment':environment,'stdin':None},payload=payload)
-        return None if answer is None else {key:answer[key] for key in ('ok','ticket','token')}
 
     def listener_key(self,case,tag,scope=None):
         return (case,tag,scope) if case in CONTROLLED else (case,tag)
@@ -576,8 +558,6 @@ class Observer:
         elif kind == 'launch-proposal':
             from effect_proposals import proposal
             return proposal(self,actor,payload)
-        elif kind == 'launch-intent':
-            return self.launch(actor, payload)
         elif kind == 'launch-return':
             self.launch_owner(actor)
             shape(payload, ('pid', 'ticket', 'token'))

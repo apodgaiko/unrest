@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, replace
+from dataclasses import replace
 import json
 import os
 import signal
@@ -12,6 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from effect_proposals import proposal
+from test_proposal_support import operands
 from content_manifest import Refused
 from controlled_startup import BACKEND_PIN, CASES, SESSION
 from endpoint_policy import Socket
@@ -57,9 +59,7 @@ def backend_request(tmp_path):
         tuple(sorted({'HOME': cwd, 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'),
                       'PATH': '/usr/bin:/bin'}.items())), cwd, 'python-script', BACKEND_PIN)
     expected = render(rule, CASES[0], rule.owner, {}, {})
-    request = {'case': CASES[0], 'source_line': 506, 'script_sha256': BACKEND_PIN,
-               'original': json.loads(json.dumps(asdict(expected))),
-               'translated': [native, '-I', '-S', *expected.argv[1:]]}
+    request = operands(expected)
     actor = {'birth': observer.root_birth, 'role': 'root'}
     return observer, actor, request
 
@@ -75,22 +75,22 @@ def test_host_reconstructs_exact_original_launch(tmp_path, mutation):
     elif mutation == 'script':
         changed['script_sha256'] = 'b' * 64
     elif mutation == 'argv':
-        changed['translated'].append('--foreign')
+        changed['argv'].append('--foreign')
     elif mutation == 'environment':
-        changed['original']['environment'].append(['UNDECLARED', '1'])
+        changed['environment']['UNDECLARED']='1'
     elif mutation == 'cwd':
-        changed['original']['cwd'] = str(tmp_path)
+        changed['cwd'] = str(tmp_path)
     elif mutation == 'owner':
-        changed['original']['owner'] = 'borrowed-source-name'
+        changed['owner'] = 'borrowed-source-name'
     else:
-        changed['original']['executable_sha256'] = 'b' * 64
+        changed['executable_sha256'] = 'b' * 64
     with pytest.raises(Refused):
-        observer.launch(actor, changed)
+        proposal(observer, actor, changed)
     assert not observer.intents
-    assert observer.launch(actor, request)['ok'] is True
+    assert proposal(observer, actor, request)['ok'] is True
     assert len(observer.intents) == 1
     with pytest.raises(Refused):
-        observer.launch(actor, request)
+        proposal(observer, actor, request)
 
 
 
@@ -236,12 +236,12 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
             left.sendall(transport.encode(request, transport.REQUEST_LIMIT))
             assert frame.read() == request
             ledger.poison.append('preserved source refusal')
-            admission = transport.Admission(ledger, frozenset({'drain_child', 'launch-intent'}))
+            admission = transport.Admission(ledger, frozenset({'drain_child', 'launch-proposal'}))
             assert observer.dispatch(actor, admission.admit(frame)) == {'ok': True}
             assert ledger.process(child_birth).receipt['raw_status'] == raw
             assert ledger.poison == ['preserved source refusal']
             assert not ledger.reaped(child_birth, 'child-token')  # No fabricated kernel wait joins.
-            frame.received = {**request, 'id': 'b' * 32, 'kind': 'launch-intent'}
+            frame.received = {**request, 'id': 'b' * 32, 'kind': 'launch-proposal'}
             with pytest.raises(Refused):
                 admission.admit(frame)
         finally:
@@ -374,10 +374,10 @@ def test_constructor_window_serializes_before_second_intent(tmp_path, consumed):
     observer, actor, request = backend_request(tmp_path)
     observer.intents[10] = {'parent': actor['birth'], 'consumed': consumed, 'case': observer.case, 'role': 'acp'}
     if not consumed:
-        assert observer.launch(actor, request) is None
+        assert proposal(observer, actor, request) is None
         assert len(observer.intents) == 1 and observer.serial == 0
     else:
-        assert observer.launch(actor, request)['ok'] is True
+        assert proposal(observer, actor, request)['ok'] is True
         assert len(observer.intents) == 2
 
 
@@ -394,9 +394,9 @@ def test_constructor_window_serializes_before_second_intent(tmp_path, consumed):
 ])
 def test_literal_field_mutations_reach_real_observer_refusal(tmp_path, field, value):
     observer, actor, request = backend_request(tmp_path)
-    request['original'][field] = value
+    request[field] = value
     with pytest.raises(Refused):
-        observer.launch(actor, request)
+        proposal(observer, actor, request)
     assert not observer.intents
 
 
@@ -408,16 +408,25 @@ def test_consistent_inline_body_and_hash_substitution_refuses_at_real_admission(
 
     observer, actor, _ = backend_request(tmp_path)
     observer.case = next(iter(STARTUP))
-    value, site = expected(observer.case, '/pinned/python', 'a'*64,
+    value, _ = expected(observer.case, '/pinned/python', 'a'*64,
         Path(observer.meta['checkout']), observer.meta_environment())
-    request = {'case': observer.case, 'original': value.wire(),
-        'translated': ['/pinned/python', '-I', '-S', *value.argv[1:]],
-        'source_line': site, 'script_sha256': value.payload_sha256}
+    request = operands(value)
     changed = deepcopy(request)
-    changed['original']['argv'][-1] = changed['translated'][-1] = body
-    changed['original']['payload_sha256'] = changed['script_sha256'] = hashlib.sha256(body.encode()).hexdigest()
-    with pytest.raises(Refused):
-        observer.launch(actor, changed)
+    changed['argv'][-1] = body
+    matching_hash = hashlib.sha256(body.encode()).hexdigest()
+    assert matching_hash != value.payload_sha256
+    for candidate in (changed, {**changed, 'payload_sha256': matching_hash}):
+        with pytest.raises(Refused):
+            proposal(observer, actor, candidate)
     assert not observer.intents
-    assert observer.launch(actor, request)['ok'] is True
+    assert proposal(observer, actor, request)['ok'] is True
     assert len(observer.intents) == 1
+
+
+def test_retired_launch_intent_has_no_control_or_dispatch_authority(tmp_path):
+    from source_profile import METHODS
+    observer,actor,request=backend_request(tmp_path)
+    assert 'launch-intent' not in METHODS
+    with pytest.raises(Refused):
+        observer.dispatch(actor,{'kind':'launch-intent','payload':request})
+    assert not observer.intents

@@ -9,6 +9,8 @@ from types import MappingProxyType
 
 import pytest
 
+from effect_proposals import proposal
+from test_proposal_support import operands
 from content_manifest import Refused
 from ordinary_acp import CASES, MOCK, PINS, environment, expected, plain_environment
 import ordinary_acp
@@ -104,39 +106,33 @@ def test_host_refuses_ordinary_request_mutations(tmp_path, mutation):
         observer.meta_environment(),
         tmp_path,
     )
-    request = {
-        "case": CASES[0],
-        "source_line": 409,
-        "script_sha256": PINS[MOCK],
-        "original": result.wire(),
-        "translated": ["/pinned/python", "-I", "-S", *result.argv[1:]],
-    }
+    request = operands(result)
     changed = deepcopy(request)
     if mutation == "case":
         changed["case"] = CASES[1]
     elif mutation == "site":
-        changed["source_line"] += 1
+        changed["source_line"] = 410
     elif mutation == "argv":
-        changed["original"]["argv"].append("--foreign")
+        changed["argv"].append("--foreign")
     elif mutation == "cwd":
-        changed["original"]["cwd"] = str(tmp_path)
+        changed["cwd"] = str(tmp_path)
     elif mutation == "environment":
-        changed["original"]["environment"].append(["FORBIDDEN", "1"])
+        changed["environment"]["FORBIDDEN"] = "1"
     elif mutation == "pin":
-        changed["original"]["executable_sha256"] = "b" * 64
+        changed["executable_sha256"] = "b" * 64
     elif mutation == "owner":
-        changed["original"]["owner"] = "unrelated-caller"
+        changed["owner"] = "unrelated-caller"
     elif mutation == "script":
         changed["script_sha256"] = "b" * 64
     else:
-        changed["translated"].append("--foreign")
+        changed["translated"] = ["--foreign"]
     actor = {"birth": observer.root_birth, "role": "root"}
     with pytest.raises(Refused):
-        observer.launch(actor, changed)
+        proposal(observer, actor, changed)
     assert observer.intents == {}
-    assert observer.launch(actor, request)["ok"] is True
+    assert proposal(observer, actor, request)["ok"] is True
     with pytest.raises(Refused):
-        observer.launch(actor, request)
+        proposal(observer, actor, request)
 
 
 def test_native_fixture_keeps_original_executable_and_no_python_prefix(tmp_path, monkeypatch):
@@ -237,15 +233,7 @@ def test_no_launch_cases_have_no_process_route(tmp_path, case):
     observer.root_birth = Birth(1, 1, 1, 1, "test-boot", 20000)
     observer.finished, observer.case, observer.intents = False, case, {}
     actor = {"birth": observer.root_birth, "role": "root"}
-    with pytest.raises(Refused, match="declared launch case"):
-        observer.launch(
-            actor,
-            {
-                "case": case,
-                "original": {},
-                "translated": [],
-                "source_line": 409,
-                "script_sha256": "a" * 64,
-            },
-        )
+    with pytest.raises(Refused):
+        proposal(observer, actor, {'case':case,'executable':'/pinned/python','argv':['/pinned/python'],
+            'cwd':'/source','environment':{},'stdin':None})
     assert observer.intents == {}

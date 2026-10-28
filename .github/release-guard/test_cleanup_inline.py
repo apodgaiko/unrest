@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from effect_proposals import proposal
 from content_manifest import Refused
 from cleanup_inline import (
     CASES,
@@ -113,8 +114,8 @@ def test_numeric_cases_cannot_enter_a_child_profile_or_mint_an_intent(tmp_path, 
         validate(profile, "cpython.run_file", ("foreign.py",))
     observer, actor, request = backend_request(tmp_path)
     observer.case = request["case"] = case
-    with pytest.raises(Refused, match="declared launch case"):
-        observer.launch(actor, request)
+    with pytest.raises(Refused):
+        proposal(observer, actor, request)
     assert observer.intents == {}
 
 
