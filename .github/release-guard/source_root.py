@@ -12,7 +12,7 @@ import pytest
 from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
-from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, WARNING_REFUSALS, NOTIFICATION_SIGNALS, configured
+from controlled_cases import CASES as CONTROLLED, PINS as CONTROLLED_PINS, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP, INITIALIZED_HTTP, configured
 from bootstrap_configuration import Binding
 from content_manifest import Refused
 from controlled_startup import SESSION, SESSION_PIN, TEST, TEST_PIN, Startup, dictionary
@@ -70,6 +70,11 @@ class BootstrapCalls(TestSources):
             self.process(dictionary(backends['worker'],cls).get('process'),pid=pid)
         finally:
             del frames
+
+    def connection(self,port):
+        if self.policy.case not in ROOT_HTTP:
+            raise Refused('controlled root HTTP case')
+        return self.http.connection(port)
 
     def listener(self):
         frames = active_frames()
@@ -149,9 +154,12 @@ class BootstrapCalls(TestSources):
             checkout, Path(self.profile['owned']), Path(self.profile['native']), self.profile['native_sha256'],
             configuration_binding=Binding(checkout) if configured(item.nodeid) else None,
             case=item.nodeid)
-        if item.nodeid in NOTIFICATION_SIGNALS:
+        if item.nodeid in (*NOTIFICATION_SIGNALS,*(case for case in ROOT_HTTP if case != INITIALIZED_HTTP)):
             from notification_calls import prepare as prepare_notification
             prepare_notification(self)
+        if item.nodeid in ROOT_HTTP:
+            from root_http import Contexts
+            self.http = Contexts(self)
         relay = importlib.import_module('unrest_harness.experimental_relay')
         relay_unit = self.unit('src/unrest_harness/experimental_relay.py', relay, self.mode(relay))
         base = self.startup.base
@@ -222,6 +230,8 @@ class OriginalCases:
         phases = self.reports.get(item.nodeid, {})
         if phases != {'setup': 'passed', 'call': 'passed', 'teardown': 'passed'}:
             raise Refused('root original assertions or cleanup failed')
+        if item.nodeid in ROOT_HTTP:
+            policy.calls.http.finish()
         policy.client.request('case-finish', {'case': item.nodeid})
         self.completed.append(item.nodeid)
         policy.case, policy.calls = None, None

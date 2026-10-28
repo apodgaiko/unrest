@@ -7,7 +7,7 @@ from pathlib import Path
 import types
 
 from content_manifest import Refused
-from controlled_cases import PINS
+from controlled_cases import PINS, NOTIFICATION_SIGNALS
 from controlled_startup import dictionary, path
 from source_owner import Link, active_frames, frame_fields, _namespace, _safe_code
 
@@ -40,9 +40,11 @@ def prepare(calls):
 
 
 def signal_owner(calls):
+    if type(calls.policy.case) is not str or calls.policy.case not in NOTIFICATION_SIGNALS:
+        raise Refused('notification selected signal phase')
     module,unit,test,turn,original,role_type,broker_type = calls.notification
     when,status = calls.policy.case.rsplit('[',1)[1][:-1].rsplit('-',1)
-    if when not in ('parked','before-send') or status not in ('connecting','connected','errored','unknown'):
+    if when not in ('parked','before-send') or status not in ('disabled','connecting','connected','errored','unknown'):
         raise Refused('notification selected signal phase')
     params = _namespace(calls.case_item.callspec.params)
     if (type(params.get('when')) is not str or params['when'] != when

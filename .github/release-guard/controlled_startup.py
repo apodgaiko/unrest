@@ -233,8 +233,8 @@ class Startup:
             match((expected,),observed,expected.owner,case)
             if self.root_key() != self.root_identity:
                 raise Refused('startup owned root replaced')
-            from controlled_cases import NOTIFICATION_SIGNALS
-            if case in NOTIFICATION_SIGNALS:
+            from controlled_cases import NOTIFICATION_SIGNALS, ROOT_HTTP
+            if case in (*NOTIFICATION_SIGNALS,*ROOT_HTTP):
                 if self.owners.setdefault(str(root),instance) is not instance:
                     raise Refused('controlled notification owner generation changed')
             return Intent(expected, (expected.argv[0], '-I', '-S', *expected.argv[1:]), frame.f_lineno, script_pin)

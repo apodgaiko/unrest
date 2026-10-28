@@ -10,7 +10,7 @@ import sys
 import types
 
 from bootstrap_cases import declaration
-from controlled_cases import CASES as CONTROLLED
+from controlled_cases import CASES as CONTROLLED, ROOT_HTTP
 from controlled_pairs import limits as controlled_limits
 from content_manifest import Refused
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES
@@ -87,13 +87,13 @@ class Hooks:
             self.local.socket = 'socket.bind', stream, args[0]
         elif name in ('connect', 'connect_ex'):
             cleanup = self.policy.case in (*CLEANUP_CASES, *STARTUP) or self.policy.profile['case'] in (*CLEANUP_CASES, *STARTUP)
-            if ((role not in ('root', 'cleanup-acp') if cleanup else role != 'acp' and not (controlled_limits(self.policy.profile['case'])[1] > 0 if self.policy.profile['case'] in CONTROLLED else declaration(self.policy.profile['case']).broker_http)) or kwargs or len(args) != 1 or type(args[0]) is not tuple
+            if ((role not in ('root', 'cleanup-acp') if cleanup else role != 'acp' and not (role == 'root' and self.policy.case in ROOT_HTTP) and not (controlled_limits(self.policy.profile['case'])[1] > 0 if self.policy.profile['case'] in CONTROLLED else declaration(self.policy.profile['case']).broker_http)) or kwargs or len(args) != 1 or type(args[0]) is not tuple
                     or len(args[0]) != 2 or type(args[0][0]) is not str or args[0][0] != '127.0.0.1'
                     or type(args[0][1]) is not int or not 0 < args[0][1] <= 65535):
                 self.policy.refuse('source unknown connection')
-            if role == 'root':
-                self.policy.calls.connection(args[0][1])
-            answer = self.rpc('connect', {'fd': descriptor, 'address': list(args[0])})
+            context = self.policy.calls.connection(args[0][1]) if role == 'root' else None
+            answer = self.rpc('connect', {'fd': descriptor, 'address': list(args[0]),
+                **({'context':context} if context is not None else {})})
             probe = answer.get('probe') is True
             if probe and (role != 'root' or self.policy.case not in STARTUP):
                 self.policy.refuse('source negative probe context')

@@ -2896,3 +2896,18 @@ require the real test frame; before-send signals bind the retained worker client
 original session/prompt branch and active broker in its request task. External
 case parameters, original backend/Popen and parent/birth joins remain mandatory.
 No global task search or root HTTP permission follows from this signal chain.
+
+The seven original ROOT broker-refusal cases acquire a serial context at their
+prepared Client enter caller before transport tasks are created. Each context
+binds the previously checked owner, live broker listener, exact `/mcp` URL,
+authentication and default locked transport. Shared context retirement revokes
+both later connections and retained client-side payloads, while preserving the
+distinct accepted server socket's ordinary drain/close path. Local guard refusals
+remain sticky even when an original negative catches an exception.
+
+The stateless JSON transport grants at most three connections for initialize,
+initialized notification and a refused tool call, or one for invalid-token
+initialization. It grants no GET/DELETE/reconnect allowance. Backend RPC limits
+remain separate. The observer reacquires the original listener and requires real
+reciprocal socket joins; context propagation grants no generic ROOT loopback
+authority, native execution or genuine-provider acceptance.

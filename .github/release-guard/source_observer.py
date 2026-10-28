@@ -17,7 +17,7 @@ import time
 from content_manifest import Refused, native_digest
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, declaration
-from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
+from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP
 from controlled_pairs import before_bind, before_spawn, limits as controlled_limits, scope as controlled_scope
 from controlled_startup import ACP, expected_entry
 from endpoint_policy import Endpoints, Owner, Route
@@ -67,6 +67,7 @@ class Observer:
         self.eof_drains, self.eof_fds, self.interrupted_records = {}, {}, []
         self.connected_routes: dict[str, int] = {}
         self.probe_ports = {}
+        self.http_contexts: dict[tuple[str,int],dict] = {}
         self.frames, self.controls, self.completed = [], [], []
         self.case, self.finished, self.serial = None, False, 0
         self.out_read, self.output = out_read, bytearray()
@@ -460,7 +461,11 @@ class Observer:
             return {'ok': True}
         connection = self.connections.get(key)
         if connection is not None:
-            self.endpoints.retained(connection, self.owner(actor), acquire_tcp(actor['birth'], fd, retained=True))
+            observed = acquire_tcp(actor['birth'],fd,retained=True)
+            if self.case in ROOT_HTTP:
+                from root_http_observer import retained
+                retained(self,connection,observed)
+            self.endpoints.retained(connection,self.owner(actor),observed)
             return {'ok': True}
         tickets = [ticket for ticket in self.endpoints.tickets.values()
                    if ticket.client.owner == actor['birth'] and ticket.client.fd == fd]
@@ -562,6 +567,9 @@ class Observer:
                         or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)
                         or any(ticket.route.case == self.case for ticket in self.endpoints.tickets.values())):
                     raise Refused('source original case actual cleanup incomplete')
+                if self.case in ROOT_HTTP and (sum(case == self.case for case,_ in self.http_contexts) != (2 if 'initialized_owner' in self.case else 1)
+                        or any(state['active'] for (case,_),state in self.http_contexts.items() if case == self.case)):
+                    raise Refused('root HTTP original contexts incomplete')
                 self.endpoints.retire_case(self.case)
                 self.completed.append(self.case)
                 self.case = None
@@ -701,8 +709,12 @@ class Observer:
                 self.listener_fds[actor['birth'], fd] = slot
             else:
                 raise Refused('source listener stage')
+        elif kind in ('root-http-open','root-http-close'):
+            from root_http_observer import context
+            return context(self,actor,kind,payload)
         elif kind == 'connect':
-            shape(payload, ('fd', 'address'))
+            root_http = actor['role'] == 'root' and self.case in ROOT_HTTP
+            shape(payload, ('fd', 'address','context') if root_http else ('fd','address'))
             address = payload['address']
             if type(address) is not list or len(address) != 2 or address[0] != '127.0.0.1':
                 raise Refused('source literal loopback connection')
@@ -717,7 +729,10 @@ class Observer:
                     raise Refused('source finite negative readiness probe')
                 probe['attempts'] += 1
                 return {'ok': True, 'probe': True}  # Never creates a Route, Ticket or Connection.
-            if self.case in CLEANUP_CASES:
+            if root_http:
+                from root_http_observer import connection
+                name,maximum = connection(self,actor,payload,port)
+            elif self.case in CLEANUP_CASES:
                 if actor['role'] not in ('root', 'cleanup-acp'):
                     raise Refused('source cleanup connection role')
                 targets = [value for value in self.intents.values() if value['case'] == self.case and value['role'] == 'mcp' and value['consumed']]
