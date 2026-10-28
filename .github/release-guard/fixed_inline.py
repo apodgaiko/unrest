@@ -8,7 +8,7 @@ from pathlib import Path
 
 from content_manifest import Refused
 from git_observer import image
-from launch_policy import Rule, render
+from launch_policy import build_expected
 
 TEST = 'tests/test_repository_contract.py'
 PRODUCT = 'src/unrest_harness/repository_contract.py'
@@ -56,8 +56,7 @@ def startup_expected(case,native,pin,cwd,owned):
     role,index=STDIO[case]
     environment={'PATH':'/bin:/usr/bin','HOME':cwd,'UNREST_HOME':str(root/'home'),**STDIO_INVALID[index]}
     vector=(native,'-I','-c',STDIO_BODY,'--mode',role)
-    owner=STDIO_TEST+':test_real_startup_rejection_is_bounded_and_body_free'
-    return render(Rule('fixed:startup',owner,(case,),native,pin,vector,tuple(sorted(environment.items())),cwd,'python-command'),case,owner,{}, {})
+    return build_expected('fixed:startup', case, native, pin, vector, tuple(sorted(environment.items())), cwd, 'python-command')
 
 
 def script(checkout, operation):
@@ -84,19 +83,25 @@ def expected(case, operation, native, pin, checkout, environment, *, query=False
         if query or operation not in OBSERVATION_OPERATIONS:
             raise Refused('observation probe has no query authority')
         argv=(native,'-c',script(checkout,operation),*OBSERVATION_ARGUMENTS[operation])
-        owner=OBSERVATION_TEST+':test_fresh_entrypoint_import_boundary'
-        return render(Rule('fixed:'+operation,owner,(case,),native,pin,argv,
-            tuple(sorted(environment.items())),str(checkout),'python-command'),case,owner,{}, {})
+        return build_expected(
+            'fixed:'+operation, case,
+            native, pin,
+            argv,
+            tuple(sorted(environment.items())),
+            str(checkout), 'python-command',
+        )
     if query:
         if operation != 'check':
             raise Refused('fixed inline query scope')
         argv, executable, pin, kind = ('git','-C',str(checkout),'rev-parse','--show-toplevel'), '/usr/bin/git', image(), 'native'
-        owner = PRODUCT + ':find_repository_root'
     else:
         body = script(checkout, operation)
         tail = (json.dumps(REMOVED),) if operation == 'mcp' else (json.dumps(() if operation == 'check' else REMOVED), json.dumps(ARGUMENTS[operation]))
         argv, executable, kind = (native,'-c',body,*tail), native, 'python-command'
-        owner = TEST + ':' + ('test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe')
-    rule = Rule('fixed:' + ('query' if query else operation), owner, (case,), executable, pin, argv,
-                tuple(sorted(environment.items())), str(checkout), kind, None)
-    return render(rule, case, owner, {}, {})
+    return build_expected(
+        'fixed:' + ('query' if query else operation), case,
+        executable, pin,
+        argv,
+        tuple(sorted(environment.items())),
+        str(checkout), kind, None,
+    )

@@ -14,7 +14,7 @@ from typing import Any
 from bootstrap_cases import BOOTSTRAP, configuration, wrapper
 from content_manifest import Refused
 from controlled_cases import CASES as CONTROLLED, backend as controlled_backend, backend_path, configuration_items, configured as is_configured
-from launch_policy import Rule, render
+from launch_policy import build_expected
 
 SESSION = 'src/unrest_harness/experimental_session.py'
 TEST = 'tests/test_experimental_bootstrap.py'
@@ -63,6 +63,10 @@ def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None):
         source = vector = (native,str(checkout/ACP),'--controlled-local-acp-v1')
         kind,reference = 'python-script',pin
         environment.update(CODEX_PATH=str(home.parent/'fixed-relay'),INITIAL_AGENT_MODE='read-only',SYNTHETIC_RELAY=json.dumps(relay))
-    rule = Rule('controlled-startup:'+('backend' if backend else 'acp'),SESSION+':_open_role_owned',(case,),
-        native,native_pin,vector,tuple(sorted(environment.items())),str(home),kind,reference)
-    return render(rule,case,rule.owner,{},{}),source,pin
+    return build_expected(
+        'controlled-startup:'+('backend' if backend else 'acp'), case,
+        native, native_pin,
+        vector,
+        tuple(sorted(environment.items())),
+        str(home), kind, reference,
+    ),source,pin

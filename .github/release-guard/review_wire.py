@@ -9,7 +9,7 @@ from case_inventory import identity
 from content_manifest import Refused
 from control_transport import unique
 from native_entry import key
-from launch_policy import Rule,render
+from launch_policy import build_expected
 
 TEST='tests/test_provider_review.py'
 SCRIPT='tests/fixtures/approval_acp_process.py'
@@ -75,7 +75,13 @@ def proposal(host,actor,raw):
         raise Refused('review-wire sequential finite quota')
     body=scenario(Path(argv[-1]),owned)
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
-    value=render(Rule('review-wire',TEST+':wire',(case,),native,pin,tuple(argv),tuple(sorted(environment.items())),str(checkout),'python-script',PIN),case,TEST+':wire',{}, {})
+    value=build_expected(
+        'review-wire', case,
+        native, pin,
+        tuple(argv),
+        tuple(sorted(environment.items())),
+        str(checkout), 'python-script', PIN,
+    )
     if raw['environment']!=environment:
         raise Refused('review-wire original environment')
     snapshot=host.directory/('review-wire-'+hashlib.sha256((case+str(len(records))).encode()).hexdigest()+'.json')

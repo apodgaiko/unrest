@@ -15,9 +15,9 @@ import pytest
 from effect_proposals import proposal
 from test_proposal_support import operands
 from content_manifest import Refused
-from controlled_startup import BACKEND_PIN, CASES, SESSION
+from controlled_startup import BACKEND_PIN, CASES
 from endpoint_policy import Socket
-from launch_policy import Rule, render
+from launch_policy import build_expected
 from process_ledger import Birth
 from source_host import inventory
 import source_host
@@ -54,11 +54,8 @@ def backend_request(tmp_path):
     home.mkdir(parents=True)
     cwd = str(home)
     native = '/pinned/python'
-    rule = Rule('controlled-startup:backend', SESSION + ':_open_role_owned', (CASES[0],),
-        native, 'a' * 64, (native, str(home.parent / 'fake-app-server'), 'app-server'),
-        tuple(sorted({'HOME': cwd, 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'),
+    expected = build_expected('controlled-startup:backend', CASES[0], native, 'a' * 64, (native, str(home.parent / 'fake-app-server'), 'app-server'), tuple(sorted({'HOME': cwd, 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'),
                       'PATH': '/usr/bin:/bin'}.items())), cwd, 'python-script', BACKEND_PIN)
-    expected = render(rule, CASES[0], rule.owner, {}, {})
     request = operands(expected)
     actor = {'birth': observer.root_birth, 'role': 'root'}
     return observer, actor, request
@@ -408,7 +405,7 @@ def test_consistent_inline_body_and_hash_substitution_refuses_at_real_admission(
 
     observer, actor, _ = backend_request(tmp_path)
     observer.case = next(iter(STARTUP))
-    value, _ = expected(observer.case, '/pinned/python', 'a'*64,
+    value = expected(observer.case, '/pinned/python', 'a'*64,
         Path(observer.meta['checkout']), observer.meta_environment())
     request = operands(value)
     changed = deepcopy(request)

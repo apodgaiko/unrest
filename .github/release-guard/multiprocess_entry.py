@@ -7,7 +7,7 @@ import ctypes
 
 from content_manifest import Refused
 from control_transport import finite
-from launch_policy import Rule,render
+from launch_policy import build_expected
 from multiprocess_routes import ROUTES,Spawn,plan as route_plan
 
 CASES=tuple('tests/test_multiprocess_resource_ownership.py::test_original_child_status_is_preserved['+str(status)+']' for status in (0,17))
@@ -154,7 +154,7 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
             raise Refused('spawn inherited pipe inventory')
         role='mp-child'
         descriptors=sorted(passfds)
-    value=render(Rule(role,role,(case,),native,pin,tuple(argv),tuple(sorted(environment.items())),str(checkout),'python-command'),case,role,{}, {})
+    value=build_expected(role, case, native, pin, tuple(argv), tuple(sorted(environment.items())), str(checkout), 'python-command')
     return value,role,descriptors
 
 

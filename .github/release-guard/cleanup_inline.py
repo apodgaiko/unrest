@@ -40,34 +40,22 @@ def child_count(case):
     return 0 if family == 'no-launch' else 1 if family == 'startup' or variant == 'reader' else 3
 
 
-def source_site(case, terminal=False):
-    family, variant, _ = declaration(case)
-    if terminal:
-        if family != 'inflight':
-            raise Refused('cleanup inline terminal outside inflight case')
-        return 1034
-    if family == 'no-launch':
-        raise Refused('cleanup numeric case has no process authority')
-    return 61 if family == 'startup' else 429 if family == 'inflight' else 269 if variant == 'reader' else 299
-
-
-
-
 def expected(case, native, native_pin, checkout, root_environment, *, base=None, terminal=False):
-    from launch_policy import Rule, render
+    from launch_policy import build_expected
     family, _, _ = declaration(case)
-    site = source_site(case, terminal)
+    if terminal and case not in INFLIGHT:
+        raise Refused('cleanup inline terminal outside inflight case')
     if terminal:
         if base is None:
             raise Refused('cleanup inline missing owned fixture')
         cwd, environment = str(base), {}
-        owner = 'src/unrest_harness/acp_runner.py:ACPClient._handle_terminal_create'
     else:
         cwd = str(checkout)
         environment = {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'}
-        owner = TEST + ':' + ('test_startup_failure_attribution_and_owned_cleanup.<locals>.start'
-            if family == 'startup' else case.split('::')[1].split('[')[0])
-    rule = Rule('cleanup-inline:' + ('terminal' if terminal else 'initial'), owner, (case,),
-                native, native_pin, (native, '-c', body(case)), tuple(sorted(environment.items())),
-                cwd, 'python-command', None)
-    return render(rule, case, owner, {}, {}), site
+    return build_expected(
+        'cleanup-inline:' + ('terminal' if terminal else 'initial'), case,
+        native, native_pin,
+        (native, '-c', body(case)),
+        tuple(sorted(environment.items())),
+        cwd, 'python-command', None,
+    )

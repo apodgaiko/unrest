@@ -19,7 +19,6 @@ from cleanup_inline import (
     EXIT,
     body,
     child_count,
-    source_site,
 )
 from cleanup_launch import TEST
 
@@ -43,24 +42,21 @@ def test_inline_bodies_and_effect_lines_are_original_source():
 
 
 @pytest.mark.parametrize("case", CASES)
-def test_inline_parameters_keep_original_effect_counts_and_source_sites(case):
+def test_inline_parameters_keep_original_effect_counts(case):
     if case in NO_LAUNCH:
         assert child_count(case) == 0
         with pytest.raises(Refused):
             body(case)
-        with pytest.raises(Refused):
-            source_site(case)
     else:
         assert body(case) == (EXIT if case in STARTUP and STARTUP[case][1] == "exit" else SLEEP)
         assert child_count(case) == (
             1 if case in STARTUP or CLIENT.get(case, (None, None))[1] == "reader" else 3
         )
-        assert source_site(case) in (61, 269, 299, 429)
-    if case in INFLIGHT:
-        assert source_site(case, terminal=True) == 1034
-    else:
+    if case not in INFLIGHT:
+        from cleanup_inline import expected
         with pytest.raises(Refused):
-            source_site(case, terminal=True)
+            expected(case, '/native', 'a'*64, Path('/source'), {},
+                     base=Path('/owned/pytest/case'), terminal=True)
 
 
 @pytest.mark.parametrize(
@@ -80,16 +76,15 @@ def test_inline_options_and_vectors_are_closed():
             with pytest.raises(Refused):
                 expected(case, "/native", "a" * 64, Path("/source"), root)
             continue
-        result, site = expected(case, "/native", "a" * 64, Path("/source"), root)
+        result = expected(case, "/native", "a" * 64, Path("/source"), root)
         assert result.argv == ("/native", "-c", body(case)) and result.cwd == "/source"
         assert dict(result.environment) == {
             **root,
             "PYTEST_VERSION": "9.0.2",
             "PYTEST_CURRENT_TEST": case + " (call)",
         }
-        assert site == source_site(case)
     case = next(iter(INFLIGHT))
-    result, site = expected(
+    result = expected(
         case,
         "/native",
         "a" * 64,
@@ -98,7 +93,7 @@ def test_inline_options_and_vectors_are_closed():
         base=Path("/owned/pytest/case"),
         terminal=True,
     )
-    assert result.cwd == "/owned/pytest/case" and result.environment == () and site == 1034
+    assert result.cwd == "/owned/pytest/case" and result.environment == ()
 
 
 @pytest.mark.parametrize("case", NO_LAUNCH)
@@ -124,7 +119,7 @@ def test_preflight_only_command_never_matches_a_child_rule(case):
     from cleanup_inline import expected
 
     root = {"HOME": "/owned/home", "TMPDIR": "/owned/tmp", "PATH": "/usr/bin:/bin"}
-    result, _ = expected(case, "/native", "a" * 64, Path("/source"), root)
+    result = expected(case, "/native", "a" * 64, Path("/source"), root)
     assert result.argv != ("/native", "-c", "pass")
 
 

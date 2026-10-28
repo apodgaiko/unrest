@@ -9,7 +9,7 @@ import stat
 
 from content_manifest import Refused
 from git_observer import image, regular
-from launch_policy import Expected, Rule, render
+from launch_policy import Expected, build_expected
 
 OWNER = 20000
 TEST = 'tests/test_launch_preflight.py'
@@ -134,6 +134,4 @@ def expected(case,cwd,owned,native,native_pin):
         vector=('./invalid-format',)
         attempts=('./invalid-format',)
         tool=(str(target),pin)
-    owner=PRODUCT+':spawn_launch'
-    rule=Rule('preflight:'+role,owner,(case,),str(target),pin,vector,tuple(sorted(env.items())),cwd,kind,payload)
-    return Plan(render(rule,case,owner,{},{}),attempts,tool,role)
+    return Plan(build_expected('preflight:'+role, case, str(target), pin, vector, tuple(sorted(env.items())), cwd, kind, payload),attempts,tool,role)

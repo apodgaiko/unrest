@@ -12,7 +12,7 @@ import stat
 import types
 
 from content_manifest import Refused
-from launch_policy import Rule, render
+from launch_policy import build_expected
 
 PRODUCT = 'src/unrest_harness/acp_runner.py'
 TEST = 'tests/test_acp_runner.py'
@@ -86,7 +86,6 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
         if case == CASES[2]:
             env['ANTHROPIC_API_KEY'] = 'batch-crash-known-value'
         vector, executable, pin, kind, payload = ('/bin/sleep', '30'), '/bin/sleep', system_sleep(), 'native', None
-        owner = TEST + ':fixture-sleep'
     else:
         home = Path(cwd)
         if (not home.is_absolute() or str(home.resolve()) != cwd or home.name != 'workspace'
@@ -95,10 +94,7 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
         env = environment(case, home.parent, root_environment)
         vector = (native, str(checkout / MOCK))
         executable, pin, kind, payload = native, native_pin, 'python-script', PINS[MOCK]
-        owner = PRODUCT + ':spawn_launch'
-    rule = Rule('ordinary:' + role, owner, (case,), executable, pin, vector,
-                tuple(sorted(env.items())), cwd, kind, payload)
-    return render(rule, case, owner, {}, {})
+    return build_expected('ordinary:' + role, case, executable, pin, vector, tuple(sorted(env.items())), cwd, kind, payload)
 
 
 def plain_environment(value):

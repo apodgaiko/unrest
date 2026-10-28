@@ -8,7 +8,7 @@ from pathlib import Path
 import stat
 
 from content_manifest import Refused, capture, native_digest
-from launch_policy import Rule, render
+from launch_policy import build_expected
 from ordinary_acp import PRODUCT, PINS as ACP_PINS
 
 TEST = 'tests/test_acp_cleanup.py'
@@ -49,10 +49,6 @@ def selection(case):
 
 def module_mode(case):
     return {'work': 'worker', 'validate': 'validator', 'terminal_reviewer': 'terminal-reviewer'}[selection(case)[2]]
-
-
-def module_site(case):
-    return 2247 if selection(case)[2] == 'terminal_reviewer' else 2191
 
 
 def child_count(case):
@@ -167,7 +163,7 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
         vector = (native, str(checkout / SCRIPT), str(base / 'scenario.json'))
         executable, pin, kind, payload = native, native_pin, 'python-script', PINS[SCRIPT]
         env = environment(base, root_environment, agent=True, case=case)
-        owner, cwd = PRODUCT + ':spawn_launch', str(home)
+        cwd = str(home)
     elif role == 'mcp':
         if type(port) is not int or not 0 < port <= 65535 or type(descriptor) is not int or not 3 <= descriptor <= 1024:
             raise Refused('cleanup finite listener or descriptor')
@@ -175,7 +171,7 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
                   '--host', '127.0.0.1', '--port', str(port), '--sensitive-inventory-fd', str(descriptor))
         executable, pin, kind, payload = native, native_pin, 'python-module', PINS[SERVER]
         env = environment(base, root_environment, agent=False, case=case)
-        owner, cwd = PRODUCT + (':_start_terminal_reviewer_mcp' if module_site(case) == 2247 else ':_start_worker_mcp_server'), str(home)
+        cwd = str(home)
     elif role in ('git-init', 'git-commit', 'git-observe') and (case in RECORDED if role != 'git-observe' else git_completion(case)):
         arguments = {'git-init': ('init', '-q', str(home)),
             'git-commit': ('-c', 'user.name=Controlled', '-c', 'user.email=controlled@example.invalid',
@@ -185,11 +181,9 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
         env = ({**environment(base, root_environment, agent=False, case=case), **OFFLINE} if role == 'git-observe' else
                {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'})
         cwd = str(checkout) if role == 'git-init' else str(home)
-        owner = SERVER + ':_completion_context' if role == 'git-observe' else TEST + ':test_recorded_transport_failures'
     else:
         raise Refused('cleanup undeclared launch role')
-    return render(Rule('cleanup:' + role, owner, (case,), executable, pin, vector,
-                      tuple(sorted(env.items())), cwd, kind, payload), case, owner, {}, {})
+    return build_expected('cleanup:' + role, case, executable, pin, vector, tuple(sorted(env.items())), cwd, kind, payload)
 
 
 def translated(result, directory):

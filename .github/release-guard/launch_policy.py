@@ -1,7 +1,7 @@
 """Finite literal launch rendering; declarations are not execution authority.
 
-The observer must authenticate the policy, original source owner, case, parameter
-values and acquired root generations independently. No value may be inferred
+The observer must select the finite case, parameter values and acquired root
+generations independently; metadata labels confer no execution authority. No value may be inferred
 from an untrusted launch vector merely to make a declaration accept that vector.
 """
 from __future__ import annotations
@@ -20,23 +20,8 @@ MAX_DECLARATION_BYTES = 2 * 1024 * 1024
 
 
 @dataclass(frozen=True)
-class Rule:
-    id: str
-    owner: str
-    cases: tuple[str, ...]
-    executable: str
-    executable_sha256: str
-    argv: tuple[str, ...]
-    environment: tuple[tuple[str, str], ...]
-    cwd: str
-    payload_kind: str
-    payload_sha256: str | None = None  # Required only for external script/module content.
-
-
-@dataclass(frozen=True)
 class Expected:
     rule: str
-    owner: str
     case: str
     executable: str
     executable_sha256: str
@@ -45,16 +30,6 @@ class Expected:
     cwd: str
     payload_kind: str
     payload_sha256: str
-
-    def wire(self) -> dict:
-        """Closed JSON primitives; tuple-valued policy state stays internal."""
-        return {'rule': self.rule, 'owner': self.owner, 'case': self.case,
-                'executable': self.executable, 'executable_sha256': self.executable_sha256,
-                'argv': list(self.argv), 'environment': [list(pair) for pair in self.environment],
-                'cwd': self.cwd, 'payload_kind': self.payload_kind, 'payload_sha256': self.payload_sha256}
-
-
-
 
 def _text(value: object) -> str:
     if type(value) is not str or "\x00" in value:
@@ -154,27 +129,20 @@ def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
     return index, reference
 
 
-def render(rule: Rule, case: str, owner: str, values: dict,
-           roots: dict[str, str]) -> Expected:
-    """Validate one literal rule; its builder must authenticate dynamic inputs."""
-    if (type(rule) is not Rule or type(rule.cases) is not tuple
-            or len(rule.cases) > MAX_FIELDS or type(rule.payload_kind) is not str
-            or not _sha(rule.executable_sha256)
-            or rule.payload_kind not in {"python-script", "python-command", "python-module",
-                                         "native", "expected-exec-failure"}):
-        raise Refused("policy_rule")
-    if type(values) is not dict or type(roots) is not dict or values or roots:
-        raise Refused('policy_unused_context')
+def build_expected(rule: str, case: str, executable: str, executable_sha256: str,
+                   argv: tuple[str, ...], environment: tuple[tuple[str, str], ...],
+                   cwd: str, payload_kind: str, reference: str | None = None) -> Expected:
+    """Validate the observer-selected declaration without an intermediate policy."""
+    if not _sha(executable_sha256) or type(payload_kind) is not str:
+        raise Refused('policy_rule')
     budget = _Budget()
-    for item in (rule.id, rule.owner, case, owner, *rule.cases):
+    for item in (rule, case):
         if not budget.text(item):
             raise Refused('policy_rule')
-    if owner != rule.owner or case not in rule.cases or len(set(rule.cases)) != len(rule.cases):
-        raise Refused('policy_rule')
-    executable = _absolute(budget.text(rule.executable))
-    argv = _argv(rule.argv, budget)
-    cwd = _absolute(budget.text(rule.cwd))
-    environment = _environment(rule.environment, budget)
-    _, payload_sha256 = _payload(argv, rule.payload_kind, rule.payload_sha256, rule.executable_sha256)
-    return Expected(rule.id, owner, case, executable, rule.executable_sha256, argv,
-                    environment, cwd, rule.payload_kind, payload_sha256)
+    executable = _absolute(budget.text(executable))
+    argv = _argv(argv, budget)
+    cwd = _absolute(budget.text(cwd))
+    environment = _environment(environment, budget)
+    _, payload_sha256 = _payload(argv, payload_kind, reference, executable_sha256)
+    return Expected(rule, case, executable, executable_sha256, argv,
+                    environment, cwd, payload_kind, payload_sha256)

@@ -4,7 +4,7 @@ import stat
 
 from content_manifest import Refused
 from git_observer import image
-from launch_policy import Rule, render
+from launch_policy import build_expected
 from multiprocess_routes import TRANSACTIONS
 from cleanup_launch import EXECUTION_CASES, OFFLINE
 
@@ -56,9 +56,7 @@ def expected(host, actor, raw):
             environment.update(UNREST_NODE_ID=node,
                 UNREST_HANDOFF_PATH=str(runtime/'attempts'/('attempt-'+subject+'__'+node+'.json')))
         cwd = str(root)
-    owner = 'tests/test_server.py:'+('_process_group_inventory' if role=='ps' else '_http_server_process')
-    value = render(Rule('http:'+role,owner,(case,),executable,pin,vector,
-        tuple(sorted(environment.items())),cwd,kind),case,owner,{}, {})
+    value = build_expected('http:'+role, case, executable, pin, vector, tuple(sorted(environment.items())), cwd, kind)
     return value, role, port
 
 

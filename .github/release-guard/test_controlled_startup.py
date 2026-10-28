@@ -17,7 +17,7 @@ import pytest
 from content_manifest import Refused
 from control_transport import finite, encode, REQUEST_LIMIT
 from controlled_startup import CASES, expected_entry, ACP
-from launch_policy import Expected, Rule, render
+from launch_policy import Expected, build_expected
 from content_manifest import capture
 
 sys.path.insert(
@@ -125,12 +125,8 @@ class OperandModel:
             backend=backend,
             relay=relay,
         )
-        observed_rule = Rule(expected.rule, expected.owner, (case,),
-            observed.executable, observed.executable_sha256, observed.argv,
-            observed.environment, observed.cwd, observed.payload_kind,
-            None if observed.payload_kind=='python-command' else observed.payload_sha256)
         if (type(observed.payload_sha256) is not str or observed.payload_sha256!=expected.payload_sha256
-                or render(observed_rule, case, expected.owner, {}, {}) != expected):
+                or build_expected(expected.rule, case, observed.executable, observed.executable_sha256, observed.argv, observed.environment, observed.cwd, observed.payload_kind, None if observed.payload_kind=='python-command' else observed.payload_sha256) != expected):
             raise Refused('test model operand mismatch')
         if backend:
             file = self.owner.backend_launcher
@@ -181,7 +177,8 @@ def test_real_product_caller_and_original_asyncio_options_select_backend_before_
         intent = gate.select(case, observation(args))
         request = {
             "case": case,
-            "original": intent.original.wire(),
+            "original": {**intent.original.__dict__, "argv": list(intent.original.argv),
+                         "environment": [list(pair) for pair in intent.original.environment]},
             "translated": list(intent.translated_argv),
             "source_line": intent.original_source_line,
             "script_sha256": intent.script_sha256,

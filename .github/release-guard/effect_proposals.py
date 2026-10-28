@@ -54,11 +54,17 @@ def proposal(host, actor, raw):
     extra_environment=None
     custody=case in CONTROLLED and argv[0]=='/usr/bin/git'
     if custody:
-        from custody_git import command as custody_command,ENVIRONMENT,SOURCE
+        from custody_git import command as custody_command,ENVIRONMENT
         from git_observer import image
-        from launch_policy import Rule,render
+        from launch_policy import build_expected
         value,custody_kind=custody_command(case,tuple(argv),cwd,owned)
-        expected=render(Rule('custody:git',SOURCE+':git',(case,),'/usr/bin/git',image(),value.argv,tuple(sorted(ENVIRONMENT.items())),cwd,'native'),case,SOURCE+':git',{}, {})
+        expected=build_expected(
+            'custody:git', case,
+            '/usr/bin/git', image(),
+            value.argv,
+            tuple(sorted(ENVIRONMENT.items())),
+            cwd, 'native',
+        )
         script_pin,vector=None,list(value.argv)
     elif case in PLANS:
         model = plan_expected(case,cwd,owned,native,pin)
@@ -108,7 +114,7 @@ def proposal(host, actor, raw):
         if len(records)>=child_count(case) or any(not row['consumed'] or not host.actors[row['pid']]['returned'] for row in records):
             raise Refused('cleanup inline original child order')
         role,maximum='cleanup-inline',child_count(case)
-        expected,_ = inline_expected(case,native,pin,checkout,root_environment,base=base_path(cwd,owned) if terminal else None,terminal=terminal)
+        expected = inline_expected(case,native,pin,checkout,root_environment,base=base_path(cwd,owned) if terminal else None,terminal=terminal)
         script_pin,vector = expected.payload_sha256,[native,'-I','-S',*expected.argv[1:]]
     elif case in CLEANUP:
         port,descriptor = None,None

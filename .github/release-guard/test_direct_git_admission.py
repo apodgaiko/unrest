@@ -9,7 +9,7 @@ from git_commands import Command
 from git_observer import Git
 from git_sites import CASES
 from process_ledger import Ledger
-from launch_policy import Rule,render
+from launch_policy import build_expected
 
 
 @pytest.mark.parametrize('failure',[None,'pending','unreaped','descendant','output','input','repository','location'])
@@ -20,8 +20,7 @@ def test_selected_git_command_still_requires_every_custody_and_causal_join(failu
     git=Git(host)
     host.ledger.reaped=lambda *args:failure!='unreaped'
     command=Command(('git','rev-parse','HEAD'),'/owned/project',requires=(('/owned/project','commit','a'*40,()),))
-    value=render(Rule('git:head','git:head',(host.case,),'/usr/bin/git','b'*64,
-        command.argv,(),command.cwd,'native'),host.case,'git:head',{}, {})
+    value=build_expected('git:head', host.case, '/usr/bin/git', 'b'*64, command.argv, (), command.cwd, 'native')
     if failure in ('pending','unreaped','descendant','output'):
         git.last[host.case]={'consumed':failure!='pending','birth':'old','token':'old',
             'command':Command(('git','rev-parse','HEAD'),command.cwd,produces=('parent','commit',())),

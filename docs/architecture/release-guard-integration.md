@@ -214,3 +214,13 @@ Git checkout helpers compare their current image with the consumed original
 parent command's executable pin. A removed process-global cache is not an input
 to this proof. The helper retains its own birth, worktree/HEAD phase, actual native
 parent wait and subsequent Python-parent/output join requirements.
+
+Launch declarations use one immutable `Expected` record constructed by
+`build_expected`. The former `Rule`/render intermediate, duplicated owner labels,
+unused substitution contexts and declaration serialization are removed. Family
+builders still select finite cases and independently acquire operands; admission
+still compares the case, argv, environment and cwd, and exec-time content and
+process-custody checks remain unchanged. The external payload reference is an
+input distinct from the derived payload digest, including delayed wrappers whose
+inline body and auxiliary script have separate pins. Cleanup terminal selection
+still requires an inflight case; historical source-line numbers grant no authority.

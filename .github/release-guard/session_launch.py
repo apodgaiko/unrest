@@ -5,7 +5,7 @@ import hashlib
 from pathlib import Path
 
 from content_manifest import Refused
-from launch_policy import Rule, render
+from launch_policy import build_expected
 
 TEST = 'tests/test_provider_sessions.py'
 PRODUCT = 'src/unrest_harness/provider_sessions.py'
@@ -75,7 +75,10 @@ def expected(case, cwd, checkout, owned, native, pin, root_environment, *, child
     invalid = case in INVALID
     if invalid:
         argv, pin = (str(base / 'private-canary-startup_failed'),), hashlib.sha256(INVALID_BYTES).hexdigest()
-    owner = SCRIPT + ':main' if child else PRODUCT + ':_spawn_provider_launch'
-    rule = Rule('session:' + ('child' if child else 'adapter'), owner, (case,), argv[0], pin,
-        argv, tuple(sorted(environment.items())), cwd, 'expected-exec-failure' if invalid else 'python-command' if inline else 'python-script', None if inline or invalid else PINS[SCRIPT])
-    return render(rule, case, owner, {}, {})
+    return build_expected(
+        'session:' + ('child' if child else 'adapter'), case,
+        argv[0], pin,
+        argv,
+        tuple(sorted(environment.items())),
+        cwd, 'expected-exec-failure' if invalid else 'python-command' if inline else 'python-script', None if inline or invalid else PINS[SCRIPT],
+    )

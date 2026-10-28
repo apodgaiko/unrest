@@ -4,7 +4,7 @@ from content_manifest import Refused
 from git_commands import build,FIELDS,Command
 from git_sites import CASES,OPERATIONS,OWNED_BODY
 from git_observer import SETUP,image
-from launch_policy import Rule,render
+from launch_policy import build_expected
 
 
 def integration(host,repository,revision):
@@ -62,8 +62,13 @@ def prepare(host,actor,raw):
         if case!=CASES[7] or slot is None or raw['stdin'] is not None or raw['cwd']!=repository+'/.unrest-runtime/workspaces/trees/process':
             raise Refused('Git proposal owned process scope')
         operation,fields,command='owned-process',{},None
-        expected=render(Rule('workspace:owned','workspace:owned',(case,),native,pin,tuple(raw['argv']),
-            tuple(sorted({**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}.items())),raw['cwd'],'python-command'),case,'workspace:owned',{}, {})
+        expected=build_expected(
+            'workspace:owned', case,
+            native, pin,
+            tuple(raw['argv']),
+            tuple(sorted({**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}.items())),
+            raw['cwd'], 'python-command',
+        )
         vector=[native,'-I','-S','-c',OWNED_BODY]
     else:
         if raw['executable']!='git':
@@ -94,8 +99,13 @@ def prepare(host,actor,raw):
         operation,(fields,command)=next(iter(candidates.items()))
         phase='setup' if setup<len(SETUP) else 'call'
         environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' ('+phase+')',**dict(command.additions)}
-        owner='git:'+operation
-        expected=render(Rule('git:'+operation,owner,(case,),'/usr/bin/git',image(),command.argv,tuple(sorted(environment.items())),command.cwd,'native'),case,owner,{}, {})
+        expected=build_expected(
+            'git:'+operation, case,
+            '/usr/bin/git', image(),
+            command.argv,
+            tuple(sorted(environment.items())),
+            command.cwd, 'native',
+        )
         vector=list(command.argv)
     if raw['environment']!=dict(expected.environment) or raw['cwd']!=expected.cwd:
         raise Refused('Git proposal environment or cwd differs')
