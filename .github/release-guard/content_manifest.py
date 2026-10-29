@@ -122,16 +122,11 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
         stack.callback(os.close, fd)
         if _key(before) != _key(os.fstat(fd)):
             raise Refused("file_acquisition_race")
-        digest = hashlib.sha256()
-        counted_bytes = bytearray()
-        size = 0
-        while block := os.read(fd, min(65536, file_bound-size+1)):
-            size += len(block)
-            if size > file_bound or size > before.st_size:
-                raise Refused("file_read_bound")
-            digest.update(block)
-            if line_counts is not None or collected is not None and collected['retain']:
-                counted_bytes.extend(block)
+        with os.fdopen(fd,'rb',closefd=False) as stream:
+            body=stream.read(before.st_size+1)
+        size=len(body)
+        if size>before.st_size:
+            raise Refused('file_read_bound')
         if (size != before.st_size or _key(before) != _key(os.fstat(fd))
                 or _key(before) != _key(os.stat(parts[-1], dir_fd=parent,
                                                  follow_symlinks=False))):
@@ -139,13 +134,13 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
         _verify(directories,_key,'directory_read_race')
         if line_counts is not None:
             try:
-                line_counts[name] = len(counted_bytes.decode("utf-8").splitlines())
+                line_counts[name] = len(body.decode("utf-8").splitlines())
             except UnicodeError:
                 raise Refused("opaque_guard_payload") from None
         if collected is not None:
-            collected.update(body=bytes(counted_bytes) if collected['retain'] else None,info=before)
+            collected.update(body=body if collected['retain'] else None,info=before)
         return {"path": name, "mode": stat.S_IMODE(before.st_mode),
-                "size": size, "sha256": digest.hexdigest()}
+                "size": size, "sha256": hashlib.sha256(body).hexdigest()}
 
 
 def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | None,

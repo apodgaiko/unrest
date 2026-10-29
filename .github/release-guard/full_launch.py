@@ -11,26 +11,14 @@ from full_source import environment,child_environment
 from source_profile import pytest_arguments as arguments
 
 
-def prepare_uv(binding,metadata):
+def prepare_uv(metadata):
     runtime=Path(metadata['runtime_root'])
     # Warm only stock uv's interpreter metadata before candidate execution.
     # A cache miss during the guarded run never grants a Python helper launch.
     if subprocess.check_output([str(runtime/'bin/uv'),'--version'],text=True,timeout=5).split()[:2]!=['uv','0.11.8']:
         raise Refused('full source supported stock uv version')
-    from uv_cli import child_environment as nested_environment
-    records=[]
-    parent=environment(metadata)
-    for _ in range(2):
-        raw=subprocess.check_output([str(runtime/'bin/uv'),'run','/usr/bin/env'],
-            cwd=metadata['checkout'],env=parent,timeout=30)
-        rows=raw.decode().splitlines()
-        observed=dict(row.split('=',1) for row in rows)
-        expected=nested_environment(metadata,parent)
-        records.append({'observed':observed,'expected':expected})
-        (Path(binding['profiles']).parent/'source-private/uv-preparation.json').write_text(json.dumps(records,sort_keys=True))
-        if len(rows)!=len(observed) or observed!=expected:
-            raise Refused('full source stock uv environment')
-        parent=expected
+    subprocess.check_output([str(runtime/'bin/uv'),'run','/usr/bin/env'],
+        cwd=metadata['checkout'],env=environment(metadata),timeout=30)
     cache=Path(metadata['owned'])/'uv-cache'
     for path in [cache,*sorted(cache.rglob('*'))]:
         if path.is_symlink() or not (path.is_file() or path.is_dir()):
@@ -39,7 +27,7 @@ def prepare_uv(binding,metadata):
 
 
 def prepare(binding,metadata):
-    prepare_uv(binding,metadata)
+    prepare_uv(metadata)
     value={'cases':[],'skips':[],'source':metadata['source_sha256'],'dependency':metadata['dependency_sha256']}
     return {**metadata,'cases':seal(value,Path(binding['profiles']))}
 

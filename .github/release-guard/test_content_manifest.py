@@ -186,7 +186,7 @@ def test_bounds_refuse(source, monkeypatch, limit):
 
 @pytest.mark.parametrize("replacement", ["leaf", "parent", "root", "ancestor", "inplace"])
 def test_replacement_during_read_refuses_and_closes_all_fds(source, monkeypatch, replacement):
-    original_read, original_open, original_close = os.read, os.open, os.close
+    original_fdopen, original_open, original_close = os.fdopen, os.open, os.close
     acquired, closed = [], []
     changed = False
 
@@ -199,9 +199,9 @@ def test_replacement_during_read_refuses_and_closes_all_fds(source, monkeypatch,
         closed.append(fd)
         return original_close(fd)
 
-    def read(fd, count):
+    def read(stream, count):
         nonlocal changed
-        block = original_read(fd, count)
+        block = stream.read(count)
         if block and not changed:
             changed = True
             if replacement == "leaf":
@@ -225,7 +225,13 @@ def test_replacement_during_read_refuses_and_closes_all_fds(source, monkeypatch,
 
     monkeypatch.setattr(content.os, "open", opened)
     monkeypatch.setattr(content.os, "close", close)
-    monkeypatch.setattr(content.os, "read", read)
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    @contextmanager
+    def buffered(fd,*args,**kwargs):
+        with original_fdopen(fd,*args,**kwargs) as stream:
+            yield SimpleNamespace(read=lambda count:read(stream,count))
+    monkeypatch.setattr(content.os, "fdopen", buffered)
     with pytest.raises(content.Refused):
         content.capture(source, NAMES)
     assert changed

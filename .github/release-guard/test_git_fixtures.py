@@ -109,3 +109,9 @@ def test_repository_keeps_generation_and_closed_routing_configuration(tmp_path,m
     config[0]+=b'worktree=/outside\n'
     with pytest.raises(Refused,match='routing configuration'):
         git.repository(str(repository),'config-email','workspaces')
+
+
+def test_factored_parameter_axes_preserve_the_complete_ordered_fixture_map():
+    import hashlib
+    import json
+    assert hashlib.sha256(json.dumps(list(fixtures.SLOTS.items()),separators=(',',':')).encode()).hexdigest()=='294ac85f02c8f2ba7cef463ee297fd2d67b1e88c913e4331ad3fcd55276c13c8'

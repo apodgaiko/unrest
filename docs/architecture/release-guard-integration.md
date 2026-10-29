@@ -626,3 +626,16 @@ remain failures. Failed-exec proofs, plan exec generation, archive and installed
 provenance, nested-pytest seals, completion-server transitions and the exact cohort
 controller73 exception are retained. No source test, parameter, assertion or
 refusal context is removed or selected out by this ownership change.
+
+Preparation warms stock UV's interpreter cache once with its fixed version,
+interpreter and cache paths. The duplicated preparatory environment probes are
+retired; real root and CLI exec admission still compare the complete actual argv,
+environment and binary pin. A cache miss grants no helper permission. Fixture
+parameter axes preserve the complete ordered original map.
+
+Bounded file acquisition now reads at most the pre-read size plus one byte using
+the already-held nofollow descriptor. Exact length, complete hash, UID/mode/nlink,
+post-read identity and held-ancestor checks remain. Hash-only reads use transient
+memory proportional to that bounded file (up to64MiB for dependency inventory),
+replacing the streaming counter; retained reads avoid a second bytearray copy.
+All five replacement-during-read races still exercise the actual read boundary.
