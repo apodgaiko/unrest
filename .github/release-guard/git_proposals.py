@@ -9,6 +9,9 @@ from launch_policy import build_expected
 
 def prepare(host,actor,raw):
     case=host.case
+    from candidate_git import CASES as CANDIDATE_CASES,proposal as candidate_proposal
+    if case in CANDIDATE_CASES:
+        return candidate_proposal(host,actor,raw)
     if case not in CASES:
         raise Refused('Git proposal undeclared case')
     from git_fixtures import SLOTS,fixture as declared_fixture

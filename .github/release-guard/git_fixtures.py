@@ -6,6 +6,7 @@ import re
 from content_manifest import Refused
 from launch_policy import source_unit
 from owned_fixture import acquire
+from candidate_git import CASES as CANDIDATE_CASES,TEST as CANDIDATE_TEST,PIN as CANDIDATE_PIN
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class Fixture:
 
 
 MODULES={
+    CANDIDATE_TEST:Fixture('candidate',('init','--initial-branch=main','--object-format=sha1'),'Fixture','fixture@example.invalid',('.',),'setup'),
     'tests/test_foundation_authority.py':Fixture('workspaces',('init',),'Authority Test','authority@example.test',('.',),'call'),
     'tests/test_foundation_integration.py':Fixture('workspaces',('init',),'Foundation Integration','foundation@example.test',('.',),'call'),
     'tests/test_project_adapter.py':Fixture('workspaces',('init','-b','main'),'Project Adapter Test','project-adapter@example.test',('README.md','.gitignore'),'setup'),
@@ -31,6 +33,7 @@ MODULES={
     'tests/test_v04_activation.py':Fixture('activation',('init','-b','main'),'ACT-190 Activation','act190@example.test',('README.md',),'call'),
 }
 PINS={
+    CANDIDATE_TEST:CANDIDATE_PIN,
     'tests/test_foundation_authority.py':'c8f63d70d4dcc3d74215a9db538632fc9115086d32d42f633235135dcaea2c70',
     'tests/test_foundation_integration.py':'bcbddfff3ffabd8b4374be17fa22b35872bd347d2daa8ca9ee3132f007caa8ef',
     'tests/test_improve_adapter.py':'d3c9c1fa8461db4e30b3d3239bf52746018a56b957f4699ddff7572c10be3290',
@@ -84,6 +87,7 @@ SLOTS={
     'tests/test_v04_activation.py::test_project_click_and_subprocess_stop_without_exact_request':('repo-click', 'repo-subprocess'),
     'tests/test_v04_activation.py::test_improvement_click_and_subprocess_stop_without_exact_request':('improve-click-cli', 'improve-subprocess-cli'),
 }
+SLOTS.update(dict.fromkeys(CANDIDATE_CASES,('repository',)))
 
 
 def fixture(case):
@@ -109,6 +113,7 @@ def root(host,case,repository):
 
 
 GROUPS={
+    'candidate113':CANDIDATE_CASES,
     'foundation8':tuple(case for case in SLOTS if case.startswith(('tests/test_foundation_authority.py::','tests/test_foundation_integration.py::'))),
     'project12':tuple(case for case in SLOTS if case.startswith('tests/test_project_adapter.py::')),
     'improve20':tuple(case for case in SLOTS if case.startswith('tests/test_improve_adapter.py::')),

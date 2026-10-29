@@ -73,7 +73,7 @@ class Policy:
             raise Refused('source process cwd primitive')
         environment=plain_environment(dict(os.environ) if environment is None else environment)
         commit_input=None
-        if self.case in GIT_CASES and vector[1:2]==['commit-tree']:
+        if self.case in GIT_CASES and vector[1:2]==['commit-tree'] and vector[3:4]==['-p']:
             commit_input=getattr(self.local,'run_input',None)
             if (type(commit_input) is not str or len(commit_input)>16384
                     or not commit_input.startswith('Integrate Unrest workspaces\n\n')):

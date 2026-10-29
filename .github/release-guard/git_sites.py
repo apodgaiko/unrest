@@ -85,6 +85,8 @@ FIXTURE_OPERATIONS = {
 OPERATIONS = {family: tuple(sorted(set(SHARED_OPERATIONS) | set(operations)))
               for family,operations in FIXTURE_OPERATIONS.items()}
 
+OPERATIONS['candidate']=('init','candidate-command')
+
 OWNED_BODY = 'import time; time.sleep(60)'
 
 WORKSPACE_CASES=CASES

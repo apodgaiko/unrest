@@ -360,3 +360,14 @@ preflight test; its nine real launch cases retain their exact declarations.
 Non-launch cases use the observer's default zero-child rule and unknown process
 requests still refuse. The frozen 54-case list is only a test collection oracle,
 excluded from native support, and grants no launch or completion authority.
+
+
+Candidate-input tests share the existing disposable Git repository/image/wait
+boundary. Their 113 exact fixture consumers have nine setup commands extracted
+only from the byte-pinned `repo` fixture. Additional writes and queries are closed
+case/parameter-selected complete vectors, with full object IDs in the two dynamic
+positions, exact environment and a finite ordinal. Canary cases admit only their
+original final configuration write: no subsequent Git command or helper launch
+is authorized. The repository's closed routing configuration is reacquired before
+each Git launch, and its owned generation and every original parent wait remain
+mandatory. These are controlled fixture tests, not provider acceptance evidence.
