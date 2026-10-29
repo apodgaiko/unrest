@@ -261,8 +261,6 @@ def proposal(host, actor, raw):
                 raise Refused('source ACP before owned backend')
             if not host.executed(backends[0]):
                 return None
-        from configuration_inputs import check_inputs
-        check_inputs(checkout,Path(cwd),case)
         relay = None
         if not backend:
             import json

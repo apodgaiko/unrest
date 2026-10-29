@@ -10,7 +10,6 @@ import pytest
 
 from bootstrap_cases import BOOTSTRAP, CONTROLS, DECLARATIONS, TEST, configuration, wrapper
 from types import SimpleNamespace
-from configuration_inputs import check_inputs
 from content_manifest import Refused
 from unrest_harness.experimental_provider_config import ProviderConfig
 
@@ -46,25 +45,10 @@ def fresh(tmp_path):
 
 def test_independent_configuration_render_matches_original_product(fresh):
     binding, config, root, home = fresh
-    check_inputs(binding.checkout,home,BOOTSTRAP[0])
     arguments, encoded = configuration(binding.checkout, home)
     assert config.argv(root / 'fake-app-server', home) == [str(root / 'fake-app-server'), *arguments, 'app-server']
     assert encoded == json.dumps(config.thread_config(home), sort_keys=True)
     assert config.overrides(home).keys() == CONTROLS.keys() | {'sqlite_home', 'log_dir', 'model_catalog_json', 'skills.config', 'mcp_servers'}
-
-
-@pytest.mark.parametrize('relative', ['system/config.toml','subscription/config.toml',
-    'subscription/AGENTS.md','subscription/AGENTS.override.md','subscription/rules',
-    'system/requirements.toml','system/managed_config.toml','probe/config.toml',
-    'probe/.codex/config.toml','probe/.agents/skills','user/.agents/skills'])
-def test_configuration_binding_refuses_mutated_or_new_inputs(fresh,relative):
-    binding,config,root,home=fresh
-    check_inputs(binding.checkout,home,BOOTSTRAP[0])
-    target=root.parent.parent/relative
-    target.parent.mkdir(parents=True,exist_ok=True)
-    target.write_text('foreign')
-    with pytest.raises(Refused,match='unexpected input'):
-        check_inputs(binding.checkout,home,BOOTSTRAP[0])
 
 
 @pytest.mark.parametrize('field', ['codex_home','skills','servers'])
@@ -111,7 +95,6 @@ def test_populated_fixture_renderer_disables_exact_servers_and_skills_without_au
 def test_original_fresh_probe_configuration_binding_and_render(fresh, case):
     from controlled_startup import expected_entry
     binding, config, root, home = fresh
-    check_inputs(binding.checkout,home,case)
     value, _, _ = expected_entry(case, binding.checkout, home, '/pinned/python', 'a'*64, backend=True)
     assert value.argv[1:] == tuple(config.argv(root/'fake-app-server', home))
     assert dict(value.environment)['CODEX_HOME'] == str(config.codex_home)
@@ -151,11 +134,7 @@ def test_exact_populated_configuration_binds_inputs_without_reading_auth(tmp_pat
         assert path.name != 'auth.json'
         return read(path,*args,**kwargs)
     monkeypatch.setattr(Path,'open',opening)
-    check_inputs(binding.checkout,home,case)
     value,_,_ = expected_entry(case,binding.checkout,home,'/pinned/python','a'*64,backend=True)
     assert value.argv[1:] == tuple(config.argv(root/'fake-app-server',home))
     assert json.dumps(config.thread_config(home),sort_keys=True) == dict(value.environment)['CODEX_CONFIG']
     assert configuration_items(case,home)[0] == tuple(sorted(config.servers))
-    (config.codex_home/'config.toml').write_text('mcp_servers={}\n')
-    with pytest.raises(Refused):
-        check_inputs(binding.checkout,home,case)

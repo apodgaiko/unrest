@@ -511,3 +511,12 @@ removed. Cleanup/review JSON inputs likewise remain exclusive observer-owned
 those trusted issuer records. Mutable script compilation hashes and the
 original executor loader remain mandatory. Actual namespace and mixed-UID
 mutation negatives retain independent coverage of this custody boundary.
+
+
+Provider configuration-search semantics are tested by the original configuration
+suite. The guard no longer duplicates that suite's search-footprint inventory in
+`configuration_inputs.py`. Exact selected case/backend bytes, complete argv and
+environment (including disabled features/skills/MCP controls), owned cwd, actual
+native identity and native no-launch negatives remain admission requirements.
+This removes a second application-behavior oracle; it grants no provider launch,
+permission override, alternative method or recovery of a denied review.

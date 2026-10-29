@@ -18,9 +18,6 @@ ROOT = next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml"
 
 @pytest.mark.parametrize("mutation", ["home", "extra", "missing", "value"])
 def test_original_warning_environment_is_exact(tmp_path, monkeypatch, mutation):
-    import configuration_inputs
-    # Isolate operand admission; configured-file custody has separate controls.
-    monkeypatch.setattr(configuration_inputs,"check_inputs",lambda *args:None)
     case = next(iter(WARNING_REFUSALS))
     home = tmp_path / "pytest/campaign/owner/worker"
     home.mkdir(parents=True)
