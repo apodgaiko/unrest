@@ -40,17 +40,21 @@ def main():
                 stage='drop credentials'
                 credentials(20000)
                 stage='exclude host service'
-                try:
-                    socket.create_connection(('127.0.0.1',ambient_port),timeout=1)
-                except OSError as error:
-                    assert error.errno in (errno.ECONNREFUSED,errno.ENETUNREACH)
-                else:
-                    raise AssertionError('ambient host loopback reached')
+                with socket.socket() as probe:
+                    probe.settimeout(1)
+                    try:
+                        probe.connect(('127.0.0.1',ambient_port))
+                    except OSError as error:
+                        assert error.errno in (errno.ECONNREFUSED,errno.ENETUNREACH)
+                    else:
+                        raise AssertionError('ambient host loopback reached')
                 stage='local exchange'
                 with socket.socket() as listener:
                     listener.bind(('127.0.0.1',0))
                     listener.listen()
-                    with socket.create_connection(listener.getsockname(),timeout=1) as client:
+                    with socket.socket() as client:
+                        client.settimeout(1)
+                        client.connect(listener.getsockname())
                         with listener.accept()[0] as server:
                             client.sendall(b'local')
                             assert server.recv(5)==b'local'
