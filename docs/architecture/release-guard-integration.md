@@ -431,3 +431,14 @@ waitpid result; a separate native negative shows waitid-only reaping produces
 no original-parent wait4 join. Every admitted process still requires its numeric
 original-parent terminal wait4 matched to the observed birth, exit and tracer
 terminal status. Missing waits remain fail-closed.
+
+
+Historical release checks use their original source-pinned cases and finite
+readonly Git commands over the closed public projection. They cannot mutate a
+repository, query other paths/revisions, or launch helpers. Each command retains
+exact image/environment/cwd binding, one consumed intent and its actual original
+parent wait before the next command. Historical cases use their own command
+inventory rather than the five-command minimum of a newly initialized fixture.
+The private source copy includes a fixed ignored egg-info marker so the existing
+ignored-file exclusion assertion remains a real probe in the readonly source
+suite; this generated test input is outside the candidate tracked-file binding.

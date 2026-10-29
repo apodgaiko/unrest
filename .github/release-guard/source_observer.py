@@ -28,7 +28,7 @@ from source_profile import METHODS
 from ordinary_acp import EXECUTION_CASES as ORDINARY_CASES, NEGATIVE_CASES
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
-from git_sites import CASES as GIT_CASES
+from git_sites import CASES as GIT_CASES,HISTORY_CASES
 from completion_roles import CASES as ROLE_CASES,actor_slot
 from git_observer import Git
 from cleanup_inline import NO_LAUNCH, DECLARATIONS, child_count as inline_count
@@ -441,7 +441,7 @@ class Observer:
                     count,spec=0,None
                     if children:
                         raise Refused('skipped source case launched children')
-                if (payload['case'] != self.case or outcome=='passed' and self.case in GIT_CASES and len(children) < 5 or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
+                if (payload['case'] != self.case or outcome=='passed' and self.case in GIT_CASES and len(children) < (1 if self.case in HISTORY_CASES else 5) or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)):

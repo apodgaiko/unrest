@@ -99,6 +99,9 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
         target.chmod(row['mode'])
     require(capture(source, sorted(names)) == manifest, 'private source copy changed')
     if public:
+        probe=source/'src/unrest_harness.egg-info/PKG-INFO'
+        probe.parent.mkdir(parents=True)
+        probe.write_bytes(b'Ignored generated metadata exclusion probe\n')
         from public_git import prepare as public_git
         from content_manifest import _capture
         public_git(checkout, source, binding['head'])

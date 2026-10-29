@@ -9,6 +9,9 @@ from launch_policy import build_expected
 
 def prepare(host,actor,raw):
     case=host.case
+    from history_git import CASES as HISTORY_CASES,proposal as history_proposal
+    if case in HISTORY_CASES:
+        return history_proposal(host,actor,raw)
     from candidate_git import CASES as CANDIDATE_CASES,proposal as candidate_proposal
     if case in CANDIDATE_CASES:
         return candidate_proposal(host,actor,raw)

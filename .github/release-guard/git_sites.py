@@ -1,4 +1,5 @@
 """Finite operations and original byte pins; no Python caller authentication."""
+from history_git import CASES as HISTORY_CASES
 from git_fixtures import SLOTS
 from git_commands import OPERATIONS as COMMANDS,SETUP
 PINS = {
@@ -42,4 +43,4 @@ OPERATIONS={'workspaces':tuple(sorted(COMMANDS)),
 
 OWNED_BODY = 'import time; time.sleep(60)'
 
-CASES=(*CASES,*SLOTS)
+CASES=(*CASES,*SLOTS,*HISTORY_CASES)
