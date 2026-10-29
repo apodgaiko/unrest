@@ -535,3 +535,10 @@ workspace generation. No descendants or network routes are granted. Body READY,
 exit0 and an actual parent wait remain required alongside the original assertions.
 Pinned-source owner selection accepts explicit async functions as well as regular
 functions/classes; it still never evaluates a source expression.
+
+The cleared-gate sealed-patch regression keeps its actual fresh replay script,
+`sealed-patch` mode, actual persisted project and owned home. Script and caller
+bytes are pinned; the child gets no descendant permission. The original refusal,
+protected-byte comparisons and reconstruction assertions still run. Fixed-file
+profiles take their script path from the already consumed byte-pinned intent,
+with the same independent exec-time file check as other file entries.

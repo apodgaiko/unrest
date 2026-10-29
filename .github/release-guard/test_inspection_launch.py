@@ -18,14 +18,17 @@ def fixture(tmp_path,monkeypatch,case):
     monkeypatch.setattr(inspection,'OWNER',os.getuid())
     owned=tmp_path/'owned'
     root=owned/'pytest'/(case.split('::')[-1][:30]+'0')
-    home=root/('.unrest' if case==inspection.FRONTIER else 'home')
+    home=root/('home' if case==inspection.RECOVERY else '.unrest')
     project='20261029T000000Z-original-project'
     record=home/'projects'/project/'.unrest-runtime/project.json'
     record.parent.mkdir(parents=True)
     record.write_text(json.dumps({'id':project,'workspace_dir':str(root/'workspace')}))
     env={'PATH':'/bin:/usr/bin'}
     host=SimpleNamespace(case=case,meta={'checkout':str(ROOT),'owned':str(owned)},fixture_roots={})
-    if case==inspection.FRONTIER:
+    if case==inspection.SEALED:
+        argv=['/native/python',str(ROOT/inspection.REPLAY),'sealed-patch',str(home),project]
+        cwd=str(ROOT)
+    elif case==inspection.FRONTIER:
         tree=ast.parse((ROOT/case.split('::')[0]).read_bytes())
         owner=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='TestCurrentEvidenceFrontier')
         function=next(node for node in owner.body if isinstance(node,ast.FunctionDef) and node.name==case.split('::')[-1])
@@ -45,7 +48,7 @@ def test_original_byte_and_operand_parity_requires_real_project_record(tmp_path,
     assert value.argv==tuple(argv) and value.cwd==cwd
     assert len(SEQUENCES[case])==(2 if case==inspection.FRONTIER else 1)
     assert inspection.CASES in GROUPS
-    expected=env if case==inspection.FRONTIER else {**env,'UNREST_HOME':str(record.parents[3]),'UNREST_PROJECTS_DIR':str(record.parents[2])}
+    expected=env if case!=inspection.RECOVERY else {**env,'UNREST_HOME':str(record.parents[3]),'UNREST_PROJECTS_DIR':str(record.parents[2])}
     assert dict(value.environment)==expected
 
 

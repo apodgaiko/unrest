@@ -101,11 +101,8 @@ class Observer:
                    'cleanup-acp': SCRIPT, 'acp': ACP, 'mock-acp': MOCK}
         script = (str(Path(self.meta['checkout']) / scripts[role]) if role in scripts else
                   str(backend_path(case,Path(cwd).parent) if case in CONTROLLED else Path(cwd).parent / 'fake-app-server') if role in ('backend', 'delayed-backend') else None)
-        if role=='fixed-inline' and case==CLI_CASE:
-            script=str(Path(self.meta['checkout'])/'tools/v04_speed_runner.py')
-        from measurement_launch import CASE as MEASUREMENT_CASE, TOOL as MEASUREMENT_TOOL
-        if role=='fixed-inline' and case==MEASUREMENT_CASE:
-            script=str(Path(self.meta['checkout'])/MEASUREMENT_TOOL)
+        if role=='fixed-inline' and vector[3] not in ('-c','-m'):
+            script=vector[3]  # The consumed intent independently pins this file.
         source = {'schema': 'unrest.bootstrap-source.v1', 'role': role, 'case': case,
             'identity': canonical(actual), 'parent': canonical(process_identity(parent.pid)),
             'observer': canonical(process_identity(os.getpid())), 'argv': vector,
