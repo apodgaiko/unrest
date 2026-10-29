@@ -405,3 +405,54 @@ def test_missing_thread_exit_stop_accepts_only_actual_group_sigkill(leader_raw,t
     else:
         with pytest.raises(Refused,match='terminal birth or exit'):
             emit(ledger,'tracer_terminal_wait',**row)
+
+
+@pytest.mark.parametrize('leader_raw',(0,9,15,256))
+def test_thread_kill_terminal_before_group_exit_requires_the_later_actual_group_status(leader_raw):
+    ledger,root,leader=setup()
+    thread_id=identity(102,root.pid,tgid=leader.pid)
+    thread=Birth.read(thread_id)
+    emit(ledger,'kernel_child',parent=leader.pid,child=thread.pid,event=3,identity=thread_id)
+    emit(ledger,'kernel_exit',pid=thread.pid,raw=0)
+    emit(ledger,'tracer_terminal_wait',pid=thread.pid,raw=9,normalized=-9,identity=thread_id)
+    assert ledger.process(thread).exit[1]==0
+    assert ledger.process(thread).terminal[1:]==(9,-9)
+    assert not ledger.reaped(leader,'child-token')
+    assert ledger.process(leader).exit is None
+    if leader_raw!=9:
+        with pytest.raises(Refused,match='pending thread group status'):
+            emit(ledger,'kernel_exit',pid=leader.pid,raw=leader_raw)
+        assert ledger.process(leader).exit is None
+        return
+    terminal(ledger,leader,9)
+    assert not ledger.reaped(leader,'child-token')
+    wait4(ledger,root,leader,9)
+    assert ledger.reaped(leader,'child-token')
+
+
+@pytest.mark.parametrize('raw,own_exit',((9,False),(15,True),(256,True)))
+def test_unjoined_thread_terminal_does_not_gain_a_general_status_exception(raw,own_exit):
+    ledger,root,leader=setup()
+    thread_id=identity(102,root.pid,tgid=leader.pid)
+    emit(ledger,'kernel_child',parent=leader.pid,child=102,event=3,identity=thread_id)
+    if own_exit:
+        emit(ledger,'kernel_exit',pid=102,raw=0)
+    with pytest.raises(Refused,match='terminal birth or exit'):
+        emit(ledger,'tracer_terminal_wait',pid=102,raw=raw,normalized=__import__('os').waitstatus_to_exitcode(raw),identity=thread_id)
+
+
+@pytest.mark.parametrize('mutation',('birth','group','duplicate'))
+def test_deferred_group_kill_keeps_exact_thread_identity_and_single_terminal(mutation):
+    ledger,root,leader=setup()
+    thread_id=identity(102,root.pid,tgid=leader.pid)
+    thread=Birth.read(thread_id)
+    emit(ledger,'kernel_child',parent=leader.pid,child=102,event=3,identity=thread_id)
+    emit(ledger,'kernel_exit',pid=102,raw=0)
+    if mutation=='group':
+        ledger.process(thread).group=root
+    elif mutation=='birth':
+        thread_id={**thread_id,'start_ticks':thread_id['start_ticks']+1}
+    else:
+        emit(ledger,'tracer_terminal_wait',pid=102,raw=9,normalized=-9,identity=thread_id)
+    with pytest.raises(Refused):
+        emit(ledger,'tracer_terminal_wait',pid=102,raw=9,normalized=-9,identity=thread_id)

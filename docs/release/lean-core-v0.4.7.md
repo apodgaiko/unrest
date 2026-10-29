@@ -121,9 +121,12 @@ is completed after packaging.
 
 The replacement guard removes the previous release executor and uses a finite
 native entry, a separate process observer, immutable measured inputs and actual
-kernel exit/original-parent wait evidence. Its conservative footprint is 9,999
-physical enforcement lines, counting every non-test file under `.github`;
-retained guard tests and the existing distribution oracle are reported separately.
+kernel exit/original-parent wait evidence. Its ceiling is 10,000 physical
+enforcement lines, counting every non-test file under `.github`; retained guard
+tests and the existing distribution oracle are reported separately. The earlier
+9,999-line snapshot lacked launch families exposed by the unexcluded checkpoint.
+The integrated replacement currently exceeds the ceiling and is not certified;
+the frozen candidate must satisfy the same counter and dependency-closure review.
 The counter does not itself prove dependency closure or release eligibility.
 See [guard integration](../architecture/release-guard-integration.md) for the
 retained boundaries and explicitly retired duplicate enforcement claims.

@@ -915,3 +915,10 @@ server/query completion pass and intermediate application phase-wait model are
 retired. Fixture custody is acquired again before any further Git command or
 server launch; finished fixtures grant no later capability. Original concurrent
 server, late-client and restart tests retain their actual ordering assertions.
+
+A thread's observed exit stop and tracer terminal status can differ when a
+subsequent group SIGKILL arrives. A terminal SIGKILL with an earlier member exit
+may precede the exact group's leader exit observation. That terminal fact remains
+pending corroboration: the later leader exit must match it. The earlier member
+exit is never overwritten, no parent-wait evidence is inferred, and a missing or
+mismatched leader exit cannot certify completion.
