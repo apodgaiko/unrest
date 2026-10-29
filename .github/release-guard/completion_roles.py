@@ -33,7 +33,15 @@ SOURCE={
     SERVER_TEST+'::test_completion_preflight_is_invariant_to_prose_and_evidence_body':4,
 }
 CASES.update(dict.fromkeys(SOURCE,('source','work','')))
-HTTP=tuple(case for case,row in CASES.items() if row[0] in ('ownership','crash'))
+RESTART={SERVER_TEST+f'::test_real_orchestrator_restart_preserves_completion_refusal_attempt[{repair}-{role}]':
+    ('restart',role,repair) for repair in ('repair','second-invalid') for role in ('work','validate')}
+TARGETLESS={SERVER_TEST+f'::test_real_targetless_work_completion[{done}-{attention}]':('targetless','work','')
+    for done,attention in ((True,False),(False,False),(True,True),(False,True))}
+BINDING={SERVER_TEST+f'::test_real_completion_target_binding[{value}]':('binding','validate' if value=='validator' else 'work',value)
+    for value in ('missing','extra','attempt','type','validator','scope','evidence')}
+CASES.update({**RESTART,**TARGETLESS,**BINDING})
+ROOT_QUERIES={**SOURCE,**{case:int(role=='work') for case,(_,role,_) in RESTART.items()},**dict.fromkeys(BINDING,1)}
+HTTP=tuple(case for case,row in CASES.items() if row[0] not in ('setup','source'))
 
 PINS={'tests/test_completion_ownership.py': '2b67510bdd8f40d584baab65837174b2f5a3935aff343b7d9eaccedf09b5df8b', 'tests/test_completion_setup.py': 'fe1a1c98792d1b30d81d975cb23ad9122ae74678295ef4ed8c5e532a7aa00b6a', 'tests/test_server.py': 'ece1638c115aa2055320bb0fb0c1b34359a8694ff6851fc289baf393e5523b72'}
 OWNER=20000
@@ -45,6 +53,12 @@ def schedule(case):
     family,role,scenario=CASES[case]
     if family=='source':
         return ()
+    if family=='restart':
+        return (('http','same-process-attempt',2 if role=='work' else 0),('http','',0),('http','',0))
+    if family=='targetless':
+        return (('http','attempt',1),('http','attempt',0))
+    if family=='binding':
+        return (('http','attempt',int(role=='work')),)
     work=role=='work'
     if family=='ownership':
         return (('http','attempt',2 if work and scenario=='exhausted' else int(work)),
@@ -58,7 +72,7 @@ def root(host,cwd):
     case=host.case
     if case not in CASES:
         raise Refused('completion undeclared role')
-    if case in SOURCE:
+    if case.split('::')[0]==SERVER_TEST:
         source_unit(Path(host.meta['checkout']),SERVER_TEST,PINS[SERVER_TEST])
     workspace=Path(cwd)
     if workspace.name!='workspace' or workspace.resolve()!=workspace:
@@ -98,18 +112,29 @@ def program(checkout,parent,case,ordinal):
     return render_string(template,tuple((name,114,repr(value)) for name,value in substitutions))
 
 
-def environment(checkout,parent,case,ordinal,ambient):
+def mode(case,ordinal):
     family,role,_=CASES[case]
+    return 'orchestrator' if family=='restart' and ordinal>0 else 'validator' if role=='validate' else 'worker'
+
+
+def environment(checkout,parent,case,ordinal,ambient):
+    family,role,scenario=CASES[case]
     http=schedule(case)[ordinal][0]=='http'
     result=dict(ambient) if http else {key:value for key,value in ambient.items() if not key.startswith('UNREST_')}
-    result.update(UNREST_HOME=str(parent/'.unrest'),UNREST_PROJECTS_DIR=str(parent/'.unrest/projects'),
-        UNREST_PROJECT_ID=family,UNREST_MISSION_ID='mission-001',UNREST_NODE_ID='node',
-        UNREST_NODE_TYPE=role,UNREST_HANDOFF_PATH=str(attempt(parent,case,ordinal)))
+    result.update(UNREST_HOME=str(parent/'.unrest'),UNREST_PROJECTS_DIR=str(parent/'.unrest/projects'))
     if http:
         result['PYTHONPATH']=str(checkout/'src')
         for name in ('WORKER','VALIDATOR','TERMINAL_REVIEWER'):
             result['UNREST_'+name+'_PROVIDER']='claude'
-            result['UNREST_'+name+'_ACP_COMMAND']='/bin/true'
+            result['UNREST_'+name+'_ACP_COMMAND']=str(parent/'workspace/.forbidden-child-trap') if family=='restart' and ordinal==0 else '/bin/true'
+    if mode(case,ordinal)=='orchestrator':
+        return result
+    project=f'real-restart-{role}-{scenario=="repair"}' if family=='restart' else family
+    node=role+'-node' if family=='restart' else 'work' if family=='targetless' else 'node'
+    path=(parent/'.unrest/projects'/project/'.unrest-runtime/missions/mission-001/attempts'/
+          (schedule(case)[ordinal][1]+'__'+node+'.json') if family in ('restart','targetless','binding') else attempt(parent,case,ordinal))
+    result.update(UNREST_PROJECT_ID=project,UNREST_MISSION_ID='mission-001',UNREST_NODE_ID=node,
+        UNREST_NODE_TYPE=role,UNREST_HANDOFF_PATH=str(path))
     return result
 
 

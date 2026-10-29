@@ -9,7 +9,7 @@ from launch_policy import admit_expected,build_expected
 from multiprocess_routes import TRANSACTIONS
 from cleanup_launch import EXECUTION_CASES
 
-from completion_roles import HTTP as ROLE_HTTP
+from completion_roles import HTTP as ROLE_HTTP,RESTART
 
 SUPERVISION = tuple(TRANSACTIONS)[:9]
 CASES = (*SUPERVISION, *ROLE_HTTP)
@@ -19,14 +19,16 @@ TRANSPORT = (*EXECUTION_CASES, *CASES, *INVENTORY)
 def expected(host, actor, raw):
     host.root_only(actor)
     case = host.case
-    if case not in SUPERVISION or raw['stdin'] is not None:
+    if (case not in (*SUPERVISION,*RESTART) or case in RESTART and raw['argv'][:1]!=['ps']
+            or raw['stdin'] is not None):
         raise Refused('HTTP original case or input')
     native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
     checkout, owned = Path(host.meta['checkout']), Path(host.meta['owned'])
     environment = {**host.meta_environment(), 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case+' (call)'}
     if raw['argv'][:1] == ['ps']:
         servers = [row for row in host.intents.values() if row['case']==case and row['role']=='mcp']
-        if len(servers)!=1 or not servers[0]['consumed'] or not host.ledger.reaped(servers[0]['birth'],servers[0]['token']):
+        if (not servers or any(not row['consumed'] for row in servers)
+                or case not in RESTART and (len(servers)!=1 or not host.ledger.reaped(servers[0]['birth'],servers[0]['token']))):
             raise Refused('HTTP inventory before original server wait')
         role, executable, kind = 'ps', '/usr/bin/ps', 'native'
         vector, cwd = ('ps', '-axo', 'pid=,ppid=,pgid='), str(checkout)
@@ -81,4 +83,4 @@ def stdio(host,pid,row):
 def proposal(host,actor,raw):
     value,role,port = expected(host,actor,raw)
     vector = [value.executable,*value.argv[1:]] if role=='ps' else [value.executable,'-I','-S',*value.argv[1:]]
-    return admit_expected(host,actor,raw,value,role,vector,port=port)
+    return admit_expected(host,actor,raw,value,role,vector,port=port,maximum=3 if host.case in RESTART else 1)

@@ -780,3 +780,13 @@ selected ordering, and the owned handoff/receipt paths. It retains bounded
 protocol data without treating it as launch permission. Existing wire-only cases
 still reject all handoff, receipt and frame-program fields. No external review
 or denied-review retry is introduced by these controlled fixture cases.
+
+Three further original HTTP families share the same role-server constructor:
+completion refusal across orchestrator restart, targetless completion, and
+completion target binding (15 parameters). Schedules retain distinct server
+slots, role-only metadata, exact inert provider command strings (including the
+original forbidden-child trap), and parent-local Git query bounds. Restart
+inventory is the fixed native `ps -axo pid=,ppid=,pgid=` command, at most three
+times after an admitted server; unlike supervision teardown inventory, these
+original checks intentionally run while the server is live. No inventory result
+can grant launch or signal authority.

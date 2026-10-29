@@ -16,12 +16,12 @@ def test_role_catalogue_preserves_all_original_parameter_ids_and_order():
             self.nodes=tuple(item.nodeid for item in session.items)
     plugin=Collected()
     code=pytest.main(['--collect-only','-q',roles.OWNERSHIP,roles.CRASH,roles.SETUP],plugins=[plugin])
-    assert code==0 and plugin.nodes==tuple(case for case in roles.CASES if case not in roles.SOURCE)
-    assert len(roles.CASES)-len(roles.SOURCE)==28 and sum(len(roles.schedule(case)) for case in roles.CASES)==80
-    assert sum(kind=='http' for case in roles.CASES for kind,_,_ in roles.schedule(case))==52
+    assert code==0 and plugin.nodes==tuple(case for case in roles.CASES if roles.CASES[case][0] in ('ownership','crash','setup'))
+    assert sum(row[0] in ('ownership','crash','setup') for row in roles.CASES.values())==28 and sum(len(roles.schedule(case)) for case,row in roles.CASES.items() if row[0] in ('ownership','crash','setup'))==80
+    assert sum(kind=='http' for case,row in roles.CASES.items() if row[0] in ('ownership','crash','setup') for kind,_,_ in roles.schedule(case))==52
 
 
-@pytest.mark.parametrize('case',[case for case in roles.CASES if case not in roles.SOURCE])
+@pytest.mark.parametrize('case',[case for case,row in roles.CASES.items() if row[0] in ('ownership','crash','setup')])
 def test_all_literals_and_environment_bind_closed_role_and_attempt(case,tmp_path):
     parent=tmp_path/'quote\'s-root'
     ambient={'HOME':'/owned/home','PATH':'/usr/bin:/bin','UNREST_FOREIGN':'must be stripped for stdio'}
@@ -81,3 +81,32 @@ def test_passive_git_metadata_is_closed_and_fully_retained():
     assert application_environment(baseline,observed)==observed
     with pytest.raises(Refused):
         application_environment(baseline,{'PATH':'/usr/bin:/bin'})
+
+
+def test_added_http_families_preserve_original_nodes_and_server_topology():
+    class Collected:
+        def pytest_collection_finish(self,session):
+            self.nodes=tuple(item.nodeid for item in session.items)
+    selected={**roles.RESTART,**roles.TARGETLESS,**roles.BINDING}
+    selectors=tuple(dict.fromkeys(case.split('[')[0] for case in selected))
+    plugin=Collected()
+    assert pytest.main(['--collect-only','-q',*selectors],plugins=[plugin])==0
+    assert plugin.nodes==tuple(selected) and len(selected)==15
+    for case,(family,role,scenario) in selected.items():
+        parent=Path('/owned/case')
+        for slot in range(len(roles.schedule(case))):
+            environment=roles.environment(ROOT,parent,case,slot,{'HOME':'/owned/home','PATH':'/usr/bin:/bin'})
+            assert roles.program(ROOT,parent,case,slot)=='from unrest_harness.server import main; main()'
+            if family=='restart' and slot>0:
+                assert roles.mode(case,slot)=='orchestrator'
+                assert 'UNREST_HANDOFF_PATH' not in environment
+                assert environment['UNREST_WORKER_ACP_COMMAND']=='/bin/true'
+            else:
+                assert environment['UNREST_NODE_TYPE']==role
+                assert roles.mode(case,slot)==('validator' if role=='validate' else 'worker')
+                if family=='restart':
+                    assert environment['UNREST_PROJECT_ID']==f'real-restart-{role}-{scenario=="repair"}'
+                    assert environment['UNREST_WORKER_ACP_COMMAND']=='/owned/case/workspace/.forbidden-child-trap'
+                else:
+                    assert environment['UNREST_PROJECT_ID']==family
+        assert case in roles.HTTP

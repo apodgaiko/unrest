@@ -2,7 +2,7 @@
 from pathlib import Path
 import stat
 
-from completion_roles import CASES,SOURCE,schedule,root,actor_slot
+from completion_roles import CASES,SOURCE,ROOT_QUERIES,schedule,root,actor_slot
 from content_manifest import Refused
 from custody_git import repository
 from git_commands import Command
@@ -56,7 +56,7 @@ def proposal(host,actor,raw):
     base={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
     if actor['role']=='root':
         host.root_only(actor)
-        if (len(records)>=2+SOURCE.get(case,0)
+        if (len(records)>=2+ROOT_QUERIES.get(case,0)
                 or any(row['case']==case and 'server_slot' in row for row in host.intents.values())):
             raise Refused('completion root fixture sequence')
         is_fixture=len(records)<2
@@ -72,7 +72,7 @@ def proposal(host,actor,raw):
         else:
             ready(host,workspace)
             vector=('git','rev-parse','HEAD')
-            environment=application_environment(base,raw['environment'])
+            environment=application_environment(base,raw['environment']) if case in SOURCE else base
         command=Command(vector,str(workspace))
     else:
         server=actor_slot(host,actor)
@@ -87,7 +87,7 @@ def proposal(host,actor,raw):
         tuple(sorted(environment.items())),str(workspace),'native')
     translated=['/usr/bin/git',*vector[1:]]
     answer=admit_expected(host,actor,raw,expected,'git-command',translated,
-        maximum=2+SOURCE.get(case,sum(row[2] for row in schedule(case))))
+        maximum=2+ROOT_QUERIES.get(case,0)+sum(row[2] for row in schedule(case)))
     if answer is None:
         return None
     intent=host.intents[answer['ticket']]

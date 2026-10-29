@@ -92,3 +92,31 @@ def test_child_exit_alone_cannot_satisfy_original_completion(host,monkeypatch):
     assert not server.complete(host,row)
     host.actors[1]['waited']=True
     assert server.complete(host,row)
+
+
+def test_restart_inventory_is_native_bounded_and_requires_an_admitted_server(host,monkeypatch):
+    import http_cases
+    value,actor,parent=host
+    value.case=next(iter(roles.RESTART))
+    value.meta['owned']=str(parent)
+    monkeypatch.setattr(http_cases,'image',lambda executable:'b'*64)
+    environment={**value.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':value.case+' (call)'}
+    request={'argv':['ps','-axo','pid=,ppid=,pgid='],'executable':'ps','cwd':str(ROOT),
+        'environment':environment,'stdin':None}
+    with pytest.raises(Refused,match='before original server wait'):
+        server.proposal(value,actor,request)
+    value.intents={1:{'case':value.case,'role':'mcp','consumed':False}}
+    with pytest.raises(Refused):
+        server.proposal(value,actor,request)
+    value.intents[1]['consumed']=True
+    seen=[]
+    def admit(*args,**kwargs):
+        seen.append((args,kwargs))
+        return {'ticket':2,'token':'bound'}
+    value.admit_launch=admit
+    assert server.proposal(value,actor,request)['translated']==['/usr/bin/ps','-axo','pid=,ppid=,pgid=']
+    assert seen[0][1]['maximum']==3
+    request['environment']={**environment,'UNREST_WORKER_PROVIDER':'other'}
+    with pytest.raises(Refused):
+        server.proposal(value,actor,request)
+    assert len(seen)==1
