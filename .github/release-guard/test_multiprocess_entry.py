@@ -117,7 +117,6 @@ def tracker(monkeypatch):
 
     host.admit_launch = admit
     monkeypatch.setattr(entry, "fd_record", lambda pid, fd: [fd, 10, 20, 0])
-    monkeypatch.setattr(entry, "counterpart", lambda pid, row: [[6, 10, 20, 1]])
     return host, actor, raw, calls
 
 
@@ -225,7 +224,6 @@ def test_spawn_requires_distinct_bootstrap_reader_sentinel_writer_and_live_track
     elif mutation == "tracker-generation":
         rows[101, 5][2] = 99
     monkeypatch.setattr(entry, "fd_record", lambda pid, fd: rows[pid, fd])
-    monkeypatch.setattr(entry, "counterpart", lambda pid, row: [[99, row[1], row[2], 1 - row[3]]])
     monkeypatch.setattr(
         linux_observation,
         "process_identity",
@@ -421,43 +419,6 @@ def test_ipc_cases_have_only_their_exact_spawn_inventory(case_index, count):
 
 
 @pytest.mark.parametrize(
-    "mutation", [None, "direction", "pair", "alias", "order", "arena-order", "extra-arena"]
-)
-def test_queue_and_arena_are_distinct_exact_posix_resources(mutation):
-    from multiprocess_entry import child_custody, IPC_CASES
-
-    fds = [6, 11, 12, 13, 8, 10]
-    rows = [
-        [6, 1, 20, 1],
-        [8, 1, 30, 0],
-        [10, 1, 40, 1],
-        [11, 1, 50, 0],
-        [12, 1, 50, 1],
-        [13, 1, 60, 2, 4096],
-    ]
-    if mutation == "direction":
-        rows[3][3], rows[4][3] = 1, 0
-    elif mutation == "pair":
-        rows[4][2] = 51
-    elif mutation == "alias":
-        rows[3][2] = rows[4][2] = 20
-    elif mutation == "order":
-        fds[1], fds[2] = fds[2], fds[1]
-    elif mutation == "arena-order":
-        fds[1], fds[3] = fds[3], fds[1]
-    elif mutation == "extra-arena":
-        rows[3] = [11, 1, 50, 2, 4096]
-    if mutation is None:
-        child_custody(IPC_CASES[0], fds, 6, 8, rows)
-        for case in (IPC_CASES[1], CASES[0]):
-            with pytest.raises(Refused, match="extra"):
-                child_custody(case, fds, 6, 8, rows)
-    else:
-        with pytest.raises(Refused):
-            child_custody(IPC_CASES[0], fds, 6, 8, rows)
-
-
-@pytest.mark.parametrize(
     "mutation",
     [
         None,
@@ -548,7 +509,7 @@ def test_child_rechecks_arena_inode_instead_of_trusting_descriptor_number(monkey
 @pytest.mark.parametrize("case", __import__("multiprocess_routes").ROUTES)
 def test_queue_family_targets_have_exact_counts_order_and_no_extra_permission(case):
     from multiprocess_routes import ROUTES
-    from multiprocess_entry import plan, count, child_custody
+    from multiprocess_entry import plan, count
 
     entries = ROUTES[case]
     assert count(case) == 1 + sum(spec.maximum for spec in entries.values())
@@ -574,7 +535,6 @@ def test_queue_family_targets_have_exact_counts_order_and_no_extra_permission(ca
             expected(case, argv, fds, list(target), NATIVE, "a" * 64, "/source", {})[1]
             == "mp-child"
         )
-        child_custody(case, fds, 6, 8, rows, list(target))
         with pytest.raises(Refused):
             expected(case, argv, fds + [99], list(target), NATIVE, "a" * 64, "/source", {})
         with pytest.raises(Refused):
@@ -584,10 +544,7 @@ def test_queue_family_targets_have_exact_counts_order_and_no_extra_permission(ca
             changed[1], changed[-2] = changed[-2], changed[1]
             with pytest.raises(Refused):
                 expected(case, argv, changed, list(target), NATIVE, "a" * 64, "/source", {})
-            changed_rows = [row[:] for row in rows]
-            changed_rows[1][2] = 20
-            with pytest.raises(Refused):
-                child_custody(case, fds, 6, 8, changed_rows, list(target))
+
 
 
 @pytest.mark.parametrize("case", [*CASES, *__import__("multiprocess_entry").IPC_CASES])

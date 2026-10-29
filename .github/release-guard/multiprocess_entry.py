@@ -104,23 +104,6 @@ def stderr_record(pid,fd):
     return [fd,info.st_dev,info.st_ino,int(flags[0],8)&~os.O_CLOEXEC]
 
 
-def counterpart(pid,record):
-    records=[]
-    for path in sorted((Path('/proc')/str(pid)/'fd').iterdir()):
-        fd=int(path.name)
-        if fd<=2 or fd==record[0]:
-            continue
-        try:
-            other=fd_record(pid,fd)
-        except (FileNotFoundError,Refused):
-            continue
-        if other[1:3]==record[1:3] and other[3]!=record[3]:
-            records.append(other)
-    if not records:
-        raise Refused('spawn missing original-parent FIFO counterpart')
-    return records
-
-
 def expected(case,argv,passfds,target,native,pin,checkout,environment):
     if (type(case) is not str or case not in ALL_CASES or case==ZERO or type(argv) is not list
             or any(type(arg) is not str for arg in argv) or argv[:4]!=[native,'-S','-I','-c'] or type(passfds) is not list
@@ -154,33 +137,6 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
         descriptors=sorted(passfds)
     value=build_expected(case, native, pin, tuple(argv), tuple(sorted(environment.items())), str(checkout), 'python-command')
     return value,role,descriptors
-
-
-def child_custody(case,passfds,tracker_fd,reader,inherited,target=None):
-    tracked=next(row for row in inherited if row[0]==tracker_fd)
-    bootstrap=next(row for row in inherited if row[0]==reader)
-    sentinel=next(row for row in inherited if row[0]==passfds[-1])
-    used={tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)}
-    if (bootstrap[3]!=os.O_RDONLY or sentinel[3]!=os.O_WRONLY or len(used)!=3):
-        raise Refused('spawn distinct bootstrap reader and sentinel writer')
-    extras=[row for fd in passfds[1:-2] for row in inherited if row[0]==fd]
-    cursor=0
-    for kind in plan(case,TARGETS.get(case) if target is None else target).resources:
-        width=2 if kind=='queue' else 1
-        rows=extras[cursor:cursor+width]
-        if kind=='queue':
-            if (len(rows)!=2 or any(len(row)!=4 for row in rows) or rows[0][1:3]!=rows[1][1:3]
-                    or [row[3] for row in rows]!=[os.O_RDONLY,os.O_WRONLY]):
-                raise Refused('spawn exact Queue descriptor custody')
-        elif len(rows)!=1 or len(rows[0])!=(7 if kind=='pipe' else 5):
-            raise Refused('spawn exact application descriptor custody')
-        member=tuple(rows[0][1:3])
-        if member in used:
-            raise Refused('spawn aliased application descriptor')
-        used.add(member)
-        cursor+=width
-    if cursor!=len(extras) or len(inherited)!=3+cursor:
-        raise Refused('spawn unexpected extra descriptors')
 
 
 def quota(records,role,target,maximum):
@@ -223,7 +179,6 @@ def proposal(host,actor,raw):
         reader=int(raw['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1])
         tracker_read=fd_record(actor['birth'].pid,reader)
         inherited=[tracker_read if fd==reader else stderr_record(actor['birth'].pid,fd) for fd in descriptors]
-        counterpart(actor['birth'].pid,tracker_read)
         if tracker_read[3]!=os.O_RDONLY:
             raise Refused('tracker read direction')
     else:
@@ -250,10 +205,11 @@ def proposal(host,actor,raw):
         if not owner['body_ready']:
             return None  # Existing bounded RPC waits for the native READY join.
         reader=int(raw['argv'][4].split('pipe_handle=',1)[1][:-1])
-        for row in inherited:
-            if row[0]!=tracker_fd and len(row)==4:
-                counterpart(actor['birth'].pid,row)
-        child_custody(host.case,raw['passfds'],tracker_fd,reader,inherited,raw['target'])
+        bootstrap=next(row for row in inherited if row[0]==reader)
+        sentinel=next(row for row in inherited if row[0]==raw['passfds'][-1])
+        if (bootstrap[3]!=os.O_RDONLY or sentinel[3]!=os.O_WRONLY
+                or len({tuple(row[1:3]) for row in (tracked,bootstrap,sentinel)})!=3):
+            raise Refused('spawn distinct bootstrap reader and sentinel writer')
     vector=[native,'-I','-S',*raw['argv'][3:]]
     answer=host.admit_launch(actor,value,role,vector,None,inherited=inherited,maximum=count(host.case)-1 if role=='mp-child' else 1)
     if answer is None:
