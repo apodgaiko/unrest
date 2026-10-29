@@ -553,3 +553,11 @@ exit9 plus tracer terminal-9 cancels its channel. The cancellation record claims
 neither descriptor retention nor payload execution. Parked channels settle before
 new dispatch, and case completion waits for resolution; ordinary child cleanup
 still requires the independently joined original-parent numeric wait.
+
+An observed SIGKILL group teardown can deliver a thread's terminal wait without
+that thread's individual exit-stop record. The ledger accepts this only for an
+already observed member of the same kernel thread group, with the leader's actual
+exit9, the thread's actual terminal9/-9 and its unchanged Birth. The missing thread
+exit remains absent. This never supplies a leader terminal, a process exit, or an
+original-parent wait; all child-process numeric joins retain their existing rules.
+Normal exits and other signals still need the individual thread exit stop.

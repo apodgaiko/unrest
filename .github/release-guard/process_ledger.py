@@ -284,8 +284,10 @@ class Ledger:
                     self.poison.append('failure-cleanup')
                 else:
                     group_exit=self.process(process.group).exit if birth.pid!=birth.tgid and process.group is not None else None
-                    if (process.exit is None or process.exit[1]!=raw and (group_exit is None or group_exit[1]!=raw)
-                            or Birth.read(row.get('identity')) != birth):
+                    own_exit=process.exit is not None and process.exit[1]==raw
+                    group_terminal=(group_exit is not None and group_exit[1]==raw
+                                    and (process.exit is not None or raw==9))
+                    if (not (own_exit or group_terminal) or Birth.read(row.get('identity')) != birth):
                         raise Refused('ledger terminal birth or exit')
                 process.terminal = (sequence, raw, code)
                 if process.parent is not None and process.birth.pid == process.birth.tgid:

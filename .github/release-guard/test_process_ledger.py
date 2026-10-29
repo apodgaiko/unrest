@@ -416,3 +416,23 @@ def test_native_owned_fork_wait_cannot_retire_without_child_admission(token):
     wait4(ledger, root, child, 0)
     assert not ledger.reaped(child, token)
     assert not ledger.reaped(child, 'child-token')
+
+
+@pytest.mark.parametrize('leader_raw,terminal_raw,valid',[(9,9,True),(0,0,False),(15,9,False),(9,15,False)])
+def test_missing_thread_exit_stop_accepts_only_actual_group_sigkill(leader_raw,terminal_raw,valid):
+    ledger=Ledger('missing-thread-exit')
+    leader_id,thread_id=identity(100,99),identity(101,99,tgid=100)
+    leader,thread=Birth.read(leader_id),Birth.read(thread_id)
+    emit(ledger,'kernel_root',identity=leader_id)
+    emit(ledger,'kernel_child',parent=100,child=101,event=3,identity=thread_id)
+    emit(ledger,'kernel_exit',pid=100,raw=leader_raw)
+    row=dict(pid=101,raw=terminal_raw,normalized=__import__('os').waitstatus_to_exitcode(terminal_raw),identity=thread_id)
+    if valid:
+        emit(ledger,'tracer_terminal_wait',**row)
+        assert ledger.process(thread).exit is None  # Never manufacture the missing per-thread stop.
+        assert ledger.process(thread).terminal[1:]==(9,-9)
+        assert ledger.process(leader).terminal is None
+        assert not ledger.reaped(thread,'unregistered') and not ledger.reaped(leader,'unregistered')
+    else:
+        with pytest.raises(Refused,match='terminal birth or exit'):
+            emit(ledger,'tracer_terminal_wait',**row)
