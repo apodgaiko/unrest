@@ -61,8 +61,6 @@ def fixture(tmp_path,monkeypatch):
 def prepare(fixture):
     host,actor,raw,wait,workspace=fixture
     first=git.proposal(host,actor,raw(git.FIXTURE[0]))
-    with pytest.raises(Refused,match='previous parent-local'):
-        git.proposal(host,actor,raw(git.FIXTURE[1]))
     metadata=workspace/'.git'
     (metadata/'refs/heads').mkdir(parents=True)
     (metadata/'HEAD').write_text('ref: refs/heads/main\n')
@@ -73,7 +71,7 @@ def prepare(fixture):
     return host,actor,raw,wait,workspace
 
 
-def test_fixture_needs_two_actual_parent_waits_before_sealing_model_metadata(fixture):
+def test_fixture_retains_exact_mutation_count_and_metadata_generation(fixture):
     host,actor,raw,wait,workspace=prepare(fixture)
     assert git.ready(host,workspace) is None
     with pytest.raises(Refused,match='root fixture sequence'):
@@ -133,7 +131,7 @@ def test_concurrent_servers_have_independent_queries_and_exact_parent_quota(fixt
     assert first['ticket']!=second['ticket']
     assert host.intents[first['ticket']]['parent'] is servers[0]['birth']
     assert host.intents[second['ticket']]['parent'] is servers[1]['birth']
-    with pytest.raises(Refused,match='previous parent-local'):
+    with pytest.raises(Refused,match='query quota'):
         git.proposal(host,servers[0],raw(('git','rev-parse','HEAD'),servers[0]['profile']['environment']))
     wait(first)
     with pytest.raises(Refused,match='query quota'):

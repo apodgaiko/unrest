@@ -98,8 +98,6 @@ def launch(host,actor,result,kind,expected):
     maximum=4 if host.case in CRASH else COHORT[host.case][1] if host.case in COHORT else 12+8*limits(host.case)[0]
     if len(prior) >= maximum:
         raise Refused('custody Git finite case command bound')
-    if any(not v['consumed'] or not host.ledger.reaped(v['birth'],v['token']) for v in prior if v.get('repository')==result.cwd):
-        raise Refused('custody Git previous command actual wait')
     identity = repository(result.cwd,Path(host.meta['owned']),initialize=result.argv[len(PREFIX)] == 'init')
     key = host.case,result.cwd
     previous = host.git.custody_roots.get(key)

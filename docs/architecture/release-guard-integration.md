@@ -898,3 +898,12 @@ complete acquired descriptor inventory, FIFO access flags, anonymous-arena
 constraints, Unix open-file identity and owner, and child-side descriptor
 recensus. The live tracker still needs its authenticated READY, exact birth and
 read/write pipe identity. Numeric child waits and cleanup assertions are unchanged.
+
+Git commands no longer require a second intermediate wait-order model before
+each subsequent command. Their independently acquired repository generations,
+fixed command operands, mutation ordinals, parent roles, helper reservations and
+quotas remain. The unique pending-launch join still serializes admission through
+actual exec. Case finalization requires every admitted command and helper to have
+its real numeric parent wait; helpers also retain the successful native status,
+image pin, parent, case and execution generation checks. The guard does not
+independently certify application-level Git call ordering or HEAD correctness.

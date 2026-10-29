@@ -40,7 +40,7 @@ def test_pre_send_stops_allow_one_owned_startup_pair_but_no_second(boundary):
             [{'cwd':'/owned/pytest/case/worker','role':'backend'}],lambda row:True)
 
 
-def test_git_sequencing_is_per_repository_but_quota_remains_case_wide(monkeypatch):
+def test_git_quota_remains_case_wide_without_intermediate_wait_ordering(monkeypatch):
     import custody_git
     from types import SimpleNamespace
     case=TEST+'::test_actual_four_arm_timing_and_model_conformance[equal-True-True]'
@@ -53,8 +53,7 @@ def test_git_sequencing_is_per_repository_but_quota_remains_case_wide(monkeypatc
     selected=command(case,(*PREFIX,'rev-parse','HEAD'),cwd,Path('/owned'))
     assert custody_git.launch(host,None,*selected,None) is None
     prior['repository']=cwd
-    with pytest.raises(Refused,match='actual wait'):
-        custody_git.launch(host,None,*selected,None)
+    assert custody_git.launch(host,None,*selected,None) is None
     prior['repository']='/owned/pytest/case/first'
     host.intents={i:prior for i in range(CASES[case][1])}
     with pytest.raises(Refused,match='command bound'):

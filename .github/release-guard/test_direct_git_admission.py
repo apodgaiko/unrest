@@ -12,8 +12,8 @@ from process_ledger import Ledger
 from launch_policy import build_expected
 
 
-@pytest.mark.parametrize('failure',[None,'pending','unreaped','descendant','repository','location'])
-def test_selected_git_command_still_requires_every_custody_and_actual_wait(failure):
+@pytest.mark.parametrize('failure',[None,'repository','location'])
+def test_selected_git_command_retains_repository_and_worktree_custody(failure):
     calls=[]
     host=SimpleNamespace(case=CASES[0],root_only=lambda actor:None,intents={},
         ledger=Ledger('synthetic-direct-git'))
@@ -21,10 +21,6 @@ def test_selected_git_command_still_requires_every_custody_and_actual_wait(failu
     host.ledger.reaped=lambda *args:failure!='unreaped'
     command=Command(('git','rev-parse','HEAD'),'/owned/project')
     value=build_expected(host.case, '/usr/bin/git', 'b'*64, command.argv, (), command.cwd, 'native')
-    if failure in ('pending','unreaped','descendant'):
-        git.last[host.case]={'consumed':failure!='pending','birth':'old','token':'old',
-            'command':Command(('git','rev-parse','HEAD'),command.cwd)}
-    git.descendants_reaped=lambda *args:failure!='descendant'
     def repository(*args):
         calls.append(('repository',args))
         if failure=='repository':
@@ -48,7 +44,7 @@ def test_selected_git_command_still_requires_every_custody_and_actual_wait(failu
         assert git.launch({},'head',command.cwd,command,value,list(command.argv))['ok'] is True
         assert [kind for kind,_ in calls]==['repository','location','admit']
         assert calls[2][1]==(value,'git-command',list(command.argv),None)
-        assert git.commands['new'] is git.last[host.case] is host.intents[1]
+        assert git.commands['new'] is host.intents[1]
         assert host.intents[1]['command'] is command
 
 

@@ -51,7 +51,8 @@ def test_actual_native_parent_wait_settles_every_helper_without_python_receipt()
     wait4(ledger,parent,helper,0)
     complete(ledger,root,parent,0)
     git=Git(SimpleNamespace(ledger=ledger))
-    assert git.descendants_reaped(parent)
+    assert git.reaped({'birth':helper,'role':'git-helper','case':CASE})
+    assert git.reaped({'birth':nested,'role':'git-helper','case':CASE})
     assert git.native_child_reaped(parent,helper,CASE,ledger.process(parent).pins)
 
 
@@ -77,5 +78,5 @@ def test_native_descendant_wait_has_no_generic_reap_exception(mutation):
         process.parent_wait=(*process.parent_wait[:3],1)
     complete(ledger,root,parent,0)
     git=Git(SimpleNamespace(ledger=ledger))
-    assert not git.descendants_reaped(parent)
+    assert not git.reaped({'birth':helper,'role':'git-helper','case':CASE})
     assert not git.native_child_reaped(parent,helper,CASE,ledger.process(parent).pins)

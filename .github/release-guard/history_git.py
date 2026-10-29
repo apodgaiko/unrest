@@ -77,9 +77,6 @@ def proposal(host,actor,raw):
         raise Refused('history exact readonly command')
     if regular(Path(host.meta['owned'])/'home/.gitconfig',uid=20001)!=HOME_CONFIG:
         raise Refused('history protected home configuration')
-    previous=[value for value in host.intents.values() if value['case']==host.case and value['role']=='git-custody']
-    if any(not value['consumed'] or not host.ledger.reaped(value['birth'],value['token']) for value in previous):
-        raise Refused('history previous actual parent wait')
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
     expected=build_expected(host.case,'/usr/bin/git',image(),tuple(raw['argv']),
         tuple(sorted(environment.items())),raw['cwd'] if host.case==CLI else str(checkout),'native')
@@ -99,8 +96,6 @@ def cli_proposal(host,actor,raw):
     if repository.resolve()!=repository or (repository/'.git').resolve()!=repository/'.git':
         raise Refused('binding CLI repository alias')
     previous=[value for value in host.intents.values() if value['case']==CLI]
-    if any(not value['consumed'] or not host.ledger.reaped(value['birth'],value['token']) for value in previous):
-        raise Refused('binding CLI previous actual wait')
     ordinal=sum(value['role']=='fixed-inline' for value in previous)
     if ordinal>=2:
         raise Refused('binding CLI original two invocations')

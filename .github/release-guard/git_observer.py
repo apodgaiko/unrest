@@ -36,7 +36,7 @@ def image(file='/usr/bin/git'):
 class Git:
     def __init__(self, observer):
         self.host = observer
-        self.repositories, self.commands, self.last = {}, {}, {}
+        self.repositories, self.commands = {}, {}
         self.helpers = {}
         self.custody_roots = {}
 
@@ -108,10 +108,6 @@ class Git:
         family=declared_fixture(host.case).family if host.case in SLOTS else 'workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
         if operation not in OPERATIONS[family]:
             raise Refused('Git finite operation declaration')
-        previous = self.last.get(host.case)
-        if previous is not None and (not previous['consumed'] or not host.ledger.reaped(previous['birth'], previous['token'])
-                or not self.descendants_reaped(previous['birth'])):
-            raise Refused('git next command before actual parent/descendant wait')
         root = self.repository(repository, operation, family)
         self.location(root, command.cwd)
         answer = host.admit_launch(actor,expected,'git-command',vector,None,maximum=128)
@@ -120,7 +116,6 @@ class Git:
         intent = host.intents[answer['ticket']]
         intent.update(command=command, repository=str(root), operation=operation)
         self.commands[intent['token']] = intent
-        self.last[host.case] = intent
         return answer
 
     def reserve_helper(self, birth, parent):
@@ -160,18 +155,6 @@ class Git:
             and child.pins==owner.pins==pins and child.generation==child.registered_generation==1
             and owner.generation==owner.registered_generation==1 and ledger.reaped(birth,child.life_token)
             and child.terminal[2]==0 and child.parent_wait[3]==0)
-
-    def descendants_reaped(self,birth):
-        process=self.host.ledger.process(birth)
-        pending,checked=[birth],0
-        while pending:
-            parent=pending.pop()
-            for child in self.host.ledger.children.get(parent,()):
-                checked+=1
-                if checked>16 or not self.native_child_reaped(parent,child,process.case,process.pins):
-                    return False
-                pending.append(child)
-        return True
 
     def reaped(self, actor):
         birth = actor['birth']

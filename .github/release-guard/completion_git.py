@@ -31,10 +31,6 @@ def application_environment(baseline,observed):
 
 
 def ready(host,workspace):
-    records=[row for row in host.intents.values() if row['case']==host.case and row.get('fixture_git')]
-    if (len(records)!=len(fixture(host.case)) or any(not row['consumed'] or not host.git.reaped(host.actors[row['pid']])
-            or host.ledger.process(row['birth']).terminal[2]!=0 for row in records)):
-        raise Refused('completion fixture before actual Git waits')
     identity=repository(str(workspace),Path(host.meta['owned']),initialize=False)
     if host.fixture_roots.get(('completion-git-root',host.case))!=identity:
         raise Refused('completion fixture repository generation changed')
@@ -57,8 +53,6 @@ def proposal(host,actor,raw):
         raise Refused('completion sealed Git home configuration')
     records=[row for row in host.intents.values() if row['case']==case and row['role']=='git-command'
              and row['parent']==actor['birth']]
-    if any(not row['consumed'] or not host.git.reaped(host.actors[row['pid']]) for row in records):
-        raise Refused('completion previous parent-local Git wait')
     base={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
     commands=fixture(case)
     if actor['role']=='root':
