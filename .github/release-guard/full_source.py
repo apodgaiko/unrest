@@ -76,3 +76,5 @@ def pytest_configure(config):
     if ACTIVE is None or ACTIVE.profile['role']!='root' or type(ACTIVE.profile['cases']) is not dict:
         raise Refused('full source native activation absent')
     config.pluginmanager.register(FullCases(ACTIVE),'release-full-outcomes')
+    from prepared_distribution import Provider
+    config.pluginmanager.register(Provider(ACTIVE),'release-prepared-distribution')

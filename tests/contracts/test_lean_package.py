@@ -209,7 +209,9 @@ def test_reference_contract_scenario(
     assert ASSERTION_TO_SCENARIOS[assertion_id] == (scenario_id,)
     assert reference_node in lean_reference_run.nodes
     if reference_node == "local::archive-rejects-deleted-product-surface":
-        assert "distribution archives verified" in built_distribution.checker_output
+        assert built_distribution.content_proof["package_files"] > 0
+        assert built_distribution.content_proof["wheel"] == built_distribution.wheel.name
+        assert built_distribution.content_proof["sdist"] == built_distribution.sdist.name
         assert len(built_distribution.wheel_sha256) == 64
         assert len(built_distribution.sdist_sha256) == 64
         _assert_lean_archive(

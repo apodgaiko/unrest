@@ -69,8 +69,11 @@ def test_v045_public_assets_and_api_exports_are_in_source_package() -> None:
 
 
 @pytest.fixture(scope="module")
-def built_distribution(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def built_distribution(tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest) -> Path:
     """Build the candidate archives once in test-owned temporary storage."""
+    provider = request.config.pluginmanager.get_plugin("release-prepared-distribution")
+    if provider is not None:
+        return provider.inputs()["dist"]
     dist = tmp_path_factory.mktemp("sdist-executable-proof") / "dist"
     environment = os.environ.copy()
     environment.pop("PYTHONPATH", None)

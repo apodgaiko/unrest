@@ -343,7 +343,7 @@ def test_membership_only_distribution_checker_mutations_fail_contract(
     repository = _copy_repository(tmp_path)
     path = repository / "tools/check_distribution.py"
     text = path.read_text(encoding="utf-8")
-    target = "restart_oracle = _check_extracted_restart_oracle(root, sdists[0])"
+    target = 'restart_oracle = _check_extracted_restart_oracle(root, dist / str(contents["sdist"]), run_process)'
     assert text.count(target) == 1
     path.write_text(text.replace(target, replacement), encoding="utf-8")
 

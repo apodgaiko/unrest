@@ -60,7 +60,7 @@ def inventory(root):
     return hashlib.sha256(json.dumps(rows, separators=(',', ':')).encode()).hexdigest()
 
 
-def prepare(binding, checkout, root, git=False, public=False, native=False, extracted=None):
+def prepare(binding, checkout, root, git=False, public=False, native=False, extracted=None, distribution=False):
     from content_manifest import capture, encode
     require(subprocess.check_output(['/usr/bin/git', 'rev-parse', 'HEAD'], cwd=checkout).decode().strip()
             == binding['head'], 'source revision binding')
@@ -100,6 +100,9 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
         member.chmod(0o755 if member.is_dir() or member.stat().st_mode & 0o111 else 0o644)
     if extracted is not None:
         shutil.copyfile(checkout/'tools/check_distribution.py',dependencies/'release_distribution_oracle.py')
+    if distribution:
+        from prepared_distribution import prepare as prepare_distribution
+        prepare_distribution(binding,source,manifest,dependencies)
     owned = root / 'owned'
     owned.mkdir(mode=0o700)
     os.chown(owned, 20000, 20000)
@@ -386,7 +389,7 @@ def main():
         phase_root=root/'archive' if archive else root
         if archive:
             phase_root.mkdir(mode=0o755)
-        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), phase_root, extracted=Path(sys.argv[3]).resolve(strict=True) if archive else None, git=full or cases == GIT_CASES, public=full or any(case in IMPORT_CASES for case in cases), native=full or any(case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP) for case in cases)), 'cases': list(cases)}
+        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), phase_root, extracted=Path(sys.argv[3]).resolve(strict=True) if archive else None, git=full or cases == GIT_CASES, public=full or any(case in IMPORT_CASES for case in cases), native=full or any(case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP) for case in cases), distribution=full), 'cases': list(cases)}
         if full:
             from full_launch import prepare as prepare_full
             metadata=prepare_full(binding,metadata)

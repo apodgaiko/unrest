@@ -354,3 +354,21 @@ are parent-owned pipes. Both children require exit zero and actual original-pare
 waits. This grants no provider launch, TCP endpoint or generic ps/Python command.
 The original response, candidate, registration, process and cleanup assertions
 remain unchanged.
+
+Package build/install preparation uses a disposable copy of the measured candidate
+and the measured stock uv/runtime under the existing reduced source credentials.
+The isolated backend is measured from its actual fresh uv archive cache; it is
+not claimed to be locked by `uv.lock`. Complete backend, archive and installed
+member bytes are retained under the existing read-only dependency generation.
+A provider checks the source/tool/runtime binding and those member inventories,
+then returns only fixed artifact paths. It supplies no test outcome, checker
+output or persistence result. Test-owned cwd/lifecycle state remains writable and
+separate. Ordinary test runs retain their public uv build/install path.
+
+The contract archive scenario now invokes the actual content oracle and safe
+extraction directly, using structured results instead of subprocess-success text.
+This removes its duplicate extracted-suite run. `check_distribution()` and its
+CLI still unconditionally execute the extracted restart oracle after complete
+content validation, and the membership-only mutation test targets that live call.
+The original distribution success and extracted fixture/import failure tests keep
+their real execution requirements. Prepared inputs alone certify none of them.

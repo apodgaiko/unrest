@@ -266,10 +266,8 @@ def _check_extracted_restart_oracle(
         )
 
 
-def check_distribution(
-    root: Path, dist: Path, *,
-    run_process: Callable[..., subprocess.CompletedProcess[str]] | None = None,
-) -> dict[str, object]:
+def check_archive_contents(root: Path, dist: Path) -> dict[str, object]:
+    """Compare every packaged byte and safely extract without running tests."""
     wheels = sorted(dist.glob("*.whl"))
     sdists = sorted(dist.glob("*.tar.gz"))
     if len(wheels) != 1 or len(sdists) != 1:
@@ -331,13 +329,18 @@ def check_distribution(
     }
     if not required_assets <= wheel.keys():
         raise RuntimeError("wheel is missing typed marker or runtime policy asset")
-    restart_oracle = _check_extracted_restart_oracle(root, sdists[0], run_process)
-    return {
-        "package_files": len(source),
-        "restart_oracle": restart_oracle,
-        "sdist": sdists[0].name,
-        "wheel": wheels[0].name,
-    }
+    with tempfile.TemporaryDirectory(prefix="unrest-sdist-content-") as temporary:
+        _extract_sdist_safely(sdists[0], Path(temporary))
+    return {"package_files": len(source), "sdist": sdists[0].name, "wheel": wheels[0].name}
+
+
+def check_distribution(
+    root: Path, dist: Path, *,
+    run_process: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> dict[str, object]:
+    contents = check_archive_contents(root, dist)
+    restart_oracle = _check_extracted_restart_oracle(root, dist / str(contents["sdist"]), run_process)
+    return {**contents, "restart_oracle": restart_oracle}
 
 
 def main() -> None:
