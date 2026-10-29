@@ -741,3 +741,11 @@ own child. Failed or interrupted waits never signal a PID already reaped, and th
 first private failure record is retained. The native primitive control proves
 real PPid1 adoption and numeric waits17/23. This primitive alone grants no source
 case an adoption exception, resumed signaling scope or release eligibility.
+
+The ordinary mock ACP declaration also covers the eight original full-job format
+and credential-field parameters and the two concurrent startup parameters. The
+observer derives task/attempt identities and public template canaries from pinned
+source and the selected case; it acquires the owned pytest directory and retains
+its inode generation. Native sleep retains exact inherited environment and argv.
+Two sibling mock sessions have separate ordered identities and a quota of two;
+this does not serialize their real protocol sessions or change test deadlines.

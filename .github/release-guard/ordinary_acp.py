@@ -44,11 +44,17 @@ STARTUP_CASES=tuple(TEST+'::'+name for name in (
     'test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[work]',
     'test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[validate]',
     'test_terminal_real_startup_failure_is_safe_and_starts_no_protocol'))
-EXECUTION_CASES=(*CASES,*STARTUP_CASES)
+TEMPLATE_CASES=tuple(TEST+'::'+name+'['+role+'-'+provider+']'
+    for name in ('test_full_jobs_and_handoffs_preserve_complete_format_templates',
+                 'test_full_jobs_do_not_infer_credentials_inside_format_fields')
+    for role in ('worker','validator') for provider in ('claude','codex'))
+BATCH_CASES=tuple(TEST+'::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success['+provider+']'
+                  for provider in ('claude','codex'))
+EXECUTION_CASES=(*CASES,*STARTUP_CASES,*TEMPLATE_CASES,*BATCH_CASES)
 ALL_CASES = (*EXECUTION_CASES, *NEGATIVE_CASES)
 
 
-def environment(case, base, root_environment):
+def environment(case, base, root_environment, ordinal=0):
     if case not in EXECUTION_CASES:
         raise Refused('ordinary finite case')
     if case in STARTUP_CASES:
@@ -63,6 +69,26 @@ def environment(case, base, root_environment):
         else:
             result.update(UNREST_NODE_ID='startup-'+role,UNREST_NODE_TYPE=role,
                 UNREST_HANDOFF_PATH=str(runtime/'attempts'/('2026-08-30T04-00-00Z-'+role+'__startup-'+role+'.json')))
+        return result
+    if case in (*TEMPLATE_CASES,*BATCH_CASES):
+        if ordinal not in range(2 if case in BATCH_CASES else 1):
+            raise Refused('ordinary mock ordinal')
+        if case in BATCH_CASES:
+            provider=case.rsplit('[',1)[1][:-1]
+            node,role,spawn=f'v{ordinal}','validate',f'2026-08-10T07-00-00Z-{ordinal:04d}'
+        else:
+            selected,provider=case.rsplit('[',1)[1][:-1].split('-')
+            role='work' if selected=='worker' else 'validate'
+            credential=case in TEMPLATE_CASES[4:]
+            node=provider+'-'+role+('-format-credential' if credential else '')
+            spawn=f"2026-07-29T{'08' if credential else '05'}-00-00Z-{provider}-{role}"
+        result={key:root_environment[key] for key in ('HOME','TMPDIR','PATH')}
+        result.update(UNREST_CAPABILITY_PROFILE='safe',UNREST_CAPABILITY_POLICY_VERSION='1',
+            UNREST_HOME=str(base/'.unrest'),UNREST_PROJECT_ID='p1',UNREST_MISSION_ID='mission-001',
+            UNREST_NODE_ID=node,UNREST_NODE_TYPE=role,
+            UNREST_HANDOFF_PATH=str(base/'.unrest/projects/p1/.unrest-runtime/missions/mission-001/attempts'/(spawn+'__'+node+'.json')))
+        if provider=='codex':
+            result.update(INITIAL_AGENT_MODE='agent',CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
         return result
     role = 'work' if case==MOCK_CASE else case.rsplit('[', 1)[1][:-1]
     node, spawn = ('v-good', '2026-08-10T07-05-00Z-0000') if role == 'claude' else (
@@ -98,13 +124,31 @@ def system_sleep():
     return digest(Path('/usr/bin/sleep'))
 
 
-def expected(case, role, cwd, checkout, native, native_pin, root_environment, owned, *, base=None):
+def template_environment(case,checkout):
+    from launch_policy import source_unit,literal,assignment,render_string
+    name,parameter=case.split('::')[1].split('[')
+    selected,provider=parameter[:-1].split('-')
+    role='work' if selected=='worker' else 'validate'
+    unit=source_unit(checkout,TEST,PINS[TEST],(name,))
+    if case in TEMPLATE_CASES[:4]:
+        template=literal(unit,'template')
+        return {'LANG':'C','PATH':template+':relative-tools:local-bin',
+            f'PAYMENTS_{provider}_{role}_DSN_TEMPLATE_URI_V21'.upper():template}
+    secret=f'v22-{provider}-{role}-format-ast-credential'
+    value=render_string(assignment(unit,'source_value'),[('secret',-1,secret)]*3)
+    return {'LANG':'C','PATH':'/bin:/usr/bin:'+secret,
+        f'PAYMENTS_{provider}_{role}_FORMAT_DSN_TEMPLATE_URI_V22'.upper():value}
+
+
+def expected(case, role, cwd, checkout, native, native_pin, root_environment, owned, *, base=None,ordinal=0):
     if case not in EXECUTION_CASES or role not in (('session-invalid','sleep') if case in STARTUP_CASES else ('mock-acp', 'sleep')):
         raise Refused('ordinary closed launch role')
     if role == 'sleep':
         if cwd != str(checkout):
             raise Refused('ordinary inherited fixture cwd')
         env = {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'}
+        if case in TEMPLATE_CASES:
+            env.update(template_environment(case,checkout))
         if case == CASES[2]:
             env['ANTHROPIC_API_KEY'] = 'batch-crash-known-value'
         if case==MOCK_CASE:
@@ -131,7 +175,10 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
         if (not home.is_absolute() or str(home.resolve()) != cwd or home.name != 'workspace'
                 or not home.parent.is_relative_to(owned / 'pytest') or home.parent == owned / 'pytest'):
             raise Refused('ordinary owned project workspace')
-        env = environment(case, home.parent, root_environment)
+        env = environment(case, home.parent, root_environment,ordinal)
+        if case in TEMPLATE_CASES:
+            env.update({key:value for key,value in template_environment(case,checkout).items()
+                        if key in ('LANG','PATH')})
         vector = (native, str(checkout / MOCK))
         executable, pin, kind, payload = native, native_pin, 'python-script', PINS[MOCK]
     return build_expected(case, executable, pin, vector, tuple(sorted(env.items())), cwd, kind, payload)

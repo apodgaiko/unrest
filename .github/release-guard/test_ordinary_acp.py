@@ -317,3 +317,70 @@ def test_startup_failure_uses_exact_original_owned_non_executable_format(tmp_pat
         with pytest.raises((Refused,OSError)):
             expected(case,'session-invalid',str(workspace),Path('/checkout'),'/native','a'*64,
                 {'HOME':'/home','TMPDIR':'/tmp','PATH':'/usr/bin:/bin'},tmp_path)
+
+
+@pytest.mark.parametrize('case',(*ordinary_acp.TEMPLATE_CASES,*ordinary_acp.BATCH_CASES))
+def test_mock_family_preserves_original_policy_environment(tmp_path,case):
+    from unrest_harness.acp_runner import _acp_subprocess_env
+    from unrest_harness.capability_policy import load_capability_policy,resolve_role_capability
+    from unrest_harness.providers import PROVIDERS
+    root=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+    workspace=tmp_path/'workspace'
+    workspace.mkdir()
+    record=tmp_path/'.unrest/projects/p1'
+    record.mkdir(parents=True)
+    provider=case.rsplit('[',1)[1][:-1].split('-')[-1]
+    root_env={'HOME':str(tmp_path),'TMPDIR':str(tmp_path),'PATH':'/usr/bin:/bin'}
+    observer_env=environment(case,tmp_path,root_env)
+    if case in ordinary_acp.TEMPLATE_CASES:
+        root_env.update(ordinary_acp.template_environment(case,root))
+        observer_env.update({key:value for key,value in root_env.items() if key in ('LANG','PATH')})
+    policy=resolve_role_capability(PROVIDERS[provider],role='worker' if observer_env['UNREST_NODE_TYPE']=='work' else 'validator',
+        policy=load_capability_policy(root/'src/unrest_harness/bundled'),
+        profile='safe',workspace=workspace,project_record=record)
+    internal={key:value for key,value in observer_env.items() if key.startswith('UNREST_')}
+    actual=_acp_subprocess_env(PROVIDERS[provider],policy=policy,internal=internal,host_environment=root_env)
+    assert actual==observer_env
+
+
+@pytest.mark.parametrize('case',(*ordinary_acp.TEMPLATE_CASES,*ordinary_acp.BATCH_CASES))
+@pytest.mark.parametrize('mutation',(None,'identity','payload','environment','fixture','generation'))
+def test_added_mock_launches_have_closed_identity_environment_and_quota(tmp_path,monkeypatch,case,mutation):
+    import os
+    from types import SimpleNamespace
+    import owned_fixture
+    acquire=owned_fixture.acquire
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,uid:acquire(path,owned,prefix,os.getuid()))
+    root=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+    base=tmp_path/'pytest'/(case.split('::')[1][:30]+'0')
+    cwd=base/'workspace'
+    cwd.mkdir(parents=True)
+    root_env={'HOME':'/owned/home','TMPDIR':'/owned/tmp','PATH':'/usr/bin:/bin'}
+    value=expected(case,'mock-acp',str(cwd),root,'/native','a'*64,root_env,tmp_path)
+    raw=operands(value)
+    raw.pop('source_line',None)
+    calls=[]
+    host=SimpleNamespace(case=case,meta={'checkout':str(root),'owned':str(tmp_path)},
+        binding={'entry':{'path':'/native','sha256':'a'*64}},fixture_roots={},intents={},
+        meta_environment=lambda:root_env,launch_owner=lambda actor:None,root_only=lambda actor:None)
+    def admit(*args,**kwargs):
+        calls.append((args,kwargs))
+        return {'ticket':1,'token':'bound'}
+    host.admit_launch=admit
+    if mutation=='identity':
+        raw['environment']['UNREST_NODE_ID']='foreign'
+    elif mutation=='payload':
+        raw['argv'][1]='/foreign.py'
+    elif mutation=='environment':
+        raw['environment']['PYTHONPATH']='/foreign'
+    elif mutation=='fixture':
+        raw['cwd']=str(tmp_path)
+    elif mutation=='generation':
+        host.fixture_roots[case]=('foreign',0,0)
+    if mutation is None:
+        assert proposal(host,{'role':'root'},raw)['translated']==['/native','-I','-S',str(root/MOCK)]
+        assert calls[0][1]['maximum']==(2 if case in ordinary_acp.BATCH_CASES else 1)
+    else:
+        with pytest.raises((Refused,FileNotFoundError)):
+            proposal(host,{'role':'root'},raw)
+        assert not calls

@@ -173,16 +173,17 @@ def proposal(host, actor, raw):
         role,maximum='git-fixed' if query else 'pytest-regression' if case in NESTED_CASES else 'fixed-inline',1 if query else len(SEQUENCES[case])
     elif case in ORDINARY:
         host.root_only(actor)
-        from ordinary_acp import MOCK_CASE,STARTUP_CASES
+        from ordinary_acp import MOCK_CASE,STARTUP_CASES,TEMPLATE_CASES,BATCH_CASES
         base=None
-        if case==MOCK_CASE:
+        if case==MOCK_CASE or (case in (*TEMPLATE_CASES,*BATCH_CASES) and argv[0]!='/bin/sleep'):
             from owned_fixture import retain
             candidate=(Path(raw['environment'].get('UNREST_HANDOFF_PATH','')).parents[7]
                        if argv[0]=='sleep' else Path(cwd).parent)
             base=retain(host,candidate,case.split('::')[1][:30],20000)
         role='sleep' if argv[0] in ('/bin/sleep','sleep') else 'session-invalid' if case in STARTUP_CASES else 'mock-acp'
-        maximum=2 if case==ORDINARY[2] and role=='sleep' else 1
-        expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base)
+        maximum=2 if case in BATCH_CASES or (case==ORDINARY[2] and role=='sleep') else 1
+        ordinal=sum(row['case']==case and row['role']=='mock-acp' for row in host.intents.values()) if case in BATCH_CASES and role=='mock-acp' else 0
+        expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base,ordinal=ordinal)
         script_pin = expected.payload_sha256
         vector = list(expected.argv) if role in ('sleep','session-invalid') else [native,'-I','-S',*expected.argv[1:]]
     elif case in DECLARATIONS:
