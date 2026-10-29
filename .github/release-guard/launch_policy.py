@@ -151,7 +151,7 @@ def source_unit(checkout: Path,path: str,pin: str,owners=()):
         raise Refused('original source bytes')
     unit=ast.parse(body)
     for name in owners:
-        rows=[node for node in unit.body if isinstance(node,(ast.ClassDef,ast.FunctionDef)) and node.name==name]
+        rows=[node for node in unit.body if isinstance(node,(ast.ClassDef,ast.FunctionDef,ast.AsyncFunctionDef)) and node.name==name]
         if len(rows)!=1:
             raise Refused('sole original source owner')
         unit=rows[0]

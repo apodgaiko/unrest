@@ -527,3 +527,11 @@ and actual HEAD are sealed after the two fixture waits; each captured query must
 match that HEAD. Validator slots grant no Git query. Reporting pipes bind the
 actual command parent, child Birth/token and original wait, never generic MCP or
 Python authority. The original 28 parameter cases and assertions are unchanged.
+
+The chatty-child regression retains its original262,144-byte writes to each
+pipe and five-second drain/cleanup bound. Its single inline child is reconstructed
+from the pinned async test owner, with exact PATH-only environment and owned
+workspace generation. No descendants or network routes are granted. Body READY,
+exit0 and an actual parent wait remain required alongside the original assertions.
+Pinned-source owner selection accepts explicit async functions as well as regular
+functions/classes; it still never evaluates a source expression.
