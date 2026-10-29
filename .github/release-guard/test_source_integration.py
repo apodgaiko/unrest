@@ -209,19 +209,16 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
                    'id': 'a' * 32, 'kind': 'drain_child', 'payload': payload}
         left, right = socket.socketpair()
         try:
-            frame = transport.Frame(right, transport.REQUEST_LIMIT, ledger.poison)
+            frame = transport.Frame(right, transport.REQUEST_LIMIT)
             frame.capture(ledger, birth, 'root-token', os.getgid())
             left.sendall(transport.encode(request, transport.REQUEST_LIMIT))
             assert frame.read() == request
-            ledger.poison.append('preserved source refusal')
-            admission = transport.Admission(ledger, frozenset({'drain_child', 'launch-proposal'}))
+            admission = transport.Admission(ledger, frozenset({'launch-proposal'}))
             with pytest.raises(Refused):
                 admission.admit(frame)
-            assert 'preserved source refusal' in ledger.poison
-            assert not ledger.reaped(child_birth, 'child-token')  # No fabricated kernel wait joins.
-            frame.received = {**request, 'id': 'b' * 32, 'kind': 'launch-proposal'}
-            with pytest.raises(Refused):
-                admission.admit(frame)
+            assert not ledger.reaped(child_birth, 'child-token')  # A Python receipt cannot invent kernel joins.
+            with pytest.raises(Refused,match='source guard refusal'):
+                observer.dispatch({'birth':birth,'role':'root'},{'kind':'guard-refusal','payload':{'code':'preserved source refusal'}})
         finally:
             left.close()
             right.close()

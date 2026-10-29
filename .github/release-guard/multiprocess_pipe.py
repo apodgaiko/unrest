@@ -6,7 +6,7 @@ from socket_observation import acquire,descriptor
 
 def owner(host,actor,*,body):
     process=host.ledger.process(actor['birth'])
-    if (host.ledger.poison or process.token!=actor['token']
+    if (process.token!=actor['token']
             or process.registered_generation!=process.generation or process.case!=actor['case']
             or actor['case']!=host.case or process.exit is not None or process.terminal is not None
             or process.stage not in (('body-ready',) if body else ('core-ready','body-ready'))):

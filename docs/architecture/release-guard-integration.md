@@ -639,3 +639,18 @@ post-read identity and held-ancestor checks remain. Hash-only reads use transien
 memory proportional to that bounded file (up to64MiB for dependency inventory),
 replacing the streaming counter; retained reads avoid a second bytearray copy.
 All five replacement-during-read races still exercise the actual read boundary.
+
+Observer validation failures now propagate through one fail-stop boundary into
+OwnedTrace's bounded owned-process cleanup. Internal Ledger, Frame and Admission
+objects have no reuse-after-caught-error contract; the former continuation and
+local poison wrappers are retired. The source policy, native entry and tracer
+retain their sticky refusal state, including refusals caught by application code.
+Accepted sockets enter the observer's owned collection before capture, and each
+source RPC closes its fresh frame in a finally block.
+
+Private source-result v4 retains the initiating failure, all control and kernel
+records, and the tracer's actual `trace_poison` value. Earlier evidence schemas
+remain unchanged. Linux controls inject ledger, frame and admission failures at
+the trace callback boundary and require actual bounded owned-root cleanup while
+an unrelated child remains untouched. Buffered file-read race controls intercept
+the actual fdopen/read boundary; FIFO negatives still refuse before that boundary.

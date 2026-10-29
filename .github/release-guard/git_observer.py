@@ -155,7 +155,7 @@ class Git:
     def native_child_reaped(self,parent,birth,case,pins):
         ledger=self.host.ledger
         child,owner=ledger.process(birth),ledger.process(parent)
-        return (not ledger.poison and child.parent==parent and child.case==owner.case==case
+        return (child.parent==parent and child.case==owner.case==case
             and child.command_class=='native-git-helper' and owner.command_class in ('native-git-command','native-git-helper')
             and child.pins==owner.pins==pins and child.generation==child.registered_generation==1
             and owner.generation==owner.registered_generation==1 and ledger.reaped(birth,child.life_token)

@@ -36,8 +36,8 @@ def test_actual_kernel_peer_and_frame_roundtrip_with_exact_echo():
         # Production source and observer must each pin their distinct peer.
         peer(left, birth, os.getgid())
         peer(right, birth, os.getgid())
-        outgoing = Frame(left, RESPONSE_LIMIT, [])
-        incoming = Frame(right, REQUEST_LIMIT, ledger.poison)
+        outgoing = Frame(left, RESPONSE_LIMIT)
+        incoming = Frame(right, REQUEST_LIMIT)
         incoming.capture(ledger, birth, 'root', os.getgid())
         outgoing.answer(request)
         assert outgoing.send()
@@ -49,7 +49,6 @@ def test_actual_kernel_peer_and_frame_roundtrip_with_exact_echo():
         assert verify_reply(outgoing.read(), request) == {'ok': True}
         with pytest.raises(Refused):
             admission.admit(incoming)
-        assert admission.poison
 
 
 @pytest.mark.parametrize('field,value', [('nonce', 'other'), ('pid', True), ('token', 'other'),
@@ -59,13 +58,12 @@ def test_actual_peer_does_not_rescue_foreign_request_authority(field, value):
     left, right = socket.socketpair()
     with left, right:
         admission = Admission(ledger, frozenset({'ready'}))
-        incoming = Frame(right, REQUEST_LIMIT, ledger.poison)
+        incoming = Frame(right, REQUEST_LIMIT)
         incoming.capture(ledger, birth, 'root', os.getgid())
         left.sendall(encode({**request, field: value}, REQUEST_LIMIT))
         assert incoming.read() is not None
         with pytest.raises(Refused):
             admission.admit(incoming)
-        assert admission.poison
 
 
 def test_actual_peer_rejects_stale_birth_and_wrong_gid():
@@ -82,45 +80,13 @@ def test_duplicate_json_fields_cannot_reach_admission():
     ledger, _, request = setup()
     left, right = socket.socketpair()
     with left, right:
-        frame = Frame(right, REQUEST_LIMIT, ledger.poison)
+        frame = Frame(right, REQUEST_LIMIT)
         import struct
         payload = encode(request, REQUEST_LIMIT)[4:-1] + b',"nonce":"other"}'
         left.sendall(struct.pack('!I', len(payload)) + payload)
         with pytest.raises(Refused):
             frame.read()
-        assert frame.received is None and frame.poison
-
-
-@pytest.mark.parametrize('failure', ['malformed', 'expired', 'io'])
-def test_channel_poison_blocks_ordinary_but_allows_captured_authenticated_drain(failure):
-    ledger, birth, request = setup()
-    admission = Admission(ledger, frozenset({'ready', 'custody_close'}))
-    left, right = socket.socketpair()
-    with left, right:
-        failed = Frame(right, REQUEST_LIMIT, ledger.poison)
-        if failure == 'malformed':
-            left.sendall(b'\0\0\0\0')
-        elif failure == 'expired':
-            failed.started -= 5
-        else:
-            right.close()
-        with pytest.raises((Refused, OSError)):
-            failed.read()
-    assert ledger.poison and admission.poison
-    for kind in ('ready', 'custody_close'):
-        left, right = socket.socketpair()
-        with left, right:
-            frame = Frame(right, REQUEST_LIMIT, ledger.poison)
-            frame.capture(ledger, birth, 'root', os.getgid())
-            outgoing = {**request, 'kind': kind, 'id': ('e' if kind == 'ready' else 'f') * 32}
-            left.sendall(encode(outgoing, REQUEST_LIMIT))
-            assert frame.read() == outgoing
-            if kind == 'ready':
-                with pytest.raises(Refused):
-                    admission.admit(frame)
-            else:
-                assert admission.admit(frame) == outgoing
-    assert ledger.poison
+        assert frame.received is None
 
 
 def test_distinct_processes_authenticate_each_other_before_consuming_reply(tmp_path):
@@ -141,7 +107,7 @@ def test_distinct_processes_authenticate_each_other_before_consuming_reply(tmp_p
                 stream.settimeout(4)
                 stream.connect(path)
                 peer(stream, observer_birth, os.getgid())
-                source = Frame(stream, RESPONSE_LIMIT, [])
+                source = Frame(stream, RESPONSE_LIMIT)
                 request = {'pid': os.getpid(), 'nonce': 'a' * 64, 'token': 'child', 'generation': 0,
                            'id': '1' * 32, 'kind': 'ready', 'payload': {}}
                 source.answer(request)
@@ -170,7 +136,7 @@ def test_distinct_processes_authenticate_each_other_before_consuming_reply(tmp_p
                               'event': 1, 'identity': actual})
             ledger.register(child_birth, 'child', (('runtime', 'b' * 64),), 'c' * 64,
                             case='peer-control', command_class='control')
-            incoming = Frame(stream, REQUEST_LIMIT, ledger.poison)
+            incoming = Frame(stream, REQUEST_LIMIT)
             incoming.capture(ledger, child_birth, 'child', os.getgid())
             while incoming.read() is None:
                 time.sleep(.001)
@@ -181,7 +147,7 @@ def test_distinct_processes_authenticate_each_other_before_consuming_reply(tmp_p
         actual_pid, raw = os.waitpid(child, 0)
         waited = True
         assert actual_pid == child and raw == 0
-        assert child_birth.pid != observer_birth.pid and not ledger.poison
+        assert child_birth.pid != observer_birth.pid
     finally:
         listener.close()
         if not waited:

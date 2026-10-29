@@ -9,24 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import os
-from functools import wraps
 from typing import Any
 
 from content_manifest import Refused
 
 MAX_PROCESSES = 20000
 MAX_EXEC_EPOCHS = 128
-
-
-def fail_closed(method):
-    @wraps(method)
-    def guarded(self, *args, **kwargs):
-        try:
-            return method(self, *args, **kwargs)
-        except BaseException:
-            self.poison.append('invalid-' + method.__name__)
-            raise
-    return guarded
 
 
 def canonical(identity: Any) -> dict:
@@ -112,7 +100,6 @@ class Ledger:
         self.children: dict[Birth, list[Birth]] = {}
         self.by_token: dict[str, Birth] = {}
         self.pending_waits: dict[tuple[int, int, int, int], list[Birth]] = {}
-        self.poison: list[str] = []
         self.root: Birth | None = None
 
     def process(self, birth: Birth) -> Process:
@@ -120,7 +107,6 @@ class Ledger:
             raise Refused('unknown ledger birth')
         return self.processes[birth]
 
-    @fail_closed
     def register(self, birth: Birth, token: str, pins: tuple[tuple[str, str], ...], seal: str,
                  *, case: str, command_class: str, new_session: bool = False,
                  expected_generation: int | None = None) -> None:
@@ -144,7 +130,6 @@ class Ledger:
         process.new_session = new_session
         process.stage = 'registered'
 
-    @fail_closed
     def ready(self, birth: Birth, kind: str, payload: dict) -> None:
         process = self.process(birth)
         if process.registered_generation != process.generation:
@@ -157,7 +142,7 @@ class Ledger:
                 raise Refused('ledger core readiness')
             process.stage = 'core-ready'
         elif kind == 'body-ready':
-            if (self.poison or (process.new_session and not process.session_complete)
+            if ((process.new_session and not process.session_complete)
                     or process.stage != 'core-ready' or set(payload) != {'seal'}
                     or type(payload['seal']) is not str or payload['seal'] != process.expected_seal):
                 raise Refused('ledger execution seal')
@@ -165,7 +150,6 @@ class Ledger:
         else:
             raise Refused('ledger control operation')
 
-    @fail_closed
     def wait_entry(self, caller: Birth, requested: int) -> None:
         process = self.process(caller)
         if (self.current.get(caller.pid) != caller or process.group is None
@@ -186,7 +170,6 @@ class Ledger:
                 or target.birth.pid != target.birth.tgid):
             raise Refused('ledger wait outside admitted child')
 
-    @fail_closed
     def kernel(self, sequence: int, row: dict) -> None:
         if (type(sequence) is not int or sequence != self.next_kernel
                 or type(row) is not dict or type(row.get('kind')) is not str):
@@ -251,7 +234,7 @@ class Ledger:
                 if process.terminal is not None:
                     raise Refused('ledger duplicate terminal')
                 if kind == 'failure_cleanup_tracer_wait':
-                    self.poison.append('failure-cleanup')
+                    raise Refused('ledger failure cleanup cannot retire a process')
                 else:
                     group_exit=self.process(process.group).exit if birth.pid!=birth.tgid and process.group is not None else None
                     own_exit=process.exit is not None and process.exit[1]==raw
@@ -286,15 +269,14 @@ class Ledger:
             process.parent_wait = (sequence, raw, code, integer(row.get('options')))
         elif kind == 'exec_attempt':
             if row.get('accepted') is not True:
-                self.poison.append('denied-exec')
+                raise Refused('ledger denied exec')
         elif kind in {'cleanup_incomplete', 'exec_syscall_return'}:
             if kind == 'cleanup_incomplete' or row.get('denied') is True:
-                self.poison.append(kind)
+                raise Refused('ledger cleanup or denied syscall')
         elif kind not in {'exec_memory_boundary', 'kernel_vfork_done'}:
             raise Refused('ledger unknown kernel record')
         self.next_kernel += 1
 
-    @fail_closed
     def session(self, birth: Birth, observed: dict) -> None:
         process = self.process(birth)
         if (not process.new_session or process.session_complete or process.parent is None
@@ -315,7 +297,7 @@ class Ledger:
 
     def reaped(self, birth: Birth, token: str) -> bool:
         process = self.process(birth)
-        if self.poison or type(token) is not str or token != process.life_token or self.by_token.get(token) != birth or process.parent is None:
+        if type(token) is not str or token != process.life_token or self.by_token.get(token) != birth or process.parent is None:
             return False
         if process.exit is None or process.terminal is None or process.parent_wait is None:
             return False
@@ -325,6 +307,6 @@ class Ledger:
 
     def body_ready(self, birth: Birth, token: str) -> bool:
         process = self.process(birth)
-        return (not self.poison and token == process.token and process.stage == 'body-ready'
+        return (token == process.token and process.stage == 'body-ready'
                 and process.registered_generation == process.generation
                 and process.exit is None and process.terminal is None)

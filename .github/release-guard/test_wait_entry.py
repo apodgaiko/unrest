@@ -47,4 +47,3 @@ def test_production_callback_consumes_birth_records_before_entry_authority():
     assert Birth.read(trace.identities[root.pid]) == root
     with pytest.raises(Refused):
         observer.validate_wait(trace, root.pid, -1)
-    assert ledger.poison

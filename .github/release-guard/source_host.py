@@ -300,7 +300,7 @@ def worker(binding, metadata, raw_directory):
         if full:
             from full_launch import finished
             finished(observer)
-        require(result['root_parent_wait_raw'] == 0 and not result['poison'] and not observer.ledger.poison
+        require(result['root_parent_wait_raw'] == 0 and not result['poison']
                 and observer.finished and tuple(observer.completed) == (() if binding.get('collection_only') else observer.cases)
                 and not observer.frames
                 and all(intent['consumed'] for intent in observer.intents.values()), 'original source completion refused')
@@ -313,7 +313,7 @@ def worker(binding, metadata, raw_directory):
         raise
     finally:
         try:
-            record = {'schema': 'unrest.bootstrap-source-result.v3', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and unexcluded(metadata,binding) and observer.finished and failure is None),
+            record = {'schema': 'unrest.bootstrap-source-result.v4', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and unexcluded(metadata,binding) and observer.finished and failure is None),
                       'git_value_provenance_proven':False, 'release_certified': False, 'completed': [] if observer is None else observer.completed,
                       'result': result, 'failure': failure, 'metadata': metadata,
                       'kernel': [] if trace is None else trace.records,
@@ -325,7 +325,7 @@ def worker(binding, metadata, raw_directory):
                           'unix_pair_lineage_proven':False},
                       'cohort_observations': [] if observer is None else observer.cohort_observations,
                       'plan_observations': [] if observer is None else observer.plan_records,
-                      'poison': [] if observer is None else observer.ledger.poison,
+                      'trace_poison': None if trace is None else trace.poison,
                       'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
             if observer is not None and observer.full:
                 ref=observer.meta['cases']

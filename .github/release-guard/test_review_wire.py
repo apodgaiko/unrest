@@ -1,5 +1,7 @@
 """Controlled wire fixture scope; these checks do not prove provider acceptance."""
 
+from contextlib import contextmanager
+
 import json
 import os
 import stat
@@ -164,18 +166,22 @@ def test_scenario_read_is_bounded_and_binds_opened_file_generation(tmp_path, mon
     file = base / "scenario.json"
     original = json.dumps({"events": [], "delay": 0, "raw_frame": None}).encode()
     file.write_bytes(original)
-    original_read=os.read
+    original_fdopen=os.fdopen
     limits=[]
-    def read(fd,limit):
+    def read(stream,limit):
         limits.append(limit)
         if mutation=='growth' and len(limits)==1:
             file.write_bytes(original+b'x'*200000)
-        result=original_read(fd,limit)
+        result=stream.read(limit)
         if mutation=='replacement' and len(limits)==1:
             file.unlink()
             file.write_bytes(original)
         return result
-    monkeypatch.setattr(os,'read',read)
+    @contextmanager
+    def buffered(fd, *args, **kwargs):
+        with original_fdopen(fd, *args, **kwargs) as stream:
+            yield SimpleNamespace(read=lambda count: read(stream, count))
+    monkeypatch.setattr(os,'fdopen',buffered)
     with pytest.raises(Refused,match='file_read'):
         wire.scenario(file,tmp_path)
     assert limits and all(0<limit<=131073 for limit in limits) and len(limits)<=2
@@ -237,7 +243,7 @@ def test_fifo_scenario_without_writer_refuses_before_any_blocking_read(
             os.mkfifo(file)
         return original_open(path,flags,*args,**kwargs)
     monkeypatch.setattr(os,'open',opening)
-    monkeypatch.setattr(os,'read',lambda *args:pytest.fail('FIFO must refuse before read'))
+    monkeypatch.setattr(os,'fdopen',lambda *args, **kwargs:pytest.fail('FIFO must refuse before read'))
     with pytest.raises(Refused,match='nonregular|acquisition_race'):
         wire.scenario(file,tmp_path)
     assert len(calls)==int(replace_before_open)

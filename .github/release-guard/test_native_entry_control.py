@@ -83,6 +83,7 @@ def worker(case, binding, output):
         os.close(ready_read)
         birth = Birth.read(process_identity(child))
         ledger = Ledger(nonce)
+        failures=[]
         pins = (('entry', binding['bootstrap']['sha256']), ('native', native['sha256']))
         admission = Admission(ledger, frozenset({'core-ready', 'body-ready'}))
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -141,9 +142,9 @@ def worker(case, binding, output):
                     stream, _ = server.accept()
                 except BlockingIOError:
                     break
-                frame = Frame(stream, REQUEST_LIMIT, ledger.poison)
-                frame.capture(ledger, birth, token, 20000)
+                frame = Frame(stream, REQUEST_LIMIT)
                 clients.append(frame)
+                frame.capture(ledger, birth, token, 20000)
             for frame in list(clients):
                 if frame.received is None:
                     value = frame.read()
@@ -160,7 +161,7 @@ def worker(case, binding, output):
                         next_control += 1
                         answer = {'ok': True}
                     except (ValueError, KeyError):
-                        ledger.poison.append('native readiness refused')
+                        failures.append('native readiness refused')
                         answer = {'ok': False}
                     frame.answer(reply(frame.received, answer))
                 if frame.send():
@@ -208,7 +209,7 @@ def worker(case, binding, output):
         if raw != expected_status or result['poison']:
             raise RuntimeError('native controlled return or trace refused')
         if case in BODIES:
-            if next_control != 2 or ledger.poison:
+            if next_control != 2 or failures:
                 raise RuntimeError('native readiness order incomplete')
             marker = b'NATIVE_BODY_OK' if case in ('positive','fastpath-positive','product-order-positive','product-order-resolver-positive') else b'REFUSAL_CAUGHT'
             if marker not in captured:
@@ -231,7 +232,7 @@ def worker(case, binding, output):
         (root / 'control.sock').unlink(missing_ok=True)
         # Retain both successful and failed raw diagnostics outside public logs.
         (root / ('raw-' + case + '.json')).write_text(json.dumps({
-            'case': case, 'records': trace.records, 'poison': ledger.poison,
+            'case': case, 'records': trace.records, 'poison': failures,
             'output_base64': base64.b64encode(captured).decode()}, sort_keys=True))
 
 

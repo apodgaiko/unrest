@@ -149,7 +149,7 @@ class Observer:
                     if self.case in WAIVED and value.get('cohort_controller') and value.get('pid')==row['child']:
                         value.setdefault('closeout_started',time.monotonic())
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
-                self.ledger.poison.append('native guard refusal')
+                raise Refused('native guard refusal')
             if row['kind'] == 'kernel_root' and not self.full:
                 from postbuild_root import COMMAND as ARCHIVE_COMMAND
                 vector=[self.binding['entry']['path'],'-I','-S','-c',ARCHIVE_COMMAND,self.binding['checkout']]
@@ -521,7 +521,7 @@ class Observer:
             if (type(payload['code']) is not str or not 0 < len(payload['code']) <= 128
                     or any(not char.isascii() or not (char.isalnum() or char in ' -_') for char in payload['code'])):
                 raise Refused('source refusal code schema')
-            self.ledger.poison.append('source guard refusal')
+            raise Refused('source guard refusal')
         else:
             raise Refused('source undeclared observer method')
         return {'ok': True}
@@ -543,9 +543,9 @@ class Observer:
             if actor is None or uid != 20000 or gid != 20000:
                 stream.close()
                 raise Refused('source registered channel peer')
-            frame = Frame(stream, REQUEST_LIMIT, self.ledger.poison, seconds=8 if self.case in CLEANUP_CASES else 4)
-            frame.capture(self.ledger, actor['birth'], actor['token'], 20000)
+            frame = Frame(stream, REQUEST_LIMIT, seconds=8 if self.case in CLEANUP_CASES else 4)
             self.frames.append({'frame': frame, 'actor': actor, 'request': None})
+            frame.capture(self.ledger, actor['birth'], actor['token'], 20000)
         for channel in list(self.frames):
             frame, actor = channel['frame'], channel['actor']
             if channel['request'] is None:

@@ -27,7 +27,7 @@ def main():
             str(binding_file),'archive15',str(cwd)],cwd=checkout,check=False,timeout=120)
         record=json.loads((binding_file.parent/'archive-private/source-result.json').read_bytes())
         from postbuild_root import CASES
-        if result.returncode or record['completed']!=list(CASES) or record['poison'] or record['failure']:
+        if result.returncode or record['completed']!=list(CASES) or record['trace_poison'] or record['failure']:
             raise RuntimeError('guarded archive persistence did not pass; private evidence retained')
         output=base64.b64decode(record['output_base64'],validate=True).decode()
         return subprocess.CompletedProcess(argv,0,output,'')

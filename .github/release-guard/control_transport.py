@@ -8,7 +8,6 @@ can discharge the narrow controlled-ACP SIGTERM case.
 from __future__ import annotations
 
 import json
-from functools import wraps
 import socket
 import struct
 import time
@@ -23,7 +22,6 @@ CHANNEL_SECONDS = 4
 # Control framing uses captured I/O so source payload mediation cannot recurse
 # into the private, independently peer-authenticated observer channel.
 _SEND, _RECV, _CLOSE = socket.socket.send, socket.socket.recv, socket.socket.close
-DRAIN = frozenset({'custody_close', 'custody_signal', 'drain_inventory', 'drain_complete'})
 
 
 def unique(pairs):
@@ -69,26 +67,10 @@ def encode(value: dict, limit: int) -> bytes:
     return struct.pack('!I', len(payload)) + payload
 
 
-def fail_channel(method):
-    @wraps(method)
-    def guarded(self, *args, **kwargs):
-        try:
-            return method(self, *args, **kwargs)
-        except BaseException:
-            self.poison.append('control transport refused')
-            self.shared_poison.append('control transport refused')
-            try:
-                _CLOSE(self.stream)
-            except OSError:
-                pass
-            raise
-    return guarded
-
-
 class Frame:
-    def __init__(self, stream: socket.socket, limit: int, shared_poison: list[str], *, seconds: int = 4):
+    def __init__(self, stream: socket.socket, limit: int, *, seconds: int = 4):
         self.seconds = seconds
-        self.shared_poison = shared_poison
+        self.owner = None
         self.stream, self.limit = stream, limit
         self.started = time.monotonic()
         self.buffer = bytearray()
@@ -96,13 +78,11 @@ class Frame:
         self.output: bytes | None = None
         self.eof = False
         self.binding: tuple[Birth, str, int, str, int] | None = None
-        self.poison: list[str] = []
         stream.setblocking(False)
 
-    @fail_channel
     def capture(self, ledger: Ledger, birth: Birth, token: str, gid: int) -> None:
         self.check()
-        if (self.shared_poison is not ledger.poison or self.buffer or self.received is not None
+        if (self.owner is not None or self.buffer or self.received is not None
                 or self.eof or self.binding is not None):
             self.refuse('control late peer capture')
         peer(self.stream, birth, gid)
@@ -111,19 +91,17 @@ class Frame:
                 or process.registered_generation != process.generation
                 or process.exit is not None or process.terminal is not None):
             self.refuse('control captured registration')
+        self.owner = ledger
         self.binding = birth, token, process.generation, process.command_class, gid
 
     def check(self) -> None:
-        if self.poison or time.monotonic() - self.started > self.seconds:
-            self.refuse('control channel deadline or poison')
+        if time.monotonic() - self.started > self.seconds:
+            self.refuse('control channel deadline')
 
     def refuse(self, reason: str):
-        self.poison.append(reason)
-        self.shared_poison.append(reason)
         _CLOSE(self.stream)
         raise Refused(reason)
 
-    @fail_channel
     def read(self) -> dict | None:
         """At most one recv per scheduler tick, even for a partial frame."""
         self.check()
@@ -156,7 +134,6 @@ class Frame:
         self.received = value
         return value
 
-    @fail_channel
     def answer(self, value: dict) -> None:
         self.check()
         if self.output is not None:
@@ -166,7 +143,6 @@ class Frame:
         except Refused:
             self.refuse('control output')
 
-    @fail_channel
     def send(self) -> bool:
         """At most one send per tick; partial writes never redispatch policy."""
         self.check()
@@ -201,46 +177,39 @@ class Admission:
     def __init__(self, ledger: Ledger, methods: frozenset[str]):
         self.ledger, self.methods = ledger, methods
         self.seen: set[str] = set()
-        self.poison = ledger.poison
 
     def admit(self, frame: Frame) -> dict:
-        try:
-            if type(frame) is not Frame or frame.shared_poison is not self.ledger.poison or frame.binding is None:
-                raise Refused('control uncaptured channel')
-            frame.check()
-            birth, token, generation, command_class, gid = frame.binding
-            request = frame.received
-            finite(request)
-            if type(request) is not dict or set(request) != {'pid', 'nonce', 'token', 'generation', 'id', 'kind', 'payload'}:
-                raise Refused('control request schema')
-            peer(frame.stream, birth, gid)
-            process = self.ledger.process(birth)
-            identifier = request['id']
-            if (type(identifier) is not str or len(identifier) != 32
-                    or any(char not in '0123456789abcdef' for char in identifier)
-                    or identifier in self.seen or len(self.seen) >= 100000
-                    or type(request['pid']) is not int or request['pid'] != birth.pid
-                    or type(request['generation']) is not int or request['generation'] != process.generation
-                    or process.registered_generation != process.generation
-                    or (process.token, process.generation, process.command_class) != (token, generation, command_class)
-                    or type(process.token) is not str or request['token'] != process.token
-                    or request['nonce'] != self.ledger.nonce
-                    or type(request['kind']) is not str or request['kind'] not in self.methods
-                    or type(request['payload']) is not dict
-                    or process.exit is not None or process.terminal is not None
-                    or (self.poison or self.ledger.poison) and request['kind'] not in DRAIN):
-                raise Refused('control request authority')
-            self.seen.add(identifier)
-            return request
-        except BaseException:
-            self.poison.append('control admission refused')
-            raise
+        if type(frame) is not Frame or frame.owner is not self.ledger or frame.binding is None:
+            raise Refused('control uncaptured channel')
+        frame.check()
+        birth, token, generation, command_class, gid = frame.binding
+        request = frame.received
+        if type(request) is not dict or set(request) != {'pid', 'nonce', 'token', 'generation', 'id', 'kind', 'payload'}:
+            raise Refused('control request schema')
+        peer(frame.stream, birth, gid)
+        process = self.ledger.process(birth)
+        identifier = request['id']
+        if (type(identifier) is not str or len(identifier) != 32
+                or any(char not in '0123456789abcdef' for char in identifier)
+                or identifier in self.seen or len(self.seen) >= 100000
+                or type(request['pid']) is not int or request['pid'] != birth.pid
+                or type(request['generation']) is not int or request['generation'] != process.generation
+                or process.registered_generation != process.generation
+                or (process.token, process.generation, process.command_class) != (token, generation, command_class)
+                or type(process.token) is not str or request['token'] != process.token
+                or request['nonce'] != self.ledger.nonce
+                or type(request['kind']) is not str or request['kind'] not in self.methods
+                or type(request['payload']) is not dict
+                or process.exit is not None or process.terminal is not None):
+            raise Refused('control request authority')
+        self.seen.add(identifier)
+        return request
 
 
 def cancelled_empty(frame: Frame, ledger: Ledger, birth: Birth, token: str) -> bool:
     frame.check()
     process = ledger.process(birth)
-    return (not frame.poison and frame.shared_poison is ledger.poison and frame.binding is not None
+    return (frame.owner is ledger and frame.binding is not None
             and frame.binding[:4] == (birth, token, process.generation, 'controlled-acp')
             and process.token == token and process.registered_generation == process.generation and frame.eof and not frame.buffer and frame.received is None
             and frame.output is None and process.command_class == 'controlled-acp'

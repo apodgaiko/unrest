@@ -171,7 +171,7 @@ def test_long_finite_original_exec_argument_is_observed_without_truncation():
     assert len(attempts) == 1 and attempts[0]["argv"] == argv
 
 
-@pytest.mark.parametrize("where", ["attached", "tick", "initial_stop"])
+@pytest.mark.parametrize("where", ["attached", "tick", "initial_stop", "ledger", "frame", "admission"])
 def test_actual_failed_setup_cleans_owned_root_and_preserves_unrelated_child(where):
     unrelated = os.fork()
     if unrelated == 0:
@@ -188,18 +188,43 @@ def test_actual_failed_setup_cleans_owned_root_and_preserves_unrelated_child(whe
     os.close(read)
     initiating = RuntimeError("controlled setup failure")
 
+    from content_manifest import Refused
     def fail(*args):
-        raise initiating
+        nonlocal initiating
+        if where not in ('ledger','frame','admission'):
+            raise initiating
+        from test_control_transport_native import setup
+        from control_transport import Frame,Admission,REQUEST_LIMIT,encode
+        import socket
+        ledger,birth,request=setup()
+        try:
+            if where=='ledger':
+                ledger.wait_entry(birth,0)
+            left,right=socket.socketpair()
+            with left,right:
+                frame=Frame(right,REQUEST_LIMIT)
+                if where=='frame':
+                    left.sendall(b'\0\0\0\0')
+                    frame.read()
+                else:
+                    frame.capture(ledger,birth,'root',os.getgid())
+                    left.sendall(encode({**request,'nonce':'foreign'},REQUEST_LIMIT))
+                    assert frame.read() is not None
+                    Admission(ledger,frozenset({'ready'})).admit(frame)
+        except Refused as error:
+            initiating=error
+            raise
+        pytest.fail('invalid receiver operation did not abort')
 
     observer = trace.OwnedTrace(child, [], timeout=.05 if where == "initial_stop" else 2,
                                cleanup_seconds=2, start_write=write,
                                on_attached=fail if where == "attached" else None,
-                               on_tick=fail if where == "tick" else None)
+                               on_tick=fail if where in ("tick","ledger","frame","admission") else None)
     if where == 'initial_stop':
         # Expire the initial-stop allocation without changing product parameters.
         observer.deadline = 0
     try:
-        with pytest.raises(TimeoutError if where == "initial_stop" else RuntimeError) as result:
+        with pytest.raises(TimeoutError if where == "initial_stop" else Refused if where in ("ledger","frame","admission") else RuntimeError) as result:
             observer.run()
         if where != "initial_stop":
             assert result.value is initiating

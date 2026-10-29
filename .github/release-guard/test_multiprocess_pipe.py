@@ -35,7 +35,7 @@ def bindings(*, child=False):
 
 
 @pytest.mark.parametrize(
-    "mutation", [None, "case", "token", "generation", "exit", "terminal", "stage", "poison"]
+    "mutation", [None, "case", "token", "generation", "exit", "terminal", "stage"]
 )
 def test_parent_record_requires_live_current_authenticated_owner(monkeypatch, mutation):
     host, actor, process = bindings()
@@ -52,8 +52,6 @@ def test_parent_record_requires_live_current_authenticated_owner(monkeypatch, mu
         process.terminal = (1, 0, 0)
     elif mutation == "stage":
         process.stage = "core-ready"
-    elif mutation == "poison":
-        host.ledger.poison.append("original refusal")
     if mutation is None:
         assert pipe.parent_record(host, actor, 11) == [11, 1, 50, 2, 900, 100, 10]
     else:

@@ -15,7 +15,7 @@ import control_transport as control
 def channels():
     left, right = socket.socketpair()
     try:
-        yield left, right, control.Frame(right, control.REQUEST_LIMIT, [])
+        yield left, right, control.Frame(right, control.REQUEST_LIMIT)
     finally:
         left.close()
         right.close()
@@ -41,18 +41,17 @@ def test_partial_frame_is_read_once_and_delivered_once(channels):
     assert frame.send()  # no second write or redispatch
     with pytest.raises(Refused):
         frame.answer({'second': True})
-    assert frame.poison
 
 
 @pytest.mark.parametrize('raw', [b'{"x":1,"x":2}', b'[]', b'null', b'{"x":NaN}',
     b'{"x":1.5}', b'{"x":18446744073709551616}', b'{' + b'x' * 20,
     b'{"x":' + b'[' * 30 + b'0' + b']' * 30 + b'}'])
-def test_malformed_or_unbounded_json_is_sticky(channels, raw):
+def test_malformed_or_unbounded_json_raises_to_its_owner(channels, raw):
     left, _, frame = channels
     left.sendall(wire(raw))
     with pytest.raises(Refused):
         frame.read()
-    assert frame.poison and frame.stream.fileno() == -1
+    assert frame.stream.fileno() == -1
 
 
 @pytest.mark.parametrize('raw', [struct.pack('!I', 0), struct.pack('!I', 8193),
@@ -62,7 +61,7 @@ def test_frame_size_and_two_requests_refused_before_dispatch(channels, raw):
     left.sendall(raw)
     with pytest.raises(Refused):
         frame.read()
-    assert frame.received is None and frame.poison
+    assert frame.received is None
 
 
 def test_empty_eof_is_not_an_admission(channels):
@@ -153,13 +152,10 @@ def test_reply_echo_does_not_equate_json_boolean_and_integer():
         control.verify_reply({'request': {'value': True}, 'answer': {}}, {'value': 1})
 
 
-def test_transport_oserror_is_sticky_and_closes_channel(channels):
+def test_transport_oserror_propagates_without_reuse(channels):
     _, right, frame = channels
     right.close()
     with pytest.raises(OSError):
-        frame.read()
-    assert frame.poison
-    with pytest.raises(Refused):
         frame.read()
 
 
@@ -170,7 +166,7 @@ def test_empty_cancellation_requires_captured_birth_and_complete_sigterm_parent_
     ledger.process(child).command_class = 'controlled-acp' if missing != 'class' else 'other'
     _, _, frame = channels
     # Reduction control only. Native capture and kernel joins have separate tests.
-    frame.shared_poison = ledger.poison
+    frame.owner = ledger
     frame.binding = None if missing == 'capture' else (child, 'child-token', 0, 'controlled-acp', 20000)
     frame.eof = True
     if missing == 'empty':
@@ -186,7 +182,7 @@ def test_empty_reap_does_not_extend_channel_deadline(channels, monkeypatch):
     from test_process_ledger import setup
     ledger, _, child = setup()
     _, _, frame = channels
-    frame.shared_poison = ledger.poison
+    frame.owner = ledger
     frame.binding, frame.eof = (child, 'child-token', 0, 'controlled-acp', 20000), True
     monkeypatch.setattr(control.time, 'monotonic', lambda: frame.started + 4.001)
     with pytest.raises(Refused, match='deadline'):
@@ -200,7 +196,7 @@ def test_preexec_empty_channel_cannot_discharge_a_later_registration(channels, c
     process = ledger.process(child)
     process.command_class = 'controlled-acp'
     _, _, frame = channels
-    frame.shared_poison = ledger.poison
+    frame.owner = ledger
     frame.binding, frame.eof = (child, 'child-token', 0, 'controlled-acp', 20000), True
     terminal(ledger, child, 15)
     wait4(ledger, root, child, 15)
@@ -222,7 +218,7 @@ def test_empty_channel_cannot_discharge_using_another_ledger(channels):
     other.nonce = 'different-epoch-nonce'
     other.process(same_child).command_class = 'controlled-acp'
     _, _, frame = channels
-    frame.shared_poison = original.poison
+    frame.owner = original
     frame.binding, frame.eof = (child, 'child-token', 0, 'controlled-acp', 20000), True
     terminal(other, same_child, 15)
     wait4(other, root, same_child, 15)
@@ -245,4 +241,4 @@ def test_private_framing_never_reenters_payload_io_wrappers(channels, monkeypatc
         assert json.loads(recv(left, 100)[4:]) == {'ok': True}
         with pytest.raises(Refused):
             frame.refuse('controlled refusal')
-        assert right.fileno() == -1 and frame.poison
+        assert right.fileno() == -1

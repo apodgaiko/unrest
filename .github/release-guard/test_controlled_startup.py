@@ -7,6 +7,8 @@ custody, the original timing cases or source-checkpoint certification.
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
+from types import SimpleNamespace
 from dataclasses import dataclass, replace
 import hashlib
 from pathlib import Path
@@ -442,12 +444,12 @@ def test_owned_postimage_capture_binds_its_path_without_unrelated_subtree_clock(
     target.write_bytes(b"pinned backend")
     pin = hashlib.sha256(target.read_bytes()).hexdigest()
     inode = target.stat().st_ino
-    read = os.read
+    original_fdopen = os.fdopen
     changed = []
 
-    def reading(fd, count):
-        block = read(fd, count)
-        if block and os.fstat(fd).st_ino == inode and not changed:
+    def reading(stream, count):
+        block = stream.read(count)
+        if block and os.fstat(stream.fileno()).st_ino == inode and not changed:
             changed.append(True)
             if mutation == "unrelated-sibling":
                 (tmp_path / "common" / "other-owner").mkdir()
@@ -461,7 +463,12 @@ def test_owned_postimage_capture_binds_its_path_without_unrelated_subtree_clock(
                 target.write_bytes(b"pinned backend")
         return block
 
-    monkeypatch.setattr(content_manifest.os, "read", reading)
+    @contextmanager
+    def buffered(fd, *args, **kwargs):
+        with original_fdopen(fd, *args, **kwargs) as stream:
+            yield SimpleNamespace(read=lambda count: reading(stream, count))
+
+    monkeypatch.setattr(content_manifest.os, "fdopen", buffered)
     if mutation == "unrelated-sibling":
         assert capture(target.parent, [target.name])["files"][0]["sha256"] == pin
     else:

@@ -39,7 +39,7 @@ class Client:
                     stream.settimeout(seconds)
                     self.connect(stream, self.path)
                     peer(stream, self.observer, 20001)
-                    frame = Frame(stream, RESPONSE_LIMIT, [], seconds=seconds)
+                    frame = Frame(stream, RESPONSE_LIMIT, seconds=seconds)
                     frame.answer(request)
                     while not frame.send():
                         self.sleep(.0001)
