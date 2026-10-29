@@ -105,7 +105,6 @@ def test_setup_and_tick_errors_keep_original_and_cleanup_failures(monkeypatch, w
     value.selective = False
     value.deadline = float("inf")
     value.identities = {}
-    value.diagnostic_trace = trace.DiagnosticTrace()
     value.on_tick = None
     value.on_attached = None
     original, cleanup = RuntimeError("initiating"), RuntimeError("cleanup")

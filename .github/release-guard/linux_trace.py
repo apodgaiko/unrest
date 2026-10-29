@@ -132,45 +132,6 @@ def signed(value: int) -> int:
     return ctypes.c_longlong(value).value
 
 
-class DiagnosticTrace:
-    """Fixed-width numeric rows per owned PID; no per-stop record growth.
-
-    Column order is part of this diagnostic schema. Original records retain
-    their independent order and complete identity/wait/security content.
-    """
-
-    COLUMNS = ('pid', 'stops', 'resumes', 'first_ns', 'last_ns', 'cpu_ns',
-               'handling_ns', 'max_handling_ns', 'forks', 'execs', 'seccomp',
-               'syscalls', 'other', 'continue', 'syscall_resume')
-
-    def __init__(self) -> None:
-        self.rows: dict[int, list[int]] = {}
-        self.started: dict[int, tuple[int, int]] = {}
-
-    def stop(self, pid: int, stop: int, event: int) -> None:
-        now, cpu = time.monotonic_ns(), time.process_time_ns()
-        row = self.rows.setdefault(pid, [pid, 0, 0, now, now, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-        row[1] += 1
-        row[4] = now
-        row[8 if event in (1, 2, 3) else 9 if event == 4 else 10 if event == 7
-            else 11 if stop == signal.SIGTRAP | 0x80 else 12] += 1
-        self.started[pid] = (now, cpu)
-
-    def resume(self, pid: int, request: int) -> None:
-        now, cpu = time.monotonic_ns(), time.process_time_ns()
-        begin, start_cpu = self.started.pop(pid)
-        row = self.rows[pid]
-        row[2] += 1
-        row[4] = now
-        row[5] += cpu - start_cpu
-        row[6] += now - begin
-        row[7] = max(row[7], now - begin)
-        row[13 if request == 7 else 14] += 1
-
-    def export(self) -> dict[str, Any]:
-        return {'columns': self.COLUMNS, 'rows': [self.rows[pid] for pid in sorted(self.rows)]}
-
-
 class OwnedTrace:
     """Consume a stopped, directly owned child once, with finite exec vectors.
 
@@ -219,7 +180,6 @@ class OwnedTrace:
         self.before_numeric_wait: Any = None
         self.root_parent_wait: int | None = None
         self.records: list[dict[str, Any]] = []
-        self.diagnostic_trace = DiagnosticTrace()
         self.poison: list[str] = []
         self.active = {child}
         self.pending: dict[int, dict[str, Any]] = {}
@@ -579,7 +539,6 @@ class OwnedTrace:
                 if not os.WIFSTOPPED(raw):
                     raise RuntimeError("unknown ptrace wait disposition")
                 self.stopped[pid] = raw
-                self.diagnostic_trace.stop(pid, os.WSTOPSIG(raw), raw >> 16)
                 stop = os.WSTOPSIG(raw)
                 event = raw >> 16
                 deliver = 0
@@ -616,7 +575,6 @@ class OwnedTrace:
                 else:
                     deliver = stop
                 request = 24 if not self.selective or pid in self.pending else 7
-                self.diagnostic_trace.resume(pid, request)
                 ptrace(request, pid, data=ctypes.c_void_p(deliver))
                 self.stopped.pop(pid)
                 self.harvested.discard(pid)
@@ -649,5 +607,4 @@ class OwnedTrace:
         if errors:
             raise BaseExceptionGroup('owned trace cleanup failed', errors)
         return {"root_parent_wait_raw": root_wait, "records": self.records,
-                "poison": self.poison, "source_checkpoint_ready": False,
-                "diagnostic_trace": self.diagnostic_trace.export()}
+                "poison": self.poison, "source_checkpoint_ready": False}

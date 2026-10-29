@@ -167,18 +167,21 @@ def worker(case):
 
     observer = trace.OwnedTrace(source, [], timeout=3, start_write=start_write,
                                on_attached=attached, on_tick=tick, cleanup_seconds=2)
-    if case in ('pending_birth', 'group_stop'):
-        original_stop = observer.diagnostic_trace.stop
-
-        def stop(pid, sig, event):
-            nonlocal observed_group_stop
-            original_stop(pid, sig, event)
-            if case == 'group_stop' and event == 128 and sig == signal.SIGSTOP:
-                observed_group_stop = True
-            if case == 'pending_birth' and event == 1:
-                raise initiating  # Raw stop retained, birth not yet consumed.
-
-        observer.diagnostic_trace.stop = stop
+    if case in ('pending_birth','group_stop'):
+        triggered=False
+        class Stops(dict):
+            def __setitem__(self,pid,raw):
+                nonlocal observed_group_stop,triggered
+                super().__setitem__(pid,raw)
+                if not os.WIFSTOPPED(raw):
+                    return
+                sig,event=os.WSTOPSIG(raw),raw>>16
+                if case=='group_stop' and event==128 and sig==signal.SIGSTOP:
+                    observed_group_stop=True
+                if case=='pending_birth' and event==1 and not triggered:
+                    triggered=True
+                    raise initiating  # Actual raw stop retained; birth not consumed.
+        observer.stopped=Stops(observer.stopped)
     try:
         observer.run()
     except RuntimeError as error:

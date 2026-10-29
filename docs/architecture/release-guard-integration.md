@@ -312,3 +312,12 @@ rollback-label reconciliation are removed. Closed case/operation declarations
 still select the eligible forms before matching; complete environment/cwd and
 kernel exec identity checks follow. Literal vector fixtures live only in tests
 and are excluded from native support; they confer no launch authority.
+
+
+The tracer retains actual kernel identity, birth, exec, exit, signal and numeric
+wait records. Per-stop CPU clocks and diagnostic resume counters are removed;
+they were telemetry rather than admission or completion evidence. Mixed-user
+cleanup controls inject their failure at the actual retained-stop ledger, then
+retain all original drain and actual-parent-wait assertions. Test failure stacks
+and original encrypted evidence are unchanged. No performance or provider final
+timing claim follows from the smaller tracer.
