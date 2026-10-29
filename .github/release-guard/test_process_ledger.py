@@ -177,18 +177,11 @@ def test_preexec_intent_can_only_become_ready_in_its_actual_exec_generation():
     assert ledger.body_ready(root, 'root-token')
 
 
-def session_records():
-    common = {'owner_pid': 100, 'token': 'child-token', 'case': 'case[one]', 'class': 'child'}
-    return ({**common, 'kind': 'admitted'},
-            {**common, 'kind': 'registered', 'pid': 101, 'python': True},
-            {**common, 'kind': 'launch_lifecycle_binding', 'start_new_session': True})
-
-
 def test_session_transition_changes_only_registered_view_not_original_birth():
     ledger, root, child = setup(new_session=True)
     original = deepcopy(ledger.process(child).identity)
     current = {**original, 'pgid': child.pid, 'sid': child.pid}
-    ledger.session(child, current, session_records())
+    ledger.session(child, current)
     assert ledger.process(child).identity == original
     assert ledger.process(child).registered_identity == current
     ledger.control(child, 'child-token', 0, 0, 'core-ready', {'pins': PINS})
@@ -196,25 +189,22 @@ def test_session_transition_changes_only_registered_view_not_original_birth():
     assert ledger.body_ready(child, 'child-token')
 
 
-@pytest.mark.parametrize('mutation', ['case', 'class', 'start_new_session', 'pid', 'duplicate', 'stable_birth'])
-def test_session_transition_cannot_launder_other_missing_identity(mutation):
-    ledger, root, child = setup(new_session=True)
-    records = list(session_records())
-    current = {**ledger.process(child).identity, 'pgid': 101, 'sid': 101}
-    if mutation == 'case':
-        records[0]['case'] = 'wrong'
-    elif mutation == 'class':
-        records[0]['class'] = 'wrong'
-    elif mutation == 'start_new_session':
-        records[2]['start_new_session'] = False
-    elif mutation == 'pid':
-        records[1]['pid'] = 102
-    elif mutation == 'duplicate':
-        records[2] = records[1]
-    else:
-        current['start_ticks'] += 1
+@pytest.mark.parametrize('mutation', ('not-declared','repeat','pgid','sid','stable_birth','original-group','unknown-parent'))
+def test_session_transition_requires_actual_birth_parent_and_group(mutation):
+    ledger,root,child=setup(new_session=mutation!='not-declared')
+    current={**ledger.process(child).identity,'pgid':101,'sid':101}
+    if mutation=='repeat':
+        ledger.session(child,current)
+    elif mutation in ('pgid','sid'):
+        current[mutation]=100
+    elif mutation=='stable_birth':
+        current['start_ticks']+=1
+    elif mutation=='original-group':
+        ledger.process(child).identity['pgid']=102
+    elif mutation=='unknown-parent':
+        ledger.process(child).parent=None
     with pytest.raises(Refused):
-        ledger.session(child, current, tuple(records))
+        ledger.session(child,current)
     assert ledger.poison
 
 

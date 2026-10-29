@@ -129,10 +129,7 @@ class Observer:
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
         if new_session:
-            common = {'owner_pid': self.root, 'token': token, 'case': case, 'class': command_class}
-            witnesses = ({'kind': 'admitted', **common}, {'kind': 'registered', 'pid': pid, 'python': True, **common},
-                         {'kind': 'launch_lifecycle_binding', 'start_new_session': True, **common})
-            self.ledger.session(actor['birth'], actual, witnesses)
+            self.ledger.session(actor['birth'], actual)
         if role=='mp-child':
             self.mp_pipes.update({(actor['birth'],row[0]):row for row in inherited if len(row)==7})
         return actor

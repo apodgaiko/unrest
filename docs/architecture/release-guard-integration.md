@@ -321,3 +321,11 @@ cleanup controls inject their failure at the actual retained-stop ledger, then
 retain all original drain and actual-parent-wait assertions. Test failure stacks
 and original encrypted evidence are unchanged. No performance or provider final
 timing claim follows from the smaller tracer.
+
+
+New-session admission uses the registered kernel parent/birth and the actual
+observed transition from the parent's original group/session to child PID group
+and session. Observer-generated admitted/registered/lifecycle dictionaries are
+removed: they repeated values from that same registration and supplied no
+independent witness. The actual identity, group, one-transition and READY gates
+remain; genuine provider review/approval evidence is a separate unchanged scope.

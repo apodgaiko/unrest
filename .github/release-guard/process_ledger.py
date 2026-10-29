@@ -331,23 +331,11 @@ class Ledger:
         self.next_kernel += 1
 
     @fail_closed
-    def session(self, birth: Birth, observed: dict, records: tuple[dict, ...]) -> None:
+    def session(self, birth: Birth, observed: dict) -> None:
         process = self.process(birth)
         if (not process.new_session or process.session_complete or process.parent is None
-                or process.stage not in ('registered', 'core-ready')
-                or type(records) is not tuple or len(records) != 3):
+                or process.stage not in ('registered','core-ready')):
             raise Refused('ledger session transition')
-        expected = {'admitted', 'registered', 'launch_lifecycle_binding'}
-        if {row.get('kind') for row in records} != expected:
-            raise Refused('ledger session witnesses')
-        for row in records:
-            if (row.get('owner_pid') != process.parent.pid or row.get('token') != process.token
-                    or row.get('case') != process.case or row.get('class') != process.command_class):
-                raise Refused('ledger session owner or case')
-            if row['kind'] == 'registered' and (row.get('pid') != birth.pid or row.get('python') is not True):
-                raise Refused('ledger session child')
-            if row['kind'] == 'launch_lifecycle_binding' and row.get('start_new_session') is not True:
-                raise Refused('ledger session method')
         current = canonical(observed)
         original = process.identity
         parent_identity = self.process(process.parent).registered_identity
