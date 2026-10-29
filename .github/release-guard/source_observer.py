@@ -184,76 +184,26 @@ class Observer:
         return standalone_environment(self.meta)
 
     def stdio(self, pid, role, *, input_pipe=False, intent=None):
-        from storage_launch import CASES as STORAGE_CASES
-        from completion_launch import CASES as COMPLETION_CASES
         if role=='mcp' and self.case in HTTP_CASES:
             from http_cases import stdio
             return stdio(self,pid,intent)
         parent = Path('/proc') / str(process_identity(pid)['ppid']) / 'fd'
-        parent_inodes = set()
+        parent_pipes = set()
         for fd in parent.iterdir():
             try:
                 info = fd.stat()
             except FileNotFoundError:
                 continue
             if stat.S_ISFIFO(info.st_mode):
-                parent_inodes.add((info.st_dev, info.st_ino))
-        for descriptor in (0, 1, 2):
+                parent_pipes.add((info.st_dev,info.st_ino))
+        null = Path('/dev/null').stat()
+        for descriptor in (0,1,2):
             info = (Path('/proc') / str(pid) / 'fd' / str(descriptor)).stat()
-            inline = role == 'cleanup-inline'
-            terminal = inline and self.case in INFLIGHT and os.readlink(Path('/proc') / str(pid) / 'cwd') != self.meta['checkout']
-            inherited = (role=='git-command' and intent is not None and intent.get('fixture_stdio')
-                or role=='fixed-inline' and intent is not None and intent.get('server_stdio') and descriptor==2
-                or inline and (descriptor == 0 if terminal or self.case in STARTUP else descriptor == 2)
-                or role=='fixed-inline' and (self.case in STORAGE_CASES and descriptor==2 or self.case==JOURNAL_CASE
-                    or self.case in COMPLETION_CASES and intent is not None and intent.get('fixed_operation')=='crash'))
-            if intent is not None and intent.get('merged_output') and descriptor==2:
-                other=(Path('/proc')/str(pid)/'fd/1').stat()
-                if (info.st_dev,info.st_ino)!=(other.st_dev,other.st_ino):
-                    raise Refused('credential original merged output descriptors')
-            if terminal and descriptor == 2:
-                other = (Path('/proc') / str(pid) / 'fd/1').stat()
-                if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
-                    raise Refused('cleanup inline merged terminal stderr')
-            if intent is not None and intent.get('null_stdio'):
-                null=Path('/dev/null').stat()
-                if not stat.S_ISCHR(info.st_mode) or info.st_rdev!=null.st_rdev:
-                    raise Refused('source declared null stdio')
-            elif role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('terminal-native','uv-cli','mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps','archive-checker','archive-leaf','archive-installed') and not input_pipe):
-                expected_info = (parent / str(descriptor)).stat()
-                if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
-                    raise Refused('source exact inherited descriptor')
-            elif role == 'git-custody' and descriptor in (0,2):
-                null = Path('/dev/null').stat()
-                if not stat.S_ISCHR(info.st_mode) or info.st_rdev != null.st_rdev:
-                    raise Refused('custody Git exact null descriptors')
-            elif role == 'git-helper':
-                null = Path('/dev/null').stat()
-                if not ((stat.S_ISCHR(info.st_mode) and info.st_rdev == null.st_rdev)
-                        or (stat.S_ISFIFO(info.st_mode) and (info.st_dev, info.st_ino) in parent_inodes)):
-                    raise Refused('Git helper parent pipe or null descriptor')
-            elif role == 'workspace-owned':
-                null = Path('/dev/null').stat()
-                if not stat.S_ISCHR(info.st_mode) or info.st_rdev != null.st_rdev:
-                    raise Refused('workspace exact null descriptors')
-            elif role == 'sleep' and (descriptor == 0 or self.case != ORDINARY_CASES[2]):
-                expected_fd = parent / str(descriptor) if descriptor == 0 else Path('/dev/null')
-                expected_info = expected_fd.stat()
-                if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
-                    raise Refused('source inherited native fixture descriptor')
-            elif descriptor == 2 and role=='desktop':
-                other=(parent/'2').stat()
-                if (info.st_dev,info.st_ino,info.st_mode)!=(other.st_dev,other.st_ino,other.st_mode):
-                    raise Refused('desktop exact inherited stderr')
-            elif descriptor == 2 and role == 'acp':
-                null = Path('/dev/null').stat()
-                if not stat.S_ISCHR(info.st_mode) or info.st_rdev != null.st_rdev:
-                    raise Refused('source exact ACP stderr')
-            elif not stat.S_ISFIFO(info.st_mode) or (info.st_dev, info.st_ino) not in parent_inodes:
-                raise Refused('source exact parent-owned pipe')
-
-        output = (Path('/proc') / str(pid) / 'fd/1').stat()
-        return (output.st_dev, output.st_ino)
+            if not (stat.S_ISCHR(info.st_mode) and info.st_rdev==null.st_rdev
+                    or stat.S_ISFIFO(info.st_mode) and (info.st_dev,info.st_ino) in parent_pipes):
+                raise Refused('source stdio outside actual parent pipe or null descriptor')
+        output=(Path('/proc')/str(pid)/'fd/1').stat()
+        return output.st_dev,output.st_ino
 
     def resolve(self, trace, pid, path, vector, environment, cwd):
         if self.case in PLAN_CASES:

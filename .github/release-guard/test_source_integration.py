@@ -276,7 +276,8 @@ def test_caught_cleanup_signal_refusal_stays_poisoned(monkeypatch):
 
 @pytest.mark.skipif(sys.platform != 'linux', reason='actual proc descriptor ownership')
 @pytest.mark.parametrize('role,input_pipe', (('git-init', False), ('git-helper', False), ('git-command', True), ('fixed-inline',False)))
-def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_path, role, input_pipe):
+@pytest.mark.parametrize('foreign',['regular','pipe','socket'])
+def test_fixture_stdio_retains_parent_pipes_and_rejects_foreign_descriptors(tmp_path, role, input_pipe, foreign):
     command_read, command_write = os.pipe()
     ready_read, ready_write = os.pipe()
     child = os.fork()
@@ -297,8 +298,20 @@ def test_fixture_git_inherits_exact_descriptors_and_rejects_substitution(tmp_pat
                 os.dup2(2, 1)
             os.write(ready_write, b'1')
             assert os.read(command_read, 1) == b'1'
-            with (tmp_path / 'foreign-output').open('wb') as stream:
-                os.dup2(stream.fileno(), 1)
+            if foreign=='regular':
+                with (tmp_path / 'foreign-output').open('wb') as stream:
+                    os.dup2(stream.fileno(), 1)
+            elif foreign=='pipe':
+                read,write=os.pipe()
+                os.dup2(write,1)
+                os.close(read)
+                os.close(write)
+            else:
+                import socket
+                left,right=socket.socketpair()
+                os.dup2(left.fileno(),1)
+                left.close()
+                right.close()
             os.write(ready_write, b'2')
             os.read(command_read, 1)
         finally:

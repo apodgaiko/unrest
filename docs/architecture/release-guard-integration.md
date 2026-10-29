@@ -170,6 +170,14 @@ Bare fixture Git commands are executed through the measured `/usr/bin/git`
 image directly, avoiding undeclared PATH probes when stock-uv support adds a
 runtime bin directory. Command arguments and original product assertions remain.
 
+Stdio containment has one common rule: descriptors 0–2 must be `/dev/null` or
+FIFOs currently held by the actual parent. Sockets, arbitrary character devices
+and arbitrary regular files remain refused. The original HTTP fixture retains
+its separately acquired, exact owned log-file exception. Extra inherited MP
+resources remain independently bound. Original null/inherited/merged stream
+shape is an application-test assertion, no longer an additional guard claim;
+actual process identity, READY and original-parent waits are unchanged.
+
 ## Verification and retired model controls
 
 Every original product/source test and its real completion, status and cleanup
