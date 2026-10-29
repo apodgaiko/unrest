@@ -29,7 +29,7 @@ from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS
 from review_wire import CASES as REVIEW_CASES
 from product_audit import CASES as AUDIT_CASES
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
-from package_cases import CASES as PACKAGE_CASES,GROUPS as PACKAGE_GROUPS,POSITIVE,MUTATIONS,NEGATIVE,FIRST,LIFECYCLE
+from package_cases import CASES as PACKAGE_CASES,GROUPS as PACKAGE_GROUPS,POSITIVE,MUTATIONS,NEGATIVE,FIRST,LIFECYCLE,SECURITY_CASES
 from fixed_inline import CASES as FIXED_CASES, GROUPS as FIXED_GROUPS, NESTED_CASES, DESKTOP_CASE
 
 from completion_roles import CASES as ROLE_CASES,GROUPS as ROLE_GROUPS
@@ -165,7 +165,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
         'review-wire':REVIEW_CASES, 'mp-child': CHILD_CASES, 'mp-tracker': tuple(case for case in MP_CASES if case!=ZERO),
         'root': ('<bootstrap>',), 'backend': (*BOOTSTRAP,*CONTROLLED), 'acp': (*BOOTSTRAP,*CONTROLLED),
         'delayed-backend': tuple(case for case in BOOTSTRAP if wrapper(case) is not None),
-        'archive-checker':(POSITIVE,*MUTATIONS),'archive-leaf':(POSITIVE,*NEGATIVE),'archive-installed':(FIRST,LIFECYCLE),
+        'archive-checker':(POSITIVE,*MUTATIONS),'archive-leaf':(POSITIVE,*NEGATIVE),'archive-installed':(FIRST,LIFECYCLE,*SECURITY_CASES),
         'desktop':(DESKTOP_CASE,), 'pytest-regression': tuple(NESTED_CASES), 'fixed-inline': (*tuple(case for case in FIXED_CASES if case not in (*NESTED_CASES,DESKTOP_CASE)),*tuple(case for case,row in ROLE_CASES.items() if row[0]!='ownership')), 'plan-python': (PLAN_PYTHON,),
         'session-adapter': tuple(case for case in LIVE if case not in (*INVALID,inline_session)),
         'session-inline': (inline_session,), 'session-child': (TIMEOUT,),

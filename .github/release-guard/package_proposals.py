@@ -4,11 +4,10 @@ import json
 import os
 from pathlib import Path
 import stat
-from types import SimpleNamespace
 
 from content_manifest import Refused, read_regular, _directory_key, _key
 from launch_policy import admit_expected,build_expected
-from package_cases import POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, literal, CONTRACT
+from package_cases import POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, literal, CONTRACT, SECURITY_CASES
 from archive_leaf import CHECKER_COMMAND, LEAF_COMMAND
 
 SOURCE_UID=20000
@@ -16,13 +15,8 @@ PREPARED_UID=0
 
 
 def inputs(host):
-    key='<prepared-distribution>'
-    if key not in host.fixture_roots:
-        from prepared_distribution import inputs as prepared
-        from input_manifest import read
-        profile=host.actors[host.root]['profile']
-        host.fixture_roots[key]=prepared(SimpleNamespace(profile=profile,pins=read(host.directory,profile)))
-    return host.fixture_roots[key]
+    from prepared_distribution import observer_inputs
+    return observer_inputs(host)
 
 
 def owned(path,root,prefix):
@@ -100,6 +94,9 @@ def retained_archive(row,case):
 
 
 def proposal(host,actor,raw):
+    if host.case in SECURITY_CASES:
+        from package_security import proposal as security_proposal
+        return security_proposal(host,actor,raw)
     case=host.case
     if raw['stdin'] is not None:
         raise Refused('package undeclared stdin')
@@ -175,5 +172,10 @@ def proposal(host,actor,raw):
         raise Refused('package exact original launch case')
     value=build_expected('package:'+role,case,native,pin,argv,tuple(sorted(env.items())),cwd,
         'native' if role=='archive-checker' else 'python-command')
-    return admit_expected(host,actor,raw,value,role,vector,
+    answer=admit_expected(host,actor,raw,value,role,vector,
         fields={'execution_data':execution_data,'package_inputs':archive_data})
+    if answer is not None and case==FIRST:
+        row=host.intents[answer['ticket']]
+        row.update(security_status=0,security_operation='provenance')
+        host.fixture_roots['<installed-provenance>']=row
+    return answer

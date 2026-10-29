@@ -607,3 +607,22 @@ The stock-uv environment uses `UV_NO_PROJECT=1` without the redundant
 original exact CLI stderr assertion. Removing the inert flag keeps project
 resolution/synchronization disabled; it neither suppresses diagnostics nor changes
 the refusal assertion. Both measured environment-depth transformations remain.
+
+The credential matrix preserves all twenty original calls: nine credential-choice
+negatives plus the ordinary-choice control for each copied-source and installed
+variant. Raw bootstrap, argv, env and cwd match before translation. The actual
+owned `copied-candidate/src` copy is acquired against the complete checkout/src
+inventory into a new observer-owned immutable tree. Only that exact source-path
+operand is substituted; cwd, trap, dependencies, options and sentinel stay original.
+Snapshot identity, bytes and protected ancestry are retained at each exec. The
+installed variant uses the current prepared installation, and supported Claude/
+Codex initialization keeps its two original no-provider leaves. Every negative
+must actually exit2; each supported init and provenance probe must exit0 and reap.
+
+The globally unique built-distribution provenance probe has an explicit first
+consumer (the package FIRST case or focused credential MATRIX). Its original
+setup-phase body, environment and unrelated cwd are matched. Reserving the owned
+fixture directory leaves it pending: matrix work requires the probe's real body
+READY, exit0 and original-parent wait. Original JSON/module/cwd provenance assertions
+remain in the fixture. This coverage grants no provider or descendant launch and
+does not substitute for release archive or installed-lifecycle certification.

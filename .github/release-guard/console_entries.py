@@ -1,11 +1,9 @@
 """Three exact guarded console paths; installed scripts remain actual file bodies."""
 from pathlib import Path
 import configparser
-import json
 import tomllib
 
 from content_manifest import Refused,read_regular,native_digest
-from control_transport import unique
 
 REGISTRATIONS={'unrest':'unrest_harness.cli:cli','unrest-server':'unrest_harness.server:main'}
 
@@ -28,17 +26,8 @@ def script(host,name):
     declaration=tomllib.loads((checkout/'pyproject.toml').read_text())['project']['scripts']
     if declaration!=REGISTRATIONS:
         raise Refused('console current exact project registrations')
-    from types import SimpleNamespace
-    from prepared_distribution import inputs,NAME
-    from input_manifest import read
-    key=('console-inputs',metadata['source_sha256'])
-    if key not in host.fixture_roots:
-        value=inputs(SimpleNamespace(profile=metadata,pins=read(host.directory,metadata)))
-        body,_,_=read_regular(Path(metadata['dependencies'])/NAME/'receipt.json',16*1024*1024,uid=0,mode=0o644)
-        receipt=json.loads(body,object_pairs_hook=unique)
-        value['console_pins']={row['path']:row['sha256'] for row in receipt['installed']['content']['files']}
-        host.fixture_roots[key]=value
-    value=host.fixture_roots[key]
+    from prepared_distribution import observer_inputs
+    value=observer_inputs(host)
     root=value['installed_site']
     names=sorted(root.glob('*.dist-info/entry_points.txt'))
     if len(names)!=1:
@@ -49,7 +38,7 @@ def script(host,name):
         raise Refused('console installed registration bytes')
     path=root/'bin'/name
     pin=native_digest(path)
-    if pin!=value['console_pins'].get('bin/'+name):
+    if pin!=value['installed_members'].get('bin/'+name):
         raise Refused('console retained installed script changed')
     return path,pin
 

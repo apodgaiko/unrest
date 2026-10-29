@@ -121,6 +121,19 @@ def inputs(policy):
     return {'dist':root/'archives','installed_site':root/'installed','dependency_site':Path(profile['dependencies']),'extracted':root/'extracted'}
 
 
+def observer_inputs(host):
+    from types import SimpleNamespace
+    from input_manifest import read
+    key='<prepared-distribution>'
+    if key not in host.fixture_roots:
+        value=inputs(SimpleNamespace(profile=host.meta,pins=read(host.directory,host.meta)))
+        body,_,_=read_regular(Path(host.meta['dependencies'])/NAME/'receipt.json',16*1024*1024,uid=OWNER,mode=0o644)
+        receipt=json.loads(body,object_pairs_hook=unique)
+        value['installed_members']={row['path']:row['sha256'] for row in receipt['installed']['content']['files']}
+        host.fixture_roots[key]=value
+    return host.fixture_roots[key]
+
+
 class Provider:
     def __init__(self,policy):
         self.policy,self.value=policy,None

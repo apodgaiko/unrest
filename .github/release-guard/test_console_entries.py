@@ -32,9 +32,9 @@ def retained(tmp_path,monkeypatch):
     (installed/'package.dist-info/entry_points.txt').write_text('[console_scripts]\nunrest = unrest_harness.cli:cli\nunrest-server = unrest_harness.server:main\n')
     file=installed/'bin/unrest-server'
     file.write_bytes(b'#!/pinned/interpreter\nfrom unrest_harness.server import main\nmain()\n')
-    value={'installed_site':installed,'console_pins':{'bin/unrest-server':hashlib.sha256(file.read_bytes()).hexdigest()}}
+    value={'installed_site':installed,'installed_members':{'bin/unrest-server':hashlib.sha256(file.read_bytes()).hexdigest()}}
     host=SimpleNamespace(meta={'checkout':str(checkout),'source_sha256':'a'*64},
-        fixture_roots={('console-inputs','a'*64):value})
+        fixture_roots={'<prepared-distribution>':value})
     original=console.read_regular
     monkeypatch.setattr(console,'read_regular',lambda path,*args,**kwargs:original(path,*args,**{**kwargs,'uid':os.getuid()}))
     return host,file

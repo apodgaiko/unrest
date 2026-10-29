@@ -204,6 +204,10 @@ class Observer:
                 or inline and (descriptor == 0 if terminal or self.case in STARTUP else descriptor == 2)
                 or role=='fixed-inline' and (self.case in STORAGE_CASES and descriptor==2 or self.case==JOURNAL_CASE
                     or self.case in COMPLETION_CASES and intent is not None and intent.get('fixed_operation')=='crash'))
+            if intent is not None and intent.get('merged_output') and descriptor==2:
+                other=(Path('/proc')/str(pid)/'fd/1').stat()
+                if (info.st_dev,info.st_ino)!=(other.st_dev,other.st_ino):
+                    raise Refused('credential original merged output descriptors')
             if terminal and descriptor == 2:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
@@ -270,6 +274,10 @@ class Observer:
         if actual_pin != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
             return False
         intent = matches[0]
+        if intent.get('credential_snapshot') is not None:
+            from archive_snapshot import retained
+            target,state=intent['credential_snapshot']
+            retained(Path(target),state)
         if intent.get('package_inputs') is not None:
             from package_proposals import retained_archive
             retained_archive(intent['package_inputs'],intent['case'])
@@ -420,6 +428,12 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        from package_security import CASES as SECURITY_CASES
+        if actor.get('case') in SECURITY_CASES and actor['role']=='archive-installed':
+            from package_security import completed
+            rows=[row for row in self.intents.values() if row['case']==actor['case'] and row['consumed']
+                  and row.get('birth')==actor['birth'] and row['token']==actor['token']]
+            return len(rows)==1 and completed(self,rows[0])
         if actor['role'] in ('archive-checker','archive-leaf','archive-installed'):
             from package_cases import MUTATIONS,NEGATIVE
             code=1 if actor['role']=='archive-checker' and actor['case'] in MUTATIONS or actor['role']=='archive-leaf' and actor['case'] in NEGATIVE else 0
@@ -582,7 +596,7 @@ class Observer:
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
                 from package_cases import CASES as PACKAGE_CASES,count as package_count
                 from completion_server import finish as role_finish
-                count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case,self) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
                 if outcome=='failed':
                     count,spec=len(children),None
                 if skipped:
