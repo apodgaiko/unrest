@@ -6,7 +6,7 @@ from pathlib import Path
 
 from content_manifest import Refused
 from owned_fixture import acquire
-from launch_policy import source_unit,assignment
+from launch_policy import source_unit,assignment,render_string
 
 OWNERSHIP_TEST='tests/test_completion_ownership.py'
 SETUP_TEST='tests/test_completion_setup.py'
@@ -77,20 +77,7 @@ def program(checkout,parent,case,ordinal):
     substitutions=(('str(path)',str(path)),('phase',scenario)) if family=='crash' else (
         ('str(path.parent)',str(path.parent)),('str(barrier)',str(parent/'workspace/barrier')),
         ('str(barrier)',str(parent/'workspace/barrier')))
-    index=0
-    result=[]
-    for part in template.values:
-        if isinstance(part,ast.Constant) and type(part.value) is str:
-            result.append(part.value)
-        elif (isinstance(part,ast.FormattedValue) and part.conversion==114 and part.format_spec is None
-              and index<len(substitutions) and ast.unparse(part.value)==substitutions[index][0]):
-            result.append(repr(substitutions[index][1]))
-            index+=1
-        else:
-            raise Refused('completion closed role template substitution')
-    if index!=len(substitutions):
-        raise Refused('completion incomplete original role template')
-    return ''.join(result)
+    return render_string(template,tuple((name,114,repr(value)) for name,value in substitutions))
 
 
 def environment(checkout,parent,case,ordinal,ambient):

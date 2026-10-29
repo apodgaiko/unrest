@@ -66,7 +66,7 @@ def test_original_wire_selection_preserves_oversized_parameter_without_large_mes
     from case_inventory import identity
 
     cases = wire.CASES
-    assert len(cases) == len(set(cases)) == 24
+    assert len(cases) == len(set(cases)) == 54
     node = (
         wire.TEST + "::test_malformed_and_oversized_wire_never_become_success[" + "x" * 70000 + "]"
     )
@@ -192,7 +192,7 @@ def test_component_collection_and_reports_keep_actual_large_pytest_item(monkeypa
     from case_inventory import identity
 
     node = next(node for node in wire.NODES if len(node) > 70000)
-    assert len(wire.NODES) == 24 and tuple(identity(node) for node in wire.NODES) == wire.CASES
+    assert len(wire.NODES) == 54 and tuple(identity(node) for node in wire.NODES) == wire.CASES
     calls = []
     policy = SimpleNamespace(
         profile={"cases": [identity(node)]},
@@ -272,3 +272,18 @@ def test_wire_retirement_requires_ready_and_authorized_cleanup(code, signals, re
     host.intents={1:row}
     actor['intent']=row
     assert Observer.completed_child(host, actor) is accepted
+
+
+def test_extra_wire_catalogue_matches_the_unmodified_original_collection(monkeypatch):
+    monkeypatch.setenv('PYTEST_DISABLE_PLUGIN_AUTOLOAD','1')
+    nodes=[]
+    class Collected:
+        def pytest_collection_finish(self,session):
+            nodes.extend(item.nodeid for item in session.items)
+    assert pytest.main(['--collect-only','-q','-o','addopts=',wire.FRAMES],plugins=[Collected()])==0
+    import ast
+    unit=ast.parse(Path(wire.FRAMES).read_bytes())
+    consumers={fn.name for fn in unit.body if isinstance(fn,ast.AsyncFunctionDef)
+        and any(isinstance(call,ast.Call) and isinstance(call.func,ast.Name) and call.func.id=='wire' for call in ast.walk(fn))}
+    expected=tuple(node for node in nodes if node.split('::')[1].split('[')[0] in consumers)
+    assert tuple(node for node in wire.NODES if node.startswith(wire.FRAMES+'::'))==expected

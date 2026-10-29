@@ -138,3 +138,25 @@ def test_literal_text_rejects_nul_and_unencodable_values(value):
 def test_retired_context_is_not_a_constructor_input(extra):
     with pytest.raises(TypeError):
         policy.build_expected(**{**rule(), extra: {}})
+
+
+@pytest.mark.parametrize('source,rows',[
+    ('f"{foreign}"',(('known',-1,'x'),)),
+    ('f"{known!r}"',(('known',-1,'x'),)),
+    ('f"{known:>4}"',(('known',-1,'x'),)),
+    ('f"{second}{first}"',(('first',-1,'a'),('second',-1,'b'))),
+    ('f"{known}"',()),
+    ('"literal"',(('known',-1,'x'),)),
+    ('f"{known}"',(('known',-1,'x'),('extra',-1,'y'))),
+    ('known',()),
+])
+def test_closed_renderer_rejects_unowned_expressions_and_incomplete_substitutions(source,rows):
+    import ast
+    with pytest.raises(policy.Refused):
+        policy.render_string(ast.parse(source,mode='eval').body,rows)
+
+
+def test_closed_renderer_preserves_authored_order_and_preformatted_bytes():
+    import ast
+    node=ast.parse('f"literal:{first}:{second!r}"',mode='eval').body
+    assert policy.render_string(node,(('first',-1,'/owned/a'),('second',114,repr(('x','y')))))=="literal:/owned/a:('x', 'y')"

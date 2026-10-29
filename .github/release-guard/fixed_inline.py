@@ -8,7 +8,7 @@ from pathlib import Path
 
 from content_manifest import Refused
 from git_observer import image
-from launch_policy import build_expected,source_unit,literal
+from launch_policy import build_expected,source_unit,literal,render_string
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN, CASES as NESTED_CASES, HERMETIC, hermetic
 from desktop_launch import CASE as DESKTOP_CASE
@@ -130,21 +130,9 @@ def script(checkout, operation, root=None):
             return body.value
         if operation not in (*METHODS,*NETWORK) or not isinstance(body,ast.JoinedStr):
             raise Refused('fixed isolated literal template')
-        parts=[]
-        for part in body.values:
-            if isinstance(part,ast.Constant) and type(part.value) is str:
-                parts.append(part.value)
-            elif (isinstance(part,ast.FormattedValue) and isinstance(part.value,ast.Name)
-                  and part.value.id=='method' and operation in METHODS and part.conversion==-1 and part.format_spec is None):
-                parts.append(operation)
-            elif (isinstance(part,ast.FormattedValue) and isinstance(part.value,ast.Name)
-                  and operation in NETWORK and part.format_spec is None
-                  and (part.value.id,part.conversion) in (('family',-1),('detached',114))):
-                family,detached=NETWORK[operation]
-                parts.append(str(family) if part.value.id=='family' else repr(detached))
-            else:
-                raise Refused('fixed isolated template substitution')
-        return ''.join(parts)
+        substitutions=(('method',-1,operation),) if operation in METHODS else (
+            ('family',-1,str(NETWORK[operation][0])),('detached',114,repr(NETWORK[operation][1])))
+        return render_string(body,substitutions)
     return literal(functions[0],'script')
 
 

@@ -94,6 +94,25 @@ def literal(unit,name):
     return value.value
 
 
+def render_string(node,substitutions):
+    parts=node.values if isinstance(node,ast.JoinedStr) else (node,)
+    result=[]
+    index=0
+    for part in parts:
+        if isinstance(part,ast.Constant) and type(part.value) is str:
+            result.append(part.value)
+        elif (isinstance(part,ast.FormattedValue) and part.format_spec is None
+                and index<len(substitutions)
+                and (ast.unparse(part.value),part.conversion)==substitutions[index][:2]):
+            result.append(substitutions[index][2])
+            index+=1
+        else:
+            raise Refused('closed string template substitution')
+    if index!=len(substitutions):
+        raise Refused('closed string template incomplete')
+    return ''.join(result)
+
+
 def admit_expected(host,actor,raw,value,role,vector,script_pin=None,*,fields=None,**options):
     """Finalize an independently reconstructed declaration; never infer one."""
     if raw['argv']!=list(value.argv) or raw['environment']!=dict(value.environment) or raw['cwd']!=value.cwd:

@@ -3,6 +3,7 @@ import ast
 from pathlib import Path
 
 from content_manifest import Refused
+from launch_policy import render_string
 from owned_fixture import acquire
 
 NAMES = ('test_precaptured_constructor_resolver_and_command_aliases_are_audit_denied',
@@ -47,18 +48,8 @@ def body(tree, operation, root, checkout):
             if operation==CASES[0] else {'str(tmp_path)':(str(root),114),
             'str(FIXTURE)':(str(checkout/'tests/fixtures/v04_speed_workloads.v2.json'),114),
             'HEAD':(constants['HEAD'],114),'TREE':(constants['TREE'],114)})
-    result=[]
-    for part in calls[0].args[0].values:
-        if isinstance(part,ast.Constant) and type(part.value) is str:
-            result.append(part.value)
-        elif isinstance(part,ast.FormattedValue) and part.format_spec is None:
-            value=values.get(ast.unparse(part.value))
-            if value is None or part.conversion!=value[1]:
-                raise Refused('speed closed string substitution')
-            result.append(repr(value[0]) if value[1]==114 else value[0])
-        else:
-            raise Refused('speed string template shape')
-    return ''.join(result)
+    order=('marker_system','marker_run','marker_system','marker_run') if operation==CASES[0] else ('str(tmp_path)','str(FIXTURE)','HEAD','TREE')
+    return render_string(calls[0].args[0],tuple((name,values[name][1],repr(values[name][0]) if values[name][1]==114 else values[name][0]) for name in order))
 
 
 def cli_expected(native,pin,checkout,root,operation):

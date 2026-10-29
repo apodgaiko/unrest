@@ -9,6 +9,7 @@ from public_git import FM000
 BINDING='tests/test_release_binding.py'
 V021='tests/test_v021_release_records.py'
 V045='tests/test_v045_release_records.py'
+REPOSITORY='tests/test_repository_contract.py::test_current_repository_passes_deterministically_without_writes'
 CLI=V045+'::test_binding_cli_accepts_active_manifest_and_refuses_wrong_digest'
 TOOL='tools/release_binding.py'
 TOOL_PIN='c40638ed9b7b00e2ca831bd29c909c78672bb91017d21ad13c283143989f43a2'
@@ -21,13 +22,15 @@ CATALOG={
     V021:('test_fm000_proposal_artifacts_remain_exact_historical_provenance','test_v021_candidate_had_no_forbidden_v03_runtime_surface'),
     V045:('test_v040_release_carriers_remain_exact_tag_bytes',),
 }
-CASES=(*tuple(file+'::'+name for file,names in CATALOG.items() for name in names),CLI)
-PINS={'tests/test_release_binding.py': '2db77fb31af6b7e536420a16aaa92fc237404570d0f97df37f374fed788c2d0f', 'tests/test_v021_release_records.py': '7d5f90c969295c019e515133cca6abbb2458882c53b43a7bee3c59ca44a95ee5', 'tests/test_v045_release_records.py': 'be9693d6ad6937f0080f6022d3db602ad8530c0d24f8528b85ebc3ee4c492da4'}
+CASES=(*tuple(file+'::'+name for file,names in CATALOG.items() for name in names),CLI,REPOSITORY)
+PINS={'tests/test_repository_contract.py':'1cbd5eadccc55dbdce16eaa0ff1434e2694c716cfe5c7f3ed252e74672b19aeb', 'tests/test_release_binding.py': '2db77fb31af6b7e536420a16aaa92fc237404570d0f97df37f374fed788c2d0f', 'tests/test_v021_release_records.py': '7d5f90c969295c019e515133cca6abbb2458882c53b43a7bee3c59ca44a95ee5', 'tests/test_v045_release_records.py': 'be9693d6ad6937f0080f6022d3db602ad8530c0d24f8528b85ebc3ee4c492da4'}
 
 
 def commands(checkout,case):
     file,name=case.split('::')
     source_unit(checkout,file,PINS[file],(name,))
+    if case==REPOSITORY:
+        return [('status','--short')]
     if case==CLI or name in CATALOG[BINDING][:3]:
         return [('ls-files','--stage','-z'),('ls-files','--others','--exclude-standard','-z')]
     versions={'test_v02_carriers_are_byte_identical_to_the_v020_tag':('0.2', '0.2.0',('manifest.json','review-audit.json','evidence-crosswalk.json','md','rollback.md')),
@@ -80,7 +83,7 @@ def proposal(host,actor,raw):
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
     expected=build_expected(host.case,'/usr/bin/git',image(),tuple(raw['argv']),
         tuple(sorted(environment.items())),raw['cwd'] if host.case==CLI else str(checkout),'native')
-    return admit_expected(host,actor,raw,expected,'git-custody',['/usr/bin/git',*raw['argv'][1:]],maximum=128)
+    return admit_expected(host,actor,raw,expected,'git-custody',['/usr/bin/git',*raw['argv'][1:]],maximum=2 if host.case==REPOSITORY else 128)
 
 
 def cli_proposal(host,actor,raw):

@@ -4,7 +4,7 @@ import base64
 from pathlib import Path
 
 from content_manifest import Refused
-from launch_policy import source_unit,assignment,build_expected,admit_expected
+from launch_policy import source_unit,assignment,build_expected,admit_expected,render_string
 from owned_fixture import acquire
 
 TEST='tests/test_capability_policy.py'
@@ -30,11 +30,7 @@ def program(checkout,case):
     names=ast.literal_eval(assignment(source_unit(checkout,POLICY,POLICY_PIN),'FINITE_CREDENTIAL_NAMES'))
     observed=(*names,*(f'UNRELATED_ALIAS_{i}' for i in range(len(names))),'HOME','TEMP','SSL_CERT_DIR','NO_PROXY','TMP')
     template=assignment(unit,'script')
-    if (not isinstance(template,ast.JoinedStr) or len(template.values)!=3
-            or not isinstance(template.values[1],ast.FormattedValue)
-            or ast.unparse(template.values[1].value)!='observed_names' or template.values[1].conversion!=114):
-        raise Refused('terminal sole original repr-only names template')
-    body=template.values[0].value+repr(observed)+template.values[2].value
+    body=render_string(template,(('observed_names',114,repr(observed)),))
     wrapped=f'terminal-sentinel-1-{names[1].lower()}'
     return body,{'SSL_CERT_DIR':'MONKEY','NO_PROXY':'ordinary-equal-free-value','TMP':base64.urlsafe_b64encode(wrapped.encode()).decode()}
 

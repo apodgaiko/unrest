@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from content_manifest import Refused
-from launch_policy import source_unit,assignment,admit_expected,build_expected
+from launch_policy import source_unit,assignment,admit_expected,build_expected,render_string
 from owned_fixture import acquire
 
 TEST='tests/contracts/test_lean_provider_security.py'
@@ -48,16 +48,7 @@ def matrix_program(checkout,bootstrap,trap):
         if isinstance(node,ast.BinOp) and isinstance(node.op,ast.Add):
             return render(node.left)+render(node.right)
         if isinstance(node,ast.JoinedStr):
-            result=[]
-            for part in node.values:
-                if isinstance(part,ast.Constant) and type(part.value) is str:
-                    result.append(part.value)
-                elif (isinstance(part,ast.FormattedValue) and ast.unparse(part.value)=='str(trap)'
-                        and part.conversion==114 and part.format_spec is None):
-                    result.append(repr(str(trap)))
-                else:
-                    raise Refused('credential matrix closed trap substitution')
-            return ''.join(result)
+            return render_string(node,(('str(trap)',114,repr(str(trap))),))
         raise Refused('credential matrix original concatenation')
     return render(node)
 

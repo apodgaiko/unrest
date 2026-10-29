@@ -718,3 +718,17 @@ launch routing and directory retention share their existing exact validators.
 The diagnostic workflow is temporarily restored while repairing the failed
 checkpoint's missing families. Its selected runs never certify an unexcluded
 source checkpoint or release; it will be retired again before final freeze.
+
+Closed source-string templates share one renderer. Callers author ordered
+expression/conversion/already-rendered-text rows from their existing trusted
+values. The renderer accepts only string constants and JoinedStr, rejects format
+specifications and unknown/reordered fields, and requires exact row exhaustion.
+It evaluates no source expression and derives no permission rows from a template.
+
+The three additional wire-helper consumers in provider_review_frames retain the
+same pinned transport, inert scenario schema, sequential quota and actual waits.
+Their 30 explicit original parameter nodes are checked against ordinary pytest
+collection and the helper call sites. The five actual-runner scenarios remain a
+separate family; their handoff/receipt schema is not admitted by the wire-only
+boundary. The repository contract's two readonly status commands use its pinned
+source owner and the existing public-history projection, without helper authority.

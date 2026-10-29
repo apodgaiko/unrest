@@ -11,7 +11,7 @@ def test_exact_queries_are_readonly_and_bounded(case):
     rows=commands(ROOT,case)
     assert 1<=len(rows)<=128
     assert len(rows)==len(set(rows))
-    assert {row[0] for row in rows}<={'ls-files','ls-tree','show','archive','merge-base','rev-parse','diff'}
+    assert {row[0] for row in rows}<={'ls-files','ls-tree','show','archive','merge-base','rev-parse','diff','status'}
     assert all(not any('\0' in part or '\n' in part for part in row) for row in rows)
 
 def test_candidate_inventory_forms_and_historical_counts():
