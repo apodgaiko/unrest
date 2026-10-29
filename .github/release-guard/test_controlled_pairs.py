@@ -16,15 +16,15 @@ def test_every_catalogue_case_has_a_finite_source_bound():
 def test_pair_cannot_borrow_another_owner_backend():
     case = next(case for case in CASES if 'test_ack_durability[' in case)
     records = [{'cwd':'/owned/pytest/a/worker','role':'backend','consumed':True,'pid':12}]
-    actors = {12:{'returned':True}}
-    before_spawn(case,'/owned/pytest/a/worker','acp',records,actors)
+    def executed(row):
+        return True
+    assert before_spawn(case,'/owned/pytest/a/worker','acp',records,executed)
     with pytest.raises(Refused):
-        before_spawn(case,'/owned/pytest/b/worker','acp',records,actors)
+        before_spawn(case,'/owned/pytest/b/worker','acp',records,executed)
     with pytest.raises(Refused):
-        before_spawn(case,'/owned/pytest/a/validator','acp',records,actors)
-    actors[12]['returned'] = False
-    with pytest.raises(Refused):
-        before_spawn(case,'/owned/pytest/a/worker','acp',records,actors)
+        before_spawn(case,'/owned/pytest/a/validator','acp',records,executed)
+    assert before_spawn(case,'/owned/pytest/a/worker','acp',records,lambda row:False) is False
+
 
 
 def test_pair_replay_and_case_bound_refuse():

@@ -23,6 +23,7 @@ def host(tmp_path,monkeypatch):
     value.meta_environment=lambda:{'HOME':'/owned/home','PATH':'/usr/bin:/bin'}
     value.root_only=lambda actor:None if actor['birth'] is root else pytest.fail('foreign parent')
     value.owner=lambda actor:actor['token']
+    value.executed=lambda row:row['consumed'] and value.actors[row['pid']]['executed']
     value.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=None),reaped=lambda birth,token:value.actors[birth]['waited'])
     monkeypatch.setattr(server,'root',lambda host,cwd:parent)
     monkeypatch.setattr(server,'git_ready',lambda host,cwd:'1'*40)
@@ -51,7 +52,7 @@ def raw(host,parent,slot,port=12345):
 def consumed(host,answer):
     row=host.intents[answer['ticket']]
     row.update(consumed=True,pid=answer['ticket'],birth=answer['ticket'])
-    host.actors[row['pid']]={'returned':True,'waited':False,'birth':row['birth'],'token':row['token']}
+    host.actors[row['pid']]={'executed':True,'waited':False,'birth':row['birth'],'token':row['token']}
 
 
 def test_each_concurrent_http_constructor_consumes_one_exact_authored_slot(host):

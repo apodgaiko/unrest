@@ -214,8 +214,10 @@ def proposal(host, actor, raw):
         from cleanup_inline import child_count
         records = [row for row in host.intents.values() if row['case']==case]
         terminal = case in INFLIGHT and len(records)==2
-        if len(records)>=child_count(case) or any(not row['consumed'] or not host.actors[row['pid']]['returned'] for row in records):
+        if len(records)>=child_count(case):
             raise Refused('cleanup inline original child order')
+        if any(not host.executed(row) for row in records):
+            return None
         role,maximum='cleanup-inline',child_count(case)
         expected = inline_expected(case,native,pin,checkout,root_environment,base=base_path(cwd,owned) if terminal else None,terminal=terminal)
         script_pin,vector = expected.payload_sha256,[native,'-I','-S',*expected.argv[1:]]
@@ -252,11 +254,14 @@ def proposal(host, actor, raw):
         role='backend' if backend else 'acp'
         records=[row for row in host.intents.values() if row['case']==case]
         if case in CONTROLLED:
-            before_spawn(case,cwd,role,records,host.actors)
+            if not before_spawn(case,cwd,role,records,host.executed):
+                return None
         elif not backend:
             backends=[row for row in records if row['role'] in ('backend','delayed-backend')]
-            if len(backends)!=1 or not backends[0]['consumed'] or not host.actors[backends[0]['pid']]['returned']:
-                raise Refused('source ACP before owned backend return')
+            if len(backends)!=1:
+                raise Refused('source ACP before owned backend')
+            if not host.executed(backends[0]):
+                return None
         from configuration_inputs import check_inputs
         check_inputs(checkout,Path(cwd),case)
         relay = None

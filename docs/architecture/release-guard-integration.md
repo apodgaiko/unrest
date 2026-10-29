@@ -458,3 +458,12 @@ its completion contract and independent original-parent terminal wait. Skipped
 cases must launch no children. Completion-server status/session/READY checks and
 package provenance remain mandatory; only the duplicate expected-count claims
 and finish-only count calculators are retired.
+
+
+Constructor-return RPC receipts are retired. Source wrappers retain local Popen
+handles for owned signaling, while dependent launch gates require the consumed
+intent's matching kernel Birth/token/case and actual execution generation equal
+to registered generation 1. A consumed intent alone is insufficient because it
+precedes successful exec. Pending execution holds the bounded RPC request; a
+missing or foreign declaration still refuses. Historical successful execution
+remains usable after exit, and all terminal/parent-wait obligations remain.

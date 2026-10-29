@@ -37,7 +37,6 @@ def install(policy):
                 raise Refused('spawn response schema')
             pid=original(executable,answer['translated'],passfds)
             policy.children[pid]={'token':answer['token'],'case':policy.case,'process':None}
-            policy.client.request('launch-return',{'pid':pid,'ticket':answer['ticket'],'token':answer['token']})
             return pid
         except Refused:
             policy.refuse('finite spawn refused')

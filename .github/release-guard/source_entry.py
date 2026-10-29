@@ -171,7 +171,6 @@ class Policy:
             if pending is None:
                 policy.refuse('source constructor without admitted audit')
             policy.local.launch = None
-            policy.client.request('launch-return', {'pid': process.pid, 'ticket': pending['ticket'], 'token': pending['token']})
             saved = {'token': pending['token'], 'process': process, 'case': policy.case}
             policy.children[process.pid] = saved
         def signal(pid, sig, *, group):

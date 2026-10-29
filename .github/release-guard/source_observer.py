@@ -105,7 +105,7 @@ class Observer:
             ('source', source['source_sha256']), ('support', source['support_sha256']),
             ('runtime', source['runtime_sha256']), ('dependency', source['dependency_sha256']))))
         actor = {'birth': Birth.read(actual), 'role': role, 'case': case, 'token': token,
-                 'profile': source, 'pins': pins, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
+                 'profile': source, 'pins': pins, 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
@@ -237,7 +237,7 @@ class Observer:
             self.ledger.register(birth, intent['token'], pins, intent['executable_sha256'],
                                  case=intent['case'], command_class=native_class(intent['role']), expected_generation=0 if intent['role'] == 'session-invalid' else 1)
             self.actors[pid] = {'birth': birth, 'role': intent['role'], 'case': intent['case'], 'token': intent['token'],
-                'returned': False, 'body_ready': False, 'signals': set(), 'kernel_admitted': True}
+                'body_ready': False, 'signals': set(), 'kernel_admitted': True}
             if intent['role']=='uv-cli':
                 from uv_cli import reserve_child
                 reserve_child(self,intent,birth)
@@ -300,6 +300,13 @@ class Observer:
             'script_sha256': script_pin,
             'inherited': list(inherited), 'port': port}
         return {'ok': True, 'ticket': self.serial, 'token': token}
+
+    def executed(self,intent):
+        if not intent['consumed']:
+            return False
+        process=self.ledger.process(intent['birth'])
+        return (process.token==intent['token'] and process.case==intent['case']
+            and process.generation==process.registered_generation==1)
 
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
@@ -490,16 +497,6 @@ class Observer:
         elif kind == 'launch-proposal':
             from effect_proposals import proposal
             return proposal(self,actor,payload)
-        elif kind == 'launch-return':
-            self.launch_owner(actor)
-            shape(payload, ('pid', 'ticket', 'token'))
-            intent = self.intents[number(payload['ticket'], 1)]
-            child = self.actors.get(number(payload['pid'], 1))
-            if (not intent['consumed'] or intent['pid'] != payload['pid'] or child is None
-                    or self.ledger.process(child['birth']).parent != actor['birth']
-                    or intent['token'] != payload['token'] or child['returned']):
-                raise Refused('source actual constructor return binding')
-            child['returned'] = True
         elif kind == 'self-stop':
             shape(payload, ('signal',))
             children = [value for value in self.actors.values() if self.ledger.process(value['birth']).parent == actor['birth']]

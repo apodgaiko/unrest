@@ -198,7 +198,7 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
         observer.full, observer.outcomes = False, []
         observer.frames=[]
         observer.root_birth, observer.root, observer.ledger, observer.finished = birth, birth.pid, ledger, False
-        observer.actors = {child: {'birth': child_birth, 'returned': True}}
+        observer.actors = {child: {'birth': child_birth, 'body_ready': True}}
         payload = {'pid': child, 'requested_pid': child, 'child_token': 'child-token',
                    'raw_status': raw, 'numeric_returncode': os.waitstatus_to_exitcode(raw), 'options': 0}
         request = {'pid': birth.pid, 'nonce': ledger.nonce, 'token': 'root-token', 'generation': 1,
@@ -422,3 +422,17 @@ def test_retired_launch_intent_has_no_control_or_dispatch_authority(tmp_path):
     with pytest.raises(Refused):
         observer.dispatch(actor,{'kind':'launch-intent','payload':request})
     assert not observer.intents
+
+
+@pytest.mark.parametrize('mutation',('unconsumed','before-exec','unregistered','wrong-token','wrong-case','registered','exited'))
+def test_constructor_receipt_is_not_execution_evidence(mutation):
+    from types import SimpleNamespace
+    from source_observer import Observer
+    observer=object.__new__(Observer)
+    birth=object()
+    intent={'birth':birth,'token':'ticket','case':'case','consumed':mutation!='unconsumed'}
+    process=SimpleNamespace(token='other' if mutation=='wrong-token' else 'ticket',
+        case='other' if mutation=='wrong-case' else 'case',generation=0 if mutation=='before-exec' else 1,
+        registered_generation=0 if mutation=='unregistered' else 1,exit=(1,0) if mutation=='exited' else None)
+    observer.ledger=SimpleNamespace(process=lambda selected:process if selected is birth else pytest.fail('foreign birth'))
+    assert observer.executed(intent)==(mutation in ('registered','exited'))

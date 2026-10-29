@@ -217,8 +217,11 @@ def proposal(host,actor,raw):
     spec=plan(host.case,raw['target']) if role=='mp-child' else None
     quota(records,role,raw['target'],spec.maximum if spec is not None else 1)
     tracker=next((row for row in records if row['role']=='mp-tracker'),None)
-    if role=='mp-child' and (tracker is None or not tracker['consumed'] or not host.actors[tracker['pid']]['returned']):
-        raise Refused('spawn needs returned owned tracker')
+    if role=='mp-child':
+        if tracker is None:
+            raise Refused('spawn needs owned tracker')
+        if not host.executed(tracker):
+            return None
     if role=='mp-tracker':
         reader=int(raw['argv'][4].removeprefix('from multiprocessing.resource_tracker import main;main(')[:-1])
         tracker_read=fd_record(actor['birth'].pid,reader)

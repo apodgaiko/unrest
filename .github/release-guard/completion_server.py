@@ -52,7 +52,7 @@ def before(host,slot):
     git_ready(host,parent/'workspace')
     if slot in existing or family!='setup' and slot!=len(existing):
         raise Refused('completion original server sequence')
-    if any(not row['consumed'] or not host.actors[row['pid']]['returned'] for row in existing.values()):
+    if any(not host.executed(row) for row in existing.values()):
         return None
     prior=(tuple(existing) if family=='ownership' and slot>=2 or family=='crash' and slot==1 else ())
     if any(not complete(host,existing[index]) for index in prior):

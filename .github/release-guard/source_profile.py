@@ -16,7 +16,7 @@ from process_ledger import Birth, canonical
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
 
 METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
-    'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal', 'launch-return',
+    'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal',
     'custody_signal', 'custody_close', 'self-stop', 'guard-refusal'})
 
 

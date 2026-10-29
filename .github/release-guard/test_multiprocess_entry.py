@@ -101,6 +101,7 @@ def tracker(monkeypatch):
         meta={"checkout": "/source"},
         binding={"entry": {"path": NATIVE, "sha256": "a" * 64}},
         root_only=lambda value: None,
+        executed=lambda row:True,
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
         intents={},
     )
@@ -235,6 +236,7 @@ def test_spawn_requires_distinct_bootstrap_reader_sentinel_writer_and_live_track
         meta={"checkout": "/source"},
         binding={"entry": {"path": NATIVE, "sha256": "a" * 64}},
         root_only=lambda value: None,
+        executed=lambda row:True,
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
         intents={
             1: {

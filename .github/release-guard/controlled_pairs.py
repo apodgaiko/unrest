@@ -56,7 +56,7 @@ def scope(case: str, tag: str, value: object, owned: Path) -> str:
     return value
 
 
-def before_spawn(case: str, home: str, role: str, records: list[dict], actors: dict) -> None:
+def before_spawn(case: str, home: str, role: str, records: list[dict], executed) -> bool:
     maximum, _ = limits(case)
     if case == STARTUP_FAILURE and role != 'backend':
         raise Refused('startup failure has no ACP launch')
@@ -65,6 +65,8 @@ def before_spawn(case: str, home: str, role: str, records: list[dict], actors: d
     if role == 'backend':
         if pair or len(pairs) >= maximum:
             raise Refused('controlled fresh backend pair bound')
-    elif (role != 'acp' or len(pair) != 1 or pair[0]['role'] != 'backend'
-            or not pair[0]['consumed'] or not actors[pair[0]['pid']]['returned']):
-        raise Refused('controlled ACP original pair backend return')
+    else:
+        if role != 'acp' or len(pair) != 1 or pair[0]['role'] != 'backend':
+            raise Refused('controlled ACP original pair backend')
+        return executed(pair[0])
+    return True
