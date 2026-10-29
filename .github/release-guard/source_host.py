@@ -283,7 +283,7 @@ def worker(binding, metadata, raw_directory):
             finished(observer)
         require(result['root_parent_wait_raw'] == 0 and not result['poison'] and not observer.ledger.poison
                 and observer.finished and tuple(observer.completed) == (() if binding.get('collection_only') else observer.cases)
-                and not observer.frames and not observer.pair_intents and not observer.endpoints.poison
+                and not observer.frames
                 and all(intent['consumed'] for intent in observer.intents.values()), 'original source completion refused')
     except BaseException:
         failure = traceback.format_exc()
@@ -302,7 +302,8 @@ def worker(binding, metadata, raw_directory):
                       'outcomes': [] if observer is None else observer.outcomes,
                       'network_observations': {'namespace':metadata.get('network_namespace'),
                           'tcp_peer_ownership_proven':False,'tcp_quotas_proven':False,
-                          'reservation_causality_proven':False,'application_payload_proven':False},
+                          'reservation_causality_proven':False,'application_payload_proven':False,
+                          'unix_pair_lineage_proven':False},
                       'plan_observations': [] if observer is None else observer.plan_records,
                       'poison': [] if observer is None else observer.ledger.poison,
                       'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}

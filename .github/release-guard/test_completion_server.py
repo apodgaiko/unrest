@@ -22,7 +22,6 @@ def host(tmp_path,monkeypatch):
         intents={},actors={},probe_ports={},retired=[],root_birth=root)
     value.meta_environment=lambda:{'HOME':'/owned/home','PATH':'/usr/bin:/bin'}
     value.root_only=lambda actor:None if actor['birth'] is root else pytest.fail('foreign parent')
-    value.endpoints=SimpleNamespace(retire_owner=lambda owner,case:value.retired.append(owner))
     value.owner=lambda actor:actor['token']
     value.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=None),reaped=lambda birth,token:value.actors[birth]['waited'])
     monkeypatch.setattr(server,'root',lambda host,cwd:parent)

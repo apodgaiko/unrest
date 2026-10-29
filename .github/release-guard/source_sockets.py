@@ -1,4 +1,4 @@
-"""Literal isolated loopback and independently owned anonymous Unix pairs."""
+"""Literal isolated loopback and anonymous Unix stream pairs."""
 from __future__ import annotations
 
 import errno
@@ -25,21 +25,6 @@ class Hooks:
         self.original={name:getattr(socket.socket,name) for name in ('bind','connect','connect_ex')}
         self.pair = socket.socketpair
         self.getaddrinfo = socket.getaddrinfo
-
-    def descriptor(self, stream):
-        if type(stream) is not self.socket_type:
-            raise Refused('source exact socket type')
-        descriptor = self.fd(stream)
-        if type(descriptor) is not int or descriptor < 0:
-            raise Refused('source live socket descriptor')
-        return descriptor
-
-    def rpc(self, kind, payload):
-        try:
-            return self.policy.client.request(kind, payload)
-        except BaseException:
-            self.policy.poison = True
-            raise
 
     def audit(self, event, args):
         if event == 'socket.__new__':
@@ -85,13 +70,11 @@ class Hooks:
                 or TYPE(proto) is not int or int.__int__(family) != socket.AF_UNIX
                 or int.__int__(type) != socket.SOCK_STREAM or proto != 0):
             self.policy.refuse('source unknown self-pair domain')
-        ticket = self.rpc('pair-intent', {'site':'local-stream-pair'})['ticket']
-        self.local.pair = ticket
+        self.local.pair = True
         try:
             pair = self.pair(family, type, proto)
         finally:
             self.local.pair = None
-        self.rpc('pair-seal', {'ticket': ticket, 'fds': [self.descriptor(stream) for stream in pair]})
         return pair
 
     def literal_address(self, host, port, family=0, type=0, proto=0, flags=0):

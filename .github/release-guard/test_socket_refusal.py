@@ -58,8 +58,8 @@ def test_ordinary_io_error_is_not_converted_to_guard_refusal(installed,monkeypat
 
 def test_caught_pair_descriptor_refusal_is_sticky(installed):
     hooks,policy,records,_=installed
-    hooks.self_pair=lambda *args,**kwargs:hooks.descriptor(object())
-    with pytest.raises(Refused,match='exact socket type'):
+    hooks.self_pair=lambda *args,**kwargs:(_ for _ in ()).throw(Refused('unknown self-pair domain'))
+    with pytest.raises(Refused,match='unknown self-pair domain'):
         source_sockets.socket.socketpair()
     assert policy.poison
     assert [kind for kind,_ in records]==['guard-refusal']
@@ -68,7 +68,7 @@ def test_caught_pair_descriptor_refusal_is_sticky(installed):
 def test_existing_guard_poison_is_not_reported_twice(installed):
     hooks,policy,records,Socket=installed
     policy.poison=True
-    hooks.self_pair=lambda *args,**kwargs:hooks.descriptor(object())
+    hooks.self_pair=lambda *args,**kwargs:(_ for _ in ()).throw(Refused('unknown self-pair domain'))
     with pytest.raises(Refused):
         source_sockets.socket.socketpair()
     assert policy.poison and not records

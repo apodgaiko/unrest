@@ -22,13 +22,10 @@ from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as 
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, declaration
 from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
-from endpoint_policy import Endpoints, Owner
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
-from socket_observation import acquire_unix_pair
 from source_profile import METHODS, ROOT_COMMAND
 from ordinary_acp import EXECUTION_CASES as ORDINARY_CASES, NEGATIVE_CASES
-from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
 from git_sites import CASES as GIT_CASES
@@ -71,10 +68,7 @@ class Observer:
         self.ledger = Ledger(os.urandom(32).hex())
         self.admission = Admission(self.ledger, METHODS)
         self.git = Git(self)
-        self.endpoints, self.actors, self.intents = Endpoints(self.ledger), {}, {}
-        self.pairs = UnixPairs(self.endpoints)
-        self.pair_intents = {}
-        self.descriptors, self.mp_pipes = {}, {}
+        self.actors, self.intents, self.mp_pipes = {}, {}, {}
 
         self.fixture_roots = {}
         self.plan_records: list[dict] = []
@@ -88,9 +82,6 @@ class Observer:
         path.chmod(0o666)
         self.server.listen(32)
         self.server.setblocking(False)
-
-    def owner(self, actor):
-        return Owner(actor['birth'], actor['token'], 1)
 
     def profile(self, pid, role, case, vector, environment, cwd, token, inherited=()):
         actual = process_identity(pid)
@@ -456,7 +447,6 @@ class Observer:
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
                         or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)):
                     raise Refused('source original case actual cleanup incomplete')
-                self.endpoints.retire_case(self.case)
                 if self.full:
                     self.outcomes.append(dict(payload))
                 self.completed.append(self.case)
@@ -520,24 +510,6 @@ class Observer:
                     or intent['token'] != payload['token'] or child['returned']):
                 raise Refused('source actual constructor return binding')
             child['returned'] = True
-        elif kind == 'pair-intent':
-            shape(payload, ('site',))
-            if payload['site'] != 'local-stream-pair' or len(self.pair_intents) >= 32:
-                raise Refused('source finite self-pipe intent')
-            self.serial += 1
-            self.pair_intents[self.serial] = actor['birth']
-            return {'ok': True, 'ticket': self.serial}
-        elif kind == 'pair-seal':
-            shape(payload, ('ticket', 'fds'))
-            ticket = number(payload['ticket'], 1)
-            if self.pair_intents.get(ticket) != actor['birth']:
-                raise Refused('source self-pipe owner ticket')
-            pair = self.pairs.admit(self.owner(actor), self.ledger.process(actor['birth']).case,
-                                    acquire_unix_pair(actor['birth'], payload['fds']))
-            del self.pair_intents[ticket]
-            for member in pair.members:
-                key = actor['birth'], member.fd
-                self.descriptors[key] = pair
         elif kind == 'self-stop':
             shape(payload, ('signal',))
             children = [value for value in self.actors.values() if self.ledger.process(value['birth']).parent == actor['birth']]

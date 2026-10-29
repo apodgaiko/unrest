@@ -68,38 +68,29 @@ expected children, consumed intents, actual statuses and original-parent joins.
 
 ## IPC admission model
 
-Socket construction and adoption remain restricted. DNS, datagrams, arbitrary
-families and Unix pathname connection effects remain forbidden. Each TCP bind
-or connect requires independently selected case/actor authority. A listener
-registration binds current Birth/UID, descriptor identity and literal loopback
-address. Each connect reacquires that exact owned listener and a fresh unbound
-client descriptor, checks owner readiness/generation, and consumes finite quotas.
-Shared listeners never transfer another server's authority. Case and owner
-retirement revoke future admissions; owner retirement still requires the actual
-parent wait. Reconnecting always needs a new admission.
+Socket construction and adoption remain restricted. TCP effects are literal
+IPv4 loopback inside the independently verified private network namespace. DNS,
+datagrams, arbitrary families and source Unix pathname/abstract bind/connect
+remain forbidden. The private control pathname retains its independent kernel
+peer authentication and current registration/token checks.
 
-After admission, ordinary Python and the kernel own stream IO. The guard does
-**not** certify application accept, reciprocal accepted-FD identity, every later
-FD alias, queued payload bytes, EOF-only drains or application authorization at
-each read/write. It no longer sends per-payload, connected or accepted RPCs, nor
-wraps file IO or multiprocessing Connection callbacks. No socket payload RPC is
-parked during SIGKILL cleanup. Removing that RPC removes the artificial guard
-race; it does not supply or waive any original child cleanup assertion.
+Anonymous AF_UNIX/SOCK_STREAM self-pairs need no observer receipt. The guard no
+longer certifies their creation history, reciprocal peer lineage or case-owned
+pair graph. When an exact multiprocessing declaration passes a socket FD, the
+observer independently duplicates that actual parent file description using
+`pidfd_getfd` and measures its UID, inode/device, access flags, unnamed local/peer
+addresses, domain/type and SO_COOKIE. The immutable inherited row binds those
+facts to the admitted parent's PID and birth ticks. Child bootstrap checks the
+actual inherited descriptor; the observer independently reacquires the child's
+same description at core READY before BODY_READY. Duplicates close immediately,
+without I/O or flag changes. Creation-time SO_PEERCRED is a UID/GID constraint,
+not proof of live reciprocal peer lineage. Observer privileges do not change.
 
-Unix self-pairs retain actual reciprocal acquisition at creation. Multiprocessing
-retains exact inherited FIFO/socket identities, directions, ownership, child
-readiness, finite child/tracker entries and actual waits. New inheritance or a
-replacement descriptor is not admitted by a stream operation.
-
-ROOT HTTP reaches only the selected case's actual broker listener, under its
-finite connection quota. FastMCP private objects, bearer-token internals and
-contextvars no longer serve as a second authorization oracle. Product tests keep
-their actual authentication, refusal and context-lifetime assertions.
-
-Source-result schema v3 records listener/routes and connection-admission counts,
-with `application_payload_proven=false`. Its original-parent wait evidence is
-unchanged. Historical v1/v2 records retain their own proof model; v3 does not
-reinterpret or upgrade them.
+Ordinary Python and the kernel own stream I/O. There are no per-payload,
+connected/accepted or anonymous-pair receipt RPCs. Original product tests retain
+authentication, readiness, protocol, payload and cleanup assertions. Evidence
+marks retired TCP/pair claims unproven and retains actual numeric parent waits;
+older evidence is never reinterpreted or upgraded.
 
 ## Finite launch families
 
@@ -188,19 +179,12 @@ membership grants no launch. Duplicate child-side role/case and focused-group
 catalogues are removed. Actual identity, parent, argv, environment, mounts,
 inherited descriptors, execution pins and READY checks remain.
 
-Controlled and bootstrap TCP listeners use one same-case owned-listener admission.
-The observer acquires the literal loopback FD/cookie and enforces finite per-case
-listener and connection quotas, READY, fresh clients and listener reacquisition.
-Existing client classes remain closed. An ACP relay tuple remains exact bounded
-application input; its ports must name acquired same-case root listeners, and its
-complete environment is bound again at exec. Nonces no longer confer authority.
-The guard no longer certifies broker/bridge/lifetime pairing, handshake nonce
-correspondence or listener ordering; original product tests retain those checks.
-Backend-first child admission, owned launch-home checks, native review refusal,
-actual original-parent waits and private network/Unix-control separation remain.
-Advisory port probes never become listeners. MCP slot ownership and its explicit
-retirement remain separate. Python application-context wrappers are removed;
-only finite multiprocessing hook installation remains after discovery.
+Controlled/bootstrap relay and HTTP ports are bounded application operands in
+the complete admitted argv/environment. Network isolation and literal-address
+checks provide containment; product tests establish listener/readiness and
+protocol behavior. Backend-first admission, owned launch-home checks, native
+review refusal and actual original-parent waits remain. Advisory port probes
+confer no authority. Only finite multiprocessing hooks remain after discovery.
 
 Three original ACP invalid-format startup cases reuse ordinary native-fixture
 admission: the exact no-op sleep child and a case-owned mode-0700 file with the
@@ -232,12 +216,12 @@ controls exercise actual ingress/frame rejection and unchanged byte/exec binding
 
 Every original product/source test and its real completion, status and cleanup
 assertions remains. Guard controls retain unknown-launch, foreign/PID-reused owner,
-non-loopback/DNS, ambient inherited FD, stale listener, sticky caught refusal,
-quota/retirement, invalid profile and missing-parent-wait negatives.
+non-loopback/DNS, ambient or replaced inherited FD, sticky caught refusal,
+finite launch quotas, profile custody and missing-parent-wait negatives.
 
-The unused TCP empty-EOF query is removed; native socket controls retain real
-cookie/FD acquisition, payload reads and actual child waits without claiming
-application accept or EOF certification.
+Native socket controls verify actual inherited cookies/descriptors, named-socket
+refusal, birth replacement and duplicate-handle cleanup. Application accept and
+EOF are product-test obligations.
 
 Model-only controls for queued-send/accepted-ticket joins, post-connect payload
 reauthorization, EOF-only drains, parked payload cancellation, and Git semantic
@@ -288,8 +272,8 @@ retired graph are replaced by literal-effect controls and a real root Linux
 namespace control that excludes a host loopback service, exchanges local bytes,
 drops source capabilities and performs the actual parent wait.
 
-Anonymous Unix-pair ownership/peer/cookie/inherited-member checks, the exact
-peer-authenticated control pathname, immutable native/script/argv admission,
+Exact inherited Unix-description checks, the peer-authenticated control
+pathname, immutable native/script/argv admission,
 finite launches, READY and original-parent numeric waits remain mandatory.
 Filesystem Unix sockets receive no general allowance. Every original product
 case and assertion remains, including the strengthened RunControl joins.

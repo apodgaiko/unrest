@@ -1,156 +1,65 @@
-"""Linux SOCK_DIAG cookies and inode/FD bindings in the private network scope.
-
-UAPI layouts: Linux v6.12 include/uapi/linux/{inet_diag,unix_diag,netlink}.h.
-Only the trusted observer uses netlink; this does not authorize payload sockets.
-"""
-from __future__ import annotations
-
+"""Actual unnamed Unix stream descriptions, not inferred peer lineage."""
+import ctypes
+import fcntl
 import os
-from pathlib import Path
 import socket
+import stat
 import struct
+import sys
+
+from content_manifest import Refused
+from linux_observation import pidfd_open,process_identity
+from process_ledger import Birth
 
 
-def dump(request: bytes) -> list[bytes]:
-    with socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 4) as stream:
-        stream.settimeout(1)
-        stream.bind((0, 0))
-        sequence = int.from_bytes(os.urandom(4), "little") or 1
-        port = stream.getsockname()[0]
-        header = struct.pack("=IHHII", 16 + len(request), 20, 0x301, sequence, port)
-        stream.sendto(header + request, (0, 0))
-        rows: list[bytes] = []
-        for _ in range(128):
-            packet, ancillary, flags, sender = stream.recvmsg(262144)
-            if sender != (0, 0) or ancillary or flags:
-                raise RuntimeError("socket diagnostic sender or datagram drift")
-            offset = 0
-            while offset < len(packet):
-                if len(packet) - offset < 16:
-                    raise RuntimeError("short socket diagnostic header")
-                length, kind, options, seq, destination = struct.unpack_from("=IHHII", packet, offset)
-                if (length < 16 or offset + length > len(packet) or seq != sequence
-                        or destination != port or options & 0x10):
-                    raise RuntimeError("socket diagnostic envelope drift")
-                body = packet[offset + 16:offset + length]
-                if kind == 3:
-                    return rows
-                if kind == 2:
-                    raise RuntimeError("socket diagnostic kernel error: " + str(
-                        struct.unpack_from("=i", body)[0]
-                    ))
-                if kind != 20 or len(rows) >= 4096:
-                    raise RuntimeError("unknown or unbounded socket diagnostic response")
-                rows.append(body)
-                offset += (length + 3) & ~3
-        raise RuntimeError("unbounded socket diagnostic dump")
-
-
-def unix_table() -> dict[int, dict[str, int]]:
-    request = struct.pack("=BBHIIIII", socket.AF_UNIX, 0, 0, 0xFFFFFFFF, 0, 0x44,
-                          0xFFFFFFFF, 0xFFFFFFFF)
-    rows = {}
-    for raw in dump(request):
-        if len(raw) < 16 or raw[0] != socket.AF_UNIX:
-            raise RuntimeError("unknown unix_diag ABI")
-        inode, cookie = struct.unpack_from("=IQ", raw, 4)
-        value = {"inode": inode, "socket_cookie": cookie, "state": raw[2], "type": raw[1]}
-        offset = 16
-        while offset < len(raw):
-            if len(raw) - offset < 4:
-                raise RuntimeError("short Unix diagnostic attribute")
-            length, kind = struct.unpack_from("=HH", raw, offset)
-            if length < 4 or offset + length > len(raw):
-                raise RuntimeError("Unix diagnostic attribute length drift")
-            if kind in (2, 7):
-                if length != 8:
-                    raise RuntimeError("Unix diagnostic peer/UID ABI drift")
-                value["peer_inode" if kind == 2 else "socket_uid"] = struct.unpack_from(
-                    "=I", raw, offset + 4
-                )[0]
-            offset += (length + 3) & ~3
-        if inode in rows or cookie == (1 << 64) - 1:
-            raise RuntimeError("Unix diagnostic cookie/inode drift")
-        rows[inode] = value
-    return rows
-
-
-def _socket_inode(pid: int, descriptor: int) -> int | None:
+def descriptor(fd,uid):
+    before=os.fstat(fd)
+    flags=fcntl.fcntl(fd,fcntl.F_GETFL)
+    if (not stat.S_ISSOCK(before.st_mode) or before.st_uid!=uid
+            or flags&~os.O_CLOEXEC!=os.O_RDWR):
+        raise Refused('inherited Unix stream file custody')
+    copied=os.dup(fd)
+    stream=None
     try:
-        target = os.readlink(Path('/proc') / str(pid) / 'fd' / str(descriptor))
-    except FileNotFoundError:
-        return None
-    if not target.startswith('socket:[') or not target.endswith(']'):
-        return None
-    return int(target[8:-1])
+        stream=socket.socket(fileno=copied)
+        if (stream.getsockopt(socket.SOL_SOCKET,39)!=socket.AF_UNIX
+                or stream.getsockopt(socket.SOL_SOCKET,socket.SO_TYPE)!=socket.SOCK_STREAM
+                or stream.getsockname() not in ('',b'') or stream.getpeername() not in ('',b'')
+                or struct.unpack('3i',stream.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))[1:]!=(uid,uid)):
+            raise Refused('inherited unnamed Unix stream domain')
+        cookie=struct.unpack('=Q',stream.getsockopt(socket.SOL_SOCKET,57,8))[0]
+    finally:
+        if stream is None:
+            os.close(copied)
+        else:
+            stream.close()
+    after=os.fstat(fd)
+    if (before.st_dev,before.st_ino,before.st_uid)!=(after.st_dev,after.st_ino,after.st_uid) or not 0<cookie<(1<<64)-1:
+        raise Refused('inherited Unix stream generation')
+    return [before.st_dev,before.st_ino,os.O_RDWR,cookie]
 
 
-def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
-    if (type(fds) is not list or len(fds) != 2
-            or any(type(fd) is not int or fd < 0 for fd in fds) or len(set(fds)) != 2):
-        raise ValueError("exactly two distinct Unix descriptors required")
-    before: dict[int, int] = {}
-    for fd in fds:
-        inode = _socket_inode(pid, fd)
-        if inode is None:
-            raise RuntimeError('Unix pair no longer has two live kernel descriptors')
-        before[fd] = inode
-    table = unix_table()
-    if any(before[fd] not in table for fd in fds):
-        raise RuntimeError("Unix pair no longer has two live kernel descriptors")
-    rows = [{"fd": fd, **table[before[fd]]} for fd in fds]
-    if ({fd: _socket_inode(pid, fd) for fd in fds} != before or any(row["type"] != socket.SOCK_STREAM for row in rows)
-            or rows[0]["inode"] != rows[1].get("peer_inode")
-            or rows[1]["inode"] != rows[0].get("peer_inode")):
-        raise RuntimeError("Unix pair kernel peer binding refused")
-    return rows
-
-
-def retained_unix_member(pid: int, descriptor: int,
-                         pair: list[dict[str, int]]) -> dict[str, int] | None:
-    saved = next((row for row in pair if row['fd'] == descriptor), None)
-    if saved is None:
-        return None
-    before = _socket_inode(pid, descriptor)
-    if before != saved['inode']:
-        return None
-    current = unix_table().get(saved['inode'])
-    if _socket_inode(pid, descriptor) != saved['inode']:
-        raise RuntimeError('retained Unix descriptor changed during observation')
-    if (current is None or current['socket_cookie'] != saved['socket_cookie']
-            or current.get('socket_uid') != saved['socket_uid']
-            or current['type'] != socket.SOCK_STREAM
-            or current.get('peer_inode', 0) not in (0, saved['peer_inode'])):
-        return None
-    return {'fd': descriptor, **current}
-
-
-def acquire_unix_pair(birth, descriptors):
-    from process_ledger import Birth
-    from linux_observation import process_identity
-    from unix_endpoints import Member
-
-    if type(birth) is not Birth or Birth.read(process_identity(birth.pid)) != birth:
-        raise RuntimeError('stale_or_reused_ownership')
-    rows = unix_pair(birth.pid, descriptors)
-    if Birth.read(process_identity(birth.pid)) != birth:
-        raise RuntimeError('stale_or_reused_ownership')
-    return tuple(Member.read(birth, row) for row in rows)
-
-
-def acquire_unix_member(birth, descriptor, pair):
-    from process_ledger import Birth
-    from linux_observation import process_identity
-    from unix_endpoints import Member, Pair
-
-    if type(descriptor) is not int or descriptor < 0:
-        raise ValueError('exact Unix descriptor required')
-    if (type(birth) is not Birth or type(pair) is not Pair or pair.owner.birth != birth
-            or Birth.read(process_identity(birth.pid)) != birth):
-        raise RuntimeError('stale_or_reused_ownership')
-    saved = [{'fd': member.fd, 'inode': member.inode, 'socket_cookie': member.cookie,
-              'socket_uid': member.uid, 'peer_inode': member.peer} for member in pair.members]
-    row = retained_unix_member(birth.pid, descriptor, saved)
-    if Birth.read(process_identity(birth.pid)) != birth:
-        raise RuntimeError('stale_or_reused_ownership')
-    return Member.read(birth, row) if row is not None else None
+def acquire(birth,fd):
+    if (sys.platform!='linux' or os.uname().machine!='x86_64'
+            or type(birth) is not Birth or type(fd) is not int or not 3<=fd<=1024):
+        raise Refused('inherited Unix stream acquisition operands')
+    if Birth.read(process_identity(birth.pid))!=birth:
+        raise Refused('inherited Unix stream birth changed')
+    process=pidfd_open(birth.pid)
+    try:
+        libc=ctypes.CDLL(None,use_errno=True)
+        copied=libc.syscall(438,process,fd,0)  # Linux/x86-64 pidfd_getfd.
+        if copied<0:
+            raise OSError(ctypes.get_errno(),'inherited Unix stream acquisition refused')
+        try:
+            value=descriptor(copied,birth.uid)
+            current=os.stat('/proc/'+str(birth.pid)+'/fd/'+str(fd))
+            if [current.st_dev,current.st_ino]!=value[:2]:
+                raise Refused('inherited Unix stream descriptor replaced')
+        finally:
+            os.close(copied)
+    finally:
+        os.close(process)
+    if Birth.read(process_identity(birth.pid))!=birth:
+        raise Refused('inherited Unix stream birth changed')
+    return [fd,*value]

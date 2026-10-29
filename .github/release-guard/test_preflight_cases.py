@@ -96,15 +96,13 @@ def test_no_effect_host_requires_zero_children_not_observed_child_count(with_chi
     observer.eof_drains = {}
     observer.intents = {}
     observer.completed = []
-    retired = []
-    observer.endpoints = SimpleNamespace(tickets={}, retire_case=retired.append)
     if with_child:
         observer.actors[101] = {"role": "foreign", "case": case}
         with pytest.raises(Refused, match="actual cleanup incomplete"):
             observer.dispatch(actor, {"kind": "case-finish", "payload": {"case": case}})
-        assert not retired and not observer.completed
+        assert not observer.completed
     else:
         assert observer.dispatch(actor, {"kind": "case-finish", "payload": {"case": case}}) == {
             "ok": True
         }
-        assert retired == [case] and observer.completed == [case]
+        assert observer.completed == [case]
