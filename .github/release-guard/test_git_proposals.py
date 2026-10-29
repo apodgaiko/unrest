@@ -142,7 +142,7 @@ def test_producer_reply_is_recursively_json_finite(monkeypatch):
     monkeypatch.setattr(git_proposals, "image", lambda: "a" * 64)
     host = SimpleNamespace(
         case=CASES[0],
-        git=SimpleNamespace(repositories={CASES[0]: {"path": REPO, "setup": 5}}),
+        git=SimpleNamespace(repositories={(CASES[0],REPO): {"path": REPO, "setup": 5}}),
         binding={"entry": {"path": "/native/python", "sha256": "b" * 64}},
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
         launch=lambda actor, payload: {"ok": True, "ticket": 1, "token": "t"},
@@ -173,7 +173,7 @@ def test_owned_process_refuses_undeclared_stdin_before_admission():
     calls = []
     host = SimpleNamespace(
         case=CASES[7],
-        git=SimpleNamespace(repositories={CASES[7]: {"path": REPO, "setup": 5}}),
+        git=SimpleNamespace(repositories={(CASES[7],REPO): {"path": REPO, "setup": 5}}),
         binding={"entry": {"path": "/native/python", "sha256": "b" * 64}},
         launch=lambda actor, payload: calls.append(payload),
     )
@@ -198,7 +198,7 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     calls = []
     host = SimpleNamespace(
         case=case,
-        git=SimpleNamespace(repositories={case: {"path": REPO, "setup": 5}}),
+        git=SimpleNamespace(repositories={(case,REPO): {"path": REPO, "setup": 5}}),
         binding={"entry": {"path": "/native/python", "sha256": "b" * 64}},
         meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
     )
@@ -243,3 +243,26 @@ def test_shared_repository_operations_exist_for_both_product_families(family, op
     value = build(operation, REPO, REPO, fields, family=family)
     recovered = operands(operation,list(value.argv[1:]),{"stdin":None,"environment":{}})
     assert build(operation, REPO, REPO, recovered, family=family) == value
+
+
+@pytest.mark.parametrize('branch',['main','master'])
+def test_proposal_update_targets_only_the_acquired_branch(monkeypatch,branch):
+    import git_proposals
+    from git_fixtures import SLOTS
+
+    monkeypatch.setattr(git_proposals,'image',lambda:'a'*64)
+    case=next(iter(SLOTS))
+    calls=[]
+    host=SimpleNamespace(case=case,
+        git=SimpleNamespace(repositories={(case,REPO):{'path':REPO,'setup':5,'branch':branch}},
+                            launch=lambda *args:calls.append(args) or {'ticket':1}),
+        binding={'entry':{'path':'/native/python','sha256':'b'*64}},
+        meta_environment=lambda:{'PATH':'/bin:/usr/bin'})
+    raw={'executable':'git','argv':['git','update-ref','refs/heads/'+branch,TREE,REV],
+         'cwd':REPO,'stdin':None,'environment':{'PATH':'/bin:/usr/bin','PYTEST_VERSION':'9.0.2',
+            'PYTEST_CURRENT_TEST':case+' (call)'}}
+    assert prepare(host,{},raw)['translated']==raw['argv']
+    raw['argv'][2]='refs/heads/'+('master' if branch=='main' else 'main')
+    with pytest.raises(Refused):
+        prepare(host,{},raw)
+    assert len(calls)==1

@@ -79,4 +79,3 @@ def test_native_descendant_wait_has_no_generic_reap_exception(mutation):
     git=Git(SimpleNamespace(ledger=ledger))
     assert not git.descendants_reaped(parent)
     assert not git.native_child_reaped(parent,helper,CASE,ledger.process(parent).pins)
-

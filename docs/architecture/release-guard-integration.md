@@ -147,6 +147,14 @@ Native helpers and completion queries keep their explicit zero-status checks.
 Source-result records mark `git_value_provenance_proven=false`; this grants no
 external review acceptance and does not reinterpret older records.
 
+Additional foundation, project, improvement and activation Git fixtures use the
+same repository admission. Exact collected case IDs declare repository slots,
+original setup argv and setup/call phase. Their complete source files are pinned;
+owned pytest directory generations cannot change between slots. Plain-init
+foundation fixtures acquire either `main` or `master` once and reject a changed
+HEAD branch. Proposals must match that acquired branch. These declarations grant
+no native provider execution or new application-level Git proof.
+
 ## Verification and retired model controls
 
 Every original product/source test and its real completion, status and cleanup

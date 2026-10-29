@@ -75,9 +75,11 @@ ROLES = {**dict.fromkeys(FIELDS, ('parent',)),
     'check-index': ('integration', 'rollback')}
 
 
-def build(operation, repository, location, fields, *, family):
+def build(operation, repository, location, fields, *, family, fixture=None, branch="main"):
     if type(operation) is not str or operation not in FIELDS or type(family) is not str or family not in ('workspaces', 'evolution'):
         raise Refused('git closed operation')
+    if branch not in ("main","master"):
+        raise Refused("Git declared branch")
     repo, cwd = path(repository), path(location)
     if type(fields) is not dict or any(type(k) is not str for k in fields) or set(fields) != set(FIELDS[operation]):
         raise Refused('git operation operands')
@@ -104,6 +106,8 @@ def build(operation, repository, location, fields, *, family):
             'stage-base': ('add', 'README.md'), 'commit-base': ('commit', '-m', 'base'),
             'stage-advance': ('add', 'advance.txt'), 'commit-advance': ('commit', '-m', 'advance parent'),
             'stage-child': ('add', 'child.txt'), 'commit-child': ('commit', '-m', 'child self commit')}[operation]
+        if fixture is not None and operation in ('init','config-name','config-email','stage-base','commit-base'):
+            args=fixture.commands[('init','config-name','config-email','stage-base','commit-base').index(operation)]
         if (operation in ('stage-child', 'commit-child')) != (cwd != repo):
             raise Refused('git fixture location')
         if family == 'evolution' and operation in ('stage-child', 'commit-child', 'stage-advance', 'commit-advance'):
@@ -143,7 +147,7 @@ def build(operation, repository, location, fields, *, family):
         args = ('apply', '--index', '--binary', str(patch))
     elif operation in ('update-parent', 'rollback-update'):
         new, old = digest(fields['new']), digest(fields['old'])
-        args = ('update-ref', 'refs/heads/main', new, old)
+        args = ('update-ref', 'refs/heads/'+branch, new, old)
     elif operation == 'commit-tree':
         tree, revision, date, leases = fields['tree_id'], digest(fields['revision']), fields['date'], fields['leases']
         digest(tree)

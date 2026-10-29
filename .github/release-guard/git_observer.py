@@ -44,7 +44,11 @@ class Git:
     def repository(self, repository, operation, family):
         root = Path(repository)
         owned = Path(self.host.meta['owned'])
-        if (root.name != 'project' or root.parent.parent != owned / 'pytest'
+        from git_fixtures import SLOTS,fixture as declared_fixture,root as fixture_root
+        fixture=declared_fixture(self.host.case) if self.host.case in SLOTS else None
+        if fixture is not None:
+            fixture_root(self.host,self.host.case,repository)
+        if ((root.name != 'project' if fixture is None else root.name not in SLOTS[self.host.case]) or root.parent.parent != owned / 'pytest'
                 or str(root.resolve(strict=True)) != repository):
             raise Refused('git original repository location')
         identities = []
@@ -53,12 +57,13 @@ class Git:
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != 20000 or stat.S_IMODE(info.st_mode) & 0o6022:
                 raise Refused('git repository custody')
             identities.append((info.st_dev, info.st_ino, info.st_uid))
-        slot = self.repositories.get(self.host.case)
+        key=(self.host.case,repository)
+        slot = self.repositories.get(key)
         if slot is None:
             if operation != 'init' or (root / '.git').exists():
                 raise Refused('git first original fixture operation')
             slot = {'path': repository, 'identities': identities, 'setup': 0}
-            self.repositories[self.host.case] = slot
+            self.repositories[key] = slot
         if slot['path'] != repository or slot['identities'] != identities:
             raise Refused('git repository generation')
         if slot['setup'] < len(SETUP):
@@ -67,13 +72,20 @@ class Git:
         if slot['setup']:
             parser = configparser.RawConfigParser(strict=True)
             parser.read_string(regular(root / '.git/config').decode('utf-8'))
-            user = {} if slot['setup'] == 1 else {'name': 'Workspace Test' if family == 'workspaces' else 'Evolution Test'}
+            user = {} if slot['setup'] == 1 else {'name': fixture.user if fixture is not None else 'Workspace Test' if family == 'workspaces' else 'Evolution Test'}
             if slot['setup'] >= 3:
-                user['email'] = 'workspace@example.test' if family == 'workspaces' else 'evolution@example.test'
+                user['email'] = fixture.email if fixture is not None else 'workspace@example.test' if family == 'workspaces' else 'evolution@example.test'
+            head=regular(root/'.git/HEAD',256)
+            allowed=(b'ref: refs/heads/main\n',b'ref: refs/heads/master\n') if fixture is not None and fixture.init==('init',) else (b'ref: refs/heads/main\n',)
+            if head not in allowed:
+                raise Refused('Git exact fixture branch')
+            branch=head.decode()[16:-1]
+            if slot.setdefault('branch',branch)!=branch:
+                raise Refused('Git fixture branch changed')
             if (parser.defaults() or set(parser.sections()) != ({'core', 'user'} if user else {'core'})
                     or dict(parser['core']) != {'repositoryformatversion': '0', 'filemode': 'true', 'bare': 'false', 'logallrefupdates': 'true'}
                     or user and dict(parser['user']) != user
-                    or regular(root / '.git/HEAD', 256) != b'ref: refs/heads/main\n'):
+                   ):
                 raise Refused('git original repository configuration')
         if regular(owned / 'home/.gitconfig', uid=20001) != HOME_CONFIG:
             raise Refused('git immutable diagnostic home configuration')
@@ -101,7 +113,8 @@ class Git:
             raise Refused('Git finite case')
         if operation=='owned-process':
             return self.owned_launch(actor,repository,expected,vector)
-        family='workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
+        from git_fixtures import SLOTS,fixture as declared_fixture
+        family=declared_fixture(host.case).family if host.case in SLOTS else 'workspaces' if host.case.startswith('tests/test_workspaces.py::') else 'evolution'
         if operation not in OPERATIONS[family]:
             raise Refused('Git finite operation declaration')
         previous = self.last.get(host.case)
@@ -182,7 +195,7 @@ class Git:
 
     def owned_launch(self, actor, repository, expected, vector):
         host = self.host
-        if host.case != CASES[7] or self.repositories.get(host.case, {}).get('path') != repository:
+        if host.case != CASES[7] or self.repositories.get((host.case,repository), {}).get('path') != repository:
             raise Refused('workspace owned launch scope')
         cwd = repository + '/.unrest-runtime/workspaces/trees/process'
         self.location(Path(repository), cwd)

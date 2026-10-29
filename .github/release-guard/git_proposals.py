@@ -2,7 +2,7 @@
 
 from content_manifest import Refused
 from git_commands import build,FIELDS,Command
-from git_sites import CASES,OPERATIONS,OWNED_BODY
+from git_sites import CASES,OPERATIONS,OWNED_BODY,SHARED_OPERATIONS
 from git_observer import SETUP,image
 from launch_policy import build_expected
 
@@ -27,7 +27,7 @@ def operands(operation,args,raw):
             return {'revision':revision}
         case ('apply',['apply','--index','--binary',patch]):
             return {'patch':patch}
-        case (('update-parent'|'rollback-update'),['update-ref','refs/heads/main',new,old]):
+        case (('update-parent'|'rollback-update'),['update-ref',ref,new,old]) if ref in ('refs/heads/main','refs/heads/master'):
             return {'new':new,'old':old}
         case (('reset-parent'|'rollback-reset'),['reset','--hard',revision]):
             return {'revision':revision}
@@ -44,8 +44,14 @@ def prepare(host,actor,raw):
     case=host.case
     if case not in CASES:
         raise Refused('Git proposal undeclared case')
-    family='workspaces' if case.startswith('tests/test_workspaces.py::') else 'evolution'
-    slot=host.git.repositories.get(case)
+    from git_fixtures import SLOTS,fixture as declared_fixture
+    fixture=declared_fixture(case) if case in SLOTS else None
+    family=fixture.family if fixture is not None else 'workspaces' if case.startswith('tests/test_workspaces.py::') else 'evolution'
+    choices=[slot for (current,repo),slot in host.git.repositories.items() if current==case
+             and (raw['cwd']==repo or raw['cwd'].startswith(repo+'/.unrest-runtime/'))]
+    if len(choices)>1:
+        raise Refused('Git unique repository slot')
+    slot=choices[0] if choices else None
     repository=slot['path'] if slot is not None else raw['cwd']
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     owned=raw['argv']==[native,'-c',OWNED_BODY]
@@ -65,12 +71,12 @@ def prepare(host,actor,raw):
         if raw['executable']!='git':
             raise Refused('Git proposal original executable')
         setup=0 if slot is None else slot['setup']
-        operations=(SETUP[setup],) if setup<len(SETUP) else OPERATIONS[family]
+        operations=(SETUP[setup],) if setup<len(SETUP) else SHARED_OPERATIONS if fixture is not None else OPERATIONS[family]
         candidates: dict[str,tuple[dict,Command]] = {}
         for operation in operations:
             try:
                 fields=operands(operation,raw['argv'][1:],raw)
-                command=build(operation,repository,raw['cwd'],fields,family=family)
+                command=build(operation,repository,raw['cwd'],fields,family=family,fixture=fixture,branch=slot.get('branch','main') if slot is not None else 'main')
             except Refused:
                 continue
             if list(command.argv)==raw['argv'] and raw['stdin']==command.stdin:
@@ -85,7 +91,7 @@ def prepare(host,actor,raw):
         if len(candidates)!=1:
             raise Refused('Git proposal requires one finite operation')
         operation,(fields,command)=next(iter(candidates.items()))
-        phase='setup' if setup<len(SETUP) else 'call'
+        phase=(fixture.phase if fixture is not None else 'setup') if setup<len(SETUP) else 'call'
         environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' ('+phase+')',**dict(command.additions)}
         expected=build_expected(
             'git:'+operation, case,

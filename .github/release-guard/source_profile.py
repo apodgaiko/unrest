@@ -23,7 +23,7 @@ from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_G
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, CLIENT_CASES
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
-from git_sites import CASES as GIT_CASES
+from git_sites import CASES as GIT_CASES,GROUPS as GIT_GROUPS
 from session_launch import CASES as SESSION_CASES, GROUPS as SESSION_GROUPS
 
 from review_wire import CASES as REVIEW_CASES
@@ -95,7 +95,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
             or type(profile['role']) is not str or profile['role'] not in ('root', 'backend', 'acp', 'delayed-backend', 'mock-acp', 'mcp', 'cleanup-acp', 'cleanup-inline', 'workspace-owned', 'session-adapter', 'session-child', 'session-inline', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed')
             or type(profile['case']) is not str
             or profile['case'] not in (('<bootstrap>',) if profile['role'] == 'root' else (*BOOTSTRAP, *CONTROLLED, *ORDINARY_CASES, *CLEANUP_CASES, *DECLARATIONS, *GIT_CASES, *SESSION_CASES, *FIXED_CASES, *PLAN_CASES, *MP_CASES, *REVIEW_CASES,*PACKAGE_CASES,*ROLE_CASES))
-            or not full and (type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ORDINARY_CASES[:3], ORDINARY_CASES[3:], ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES, *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES, MP_STATUS, IPC_CASES, *MP_GROUPS.values(), TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, REVIEW_CASES, ARCHIVE_CASES, AUDIT_CASES,*PACKAGE_GROUPS.values(),*ROLE_GROUPS.values()))):
+            or not full and (type(profile['cases']) is not list or tuple(profile['cases']) not in (CASES, BOOTSTRAP, ORDINARY_CASES, ORDINARY_CASES[:3], ORDINARY_CASES[3:], ALL_CASES, NO_LAUNCH, tuple(STARTUP), CLIENT_CASES, GIT_CASES,*GIT_GROUPS.values(), *FIXED_GROUPS, *SESSION_GROUPS, *CLEANUP_GROUPS, *CONTROLLED_GROUPS.values(), PLAN_CASES, PREFLIGHT_ALL, MP_CASES, MP_STATUS, IPC_CASES, *MP_GROUPS.values(), TRACKER_CASES, TRACKER_SMOKE, TRACKER_REMAINING, REVIEW_CASES, ARCHIVE_CASES, AUDIT_CASES,*PACKAGE_GROUPS.values(),*ROLE_GROUPS.values()))):
         raise Refused('source closed profile')
     for key in ('native', 'checkout', 'owned', 'dependencies', 'runtime_root', 'cwd'):
         value = profile[key]
