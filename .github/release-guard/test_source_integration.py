@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import replace
 import json
 import os
 import signal
@@ -16,14 +15,12 @@ from effect_proposals import proposal
 from test_proposal_support import operands
 from content_manifest import Refused
 from controlled_startup import BACKEND_PIN, CASES
-from endpoint_policy import Socket
 from launch_policy import build_expected
 from process_ledger import Birth
 from source_host import inventory
 import source_host
 from source_entry import Policy
 from source_observer import Observer
-import source_observer
 
 
 def test_private_input_inventory_rejects_aliases_and_writeable_members(tmp_path):
@@ -93,27 +90,6 @@ def test_host_reconstructs_exact_original_launch(tmp_path, mutation):
 
 
 
-def test_existing_listener_can_relisten_without_new_endpoint_authority(tmp_path, monkeypatch):
-    observer, actor, _ = backend_request(tmp_path)
-    initial = Socket(actor['birth'], 7, 1000, 2000, 7, 20000, ('0.0.0.0', 0), None)
-    bound = replace(initial, local=('127.0.0.1', 12345))
-    listening = replace(bound, state=10)
-    observer.bindings = {(actor['birth'], 7): {'socket': initial, 'tag': 'broker', 'nonce': None,
-        'case': CASES[0], 'scope':None, 'listening': False, 'listen_pending': False}}
-    observer.listeners, observer.listener_fds = {}, {}
-    observed = bound
-    monkeypatch.setattr(source_observer, 'acquire_tcp', lambda *args, **kwargs: observed)
-    def stage(value):
-        return observer.dispatch(actor, {'kind': 'listen', 'payload': {'fd': 7, 'stage': value}})
-    assert stage('before') == {'ok': True}
-    observed = listening
-    assert stage('after') == {'ok': True}
-    assert stage('before') == {'ok': True}
-    assert stage('after') == {'ok': True}
-    assert len(observer.listeners) == 1
-    observed = replace(listening, cookie=2001)
-    with pytest.raises(Refused, match='descriptor'):
-        stage('before')
 
 
 

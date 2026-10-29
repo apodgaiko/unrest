@@ -18,7 +18,7 @@ def prepared(request,tmp_path):
         binding={'entry':{'path':'/native','sha256':'a'*64}},
         meta={'checkout':str(checkout),'owned':str(tmp_path)},meta_environment=lambda:{'PATH':'/usr/bin:/bin'},
         probe_ports={request.param:{'socket':SimpleNamespace(local=('127.0.0.1',12345))}})
-    raw={'argv':['/native'], 'cwd':str(cwd), 'stdin':None}
+    raw={'argv':['/native','12345'], 'cwd':str(cwd), 'stdin':None}
     return host,raw
 
 
@@ -49,7 +49,7 @@ def test_http_declarations_cannot_select_unrelated_scope(prepared,mutation):
     elif mutation=='stdin':
         raw['stdin']='private input'
     else:
-        host.probe_ports={}
+        raw['argv'][-1]='invalid-port'
     with pytest.raises(Refused):
         http_cases.expected(host,{},raw)
 
@@ -115,7 +115,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     def identity(pid,uid,parent):
         return {'pid':pid,'tgid':pid,'ppid':parent,'start_ticks':1,'boot_id':'boot',
             'uids':[uid]*4,'gids':[uid]*4,'pgid':pid,'sid':pid,'clock_ticks_per_second':100,
-            'capabilities':{},'no_new_privs':1,'seccomp':2}
+            'capabilities':{},'no_new_privs':1,'seccomp':2,'namespaces':{'net':'net:[123]'}}
     actual=identity(os.getpid(),20000,os.getppid())
     parent=identity(os.getppid(),20000,1)
     observer=identity(os.getpid()+1000,20001,1)
@@ -131,7 +131,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
         dependencies=str(tmp_path/'dependencies'),runtime_root=str(runtime),cwd=str(tmp_path),
         identity=canonical(actual),parent=canonical(parent),observer=canonical(observer),
         generation=1,argv=vector,environment=environment,token='a'*32,
-        mount_namespace='synthetic',script=None,inherited=[[7,1,2]] if subject in ('http-extra-fd','foreign-mcp') else [],execution=issue('mcp',vector,None,None))
+        mount_namespace='synthetic',network_namespace='net:[123]',script=None,inherited=[[7,1,2]] if subject in ('http-extra-fd','foreign-mcp') else [],execution=issue('mcp',vector,None,None))
     profile['mounts']={name:[] for name in (profile['checkout'],profile['dependencies'],str(runtime),str(Path(profiles.__file__).parent))}
     monkeypatch.setattr(profiles,'process_identity',lambda pid:actual)
     monkeypatch.setattr(profiles,'credential_identity',lambda pid:parent)
@@ -140,7 +140,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     monkeypatch.setattr(profiles,'sys',SimpleNamespace(executable=native,orig_argv=vector,
         flags=SimpleNamespace(isolated=1,no_site=1,dont_write_bytecode=0,utf8_mode=1)))
     monkeypatch.setattr(profiles,'os',SimpleNamespace(getpid=os.getpid,getppid=os.getppid,
-        getcwd=lambda:str(tmp_path),environ=environment,listdir=lambda path:['7'] if subject=='foreign-mcp' else [],fstat=lambda fd:object()))
+        readlink=lambda path:'net:[123]',getcwd=lambda:str(tmp_path),environ=environment,listdir=lambda path:['7'] if subject=='foreign-mcp' else [],fstat=lambda fd:object()))
     monkeypatch.setattr(profiles,'fcntl',SimpleNamespace(F_GETFL=3,fcntl=lambda *args:0))
     monkeypatch.setattr(profiles,'inherited_descriptor',lambda inherited,fd,*args:[fd,1,2])
     if subject=='http':
@@ -187,49 +187,6 @@ def test_http_stdio_requires_exact_null_and_owned_merged_log(prepared,monkeypatc
             http_cases.stdio(host,123,row)
 
 
-@pytest.mark.parametrize('mutation',[None,'port','case','birth','token','terminal'])
-def test_http_connection_budget_binds_the_consumed_live_server(tmp_path,monkeypatch,mutation):
-    import hashlib
-    from test_source_integration import backend_request
-    from process_ledger import Birth
-    import source_observer
-    observer,actor,_=backend_request(tmp_path)
-    observer.case=http_cases.CASES[0]
-    actor['token']='root-token'
-    birth=Birth(2,2,1,2,'test-boot',20000)
-    intent={'case':observer.case,'role':'mcp','consumed':True,'pid':2,'port':12345,'birth':birth,'token':'server'}
-    server={'birth':birth,'token':'server','case':observer.case,'role':'mcp','body_ready':True}
-    observer.intents={1:intent}
-    observer.actors={2:server}
-    observer.ledger=SimpleNamespace(process=lambda actor:SimpleNamespace(terminal=(1,) if mutation=='terminal' else None))
-    name=actor['token']+':mcp:'+hashlib.sha256(observer.case.encode()).hexdigest()
-    listener=SimpleNamespace(owner=birth,fd=20)
-    observer.listeners={(observer.case,'mcp'):{'socket':listener}}
-    joins=[]
-    def connect(route,server,client):
-        joins.append((route,server,client))
-        return SimpleNamespace(serial=1,client=client)
-    observer.endpoints=SimpleNamespace(routes={name:object()},listeners={name:listener},connect=connect)
-    observer.connected_routes={name:63}
-    observer.descriptors,observer.connections={},{}
-    monkeypatch.setattr(source_observer,'acquire_tcp',lambda owner,fd,**kwargs:SimpleNamespace(owner=owner,fd=fd))
-    payload={'fd':30,'address':['127.0.0.1',12346 if mutation=='port' else 12345]}
-    if mutation=='case':
-        intent['case']='foreign'
-    elif mutation=='birth':
-        server['birth']=Birth(2,2,1,3,'test-boot',20000)
-    elif mutation=='token':
-        server['token']='foreign'
-    if mutation is not None:
-        with pytest.raises(Refused):
-            observer.dispatch(actor,{'kind':'connect','payload':payload})
-        assert not joins
-    else:
-        assert observer.dispatch(actor,{'kind':'connect','payload':payload})=={'ok':True,'ticket':1}
-        assert observer.connected_routes[name]==64 and len(joins)==1 and joins[0][1].owner==birth
-        with pytest.raises(Refused,match='finite connection count'):
-            observer.dispatch(actor,{'kind':'connect','payload':payload})
-        assert len(joins)==1
 
 
 @pytest.mark.parametrize('host',['127.0.0.1',b'127.0.0.1'])

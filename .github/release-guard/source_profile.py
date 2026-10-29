@@ -19,11 +19,11 @@ from case_inventory import identity as case_identity,load
 
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
-    'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'bound', 'listen', 'connect',
+    'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal', 'launch-return', 'pair-intent', 'pair-seal',
     'custody_signal', 'custody_close', 'self-stop', 'guard-refusal'})
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
-    'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
+    'mount_namespace', 'network_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',
     'source_sha256', 'support_sha256', 'runtime_sha256', 'dependency_sha256', 'script', 'cases', 'inherited', 'execution'}
 
 
@@ -108,6 +108,8 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     if (canonical(profile['identity']) != profile['identity'] or canonical(actual) != profile['identity'] or parent.pid != os.getppid()
             or Birth.read(credential_identity(parent.pid)) != parent or observer.uid != 20001
             or (parent.uid != 20000 if full and profile['role']=='root' else parent != observer if profile['role'] == 'root' else parent.uid != 20000)
+            or profile['network_namespace']!=os.readlink('/proc/self/ns/net')
+            or actual['namespaces']['net']!=profile['network_namespace']
             or actual['uids'] != [20000] * 4 or actual['gids'] != [20000] * 4
             or any(actual['capabilities'].values()) or actual['no_new_privs'] != 1 or actual['seccomp'] != 2
             or type(profile['generation']) is not int or profile['generation'] != 1

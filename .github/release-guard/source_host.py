@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import base64
 import ctypes
-from dataclasses import asdict
 import fcntl
 import hashlib
 import json
@@ -156,6 +155,7 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
 def isolate(metadata, support):
     libc = ctypes.CDLL(None, use_errno=True)
     # Private mount/network/IPC namespaces; no shared-host mount mutation.
+    network_before=os.readlink('/proc/self/ns/net')
     require(libc.unshare(0x00020000 | 0x40000000 | 0x08000000) == 0, 'private namespace refused')
     def mount(source, target, flags):
         if libc.mount(source, target, None, ctypes.c_ulong(flags), None):
@@ -182,6 +182,8 @@ def isolate(metadata, support):
         current = fcntl.ioctl(stream.fileno(), 0x8913, request)
         flags = struct.unpack_from('H', current, 16)[0]
         fcntl.ioctl(stream.fileno(), 0x8914, struct.pack('16sH14x', b'lo', flags | 1))
+    from network_scope import isolated
+    metadata['network_namespace']=isolated(network_before)
     mounts = {}
     for line in Path('/proc/self/mountinfo').read_text().splitlines():
         fields = line.split()
@@ -298,16 +300,9 @@ def worker(binding, metadata, raw_directory):
                       'kernel': [] if trace is None else trace.records,
                       'controls': [] if observer is None else observer.controls,
                       'outcomes': [] if observer is None else observer.outcomes,
-                      'endpoint_observations': None if observer is None else {
-                          'retired_cases': sorted(observer.endpoints.retired),
-                          'retired_routes': sorted(observer.endpoints.retired_names),
-                          'listeners': {key: asdict(value) for key, value in observer.endpoints.listeners.items()},
-                          'routes': {key: asdict(value) for key, value in observer.endpoints.routes.items()},
-                          'connection_admissions':dict(observer.endpoints.connection_counts),
-                          'application_payload_proven':False,
-                          'readiness_probes':observer.readiness_attempts,
-                          'negative_probes': {case: {'socket': asdict(value['socket']), 'attempts': value['attempts']}
-                              for case, value in observer.probe_ports.items()}},
+                      'network_observations': {'namespace':metadata.get('network_namespace'),
+                          'tcp_peer_ownership_proven':False,'tcp_quotas_proven':False,
+                          'reservation_causality_proven':False,'application_payload_proven':False},
                       'plan_observations': [] if observer is None else observer.plan_records,
                       'poison': [] if observer is None else observer.ledger.poison,
                       'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}

@@ -268,3 +268,28 @@ keep their authored per-worker-ordinal statuses; ordinary completion remains exi
 The main script profile now derives from the admitted effective vector rather
 than a parallel role-to-script catalogue; the delayed-backend auxiliary script
 retains its independent pin.
+
+
+The TCP boundary is the run's distinct network namespace, verified before source
+execution to contain only loopback and no external gateway or usable external
+route. The namespace identity is bound into every authenticated child profile
+and checked again at kernel exec admission and native bootstrap. Sources retain
+zero capabilities and `no_new_privs`. Python TCP effects permit only literal
+IPv4 loopback and bounded numeric ports; DNS and other destinations fail sticky.
+
+Per-case TCP peer ownership, listener FD/cookie reacquisition, connection/listener
+quotas, preceding port-reservation causality and TCP route-retirement proof are
+retired guard claims. Dynamic HTTP and relay ports remain bounded application
+operands in the complete admitted argv/environment. The original readiness,
+Bridge, private preflight, MCP, completion and cleanup tests establish application
+behavior; no controlled result becomes native provider acceptance. Evidence
+explicitly records these TCP claims as unproven. Guard-only controls for the
+retired graph are replaced by literal-effect controls and a real root Linux
+namespace control that excludes a host loopback service, exchanges local bytes,
+drops source capabilities and performs the actual parent wait.
+
+Anonymous Unix-pair ownership/peer/cookie/inherited-member checks, the exact
+peer-authenticated control pathname, immutable native/script/argv admission,
+finite launches, READY and original-parent numeric waits remain mandatory.
+Filesystem Unix sockets receive no general allowance. Every original product
+case and assertion remains, including the strengthened RunControl joins.

@@ -55,24 +55,18 @@ def consumed(host,answer):
     host.actors[row['pid']]={'returned':True,'waited':False,'birth':row['birth'],'token':row['token']}
 
 
-def test_each_concurrent_http_constructor_consumes_one_exact_reservation(host):
+def test_each_concurrent_http_constructor_consumes_one_exact_authored_slot(host):
     host,actor,parent=host
     for slot in (0,1):
         command=raw(host,parent,slot,12345+slot)
-        with pytest.raises(Refused,match='unconsumed port'):
-            server.proposal(host,actor,command)
-        server.probe(host,observed=SimpleNamespace(local=('127.0.0.1',12345+slot)))
-        with pytest.raises(Refused,match='unconsumed advisory'):
-            server.probe(host)
         changed={**command,'environment':{**command['environment'],'FOREIGN':'not admitted'}}
         with pytest.raises(Refused,match='original launch operands'):
             server.proposal(host,actor,changed)
         answer=server.proposal(host,actor,command)
-        assert host.probe_ports[host.case]['server_ticket']==answer['ticket']
         consumed(host,answer)
     # Both original servers are live; moving to the late-client phase must wait.
     with pytest.raises(Refused,match='actual server waits'):
-        server.probe(host)
+        server.proposal(host,actor,raw(host,parent,2))
     assert not host.retired
 
 

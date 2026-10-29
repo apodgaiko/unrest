@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-from fixed_inline import METHOD_CASES, NETWORK, NETWORK_CASES
+from fixed_inline import METHOD_CASES, NETWORK_CASES
 from source_sockets import Hooks
 import source_sockets
 
@@ -18,6 +18,7 @@ def adoption(monkeypatch):
     calls = []
 
     class Socket:
+        family=1
         def __init__(self, family=-1, type=-1, proto=-1, fileno=None):
             calls.append((family, type, proto, fileno))
             hooks.audit("socket.__new__", (self, family, type, proto))
@@ -144,19 +145,15 @@ def test_stale_foreign_and_reused_adoptions_refuse(adoption, mutation):
 
 
 @pytest.mark.parametrize("case", NETWORK_CASES)
-def test_only_one_exact_unbound_family_is_permitted(adoption, case):
-    hooks, Socket, _ = adoption
-    hooks.policy.profile["case"] = case
-    hooks.unbound_created = False
-    family = NETWORK.get(case, (2, False))[0]
-    value = Socket.__new__(Socket)
+def test_isolated_preflight_stream_families_do_not_have_tcp_quotas(adoption,case):
+    hooks,Socket,_=adoption
+    hooks.policy.profile['case']=case
+    value=Socket.__new__(Socket)
     with pytest.raises(Refused):
-        hooks.audit("socket.__new__", (value, 10 if family == 2 else 2, 1, 0))
-    assert not hooks.unbound_created
-    assert hooks.audit("socket.__new__", (value, family, 1, 0)) is True
-    assert hooks.unbound_created
-    with pytest.raises(Refused):
-        hooks.audit("socket.__new__", (value, family, 1, 0))
+        hooks.audit('socket.__new__',(value,17,1,0))
+    for family in (2,10):
+        assert hooks.audit('socket.__new__',(value,family,1,0)) is True
+        assert hooks.audit('socket.__new__',(value,family,1,0)) is True
 
 
 def test_unbound_ipv6_is_not_granted_to_an_alias_case(adoption):

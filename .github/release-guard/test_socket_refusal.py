@@ -11,6 +11,7 @@ import source_sockets
 @pytest.fixture
 def installed(monkeypatch):
     class Socket:
+        family=2
         def __init__(self,family=-1,type=-1,proto=-1,fileno=None):
             pass
         def bind(self,*args,**kwargs):
@@ -21,7 +22,7 @@ def installed(monkeypatch):
     policy.client=SimpleNamespace(request=lambda kind,payload:records.append((kind,payload)))
     hooks=object.__new__(Hooks)
     hooks.policy=policy
-    hooks.socket_type=Socket
+    hooks.socket_type=hooks.base_type=Socket
     hooks.fd=lambda stream:1
     hooks.original={'bind':Socket.bind}
     hooks.self_pair=lambda *args:None
@@ -34,19 +35,21 @@ def installed(monkeypatch):
     return hooks,policy,records,Socket
 
 
-def test_caught_local_descriptor_refusal_is_sticky(installed):
+def test_caught_literal_network_audit_refusal_is_sticky(installed):
     hooks,policy,records,Socket=installed
-    with pytest.raises(Refused,match='exact socket type'):
-        Socket.bind(object(),('127.0.0.1',0))
+    hooks.base_type=Socket
+    policy.sockets=hooks
+    with pytest.raises(Refused,match='unsupported socket effect'):
+        policy.audit('socket.bind',(object(),('127.0.0.1',0)))
     assert policy.poison
     assert [kind for kind,_ in records]==['guard-refusal']
 
 
-def test_ordinary_io_error_is_not_converted_to_guard_refusal(installed):
+def test_ordinary_io_error_is_not_converted_to_guard_refusal(installed,monkeypatch):
     hooks,policy,records,Socket=installed
     def failed(*args,**kwargs):
         raise OSError(9,'closed descriptor')
-    hooks.call=failed
+    monkeypatch.setattr(Socket,'bind',failed)
     with pytest.raises(OSError) as caught:
         Socket().bind(('127.0.0.1',0))
     assert caught.value.errno==9
@@ -65,8 +68,9 @@ def test_caught_pair_descriptor_refusal_is_sticky(installed):
 def test_existing_guard_poison_is_not_reported_twice(installed):
     hooks,policy,records,Socket=installed
     policy.poison=True
+    hooks.self_pair=lambda *args,**kwargs:hooks.descriptor(object())
     with pytest.raises(Refused):
-        Socket.bind(object(),('127.0.0.1',0))
+        source_sockets.socket.socketpair()
     assert policy.poison and not records
 
 

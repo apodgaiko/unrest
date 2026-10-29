@@ -6,29 +6,9 @@ Only the trusted observer uses netlink; this does not authorize payload sockets.
 from __future__ import annotations
 
 import os
-import ctypes
 from pathlib import Path
 import socket
 import struct
-from typing import Any
-
-from linux_observation import pidfd_open
-
-
-def duplicate_descriptor(pid: int, descriptor: int) -> int:
-    if type(pid) is not int or pid <= 0 or type(descriptor) is not int or descriptor < 0:
-        raise ValueError('finite process descriptor required')
-    if pid == os.getpid():
-        return os.dup(descriptor)
-    pidfd = pidfd_open(pid, 0)
-    try:
-        libc = ctypes.CDLL(None, use_errno=True)
-        result = libc.syscall(438, pidfd, descriptor, 0)  # x86-64 pidfd_getfd
-        if result < 0:
-            raise OSError(ctypes.get_errno(), 'kernel descriptor duplication refused')
-        return result
-    finally:
-        os.close(pidfd)
 
 
 def dump(request: bytes) -> list[bytes]:
@@ -126,52 +106,6 @@ def unix_pair(pid: int, fds: list[int]) -> list[dict[str, int]]:
     return rows
 
 
-def retained_tcp_descriptor(pid: int, descriptor: int) -> dict[str, Any] | None:
-    """Query a retained file description even after TCP leaves the diag table."""
-    path = Path('/proc') / str(pid) / 'fd' / str(descriptor)
-    try:
-        target = os.readlink(path)
-    except FileNotFoundError:
-        return None
-    if not target.startswith('socket:[') or not target.endswith(']'):
-        return None
-    before = int(target[8:-1])
-    copied = duplicate_descriptor(pid, descriptor)
-    try:
-        stream = socket.socket(fileno=copied)
-    except OSError:
-        os.close(copied)
-        raise RuntimeError('retained descriptor ceased to be a socket') from None
-    with stream:
-        if (stream.getsockopt(socket.SOL_SOCKET, socket.SO_DOMAIN) != socket.AF_INET
-                or stream.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM
-                or stream.getsockopt(socket.SOL_SOCKET, socket.SO_PROTOCOL) != socket.IPPROTO_TCP):
-            return None
-        info = os.fstat(stream.fileno())
-        cookie = struct.unpack('=Q', stream.getsockopt(socket.SOL_SOCKET, 57, 8))[0]
-        state = stream.getsockopt(socket.IPPROTO_TCP, socket.TCP_INFO, 104)[0]
-        local = stream.getsockname()
-        try:
-            remote = stream.getpeername()
-        except OSError as error:
-            import errno
-            if error.errno != errno.ENOTCONN:
-                raise
-            remote = None
-        if (info.st_ino != before or os.readlink(path) != target
-                or cookie == (1 << 64) - 1):
-            raise RuntimeError('retained descriptor changed during kernel query')
-        return {'pid': pid, 'fd': descriptor, 'inode': info.st_ino, 'socket_cookie': cookie,
-                'state': state, 'socket_uid': info.st_uid, 'local_address': local, 'peer_address': remote,
-                'observation': 'pidfd_getfd held file description; actual TCP_INFO and SO_COOKIE'}
-
-
-
-
-
-
-
-
 def retained_unix_member(pid: int, descriptor: int,
                          pair: list[dict[str, int]]) -> dict[str, int] | None:
     saved = next((row for row in pair if row['fd'] == descriptor), None)
@@ -189,27 +123,6 @@ def retained_unix_member(pid: int, descriptor: int,
             or current.get('peer_inode', 0) not in (0, saved['peer_inode'])):
         return None
     return {'fd': descriptor, **current}
-
-
-def acquire_tcp(birth, descriptor: int):
-    """Return one birth-bound socket; no caller-supplied PID or cached row wins."""
-    from endpoint_policy import Socket
-    from process_ledger import Birth
-    from linux_observation import process_identity
-
-    if type(birth) is not Birth:
-        raise ValueError('exact owned birth and observation mode required')
-    if Birth.read(process_identity(birth.pid)) != birth:
-        raise RuntimeError('stale_or_reused_ownership')
-    row = retained_tcp_descriptor(birth.pid, descriptor)
-    if row is not None:
-        local, remote = row['local_address'], row['peer_address']
-        row = {**row, 'local_host': local[0], 'local_port': local[1],
-               'remote_host': remote[0] if remote else '0.0.0.0',
-               'remote_port': remote[1] if remote else 0}
-    if Birth.read(process_identity(birth.pid)) != birth:
-        raise RuntimeError('stale_or_reused_ownership')
-    return None if row is None else Socket.read(birth, row)
 
 
 def acquire_unix_pair(birth, descriptors):

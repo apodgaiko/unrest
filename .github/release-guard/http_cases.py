@@ -38,10 +38,8 @@ def expected(host, actor, raw):
         base, role, executable, kind = root.parent, 'mcp', native, 'python-command'
         subject = case.rsplit('-',1)[1][:-1]
         mode = subject.replace('_','-')
-        probe = host.probe_ports.get(case)
-        if probe is None:
-            raise Refused('HTTP original advisory port absent')
-        port = probe['socket'].local[1]
+        from network_scope import port_argument
+        port=port_argument(raw['argv'][-1])
         code = f"import runpy; runpy.run_path({str(checkout/'tests/fixtures/supervision_role_process.py')!r}, run_name='__main__')"
         vector = (native,'-c',code,'--mode',mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
         environment.update(PYTHONPATH=str(checkout/'src'), UNREST_HOME=str(base/'home'),

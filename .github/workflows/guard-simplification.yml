@@ -37,6 +37,9 @@ jobs:
       - name: Actual mixed-user cleanup without CAP_KILL
         if: github.event_name == 'push' || inputs.source_group == 'none'
         run: sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 60 "$PWD/.venv/bin/python" -I -B .github/release-guard/test_mixed_uid_control.py
+      - name: Actual isolated loopback and host-service exclusion
+        if: github.event_name == 'push' || inputs.source_group == 'none'
+        run: sudo -n env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 timeout --signal=TERM --kill-after=5 20 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_network_scope_native.py"
       - name: Build pinned CPython native control entry
         run: uv run --no-sync python .github/release-guard/native_build.py
       - name: Actual native prebody and caught-refusal controls

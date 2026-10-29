@@ -47,25 +47,6 @@ def test_exact_original_readiness_program_and_operands(case,mutation):
         assert not admitted
 
 
-@pytest.mark.parametrize('mutation',[None,'port','retained','unready','repeat','fresh'])
-def test_probe_requires_actual_listener_and_cannot_grant_payload(monkeypatch,mutation):
-    server={'birth':'server-birth','token':'server-token','role':'fixed-inline','case':readiness.READY}
-    listener=SimpleNamespace(owner=SimpleNamespace(pid=2),fd=7,local=('127.0.0.1',12345))
-    host=SimpleNamespace(case=readiness.READY,readiness_attempts={},actors={2:server},
-        listeners={(readiness.READY,'readiness'):{'socket':listener}},
-        intents={1:{**server,'consumed':mutation!='retained'}},
-        ledger=SimpleNamespace(body_ready=lambda *args:mutation!='unready'),root_only=lambda actor:None)
-    fresh=SimpleNamespace(state=7,local=('0.0.0.0',0),remote=None)
-    monkeypatch.setattr(readiness,'acquire_tcp',lambda birth,fd:None if mutation=='fresh' else fresh if birth=='client' else listener)
-    if mutation=='repeat':
-        host.readiness_attempts[host.case]={}
-    if mutation is None:
-        assert readiness.connect(host,{'birth':'client','token':'root'},{'fd':4},12345)=={'ok':True,'probe':True,'readiness_only':True}
-        record=host.readiness_attempts[host.case]
-        assert record['payload_authority'] is False and record['accepted_peer_proven'] is False
-    else:
-        with pytest.raises(Refused):
-            readiness.connect(host,{'birth':'client','token':'root'},{'fd':4},12346 if mutation=='port' else 12345)
 
 
 @pytest.mark.parametrize('status,signals,expected',[(0,(),True),(-15,(15,),True),(-15,(),False),(23,(),False)])

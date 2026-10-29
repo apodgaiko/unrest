@@ -1,4 +1,4 @@
-"""Mediation for the declared loopback listeners/connections and self-pipes."""
+"""Literal isolated loopback and independently owned anonymous Unix pairs."""
 from __future__ import annotations
 
 import errno
@@ -6,17 +6,13 @@ import os
 import socket
 import stat
 
-from bootstrap_cases import declaration
-from controlled_cases import CASES as CONTROLLED, ROOT_HTTP
-from controlled_pairs import limits as controlled_limits
 from content_manifest import Refused
-from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
-from cleanup_inline import STARTUP
-from fixed_inline import NETWORK, NETWORK_CASES, METHOD_CASES
+from http_cases import TRANSPORT as MCP_CASES
+from fixed_inline import NETWORK_CASES, METHOD_CASES
 from speed_inline import CASES as SPEED_CASES, CLI_CASE
 from nested_pytest import CASE as NESTED_CASE
 
-from readiness_launch import CASES as READINESS_CASES,READY
+from readiness_launch import READY
 
 TYPE = type
 
@@ -26,11 +22,9 @@ class Hooks:
         self.policy, self.local = policy, policy.local
         self.socket_type, self.base_type = socket.socket, socket.SocketType
         self.fd = socket.socket.fileno
-        names = ('bind', 'listen', 'connect', 'connect_ex')
-        self.original = {name: getattr(socket.socket, name) for name in names}
+        self.original={name:getattr(socket.socket,name) for name in ('bind','connect','connect_ex')}
         self.pair = socket.socketpair
         self.getaddrinfo = socket.getaddrinfo
-        self.unbound_created = False
 
     def descriptor(self, stream):
         if type(stream) is not self.socket_type:
@@ -67,79 +61,23 @@ class Hooks:
             if args[1] == socket.AF_UNIX:
                 if args[3] != 0 or not (self.policy.private_call() or getattr(self.local, 'pair', None) is not None):
                     raise Refused('source Unix creation outside sealed self-pair')
-            elif isolated:
-                family = NETWORK.get(self.policy.profile['case'],(socket.AF_INET,False))[0]
-                if args[1]!=family or self.unbound_created:
-                    raise Refused('source isolated one unbound socket family')
-                self.unbound_created=True
-            elif (self.policy.profile['role'] not in ('root', 'acp', 'mcp', 'cleanup-acp')
-                    and not (controlled_limits(self.policy.profile['case'])[1] > 0 if self.policy.profile['case'] in CONTROLLED else declaration(self.policy.profile['case']).broker_http)):
-                raise Refused('source backend network creation')
             return True
-        pending = getattr(self.local, 'socket', None)
-        if (event not in ('socket.bind', 'socket.connect') or len(args) != 2
-                or pending is None or pending[0] != event or pending[1] is not args[0] or pending[2] != args[1]):
-            raise Refused('source socket effect without admission')
-        self.local.socket = None
+        if (event not in ('socket.bind','socket.connect') or len(args)!=2
+                or TYPE(args[0]) not in (self.socket_type,self.base_type)
+                or args[0].family!=socket.AF_INET):
+            raise Refused('source unsupported socket effect')
+        from network_scope import address
+        address(args[1],bind=event=='socket.bind')
         return True
 
-    def call(self, name, stream, *args, **kwargs):
-        descriptor = self.descriptor(stream)
-        role = self.policy.profile['role']
-        if name == 'bind':
-            if role=='fixed-inline' and self.policy.profile['case']==READY:
-                if kwargs or args!=(('127.0.0.1',0),):
-                    self.policy.refuse('readiness exact original ephemeral listener')
-                source={'tag':'readiness','nonce':None}
-            elif role == 'mcp':
-                if kwargs or args != (('127.0.0.1', int(self.policy.profile['argv'][12])),):
-                    self.policy.refuse('source unknown module listener')
-                source = {'tag': 'mcp', 'nonce': None}
-            else:
-                if role != 'root' or self.policy.calls is None or kwargs or args != (('127.0.0.1', 0),):
-                    self.policy.refuse('source unknown bind')
-                source = {'tag':'mcp-probe' if self.policy.case in (*MCP_CASES,*STARTUP) else 'owned','nonce':None}
-            self.rpc('bind', {'fd': descriptor, **source})
-            self.local.socket = 'socket.bind', stream, args[0]
-        elif name in ('connect', 'connect_ex'):
-            cleanup = self.policy.case in (*MCP_CASES,*STARTUP,*READINESS_CASES) or self.policy.profile['case'] in (*MCP_CASES,*STARTUP,*READINESS_CASES)
-            if ((role not in ('root', 'cleanup-acp') if cleanup else role != 'acp' and not (role == 'root' and self.policy.case in ROOT_HTTP) and not (controlled_limits(self.policy.profile['case'])[1] > 0 if self.policy.profile['case'] in CONTROLLED else declaration(self.policy.profile['case']).broker_http)) or kwargs or len(args) != 1 or type(args[0]) is not tuple
-                    or len(args[0]) != 2 or type(args[0][0]) is not str or args[0][0] != '127.0.0.1'
-                    or type(args[0][1]) is not int or not 0 < args[0][1] <= 65535):
-                self.policy.refuse('source unknown connection')
-            answer = self.rpc('connect', {'fd': descriptor, 'address': list(args[0])})
-            probe = answer.get('probe') is True
-            if probe and (role != 'root' or self.policy.case not in (*STARTUP,*READINESS_CASES)):
-                self.policy.refuse('source negative probe context')
-            self.local.socket = 'socket.connect', stream, args[0]
-            try:
-                result = self.original[name](stream, *args)
-            except BlockingIOError:
-                raise
-            finally:
-                self.local.socket = None
-            if probe:
-                if answer.get('readiness_only') is True and self.policy.case==READY and result in (None,0):
-                    return result
-                if type(result) is not int or result not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, errno.ECONNREFUSED):
-                    self.policy.refuse('source negative probe unexpectedly connected')
-                return result
-            return result
-        elif name == 'listen':
-            if (role not in ('root','mcp') and not (role=='fixed-inline' and self.policy.profile['case']==READY)) or kwargs or len(args) > 1 or args and (type(args[0]) is not int or not 0 <= args[0] <= 2048):
-                self.policy.refuse('source listener operation')
-            self.rpc('listen', {'fd': descriptor, 'stage': 'before'})
-        else:
-            self.policy.refuse('source unknown socket operation')
-        try:
-            result = self.original[name](stream, *args, **kwargs)
-        finally:
-            self.local.socket = None
-        if name == 'bind' and role == 'root' and self.policy.case in (*STARTUP,*HTTP_CASES):
-            self.rpc('bound', {'fd': descriptor})
-        elif name == 'listen':
-            self.rpc('listen', {'fd': descriptor, 'stage': 'after'})
-        return result
+    def call(self,name,stream,*args,**kwargs):
+        # CPython resolves addresses before its audit event. Validate first.
+        if (TYPE(stream) not in (self.socket_type,self.base_type) or stream.family!=socket.AF_INET
+                or kwargs or len(args)!=1):
+            raise Refused('source unsupported socket effect')
+        from network_scope import address
+        address(args[0],bind=name=='bind')
+        return self.original[name](stream,*args)
 
     def self_pair(self, family=socket.AF_UNIX, type=socket.SOCK_STREAM, proto=0):
         # No caller-controlled subclasses or flags turn this into another socket domain.
@@ -161,7 +99,7 @@ class Hooks:
                 and (host,port,family,type,proto,flags)==('alias-guard.invalid',443,0,0,0,0)):
             return self.getaddrinfo(host,port,family,type,proto,flags)
         # This computes a literal tuple; it never calls a DNS resolver. The
-        # subsequent connect still needs the observer's exact live route.
+        # subsequent connect is confined to the run's private loopback stack.
         http = self.policy.case in MCP_CASES or self.policy.profile['case'] in MCP_CASES
         if http and TYPE(host) is bytes and host==b'127.0.0.1':
             host='127.0.0.1'
@@ -216,12 +154,12 @@ class Hooks:
                     hooks.local.adoption=None
         hooks.socket_type.__init__=initialize
         def wrap(name):
-            def operation(stream, *args, **kwargs):
-                return hooks.guarded(hooks.call, name, stream, *args, **kwargs)
+            def operation(stream,*args,**kwargs):
+                return hooks.guarded(hooks.call,name,stream,*args,**kwargs)
             operation.__name__=name
             return operation
         for name in self.original:
-            setattr(self.socket_type, name, wrap(name))
+            setattr(self.socket_type,name,wrap(name))
         def pair(*args, **kwargs):
             return hooks.guarded(hooks.self_pair, *args, **kwargs)
         socket.socketpair = pair

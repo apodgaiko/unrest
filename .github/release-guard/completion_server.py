@@ -1,7 +1,7 @@
 """Finite concurrent role-server slots; reservations never confer listener authority."""
 from pathlib import Path
 
-from completion_roles import CASES,HTTP,root,schedule,program,environment
+from completion_roles import CASES,root,schedule,program,environment
 from completion_git import proposal as git_proposal,ready as git_ready
 from content_manifest import Refused
 from cleanup_launch import OFFLINE
@@ -57,28 +57,7 @@ def before(host,slot):
     prior=(tuple(existing) if family=='ownership' and slot>=2 or family=='crash' and slot==1 else ())
     if any(not complete(host,existing[index]) for index in prior):
         raise Refused('completion next phase before actual server waits')
-    for index in prior:
-        actor=host.actors[existing[index]['pid']]
-        host.endpoints.retire_owner(host.owner(actor),host.case)
     return parent
-
-
-def probe(host,*,observed=None):
-    if host.case not in HTTP:
-        raise Refused('completion undeclared advisory reservation')
-    existing=rows(host)
-    slot=len(existing)
-    if slot>=len(schedule(host.case)) or schedule(host.case)[slot][0]!='http':
-        raise Refused('completion finite advisory reservation slot')
-    previous=host.probe_ports.get(host.case)
-    if previous is not None and previous.get('server_ticket') is None:
-        raise Refused('completion unconsumed advisory reservation')
-    parent=before(host,slot)
-    if parent is None:
-        return None
-    if observed is not None:
-        host.probe_ports[host.case]={'socket':observed,'attempts':0,'server_slot':slot,'server_ticket':None}
-    return {'ok':True}
 
 
 def proposal(host,actor,raw):
@@ -106,10 +85,8 @@ def proposal(host,actor,raw):
     body=program(checkout,parent,case,slot)
     port=None
     if kind=='http':
-        reservation=host.probe_ports.get(case)
-        if (reservation is None or reservation.get('server_slot')!=slot or reservation.get('server_ticket') is not None):
-            raise Refused('completion exact unconsumed port reservation')
-        port=reservation['socket'].local[1]
+        from network_scope import port_argument
+        port=port_argument(raw['argv'][-1])
         vector=(native,'-c',body,'--mode',mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
     else:
         vector=(native,'-c',body,*((str(slot),) if family=='setup' else ()),'--mode',mode)
@@ -119,8 +96,6 @@ def proposal(host,actor,raw):
     answer=admit_expected(host,actor,raw,value,'mcp' if kind=='http' else 'fixed-inline',translated,
         fields={'server_slot':slot,'input_pipe':kind=='stdio','server_stdio':kind=='stdio'},
         maximum=len(schedule(case)),environment={**env,**OFFLINE},port=port)
-    if answer is not None and kind=='http':
-        reservation['server_ticket']=answer['ticket']
     return answer
 
 

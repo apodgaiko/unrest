@@ -17,30 +17,29 @@ import time
 from review_wire import CASES as REVIEW_CASES,count as review_count
 from multiprocess_entry import ALL_CASES as MP_CASES, count as mp_count
 from content_manifest import Refused, native_digest
-from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
+from http_cases import CASES as HTTP_CASES
 from preflight_cases import NO_EFFECT
 from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, declaration
-from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP
-from controlled_pairs import limits as controlled_limits
-from endpoint_policy import Endpoints, Owner, Route
+from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
+from endpoint_policy import Endpoints, Owner
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
-from socket_observation import acquire_tcp, acquire_unix_pair
+from socket_observation import acquire_unix_pair
 from source_profile import METHODS, ROOT_COMMAND
 from ordinary_acp import EXECUTION_CASES as ORDINARY_CASES, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
 from git_sites import CASES as GIT_CASES
-from completion_roles import CASES as ROLE_CASES,HTTP as ROLE_HTTP,actor_slot
+from completion_roles import CASES as ROLE_CASES,actor_slot
 from git_observer import Git
-from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, child_count as inline_count
+from cleanup_inline import NO_LAUNCH, DECLARATIONS, child_count as inline_count
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, child_count, snapshot_path
 
 
-from readiness_launch import CASES as READINESS_CASES,READY as READINESS_READY
+from readiness_launch import CASES as READINESS_CASES
 from terminal_leaves import CASES as TERMINAL_CASES
 
 
@@ -75,12 +74,9 @@ class Observer:
         self.git = Git(self)
         self.endpoints, self.actors, self.intents = Endpoints(self.ledger), {}, {}
         self.pairs = UnixPairs(self.endpoints)
-        self.bindings, self.listeners, self.pair_intents, self.listener_counts = {}, {}, {}, {}
+        self.pair_intents = {}
         self.descriptors, self.mp_pipes = {}, {}
 
-        self.connected_routes: dict[str, int] = {}
-        self.probe_ports = {}
-        self.readiness_attempts={}
         self.fixture_roots = {}
         self.plan_records: list[dict] = []
         self.frames, self.controls, self.completed = [], [], []
@@ -204,6 +200,10 @@ class Observer:
         return output.st_dev,output.st_ino
 
     def resolve(self, trace, pid, path, vector, environment, cwd):
+        actual_namespaces=process_identity(pid)['namespaces']
+        if (actual_namespaces['mnt'] != os.readlink('/proc/self/ns/mnt')
+                or actual_namespaces['net'] != self.meta['network_namespace']):
+            return False
         if self.case in PLAN_CASES:
             from plan_observer import resolve as plan_resolve
             return plan_resolve(self,trace,pid,path,vector,environment,cwd)
@@ -246,8 +246,6 @@ class Observer:
             desktop_retained(self)
             if intent['role']=='ps' and str(Path(path).resolve(strict=True))!='/usr/bin/ps':
                 raise Refused('desktop retained system ps alias')
-        if process_identity(pid)['namespaces']['mnt'] != os.readlink('/proc/self/ns/mnt'):
-            return False
         intent['stdout'] = self.stdio(pid, intent['role'],
             input_pipe=intent.get('input_pipe',False) or intent['role'] == 'git-command' and intent['command'].stdin is not None,intent=intent)
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
@@ -304,9 +302,6 @@ class Observer:
         if self.finished or actor['role'] not in ('root', 'mcp') or actor['role'] == 'mcp' and actor['case'] != self.case:
             raise Refused('source original launch owner')
 
-
-    def listener_key(self,case,tag,scope=None):
-        return (case,tag,scope) if tag=='owned' or case in ROLE_HTTP and tag=='mcp' else (case,tag)
 
     def admit_launch(self, actor, expected, role, vector, script_pin,
                      *, maximum=1, environment=None, inherited=(), port=None):
@@ -458,8 +453,6 @@ class Observer:
                     uv_children=[child for child in children if child['role'] in ('uv-cli','fixed-inline')]
                     if len(uv_children)!=2*len(FIXED_SEQUENCES[self.case]):
                         raise Refused('stock uv original child count')
-                if outcome=='passed' and self.case==READINESS_READY and self.case not in self.readiness_attempts:
-                    raise Refused('readiness original successful connect missing')
                 if outcome=='failed':
                     count,spec=len(children),None
                 if skipped:
@@ -553,170 +546,6 @@ class Observer:
             for member in pair.members:
                 key = actor['birth'], member.fd
                 self.descriptors[key] = pair
-        elif kind == 'bind':
-            if actor['role']=='fixed-inline' and self.case==READINESS_READY:
-                from readiness_launch import target
-                target(self,actor)
-            elif actor['role'] != 'mcp':
-                self.root_only(actor)
-            elif actor['case'] != self.case or self.case not in MCP_CASES:
-                raise Refused('source declared module listener case')
-            shape(payload, ('fd', 'tag', 'nonce'))
-            scope=None
-            if self.case in ROLE_HTTP:
-                if actor['role']=='mcp':
-                    actor_slot(self,actor)
-                    scope=actor['token']
-                elif payload['tag']=='mcp-probe':
-                    from completion_server import probe
-                    if probe(self) is None:
-                        return None
-            fd = number(payload['fd'])
-            if ((actor['role']=='fixed-inline' and payload['tag']!='readiness')
-                    or (actor['role'] == 'mcp' and payload['tag'] != 'mcp')
-                    or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in (*MCP_CASES, *STARTUP) else ('owned',))
-                        or self.case not in (*BOOTSTRAP, *CONTROLLED, *MCP_CASES, *STARTUP))):
-                raise Refused('source finite root listener')
-            if payload['nonce'] is not None:
-                raise Refused('listener application metadata is not authority')
-            if payload['tag']=='owned':
-                maximum=3*controlled_limits(self.case)[0] if self.case in CONTROLLED else 3
-                if self.listener_counts.get(self.case,0)>=maximum:
-                    raise Refused('owned listener finite case bound')
-            observed = acquire_tcp(actor['birth'], fd)
-            if observed is None or observed.state != 7 or observed.local != ('0.0.0.0', 0) or observed.remote is not None:
-                raise Refused('source fresh unbound TCP descriptor')
-            key = actor['birth'], fd
-            if payload['tag']=='owned':
-                scope=actor['token']+':'+str(fd)+':'+str(observed.cookie)
-                self.listener_counts[self.case]=self.listener_counts.get(self.case,0)+1
-            self.descriptors.pop(key, None)
-            self.bindings[key] = {'socket': observed, 'tag': payload['tag'],
-                                  'case': self.case, 'scope':scope, 'listening': False, 'listen_pending': False}
-        elif kind == 'bound':
-            self.root_only(actor)
-            shape(payload, ('fd',))
-            if self.case not in (*STARTUP,*HTTP_CASES) or self.case not in ROLE_HTTP and self.case in self.probe_ports:
-                raise Refused('source finite negative probe case')
-            fd = number(payload['fd'])
-            binding = self.bindings[actor['birth'], fd]
-            observed = acquire_tcp(actor['birth'], fd)
-            if (binding['case'] != self.case or binding['tag'] != 'mcp-probe' or observed is None
-                    or observed.binding() != binding['socket'].binding() or observed.state != 7
-                    or observed.local[0] != '127.0.0.1' or not 0 < observed.local[1] <= 65535
-                    or observed.remote is not None):
-                raise Refused('source acquired negative probe port')
-            if self.case in ROLE_HTTP:
-                from completion_server import probe
-                probe(self,observed=observed)
-            else:
-                self.probe_ports[self.case] = {'socket': observed, 'attempts': 0}
-        elif kind == 'listen':
-            if actor['role']=='fixed-inline' and self.case==READINESS_READY:
-                from readiness_launch import target
-                target(self,actor)
-            elif actor['role'] != 'mcp':
-                self.root_only(actor)
-            elif actor['case'] != self.case or self.case not in MCP_CASES:
-                raise Refused('source declared module listener case')
-            shape(payload, ('fd', 'stage'))
-            fd = number(payload['fd'])
-            binding = self.bindings[actor['birth'], fd]
-            if binding['tag'] == 'mcp-probe':
-                raise Refused('source advisory probe never grants a listener')
-            observed = acquire_tcp(actor['birth'], fd)
-            if (binding['case'] != self.case or observed is None or observed.binding() != binding['socket'].binding()
-                    or observed.local[0] != '127.0.0.1' or observed.remote is not None
-                    or actor['role'] == 'mcp' and observed.local[1] != int(actor['profile']['argv'][12])):
-                raise Refused('source original listener descriptor')
-            if payload['stage'] == 'before':
-                if (binding['listen_pending'] or observed.state != (10 if binding['listening'] else 7)
-                        or binding['listening'] and observed != self.listeners[self.listener_key(self.case,binding['tag'],binding['scope'])]['socket']):
-                    raise Refused('source listener before state')
-                binding['listen_pending'] = True
-            elif payload['stage'] == 'after':
-                if not binding['listen_pending'] or observed.state != 10:
-                    raise Refused('source listener after state')
-                # asyncio re-applies Uvicorn's original backlog to this same
-                # listener. A repeated listen grants no new endpoint authority.
-                previous = self.listeners.get(self.listener_key(self.case,binding['tag'],binding['scope']))
-                if previous is not None and observed != previous['socket']:
-                    raise Refused('source changed repeated listener')
-                binding['listen_pending'], binding['listening'] = False, True
-                slot = {**binding, 'socket': observed}
-                self.listeners[self.listener_key(self.case,binding['tag'],binding['scope'])] = slot
-            else:
-                raise Refused('source listener stage')
-        elif kind == 'connect':
-            root_http = actor['role'] == 'root' and self.case in ROOT_HTTP
-            shape(payload, ('fd','address'))
-            address = payload['address']
-            if type(address) is not list or len(address) != 2 or address[0] != '127.0.0.1':
-                raise Refused('source literal loopback connection')
-            port = number(address[1], 1)
-            if self.case in READINESS_CASES:
-                from readiness_launch import connect as readiness_connect
-                return readiness_connect(self,actor,payload,port)
-            if self.case in STARTUP:
-                self.root_only(actor)
-                probe = self.probe_ports.get(self.case)
-                observed = acquire_tcp(actor['birth'], number(payload['fd']))
-                if (probe is None or probe['socket'].local != ('127.0.0.1', port) or probe['attempts'] >= 16
-                        or observed is None or observed.owner != actor['birth'] or observed.uid != actor['birth'].uid
-                        or observed.state != 7 or observed.local != ('0.0.0.0', 0) or observed.remote is not None):
-                    raise Refused('source finite negative readiness probe')
-                probe['attempts'] += 1
-                return {'ok': True, 'probe': True}  # Never creates a Route, Ticket or Connection.
-            if root_http:
-                from endpoint_policy import root_http_route
-                name,maximum = root_http_route(self,actor,port)
-            elif self.case in MCP_CASES:
-                if actor['role'] not in (('root',) if self.case in HTTP_CASES else ('root', 'cleanup-acp')):
-                    raise Refused('source cleanup connection role')
-                targets = [value for value in self.intents.values() if value['case'] == self.case and value['role'] == 'mcp' and value['consumed']]
-                if self.case in ROLE_HTTP:
-                    targets=[row for row in targets if row['port']==port and self.ledger.process(row['birth']).terminal is None]
-                if len(targets) != 1 or targets[0]['port'] != port:
-                    raise Refused('source original owned MCP port')
-                target = self.actors[targets[0]['pid']]
-                if target['birth']!=targets[0]['birth'] or target['token']!=targets[0]['token'] or target['case']!=self.case or target['role']!='mcp':
-                    raise Refused('source MCP consumed server generation changed')
-                if self.ledger.process(target['birth']).terminal is not None:
-                    raise Refused('source MCP startup ended before listening')
-                slot = self.listeners.get(self.listener_key(self.case,'mcp',target['token']))
-                if slot is None or not target['body_ready']:
-                    return None  # The independent child can finish initialization.
-                name = actor['token'] + ':mcp:' + hashlib.sha256(self.case.encode()).hexdigest() + (':'+target['token'] if self.case in ROLE_HTTP else '')
-                if name not in self.endpoints.routes:
-                    route = Route(name, self.case, self.owner(target), self.owner(actor), port)
-                    actual_listener = acquire_tcp(target['birth'], slot['socket'].fd)
-                    sharing = actual_listener if any(value.port == port and self.endpoints.route_active(value) for value in self.endpoints.routes.values()) else None
-                    self.endpoints.declare(route, shared_listener=sharing)
-                    self.endpoints.listen(name, actual_listener)
-                maximum = 64 if self.case in HTTP_CASES else 1 if actor['role'] == 'root' else 16
-            else:
-                if actor['role'] not in ('acp', 'backend', 'delayed-backend'):
-                    raise Refused('source leaf connection role')
-                from owned_listeners import route
-                name = route(self,actor,port,self.actors[self.root])
-                maximum = 1 if actor['role'] == 'acp' else 8
-            if root_http or actor['role'] in ('acp','backend','delayed-backend'):
-                from owned_listeners import budget
-                budget(self,actor,maximum if root_http else 2 if actor['role']=='acp' else 8)
-            if self.case in CONTROLLED and actor['role'] == 'backend':
-                total = sum(count for route,count in self.connected_routes.items()
-                    if self.endpoints.routes[route].case == self.case
-                    and self.actors[self.endpoints.routes[route].client.birth.pid]['role'] == 'backend')
-                if total >= controlled_limits(self.case)[1]:
-                    raise Refused('controlled case broker request bound')
-            if self.connected_routes.get(name, 0) >= maximum:
-                raise Refused('source finite connection count')
-            listener = self.endpoints.listeners[name]
-            ticket = self.endpoints.connect(name, acquire_tcp(listener.owner, listener.fd),
-                                            acquire_tcp(actor['birth'], number(payload['fd'])))
-            self.connected_routes[name] = self.connected_routes.get(name, 0) + 1
-            self.descriptors.pop((actor['birth'], ticket.client.fd), None)
-            return {'ok': True, 'ticket': ticket.serial}
         elif kind == 'self-stop':
             shape(payload, ('signal',))
             children = [value for value in self.actors.values() if self.ledger.process(value['birth']).parent == actor['birth']]
