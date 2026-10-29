@@ -50,9 +50,9 @@ def test_nested_cli_cannot_authorize_a_root_git_query():
 
 
 def test_canonical_git_resolution_does_not_change_the_requested_vector():
-    from source_entry import direct_git
+    from source_entry import direct_native
     args=(['git','ls-files','--stage','-z'],)
-    assert direct_git(args,{},CLI,'fixed-inline')[1]=={'executable':'/usr/bin/git'}
-    routed,options=direct_git(args,{},CASES[0],'fixed-inline')
+    assert direct_native(args,{},CLI,'fixed-inline')[1]=={'executable':'/usr/bin/git'}
+    routed,options=direct_native(args,{},CASES[0],'fixed-inline')
     assert routed==args and options=={'executable':'/usr/bin/git'}
-    assert direct_git(args,{},CLI,'session-child')==(args,{})
+    assert direct_native(args,{},CLI,'session-child')==(args,{})

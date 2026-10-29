@@ -26,7 +26,7 @@ def proposal_operands(raw,case):
         raise Refused('finite process proposal case or vector')
     argv = raw['argv']
     if (not 0 < len(argv) <= 256 or any(type(arg) is not str for arg in argv)
-            or (raw['executable'] != argv[0] and not (argv[0]=='git' and raw['executable']=='/usr/bin/git')) or type(raw['cwd']) is not str
+            or (raw['executable'] != argv[0] and not (argv[0] in ('git','ps','sleep') and raw['executable']=='/usr/bin/'+argv[0])) or type(raw['cwd']) is not str
             or type(raw['environment']) is not dict
             or any(type(k) is not str or type(v) is not str for k,v in raw['environment'].items())):
         raise Refused('finite process proposal operands')

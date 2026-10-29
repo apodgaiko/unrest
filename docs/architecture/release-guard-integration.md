@@ -790,3 +790,10 @@ inventory is the fixed native `ps -axo pid=,ppid=,pgid=` command, at most three
 times after an admitted server; unlike supervision teardown inventory, these
 original checks intentionally run while the server is live. No inventory result
 can grant launch or signal authority.
+
+The native constructor resolves only the fixed `git`, `ps` and `sleep` images
+before CPython computes its PATH search. An audit-event argv translation occurs
+too late to change Popen's saved executable search list; the failing native
+inventory check exposed an undeclared PATH probe. This resolution seam grants
+no permission: the independent observer still requires an authored case,
+complete exact argv/env/cwd, executable bytes and a remaining quota.

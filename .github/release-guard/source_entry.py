@@ -17,14 +17,19 @@ from content_manifest import Refused
 from git_sites import CASES as GIT_CASES
 from source_profile import digest, validate
 
-def direct_git(args, kwargs, case, role):
+def direct_native(args, kwargs, case, role):
     vector = args[0] if args else kwargs.get('args')
     executable = args[2] if len(args)>2 else kwargs.get('executable')
-    if role in ('root','mcp','fixed-inline') and type(vector) in (list,tuple) and vector[:1] in (['git'],('git',)) and executable is None:
+    # Popen computes its PATH search before its audit event. Selecting the fixed
+    # image here prevents undeclared ENOENT probes; observer admission still owns
+    # every case, argv, environment, image measurement and launch quota.
+    name=vector[0] if type(vector) in (list,tuple) and vector and type(vector[0]) is str else None
+    selected={'git':'/usr/bin/git','ps':'/usr/bin/ps','sleep':'/usr/bin/sleep'}.get(name)
+    if role in ('root','mcp','fixed-inline') and selected is not None and executable is None:
         if len(args)>2:
-            args=(*args[:2],'/usr/bin/git',*args[3:])
+            args=(*args[:2],selected,*args[3:])
         else:
-            kwargs={**kwargs,'executable':'/usr/bin/git'}
+            kwargs={**kwargs,'executable':selected}
     return args,kwargs
 
 
@@ -157,7 +162,7 @@ class Policy:
                         args=(*args[:10],normalized,*args[11:])
                     else:
                         kwargs['env']=normalized
-            args,kwargs=direct_git(args,kwargs,policy.case,policy.profile['role'])
+            args,kwargs=direct_native(args,kwargs,policy.case,policy.profile['role'])
             policy.local.launch = None
             original(process, *args, **kwargs)
             pending = getattr(policy.local, 'launch', None)
