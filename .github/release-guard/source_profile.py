@@ -53,6 +53,8 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
             or profile['network_namespace']!=os.readlink('/proc/self/ns/net')
             or actual['namespaces']['net']!=profile['network_namespace']
             or actual['namespaces']['mnt']!=profile['mount_namespace']
+            or actual['namespaces']['pid']!=profile['pid_namespace']
+            or profile['pid_namespace']!=os.readlink('/proc/self/ns/pid')
             or actual['uids'] != [20000] * 4 or actual['gids'] != [20000] * 4
             or any(actual['capabilities'].values()) or actual['no_new_privs'] != 1 or actual['seccomp'] != 2
             or type(profile['generation']) is not int or profile['generation'] != 1

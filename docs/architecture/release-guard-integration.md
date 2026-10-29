@@ -749,3 +749,10 @@ source and the selected case; it acquires the owned pytest directory and retains
 its inode generation. Native sleep retains exact inherited environment and argv.
 Two sibling mock sessions have separate ordered identities and a quota of two;
 this does not serialize their real protocol sessions or change test deadlines.
+
+Source supervision now runs in that dedicated PID namespace. The outer host
+prepares inputs and encrypts evidence outside it; it never interprets local actor
+PIDs as host PIDs. The init process owns observer and adoptive waits, retains its
+own fallback cleanup record, and fails certification if emergency cleanup was
+needed. Source profiles and every exec resolution bind the actual PID namespace.
+This topology change alone grants no new orphan or restart admission.

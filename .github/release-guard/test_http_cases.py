@@ -115,7 +115,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     def identity(pid,uid,parent):
         return {'pid':pid,'tgid':pid,'ppid':parent,'start_ticks':1,'boot_id':'boot',
             'uids':[uid]*4,'gids':[uid]*4,'pgid':pid,'sid':pid,'clock_ticks_per_second':100,
-            'capabilities':{},'no_new_privs':1,'seccomp':2,'namespaces':{'net':'net:[123]','mnt':'synthetic'}}
+            'capabilities':{},'no_new_privs':1,'seccomp':2,'namespaces':{'net':'net:[123]','mnt':'synthetic','pid':'pid:[123]'}}
     actual=identity(os.getpid(),20000,os.getppid())
     parent=identity(os.getppid(),20000,1)
     observer=identity(os.getpid()+1000,20001,1)
@@ -131,7 +131,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
         dependencies=str(tmp_path/'dependencies'),runtime_root=str(runtime),cwd=str(tmp_path),
         identity=canonical(actual),parent=canonical(parent),observer=canonical(observer),
         generation=1,argv=vector,environment=environment,token='a'*32,
-        mount_namespace='synthetic',network_namespace='net:[123]',script=None,inherited=[[7,1,2]] if subject in ('http-extra-fd','foreign-mcp') else [],execution=issue('mcp',vector,None,None))
+        mount_namespace='synthetic',network_namespace='net:[123]',pid_namespace='pid:[123]',script=None,inherited=[[7,1,2]] if subject in ('http-extra-fd','foreign-mcp') else [],execution=issue('mcp',vector,None,None))
     profile['mounts']={name:[] for name in (profile['checkout'],profile['dependencies'],str(runtime),str(Path(profiles.__file__).parent))}
     monkeypatch.setattr(profiles,'process_identity',lambda pid:actual)
     monkeypatch.setattr(profiles,'credential_identity',lambda pid:parent)
@@ -139,7 +139,7 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     monkeypatch.setattr(profiles,'sys',SimpleNamespace(executable=native,orig_argv=vector,
         flags=SimpleNamespace(isolated=1,no_site=1,dont_write_bytecode=0,utf8_mode=1)))
     monkeypatch.setattr(profiles,'os',SimpleNamespace(getpid=os.getpid,getppid=os.getppid,
-        readlink=lambda path:'net:[123]',getcwd=lambda:str(tmp_path),environ=environment,listdir=lambda path:['7'] if subject=='foreign-mcp' else [],fstat=lambda fd:object()))
+        readlink=lambda path:'pid:[123]' if path.endswith('/pid') else 'net:[123]',getcwd=lambda:str(tmp_path),environ=environment,listdir=lambda path:['7'] if subject=='foreign-mcp' else [],fstat=lambda fd:object()))
     monkeypatch.setattr(profiles,'fcntl',SimpleNamespace(F_GETFL=3,fcntl=lambda *args:0))
     monkeypatch.setattr(profiles,'inherited_descriptor',lambda inherited,fd,*args:[fd,1,2])
     if subject=='http-mount':

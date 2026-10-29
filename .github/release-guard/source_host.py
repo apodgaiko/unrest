@@ -355,6 +355,46 @@ def drain_owned(rows):
             rows.append({'pid': child, 'actual_wait': settle(child, terminate=True, deadline=deadline),
                          'original_parent_wait_proven': False})
 
+def supervise(binding,metadata,raw_directory,archive):
+    """PID1 owns observer waits and all adoption; host PIDs stay outside."""
+    require(os.getpid()==1,'source supervisor must be namespace init')
+    metadata={**metadata,'pid_namespace':os.readlink('/proc/self/ns/pid')}
+    try:
+        pid = os.fork()
+        if pid == 0:
+            try:
+                worker(binding, metadata, raw_directory)
+            except BaseException:
+                (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
+                os._exit(125)
+            os._exit(0)
+        closeouts={}
+        raw, deadline = None, time.monotonic() + (110 if archive else 1220 if unexcluded(metadata,binding) else 190)
+        try:
+            while raw is None:
+                from cohort_controller import host_tick
+                host_tick(binding['profiles'],closeouts)
+                actual, status = os.waitpid(pid, os.WNOHANG)
+                if actual:
+                    raw = status
+                elif time.monotonic() > deadline:
+                    raise TimeoutError('source observer finite deadline')
+                else:
+                    time.sleep(.005)
+        finally:
+            if raw is None:
+                raw = settle(pid, terminate=True)
+            (raw_directory / 'observer-parent-wait.json').write_text(json.dumps({'actual_parent_wait': raw}))
+        require(raw == 0, 'original source integration failed; encrypted diagnostics retained')
+    finally:
+        adopted=[]
+        try:
+            drain_owned(adopted)
+        finally:
+            (raw_directory/'namespace-fallback-cleanup.json').write_text(json.dumps(adopted))
+        require(not adopted,'namespace emergency cleanup cannot certify source')
+
+
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     require(sys.platform=='linux' and os.getuid()==0 and len(sys.argv)>=2,'source host requires root Linux invocation')
@@ -403,32 +443,8 @@ def main():
         if not archive:
             from full_launch import prepare as prepare_full
             metadata=prepare_full(binding,metadata)
-        pid = os.fork()
-        if pid == 0:
-            try:
-                worker(binding, metadata, raw_directory)
-            except BaseException:
-                (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
-                os._exit(125)
-            os._exit(0)
-        closeouts={}
-        raw, deadline = None, time.monotonic() + (110 if archive else 1220 if unexcluded(metadata,binding) else 190)
-        try:
-            while raw is None:
-                from cohort_controller import host_tick
-                host_tick(binding['profiles'],closeouts)
-                actual, status = os.waitpid(pid, os.WNOHANG)
-                if actual:
-                    raw = status
-                elif time.monotonic() > deadline:
-                    raise TimeoutError('source observer finite deadline')
-                else:
-                    time.sleep(.005)
-        finally:
-            if raw is None:
-                raw = settle(pid, terminate=True)
-            (raw_directory / 'observer-parent-wait.json').write_text(json.dumps({'actual_parent_wait': raw}))
-        require(raw == 0, 'original source integration failed; encrypted diagnostics retained')
+        from namespace_supervisor import run
+        run(lambda:supervise(binding,metadata,raw_directory,archive),raw_directory/'namespace-failure.txt')
         success = True
     finally:
         adopted: list[dict] = []

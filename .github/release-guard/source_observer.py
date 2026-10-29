@@ -186,7 +186,8 @@ class Observer:
     def resolve(self, trace, pid, path, vector, environment, cwd):
         actual_namespaces=process_identity(pid)['namespaces']
         if (actual_namespaces['mnt'] != os.readlink('/proc/self/ns/mnt')
-                or actual_namespaces['net'] != self.meta['network_namespace']):
+                or actual_namespaces['net'] != self.meta['network_namespace']
+                or actual_namespaces['pid'] != self.meta['pid_namespace']):
             return False
         if self.case in PLAN_CASES:
             from plan_observer import resolve as plan_resolve
