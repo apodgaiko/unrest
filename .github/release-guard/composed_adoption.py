@@ -67,14 +67,16 @@ def closeout(host,children):
     path=wait_request(host,actor,process)
     body,_,_=read_regular(path,4096,uid=20001,mode=0o444)
     request=json.loads(body,object_pairs_hook=unique)
-    if not 0<=time.monotonic()-request['started']<=20:
-        raise Refused('composed init closeout deadline')
     receipt=path.with_suffix('.receipt')
     if not receipt.exists():
+        if not 0<=time.monotonic()-request['started']<=20:
+            raise Refused('composed init closeout deadline')
         return False
     body,_,_=read_regular(receipt,4096,uid=0,mode=0o444)
     value=json.loads(body,object_pairs_hook=unique)
-    if value!={**request,'raw':value.get('raw'),'init_pid':1,'namespace':host.meta['pid_namespace']}:
+    if (value!={**request,'raw':value.get('raw'),'init_pid':1,'namespace':host.meta['pid_namespace'],'waited':value.get('waited')}
+            or type(value['waited']) is not float or not 0<=value['waited']-request['started']<=20
+            or value['waited']>time.monotonic()):
         raise Refused('composed init receipt scope')
     if process.init_wait is None:
         host.ledger.retire_adopted(actor['birth'],value['raw'])
@@ -106,7 +108,7 @@ def host_tick(directory):
         if pid:
             if pid!=birth.pid:
                 raise Refused('composed init waited wrong child')
-            publish(receipt,{**value,'raw':raw,'init_pid':os.getpid(),'namespace':os.readlink('/proc/self/ns/pid')})
+            publish(receipt,{**value,'raw':raw,'init_pid':os.getpid(),'namespace':os.readlink('/proc/self/ns/pid'),'waited':time.monotonic()})
 
 
 def signal(host,actor,payload):

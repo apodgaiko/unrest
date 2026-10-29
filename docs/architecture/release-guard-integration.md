@@ -847,7 +847,10 @@ requests a passive numeric wait from the actual namespace init. This happens
 before original test teardown checks that the process group is empty. The
 20-second closeout starts at terminal observation, never at adoption while the
 worker legitimately runs. Root-owned receipts bind the same identity, namespace
-and status; case completion joins them with kernel exit and tracer terminal
+and status, with the actual wait's monotonic timestamp inside that bound. A
+later case-finish reuses the completed receipt without restarting the clock or
+imposing that bound on the remainder of the original test. Case completion
+joins the receipt with kernel exit and tracer terminal
 status. The v5 result labels these init waits separately. Missing or mismatched
 receipts, unknown adoption and emergency cleanup still fail certification.
 

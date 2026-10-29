@@ -110,7 +110,7 @@ def test_pid1_wait_is_actual_exact_child_and_bounded(tmp_path,monkeypatch,mutati
     adoption.host_tick(tmp_path)
     assert seen==[(child.pid,os.WNOHANG)]
     receipt=json.loads(path.with_suffix('.receipt').read_text())
-    assert receipt=={**value,'raw':0 if mutation=='status' else 15,'init_pid':1,'namespace':'pid:[123]'}
+    assert receipt=={**value,'raw':0 if mutation=='status' else 15,'init_pid':1,'namespace':'pid:[123]','waited':11.0}
     assert ledger.process(child).init_wait is None
 
 
@@ -119,7 +119,7 @@ def test_no_adoption_work_is_inferred_for_unrelated_case():
     assert adoption.closeout(SimpleNamespace(case='foreign'),[]) is True
 
 
-@pytest.mark.parametrize('mutation',(None,'status','namespace','token','deadline'))
+@pytest.mark.parametrize('mutation',(None,'status','namespace','token','deadline','late-finish'))
 def test_passive_wait_precedes_case_finish_and_receipt_never_rewrites_parent_wait(tmp_path,monkeypatch,mutation):
     ledger,_,child,observed=ready()
     ledger.adopt(child,observed)
@@ -138,15 +138,19 @@ def test_passive_wait_precedes_case_finish_and_receipt_never_rewrites_parent_wai
     request=json.loads(path.read_text())
     assert request['started']==10.0
     assert adoption.closeout(host,[actor]) is False
-    receipt={**request,'raw':0 if mutation=='status' else 15,'init_pid':1,'namespace':'pid:[123]'}
+    receipt={**request,'raw':0 if mutation=='status' else 15,'init_pid':1,'namespace':'pid:[123]','waited':11.0}
+    monkeypatch.setattr(adoption.time,'monotonic',lambda:11.0)
     if mutation=='namespace':
         receipt['namespace']='foreign'
     elif mutation=='token':
         receipt['token']='b'*32
     elif mutation=='deadline':
         monkeypatch.setattr(adoption.time,'monotonic',lambda:30.001)
+        receipt['waited']=30.001
+    elif mutation=='late-finish':
+        monkeypatch.setattr(adoption.time,'monotonic',lambda:100.0)
     adoption.publish(path.with_suffix('.receipt'),receipt)
-    if mutation is not None:
+    if mutation not in (None,'late-finish'):
         with pytest.raises(Refused):
             adoption.closeout(host,[actor])
         assert host.adoptions==[] and ledger.process(child).init_wait is None
