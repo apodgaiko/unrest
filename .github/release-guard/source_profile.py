@@ -16,10 +16,13 @@ from process_ledger import Birth, canonical
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
 from case_inventory import identity as case_identity,load
 
-ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal', 'launch-return',
     'custody_signal', 'custody_close', 'self-stop', 'guard-refusal'})
+
+
+def pytest_arguments(metadata,binding):
+    return ['pytest','-q',*metadata['selection'],*(['--collect-only'] if binding.get('collection_only') else [])]
 
 
 def case_seal(cases):
@@ -124,7 +127,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     role, script = profile['role'], profile['script']
     if role == 'root' and full:
         if (profile['cwd']!=profile['checkout'] or script is not None or event!='cpython.run_module'
-                or arguments!=('pytest',) or profile['argv'] not in ([str(Path(profile['runtime_root'])/'bin/pytest'),'-I','-S','-m','pytest','-q'],[str(Path(profile['runtime_root'])/'bin/pytest'),'-I','-S','-m','pytest','-q','--collect-only'])):
+                or arguments!=('pytest',) or profile['argv'] not in tuple([str(Path(profile['runtime_root'])/'bin/pytest'),'-I','-S','-m',*pytest_arguments(profile,{'collection_only':collect})] for collect in (False,True))):
             raise Refused('source normal pytest entry')
     elif role == 'root' and tuple(profile['cases'])==ARCHIVE_CASES:
         if (profile['cwd']!=profile['checkout'] or script is not None or event!='cpython.run_command'
@@ -134,9 +137,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
                 or Path(profile['checkout']).is_relative_to(Path(profile['argv'][5]))):
             raise Refused('archive fixed original oracle body')
     elif role == 'root':
-        if (profile['cwd'] != profile['checkout'] or script is not None or event != 'cpython.run_command' or arguments != (ROOT_COMMAND + '\n',)
-                or profile['argv'] != [native, '-I', '-S', '-c', ROOT_COMMAND]):
-            raise Refused('source fixed root body')
+        raise Refused('source unknown root domain')
     pins = tuple(sorted((('entry', profile['entry_sha256']), ('native', profile['native_sha256']),
                         ('source', profile['source_sha256']), ('support', profile['support_sha256']),
                         ('runtime', profile['runtime_sha256']), ('dependency', profile['dependency_sha256']))))

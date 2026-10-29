@@ -9,7 +9,12 @@ on:
         description: 'Exact original case group; none runs only kernel/admission controls'
         type: choice
         default: none
-        options: [network-only, run-control12, startup-invalid3, candidate113, foundation8, project12, improve20, activation5, terminal15, ordinary-mock1, readiness4, security3, uv2, uv-invalid1, uv-task1, console1, roles5, roles14, sealed-patch1, roles26, drain1, roles2, setup2, crash2, roles28, ownership12, setup12, crash4, none, archives15, full-collect, preflight9, controlled-root-http7, controlled-notification-signals16, controlled-notification-startup8, controlled-warning4, controlled-admission6, controlled-private8, controlled-probes4, controlled-large8, controlled-initialize1, controlled-startup1, controlled-cancel1, controlled-ack20, controlled-bridge1, controlled-drain3, controlled-capacity10, controlled-batches4, controlled-orders-PP, controlled-orders-RP, controlled-orders-RC, controlled-orders-RR, controlled-stops12, controlled-halt15, controlled-cancellation4, controlled-registration4, controlled-witness1, imports6, stdio8, observe1, mp-status2, mp-tracker3, mp-tracker5, mp-ipc2, mp-attention1, mp-patch2, mp-lock3, mp-supervision3, mp-finalization13, mp-nested11, mp-paths11, mp-http9, mp-transactions21, mp-transactions12, mp-terminal1, review-wire24, audit3, reload1, bound-methods18, socket-preflight5, speed-isolated2, speed-cli5, nested-speed1, hermetic1, storage16, journal1, inspection2, measurement1, completion12, desktop1, distribution17, package-contracts4, session-timeout, sessions69, workspaces24, bootstrap27, ordinary42, cleanup7, cleanup9, cleanup5, cleanup-review3, cleanup12, cleanup15]
+        options: [none, source, archives15, full-collect, network-only]
+      source_selectors:
+        description: 'JSON list of exact original tests/*.py selectors; diagnostics only'
+        type: string
+        default: '[]'
+
 
 permissions:
   contents: read
@@ -46,9 +51,26 @@ jobs:
       - name: Actual native prebody and caught-refusal controls
         if: github.event_name == 'push' || inputs.source_group == 'none'
         run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 120 "$PWD/.venv/bin/python" -I -B "$PWD/.github/release-guard/test_native_entry_control.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json"
-      - name: Exact original source case group
-        if: github.event_name == 'workflow_dispatch' && inputs.source_group != 'none' && inputs.source_group != 'archives15' && inputs.source_group != 'network-only'
-        run: sudo -n env -i PATH=/usr/bin:/bin timeout --signal=TERM --kill-after=5 240 "$PWD/.venv/bin/python" -I -B "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/support/source_host.py" "/tmp/unrest-native-control-${{ github.run_id }}-${{ github.run_attempt }}/guard-native-control/binding.json" "${{ inputs.source_group }}"
+      - name: Normal original-source diagnostic selection
+        if: github.event_name == 'workflow_dispatch' && (inputs.source_group == 'source' || inputs.source_group == 'full-collect')
+        env:
+          SOURCE_SELECTORS: ${{ inputs.source_selectors }}
+          SOURCE_MODE: ${{ inputs.source_group }}
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          selected=json.loads(os.environ['SOURCE_SELECTORS'])
+          if type(selected) is not list or any(type(value) is not str for value in selected):
+              raise RuntimeError('source selector list required')
+          if os.environ['SOURCE_MODE']=='full-collect':
+              selected=['full-collect']
+          elif not selected or any(not value.startswith('tests/') for value in selected):
+              raise RuntimeError('diagnostic source selection must name original tests')
+          root=Path('/tmp')/('unrest-native-control-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT'])/'guard-native-control'
+          subprocess.run(['sudo','-n','env','-i','PATH=/usr/bin:/bin','timeout','--signal=TERM','--kill-after=5','240',
+              str(Path.cwd()/'.venv/bin/python'),'-I','-B',str(root/'support/source_host.py'),str(root/'binding.json'),*selected],check=True)
+          PY
       - name: Exact archive and extracted persistence integration
         if: github.event_name == 'workflow_dispatch' && inputs.source_group == 'archives15'
         run: |

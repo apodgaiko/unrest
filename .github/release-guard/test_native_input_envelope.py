@@ -43,11 +43,11 @@ def test_native_descriptor_and_readonly_generation_must_agree(tmp_path, record, 
 
 def test_metadata_changes_only_root_discovery_path():
     observer = object.__new__(Observer)
-    observer.full, observer.outcomes = False, []
-    observer.meta = {"owned": "/owned", "mounts": {"/native": [1, 2, 3]}}
-    assert observer.meta_environment()["PATH"] == "/native/bin:/usr/bin:/bin"
+    observer.full, observer.outcomes = True, []
+    observer.meta = {"owned": "/owned", "runtime_root": "/runtime", "mounts": {"/native": [1, 2, 3]}}
+    assert observer.meta_environment()["PATH"] == "/runtime/bin:/runtime/bin:/native/bin:/usr/bin:/bin"
     observer.meta["mounts"] = {}
-    assert observer.meta_environment()["PATH"] == "/usr/bin:/bin"
+    assert observer.meta_environment()["PATH"] == "/runtime/bin:/runtime/bin:/usr/bin:/bin"
 
 
 @pytest.mark.parametrize('mounted', [False, True])
@@ -56,9 +56,9 @@ def test_actual_worker_root_environment_matches_observer_before_fork(monkeypatch
     import sys
     import source_host
     metadata = {'owned': str(tmp_path), 'mounts': {'/native': [1, 2, 3]} if mounted else {},
-                'cases': ['tests/test_experimental_admission_bounds.py::example']}
+                'cases': {},'selection': [],'runtime_root':str(tmp_path/'runtime'),'checkout':str(tmp_path/'source')}
     observer = object.__new__(Observer)
-    observer.full, observer.outcomes = False, []
+    observer.full, observer.outcomes = True, []
     observer.meta = metadata
     descriptors = []
     original_pipe = os.pipe
@@ -69,7 +69,11 @@ def test_actual_worker_root_environment_matches_observer_before_fork(monkeypatch
     class BeforeFork(RuntimeError):
         pass
     def fork():
-        assert sys._getframe(1).f_locals['environment'] == observer.meta_environment()
+        from full_source import environment
+        from uv_cli import child_environment
+        actual=sys._getframe(1).f_locals['environment']
+        assert actual==environment(metadata)
+        assert child_environment(metadata,actual)==observer.meta_environment()
         raise BeforeFork
     monkeypatch.setattr(source_host, 'isolate', lambda value, support: value)
     monkeypatch.setattr(os, 'pipe', pipe)

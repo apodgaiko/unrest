@@ -34,7 +34,6 @@ SAVED = tuple(TEST + f'::test_saved_review_observer_compatibility[{variant}]'
               for variant in ('observer', 'cancel', 'transport'))
 ALL_CASES = (*RECORDED, *FAULTS)
 EXECUTION_CASES = (*ALL_CASES, *SAVED)
-GROUPS = (CASES, RECORDED, FAULTS, ALL_CASES, SAVED)
 CREDENTIAL = {'OPENAI_API_KEY': 'controlled-secret-observer-value'}
 
 

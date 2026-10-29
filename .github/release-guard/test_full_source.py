@@ -32,7 +32,10 @@ def test_real_assertion_failure_is_retained_without_truncating_pytest():
     assert proof.completed == [item.nodeid]
     assert calls[-1][1]["outcome"] == "failed"
     finish = proof.pytest_sessionfinish(
-        SimpleNamespace(exitstatus=1, config=SimpleNamespace(option=SimpleNamespace(collectonly=False))), 1
+        SimpleNamespace(
+            exitstatus=1, config=SimpleNamespace(option=SimpleNamespace(collectonly=False))
+        ),
+        1,
     )
     next(finish)
     with pytest.raises(StopIteration):
@@ -55,7 +58,10 @@ def test_caught_forbidden_effect_still_fails_even_if_pytest_reports_pass():
 def test_collection_only_emits_no_source_checkpoint_completion():
     proof, _, calls = plugin()
     finish = proof.pytest_sessionfinish(
-        SimpleNamespace(exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=True))), 0
+        SimpleNamespace(
+            exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=True))
+        ),
+        0,
     )
     next(finish)
     with pytest.raises(StopIteration):
@@ -73,6 +79,7 @@ def test_fixed_uv_launcher_binds_collection_only_as_an_explicit_argument(
     from full_source import environment
 
     meta = {
+        "selection": [],
         "runtime_root": str(tmp_path / "runtime"),
         "owned": str(tmp_path / "owned"),
         "checkout": str(tmp_path / "source"),
@@ -118,6 +125,7 @@ def test_native_console_binds_actual_image_separately_from_uv_argv0(
     from full_source import child_environment
 
     meta = {
+        "selection": [],
         "runtime_root": str(tmp_path / "runtime"),
         "owned": str(tmp_path / "owned"),
         "checkout": str(tmp_path / "source"),
@@ -191,6 +199,7 @@ def test_observer_collection_reply_carries_success_and_closed_reference(tmp_path
     from control_transport import reply, verify_reply, encode, RESPONSE_LIMIT
 
     import stat
+
     original_fstat, original_stat = os.fstat, os.stat
 
     def source_owner(info):
@@ -201,7 +210,9 @@ def test_observer_collection_reply_carries_success_and_closed_reference(tmp_path
         return os.stat_result(row)
 
     monkeypatch.setattr(os, "fstat", lambda fd: source_owner(original_fstat(fd)))
-    monkeypatch.setattr(os, "stat", lambda *args, **kwargs: source_owner(original_stat(*args, **kwargs)))
+    monkeypatch.setattr(
+        os, "stat", lambda *args, **kwargs: source_owner(original_stat(*args, **kwargs))
+    )
     reference = {"path": "/profiles/cases-bound.json", "sha256": "c" * 64, "count": 1}
     monkeypatch.setattr(full_launch, "seal", lambda value, directory: dict(reference))
     node = "tests/test_wire.py::test_large[" + "x" * 70000 + "]"
@@ -243,7 +254,9 @@ def test_late_session_failure_cannot_seal_success(collect):
             session.exitstatus = 1
 
     manager.register(LateFailure())
-    session = SimpleNamespace(exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=collect)))
+    session = SimpleNamespace(
+        exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=collect))
+    )
     if collect:
         with pytest.raises(Refused, match="collection failed"):
             manager.hook.pytest_sessionfinish(session=session, exitstatus=0)
@@ -264,7 +277,64 @@ def test_raising_session_hook_cannot_seal_success(collect):
             raise RuntimeError("late finalizer failed")
 
     manager.register(BrokenFinalizer())
-    session = SimpleNamespace(exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=collect)))
+    session = SimpleNamespace(
+        exitstatus=0, config=SimpleNamespace(option=SimpleNamespace(collectonly=collect))
+    )
     with pytest.raises(RuntimeError, match="late finalizer failed"):
         manager.hook.pytest_sessionfinish(session=session, exitstatus=0)
     assert not any(kind in ("root-finish", "collection-finish") for kind, _ in calls)
+
+
+@pytest.mark.parametrize("selected", [[], ["tests/test_full_source.py::test_one[param space]"]])
+@pytest.mark.parametrize("collect", [False, True])
+def test_one_suffix_is_shared_by_diagnostic_and_release_console(selected, collect):
+    from source_profile import pytest_arguments
+
+    assert pytest_arguments({"selection": selected}, {"collection_only": collect}) == [
+        "pytest",
+        "-q",
+        *selected,
+        *(["--collect-only"] if collect else []),
+    ]
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--ignore=tests/test_one.py"],
+        ["full"],
+        ["full-collect"],
+        ["../tests/test_one.py"],
+        ["tests/../test_one.py"],
+        ["/tests/test_one.py"],
+        ["tests/test_one.txt"],
+        ["tests/missing.py"],
+        ["tests/test_one.py\0::test_one"],
+        ["./tests/test_one.py"],
+        ["tests/alias.py"],
+    ],
+)
+def test_diagnostic_selection_cannot_select_flags_escapes_or_aliases(tmp_path, arguments):
+    from source_host import selection
+
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_one.py").write_text("pass")
+    (tests / "alias.py").symlink_to(tests / "test_one.py")
+    with pytest.raises(RuntimeError):
+        selection(arguments, tmp_path)
+
+
+def test_selection_keeps_node_text_without_granting_launch_permission(tmp_path):
+    from source_host import selection, unexcluded
+
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_one.py").write_text("pass")
+    node = "tests/test_one.py::test_original[space ../literal]"
+    assert selection([node], tmp_path) == [node]
+    assert not unexcluded({"cases": {}, "selection": [node]}, {})
+    assert not unexcluded({"cases": {}}, {})
+    assert not unexcluded({"cases": {}, "selection": []}, {"collection_only": True})
+    assert unexcluded({"cases": {}, "selection": []}, {"collection_only": False})
+    assert not unexcluded({"cases": ["archive"], "selection": []}, {})

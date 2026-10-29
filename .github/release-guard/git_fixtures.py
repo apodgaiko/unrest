@@ -110,12 +110,3 @@ def root(host,case,repository):
     generation=(str(parent),info.st_dev,info.st_ino)
     if host.fixture_roots.setdefault(('git-fixture',case),generation)!=generation:
         raise Refused('Git additional pytest generation changed')
-
-
-GROUPS={
-    'candidate113':CANDIDATE_CASES,
-    'foundation8':tuple(case for case in SLOTS if case.startswith(('tests/test_foundation_authority.py::','tests/test_foundation_integration.py::'))),
-    'project12':tuple(case for case in SLOTS if case.startswith('tests/test_project_adapter.py::')),
-    'improve20':tuple(case for case in SLOTS if case.startswith('tests/test_improve_adapter.py::')),
-    'activation5':tuple(case for case in SLOTS if case.startswith('tests/test_v04_activation.py::')),
-}

@@ -44,12 +44,8 @@ def test_listener_scope_refuses_foreign_paths_and_roles(value):
         scope(next(iter(CASES)),'bridge',value,Path('/owned'))
 
 
-def test_finite_component_partitions_keep_every_original_case_exactly_once():
-    from controlled_cases import GROUPS
-    members = [case for group in GROUPS.values() for case in group]
-    assert len(members) == 154 and len(set(members)) == 154 and set(members) == set(CASES)
-    assert len(GROUPS['controlled-cancellation4']) == len(GROUPS['controlled-registration4']) == 4
-    assert len(GROUPS['controlled-witness1']) == 1
+def test_every_original_controlled_case_remains_declared():
+    assert len(CASES)==154 and len(set(CASES))==154
 
 
 def test_startup_failure_cannot_start_an_adapter():

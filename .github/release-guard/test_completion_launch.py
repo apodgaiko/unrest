@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-from fixed_inline import GROUPS,SEQUENCES
+from fixed_inline import SEQUENCES
 from source_observer import Observer
 import completion_launch as completion
 
@@ -26,7 +26,6 @@ def test_each_primitive_keeps_original_path_phase_literal_and_quota(tmp_path,mon
         assert value.argv[:2]==('/native/python','-c') and value.argv[3:]==tuple(argv[3:])
         assert 'os._exit(73)' in value.argv[2] if operation=='crash' else 'publish_completion_json' in value.argv[2]
         assert dict(value.environment)=={'PATH':'/bin'}
-    assert tuple(completion.CASES) in GROUPS
     with pytest.raises(Refused):
         completion.expected(host,'undeclared',argv,str(ROOT),{},argv[0],'a'*64)
 

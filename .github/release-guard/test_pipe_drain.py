@@ -6,7 +6,7 @@ import os
 import pytest
 
 from content_manifest import Refused
-from fixed_inline import DRAIN_CASE,SEQUENCES,GROUPS
+from fixed_inline import DRAIN_CASE,SEQUENCES
 from effect_proposals import proposal
 import owned_fixture
 
@@ -43,7 +43,7 @@ def test_original_chatty_child_retains_both_full_pipe_writes(tmp_path,monkeypatc
         answer=proposal(host,actor,raw)
         assert answer['translated']==['/native','-I','-S','-c',body]
         assert admitted[0][0][1].environment==(('PATH','/usr/bin:/bin'),)
-        assert SEQUENCES[DRAIN_CASE]==('drain',) and (DRAIN_CASE,) in GROUPS
+        assert SEQUENCES[DRAIN_CASE]==('drain',)
     else:
         with pytest.raises(Refused):
             proposal(host,actor,raw)

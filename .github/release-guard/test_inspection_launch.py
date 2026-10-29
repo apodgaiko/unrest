@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-from fixed_inline import SEQUENCES,GROUPS
+from fixed_inline import SEQUENCES
 import inspection_launch as inspection
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
@@ -47,7 +47,6 @@ def test_original_byte_and_operand_parity_requires_real_project_record(tmp_path,
     value=inspection.expected(host,argv,cwd,env,argv[0],'a'*64)
     assert value.argv==tuple(argv) and value.cwd==cwd
     assert len(SEQUENCES[case])==(2 if case==inspection.FRONTIER else 1)
-    assert inspection.CASES in GROUPS
     expected=env if case!=inspection.RECOVERY else {**env,'UNREST_HOME':str(record.parents[3]),'UNREST_PROJECTS_DIR':str(record.parents[2])}
     assert dict(value.environment)==expected
 

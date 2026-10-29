@@ -231,13 +231,13 @@ assert finite fresh listener admission, continued wait requirements and the
 absence of application-payload claims. This is an explicit changed proof model,
 not a claim that the removed controls passed under a new implementation.
 
-Focused groups prove components only. Normal full discovery and all bodies on
+Selected diagnostics prove components only. Normal full discovery and all bodies on
 Python3.13, without exclusions, remain the frozen source checkpoint. Build/archive
 membership and complete bytes, safe extracted-tree all15 persistence cases,
 unrelated-cwd installed lifecycle and fail-closed startup, independent validation,
 desktop/CI, publication and protected local update remain required. Separate USER
 policy and unrelated untracked data must be preserved. No release certification
-follows from a selected group, collection-only run or current size report.
+follows from selected diagnostics, collection-only runs or the size report.
 
 
 RunControl's original lifecycle tests reuse the library worker entry with exact
@@ -389,3 +389,21 @@ An observer-generated second sequence/epoch protocol is removed. Kernel executio
 generations remain independently bounded and stale or out-of-order READY refuses.
 Historical body readiness remains available after exit for completion checks;
 actual terminal and original-parent wait joins are unchanged.
+
+
+Development and release execution use the same stock UV → fixed native pytest
+console → normal collection/outcome path. The old selected-node root driver and
+selector-only group catalogues are removed. A diagnostic selection is protected
+metadata: canonical existing `tests/*.py` paths with optional original node text,
+not pytest option tokens or path aliases. The one exact pytest suffix is shared
+by launcher, native console and effective module argv checks. Selection confers
+no process permission; closed case/argv/image/owned-root declarations still
+admit every child, and unknown or forbidden launches still fail sticky.
+
+Only an explicitly empty selection, non-collection mode and all successful
+normal source outcomes can mark the unexcluded source checkpoint ready.
+Selected diagnostics retain the short bounded deadline and cannot certify a
+release. The archive's original fifteen-case extracted-tree oracle remains a
+separate route. Cleanup RPC deadlines follow the authenticated active case on
+both sides rather than a development group name. No contract reference cases
+are silently inserted or assertions changed by selection.

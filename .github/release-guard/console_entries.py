@@ -48,18 +48,9 @@ CONFIG_ENV={'UNREST_ORCHESTRATOR_PROVIDER':'codex','UNREST_WORKER_PROVIDER':'cod
 
 
 def standalone_environment(metadata):
-    from uv_cli import CASES as UV_CASES
-    if any(case in UV_CASES for case in metadata.get('cases',())):
-        from full_source import environment
-        result=environment(metadata)
-        for name in ('PYTEST_PLUGINS','PYTEST_ADDOPTS'):
-            result.pop(name)
-        return {**result,'PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}
     owned=Path(metadata['owned'])
-    prefix=str(Path(metadata['runtime_root'])/'bin')+':' if CASE in metadata.get('cases',()) else ''
     return {'HOME':str(owned/'home'),'TMPDIR':str(owned/'tmp'),
-        'PATH':prefix+('/native/bin:' if '/native' in metadata['mounts'] else '')+'/usr/bin:/bin',
-        'PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}
+        'PATH':'/usr/bin:/bin','PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}
 
 
 def proposal(host,actor,raw):

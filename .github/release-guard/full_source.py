@@ -16,7 +16,7 @@ from case_inventory import identity
 def environment(metadata):
     runtime, owned = Path(metadata['runtime_root']), Path(metadata['owned'])
     return {'HOME':str(owned/'home'),'TMPDIR':str(owned/'tmp'),
-        'PATH':str(runtime/'bin')+':/usr/bin:/bin',
+        'PATH':str(runtime/'bin')+':'+('/native/bin:' if '/native' in metadata.get('mounts',{}) else '')+'/usr/bin:/bin',
         'UV_PYTHON':str(runtime/'bin/python3.13'),'UV_NO_PROJECT':'1',
         'UV_NO_ENV_FILE':'1','UV_PYTHON_DOWNLOADS':'never','UV_CACHE_DIR':str(owned/'uv-cache'),
         'PYTEST_PLUGINS':'full_source','PYTEST_ADDOPTS':'--basetemp='+str(owned/'pytest')+' -o cache_dir='+str(owned/'pytest-cache')}

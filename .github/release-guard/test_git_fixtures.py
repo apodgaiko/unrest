@@ -32,8 +32,7 @@ def test_selected_fixtures_collect_every_original_parameter_without_bodies(monke
             nodes.extend(item.nodeid for item in session.items)
     assert pytest.main(['--collect-only','-q',*fixtures.SLOTS],plugins=[Collected()])==0
     assert tuple(nodes)==tuple(fixtures.SLOTS) and len(nodes)==158
-    assert {key:len(value) for key,value in fixtures.GROUPS.items()}=={
-        'foundation8':8,'project12':12,'improve20':20,'activation5':5,'candidate113':113}
+
 
 
 @pytest.mark.parametrize('mutation',[None,'case','slot','parent','generation'])

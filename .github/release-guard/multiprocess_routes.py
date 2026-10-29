@@ -58,9 +58,6 @@ for cut in ('after_pending_inbox_fsync-steer-True','before_consumed_inbox_fsync-
 TERMINAL=route('test_terminal_review_report_ordering','test_crash_report_survives_finalization_refusal[held_snapshot]',
     {'_hold_snapshot':Spawn(('pipe',))},target_module='test_supervision_finalization')
 ROUTES={**ATTENTION,**PATCH,**LOCK,**SUPERVISION,**FINALIZATION,**NESTED,**PATHS,**TRANSACTIONS,**TERMINAL}
-GROUPS={'mp-attention1':tuple(ATTENTION),'mp-patch2':tuple(PATCH),'mp-lock3':tuple(LOCK),'mp-supervision3':tuple(SUPERVISION),
-    'mp-finalization13':tuple(FINALIZATION),'mp-nested11':tuple(NESTED),'mp-paths11':tuple(PATHS),
-    'mp-http9':tuple(TRANSACTIONS)[:9],'mp-transactions21':tuple(TRANSACTIONS),'mp-transactions12':tuple(TRANSACTIONS)[9:],'mp-terminal1':tuple(TERMINAL)}
 
 
 def plan(case,target):

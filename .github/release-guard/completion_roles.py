@@ -20,15 +20,7 @@ CASES={**{OWNERSHIP+f'[{scenario}-{role}-targets{target}]':('ownership',role,sce
     **{SETUP+f'[{scenario}-{role}-targets{target}]':('setup',role,scenario)
        for scenario in ('invalid-invalid','valid-invalid','valid-valid','distinct') for role,target in ROLES}}
 HTTP=tuple(case for case,row in CASES.items() if row[0]!='setup')
-GROUPS={'roles28':tuple(CASES), **{family+suffix:tuple(case for case,row in CASES.items() if row[0]==family)
-    for family,suffix in (('ownership','12'),('crash','4'),('setup','12'))},
-    'roles2':tuple(case for case,row in CASES.items() if row[0]=='ownership' and row[2]=='valid' and not case.endswith('targets1]')),
-    'setup2':tuple(case for case,row in CASES.items() if row[0]=='setup' and row[2]=='valid-valid' and not case.endswith('targets1]')),
-    'crash2':tuple(case for case,row in CASES.items() if row[0]=='crash' and row[2]=='before')}
 
-GROUPS['roles26']=tuple(case for case in CASES if case not in GROUPS['roles2'])
-GROUPS['roles5']=tuple(case for case,row in CASES.items() if row[0]=='setup' and (row[2]=='distinct' or row[2]=='valid-valid' and not case.endswith('targets0]')))
-GROUPS['roles14']=tuple(case for case,row in CASES.items() if row[0]=='setup' or row[0]=='crash' and row[1]=='validate')
 PINS={'tests/test_completion_ownership.py': '2b67510bdd8f40d584baab65837174b2f5a3935aff343b7d9eaccedf09b5df8b', 'tests/test_completion_setup.py': 'fe1a1c98792d1b30d81d975cb23ad9122ae74678295ef4ed8c5e532a7aa00b6a', 'tests/test_server.py': '4524714474b49852af00d4533f30456b87839ed0d5bbd2d10ba5502717ddef4e'}
 OWNER=20000
 

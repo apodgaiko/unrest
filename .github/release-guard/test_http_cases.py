@@ -101,10 +101,10 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     import source_profile as profiles
     from execution_spec import issue
     from process_ledger import canonical
-    from multiprocess_routes import GROUPS
+    from multiprocess_routes import LOCK
 
     if subject=='foreign-mcp':
-        host=SimpleNamespace(case=GROUPS['mp-lock3'][0],root_only=lambda actor:None,intents={})
+        host=SimpleNamespace(case=tuple(LOCK)[0],root_only=lambda actor:None,intents={})
         with pytest.raises(Refused,match='HTTP original case'):
             http_cases.proposal(host,{}, {})
         assert not host.intents
@@ -119,14 +119,14 @@ def test_http_authority_and_inherited_profile_descriptors_remain_closed(tmp_path
     actual=identity(os.getpid(),20000,os.getppid())
     parent=identity(os.getppid(),20000,1)
     observer=identity(os.getpid()+1000,20001,1)
-    case=http_cases.CASES[0] if subject.startswith('http') else GROUPS['mp-lock3'][0]
+    case=http_cases.CASES[0] if subject.startswith('http') else tuple(LOCK)[0]
     runtime=tmp_path/'runtime'
     native=str(runtime/'bin/python-unrest-guard-control')
     vector=[native,'-I','-S','-c','pass']
     environment={'PATH':'/usr/bin:/bin'}
     profile={key:'a'*64 for key in ('entry_sha256','native_sha256','source_sha256','support_sha256','runtime_sha256','dependency_sha256')}
     profile.update(schema='unrest.bootstrap-source.v1',role='mcp',case=case,
-        cases=list(http_cases.SUPERVISION if subject.startswith('http') else GROUPS['mp-lock3']),
+        cases=list(http_cases.SUPERVISION if subject.startswith('http') else tuple(LOCK)),
         native=native,checkout=str(tmp_path/'source'),owned=str(tmp_path/'owned'),
         dependencies=str(tmp_path/'dependencies'),runtime_root=str(runtime),cwd=str(tmp_path),
         identity=canonical(actual),parent=canonical(parent),observer=canonical(observer),

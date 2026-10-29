@@ -24,7 +24,7 @@ from bootstrap_cases import BOOTSTRAP, declaration
 from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
-from source_profile import METHODS, ROOT_COMMAND
+from source_profile import METHODS
 from ordinary_acp import EXECUTION_CASES as ORDINARY_CASES, NEGATIVE_CASES
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
@@ -32,7 +32,7 @@ from git_sites import CASES as GIT_CASES
 from completion_roles import CASES as ROLE_CASES,actor_slot
 from git_observer import Git
 from cleanup_inline import NO_LAUNCH, DECLARATIONS, child_count as inline_count
-from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, child_count, snapshot_path
+from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, child_count, snapshot_path
 
 
 from readiness_launch import CASES as READINESS_CASES
@@ -148,9 +148,8 @@ class Observer:
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
             if row['kind'] == 'kernel_root' and not self.full:
-                from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
-                vector=([self.binding['entry']['path'],'-I','-S','-c',ARCHIVE_COMMAND,self.binding['checkout']]
-                    if self.cases==ARCHIVE_CASES else [self.binding['entry']['path'],'-I','-S','-c',ROOT_COMMAND])
+                from postbuild_root import COMMAND as ARCHIVE_COMMAND
+                vector=[self.binding['entry']['path'],'-I','-S','-c',ARCHIVE_COMMAND,self.binding['checkout']]
                 self.profile(self.root, 'root', '<bootstrap>',
                     vector,
                     self.meta_environment(), self.meta['checkout'], os.urandom(16).hex())
@@ -579,7 +578,7 @@ class Observer:
             if actor is None or uid != 20000 or gid != 20000:
                 stream.close()
                 raise Refused('source registered channel peer')
-            frame = Frame(stream, REQUEST_LIMIT, self.ledger.poison, seconds=8 if self.cases in CLEANUP_GROUPS else 4)
+            frame = Frame(stream, REQUEST_LIMIT, self.ledger.poison, seconds=8 if self.case in CLEANUP_CASES else 4)
             frame.capture(self.ledger, actor['birth'], actor['token'], 20000)
             self.frames.append({'frame': frame, 'actor': actor, 'request': None})
         for channel in list(self.frames):

@@ -142,18 +142,14 @@ def test_unknown_one_element_vector_is_sticky_after_exact_selector_refusal():
     assert policy.poison and calls==['guard-refusal']
 
 
-def test_host_accepts_preflight_selector_before_binding_and_refuses_unknown(tmp_path,monkeypatch):
-    import sys
-    import source_host
-    monkeypatch.setattr(sys,'platform','linux')
-    monkeypatch.setattr(os,'getuid',lambda:0)
-    monkeypatch.setattr(sys,'path',list(sys.path))
-    monkeypatch.setattr(sys,'argv',['source_host.py',str(tmp_path/'absent.json'),'preflight9'])
-    with pytest.raises(FileNotFoundError):
-        source_host.main()
-    monkeypatch.setattr(sys,'argv',['source_host.py',str(tmp_path/'absent.json'),'unknown'])
-    with pytest.raises(RuntimeError,match='exact root Linux invocation'):
-        source_host.main()
+def test_host_uses_normal_preflight_selector_and_refuses_unknown(tmp_path):
+    from source_host import selection
+    tests=tmp_path/'tests'
+    tests.mkdir()
+    (tests/'test_launch_preflight.py').write_text('pass')
+    assert selection(['tests/test_launch_preflight.py'],tmp_path)==['tests/test_launch_preflight.py']
+    with pytest.raises(RuntimeError,match='canonical original test file'):
+        selection(['unknown'],tmp_path)
 
 
 def test_python_plan_keeps_actual_bare_executable_resolution_separate_from_translated_argv(tmp_path,monkeypatch):

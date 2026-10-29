@@ -213,13 +213,9 @@ def test_hermetic_child_seals_all_three_nodes_without_advancing_outer_case(monke
 
 
 
-def test_each_bounded_nested_frontier_is_independently_closed():
-    import ast
-    from fixed_inline import GROUPS
+def test_each_bounded_nested_frontier_uses_normal_selection():
+    from pathlib import Path
     from nested_pytest import HERMETIC
-    from source_host import main
-    import inspect
-    declared={node.value for node in ast.walk(ast.parse(inspect.getsource(main)))
-              if isinstance(node,ast.Constant) and type(node.value) is str}
-    assert {'nested-speed1','hermetic1'} <= declared
-    assert (CASE,) in GROUPS and (HERMETIC,) in GROUPS
+    from source_host import selection
+    root=next(path for path in Path(__file__).resolve().parents if (path/'pyproject.toml').is_file())
+    assert selection([CASE,HERMETIC],root)==[CASE,HERMETIC]

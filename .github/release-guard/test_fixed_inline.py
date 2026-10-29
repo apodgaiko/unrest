@@ -43,7 +43,7 @@ def test_each_fixed_declaration_is_limited_to_its_original_sequence(case):
 
 
 def test_journal_keeps_the_original_sleep_and_no_descendant_authority():
-    from fixed_inline import JOURNAL_CASE, JOURNAL_TEST, GROUPS, translated
+    from fixed_inline import JOURNAL_CASE, JOURNAL_TEST,  translated
     tree=ast.parse((ROOT/JOURNAL_TEST).read_bytes())
     owner=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name==JOURNAL_CASE.split('::')[-1])
     call=next(node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='Popen')
@@ -53,7 +53,7 @@ def test_journal_keeps_the_original_sleep_and_no_descendant_authority():
     assert body=='import time; time.sleep(10)'
     assert dict(value.environment)=={'PATH':'/bin:/usr/bin'}
     assert translated(value)==('/native/python','-I','-S','-c',body)
-    assert (JOURNAL_CASE,) in GROUPS and SEQUENCES[JOURNAL_CASE]==('sleep',)
+    assert SEQUENCES[JOURNAL_CASE]==('sleep',)
     with pytest.raises(Refused,match='no descendants'):
         expected(JOURNAL_CASE,'sleep','/native/python','a'*64,ROOT,{},query=True)
 

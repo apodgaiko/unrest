@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from content_manifest import Refused
-from fixed_inline import GROUPS,SEQUENCES,translated
+from fixed_inline import SEQUENCES,translated
 import measurement_launch as measurement
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
@@ -28,7 +28,7 @@ def test_original_mode_manifest_and_output_are_exact(tmp_path,monkeypatch):
     assert value.argv==tuple(argv)
     assert value.payload_sha256==measurement.PINS[measurement.TOOL]
     assert translated(value)==('/native/python','-I','-S',*argv[1:])
-    assert SEQUENCES[measurement.CASE]==('simulate',) and (measurement.CASE,) in GROUPS
+    assert SEQUENCES[measurement.CASE]==('simulate',)
 
 
 @pytest.mark.parametrize('mutation',['cwd','outside','generation','case','count'])

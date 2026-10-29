@@ -31,6 +31,25 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def selection(arguments,checkout):
+    if arguments==[]:
+        return []
+    require(len(arguments)<=32 and all(type(value) is str for value in arguments)
+            and sum(len(value.encode()) for value in arguments)<=16384,'bounded source selection')
+    for value in arguments:
+        file=value.split('::',1)[0]
+        relative=Path(file)
+        require(file.startswith('tests/') and relative.suffix=='.py' and str(relative)==file
+                and '..' not in relative.parts and '\0' not in value
+                and (checkout/relative).resolve()==checkout/relative and (checkout/relative).is_file(),
+                'source selector must name a canonical original test file')
+    return list(arguments)
+
+
+def unexcluded(metadata,binding):
+    return type(metadata['cases']) is dict and metadata.get('selection')==[] and not binding.get('collection_only')
+
+
 def production_binding(binding):
     require(Path(binding['bootstrap']['path']) == Path(binding['support'])/'native_entry.py'
             and Path(binding['entry']['path']) == Path(binding['runtime']['path']).parent/'python-unrest-guard-control',
@@ -218,27 +237,22 @@ def worker(binding, metadata, raw_directory):
     from compartment import credentials
     from linux_trace import OwnedTrace, install_observation_filter
     from source_observer import Observer
-    from source_profile import ROOT_COMMAND
     metadata = isolate(metadata, binding['support'])
-    timeout = 1200 if type(metadata['cases']) is dict else (170 if len(metadata['cases']) > 3 else 60) if metadata['cases'][0].startswith('tests/test_acp_cleanup.py::') else 30 if len(metadata['cases']) in (3, 42) else 60 if len(metadata['cases']) == 2 else 170
+    full=type(metadata['cases']) is dict
+    timeout=1200 if unexcluded(metadata,binding) else 60 if binding.get('collection_only') else 170 if full else 100
     start_read, start_write = os.pipe()
     ready_read, ready_write = os.pipe()
     output_read, output_write = os.pipe()
-    from console_entries import standalone_environment
-    environment=standalone_environment(metadata)
-    full=type(metadata['cases']) is dict
-    if full and binding.get('collection_only'):
-        timeout=60
     if full:
         from full_source import environment as full_environment
+        from source_profile import pytest_arguments as arguments
         environment=full_environment(metadata)
-    vector = ['/usr/bin/env','-u','CODEX_PATH','uv','run','pytest','-q'] if full else [binding['entry']['path'], '-I', '-S', '-c', ROOT_COMMAND]
-    if full and binding.get('collection_only'):
-        vector.append('--collect-only')
-    from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
-    if tuple(metadata['cases'])==ARCHIVE_CASES:
-        timeout=100
-        vector=[binding['entry']['path'],'-I','-S','-c',ARCHIVE_COMMAND,binding['checkout']]
+        vector=['/usr/bin/env','-u','CODEX_PATH','uv','run',*arguments(metadata,binding)]
+    else:
+        from console_entries import standalone_environment
+        from postbuild_root import COMMAND
+        environment=standalone_environment(metadata)
+        vector=[binding['entry']['path'],'-I','-S','-c',COMMAND,binding['checkout']]
     child = os.fork()
     if child == 0:
         try:
@@ -272,7 +286,7 @@ def worker(binding, metadata, raw_directory):
         observer = Observer(binding, metadata, child, output_read)
         allowed = [{'pid': child, 'path': vector[0], 'argv': vector, 'environment': environment,
                     'cwd': metadata['checkout'], 'sha256': hashlib.sha256(Path(vector[0]).read_bytes()).hexdigest()}]
-        trace = OwnedTrace(child, allowed, timeout, start_write=start_write, selective=True, cleanup_seconds=5, full_source=full and not binding.get('collection_only',False),
+        trace = OwnedTrace(child, allowed, timeout, start_write=start_write, selective=True, cleanup_seconds=5, full_source=unexcluded(metadata,binding),
                            on_attached=lambda: observer.consume(trace), on_tick=observer.tick,
                            resolve_exec=lambda *args: observer.resolve(trace, *args),
                            validate_wait=lambda *args: observer.validate_wait(trace, *args))
@@ -294,7 +308,7 @@ def worker(binding, metadata, raw_directory):
         raise
     finally:
         try:
-            record = {'schema': 'unrest.bootstrap-source-result.v3', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
+            record = {'schema': 'unrest.bootstrap-source-result.v3', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and unexcluded(metadata,binding) and observer.finished and failure is None),
                       'git_value_provenance_proven':False, 'release_certified': False, 'completed': [] if observer is None else observer.completed,
                       'result': result, 'failure': failure, 'metadata': metadata,
                       'kernel': [] if trace is None else trace.records,
@@ -337,11 +351,7 @@ def drain_owned(rows):
 
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from package_cases import GROUPS as PACKAGE_GROUPS
-    from completion_roles import CASES as ROLE_CASES,GROUPS as ROLE_GROUPS
-    from controlled_cases import GROUPS as CONTROLLED_GROUPS, ADMISSION, NOTIFICATION_STARTUP, NOTIFICATION_SIGNALS, ROOT_HTTP
-    require(sys.platform == 'linux' and os.getuid() == 0 and (len(sys.argv)==4 and sys.argv[2]=='archive15' or len(sys.argv) == 2 or len(sys.argv) == 3 and sys.argv[2] in ('bootstrap27', 'ordinary3', 'ordinary-mock1', 'startup-invalid3', 'run-control12', 'terminal15', 'ordinary42', 'cleanup3', 'cleanup7', 'cleanup9', 'cleanup5', 'cleanup-review3', 'cleanup12', 'cleanup15', 'cleanup27', 'workspaces24', 'candidate113', 'foundation8', 'project12', 'improve20', 'activation5', 'sessions69', 'session-timeout', 'imports6', 'stdio8', 'observe1', 'mp-status2', 'mp-tracker3', 'mp-tracker5', 'mp-ipc2', 'mp-attention1', 'mp-patch2', 'mp-lock3', 'mp-supervision3', 'mp-finalization13', 'mp-nested11', 'mp-paths11', 'mp-http9', 'mp-transactions21', 'mp-transactions12', 'mp-terminal1', 'review-wire24', 'audit3', 'reload1', 'bound-methods18', 'socket-preflight5', 'speed-isolated2', 'speed-cli5', 'nested-speed1', 'hermetic1', 'storage16', 'journal1', 'inspection2', 'sealed-patch1', 'console1', 'readiness4', 'uv2', 'uv-invalid1', 'uv-task1', 'measurement1', 'completion12', 'drain1', 'desktop1', 'full', 'full-collect', 'preflight9', *CONTROLLED_GROUPS,*PACKAGE_GROUPS,*ROLE_GROUPS)),
-            'source host requires exact root Linux invocation')
+    require(sys.platform=='linux' and os.getuid()==0 and len(sys.argv)>=2,'source host requires root Linux invocation')
     binding_file = Path(sys.argv[1]).resolve(strict=True)
     binding = json.loads(binding_file.read_bytes())
     root = binding_file.parent
@@ -367,35 +377,24 @@ def main():
     os.chown(raw_directory, 20001, 20001)
     success = False
     try:
-        from run_worker_launch import WORKERS
-        from multiprocess_routes import GROUPS as MP_GROUPS
-        from review_wire import CASES as REVIEW_CASES
-        from product_audit import CASES as AUDIT_CASES
-        from bootstrap_cases import BOOTSTRAP
-        from multiprocess_entry import CASES as MP_CASES, IPC_CASES, TRACKER_SMOKE, TRACKER_REMAINING
-        from plan_launch import CASES as PLAN_CASES
-        from controlled_startup import CASES
-        from terminal_leaves import CASES as TERMINAL_CASES
-        from ordinary_acp import ALL_CASES, CASES as ORDINARY_CASES, STARTUP_CASES
-        from cleanup_launch import ALL_CASES as CLEANUP_CASES, CASES as CLEANUP_SMOKE, RECORDED, FAULTS
-        from cleanup_inline import NO_LAUNCH, STARTUP, CLIENT_CASES
-        from cleanup_launch import SAVED
-        from speed_inline import CASES as SPEED_CASES, CLI_CASE
-        from fixed_inline import DESKTOP_CASE,NESTED_CASE, HERMETIC, STORAGE_CASES, JOURNAL_CASE, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, DRAIN_CASE, CONSOLE_CASE, UV_CASES, READINESS_CASES, IMPORT_CASES, STDIO, OBSERVATION_CASE, RELOAD_CASE, METHOD_CASES, NETWORK_CASES
-        from session_launch import CASES as SESSION_CASES, TIMEOUT as SESSION_TIMEOUT
-        from git_sites import CASES as GIT_CASES,GROUPS as GIT_GROUPS
-        cleanup = {**GIT_GROUPS,'terminal15':TERMINAL_CASES,'ordinary3':ORDINARY_CASES[:3],'ordinary-mock1':(ORDINARY_CASES[3],),'run-control12':tuple(WORKERS), 'startup-invalid3':STARTUP_CASES,**ROLE_GROUPS,**PACKAGE_GROUPS,**CONTROLLED_GROUPS, **MP_GROUPS, 'preflight9': PLAN_CASES, 'imports6': IMPORT_CASES, 'stdio8': tuple(STDIO), 'observe1': (OBSERVATION_CASE,), 'mp-status2': MP_CASES, 'mp-tracker3': TRACKER_SMOKE, 'mp-tracker5': TRACKER_REMAINING, 'mp-ipc2': IPC_CASES, 'audit3': AUDIT_CASES, 'reload1': (RELOAD_CASE,), 'bound-methods18': METHOD_CASES, 'socket-preflight5': NETWORK_CASES, 'speed-isolated2': SPEED_CASES, 'speed-cli5': (CLI_CASE,), 'nested-speed1': (NESTED_CASE,), 'hermetic1':(HERMETIC,), 'storage16':tuple(STORAGE_CASES), 'journal1':(JOURNAL_CASE,), 'inspection2':INSPECTION_CASES[:2], 'sealed-patch1':(INSPECTION_CASES[2],), 'measurement1':(MEASUREMENT_CASE,), 'completion12':tuple(COMPLETION_CASES), 'drain1':(DRAIN_CASE,), 'console1':(CONSOLE_CASE,), 'readiness4':READINESS_CASES, 'uv2':UV_CASES, 'uv-invalid1':(UV_CASES[0],), 'uv-task1':(UV_CASES[1],), 'desktop1':(DESKTOP_CASE,), 'review-wire24': REVIEW_CASES, 'session-timeout': (SESSION_TIMEOUT,), 'sessions69': SESSION_CASES,  'cleanup3': CLEANUP_SMOKE, 'cleanup7': NO_LAUNCH, 'cleanup9': tuple(STARTUP), 'cleanup5': CLIENT_CASES, 'cleanup-review3': SAVED, 'cleanup12': RECORDED, 'cleanup15': FAULTS, 'cleanup27': CLEANUP_CASES}
-        full=len(sys.argv)==3 and sys.argv[2] in ('full','full-collect')
         from postbuild_root import CASES as ARCHIVE_CASES
-        cases = ARCHIVE_CASES if archive else () if full else cleanup[sys.argv[2]] if len(sys.argv) == 3 and sys.argv[2] in cleanup else (BOOTSTRAP if sys.argv[2] == 'bootstrap27' else ALL_CASES if sys.argv[2] == 'ordinary42' else ORDINARY_CASES) if len(sys.argv) == 3 else CASES
+        from controlled_cases import ADMISSION,NOTIFICATION_STARTUP,NOTIFICATION_SIGNALS,ROOT_HTTP
+        from fixed_inline import CONSOLE_CASE,UV_CASES
+        from package_cases import CASES as PACKAGE_CASES
+        checkout=Path.cwd().resolve(strict=True)
+        chosen=[] if archive or binding['collection_only'] else selection(sys.argv[2:],checkout)
+        modules={value.split('::',1)[0] for value in chosen}
+        native_inputs=not chosen or bool(modules & {case.split('::',1)[0] for case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP)})
+        distribution=not chosen or bool(modules & {case.split('::',1)[0] for case in (CONSOLE_CASE,*UV_CASES,*PACKAGE_CASES)})
         phase_root=root/'archive' if archive else root
         if archive:
             phase_root.mkdir(mode=0o755)
-        metadata = {**prepare(binding, Path.cwd().resolve(strict=True), phase_root, extracted=Path(sys.argv[3]).resolve(strict=True) if archive else None, git=full or any(case in GIT_CASES for case in cases) or any(case in ROLE_CASES for case in cases), public=full or any(case in IMPORT_CASES for case in cases), native=full or any(case in (*ADMISSION,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP) for case in cases), distribution=full or CONSOLE_CASE in cases or any(case in UV_CASES for case in cases) or len(sys.argv)>2 and sys.argv[2] in PACKAGE_GROUPS), 'cases': list(cases)}
-        if not full and any(case in UV_CASES for case in cases):
-            from full_launch import prepare_uv
-            prepare_uv(binding,metadata)
-        if full:
+        metadata={**prepare(binding,checkout,phase_root,
+            extracted=Path(sys.argv[3]).resolve(strict=True) if archive else None,
+            git=not archive,public=not archive,native=not archive and native_inputs,
+            distribution=not archive and distribution),
+            'cases':list(ARCHIVE_CASES) if archive else [],'selection':chosen}
+        if not archive:
             from full_launch import prepare as prepare_full
             metadata=prepare_full(binding,metadata)
         pid = os.fork()
@@ -406,7 +405,7 @@ def main():
                 (raw_directory / 'worker-failure.txt').write_text(traceback.format_exc())
                 os._exit(125)
             os._exit(0)
-        raw, deadline = None, time.monotonic() + (110 if archive else 1220 if full else 190 if cases == CLEANUP_CASES else 80 if cases == CLEANUP_SMOKE else 50 if len(cases) in (3, 42) else 80 if len(cases) == 2 else 190)
+        raw, deadline = None, time.monotonic() + (110 if archive else 1220 if unexcluded(metadata,binding) else 190)
         try:
             while raw is None:
                 actual, status = os.waitpid(pid, os.WNOHANG)

@@ -13,7 +13,7 @@ ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is
 
 @pytest.fixture
 def host(tmp_path,monkeypatch):
-    case=roles.GROUPS['roles2'][0]
+    case=next(case for case,row in roles.CASES.items() if row==('ownership','work','valid'))
     parent=tmp_path/'case'
     parent.mkdir()
     root=object()
@@ -71,7 +71,7 @@ def test_each_concurrent_http_constructor_consumes_one_exact_authored_slot(host)
 
 def test_setup_slot_one_may_construct_first_but_neither_slot_may_repeat(host):
     host,actor,parent=host
-    host.case=roles.GROUPS['setup2'][0]
+    host.case=next(case for case,row in roles.CASES.items() if row==('setup','work','valid-valid'))
     host.fixture_roots={('completion-role',host.case):(str(parent),)}
     for slot in (1,0):
         answer=server.proposal(host,actor,raw(host,parent,slot))

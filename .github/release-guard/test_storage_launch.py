@@ -7,7 +7,7 @@ import pytest
 
 from content_manifest import Refused
 import storage_launch as storage
-from fixed_inline import SEQUENCES, GROUPS
+from fixed_inline import SEQUENCES
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 BODY='import pathlib,sys; sys.stdout.buffer.write(pathlib.Path(sys.argv[1]).read_bytes())'
@@ -36,7 +36,6 @@ def test_every_original_parameter_keeps_lexical_operand_and_input_bytes(tmp_path
     assert value.argv==tuple(argv) and value.cwd==cwd
     assert target.read_bytes()==storage.CASES[case][2].encode()
     assert len(SEQUENCES[case])==(2 if case==storage.DIRECTORY else 1)
-    assert tuple(storage.CASES) in GROUPS
 
 
 @pytest.mark.parametrize('mutation',['outside','alias','hardlink','contents','cwd','path','generation','owner'])

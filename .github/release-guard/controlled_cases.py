@@ -189,31 +189,3 @@ def backend(case):
 def backend_path(case, root):
     _, filename = backend(case)
     return (root.parent if filename == 'controlled.py' else root) / filename
-
-
-GROUPS = {
-    'controlled-private8': tuple(case for case in POPULATED if case not in (*ADMISSION,*WARNING_REFUSALS,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS,*ROOT_HTTP)),
-    'controlled-warning4': tuple(WARNING_REFUSALS),
-    'controlled-notification-startup8': tuple(NOTIFICATION_STARTUP),
-    'controlled-notification-signals16': tuple(case for case in NOTIFICATION_SIGNALS if case not in ROOT_HTTP),
-    'controlled-root-http7': tuple(ROOT_HTTP),
-    'controlled-admission6': tuple(ADMISSION),
-    'controlled-probes4': tuple(case for case in FRESH if '::test_programmatic_private_preflight' in case or '::test_bridge_failure_preserved_through_owned_close[' in case),
-    'controlled-large8': tuple(case for case in FRESH if 'large' in case),
-    'controlled-initialize1': tuple(case for case in FRESH if '::test_initialization_probe_real_controlled_path_no_prompt' in case),
-    'controlled-startup1': (STARTUP_FAILURE,),
-    'controlled-cancel1': tuple(case for case in CASES if 'test_controlled_acp_cancel.py::' in case),
-    'controlled-ack20': tuple(case for case in CASES if 'test_experimental_ack_durability.py::' in case),
-    'controlled-bridge1': tuple(case for case in CASES if 'test_experimental_bridge_shutdown.py::' in case),
-    'controlled-drain3': tuple(case for case in CASES if 'test_experimental_drain_retirement.py::' in case),
-    'controlled-capacity10': tuple(case for case in CASES if '::test_actual_capacity_and_parking[' in case),
-    'controlled-batches4': tuple(case for case in CASES if '::test_actual_simultaneous_completion_batches[' in case),
-    **{'controlled-orders-'+scripts: tuple(case for case in CASES
-        if '::test_script_order_boundaries[' in case and case.endswith('-'+scripts+']'))
-        for scripts in ('PP','RP','RC','RR')},
-    'controlled-stops12': tuple(case for case in CASES if 'test_experimental_finite_stops.py::' in case),
-    'controlled-halt15': tuple(case for case in CASES if 'test_experimental_first_halt.py::' in case),
-    'controlled-cancellation4': tuple(case for case in CASES if '::test_cancel_at_actual_boundary[' in case),
-    'controlled-registration4': tuple(case for case in CASES if '::test_actual_registration[' in case),
-    'controlled-witness1': tuple(case for case in CASES if '::test_single_c1_fixed_timing_protocol_witness' in case),
-}

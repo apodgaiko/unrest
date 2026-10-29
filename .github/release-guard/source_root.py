@@ -1,7 +1,6 @@
 """Pinned original pytest cases and their privileged source callers."""
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 
 import pytest
@@ -37,6 +36,8 @@ class OriginalCases:
             self.policy.client.request('fixture-root',{'path':str(item.funcargs['tmp_path'])})
 
     def enter(self,case):
+        from cleanup_launch import ALL_CASES as CLEANUP_CASES
+        self.policy.client.seconds=8 if case in CLEANUP_CASES else 4
         self.policy.case=case
         self.policy.client.request('case-start',{'case':case})
 
@@ -44,6 +45,7 @@ class OriginalCases:
         payload={'case':case,'outcome':outcome,'phases':phases} if self.normal_outcomes else {'case':case}
         self.policy.client.request('case-finish',payload)
         self.policy.case=None
+        self.policy.client.seconds=4
 
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_protocol(self, item, nextitem):
@@ -100,37 +102,8 @@ def local_cases(policy,cases,*,normal_outcomes=False,on_last=None):
 
 def main():
     from source_entry import ACTIVE
-    policy = ACTIVE
-    if policy is None or policy.profile['role'] != 'root':
-        raise Refused('root native activation absent')
-    policy.calls.install()
-    from prepared_distribution import Provider
-    from package_cases import CASES as PACKAGE_CASES
-    if any(case in PACKAGE_CASES for case in policy.profile['cases']):
-        pytest_plugin=Provider(policy)
-    else:
-        pytest_plugin=None
-    plugin = OriginalCases(policy)
-    from postbuild_root import CASES as ARCHIVE_CASES, run as archive_run
-    if tuple(policy.profile['cases'])==ARCHIVE_CASES:
-        return archive_run(policy,plugin)
-    from review_wire import CASES as REVIEW_CASES,NODES as REVIEW_NODES
-    selected=REVIEW_NODES if tuple(policy.profile['cases'])==REVIEW_CASES else policy.profile['cases']
-    from package_security import CASES as SECURITY_CASES,REFERENCES,REFERENCE_CASES
-    if tuple(policy.profile['cases'])==(*REFERENCE_CASES,*SECURITY_CASES):
-        selected=(*REFERENCES,*SECURITY_CASES)
-    if pytest_plugin is not None:
-        class PreparedPlugin:
-            def pytest_configure(self,config):
-                config.pluginmanager.register(pytest_plugin,'release-prepared-distribution')
-        prepared_plugin=[PreparedPlugin()]
-    else:
-        prepared_plugin=[]
-    code = pytest.main(['-q', '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
-                       '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), '-o',
-                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *selected], plugins=[plugin,*prepared_plugin])
-    if code != 0 or plugin.completed != policy.profile['cases'] or policy.poison:
-        raise Refused('root original source cases failed')
-    from source_profile import case_seal
-    policy.client.request('root-finish', case_seal(plugin.completed))
-    return 0
+    from postbuild_root import CASES,run
+    if ACTIVE is None or ACTIVE.profile['role']!='root' or tuple(ACTIVE.profile['cases'])!=CASES:
+        raise Refused('archive exact native activation absent')
+    ACTIVE.calls.install()
+    return run(ACTIVE,OriginalCases(ACTIVE))
