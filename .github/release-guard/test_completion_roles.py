@@ -110,3 +110,35 @@ def test_added_http_families_preserve_original_nodes_and_server_topology():
                 else:
                     assert environment['UNREST_PROJECT_ID']==family
         assert case in roles.HTTP
+
+
+@pytest.mark.parametrize('mutation',(None,'project','workspace','attempt','state'))
+def test_substantive_defect_keeps_two_distinct_pinned_roles_and_owned_attempts(tmp_path,monkeypatch,mutation):
+    import measurement_runtime
+    from completion_git import fixture
+    case=roles.DEFECT
+    project=tmp_path/'.unrest/projects/p'
+    project.mkdir(parents=True)
+    document={'id':'foreign' if mutation=='project' else 'p',
+        'workspace_dir':'/foreign' if mutation=='workspace' else str(tmp_path/'workspace')}
+    state={'tasks':{role:{'status':'done' if mutation=='state' else 'running',
+        'last_attempt':'foreign' if mutation=='attempt' else '2026-10-30T00-00-00Z-'+str(index).zfill(4)}
+        for index,role in enumerate(('work','validate'))}}
+    monkeypatch.setattr(measurement_runtime,'record',lambda path:document if path.name=='project.json' else state)
+    assert len(fixture(case))==3 and fixture(case)[1]==('git','add','product.txt')
+    assert roles.schedule(case)==(('inline','',1),('inline','',0))
+    bodies=[roles.program(ROOT,tmp_path,case,index) for index in (0,1)]
+    assert bodies[0]==bodies[1] and 'independent validator found the defect' in bodies[1]
+    ast.parse(bodies[0])
+    for index,role in enumerate(('work','validate')):
+        if mutation is not None:
+            with pytest.raises(Refused):
+                roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'})
+        else:
+            environment=roles.environment(ROOT,tmp_path,case,index,{'HOME':'/owned/home'})
+            assert environment['UNREST_NODE_ID']==environment['UNREST_NODE_TYPE']==role
+            assert environment['UNREST_PROJECT_ID']=='p'
+            assert environment['UNREST_WORKSPACE']==str(tmp_path/'workspace')
+            assert environment['UNREST_HANDOFF_PATH'].endswith('__'+role+'.json')
+            assert roles.mode(case,index)==('worker' if role=='work' else 'validator')
+            assert not any(key.endswith('_ACP_COMMAND') for key in environment)

@@ -169,7 +169,8 @@ class Policy:
             if pending is None:
                 policy.refuse('source constructor without admitted audit')
             policy.local.launch = None
-            saved = {'token': pending['token'], 'process': process, 'case': policy.case}
+            saved = {'token': pending['token'], 'process': process, 'case': policy.case,
+                     'wait_at_case_close':pending.get('wait_at_case_close') is True}
             policy.children[process.pid] = saved
         def signal(pid, sig, *, group):
             if type(sig) not in (int, signals.Signals):

@@ -54,7 +54,7 @@ def before(host,slot):
     if any(not host.executed(row) for row in existing.values()):
         return None
     prior=(tuple(existing) if family=='ownership' and slot>=2 or family=='crash' and slot==1 else ())
-    if family=='restart' and slot==2 or family=='targetless' and slot==1:
+    if family=='restart' and slot==2 or family in ('targetless','defect') and slot==1:
         prior=(1,) if family=='restart' else (0,)
     if any(not complete(host,existing[index]) for index in prior):
         raise Refused('completion next phase before actual server waits')
@@ -93,7 +93,7 @@ def proposal(host,actor,raw):
         port=port_argument(raw['argv'][-1])
         vector=(native,'-c',body,'--mode',selected_mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
     else:
-        vector=(native,'-c',body,*((str(slot),) if family=='setup' else ()),'--mode',selected_mode)
+        vector=(native,'-c',body,*((str(slot),) if family=='setup' else ()),*(('--mode',selected_mode) if kind=='stdio' else ()))
     value=build_expected(case,native,pin,vector,
         tuple(sorted(env.items())),str(parent/'workspace'),'python-command')
     translated=[native,'-I','-S',*vector[1:]]

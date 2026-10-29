@@ -31,6 +31,16 @@ def record(path):
     return json.loads(body,object_pairs_hook=unique)
 
 
+
+def running(project,node):
+    runtime=project/'.unrest-runtime/missions/mission-001'
+    state=record(runtime/'task-state.json')['tasks'].get(node,{})
+    attempt=state.get('last_attempt')
+    if state.get('status')!='running' or type(attempt) is not str or not re.fullmatch(r'20\d\d-\d\d-\d\dT\d\d-\d\d-\d\dZ(?:-\d{4}){0,2}',attempt):
+        raise Refused('actual running node attempt')
+    return runtime,attempt
+
+
 def nested(host,actor,raw):
     parent=owner(host,actor)
     checkout=Path(host.meta['checkout'])
@@ -57,11 +67,7 @@ def nested(host,actor,raw):
             raise Refused('measurement ACP original server pair')
         node=servers[-1]['measurement_node']
     role='validate' if node.endswith('validate') else 'work'
-    runtime=project/'.unrest-runtime/missions/mission-001'
-    state=record(runtime/'task-state.json')['tasks'].get(node,{})
-    attempt=state.get('last_attempt')
-    if state.get('status')!='running' or type(attempt) is not str or not re.fullmatch(r'20\d\d-\d\d-\d\dT\d\d-\d\d-\d\dZ(?:-\d{4}){0,2}',attempt):
-        raise Refused('measurement actual running node attempt')
+    runtime,attempt=running(project,node)
     environment={'LANG':'C.UTF-8','PATH':os.defpath,'UNREST_CAPABILITY_PROFILE':'safe','UNREST_CAPABILITY_POLICY_VERSION':'1',
         'UNREST_HOME':str(home),'UNREST_PROJECT_ID':project.name,'UNREST_MISSION_ID':'mission-001',
         'UNREST_NODE_ID':node,'UNREST_NODE_TYPE':role,'UNREST_HANDOFF_PATH':str(runtime/'attempts'/(attempt+'__'+node+'.json'))}

@@ -39,9 +39,10 @@ TARGETLESS={SERVER_TEST+f'::test_real_targetless_work_completion[{done}-{attenti
     for done,attention in ((True,False),(False,False),(True,True),(False,True))}
 BINDING={SERVER_TEST+f'::test_real_completion_target_binding[{value}]':('binding','validate' if value=='validator' else 'work',value)
     for value in ('missing','extra','attempt','type','validator','scope','evidence')}
-CASES.update({**RESTART,**TARGETLESS,**BINDING})
+DEFECT=SERVER_TEST+'::test_structurally_valid_defect_requires_independent_validator_and_gate'
+CASES.update({**RESTART,**TARGETLESS,**BINDING,DEFECT:('defect','work','')})
 ROOT_QUERIES={**SOURCE,**{case:int(role=='work') for case,(_,role,_) in RESTART.items()},**dict.fromkeys(BINDING,1)}
-HTTP=tuple(case for case,row in CASES.items() if row[0] not in ('setup','source'))
+HTTP=tuple(case for case,row in CASES.items() if row[0] not in ('setup','source','defect'))
 
 PINS={'tests/test_completion_ownership.py': '2b67510bdd8f40d584baab65837174b2f5a3935aff343b7d9eaccedf09b5df8b', 'tests/test_completion_setup.py': 'fe1a1c98792d1b30d81d975cb23ad9122ae74678295ef4ed8c5e532a7aa00b6a', 'tests/test_server.py': 'ece1638c115aa2055320bb0fb0c1b34359a8694ff6851fc289baf393e5523b72'}
 OWNER=20000
@@ -53,6 +54,8 @@ def schedule(case):
     family,role,scenario=CASES[case]
     if family=='source':
         return ()
+    if family=='defect':
+        return (('inline','',1),('inline','',0))
     if family=='restart':
         return (('http','same-process-attempt',2 if role=='work' else 0),('http','',0),('http','',0))
     if family=='targetless':
@@ -95,6 +98,14 @@ def attempt(parent,case,ordinal):
 
 def program(checkout,parent,case,ordinal):
     family,_,scenario=CASES[case]
+    if family=='defect':
+        owner=source_unit(checkout,SERVER_TEST,PINS[SERVER_TEST],(case.split('::')[1],'ProcessDispatcher','dispatch'))
+        call=assignment(owner,'child')
+        if (not isinstance(call,ast.Call) or ast.unparse(call.func)!='subprocess.Popen'
+                or len(call.args)!=1 or not isinstance(call.args[0],ast.List) or len(call.args[0].elts)!=3
+                or not isinstance(call.args[0].elts[2],ast.Constant) or type(call.args[0].elts[2].value) is not str):
+            raise Refused('completion exact independent validator literal')
+        return call.args[0].elts[2].value
     if schedule(case)[ordinal][0]=='http':
         source_unit(checkout,case.split('::')[0],PINS[case.split('::')[0]])
         source_unit(checkout,'tests/test_server.py',PINS['tests/test_server.py'])
@@ -114,6 +125,8 @@ def program(checkout,parent,case,ordinal):
 
 def mode(case,ordinal):
     family,role,_=CASES[case]
+    if family=='defect':
+        return 'worker' if ordinal==0 else 'validator'
     return 'orchestrator' if family=='restart' and ordinal>0 else 'validator' if role=='validate' else 'worker'
 
 
@@ -122,6 +135,20 @@ def environment(checkout,parent,case,ordinal,ambient):
     http=schedule(case)[ordinal][0]=='http'
     result=dict(ambient) if http else {key:value for key,value in ambient.items() if not key.startswith('UNREST_')}
     result.update(UNREST_HOME=str(parent/'.unrest'),UNREST_PROJECTS_DIR=str(parent/'.unrest/projects'))
+    if family=='defect':
+        from measurement_runtime import record,running
+        projects=sorted((parent/'.unrest/projects').iterdir())
+        if len(projects)!=1:
+            raise Refused('completion independent validator project count')
+        document=record(projects[0]/'.unrest-runtime/project.json')
+        if document.get('id')!=projects[0].name or document.get('workspace_dir')!=str(parent/'workspace'):
+            raise Refused('completion independent validator project scope')
+        role='work' if ordinal==0 else 'validate'
+        runtime,spawn=running(projects[0],role)
+        result.update(PYTHONPATH=str(checkout/'src'),UNREST_PROJECT_ID=projects[0].name,UNREST_MISSION_ID='mission-001',
+            UNREST_NODE_ID=role,UNREST_NODE_TYPE=role,UNREST_WORKSPACE=str(parent/'workspace'),
+            UNREST_HANDOFF_PATH=str(runtime/'attempts'/(spawn+'__'+role+'.json')))
+        return result
     if http:
         result['PYTHONPATH']=str(checkout/'src')
         for name in ('WORKER','VALIDATOR','TERMINAL_REVIEWER'):

@@ -43,7 +43,7 @@ class OriginalCases:
     def leave(self,case,outcome,phases):
         from git_fixtures import SERVER_INQUIRY
         if case==SERVER_INQUIRY:
-            owned=[row['process'] for row in self.policy.children.values() if row['case']==case]
+            owned=[row['process'] for row in self.policy.children.values() if row['case']==case and row.get('wait_at_case_close') is True]
             if len(owned)!=1 or owned[0].wait(timeout=5)!=0:
                 raise Refused('source queued fixture actual parent completion')
         payload={'case':case,'outcome':outcome,'phases':phases} if self.normal_outcomes else {'case':case}

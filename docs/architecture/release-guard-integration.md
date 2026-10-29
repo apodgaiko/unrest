@@ -805,3 +805,10 @@ the guard additionally waits on that original parent's retained Popen handle
 for at most five seconds and requires numeric success; a durable PID record or
 process disappearance cannot replace this actual wait. No provider child or
 additional RunControl operation is admitted by this fixture.
+
+The substantive-defect probe also shares role-server custody: three exact Git
+setup commands and two separately identified, pinned literal inline roles. The
+work and independent validator attempts must already be running in the acquired
+project/workspace; their original success, dissent and failed-gate assertions
+remain intact. Queue closeout selects only the observer-tagged RunControl Popen
+handle, excluding the fixture's already-waited Git handles.

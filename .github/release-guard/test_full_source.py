@@ -364,8 +364,9 @@ def test_queued_inquiry_fixture_requires_one_actual_parent_handle_and_success(co
     def wait(*,timeout):
         waits.append(timeout)
         return status
-    policy=SimpleNamespace(children={index:{'case':SERVER_INQUIRY,'process':SimpleNamespace(wait=wait)} for index in range(count)},
+    policy=SimpleNamespace(children={index:{'case':SERVER_INQUIRY,'process':SimpleNamespace(wait=wait),'wait_at_case_close':True} for index in range(count)},
         client=SimpleNamespace(request=lambda kind,payload:requests.append((kind,payload))),case=SERVER_INQUIRY)
+    policy.children['already-waited-git']={'case':SERVER_INQUIRY,'process':SimpleNamespace(wait=lambda **kwargs:pytest.fail('fixture Git handle is not the queued worker'))}
     cases=OriginalCases(SimpleNamespace(profile={'cases':[]}))
     cases.policy=policy
     if count!=1 or status:
