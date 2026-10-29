@@ -119,13 +119,23 @@ int main(int argc, char **argv) {
     ssize_t size=readlink("/proc/self/exe",image,sizeof(image)-1);
     if (size<=0 || size>=(ssize_t)sizeof(image)-1) return 86;
     image[size]='\0';
+    const char *program=NULL, *mode=NULL, *executable=GUARD_NATIVE;
     if (!strcmp(image,GUARD_PYTEST)) {
-        char **normalized = calloc((size_t)argc + 5, sizeof(char *));
+        executable=GUARD_PYTEST; mode="-m"; program="pytest";
+    } else if (!strcmp(image,GUARD_UNREST)) {
+        program=GUARD_UNREST_SCRIPT;
+    } else if (!strcmp(image,GUARD_SERVER)) {
+        program=GUARD_SERVER_SCRIPT;
+    }
+    if (program != NULL) {
+        int extra=mode != NULL ? 4 : 3;
+        char **normalized=calloc((size_t)argc+extra+1,sizeof(char *));
         if (normalized == NULL) return 86;
-        normalized[0]=GUARD_PYTEST; normalized[1]="-I"; normalized[2]="-S";
-        normalized[3]="-m"; normalized[4]="pytest";
-        for (int i=1;i<argc;i++) normalized[i+4]=argv[i];
-        int status=Py_BytesMain(argc+4,normalized);
+        normalized[0]=(char *)executable; normalized[1]="-I"; normalized[2]="-S";
+        if (mode != NULL) normalized[3]=(char *)mode;
+        normalized[extra]=(char *)program;
+        for (int i=1;i<argc;i++) normalized[i+extra]=argv[i];
+        int status=Py_BytesMain(argc+extra,normalized);
         free(normalized);
         return poisoned ? 86 : status;
     }

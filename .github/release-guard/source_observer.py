@@ -33,7 +33,7 @@ from source_profile import METHODS, ROOT_COMMAND
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT
-from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE
+from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE
 from git_sites import CASES as GIT_CASES
 from completion_roles import CASES as ROLE_CASES,HTTP as ROLE_HTTP,actor_slot
 from git_observer import Git
@@ -177,10 +177,8 @@ class Observer:
         if self.full:
             from full_source import child_environment
             return child_environment(self.meta)
-        owned = Path(self.meta['owned'])
-        return {'HOME': str(owned / 'home'), 'TMPDIR': str(owned / 'tmp'),
-                'PATH': ('/native/bin:' if '/native' in self.meta['mounts'] else '')+'/usr/bin:/bin',
-                'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}
+        from console_entries import standalone_environment
+        return standalone_environment(self.meta)
 
     def stdio(self, pid, role, *, input_pipe=False, intent=None):
         from storage_launch import CASES as STORAGE_CASES
@@ -298,7 +296,7 @@ class Observer:
             from speed_inline import CASES as SPEED_CASES,fixture
             if intent['case'] in (*SPEED_CASES,CLI_CASE):
                 fixture(self)
-            self.profile(pid, intent['role'], intent['case'], vector, environment, cwd, intent['token'], intent.get('inherited', ()))
+            self.profile(pid, intent['role'], intent['case'], intent.get('python_vector',vector), environment, cwd, intent['token'], intent.get('inherited', ()))
         return True
 
     def actor_control(self, actor, kind, payload):
@@ -433,7 +431,7 @@ class Observer:
                   and row['case']==actor['case'] and row['role']=='fixed-inline' and row['consumed']]
             return (len(rows)==1 and terminal is not None and actor['body_ready']
                     and terminal[2]==(73 if rows[0]['fixed_operation']=='crash' else 0))
-        if actor['role']=='desktop' or actor.get('case')==DRAIN_CASE:
+        if actor['role']=='desktop' or actor.get('case') in (DRAIN_CASE,CONSOLE_CASE):
             return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='pytest-regression':
             return terminal is not None and terminal[2]==0 and actor['body_ready'] and actor.get('preselected_complete') is True

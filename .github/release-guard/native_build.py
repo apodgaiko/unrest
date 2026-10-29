@@ -66,6 +66,10 @@ def main():
     argv = [str(compiler), '-O2', '-Wall', '-Wextra', '-Werror',
             '-I' + str(runtime / Path(sysconfig.get_path('include')).relative_to(original)), '-L' + str(library.parent),
             '-DGUARD_PYTEST=' + json.dumps(str(runtime / 'bin/pytest')),
+            '-DGUARD_NATIVE=' + json.dumps(str(entry)),
+            *['-D'+macro+'='+json.dumps(str(runtime/'bin'/name)) for macro,name in (('GUARD_UNREST','unrest'),('GUARD_SERVER','unrest-server'))],
+            *['-D'+macro+'='+json.dumps(str(root/'dependencies/.release-distribution/installed/bin'/name))
+              for macro,name in (('GUARD_UNREST_SCRIPT','unrest'),('GUARD_SERVER_SCRIPT','unrest-server'))],
             '-DGUARD_BOOTSTRAP=' + json.dumps(repr(str(bootstrap))),
             '-DGUARD_PROFILES=' + json.dumps(repr(str(profiles))),
             '-DGUARD_CONTROL_SOCKET=' + json.dumps(str(profiles / 'control.sock')),
@@ -75,8 +79,9 @@ def main():
             *shlex.split(sysconfig.get_config_var('SYSLIBS') or ''), '-o', str(entry)]
     subprocess.run(argv, check=True)
     entry.chmod(0o755)
-    shutil.copyfile(entry, runtime / 'bin/pytest')
-    (runtime / 'bin/pytest').chmod(0o755)
+    for name in ('pytest','unrest','unrest-server'):
+        shutil.copyfile(entry,runtime/'bin'/name)
+        (runtime/'bin'/name).chmod(0o755)
     shutil.copyfile(shutil.which('uv'), runtime / 'bin/uv')
     (runtime / 'bin/uv').chmod(0o755)
     record = {'schema': 'unrest.native-control-build.v1', 'entry': pin(entry),

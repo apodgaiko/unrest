@@ -63,7 +63,7 @@ def validate(profile,event,arguments,directory):
 def admitted(intents,role,case,pid,token,vector,environment,cwd,script):
     values=[value for value in intents.values() if value['token']==token
             and value['case']==case and value['role']==role and value['consumed']
-            and value['pid']==pid and value['translated']==vector
+            and value['pid']==pid and value.get('python_vector',value['translated'])==vector
             and value['environment']==environment and value['cwd']==cwd]
     if len(values)!=1:
         raise Refused('execution specification unique admitted intent')
