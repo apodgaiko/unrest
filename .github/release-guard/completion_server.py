@@ -54,6 +54,8 @@ def before(host,slot):
     if any(not host.executed(row) for row in existing.values()):
         return None
     prior=(tuple(existing) if family=='ownership' and slot>=2 or family=='crash' and slot==1 else ())
+    if family=='composed' and slot>0:
+        prior=(slot-1,)
     if family=='restart' and slot==2 or family in ('targetless','defect') and slot==1:
         prior=(1,) if family=='restart' else (0,)
     if any(not complete(host,existing[index]) for index in prior):
@@ -65,6 +67,13 @@ def proposal(host,actor,raw):
     if raw['argv'][:1]==['ps']:
         from http_cases import proposal as inventory
         return inventory(host,actor,raw)
+    from composed_cases import CASES as COMPOSED,nodes
+    if host.case in COMPOSED and raw['argv'][1:3]==['-m','unrest_harness.run_worker']:
+        from composed_runtime import worker
+        return worker(host,actor,raw)
+    if host.case in COMPOSED and actor['role']!='root' and raw['executable']!='/usr/bin/git':
+        from composed_runtime import nested
+        return nested(host,actor,raw)
     if raw['executable']=='/usr/bin/git':
         return git_proposal(host,actor,raw)
     host.root_only(actor)
@@ -85,7 +94,7 @@ def proposal(host,actor,raw):
     checkout=Path(host.meta['checkout'])
     selected_mode=mode(case,slot)
     ambient={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
-    env=environment(checkout,parent,case,slot,ambient)
+    env=environment(checkout,parent,case,slot,ambient,native=native)
     body=program(checkout,parent,case,slot)
     port=None
     if kind=='http':
@@ -99,7 +108,7 @@ def proposal(host,actor,raw):
     translated=[native,'-I','-S',*vector[1:]]
     answer=admit_expected(host,actor,raw,value,'mcp' if kind=='http' else 'fixed-inline',translated,
         fields={'server_slot':slot,'input_pipe':kind=='stdio','server_stdio':kind=='stdio'},
-        maximum=len(schedule(case)),port=port)
+        maximum=len(schedule(case))+(len(nodes(case)) if case in COMPOSED else 0),port=port)
     return answer
 
 

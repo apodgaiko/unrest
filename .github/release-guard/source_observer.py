@@ -108,7 +108,7 @@ class Observer:
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
         from run_worker_launch import ALL_CASES as RUN_WORKERS
-        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS)
+        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES and vector[3]=='-c' or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS)
         self.ledger.register(actor['birth'], token, (), case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
         if new_session:
@@ -160,7 +160,7 @@ class Observer:
         return standalone_environment(self.meta)
 
     def stdio(self, pid, role, *, input_pipe=False, intent=None):
-        if role=='mcp' and self.case in HTTP_CASES:
+        if role=='mcp' and self.case in HTTP_CASES and intent['translated'][3]=='-c':
             from http_cases import stdio
             return stdio(self,pid,intent)
         parent = Path('/proc') / str(process_identity(pid)['ppid']) / 'fd'
@@ -273,6 +273,11 @@ class Observer:
             if self.case in CRASH:
                 owner(self,actor)
                 return
+            from composed_cases import CASES as COMPOSED
+            if self.case in COMPOSED:
+                from composed_runtime import owner
+                owner(self,actor)
+                return
             if self.case in ROLE_CASES:
                 actor_slot(self,actor)
                 return
@@ -335,7 +340,7 @@ class Observer:
             expected={'kind':NEGATIVE.get(actor['case'],'normal'),'count':0 if NEGATIVE.get(actor['case'])=='missing-package' else 15,
                 'failed':15 if NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
             return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
-        if actor['role']=='fixed-inline' and actor['case'] in ROLE_CASES:
+        if actor['role']=='fixed-inline' and value is not None and 'server_slot' in value:
             from completion_server import status
             return value is not None and status(self,actor,value['server_slot'])
         if actor['role']=='pytest-regression':
@@ -486,8 +491,8 @@ class Observer:
                 raise Refused('controlled warning signal replay')
             process = self.ledger.process(child['birth'])
             if payload['signal'] == 0:
-                from run_worker_launch import WORKERS
-                worker=self.case in WORKERS and child['role']=='fixed-inline'
+                intent=bound_intent(self,child)
+                worker=child['role']=='fixed-inline' and intent is not None and intent.get('run_worker') is True
                 journal=self.case==JOURNAL_CASE and child['role']=='fixed-inline'
                 if (payload['group'] or child['role']!='workspace-owned' and not journal and not worker
                         or journal and child.get('liveness_probes',0)!=0):

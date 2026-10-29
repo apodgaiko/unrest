@@ -8,6 +8,7 @@ from custody_git import repository
 from git_commands import Command
 from git_observer import HOME_CONFIG,image,regular
 from launch_policy import admit_expected,build_expected
+from composed_cases import CASES as COMPOSED,queries
 
 FIXTURE=(('git','init','-q'),('git','-c','user.name=Test','-c','user.email=test@example.invalid',
     'commit','--allow-empty','-qm','base'))
@@ -81,8 +82,13 @@ def proposal(host,actor,raw):
             environment=application_environment(base,raw['environment']) if case in SOURCE else base
         command=Command(vector,str(workspace))
     else:
-        server=actor_slot(host,actor)
-        if len(records)>=schedule(case)[server['server_slot']][2]:
+        if case in COMPOSED:
+            from composed_runtime import query_quota
+            quota=query_quota(host,actor)
+        else:
+            server=actor_slot(host,actor)
+            quota=schedule(case)[server['server_slot']][2]
+        if len(records)>=quota:
             raise Refused('completion server-owned Git query quota')
         ready(host,workspace)
         is_fixture=False
@@ -93,7 +99,7 @@ def proposal(host,actor,raw):
         tuple(sorted(environment.items())),str(workspace),'native')
     translated=['/usr/bin/git',*vector[1:]]
     answer=admit_expected(host,actor,raw,expected,'git-command',translated,
-        maximum=len(commands)+ROOT_QUERIES.get(case,0)+sum(row[2] for row in schedule(case)))
+        maximum=len(commands)+ROOT_QUERIES.get(case,0)+(queries(case) if case in COMPOSED else sum(row[2] for row in schedule(case))))
     if answer is None:
         return None
     intent=host.intents[answer['ticket']]

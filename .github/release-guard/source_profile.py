@@ -10,7 +10,6 @@ from pathlib import Path
 import sys
 
 from content_manifest import Refused, capture
-from http_cases import CASES as HTTP_CASES
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
@@ -70,7 +69,7 @@ def validate(profile: dict, event: str, arguments: tuple) -> dict:
         from multiprocess_entry import inherited as validate_inherited
         validate_inherited(profile,actual)
     else:
-        mcp = profile['role']=='mcp' and profile['case'] not in HTTP_CASES
+        mcp = profile['role']=='mcp' and profile['execution']['event']=='cpython.run_module' and profile['execution']['argument']=='unrest_harness'
         if (type(inherited) is not list or (not mcp and inherited)
                 or mcp and (len(inherited) != 1 or type(inherited[0]) is not list
                     or len(inherited[0]) != 3 or any(type(value) is not int or value <= 0 for value in inherited[0]))):

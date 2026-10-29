@@ -812,3 +812,15 @@ work and independent validator attempts must already be running in the acquired
 project/workspace; their original success, dissent and failed-gate assertions
 remain intact. Queue closeout selects only the observer-tagged RunControl Popen
 handle, excluding the fixture's already-waited Git handles.
+
+Composed fixtures use an authored table of HTTP-parent slots, RunControl
+operations, project slots, and explicit node/role sequences. A consumed worker
+intent carries its selected sequence; a `decide_attention` worker has no node
+permission. Targetless dispatch directly owns its node sequence in the HTTP
+orchestrator. The shared ACP/MCP constructor binds the actual parent inventory
+pipe, role environment, attempt and exact script/argv. Node module stdio is
+selected from its observer-issued execution domain; root HTTP logs and new
+sessions remain separate from nested MCP pipes and inherited worker groups.
+Original cleanup polling bounds native inventory counts; inventory never grants
+execution or signal authority. Restart adoption still requires its separate
+proof before those cases can complete.

@@ -7,6 +7,7 @@ from pathlib import Path
 from content_manifest import Refused
 from owned_fixture import acquire
 from launch_policy import source_unit,assignment,render_string
+from composed_cases import CASES as COMPOSED,HTTP as COMPOSED_HTTP,DIRECT,UNDELIVERABLE
 
 OWNERSHIP_TEST='tests/test_completion_ownership.py'
 SETUP_TEST='tests/test_completion_setup.py'
@@ -41,6 +42,7 @@ BINDING={SERVER_TEST+f'::test_real_completion_target_binding[{value}]':('binding
     for value in ('missing','extra','attempt','type','validator','scope','evidence')}
 DEFECT=SERVER_TEST+'::test_structurally_valid_defect_requires_independent_validator_and_gate'
 CASES.update({**RESTART,**TARGETLESS,**BINDING,DEFECT:('defect','work','')})
+CASES.update(dict.fromkeys(COMPOSED,('composed','orchestrator','')))
 ROOT_QUERIES={**SOURCE,**{case:int(role=='work') for case,(_,role,_) in RESTART.items()},**dict.fromkeys(BINDING,1)}
 HTTP=tuple(case for case,row in CASES.items() if row[0] not in ('setup','source','defect'))
 
@@ -52,6 +54,8 @@ def schedule(case):
     if type(case) is not str or case not in CASES:
         raise Refused('completion closed role case')
     family,role,scenario=CASES[case]
+    if family=='composed':
+        return (('http','',0),)*COMPOSED_HTTP[case]
     if family=='source':
         return ()
     if family=='defect':
@@ -125,12 +129,14 @@ def program(checkout,parent,case,ordinal):
 
 def mode(case,ordinal):
     family,role,_=CASES[case]
+    if family=='composed':
+        return 'orchestrator'
     if family=='defect':
         return 'worker' if ordinal==0 else 'validator'
     return 'orchestrator' if family=='restart' and ordinal>0 else 'validator' if role=='validate' else 'worker'
 
 
-def environment(checkout,parent,case,ordinal,ambient):
+def environment(checkout,parent,case,ordinal,ambient,*,native=None):
     family,role,scenario=CASES[case]
     http=schedule(case)[ordinal][0]=='http'
     result=dict(ambient) if http else {key:value for key,value in ambient.items() if not key.startswith('UNREST_')}
@@ -154,6 +160,14 @@ def environment(checkout,parent,case,ordinal,ambient):
         for name in ('WORKER','VALIDATOR','TERMINAL_REVIEWER'):
             result['UNREST_'+name+'_PROVIDER']='claude'
             result['UNREST_'+name+'_ACP_COMMAND']=str(parent/'workspace/.forbidden-child-trap') if family=='restart' and ordinal==0 else '/bin/true'
+    if family=='composed':
+        if native is None:
+            raise Refused('composed original native command binding')
+        command=native+' '+str(parent/'workspace/.hermetic-acp-adapter.py')+' '+str(parent/'workspace/.hermetic-acp-trace.jsonl')
+        for name in (('WORKER',) if case in DIRECT else ('WORKER','VALIDATOR','TERMINAL_REVIEWER')):
+            result['UNREST_'+name+'_ACP_COMMAND']=command
+        if case==UNDELIVERABLE:
+            result['PYTHONPATH']=str(parent/'workspace')
     if mode(case,ordinal)=='orchestrator':
         return result
     project=f'real-restart-{role}-{scenario=="repair"}' if family=='restart' else family

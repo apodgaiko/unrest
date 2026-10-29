@@ -92,15 +92,8 @@ def snapshot_path(directory, case):
 
 def environment(base, root_environment, *, agent, case=CASES[0]):
     recorded, _, role = selection(case)
-    result = {key: root_environment[key] for key in ('HOME', 'TMPDIR', 'PATH')}
-    home = base / 'home'
-    result.update(UNREST_CAPABILITY_PROFILE='safe', UNREST_CAPABILITY_POLICY_VERSION='1',
-        UNREST_HOME=str(home), UNREST_PROJECT_ID='project', UNREST_MISSION_ID='mission-001')
-    if role == 'terminal_reviewer':
-        result['UNREST_TERMINAL_REVIEW_PATH'] = str(home / 'projects/project/.unrest-runtime/missions/mission-001/terminal-reviews/attempt-1.json')
-    else:
-        result.update(UNREST_NODE_ID='w1', UNREST_NODE_TYPE=role,
-            UNREST_HANDOFF_PATH=str(home / 'projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json'))
+    from node_environment import environment as role_environment
+    result=role_environment(root_environment,base/'home','project','w1',role,'attempt-1')
     if agent:
         result.update(INITIAL_AGENT_MODE='agent', CODEX_CONFIG=json.dumps({
             'sandbox_mode': 'read-only' if role == 'terminal_reviewer' else 'workspace-write', 'approval_policy': 'on-request',

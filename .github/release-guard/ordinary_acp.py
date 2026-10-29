@@ -42,21 +42,13 @@ EXECUTION_CASES=(*CASES,*STARTUP_CASES,*TEMPLATE_CASES,*BATCH_CASES)
 
 
 def environment(case, base, root_environment, ordinal=0):
+    from node_environment import environment as role_environment
     if case not in EXECUTION_CASES:
         raise Refused('ordinary finite case')
     if case in STARTUP_CASES:
         role='work' if case==STARTUP_CASES[0] else 'validate' if case==STARTUP_CASES[1] else 'terminal_reviewer'
-        home=base/'.unrest'
-        result={key:root_environment[key] for key in ('HOME','TMPDIR','PATH')}
-        result.update(UNREST_CAPABILITY_PROFILE='safe',UNREST_CAPABILITY_POLICY_VERSION='1',
-                      UNREST_HOME=str(home),UNREST_PROJECT_ID='p1',UNREST_MISSION_ID='mission-001')
-        runtime=home/'projects/p1/.unrest-runtime/missions/mission-001'
-        if role=='terminal_reviewer':
-            result['UNREST_TERMINAL_REVIEW_PATH']=str(runtime/'terminal-reviews/2026-08-30T05-00-00Z.json')
-        else:
-            result.update(UNREST_NODE_ID='startup-'+role,UNREST_NODE_TYPE=role,
-                UNREST_HANDOFF_PATH=str(runtime/'attempts'/('2026-08-30T04-00-00Z-'+role+'__startup-'+role+'.json')))
-        return result
+        spawn='2026-08-30T05-00-00Z' if role=='terminal_reviewer' else '2026-08-30T04-00-00Z-'+role
+        return role_environment(root_environment,base/'.unrest','p1','startup-'+role,role,spawn)
     if case in (*TEMPLATE_CASES,*BATCH_CASES):
         if ordinal not in range(2 if case in BATCH_CASES else 1):
             raise Refused('ordinary mock ordinal')
@@ -69,11 +61,7 @@ def environment(case, base, root_environment, ordinal=0):
             credential=case in TEMPLATE_CASES[4:]
             node=provider+'-'+role+('-format-credential' if credential else '')
             spawn=f"2026-07-29T{'08' if credential else '05'}-00-00Z-{provider}-{role}"
-        result={key:root_environment[key] for key in ('HOME','TMPDIR','PATH')}
-        result.update(UNREST_CAPABILITY_PROFILE='safe',UNREST_CAPABILITY_POLICY_VERSION='1',
-            UNREST_HOME=str(base/'.unrest'),UNREST_PROJECT_ID='p1',UNREST_MISSION_ID='mission-001',
-            UNREST_NODE_ID=node,UNREST_NODE_TYPE=role,
-            UNREST_HANDOFF_PATH=str(base/'.unrest/projects/p1/.unrest-runtime/missions/mission-001/attempts'/(spawn+'__'+node+'.json')))
+        result=role_environment(root_environment,base/'.unrest','p1',node,role,spawn)
         if provider=='codex':
             result.update(INITIAL_AGENT_MODE='agent',CODEX_CONFIG='{"approval_policy":"on-request","model_reasoning_effort":"medium","sandbox_mode":"workspace-write"}')
         return result
@@ -82,12 +70,7 @@ def environment(case, base, root_environment, ordinal=0):
         'plan-' + role, '2026-08-30T00-00-00Z-' + role)
     if case==MOCK_CASE:
         node,spawn='w1','2026-05-17T00-00-00Z'
-    home = base / '.unrest'
-    result = {key: root_environment[key] for key in ('HOME', 'TMPDIR', 'PATH')}
-    result.update(UNREST_CAPABILITY_PROFILE='safe', UNREST_CAPABILITY_POLICY_VERSION='1',
-        UNREST_HOME=str(home), UNREST_PROJECT_ID='p1', UNREST_MISSION_ID='mission-001',
-        UNREST_NODE_ID=node, UNREST_NODE_TYPE='validate' if role == 'claude' else role,
-        UNREST_HANDOFF_PATH=str(home / 'projects/p1/.unrest-runtime/missions/mission-001/attempts' / (spawn + '__' + node + '.json')))
+    result=role_environment(root_environment,base/'.unrest','p1',node,'validate' if role=='claude' else role,spawn)
     if role == 'claude':
         result['ANTHROPIC_API_KEY'] = 'batch-crash-known-value'  # Original public redaction canary.
     return result
