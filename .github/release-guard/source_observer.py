@@ -126,7 +126,7 @@ class Observer:
                  'profile': source, 'pins': pins, 'sequence': 0, 'returned': role == 'root', 'body_ready': False, 'signals': set()}
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
-                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop'}[role]
+                         'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
         new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
@@ -158,7 +158,7 @@ class Observer:
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
                     if self.full and parent is not None and parent.pid==self.launcher and not self.full_started:
                         continue
-                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop') or len(candidates) != 1:
+                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
@@ -201,7 +201,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps') and not input_pipe):
+            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps','archive-checker','archive-leaf','archive-installed') and not input_pipe):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -260,6 +260,14 @@ class Observer:
         if native_digest(Path(path).resolve(strict=True)) != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
             return False
         intent = matches[0]
+        if intent.get('package_inputs') is not None:
+            from package_proposals import retained_archive
+            from package_cases import POSITIVE
+            retained_archive(intent['package_inputs'],0 if intent['case']==POSITIVE else 20000)
+        if intent['role']=='archive-leaf':
+            from archive_snapshot import retained
+            state=self.fixture_roots[intent['case']]['document']
+            retained(Path(state['root']),state['snapshot'])
         from desktop_launch import CASE as DESKTOP_CASE,retained as desktop_retained
         if intent['case']==DESKTOP_CASE:
             desktop_retained(self)
@@ -297,6 +305,10 @@ class Observer:
         if actor['role'] == 'root':
             self.root_only(actor)
             return
+        if actor['role']=='archive-checker' and actor['case']==self.case and actor['body_ready'] and not self.finished:
+            from package_cases import POSITIVE
+            if self.case==POSITIVE:
+                return
         if actor['role']=='desktop' and actor['case']==self.case and not self.finished:
             from desktop_launch import CASE
             if self.case==CASE:
@@ -389,6 +401,12 @@ class Observer:
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
+        if actor['role'] in ('archive-checker','archive-leaf','archive-installed'):
+            from package_cases import MUTATIONS,NEGATIVE
+            code=1 if actor['role']=='archive-checker' and actor['case'] in MUTATIONS or actor['role']=='archive-leaf' and actor['case'] in NEGATIVE else 0
+            expected={'kind':NEGATIVE.get(actor['case'],'normal'),'count':0 if NEGATIVE.get(actor['case'])=='missing-package' else 15,
+                'failed':15 if NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
+            return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
         if actor['role']=='desktop':
             return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='pytest-regression':
@@ -528,7 +546,8 @@ class Observer:
             else:
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
-                count = review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                from package_cases import CASES as PACKAGE_CASES,count as package_count
+                count = package_count(self.case) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
                 if outcome=='failed':
                     count,spec=len(children),None
                 if skipped:
@@ -576,6 +595,25 @@ class Observer:
         elif kind == 'multiprocess-proposal':
             from multiprocess_entry import proposal
             return proposal(self,actor,payload)
+        elif kind=='archive-snapshot':
+            from package_proposals import snapshot
+            return snapshot(self,actor,payload)
+        elif kind=='archive-result':
+            from package_cases import NEGATIVE,POSITIVE
+            if (actor['role']!='archive-leaf' or actor['case']!=self.case or self.case not in (*NEGATIVE,POSITIVE)
+                    or not actor['body_ready'] or 'archive_result' in actor):
+                raise Refused('archive result scope')
+            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
+                  and row['consumed'] and row['role']==actor['role'] and row['case']==self.case]
+            if len(rows)!=1:
+                raise Refused('archive result original consumed intent')
+            expected={'kind':NEGATIVE.get(self.case,'normal'),'count':0 if NEGATIVE.get(self.case)=='missing-package' else 15,
+                'failed':15 if NEGATIVE.get(self.case)=='missing-corpus' else 0,'exit':1 if self.case in NEGATIVE else 0}
+            shape(payload,('kind','count','failed','exit'))
+            if (type(payload['kind']) is not str or any(type(payload[key]) is not int for key in ('count','failed','exit'))
+                    or payload!=expected):
+                raise Refused('archive actual original result')
+            actor['archive_result']=dict(payload)
         elif kind == 'preselected-finish':
             from nested_pytest import CASE,NODES
             from source_profile import case_seal

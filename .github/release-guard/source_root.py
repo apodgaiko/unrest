@@ -88,21 +88,48 @@ class OriginalCases:
                 sys.stderr.write(label + '\n' + content + '\n')
 
 
+def local_cases(policy,cases,*,normal_outcomes=False,on_last=None):
+    """A local outcome cursor never changes its enclosing actor/case authority."""
+    class Leaf(OriginalCases):
+        def enter(self,case):
+            pass
+        def leave(self,case,outcome,phases):
+            if on_last is not None and case==self.cases[-1]:
+                on_last()
+    result=Leaf(policy)
+    result.cases=tuple(cases)
+    result.normal_outcomes=normal_outcomes
+    return result
+
+
 def main():
     from source_entry import ACTIVE
     policy = ACTIVE
     if policy is None or policy.profile['role'] != 'root':
         raise Refused('root native activation absent')
     policy.calls.install()
+    from prepared_distribution import Provider
+    from package_cases import CASES as PACKAGE_CASES
+    if any(case in PACKAGE_CASES for case in policy.profile['cases']):
+        pytest_plugin=Provider(policy)
+    else:
+        pytest_plugin=None
     plugin = OriginalCases(policy)
     from postbuild_root import CASES as ARCHIVE_CASES, run as archive_run
     if tuple(policy.profile['cases'])==ARCHIVE_CASES:
         return archive_run(policy,plugin)
     from review_wire import CASES as REVIEW_CASES,NODES as REVIEW_NODES
     selected=REVIEW_NODES if tuple(policy.profile['cases'])==REVIEW_CASES else policy.profile['cases']
+    if pytest_plugin is not None:
+        class PreparedPlugin:
+            def pytest_configure(self,config):
+                config.pluginmanager.register(pytest_plugin,'release-prepared-distribution')
+        prepared_plugin=[PreparedPlugin()]
+    else:
+        prepared_plugin=[]
     code = pytest.main(['-q', '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
                        '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), '-o',
-                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *(['tests/test_launch_preflight.py'] if tuple(policy.profile['cases']) == PREFLIGHT_ALL else selected)], plugins=[plugin])
+                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *(['tests/test_launch_preflight.py'] if tuple(policy.profile['cases']) == PREFLIGHT_ALL else selected)], plugins=[plugin,*prepared_plugin])
     if code != 0 or plugin.completed != policy.profile['cases'] or policy.poison:
         raise Refused('root original source cases failed')
     from source_profile import case_seal

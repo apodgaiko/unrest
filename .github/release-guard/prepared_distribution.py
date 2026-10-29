@@ -126,3 +126,13 @@ class Provider:
         if self.value is None:
             self.value=inputs(self.policy)
         return dict(self.value)
+
+
+    def snapshot(self,path):
+        reply=self.policy.client.request('archive-snapshot',{'path':str(path)})
+        if type(reply) is not dict or set(reply)!={'ok','path'} or reply['ok'] is not True or type(reply['path']) is not str:
+            raise Refused('snapshot acquisition acknowledgement')
+        root=Path(reply['path'])
+        if root.parent!=self.policy.directory or root.resolve(strict=True)!=root:
+            raise Refused('snapshot observer-selected root')
+        return root

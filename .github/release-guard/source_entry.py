@@ -47,7 +47,7 @@ class Policy:
         return getattr(self.client.local,'active',False) is True
 
     def popen(self, args):
-        if self.profile['role'] not in ('root','mcp','session-adapter','fixed-inline','desktop') or self.case is None:
+        if self.profile['role'] not in ('root','mcp','session-adapter','fixed-inline','desktop','archive-checker') or self.case is None:
             raise Refused('source undeclared process role')
         if type(args) is not tuple or len(args)!=4:
             raise Refused('source process audit schema')
@@ -285,7 +285,7 @@ class Policy:
         def killpg(pid, sig):
             return signal(pid, sig, group=True)
 
-        if self.profile['role'] in ('root', 'mcp', 'session-adapter', 'fixed-inline','desktop'):
+        if self.profile['role'] in ('root', 'mcp', 'session-adapter', 'fixed-inline','desktop','archive-checker'):
             subprocess.run=run
             setattr(subprocess.Popen, '__init__', construct)
             setattr(subprocess.Popen, 'communicate', communicate)
@@ -301,8 +301,13 @@ def activate(directory, profile, event, arguments):
     actual, pins = validate(profile, event, arguments)
     client = Client(directory, profile, METHODS)
     policy = Policy(directory, profile, actual, client)
-    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop'):
-        sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
+    if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed'):
+        if profile['role']=='archive-leaf':
+            sys.path[:0]=[str(Path(profile['cwd'])/'src'),profile['dependencies'],profile['cwd']]
+        elif profile['role'] in ('archive-checker','archive-installed'):
+            sys.path.insert(0,profile['dependencies'])
+        else:
+            sys.path[:0] = [profile['dependencies'], str(Path(profile['checkout']) / 'src'), profile['checkout']]
         # Only guard/locked dependencies initialize here; candidate test modules
         # are imported by the real pytest body after the native READY boundary.
         if profile['role'] == 'root':
@@ -313,6 +318,12 @@ def activate(directory, profile, event, arguments):
         policy.calls=Context(policy)
         if profile['role']!='root':
             policy.case=profile['case']
+    if profile['role'] in ('archive-checker','archive-leaf'):
+        os.environ.pop('PYTEST_PLUGINS',None)
+        os.environ.pop('PYTEST_ADDOPTS',None)
+    if profile['role']=='archive-leaf':
+        temp=str(Path(profile['owned'])/('archive-'+profile['token']))
+        os.environ.update(PYTEST_DISABLE_PLUGIN_AUTOLOAD='1',PYTEST_ADDOPTS='--basetemp='+temp+' -o cache_dir='+temp+'-cache')
     if profile['role']=='pytest-regression':
         temp=str(Path(profile['owned'])/('nested-'+profile['token']))
         os.environ.update(PYTEST_DISABLE_PLUGIN_AUTOLOAD='1',PYTEST_PLUGINS='nested_pytest,pytest_asyncio.plugin,pytest_mock',PYTEST_ADDOPTS='--basetemp='+temp+' -o cache_dir='+temp+'-cache')

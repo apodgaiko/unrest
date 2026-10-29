@@ -384,3 +384,30 @@ and complete content/directory inventory. This establishes immutability to the
 capability-free source UID 20000 without granting another mount capability.
 Provenance must report the actual snapshot cwd and module paths; it may never be
 rewritten to pretend execution used the caller's mutable extraction directory.
+
+The distribution transport selects only the original executable-oracle cases and
+installed package contract consumers. Checker, extracted-probe and installed
+interpreter roles have separate case eligibility and child quotas. The fourteen
+inert archive mutations bind canonical original filenames, file identities and
+bytes at proposal and exec; those observations describe the admitted generation,
+not immutable custody during parsing. They have no snapshot or descendant grant.
+The positive checker alone can request its exact extracted snapshot and child.
+
+The unchanged extracted probe reports its actual protected cwd, package, test and
+sys.path provenance. Normal completion requires all fifteen setup/call/teardown
+triples to pass and actual exit zero. The omitted corpus requires all fifteen
+actual call failures and exit one. A moved package requires the actual
+`ModuleNotFoundError` for `unrest_harness` before pytest starts and exit one.
+Neither negative emits a successful fifteen-case seal. A caught guard refusal,
+missing phase, unexpected import failure or wrong exit cannot substitute for an
+oracle result. Authenticated result messages additionally bind the unique
+consumed birth/token intent; terminal status and original-parent waits remain
+separate completion conditions.
+
+Installed provenance uses literal code with path arguments, executing from the
+owned unrelated cwd. Its bootstrap excludes the source checkout before importing
+product modules, and its installed site is the protected prepared tree. The
+original lifecycle, restart, corruption and CLI behavior assertions still execute.
+Local pytest cursors share their phase-accounting implementation while retaining
+the enclosing actor/case authority; only the full release root can seal release
+completion.

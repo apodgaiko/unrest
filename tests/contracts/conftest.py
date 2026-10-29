@@ -44,6 +44,14 @@ _CREDENTIAL_NAME = re.compile(
 )
 
 
+PROVENANCE_BODY = """
+import sys
+sys.path[:0] = sys.argv[1:3]
+import json, pathlib, unrest_harness
+print(json.dumps({'module': unrest_harness.__file__, 'cwd': str(pathlib.Path.cwd())}, sort_keys=True))
+"""
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -149,25 +157,13 @@ def built_distribution(
         dependency_site = dependency_sites[0]
     else:
         environment, dependency_site = prepared["installed_site"], prepared["dependency_site"]
-    bootstrap = (
-        "import sys; "
-        f"sys.path[:0] = [{str(environment)!r}, {str(dependency_site)!r}]; "
-    )
     provenance = _run_checked(
-        [
-            sys.executable,
-            "-S",
-            "-c",
-            (
-                bootstrap
-                + "import json, pathlib, unrest_harness; "
-                "print(json.dumps({'module': unrest_harness.__file__, "
-                "'cwd': str(pathlib.Path.cwd())}, sort_keys=True))"
-            ),
-        ],
+        [sys.executable, "-S", "-c", PROVENANCE_BODY, str(environment), str(dependency_site)],
         cwd=root,
         env=child_env,
     )
+    if Path(json.loads(provenance)["cwd"]).resolve() != root.resolve():
+        raise AssertionError("installed provenance did not execute in the unrelated owned cwd")
     module_path = Path(json.loads(provenance)["module"]).resolve()
     if repository_root.resolve() in module_path.parents:
         raise AssertionError(f"installed import resolved to source checkout: {module_path}")

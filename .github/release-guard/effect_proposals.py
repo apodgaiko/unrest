@@ -35,6 +35,10 @@ def proposal(host, actor, raw):
         raise Refused('finite process proposal operands')
     from git_sites import CASES as GIT_CASES
     from http_cases import CASES as HTTP_CASES,proposal as http_proposal
+    from package_cases import CASES as PACKAGE_CASES
+    if case in PACKAGE_CASES:
+        from package_proposals import proposal as package_proposal
+        return package_proposal(host,actor,raw)
     from desktop_launch import CASE as DESKTOP_CASE,proposal as desktop_proposal
     if case==DESKTOP_CASE:
         return desktop_proposal(host,actor,raw)

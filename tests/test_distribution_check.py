@@ -68,6 +68,20 @@ def test_v045_public_assets_and_api_exports_are_in_source_package() -> None:
     }
 
 
+@pytest.fixture(autouse=True)
+def protected_extracted_inputs(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch):
+    """Certification explicitly selects observer-owned snapshots, keeping real execution."""
+    provider = request.config.pluginmanager.get_plugin("release-prepared-distribution")
+    if provider is None:
+        return
+    original = checker._run_extracted_restart_oracle
+
+    def run(extracted_root, **kwargs):
+        return original(provider.snapshot(extracted_root), **kwargs)
+
+    monkeypatch.setattr(checker, "_run_extracted_restart_oracle", run)
+
+
 @pytest.fixture(scope="module")
 def built_distribution(tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest) -> Path:
     """Build the candidate archives once in test-owned temporary storage."""

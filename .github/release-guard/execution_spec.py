@@ -4,7 +4,7 @@ import stat
 
 from content_manifest import Refused, capture
 
-LIBRARY = ('mcp','cleanup-acp','session-adapter','session-child','fixed-inline','plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop')
+LIBRARY = ('mcp','cleanup-acp','session-adapter','session-child','fixed-inline','plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed')
 SEALED = ('backend','delayed-backend','acp','mock-acp','cleanup-inline','workspace-owned','session-inline')
 DOMAINS = {'root':'root', **dict.fromkeys(LIBRARY,'library'), **dict.fromkeys(SEALED,'sealed')}
 
@@ -37,7 +37,7 @@ def issue(role, vector, script, script_pin, data=()):
 def validate(profile,event,arguments,directory):
     value=profile['execution']
     if (type(value) is not dict or set(value)!={'domain','event','argument','script_sha256','data'}
-            or type(value['data']) is not list or len(value['data'])!=(1 if profile['role'] in ('cleanup-acp','review-wire') else 0)
+            or type(value['data']) is not list or len(value['data'])!=(1 if profile['role'] in ('cleanup-acp','review-wire','archive-leaf') else 0)
             or value!=issue(profile['role'],profile['argv'],profile['script'],value['script_sha256'],value['data'])
             or event!=value['event'] or arguments!=(value['argument'],)):
         raise Refused('execution specification exact body or domain')
@@ -46,6 +46,8 @@ def validate(profile,event,arguments,directory):
         if (type(profile['script']) is not str or str(file.resolve())!=str(file)
                 or capture(file.parent,[file.name])['files'][0]['sha256']!=value['script_sha256']):
             raise Refused('execution specification current script bytes')
+    if profile['role']=='archive-leaf':
+        archive_snapshot(profile,directory)
     for row in value['data']:
         if type(row) is not list or len(row)!=2 or any(type(part) is not str for part in row):
             raise Refused('execution specification immutable data record')
@@ -67,3 +69,20 @@ def admitted(intents,role,case,pid,token,vector,environment,cwd,script):
         raise Refused('execution specification unique admitted intent')
     value=values[0]
     return issue(role,vector,script,value['script_sha256'] if script is not None else None,value.get('execution_data',()))
+
+
+def archive_snapshot(profile,directory):
+    import json
+    from content_manifest import read_regular
+    from control_transport import unique
+    from package_cases import NEGATIVE
+    from archive_snapshot import retained
+    file,pin=profile['execution']['data'][0]
+    body,_,actual=read_regular(Path(file),16*1024*1024,uid=20001,mode=0o444)
+    document=json.loads(body,object_pairs_hook=unique)
+    if (actual!=pin or type(document) is not dict or set(document)!={'schema','case','kind','root','snapshot'}
+            or document['schema']!='unrest.archive-snapshot.v1' or document['case']!=profile['case']
+            or document['kind']!=NEGATIVE.get(profile['case'],'normal') or document['root']!=profile['cwd']
+            or Path(document['root']).parent!=directory):
+        raise Refused('archive exact admitted snapshot reference')
+    retained(Path(document['root']),document['snapshot'])

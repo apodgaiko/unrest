@@ -8,18 +8,9 @@ PYTEST_PIN='a150eb186a3b3744cdcb35e7b546e57204ca6e11c65ad8af717e530bbb4470aa'
 
 
 def selected(policy):
-    from source_root import OriginalCases
-    class Leaf(OriginalCases):
-        def enter(self,case):
-            pass
-
-        def leave(self,case,outcome,phases):
-            if case==NODES[-1]:
-                from source_profile import case_seal
-                self.policy.client.request('preselected-finish',case_seal(NODES))
-    result=Leaf(policy)
-    result.cases=NODES
-    return result
+    from source_root import local_cases
+    from source_profile import case_seal
+    return local_cases(policy,NODES,on_last=lambda:policy.client.request('preselected-finish',case_seal(NODES)))
 
 
 def pytest_configure(config):
