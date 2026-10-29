@@ -4,7 +4,7 @@ from pathlib import Path
 
 from content_manifest import Refused
 from launch_policy import build_expected
-from owned_fixture import acquire
+from owned_fixture import retain
 
 CASE='tests/test_v046_measurement_helpers.py::test_four_arm_simulation_uses_independent_terminal_counts'
 TOOL='tools/measure_v046_flow.py'
@@ -20,10 +20,7 @@ def expected(host,argv,cwd,environment,native,pin):
     for path,digest in PINS.items():
         if hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=digest:
             raise Refused('simulation original input bytes')
-    root,info=acquire(str(Path(argv[7]).parent),Path(host.meta['owned']),CASE.split('::')[1][:30],OWNER)
-    generation=(str(root),info.st_dev,info.st_ino)
-    if host.fixture_roots.setdefault(CASE,generation)!=generation:
-        raise Refused('simulation changed fixture generation')
+    root=retain(host,Path(argv[7]).parent,CASE.split('::')[1][:30],OWNER)
     vector=(native,str(checkout/TOOL),'--case-manifest',str(checkout/FIXTURE),
         '--mode','simulated','--output',str(root/'flow.json'))
     if cwd!=str(checkout):

@@ -14,7 +14,6 @@ from http_cases import CASES as HTTP_CASES
 from linux_observation import credential_identity, process_identity
 from process_ledger import Birth, canonical
 from postbuild_root import CASES as ARCHIVE_CASES, COMMAND as ARCHIVE_COMMAND
-from case_inventory import identity as case_identity,load
 
 METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal', 'launch-return',
@@ -26,8 +25,6 @@ def pytest_arguments(metadata,binding):
 
 
 def case_seal(cases):
-    if type(cases) not in (tuple, list) or not 0 < len(cases) <= 20000 or any(type(case) is not str or not case or len(case) > 4096 for case in cases):
-        raise Refused('source case inventory primitives')
     return {'count': len(cases), 'cases_sha256': hashlib.sha256(json.dumps(cases, separators=(',', ':')).encode()).hexdigest()}
 
 
@@ -64,15 +61,6 @@ def readonly_mounts(expected: dict, namespace: str) -> None:
 
 def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     full=type(profile['cases']) is dict
-    if full:
-        cases=load(profile['cases'],Path(__file__).parent.parent/'profiles',
-                   profile['source_sha256'],profile['dependency_sha256'])['cases']
-    else:
-        case_seal(profile['cases'])
-        cases=profile['cases']
-    if (profile['case']!='<bootstrap>' if profile['role']=='root'
-            else profile['case'] not in {case_identity(case) for case in cases}):
-        raise Refused('source selected inventory membership')
     expected_mounts = {profile['checkout'], profile['dependencies'], profile['runtime_root'], str(Path(__file__).parent)}
     if '/native' in profile['mounts']:
         expected_mounts.add('/native')
@@ -125,18 +113,14 @@ def validate(profile: dict, event: str, arguments: tuple) -> tuple[dict, tuple]:
     validate_execution(profile,event,arguments,Path(__file__).parent.parent/'profiles')
     native = profile['native']
     role, script = profile['role'], profile['script']
-    if role == 'root' and full:
-        if (profile['cwd']!=profile['checkout'] or script is not None or event!='cpython.run_module'
-                or arguments!=('pytest',) or profile['argv'] not in tuple([str(Path(profile['runtime_root'])/'bin/pytest'),'-I','-S','-m',*pytest_arguments(profile,{'collection_only':collect})] for collect in (False,True))):
-            raise Refused('source normal pytest entry')
-    elif role == 'root' and tuple(profile['cases'])==ARCHIVE_CASES:
+    if role == 'root' and not full and tuple(profile['cases'])==ARCHIVE_CASES:
         if (profile['cwd']!=profile['checkout'] or script is not None or event!='cpython.run_command'
                 or arguments!=(ARCHIVE_COMMAND+'\n',) or len(profile['argv'])!=6
                 or profile['argv'][:5]!=[native,'-I','-S','-c',ARCHIVE_COMMAND]
                 or not Path(profile['argv'][5]).is_absolute() or str(Path(profile['argv'][5]).resolve())!=profile['argv'][5]
                 or Path(profile['checkout']).is_relative_to(Path(profile['argv'][5]))):
             raise Refused('archive fixed original oracle body')
-    elif role == 'root':
+    elif role == 'root' and not full:
         raise Refused('source unknown root domain')
     pins = tuple(sorted((('entry', profile['entry_sha256']), ('native', profile['native_sha256']),
                         ('source', profile['source_sha256']), ('support', profile['support_sha256']),

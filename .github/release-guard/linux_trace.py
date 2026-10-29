@@ -169,7 +169,6 @@ class OwnedTrace:
         self.timeout = timeout
         self.deadline = time.monotonic() + timeout
         self.cleanup_seconds = cleanup_seconds
-        self.pidfds: dict[int, int] = {}
         self.foreign: set[int] = set()
         self.on_tick = on_tick
         self.resolve_exec = resolve_exec
@@ -291,17 +290,7 @@ class OwnedTrace:
                 before[field] != self.acquired_root[field] for field in fields)):
             self.foreign.add(pid)
             raise RuntimeError('original root birth changed before acquisition')
-        fd = _observation.pidfd_open(before['tgid'], 0)
-        try:
-            after = _observation.process_identity(pid)
-            if any(before[field] != after[field] for field in fields):
-                self.foreign.add(pid)
-                raise RuntimeError('owned trace birth changed during pidfd acquisition')
-        except BaseException:
-            os.close(fd)
-            raise
-        self.pidfds[pid] = fd
-        return after
+        return before
 
     def _initial_wait(self, options: int) -> tuple[int, int]:
         while time.monotonic() <= self.deadline:
@@ -347,9 +336,6 @@ class OwnedTrace:
                              'root_original_parent': pid == self.child})
         if pid == self.child:
             self.root_parent_wait = raw
-        descriptor = self.pidfds.pop(pid, None)
-        if descriptor is not None:
-            os.close(descriptor)
 
     def _vfork_return(self, child: int) -> None:
         for parent, value in list(self.vforks.items()):
@@ -583,12 +569,6 @@ class OwnedTrace:
                 self._close_start()
             except BaseException as error:
                 errors.append(error)
-            for fd in self.pidfds.values():
-                try:
-                    os.close(fd)
-                except BaseException as error:
-                    errors.append(error)
-            self.pidfds.clear()
         if failure is not None:
             if errors:
                 raise BaseExceptionGroup('owned trace failed and cleanup failed', [failure, *errors])

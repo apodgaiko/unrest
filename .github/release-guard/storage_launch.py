@@ -4,7 +4,7 @@ from pathlib import Path
 import stat
 
 from content_manifest import Refused
-from owned_fixture import acquire
+from owned_fixture import retain
 from launch_policy import build_expected,source_unit
 
 OWNER=20000
@@ -37,10 +37,7 @@ def expected(host,argv,cwd,environment,native,pin):
         root=owned/'pytest'/actual.relative_to(owned/'pytest').parts[0]
     except (ValueError,IndexError):
         raise Refused('storage owned fixture root') from None
-    root,info=acquire(str(root),owned,case.split('::')[-1].split('[')[0][:30],OWNER)
-    generation=(str(root),info.st_dev,info.st_ino)
-    if host.fixture_roots.setdefault(case,generation)!=generation:
-        raise Refused('storage changed fixture generation')
+    root=retain(host,root,case.split('::')[-1].split('[')[0][:30],OWNER)
     expected=root/'state.json'
     if case.startswith(NESTED+'['):
         expected=root/'trusted'/Path(*(f'level-{index}' for index in range(depth)))/'state.json'

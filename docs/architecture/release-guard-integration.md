@@ -171,13 +171,17 @@ resources remain independently bound. Original null/inherited/merged stream
 shape is an application-test assertion, no longer an additional guard claim;
 actual process identity, READY and original-parent waits are unchanged.
 
-Child bootstrap validates its authenticated observer-issued execution entry and
-membership in the externally selected inventory. Full-discovery references are
-loaded and byte/source/dependency checked. The finite builder and uniquely
-consumed intent remain the authority for issuing a child profile; collection
-membership grants no launch. Duplicate child-side role/case and focused-group
-catalogues are removed. Actual identity, parent, argv, environment, mounts,
-inherited descriptors, execution pins and READY checks remain.
+Child bootstrap authenticates its observer-issued execution entry and checks
+actual process/parent identity, argv, environment, mounts, inherited descriptors,
+script bytes and READY. The uniquely consumed intent binds role and selected
+case before profile issuance. Normal collection is sealed and source/dependency
+bound once at the root. Re-decoding that same inventory in every child grants
+no authority and is removed; private-profile custody and exact consumed-intent
+checks remain mandatory. The full console's operation choice is bound at kernel
+admission and its normalized argv is compared to the private profile; the
+consumer does not reconstruct that choice again. Archive provenance retains its
+separate original-path exclusion checks.
+
 
 Controlled/bootstrap relay and HTTP ports are bounded application operands in
 the complete admitted argv/environment. Network isolation and literal-address
@@ -373,13 +377,14 @@ untrusted configuration in source-side wrappers. The sender still bounds its
 encoded frame; the receiver still validates every incoming request.
 
 
-The tracer holds pidfds only while each tracked birth is live. Its actual terminal
-wait records the immutable birth/status evidence before releasing that handle;
-original-parent joins still use the retained independent kernel records. Keeping
-every terminal pidfd until suite completion exhausted RLIMIT_NOFILE on sequential
-Git fixtures. A bounded native control now runs 160 sequential children under a
-96-descriptor limit, checks bounded live handles and every original numeric wait.
-Failure cleanup still closes all remaining handles and never infers missing waits.
+The tracer uses the stopped ptrace task and its measured birth identity through
+its actual terminal wait; it does not hold an unused pidfd for every observed
+birth. Process measurement independently checks stable start ticks, and the root
+must match the original acquired child. Transient pidfds still acquire inherited
+Unix descriptors. Historical evidence retains the descriptor exhaustion caused
+by holding handles until suite completion. A bounded native control runs 160
+sequential children under a 96-descriptor limit, checks actual descriptor use and
+every original numeric wait. Failure cleanup never infers missing waits.
 
 
 READY has one protocol. The transport authenticates the current birth, token,

@@ -29,7 +29,14 @@ def copied(tmp_path):
 def test_real_status_index_and_historical_queries_are_faithful(copied):
     destination, head, proof = copied
     assert git(destination, 'status', '--short') == b''
-    assert git(destination, 'ls-files', '-z', '--stage') == git(ROOT, 'ls-files', '-z', '--stage')
+    expected_index=b''
+    for row in git(ROOT, 'ls-tree', '-r', '-z', head).split(b'\0'):
+        if row:
+            header,path=row.split(b'\t',1)
+            mode,kind,oid=header.split(b' ')
+            assert kind==b'blob'
+            expected_index+=mode+b' '+oid+b' 0\t'+path+b'\0'
+    assert git(destination, 'ls-files', '-z', '--stage') == expected_index
     assert git(destination, 'rev-parse', 'HEAD').decode().strip() == head
     git(destination, 'merge-base', '--is-ancestor', FM000, 'HEAD')
     for tag in TAGS:

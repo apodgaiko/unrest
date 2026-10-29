@@ -188,7 +188,7 @@ def worker(case):
         assert error is initiating
     else:
         raise AssertionError('controlled failure did not occur')
-    assert not observer.active and not observer.pidfds and observer.start_write is None
+    assert not observer.active and observer.start_write is None
     assert observer.root_parent_wait == signal.SIGKILL
     births = [row for row in observer.records if row['kind'] == 'kernel_child']
     waits = [row for row in observer.records if row['kind'] == 'failure_cleanup_tracer_wait']

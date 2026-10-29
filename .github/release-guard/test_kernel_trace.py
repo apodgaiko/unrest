@@ -204,7 +204,7 @@ def test_actual_failed_setup_cleans_owned_root_and_preserves_unrelated_child(whe
         if where != "initial_stop":
             assert result.value is initiating
         assert observer.root_parent_wait == signal.SIGKILL
-        assert not observer.active and not observer.pidfds
+        assert not observer.active
         assert os.waitpid(unrelated, 0) == (unrelated, 17 << 8)
         unrelated = None
         with pytest.raises(ChildProcessError):
@@ -255,7 +255,7 @@ def test_pre_attach_refusal_closes_barrier_before_body_and_actual_parent_reaps(f
             assert result.value.errno == errno.EIO
             assert observer.root_parent_wait == 125 << 8
             assert not observer.active and not observer.attached and not observer.poison
-            assert observer.start_write is None and not observer.pidfds
+            assert observer.start_write is None
         assert os.read(effect_read, 4) == b''
         assert os.waitpid(unrelated, 0) == (unrelated, 17 << 8)
         with pytest.raises(ChildProcessError):
@@ -330,7 +330,7 @@ open({str(marker)!r}, 'w').write('resumed')
     assert not marker.exists()
 
 
-def test_sequential_children_do_not_accumulate_terminal_pidfds():
+def test_sequential_children_keep_descriptor_use_bounded():
     import resource
 
     body="import os\nfor _ in range(160):\n p=os.fork()\n if p==0: os._exit(0)\n actual,raw=os.waitpid(p,0)\n assert actual==p and raw==0\n"
@@ -340,14 +340,15 @@ def test_sequential_children_do_not_accumulate_terminal_pidfds():
         'environment':{},'cwd':os.getcwd()}]
     before=resource.getrlimit(resource.RLIMIT_NOFILE)
     peak=[]
+    baseline=len(os.listdir('/proc/self/fd'))
     try:
         resource.setrlimit(resource.RLIMIT_NOFILE,(min(96,before[1]),before[1]))
         child,result=run_control(argv,allowed,True,
-            on_tick=lambda observer:peak.append(len(observer.pidfds)))
+            on_tick=lambda observer:peak.append(len(os.listdir('/proc/self/fd'))))
     finally:
         resource.setrlimit(resource.RLIMIT_NOFILE,before)
     assert result['root_parent_wait_raw']==0 and not result['poison']
-    assert max(peak)<=3
+    assert peak and max(peak)<=baseline+4
     waits=[row for row in result['records'] if row['kind']=='original_parent_wait4']
     assert len(waits)==160 and all(row['parent']==child and row['raw']==0 for row in waits)
     terminals=[row for row in result['records'] if row['kind']=='tracer_terminal_wait']

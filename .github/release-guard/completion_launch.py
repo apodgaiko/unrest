@@ -3,7 +3,7 @@ from pathlib import Path
 
 from content_manifest import Refused
 from launch_policy import build_expected,source_unit,literal
-from owned_fixture import acquire
+from owned_fixture import retain
 
 PUBLICATION='tests/test_completion_ownership.py::test_interrupted_publication_and_lock_recovery'
 MARKER='tests/test_completion_setup.py::test_consumed_marker_survives_recovery_interruption'
@@ -29,9 +29,8 @@ def expected(host,operation,argv,cwd,environment,native,pin):
     name=name.split('[')[0]
     program=literal(source_unit(checkout,path,PINS[path],(name,)),'retry' if operation=='retry' else 'script')
     root=Path(argv[3]).parents[len(Path(suffix).parts)-1]
-    root,info=acquire(str(root),Path(host.meta['owned']),name[:30],OWNER)
-    generation=(str(root),info.st_dev,info.st_ino)
-    if host.fixture_roots.setdefault(case,generation)!=generation or cwd!=str(checkout):
+    root=retain(host,root,name[:30],OWNER)
+    if cwd!=str(checkout):
         raise Refused('completion changed fixture generation or cwd')
     vector=(native,'-c',program,str(root/suffix),*((phase,) if operation=='crash' and phase is not None else ()))
     return build_expected('fixed:completion',case,native,pin,vector,tuple(sorted(environment.items())),cwd,'python-command')

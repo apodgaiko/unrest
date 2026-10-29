@@ -15,3 +15,11 @@ def acquire(path,owned,prefix,owner):
             or not suffix.isascii() or not suffix.isdigit() or not stat.S_ISDIR(info.st_mode) or info.st_uid!=owner):
         raise Refused('fixture exact owned directory')
     return root,info
+
+
+def retain(host,path,prefix,owner):
+    root,info=acquire(str(path),Path(host.meta['owned']),prefix,owner)
+    generation=(str(root),info.st_dev,info.st_ino)
+    if host.fixture_roots.setdefault(host.case,generation)!=generation:
+        raise Refused('fixture changed directory generation')
+    return root

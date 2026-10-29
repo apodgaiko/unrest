@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from content_manifest import Refused,read_regular
-from owned_fixture import acquire
+from owned_fixture import retain
 from control_transport import unique
 from launch_policy import build_expected,source_unit,literal
 
@@ -21,7 +21,7 @@ def expected(host,argv,cwd,environment,native,pin):
     case=host.case
     if case not in CASES or len(argv)!=(6 if case==RECOVERY else 5):
         raise Refused('inspection finite original arguments')
-    checkout,owned=Path(host.meta['checkout']),Path(host.meta['owned'])
+    checkout=Path(host.meta['checkout'])
     path=case.split('::')[0]
     if case==SEALED:
         source_unit(checkout,path,PINS[path],case.split('::')[1:])
@@ -46,13 +46,10 @@ def expected(host,argv,cwd,environment,native,pin):
         environment={**environment,'UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
         vector=(native,'-c','from unrest_harness.cli import cli; cli()','inspect-tasks','--project',project_id)
         expected_cwd=str(root)
-    root,info=acquire(str(root),owned,case.split('::')[-1][:30],OWNER)
+    root=retain(host,root,case.split('::')[-1][:30],OWNER)
     if (home!=root/('home' if case==RECOVERY else '.unrest') or home.resolve()!=home
             or not project_id or Path(project_id).name!=project_id or project_id in ('.','..')):
         raise Refused('inspection owned original home')
-    generation=(str(root),info.st_dev,info.st_ino)
-    if host.fixture_roots.setdefault(case,generation)!=generation:
-        raise Refused('inspection changed fixture generation')
     record=home/'projects'/project_id/'.unrest-runtime/project.json'
     if record.resolve()!=record:
         raise Refused('inspection aliased project record')

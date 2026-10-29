@@ -17,7 +17,6 @@ def owned():
     value = object.__new__(trace.OwnedTrace)
     value.child = 11
     value.active = {11, 12}
-    value.pidfds = {}
     value.records, value.poison = [], []
     value.cleanup_seconds = .05
     value.root_parent_wait = None
@@ -99,7 +98,6 @@ def test_initial_wait_has_same_deadline_and_is_nonblocking(monkeypatch):
 def test_setup_and_tick_errors_keep_original_and_cleanup_failures(monkeypatch, where):
     value = owned()
     value.active = {11}
-    value.pidfds = {}
     value.attached = set()
     value.start_write = 99
     value.selective = False
@@ -128,23 +126,9 @@ def test_setup_and_tick_errors_keep_original_and_cleanup_failures(monkeypatch, w
     assert calls == ["cleanup"]
 
 
-def test_pidfd_acquisition_birth_race_closes_acquired_fd(monkeypatch):
-    value = owned()
-    first = dict(value.acquired_root)
-    values = iter((first, {**first, "start_ticks": 5}))
-    closed = []
-    monkeypatch.setattr(trace._observation, "process_identity", lambda pid: next(values))
-    monkeypatch.setattr(trace.os, "pidfd_open", lambda *args: 111, raising=False)
-    monkeypatch.setattr(trace.os, "close", closed.append)
-    with pytest.raises(RuntimeError, match="birth changed"):
-        value._pin(11)
-    assert closed == [111]
-
-
 def test_constructor_run_root_substitution_never_acquires_or_signals_foreign_pid(monkeypatch):
     value = owned()
     value.active = {11}
-    value.pidfds = {}
     signals, waits = [], []
     monkeypatch.setattr(trace._observation, "process_identity",
                         lambda pid: {**value.acquired_root, "start_ticks": 99})
@@ -207,9 +191,9 @@ def test_failed_kill_never_resumes_owned_body(monkeypatch):
     assert calls == [(8, 11)] and value.active == {11}
 
 
-def test_cleanup_interrupt_still_closes_all_descriptors(monkeypatch):
+def test_cleanup_interrupt_still_closes_start_pipe(monkeypatch):
     value = owned()
-    value.pidfds = {11: 101, 12: 102}
+    value.start_write = 101
     value._pin = lambda pid: (_ for _ in ()).throw(RuntimeError('setup'))
     value._cleanup = lambda: (_ for _ in ()).throw(KeyboardInterrupt())
     closed = []
@@ -217,7 +201,7 @@ def test_cleanup_interrupt_still_closes_all_descriptors(monkeypatch):
     with pytest.raises(BaseExceptionGroup) as result:
         value.run()
     assert isinstance(result.value.exceptions[1], KeyboardInterrupt)
-    assert closed == [101, 102] and not value.pidfds
+    assert closed == [101] and value.start_write is None
     assert value.records[-1]['numeric_waits_unverified']
 
 
@@ -267,12 +251,10 @@ def test_vfork_child_stop_settles_before_suspended_parent(monkeypatch):
     assert value.root_parent_wait == signal.SIGKILL
 
 
-def test_terminal_wait_releases_only_that_births_pidfd(monkeypatch):
+def test_terminal_wait_preserves_birth_and_status():
     value=owned()
-    value.pidfds={11:101,12:102}
-    closed=[]
-    monkeypatch.setattr(trace.os,'close',closed.append)
+    value.identities[12]={'pid':12,'start_ticks':42}
     value._terminal(12,0,cleanup=False)
-    assert closed==[102] and value.pidfds=={11:101}
     assert value.records[-1]['kind']=='tracer_terminal_wait'
-    assert value.active=={11}
+    assert value.records[-1]['identity']=={'pid':12,'start_ticks':42}
+    assert value.records[-1]['raw']==0 and value.active=={11}
