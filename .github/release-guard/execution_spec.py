@@ -9,7 +9,7 @@ SEALED = ('backend','delayed-backend','acp','mock-acp','cleanup-inline','workspa
 DOMAINS = {'root':'root', **dict.fromkeys(LIBRARY,'library'), **dict.fromkeys(SEALED,'sealed')}
 
 
-def issue(role, vector, script, script_pin, data=()):
+def issue(role, vector, script, script_pin, data=(), fixture=None):
     if (type(role) is not str or role not in DOMAINS or type(vector) is not list
             or len(vector)<4 or any(type(arg) is not str for arg in vector)
             or vector[1:3]!=['-I','-S']):
@@ -31,16 +31,28 @@ def issue(role, vector, script, script_pin, data=()):
         raise Refused('execution specification script digest')
     if (script is None)!=(script_pin is None):
         raise Refused('execution specification script pin presence')
-    return {'domain':DOMAINS[role],'event':event,'argument':argument,'script_sha256':script_pin,'data':list(data)}
+    return {'domain':DOMAINS[role],'event':event,'argument':argument,'script_sha256':script_pin,'data':list(data),'fixture':fixture}
 
 
 def validate(profile,event,arguments,directory):
     value=profile['execution']
-    if (type(value) is not dict or set(value)!={'domain','event','argument','script_sha256','data'}
+    if (type(value) is not dict or set(value)!={'domain','event','argument','script_sha256','data','fixture'}
             or type(value['data']) is not list or len(value['data'])!=(1 if profile['role'] in ('cleanup-acp','review-wire','archive-leaf') else 0)
-            or value!=issue(profile['role'],profile['argv'],profile['script'],value['script_sha256'],value['data'])
+            or value!=issue(profile['role'],profile['argv'],profile['script'],value['script_sha256'],value['data'],value['fixture'])
             or event!=value['event'] or arguments!=(value['argument'],)):
         raise Refused('execution specification exact body or domain')
+    if value['fixture'] is not None:
+        from run_worker_launch import WORKERS
+        binding=value['fixture']
+        if (profile['case'] not in WORKERS or profile['role']!='fixed-inline'
+                or profile['argv'][3:5]!=['-m','unrest_harness.run_worker']
+                or type(binding) is not dict or set(binding)!={'path','sha256','identity'}
+                or binding['path']!=str(Path(profile['cwd'])/'executor_fixture.py')
+                or type(binding['identity']) is not list or len(binding['identity'])!=9
+                or any(type(part) is not int for part in binding['identity'])
+                or type(binding['sha256']) is not str or len(binding['sha256'])!=64
+                or any(char not in '0123456789abcdef' for char in binding['sha256'])):
+            raise Refused('execution specification finite executor fixture')
     if profile['script'] is not None:
         file=Path(profile['script'])
         if (type(profile['script']) is not str or str(file.resolve())!=str(file)
@@ -68,7 +80,7 @@ def admitted(intents,role,case,pid,token,vector,environment,cwd,script):
     if len(values)!=1:
         raise Refused('execution specification unique admitted intent')
     value=values[0]
-    return issue(role,vector,script,value['script_sha256'] if script is not None else None,value.get('execution_data',()))
+    return issue(role,vector,script,value['script_sha256'] if script is not None else None,value.get('execution_data',()),value.get('execution_fixture'))
 
 
 def archive_snapshot(profile,directory):

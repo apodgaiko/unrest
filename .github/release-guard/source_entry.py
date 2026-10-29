@@ -257,6 +257,8 @@ def activate(directory, profile, event, arguments):
     if profile['role'] not in ('session-adapter', 'session-child'):
         from source_sockets import Hooks
         policy.sockets = Hooks(policy)
+    from run_worker_launch import install_fixture
+    install_fixture(policy)
     client.request('core-ready', {'pins': [list(pair) for pair in pins]})
     if policy.sockets is not None:
         policy.sockets.install()

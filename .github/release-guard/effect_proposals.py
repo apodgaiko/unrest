@@ -78,7 +78,9 @@ def proposal(host, actor, raw):
         return console_proposal(host,actor,raw)
     if case in HTTP_CASES:
         return http_proposal(host,actor,raw)
-    from run_worker_launch import CASES as RUN_WORKERS,proposal as run_proposal
+    from run_worker_launch import ALL_CASES as RUN_WORKERS,proposal as run_proposal,descendant,DESCENDANT
+    if case==DESCENDANT and actor['role']=='fixed-inline':
+        return descendant(host,actor,raw)
     if case in RUN_WORKERS and argv[1:3]==['-m','unrest_harness.run_worker']:
         return run_proposal(host,actor,raw)
     if case in GIT_CASES:

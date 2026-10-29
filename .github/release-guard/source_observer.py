@@ -14,7 +14,7 @@ import stat
 import struct
 import time
 
-from review_wire import CASES as REVIEW_CASES,SCRIPT as REVIEW_SCRIPT,count as review_count
+from review_wire import CASES as REVIEW_CASES,count as review_count
 from multiprocess_entry import ALL_CASES as MP_CASES, count as mp_count
 from content_manifest import Refused, native_digest
 from http_cases import CASES as HTTP_CASES, TRANSPORT as MCP_CASES
@@ -24,21 +24,20 @@ from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, 
 from bootstrap_cases import BOOTSTRAP, declaration
 from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP
 from controlled_pairs import limits as controlled_limits
-from controlled_startup import ACP
 from endpoint_policy import Endpoints, Owner, Route
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from socket_observation import acquire_tcp, acquire_unix_pair
 from source_profile import METHODS, ROOT_COMMAND
-from ordinary_acp import EXECUTION_CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
+from ordinary_acp import EXECUTION_CASES as ORDINARY_CASES, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
-from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT
+from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
 from git_sites import CASES as GIT_CASES
 from completion_roles import CASES as ROLE_CASES,HTTP as ROLE_HTTP,actor_slot
 from git_observer import Git
 from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, child_count as inline_count
-from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, child_count, SCRIPT, snapshot_path
+from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, child_count, snapshot_path
 
 
 from readiness_launch import CASES as READINESS_CASES,READY as READINESS_READY
@@ -101,12 +100,9 @@ class Observer:
     def profile(self, pid, role, case, vector, environment, cwd, token, inherited=()):
         actual = process_identity(pid)
         parent = Birth.read(process_identity(actual['ppid']))
-        scripts = {'desktop':'tools/v046_desktop_fixture.py','review-wire':REVIEW_SCRIPT,'session-adapter': SESSION_SCRIPT, 'session-child': SESSION_SCRIPT,
-                   'cleanup-acp': SCRIPT, 'acp': ACP, 'mock-acp': MOCK}
-        script = (str(Path(self.meta['checkout']) / scripts[role]) if role in scripts else
-                  str(backend_path(case,Path(cwd).parent) if case in CONTROLLED else Path(cwd).parent / 'fake-app-server') if role in ('backend', 'delayed-backend') else None)
-        if role=='fixed-inline' and vector[3] not in ('-c','-m'):
-            script=vector[3]  # The consumed intent independently pins this file.
+        script=(vector[3] if vector[3] not in ('-c','-m') else
+                str(backend_path(case,Path(cwd).parent) if case in CONTROLLED else Path(cwd).parent/'fake-app-server')
+                if role=='delayed-backend' else None)
         source = {'schema': 'unrest.bootstrap-source.v1', 'role': role, 'case': case,
             'identity': canonical(actual), 'parent': canonical(process_identity(parent.pid)),
             'observer': canonical(process_identity(os.getpid())), 'argv': vector,
@@ -132,7 +128,7 @@ class Observer:
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
-        from run_worker_launch import CASES as RUN_WORKERS
+        from run_worker_launch import ALL_CASES as RUN_WORKERS
         new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS)
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
@@ -297,6 +293,9 @@ class Observer:
             if self.case in ROLE_CASES:
                 actor_slot(self,actor)
                 return
+            from run_worker_launch import DESCENDANT
+            if self.case==DESCENDANT and any(value.get('run_worker') and value.get('birth')==actor['birth'] and value['token']==actor['token'] for value in self.intents.values()):
+                return
             if sum(value.get('fixed_operation') == 'check' and value['token'] == actor['token'] for value in self.intents.values()) != 1:
                 raise Refused('fixed inline has no query authority')
             return
@@ -346,8 +345,13 @@ class Observer:
                 'failed':15 if NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
             return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
         from completion_launch import CASES as COMPLETION_CASES
-        from run_worker_launch import CASES as RUN_WORKERS
+        from run_worker_launch import ALL_CASES as RUN_WORKERS
         if actor['role']=='fixed-inline' and actor['case'] in RUN_WORKERS:
+            from run_worker_launch import TEST,NAMES
+            allowed=(0,17) if actor['case']==TEST+'::test_'+NAMES[6] else (-9,) if actor['case'] in (TEST+'::test_'+NAMES[7],TEST+'::test_'+NAMES[8]) else (0,)
+            return terminal is not None and terminal[2] in allowed and actor['body_ready'] and (terminal[2]>=0 or -terminal[2] in actor['signals'])
+        from run_worker_launch import DESCENDANT
+        if actor['role']=='session-child' and actor['case']==DESCENDANT:
             return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='fixed-inline' and actor['case'] in ROLE_CASES:
             from completion_server import status
@@ -445,6 +449,9 @@ class Observer:
                 from package_cases import CASES as PACKAGE_CASES,count as package_count
                 from completion_server import finish as role_finish
                 count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case,self) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else len(children) if self.case in GIT_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                from run_worker_launch import WORKERS,DESCENDANT,TEST,NAMES
+                if self.case in WORKERS:
+                    count=2 if self.case in (TEST+'::test_'+NAMES[4],TEST+'::test_'+NAMES[6],DESCENDANT) else 1
                 if outcome=='passed' and self.case in UV_CASES:
                     uv_children=[child for child in children if child['role'] in ('uv-cli','fixed-inline')]
                     if len(uv_children)!=2*len(FIXED_SEQUENCES[self.case]):
@@ -729,8 +736,10 @@ class Observer:
                 raise Refused('controlled warning signal replay')
             process = self.ledger.process(child['birth'])
             if payload['signal'] == 0:
+                from run_worker_launch import WORKERS
+                worker=self.case in WORKERS and child['role']=='fixed-inline'
                 journal=self.case==JOURNAL_CASE and child['role']=='fixed-inline'
-                if (payload['group'] or child['role']!='workspace-owned' and not journal
+                if (payload['group'] or child['role']!='workspace-owned' and not journal and not worker
                         or journal and child.get('liveness_probes',0)!=0):
                     raise Refused('source exact owned liveness probe')
                 if journal:

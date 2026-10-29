@@ -15,7 +15,7 @@ import content_manifest as content
 
 
 def verify(root: Path, body: bytes, expected_sha256: str,
-           paths: Sequence[str]) -> content.Manifest:
+           paths: list[str] | tuple[str, ...]) -> content.Manifest:
     """Require an external digest and inventory, then remeasure current files."""
     from control_transport import unique
     names = content._inventory(paths)

@@ -257,6 +257,7 @@ def test_attached_inspect_and_steer_share_body_free_snapshot_without_run_mutatio
     )
     assert b"body" not in durable
     control.cancel_run(run.run_id, "test complete", f"cancel:attached-{operation}")
+    assert control.attach_run(run.run_id, timeout_seconds=5).state == "cancelled"
 
 
 def test_cancel_is_idempotent_records_boundaries_and_releases_resource(project: Path) -> None:

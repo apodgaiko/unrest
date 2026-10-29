@@ -254,3 +254,17 @@ unrelated-cwd installed lifecycle and fail-closed startup, independent validatio
 desktop/CI, publication and protected local update remain required. Separate USER
 policy and unrelated untracked data must be preserved. No release certification
 follows from a selected group, collection-only run or current size report.
+
+
+RunControl's original lifecycle tests reuse the library worker entry with exact
+case, operation, run identity, generation, environment and worker-count bounds.
+The one `executor_fixture` import compiles only the source bytes acquired through
+nofollow file descriptors and checked against the original pinned test fixture;
+its original path and inode generation remain bound through import. No owned cwd
+is appended to the import path and cached bytecode is never used. The restart
+case alone admits its exact one sleeping descendant, owned by the admitted worker
+and retaining its actual numeric parent wait. Crash and explicit SIGKILL cases
+keep their authored statuses; ordinary completion remains exit zero plus READY.
+The main script profile now derives from the admitted effective vector rather
+than a parallel role-to-script catalogue; the delayed-backend auxiliary script
+retains its independent pin.
