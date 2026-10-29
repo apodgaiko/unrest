@@ -361,7 +361,7 @@ class Ledger:
 
     def reaped(self, birth: Birth, token: str) -> bool:
         process = self.process(birth)
-        if self.poison or type(token) is not str or token != process.life_token or process.parent is None:
+        if self.poison or type(token) is not str or token != process.life_token or self.by_token.get(token) != birth or process.parent is None:
             return False
         if process.exit is None or process.terminal is None or process.parent_wait is None:
             return False

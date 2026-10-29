@@ -403,3 +403,16 @@ def test_waiting_thread_entry_binds_original_group_and_cannot_borrow_another_chi
     ledger.wait_entry(thread, child.pid)
     with pytest.raises(Refused):
         ledger.wait_entry(thread, root.pid)
+
+
+@pytest.mark.parametrize('token', [None, '', 'unregistered', True])
+def test_native_owned_fork_wait_cannot_retire_without_child_admission(token):
+    ledger, root, child = setup()
+    ledger.process(root).command_class = 'native-full-uv'
+    ledger.process(child).life_token = None
+    del ledger.by_token['child-token']
+    ledger.wait_entry(root, child.pid)
+    terminal(ledger, child, 0)
+    wait4(ledger, root, child, 0)
+    assert not ledger.reaped(child, token)
+    assert not ledger.reaped(child, 'child-token')
