@@ -16,7 +16,7 @@ from bootstrap_wire import Client
 from content_manifest import Refused
 from cleanup_launch import OFFLINE
 from git_sites import CASES as GIT_CASES
-from source_profile import METHODS, digest, validate
+from source_profile import digest, validate
 
 def direct_git(args, kwargs, case, role):
     vector = args[0] if args else kwargs.get('args')
@@ -80,10 +80,6 @@ class Policy:
                 self.refuse('Git finite commit input')
         answer=self.client.request('launch-proposal',{'case':self.case,'executable':executable,'argv':vector,
             'cwd':cwd,'environment':environment,'stdin':commit_input})
-        if (type(answer) is not dict or not {'ok','ticket','token','translated','rule'}<=set(answer)
-                or type(answer['ticket']) is not int or type(answer['token']) is not str
-                or type(answer['translated']) is not list or any(type(arg) is not str for arg in answer['translated'])):
-            raise Refused('source finite proposal response')
         if getattr(self.local,'launch',None) is not None:
             raise Refused('source nested process constructor')
         self.local.launch=answer
@@ -226,7 +222,7 @@ class Policy:
 def activate(directory, profile, event, arguments):
     global ACTIVE
     actual, pins = validate(profile, event, arguments)
-    client = Client(directory, profile, METHODS)
+    client = Client(directory, profile)
     policy = Policy(directory, profile, actual, client)
     if profile['role'] in ('root', 'mcp', 'cleanup-acp', 'session-adapter', 'session-child', 'fixed-inline', 'plan-python','mp-child','mp-tracker','review-wire','pytest-regression','desktop','archive-checker','archive-leaf','archive-installed'):
         if profile['role']=='archive-leaf':

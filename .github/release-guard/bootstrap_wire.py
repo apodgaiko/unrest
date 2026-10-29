@@ -8,18 +8,14 @@ import threading
 import time
 
 from content_manifest import Refused
-from control_transport import Frame, RESPONSE_LIMIT, finite, peer, verify_reply
-from process_ledger import Birth, integer, text
+from control_transport import Frame, RESPONSE_LIMIT, peer, verify_reply
+from process_ledger import Birth
 
 
 class Client:
-    def __init__(self, directory: Path, profile: dict, methods: frozenset[str]):
-        if type(methods) is not frozenset or not methods or len(methods) > 64:
-            raise Refused('bootstrap RPC methods')
-        self.methods = frozenset(text(method) for method in methods)
+    def __init__(self, directory: Path, profile: dict):
         self.observer = Birth.read(profile['observer'])
-        self.nonce, self.token = text(profile['nonce']), text(profile['token'])
-        self.generation = integer(profile['generation'], 1)
+        self.nonce, self.token, self.generation = profile['nonce'], profile['token'], profile['generation']
         self.path = str(directory / 'control.sock')
         self.lock = threading.RLock()
         self.local = threading.local()
@@ -30,9 +26,6 @@ class Client:
         self.random, self.pid, self.sleep = os.urandom, os.getpid, time.sleep
 
     def request(self, kind: str, payload: dict) -> dict:
-        if type(kind) is not str or kind not in self.methods or type(payload) is not dict:
-            raise Refused('bootstrap RPC operation')
-        finite(payload)
         with self.lock:
             self.local.active = True
             try:

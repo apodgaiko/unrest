@@ -87,7 +87,7 @@ def consume(directory, event, arguments):
     observer = Birth.read(profile['observer'])
     if observer.uid != 20001 or observer.pid != os.getppid():
         raise ValueError('native observer parent')
-    client = Client(root, profile, frozenset({'core-ready', 'body-ready'}))
+    client = Client(root, profile)
     for kind, payload in (
             ('core-ready', {'pins': [['entry', profile['entry_sha256']], ['native', profile['native_sha256']]]}),
             ('body-ready', {'seal': profile['seal']})):

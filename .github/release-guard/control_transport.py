@@ -15,7 +15,7 @@ import time
 from typing import Any
 
 from content_manifest import Refused
-from process_ledger import Birth, Ledger, integer, text
+from process_ledger import Birth, Ledger, integer
 
 REQUEST_LIMIT = 8192
 RESPONSE_LIMIT = 16384
@@ -87,14 +87,6 @@ def fail_channel(method):
 
 class Frame:
     def __init__(self, stream: socket.socket, limit: int, shared_poison: list[str], *, seconds: int = 4):
-        if type(limit) is not int or limit not in (REQUEST_LIMIT, RESPONSE_LIMIT):
-            raise Refused('control frame limit')
-        if stream.family != socket.AF_UNIX or stream.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM:
-            raise Refused('control Unix stream required')
-        if type(shared_poison) is not list:
-            raise Refused('control shared poison sink')
-        if type(seconds) is not int or seconds not in (4, 8):
-            raise Refused('control finite deadline')
         self.seconds = seconds
         self.shared_poison = shared_poison
         self.stream, self.limit = stream, limit
@@ -207,10 +199,6 @@ def peer(stream: socket.socket, birth: Birth, gid: int) -> None:
 
 class Admission:
     def __init__(self, ledger: Ledger, methods: frozenset[str]):
-        if type(methods) is not frozenset or not methods or len(methods) > 64:
-            raise Refused('control methods')
-        for method in methods:
-            text(method)
         self.ledger, self.methods = ledger, methods
         self.seen: set[str] = set()
         self.poison = ledger.poison
@@ -242,7 +230,6 @@ class Admission:
                     or process.exit is not None or process.terminal is not None
                     or (self.poison or self.ledger.poison) and request['kind'] not in DRAIN):
                 raise Refused('control request authority')
-            finite(request)
             self.seen.add(identifier)
             return request
         except BaseException:
@@ -263,14 +250,10 @@ def cancelled_empty(frame: Frame, ledger: Ledger, birth: Birth, token: str) -> b
 
 def reply(request: dict, answer: dict) -> dict:
     """The caller validates the operation's closed result schema before encoding."""
-    if type(request) is not dict or type(answer) is not dict:
-        raise Refused('control reply object')
     return {'request': request, 'answer': answer}
 
 
 def verify_reply(response: dict, request: dict) -> dict:
-    finite(response)
-    finite(request)
     if (type(response) is not dict or set(response) != {'request', 'answer'}
             or type(response['request']) is not dict or type(response['answer']) is not dict
             or encode(response['request'], REQUEST_LIMIT) != encode(request, REQUEST_LIMIT)):

@@ -379,3 +379,11 @@ test maintenance; this prevents an incidental native child without granting any
 new helper authority. Repository config mutations, input integrity/refusal
 assertions and original case IDs remain unchanged. The prior missing-helper
 failure is retained rather than relabelled as a pass.
+
+
+RPC framing retains the receiver's bounded JSON decoder, kernel peer binding,
+registration epoch, request ID/replay checks, closed method authority, exact
+reply echo, deadline and sticky failure handling. Fixed constructor arguments
+and authenticated observer-produced replies are no longer decoded again as
+untrusted configuration in source-side wrappers. The sender still bounds its
+encoded frame; the receiver still validates every incoming request.
