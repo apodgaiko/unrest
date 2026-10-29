@@ -76,16 +76,9 @@ def test_actual_proposal_ingress_refuses_nonprimitive_fields(field,value):
         proposal_operands(raw(**change),CASE)
 
 
-@pytest.mark.parametrize("changes", [
-    {"reference": "b" * 64},
-    {"payload_kind": "python-script"},
-    {"argv": ("python", "-m", "invalid/module"), "payload_kind": "python-module",
-     "reference": "b" * 64},
-    {"argv": ("python", "relative.py"), "payload_kind": "python-script",
-     "reference": "b" * 64}])
-def test_invalid_declarations_never_render(changes):
-    with pytest.raises(policy.Refused):
-        expected(rule(**changes))
+def test_payload_kind_must_match_the_declared_interpreter_mode():
+    with pytest.raises(policy.Refused,match='payload_mode_mismatch'):
+        expected(rule(payload_kind='python-script'))
 
 
 def test_external_payload_reference_and_absolute_root():

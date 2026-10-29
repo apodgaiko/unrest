@@ -1,9 +1,9 @@
 """Finite Git forms and bounded operands; native ownership/waits remain separate."""
 
 from content_manifest import Refused
-from git_commands import match as match_command,Command
+from git_commands import match as match_command,Command,SETUP
 from git_sites import CASES,OPERATIONS,OWNED_BODY,SHARED_OPERATIONS
-from git_observer import SETUP,image
+from git_observer import image
 from launch_policy import build_expected
 
 

@@ -137,3 +137,16 @@ def test_commit_input_preserves_the_per_lease_identifier_byte_bound():
         build('commit-tree',REPO,INTEGRATION,data,family='workspaces')
     data['leases']=(('lease:'+'a'*4090,'sha256:'+PATCH),)
     assert build('commit-tree',REPO,INTEGRATION,data,family='workspaces').stdin
+
+
+def test_factored_eligibility_preserves_every_original_ordered_operation():
+    import hashlib
+    import json
+    from git_sites import OPERATIONS,SHARED_OPERATIONS
+    pins={
+        'shared':'5f417e1f13141ad81c32439cdc6958c90475b2b6efc08b0170c0a63501f4c3c5',
+        'workspaces':'8da98ddc26915917729c0404c320e144347b0122f7cfdee352229296b7868e2a',
+        'evolution':'5d4a2d4fc642e59600be2fa37f4bfd53e09fa389d221239a58a1848d01d0ebf7',
+        'candidate':'c5e3d1b55f4ed0619e7fb061d7bbb3be3d00aec16993e44d193ed399555d5773'}
+    for name,values in [('shared',SHARED_OPERATIONS),*OPERATIONS.items()]:
+        assert hashlib.sha256(json.dumps(values,separators=(',',':')).encode()).hexdigest()==pins[name]

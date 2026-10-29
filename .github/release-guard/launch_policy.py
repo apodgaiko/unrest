@@ -35,8 +35,6 @@ def _absolute(value: str) -> str:
 def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
              executable_sha256: str) -> tuple[int | None, str]:
     if kind in {"native", "expected-exec-failure"}:
-        if reference is not None:
-            raise Refused("policy_native_payload_reference")
         return None, executable_sha256
     if kind not in {"python-command", "python-module", "python-script"}:
         raise Refused("policy_payload_kind")
@@ -53,13 +51,7 @@ def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
     if index >= len(argv):
         raise Refused("policy_python_payload_missing")
     if kind == "python-command":
-        if reference is not None:
-            raise Refused("policy_inline_payload_reference")
         return index, hashlib.sha256(argv[index].encode("utf-8")).hexdigest()
-    if kind == "python-script":
-        _absolute(argv[index])
-    elif not all(part.isidentifier() for part in argv[index].split(".")):
-        raise Refused("policy_module_name")
     if reference is None or not is_sha256(reference):
         raise Refused("policy_external_payload_reference")
     return index, reference
@@ -69,8 +61,6 @@ def build_expected(rule: str, case: str, executable: str, executable_sha256: str
                    argv: tuple[str, ...], environment: tuple[tuple[str, str], ...],
                    cwd: str, payload_kind: str, reference: str | None = None) -> Expected:
     """Derive the trusted builder descriptor; input validation lives at ingress."""
-    if not is_sha256(executable_sha256) or type(payload_kind) is not str:
-        raise Refused('policy_rule')
     _, payload_sha256 = _payload(argv, payload_kind, reference, executable_sha256)
     return Expected(rule, case, executable, executable_sha256, argv,
                     tuple(sorted(environment)), cwd, payload_kind, payload_sha256)

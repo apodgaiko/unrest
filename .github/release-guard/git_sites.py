@@ -1,5 +1,6 @@
 """Finite operations and original byte pins; no Python caller authentication."""
 from git_fixtures import SLOTS
+from git_commands import OPERATIONS as COMMANDS,SETUP
 PINS = {
     'tests/test_workspaces.py': '590b0e1d07d73a6a2a770edb41d839ec903f53b8c28ff19be16a0e13dc6abe14',
     'tests/test_evolution.py': '778aeac7d73291bbeaaad3cb2ad2905d6a4e93a723a42378daa080222e7c57db',
@@ -33,61 +34,12 @@ CASES = (
     'tests/test_evolution.py::test_rollback_transaction_recovers_each_git_boundary[post_receipt]',
     'tests/test_evolution.py::test_rollback_validation_failure_preserves_current',
 )
-SHARED_OPERATIONS = (
-    'apply',
-    'check-index',
-    'checkout',
-    'clean',
-    'commit-tree',
-    'date',
-    'diff-return',
-    'head',
-    'inside',
-    'integration-add',
-    'inventory',
-    'lease-add',
-    'parent-ref',
-    'prune',
-    'remove-tree',
-    'reset-parent',
-    'rollback-add',
-    'rollback-reset',
-    'rollback-update',
-    'stage-return',
-    'top',
-    'update-parent',
-    'verify-base',
-    'write-tree',
-)
-FIXTURE_OPERATIONS = {
-    'workspaces': (
-        'commit-advance',
-        'commit-base',
-        'commit-child',
-        'config-email',
-        'config-name',
-        'head',
-        'head-tree',
-        'init',
-        'stage-advance',
-        'stage-base',
-        'stage-child',
-    ),
-    'evolution': (
-        'commit-base',
-        'config-email',
-        'config-name',
-        'head',
-        'init',
-        'stage-base',
-    ),
-}
-OPERATIONS = {family: tuple(sorted(set(SHARED_OPERATIONS) | set(operations)))
-              for family,operations in FIXTURE_OPERATIONS.items()}
-
-OPERATIONS['candidate']=('init','candidate-command')
+WORKSPACE_ONLY=frozenset({'head-tree','stage-advance','commit-advance','stage-child','commit-child'})
+SHARED_OPERATIONS=tuple(sorted(set(COMMANDS)-WORKSPACE_ONLY-set(SETUP)))
+OPERATIONS={'workspaces':tuple(sorted(COMMANDS)),
+    'evolution':tuple(sorted(set(COMMANDS)-WORKSPACE_ONLY)),
+    'candidate':('init','candidate-command')}
 
 OWNED_BODY = 'import time; time.sleep(60)'
 
-WORKSPACE_CASES=CASES
 CASES=(*CASES,*SLOTS)

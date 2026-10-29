@@ -111,11 +111,9 @@ def test_missing_facts_never_become_success(missing):
     assert not ledger.reaped(child, 'child-token')
 
 
-def test_waitid_wnowait_and_tracer_wait_do_not_retire():
+def test_tracer_wait_does_not_retire_without_original_parent_wait4():
     ledger, root, child = setup()
     terminal(ledger, child, 23 << 8)
-    emit(ledger, 'original_parent_waitid', parent=100, child=101,
-         reaps=False, options=0x1000000, code=1, status=23)
     assert not ledger.reaped(child, 'child-token')
     wait4(ledger, root, child, 23 << 8)
     assert ledger.reaped(child, 'child-token')

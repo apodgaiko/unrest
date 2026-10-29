@@ -67,7 +67,7 @@ def install_observation_filter() -> None:
     rows = [(0x20, 0, 0, 4), (0x15, 1, 0, 0xC000003E),
             (0x06, 0, 0, 0x80000000), (0x20, 0, 0, 0),
             (0x35, 0, 1, 0x40000000), (0x06, 0, 0, 0x80000000)]
-    for number in (59, 61, 247, 322):  # execve, wait4, waitid, execveat
+    for number in (59, 61, 322):  # execve, wait4, execveat
         rows.extend([(0x15, 0, 1, number), (0x06, 0, 0, 0x7FF00000)])
     rows.append((0x06, 0, 0, 0x7FFF0000))
     instructions = (FilterInstruction * len(rows))(*(FilterInstruction(*row) for row in rows))
@@ -243,8 +243,7 @@ class OwnedTrace:
         number = value.orig_rax
         if entering:
             self.pending[pid] = {"syscall": number, "status_address": value.rsi,
-                                 "wait_options": value.rdx, "waitid_address": value.rdx,
-                                 "waitid_options": value.r10,
+                                 "wait_options": value.rdx,
                                  "requested_pid": ctypes.c_int32(value.rdi & 0xffffffff).value,
                                  "caller_identity": dict(self.identities[pid])}
             if number == 61:
@@ -281,19 +280,6 @@ class OwnedTrace:
                                      "normalized": os.waitstatus_to_exitcode(raw)
                                      if raw is not None and (os.WIFEXITED(raw) or os.WIFSIGNALED(raw)) else None,
                                      "options": pending["wait_options"], "requested_pid": pending["requested_pid"]})
-            elif pending and pending["syscall"] == 247 and signed(value.rax) == 0:
-                address = pending["waitid_address"]
-                wait_info = read_bytes(pid, address, 128) if address else None
-                if wait_info is None:
-                    self.poison.append("original_waitid_status_unobserved")
-                self.records.append({"kind": "original_parent_waitid", "parent": pid,
-                                     "parent_tgid": self.identities[pid]["tgid"],
-                                     "siginfo_hex": wait_info.hex() if wait_info else None,
-                                     "child": int.from_bytes(wait_info[16:20], "little") if wait_info else None,
-                                     "code": int.from_bytes(wait_info[8:12], "little", signed=True) if wait_info else None,
-                                     "status": int.from_bytes(wait_info[24:28], "little", signed=True) if wait_info else None,
-                                     "options": pending["waitid_options"],
-                                     "reaps": not bool(pending["waitid_options"] & 0x1000000)})
             elif pending and pending["syscall"] in (59, 322):
                 self.records.append({"kind": "exec_syscall_return", "pid": pid,
                                      "return": signed(value.rax)})

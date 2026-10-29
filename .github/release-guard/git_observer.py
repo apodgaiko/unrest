@@ -11,7 +11,6 @@ from git_commands import location_role
 from git_sites import CASES, OPERATIONS
 
 HOME_CONFIG = b'[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n'
-SETUP = ('init', 'config-name', 'config-email', 'stage-base', 'commit-base')
 
 
 def regular(file, maximum=4096, uid=20000):

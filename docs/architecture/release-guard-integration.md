@@ -407,3 +407,22 @@ release. The archive's original fifteen-case extracted-tree oracle remains a
 separate route. Cleanup RPC deadlines follow the authenticated active case on
 both sides rather than a development group name. No contract reference cases
 are silently inserted or assertions changed by selection.
+
+
+Git operation eligibility derives from its one closed command grammar, subtracting
+explicit workspace-only/setup operations for the narrower families. Ordered
+fingerprints preserve the previous exact lists. The observer still selects the
+case/family before the complete-vector matcher and verifies actual ownership,
+image and waits. Expected-payload rendering keeps closed kinds, mode agreement,
+inline hashing and external pins; producer-only reference-absence, script-path,
+module-name and type decoders are removed. Proposal ingress and actual bootstrap
+script/image remeasurement remain independent mandatory checks.
+
+
+Waitid/SIGINFO telemetry and its observation-count limit are retired. Neither
+WNOWAIT nor waitid-only reaping supplies retirement evidence. The real WNOWAIT
+control retains its application assertions and subsequent actual terminal
+waitpid result; a separate native negative shows waitid-only reaping produces
+no original-parent wait4 join. Every admitted process still requires its numeric
+original-parent terminal wait4 matched to the observed birth, exit and tracer
+terminal status. Missing waits remain fail-closed.

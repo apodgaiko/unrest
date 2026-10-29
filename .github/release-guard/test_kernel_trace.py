@@ -137,7 +137,7 @@ def test_seized_vfork_births_precede_native_effects_and_parent_waits(selective, 
         assert birth < effect
 
 
-def test_selective_waitid_retains_original_siginfo_then_actual_reap(tmp_path):
+def test_selective_wnowait_still_requires_the_actual_terminal_reap(tmp_path):
     body = """
 import os
 child = os.fork()
@@ -154,13 +154,8 @@ assert actual == child and raw == 23 << 8
     child, result = run_control(argv, allowed, True)
     (tmp_path / 'trace-control-waitid.json').write_text(json.dumps(result, sort_keys=True))
     assert result['root_parent_wait_raw'] == 0 and not result['poison'], result
-    observations = [row for row in result['records'] if row['kind'] == 'original_parent_waitid']
-    assert len(observations) == 1
-    observation = observations[0]
-    assert observation['code'] == 1 and observation['status'] == 23 and not observation['reaps']
-    assert len(bytes.fromhex(observation['siginfo_hex'])) == 128
     waits = [row for row in result['records'] if row['kind'] == 'original_parent_wait4']
-    assert len(waits) == 1 and waits[0]['child'] == observation['child']
+    assert len(waits) == 1 and waits[0]['parent']==child
     assert waits[0]['raw'] == 23 << 8 and waits[0]['normalized'] == 23
 
 
@@ -357,3 +352,18 @@ def test_sequential_children_do_not_accumulate_terminal_pidfds():
     assert len(waits)==160 and all(row['parent']==child and row['raw']==0 for row in waits)
     terminals=[row for row in result['records'] if row['kind']=='tracer_terminal_wait']
     assert len(terminals)==161 and all(row['raw']==0 for row in terminals)
+
+
+def test_waitid_only_reaping_cannot_supply_original_parent_wait4_evidence():
+    body="import os\np=os.fork()\nif p==0: os._exit(23)\nr=os.waitid(os.P_PID,p,os.WEXITED)\nassert r.si_pid==p and r.si_status==23\n"
+    argv=[sys.executable,'-I','-S','-c',body]
+    allowed=[{'path':sys.executable,'argv':argv,'environment':{},'cwd':os.getcwd(),
+        'sha256':hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}]
+    root,result=run_control(argv,allowed,True)
+    assert result['root_parent_wait_raw']==0 and not result['poison']
+    children=[row['child'] for row in result['records'] if row['kind']=='kernel_child']
+    assert len(children)==1
+    terminal=[row for row in result['records'] if row['kind']=='tracer_terminal_wait' and row['pid']==children[0]]
+    assert len(terminal)==1 and terminal[0]['normalized']==23
+    assert not any(row['kind']=='original_parent_wait4' for row in result['records'])
+    assert root!=children[0]

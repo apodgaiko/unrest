@@ -21,6 +21,8 @@ class Command:
     stdin: str | None = None
 
 
+SETUP=('init','config-name','config-email','stage-base','commit-base')
+
 FIXED = {
     'inside': ('rev-parse', '--is-inside-work-tree'),
     'top': ('rev-parse', '--show-toplevel'),

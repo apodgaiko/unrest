@@ -2,7 +2,7 @@
 
 Only trusted observers feed kernel rows and authenticated control envelopes.
 This reducer does not authenticate sockets, admit launches or certify a release.
-Waitid/WNOWAIT remains observation. Retirement requires the original parent's
+Waitid/WNOWAIT is not retirement evidence. Retirement requires the original parent's
 terminal wait4, joined to the admitted child birth and tracer terminal status.
 """
 from __future__ import annotations
@@ -16,7 +16,6 @@ from content_manifest import Refused
 
 MAX_PROCESSES = 20000
 MAX_EXEC_EPOCHS = 128
-MAX_WAITID_ROWS = 128
 
 
 def fail_closed(method):
@@ -102,7 +101,6 @@ class Process:
     exit: tuple[int, int] | None = None
     terminal: tuple[int, int, int] | None = None
     parent_wait: tuple[int, int, int, int] | None = None
-    waitid: list[dict] = field(default_factory=list)
 
 
 class Ledger:
@@ -286,12 +284,6 @@ class Ledger:
                 raise Refused('ledger parent wait requested child')
             del self.pending_waits[key]
             process.parent_wait = (sequence, raw, code, integer(row.get('options')))
-        elif kind == 'original_parent_waitid':
-            # No route can retire from waitid alone. Retain the bounded observation.
-            caller = self.current.get(integer(row.get('parent'), 1))
-            if caller is None or len(self.process(caller).waitid) >= MAX_WAITID_ROWS:
-                raise Refused('ledger waitid observation bound')
-            self.process(caller).waitid.append(dict(row))
         elif kind == 'exec_attempt':
             if row.get('accepted') is not True:
                 self.poison.append('denied-exec')
