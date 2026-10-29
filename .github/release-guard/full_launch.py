@@ -28,7 +28,7 @@ def prepare_uv(metadata):
 
 def prepare(binding,metadata):
     prepare_uv(metadata)
-    value={'cases':[],'skips':[],'source':metadata['source_sha256'],'dependency':metadata['dependency_sha256']}
+    value={'cases':[],'source':metadata['source_sha256'],'dependency':metadata['dependency_sha256']}
     return {**metadata,'cases':seal(value,Path(binding['profiles']))}
 
 

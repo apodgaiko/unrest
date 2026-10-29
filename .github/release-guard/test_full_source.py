@@ -338,3 +338,16 @@ def test_selection_keeps_node_text_without_granting_launch_permission(tmp_path):
     assert not unexcluded({"cases": {}, "selection": []}, {"collection_only": True})
     assert unexcluded({"cases": {}, "selection": []}, {"collection_only": False})
     assert not unexcluded({"cases": ["archive"], "selection": []}, {})
+
+
+def test_empty_preparation_inventory_roundtrips_through_actual_receiver(tmp_path,monkeypatch):
+    import case_inventory
+    import full_launch
+    from test_case_inventory import observer_files
+    observer_files(monkeypatch)
+    monkeypatch.setattr(full_launch,'prepare_uv',lambda metadata:None)
+    metadata={'source_sha256':'a'*64,'dependency_sha256':'b'*64}
+    prepared=full_launch.prepare({'profiles':str(tmp_path)},metadata)
+    assert case_inventory.load(prepared['cases'],tmp_path,'a'*64,'b'*64)=={
+        'cases':[],'source':'a'*64,'dependency':'b'*64}
+    assert prepared['cases']['count']==0
