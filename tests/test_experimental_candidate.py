@@ -18,10 +18,14 @@ from unrest_harness.experimental_candidate import (
 
 
 def git(root: Path, *args: str) -> str:
+    # These tiny disposable repositories exercise candidate input integrity,
+    # not Git's automatic maintenance subprocess or host maintenance policy.
     return subprocess.check_output(
         ["/usr/bin/git", *args], cwd=root, text=True,
         env={"PATH": "/usr/bin:/bin", "HOME": str(root), "LC_ALL": "C",
              "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+             "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "maintenance.auto",
+             "GIT_CONFIG_VALUE_0": "false",
              "GIT_AUTHOR_DATE": "2000-01-01T00:00:00+0000",
              "GIT_COMMITTER_DATE": "2000-01-01T00:00:00+0000"},
         stderr=subprocess.DEVNULL,

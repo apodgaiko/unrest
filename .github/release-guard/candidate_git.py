@@ -8,7 +8,7 @@ from git_commands import Command
 from git_operands import digest
 
 TEST='tests/test_experimental_candidate.py'
-PIN='4c9898c08322fe7454c5520cfa3a0dc3b3f9bf42dcd1d9fcc96c0213a50acb83'
+PIN='6827bd92719ed7e138980b9e4dc3d9e6fdc775444093609fe78c0e806981c39e'
 CONSUMERS={
     'test_literal_manifest_and_independent_oracle':(None,),
     'test_immutable_binding_and_failed_observation':(None,),
@@ -103,6 +103,7 @@ def command(checkout,case,repository,ordinal,argv):
         raise Refused('candidate original complete command')
     environment={'PATH':'/usr/bin:/bin','HOME':repository,'LC_ALL':'C',
         'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null',
+        'GIT_CONFIG_COUNT':'1','GIT_CONFIG_KEY_0':'maintenance.auto','GIT_CONFIG_VALUE_0':'false',
         'GIT_AUTHOR_DATE':'2000-01-01T00:00:00+0000','GIT_COMMITTER_DATE':'2000-01-01T00:00:00+0000'}
     return Command(tuple(argv),repository),environment
 

@@ -371,3 +371,11 @@ original final configuration write: no subsequent Git command or helper launch
 is authorized. The repository's closed routing configuration is reacquired before
 each Git launch, and its owned generation and every original parent wait remain
 mandatory. These are controlled fixture tests, not provider acceptance evidence.
+
+
+The candidate fixture explicitly disables Git automatic maintenance using its
+closed per-command environment. Disposable input-integrity repositories do not
+test maintenance; this prevents an incidental native child without granting any
+new helper authority. Repository config mutations, input integrity/refusal
+assertions and original case IDs remain unchanged. The prior missing-helper
+failure is retained rather than relabelled as a pass.
