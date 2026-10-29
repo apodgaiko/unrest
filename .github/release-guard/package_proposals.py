@@ -12,6 +12,7 @@ from package_cases import POSITIVE, NEGATIVE, MUTATIONS, FIRST, LIFECYCLE, liter
 from archive_leaf import CHECKER_COMMAND, LEAF_COMMAND
 
 SOURCE_UID=20000
+PREPARED_UID=0
 
 
 def inputs(host):
@@ -76,11 +77,13 @@ def environment(host,case,phase):
     return {**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' ('+phase+')'}
 
 
-def archive_inputs(path,uid):
+def archive_inputs(path,case):
+    uid=PREPARED_UID if case==POSITIVE else SOURCE_UID
     before=path.stat(follow_symlinks=False)
     names=sorted(item.name for item in path.iterdir())
     if (str(path.resolve())!=str(path) or not stat.S_ISDIR(before.st_mode) or before.st_uid!=uid
-            or before.st_mode&0o6022 or len(names)!=2 or len(list(path.glob('*.whl')))!=1 or len(list(path.glob('*.tar.gz')))!=1):
+            or before.st_mode&0o6022 or case!=POSITIVE and len(names)!=2
+            or len(list(path.glob('*.whl')))!=1 or len(list(path.glob('*.tar.gz')))!=1):
         raise Refused('archive original two-member directory')
     rows=[]
     for name in names:
@@ -91,8 +94,8 @@ def archive_inputs(path,uid):
     return [str(path),list(_directory_key(before)),rows]
 
 
-def retained_archive(row,uid):
-    if archive_inputs(Path(row[0]),uid)!=row:
+def retained_archive(row,case):
+    if archive_inputs(Path(row[0]),case)!=row:
         raise Refused('archive admitted input generation changed')
 
 
@@ -131,9 +134,10 @@ def proposal(host,actor,raw):
             owned(path.parent,owned_root,case.split('::')[1].split('[')[0][:30])
             if path.name!=MUTATIONS[case][0]:
                 raise Refused('archive exact original mutation directory')
-        if sorted(item.name for item in path.iterdir())!=sorted(item.name for item in data['dist'].iterdir()):
+        expected_names=sorted(item.name for item in data['dist'].iterdir() if item.name.endswith(('.whl','.tar.gz')))
+        if case in MUTATIONS and sorted(item.name for item in path.iterdir())!=expected_names:
             raise Refused('archive exact original filenames')
-        archive_data=archive_inputs(path,0 if case==POSITIVE else SOURCE_UID)
+        archive_data=archive_inputs(path,case)
         env=environment(host,case,'call')
         if case==POSITIVE:
             env['PYTHONPATH']=str(checkout/'src')

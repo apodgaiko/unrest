@@ -96,6 +96,9 @@ def prepare(binding, source, source_manifest, dependencies):
         **{name:tree(target/name) for name in ('backend','archives','installed','extracted')}}
     (target/'receipt.json').write_bytes(json.dumps(receipt,sort_keys=True,separators=(',',':')).encode())
     (target/'receipt.json').chmod(0o644)
+    info=(target/'archives').stat()
+    diagnostic={'receipt':receipt,'archives_identity':[info.st_uid,info.st_gid,info.st_mode]}
+    (Path(binding['profiles']).parent/'source-private/package-inputs.json').write_text(json.dumps(diagnostic,sort_keys=True))
 
 
 def inputs(policy):

@@ -262,8 +262,7 @@ class Observer:
         intent = matches[0]
         if intent.get('package_inputs') is not None:
             from package_proposals import retained_archive
-            from package_cases import POSITIVE
-            retained_archive(intent['package_inputs'],0 if intent['case']==POSITIVE else 20000)
+            retained_archive(intent['package_inputs'],intent['case'])
         if intent['role']=='archive-leaf':
             from archive_snapshot import retained
             state=self.fixture_roots[intent['case']]['document']

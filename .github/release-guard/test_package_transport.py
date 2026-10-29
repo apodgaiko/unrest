@@ -45,6 +45,7 @@ def test_native_catalogue_matches_normal_original_collection(monkeypatch):
 
 def host(tmp_path,monkeypatch,case):
     monkeypatch.setattr(transport,'SOURCE_UID',os.getuid())
+    monkeypatch.setattr(transport,'PREPARED_UID',os.getuid())
     archives=tmp_path/'prepared/archives'
     archives.mkdir(parents=True)
     for name in ('candidate.whl','candidate.tar.gz'):
@@ -60,8 +61,6 @@ def host(tmp_path,monkeypatch,case):
         value.intents[1]={}
         return {'ok':True,'ticket':1,'token':'owned'}
     value.admit_launch=admit
-    acquire=transport.archive_inputs
-    monkeypatch.setattr(transport,'archive_inputs',lambda path,uid:acquire(path,os.getuid()))
     return value,data,calls
 
 
@@ -85,10 +84,10 @@ def test_original_checker_has_exact_path_environment_and_current_data(tmp_path,m
     assert calls[-1][1]=='archive-checker'
     assert result['translated'][:4]==['/native/python','-I','-S','-c']
     row=value.intents[1]['package_inputs']
-    transport.retained_archive(row,os.getuid())
+    transport.retained_archive(row,case)
     (dist/'candidate.whl').write_bytes(b'changed admitted generation')
     with pytest.raises(Refused,match='generation'):
-        transport.retained_archive(row,os.getuid())
+        transport.retained_archive(row,case)
 
 
 @pytest.mark.parametrize('case',[FIRST,LIFECYCLE])
@@ -211,3 +210,17 @@ def test_foreign_or_incomplete_archive_result_cannot_seal(mutation):
     with pytest.raises(Refused):
         value.dispatch(actor,{'kind':'archive-result','payload':result})
     assert 'archive_result' not in actor
+
+
+
+def test_prepared_auxiliary_members_are_bound_but_never_treated_as_archives(tmp_path,monkeypatch):
+    value,data,_=host(tmp_path,monkeypatch,POSITIVE)
+    (data['dist']/'.gitignore').write_bytes(b'*\n')
+    row=transport.archive_inputs(data['dist'],POSITIVE)
+    assert [member[0] for member in row[2]]==['.gitignore','candidate.tar.gz','candidate.whl']
+    transport.retained_archive(row,POSITIVE)
+    (data['dist']/'.gitignore').write_bytes(b'changed')
+    with pytest.raises(Refused,match='generation'):
+        transport.retained_archive(row,POSITIVE)
+    with pytest.raises(Refused,match='two-member'):
+        transport.archive_inputs(data['dist'],next(iter(MUTATIONS)))
