@@ -797,3 +797,11 @@ too late to change Popen's saved executable search list; the failing native
 inventory check exposed an undeclared PATH probe. This resolution seam grants
 no permission: the independent observer still requires an authored case,
 complete exact argv/env/cwd, executable bytes and a remaining quota.
+
+The source inquiry/workspace/campaign result probe reuses the authored Git
+workspace fixture and permits its one `start_project` RunControl worker. Its
+original test intentionally observes the queued response. Before case closeout,
+the guard additionally waits on that original parent's retained Popen handle
+for at most five seconds and requires numeric success; a durable PID record or
+process disappearance cannot replace this actual wait. No provider child or
+additional RunControl operation is admitted by this fixture.

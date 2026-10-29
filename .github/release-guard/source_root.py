@@ -41,6 +41,11 @@ class OriginalCases:
         self.policy.client.request('case-start',{'case':case})
 
     def leave(self,case,outcome,phases):
+        from git_fixtures import SERVER_INQUIRY
+        if case==SERVER_INQUIRY:
+            owned=[row['process'] for row in self.policy.children.values() if row['case']==case]
+            if len(owned)!=1 or owned[0].wait(timeout=5)!=0:
+                raise Refused('source queued fixture actual parent completion')
         payload={'case':case,'outcome':outcome,'phases':phases} if self.normal_outcomes else {'case':case}
         self.policy.client.request('case-finish',payload)
         self.policy.case=None

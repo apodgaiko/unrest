@@ -10,6 +10,8 @@ from measurement_git import CASES as MEASUREMENT_CASES,TEST as MEASUREMENT_TEST,
 from candidate_git import CASES as CANDIDATE_CASES,TEST as CANDIDATE_TEST,PIN as CANDIDATE_PIN
 
 
+SERVER_INQUIRY='tests/test_server.py::test_real_run_inquiry_workspace_and_campaign_results_cross_validator'
+
 @dataclass(frozen=True)
 class Fixture:
     family: str
@@ -26,6 +28,7 @@ class Fixture:
 
 
 MODULES={
+    'tests/test_server.py':Fixture('workspaces',('init',),'Schema Validator','schema@example.test',('.',),'call'),
     MEASUREMENT_TEST:Fixture('measurement',('init','-q'),'','',('.',),'call'),
     CANDIDATE_TEST:Fixture('candidate',('init','--initial-branch=main','--object-format=sha1'),'Fixture','fixture@example.invalid',('.',),'setup'),
     'tests/test_foundation_authority.py':Fixture('workspaces',('init',),'Authority Test','authority@example.test',('.',),'call'),
@@ -35,6 +38,7 @@ MODULES={
     'tests/test_v04_activation.py':Fixture('activation',('init','-b','main'),'ACT-190 Activation','act190@example.test',('README.md',),'call'),
 }
 PINS={
+    'tests/test_server.py':'ece1638c115aa2055320bb0fb0c1b34359a8694ff6851fc289baf393e5523b72',
     MEASUREMENT_TEST:MEASUREMENT_PIN,
     CANDIDATE_TEST:CANDIDATE_PIN,
     'tests/test_foundation_authority.py':'c8f63d70d4dcc3d74215a9db538632fc9115086d32d42f633235135dcaea2c70',
@@ -107,3 +111,5 @@ def root(host,case,repository):
     generation=(str(parent),info.st_dev,info.st_ino)
     if host.fixture_roots.setdefault(('git-fixture',case),generation)!=generation:
         raise Refused('Git additional pytest generation changed')
+
+SLOTS[SERVER_INQUIRY]=('repository',)

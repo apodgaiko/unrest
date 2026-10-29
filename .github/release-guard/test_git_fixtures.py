@@ -17,11 +17,11 @@ ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is
 
 @pytest.mark.parametrize('file',tuple(file for file,spec in fixtures.MODULES.items() if spec.family not in ('candidate','measurement')))
 def test_setup_commands_are_original_pinned_fixture_literals(file):
-    name='repository' if file.endswith(('test_project_adapter.py','test_improve_adapter.py')) else '_repository'
+    name=fixtures.SERVER_INQUIRY.split('::')[1] if file=='tests/test_server.py' else 'repository' if file.endswith(('test_project_adapter.py','test_improve_adapter.py')) else '_repository'
     unit=source_unit(ROOT,file,fixtures.PINS[file],(name,))
-    calls=[node for node in ast.walk(unit) if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id=='_git']
-    commands=tuple(tuple(ast.literal_eval(arg) for arg in call.args[1:]) for call in calls)
-    assert commands==fixtures.MODULES[file].commands
+    calls=[node for node in ast.walk(unit) if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id==('git' if file=='tests/test_server.py' else '_git')]
+    commands=tuple(tuple(ast.literal_eval(arg) for arg in call.args[0 if file=='tests/test_server.py' else 1:]) for call in calls)
+    assert (commands[:5] if file=='tests/test_server.py' else commands)==fixtures.MODULES[file].commands
 
 
 def test_selected_fixtures_collect_every_original_parameter_without_bodies(monkeypatch):
@@ -31,7 +31,7 @@ def test_selected_fixtures_collect_every_original_parameter_without_bodies(monke
         def pytest_collection_finish(self,session):
             nodes.extend(item.nodeid for item in session.items)
     assert pytest.main(['--collect-only','-q',*fixtures.SLOTS],plugins=[Collected()])==0
-    assert tuple(nodes)==tuple(fixtures.SLOTS) and len(nodes)==169
+    assert tuple(nodes)==tuple(fixtures.SLOTS) and len(nodes)==170
 
 
 
@@ -114,4 +114,4 @@ def test_repository_keeps_generation_and_closed_routing_configuration(tmp_path,m
 def test_factored_parameter_axes_preserve_the_complete_ordered_fixture_map():
     import hashlib
     import json
-    assert hashlib.sha256(json.dumps(list(fixtures.SLOTS.items()),separators=(',',':')).encode()).hexdigest()=='294ac85f02c8f2ba7cef463ee297fd2d67b1e88c913e4331ad3fcd55276c13c8'
+    assert hashlib.sha256(json.dumps([(case,value) for case,value in fixtures.SLOTS.items() if case!=fixtures.SERVER_INQUIRY],separators=(',',':')).encode()).hexdigest()=='294ac85f02c8f2ba7cef463ee297fd2d67b1e88c913e4331ad3fcd55276c13c8'

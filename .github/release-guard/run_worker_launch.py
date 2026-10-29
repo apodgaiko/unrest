@@ -6,12 +6,13 @@ import re
 
 from content_manifest import Refused,read_regular,native_digest
 from control_transport import unique
-from git_fixtures import root as repository_root
+from git_fixtures import root as repository_root,SLOTS,SERVER_INQUIRY
 from launch_policy import build_expected,admit_expected,source_unit,literal
 from owned_fixture import retain
 from content_manifest import _key
 
 CASES={
+    SERVER_INQUIRY:'start_project',
     'tests/test_foundation_authority.py::test_tool_error_mapping_is_closed_and_private_details_survive_async_run':'submit_plan',
     'tests/test_foundation_authority.py::test_async_project_lock_contention_is_public_busy_with_private_cause':'end_mission',
 }
@@ -108,7 +109,7 @@ def proposal(host,actor,raw):
     home=Path(raw['cwd'])
     binding=fixture(host,home) if custom else None
     if not custom:
-        repository_root(host,case,str(home.parent/'repo'))
+        repository_root(host,case,str(home.parent/SLOTS[case][0]))
         if home.name!='.unrest' or home.resolve()!=home:
             raise Refused('async error worker original home')
     env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(Path(host.meta['checkout'])/'src'),

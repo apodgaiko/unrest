@@ -351,3 +351,27 @@ def test_empty_preparation_inventory_roundtrips_through_actual_receiver(tmp_path
     assert case_inventory.load(prepared['cases'],tmp_path,'a'*64,'b'*64)=={
         'cases':[],'source':'a'*64,'dependency':'b'*64}
     assert prepared['cases']['count']==0
+
+
+@pytest.mark.parametrize('count,status',((0,0),(2,0),(1,17),(1,0)))
+def test_queued_inquiry_fixture_requires_one_actual_parent_handle_and_success(count,status):
+    from types import SimpleNamespace
+    from source_root import OriginalCases
+    from git_fixtures import SERVER_INQUIRY
+    from content_manifest import Refused
+    waits=[]
+    requests=[]
+    def wait(*,timeout):
+        waits.append(timeout)
+        return status
+    policy=SimpleNamespace(children={index:{'case':SERVER_INQUIRY,'process':SimpleNamespace(wait=wait)} for index in range(count)},
+        client=SimpleNamespace(request=lambda kind,payload:requests.append((kind,payload))),case=SERVER_INQUIRY)
+    cases=OriginalCases(SimpleNamespace(profile={'cases':[]}))
+    cases.policy=policy
+    if count!=1 or status:
+        with pytest.raises(Refused):
+            cases.leave(SERVER_INQUIRY,'passed',{})
+        assert not requests
+    else:
+        cases.leave(SERVER_INQUIRY,'passed',{})
+        assert waits==[5] and requests==[('case-finish',{'case':SERVER_INQUIRY})]
