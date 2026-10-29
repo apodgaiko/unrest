@@ -11,7 +11,7 @@ from namespace_supervisor import run
 
 def actual_namespace_control(failure_file=None):
     def init():
-        assert os.getpid()==1
+        assert os.getpid()==os.getpgrp()==os.getsid(0)==1
         read,write=os.pipe()
         parent=os.fork()
         if parent==0:
@@ -41,6 +41,7 @@ def actual_namespace_control(failure_file=None):
         if failure_file is not None:
             Path(str(failure_file)+'.proof.json').write_text(json.dumps({
                 'namespace':os.readlink('/proc/self/ns/pid'),'init_pid':os.getpid(),
+                'init_pgid':os.getpgrp(),'init_sid':os.getsid(0),
                 'adopted_ppid':int(stat[1]),'parent_wait':parent_wait,'adopted_wait':adopted_wait}))
     run(init,failure_file)
 

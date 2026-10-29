@@ -52,6 +52,9 @@ def run(callback,failure_file=None):
         if init:
             wait(init)
         else:
+            os.setsid()
+            if os.getpgrp()!=1 or os.getsid(0)!=1:
+                raise RuntimeError('namespace init session refused')
             if (libc.unshare(0x20000) or libc.mount(None,b'/',None,0x44000,None)
                     or libc.mount(b'proc',b'/proc',b'proc',14,None)):
                 raise OSError(ctypes.get_errno(),'private procfs refused')
