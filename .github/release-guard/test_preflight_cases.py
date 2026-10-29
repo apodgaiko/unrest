@@ -109,6 +109,7 @@ def test_no_effect_host_requires_zero_children_not_observed_child_count(with_chi
 
     observer = object.__new__(Observer)
     observer.full, observer.outcomes = False, []
+    observer.frames=[]
     root = Birth(100, 100, 99, 1, "boot", 20000)
     case = next(iter(NO_EFFECT))
     actor = {"birth": root, "role": "root", "case": case}

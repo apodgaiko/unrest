@@ -41,6 +41,8 @@ from cleanup_inline import NO_LAUNCH, STARTUP, DECLARATIONS, INFLIGHT, child_cou
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_GROUPS, child_count, SCRIPT, snapshot_path
 
 
+PARK_SELF_PAIR=object()
+
 def shape(value, keys):
     if type(value) is not dict or set(value) != set(keys):
         raise Refused('source observer operation schema')
@@ -380,6 +382,10 @@ class Observer:
         pair = self.descriptors.get(key)
         if pair is not None:
             observed = acquire_unix_member(actor['birth'], fd, pair)
+            if (observed is None and 9 in actor['signals'] and pair.owner==self.owner(actor)
+                    and self.pairs.pairs.get(pair.serial) is pair and pair.case==self.ledger.process(actor['birth']).case
+                    and any(member.fd==fd for member in pair.members)):
+                return PARK_SELF_PAIR
             self.pairs.retained(pair, self.owner(actor), observed)
             return {'ok': True}
         slot = self.listener_fds.get(key)
@@ -564,6 +570,8 @@ class Observer:
                 self.case = actor['case'] = payload['case']
                 self.ledger.process(self.root_birth).case = self.case
             else:
+                if any('cancelled_pair' in channel for channel in self.frames):
+                    return None
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
                 from package_cases import CASES as PACKAGE_CASES,count as package_count
@@ -603,6 +611,8 @@ class Observer:
                 self.case = None
         elif kind == 'root-finish':
             self.root_only(actor)
+            if any('cancelled_pair' in channel for channel in self.frames):
+                return None
             from source_profile import case_seal
             shape(payload, ('count', 'cases_sha256'))
             if (self.case is not None or any(row['outcome']=='failed' for row in self.outcomes) or type(payload['count']) is not int or type(payload['cases_sha256']) is not str
@@ -945,8 +955,34 @@ class Observer:
         self.consume(trace)
         self.ledger.wait_entry(Birth.read(trace.identities[pid]), requested)
 
+    def settle_cancelled_channels(self):
+        for channel in list(self.frames):
+            pair=channel.get('cancelled_pair')
+            if pair is None:
+                continue
+            frame,actor=channel['frame'],channel['actor']
+            frame.check()
+            process=self.ledger.process(actor['birth'])
+            if (frame.poison or self.ledger.poison or pair.owner!=self.owner(actor)
+                    or frame.binding[:3]!=(actor['birth'],actor['token'],process.generation)
+                    or process.token!=actor['token'] or process.registered_generation!=process.generation
+                    or 9 not in actor['signals']):
+                raise Refused('self-pair cancellation changed authority')
+            if process.terminal is None:
+                continue
+            if process.exit is None or process.exit[1]!=9 or process.terminal[1:]!=(9,-9):
+                raise Refused('self-pair cancellation lacks actual SIGKILL')
+            self.interrupted_records.append({'kind':'cancelled-self-pair-control',
+                'request':channel['request']['id'],'pair':pair.serial,'pid':actor['birth'].pid,
+                'token':actor['token'],'generation':process.generation,
+                'fd':channel['request']['payload']['fd'],'payload_executed':False,
+                'descriptor_retention_proven':False,'original_parent_wait_proven':self.ledger.reaped(actor['birth'],actor['token'])})
+            frame.stream.close()
+            self.frames.remove(channel)
+
     def tick(self, trace):
         self.consume(trace)
+        self.settle_cancelled_channels()
         while len(self.frames) < 32:
             try:
                 stream, _ = self.server.accept()
@@ -962,6 +998,8 @@ class Observer:
             self.frames.append({'frame': frame, 'actor': actor, 'request': None})
         for channel in list(self.frames):
             frame, actor = channel['frame'], channel['actor']
+            if 'cancelled_pair' in channel:
+                continue
             if channel['request'] is None:
                 value = frame.read()
                 if value is None:
@@ -977,6 +1015,9 @@ class Observer:
                 self.controls.append({**admitted, 'observed_monotonic_ns': time.monotonic_ns()})
             if frame.output is None:
                 answer = self.dispatch(actor, channel['request'])
+                if answer is PARK_SELF_PAIR:
+                    channel['cancelled_pair']=self.descriptors[actor['birth'],channel['request']['payload']['fd']]
+                    continue
                 if answer is not None:
                     frame.answer(reply(channel['request'], answer))
             if frame.output is not None and frame.send():

@@ -542,3 +542,14 @@ bytes are pinned; the child gets no descendant permission. The original refusal,
 protected-byte comparisons and reconstruction assertions still run. Fixed-file
 profiles take their script path from the already consumed byte-pinned intent,
 with the same independent exec-time file check as other file entries.
+
+SIGKILL may destroy a self-pipe between an authenticated payload request and the
+observer's descriptor query. Only an already admitted request for that actor's
+known pair can park when the member is absent and signal9 was authorized. It gets
+no reply or payload permission. The original frame deadline remains; a different
+observed member still fails immediately. A parked request never resumes, even if
+the descriptor reappears. Only the same Birth/token/generation's actual kernel
+exit9 plus tracer terminal-9 cancels its channel. The cancellation record claims
+neither descriptor retention nor payload execution. Parked channels settle before
+new dispatch, and case completion waits for resolution; ordinary child cleanup
+still requires the independently joined original-parent numeric wait.
