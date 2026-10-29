@@ -8,9 +8,23 @@ import pytest
 from effect_proposals import proposal
 from test_proposal_support import operands
 from content_manifest import Refused
-from session_launch import ARGS, CASES, LIVE, INVALID, INVALID_BYTES, PINS, PLAN, SCRIPT, TIMEOUT, expected, node
+from session_launch import ROLES, ARGS, LIVE, INVALID, INVALID_BYTES, PINS, PLAN, SCRIPT, TIMEOUT, expected, node
 from source_observer import Observer
 from process_ledger import Birth
+
+CASES = (*PLAN,
+    *(node('every_session_role_maps_preflight_rejection_without_spawn[' + role + ']') for role in ROLES),
+    *(node('every_role_maps_each_launch_category_with_private_safe_diagnostic[' + category + '-' + role + ']')
+      for category in ('invalid_command', 'missing', 'directory', 'not_executable', 'startup_failed') for role in ROLES),
+    *(node('explicit_empty_command_is_invalid_without_fallback[' + role + ']') for role in ROLES),
+    node('clean_exit_zero_without_response_is_failed_unknown_work'), node('response_limit_has_a_non_bypassable_65536_byte_ceiling'),
+    *(node('structured_session_roles_are_read_only_even_in_unsafe_profile[' + role + '-' + profile + ']')
+      for role in ROLES for profile in ('safe', 'unsafe-development-unrestricted')),
+    node('role_provider_mapping_preserves_separate_authorities'),
+    *(node('every_session_role_has_a_bundled_structured_prompt[' + role + ']') for role in ROLES),
+    *tuple(ARGS)[1:3], node('acp_message_ids_select_final_json_without_hiding_prior_bytes'), tuple(ARGS)[3],
+    node('acp_final_message_still_requires_whole_json_and_complete_ids'), *tuple(ARGS)[4:],
+    node('private_artifact_cannot_escape_caller_root'))
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 

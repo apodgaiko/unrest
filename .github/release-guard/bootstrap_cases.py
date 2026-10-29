@@ -21,7 +21,6 @@ class Case:
     name: str
     delay: int | float | None
     configured: bool
-    children: int
 
     @property
     def nodeid(self):
@@ -29,23 +28,17 @@ class Case:
 
 
 DECLARATIONS = (
-    Case('test_actual_thirty_two_second_readiness', 32, True, 2),
-    Case('test_actual_launch_lifetime_and_interruptions[near]', 60, True, 2),
-    Case('test_actual_launch_lifetime_and_interruptions[exhausted]', 60, True, 0),
-    Case('test_actual_launch_lifetime_and_interruptions[cancel]', 60, True, 2),
-    Case('test_actual_launch_lifetime_and_interruptions[stop]', 60, True, 2),
-    Case('test_phases_share_one_deadline_across_tasks', None, False, 0),
-    Case('test_absolute_ledger_includes_setup_and_cleanup', None, False, 0),
-    Case('test_capped_body_free_observation_is_pre_cleanup', None, False, 0),
-    Case('test_turn_reservation_does_not_restart_clock_after_bootstrap', None, False, 0),
-    Case('test_delayed_turn_uses_only_original_remaining_time', 32, False, 2),
-    *(Case(f'test_original_limits_refuse_before_grant_or_send[{expired}-{limit}]',60,False,0 if expired else 2)
-      for expired in (False,True) for limit in ('turn','episode','campaign')),
-    *(Case(f'test_boundary_recheck_blocks_expired_or_stopped_send[{action}-{boundary}]',None,False,2)
+    Case('test_actual_thirty_two_second_readiness', 32, True),
+    Case('test_actual_launch_lifetime_and_interruptions[near]', 60, True),
+    Case('test_actual_launch_lifetime_and_interruptions[cancel]', 60, True),
+    Case('test_actual_launch_lifetime_and_interruptions[stop]', 60, True),
+    Case('test_delayed_turn_uses_only_original_remaining_time', 32, False),
+    *(Case(f'test_original_limits_refuse_before_grant_or_send[False-{limit}]',60,False)
+      for limit in ('turn','episode','campaign')),
+    *(Case(f'test_boundary_recheck_blocks_expired_or_stopped_send[{action}-{boundary}]',None,False)
       for action in ('expire','stop') for boundary in ('reserve','grant','send','serialize')),
-    Case('test_actual_sequential_initialize_and_session_share_cutoff', None, False, 2),
-    Case('test_startup_subtracts_from_actual_inference_timeout', 0.5, False, 2),
-    Case('test_expiry_during_seal_cannot_publish_grant', None, False, 0),
+    Case('test_actual_sequential_initialize_and_session_share_cutoff', None, False),
+    Case('test_startup_subtracts_from_actual_inference_timeout', 0.5, False),
 )
 BOOTSTRAP = tuple(case.nodeid for case in DECLARATIONS)
 BY_CASE = {case.nodeid: case for case in DECLARATIONS}

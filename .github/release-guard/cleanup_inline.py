@@ -15,29 +15,24 @@ CLIENT = {TEST + '::test_client_cleanup_reaps_main_after_reader_failure': ('clie
              ('client', variant, None) for variant in ('False', 'True')}}
 INFLIGHT = {TEST + f'::test_inflight_terminal_registration_before_inventory[{variant}]':
             ('inflight', variant, None) for variant in ('False', 'True')}
-NO_LAUNCH = tuple(TEST + f'::test_response_correlation_keeps_numeric_identity[{variant}]'
-                  for variant in ('1_0', '1_1', 'None', 'True', '1.0', 'rid5', 'rid6'))
 DECLARATIONS = {**STARTUP, **CLIENT, **INFLIGHT}
-CASES = (*DECLARATIONS, *NO_LAUNCH)
 CLIENT_CASES = (*CLIENT, *INFLIGHT)
 
 
 def declaration(case):
-    if type(case) is not str or case not in CASES:
+    if type(case) is not str or case not in DECLARATIONS:
         raise Refused('cleanup inline finite case')
-    return DECLARATIONS.get(case, ('no-launch', None, None))
+    return DECLARATIONS[case]
 
 
 def body(case):
     family, variant, _ = declaration(case)
-    if family == 'no-launch':
-        raise Refused('cleanup numeric case has no process authority')
     return EXIT if family == 'startup' and variant == 'exit' else SLEEP
 
 
 def child_count(case):
     family, variant, _ = declaration(case)
-    return 0 if family == 'no-launch' else 1 if family == 'startup' or variant == 'reader' else 3
+    return 1 if family == 'startup' or variant == 'reader' else 3
 
 
 def expected(case, native, native_pin, checkout, root_environment, *, base=None, terminal=False):

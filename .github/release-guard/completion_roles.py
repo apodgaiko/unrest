@@ -19,7 +19,21 @@ CASES={**{OWNERSHIP+f'[{scenario}-{role}-targets{target}]':('ownership',role,sce
     **{CRASH+f'[{role}-{phase}]':('crash',role,phase) for role in ('work','validate') for phase in ('before','after')},
     **{SETUP+f'[{scenario}-{role}-targets{target}]':('setup',role,scenario)
        for scenario in ('invalid-invalid','valid-invalid','valid-valid','distinct') for role,target in ROLES}}
-HTTP=tuple(case for case,row in CASES.items() if row[0]!='setup')
+SERVER_TEST='tests/test_server.py'
+SOURCE={
+    **{SERVER_TEST+'::test_canonical_task_truth_ignores_runtime_assignment_envelope['+value+']':1
+       for value in ('malformed','mismatched','generic')},
+    SERVER_TEST+'::test_missing_task_truth_derives_exact_work_completion_from_closed_envelope':2,
+    **{SERVER_TEST+f'::test_completion_carrier_exhaustive_structural_matrix[{value}-expected_fields{index}-{role}]':2 if role=='work' else 0
+       for index,value in enumerate(('missing','unknown','null','wrong_type','order','duplicate','coverage','status','attempt',
+           'return','return_uppercase','evidence','evidence_locator','evidence_multiple','scope','blocker','items','passed','done'))
+       for role in ('work','validate')},
+    **{SERVER_TEST+f'::test_completion_refusal_survives_server_restart[{repair}-{role}]':2 if role=='work' else 0
+       for repair in ('valid-repair','second-invalid') for role in ('work','validate')},
+    SERVER_TEST+'::test_completion_preflight_is_invariant_to_prose_and_evidence_body':4,
+}
+CASES.update(dict.fromkeys(SOURCE,('source','work','')))
+HTTP=tuple(case for case,row in CASES.items() if row[0] in ('ownership','crash'))
 
 PINS={'tests/test_completion_ownership.py': '2b67510bdd8f40d584baab65837174b2f5a3935aff343b7d9eaccedf09b5df8b', 'tests/test_completion_setup.py': 'fe1a1c98792d1b30d81d975cb23ad9122ae74678295ef4ed8c5e532a7aa00b6a', 'tests/test_server.py': 'ece1638c115aa2055320bb0fb0c1b34359a8694ff6851fc289baf393e5523b72'}
 OWNER=20000
@@ -29,6 +43,8 @@ def schedule(case):
     if type(case) is not str or case not in CASES:
         raise Refused('completion closed role case')
     family,role,scenario=CASES[case]
+    if family=='source':
+        return ()
     work=role=='work'
     if family=='ownership':
         return (('http','attempt',2 if work and scenario=='exhausted' else int(work)),
@@ -42,6 +58,8 @@ def root(host,cwd):
     case=host.case
     if case not in CASES:
         raise Refused('completion undeclared role')
+    if case in SOURCE:
+        source_unit(Path(host.meta['checkout']),SERVER_TEST,PINS[SERVER_TEST])
     workspace=Path(cwd)
     if workspace.name!='workspace' or workspace.resolve()!=workspace:
         raise Refused('completion original workspace')

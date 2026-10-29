@@ -2,7 +2,7 @@
 from pathlib import Path
 import stat
 
-from completion_roles import CASES,schedule,root,actor_slot
+from completion_roles import CASES,SOURCE,schedule,root,actor_slot
 from content_manifest import Refused
 from custody_git import repository
 from git_commands import Command
@@ -11,6 +11,17 @@ from launch_policy import admit_expected,build_expected
 
 FIXTURE=(('git','init','-q'),('git','-c','user.name=Test','-c','user.email=test@example.invalid',
     'commit','--allow-empty','-qm','base'))
+
+
+APP_KEYS=frozenset(('UNREST_HOME','UNREST_PROJECTS_DIR','UNREST_PROJECT_ID','UNREST_MISSION_ID',
+    'UNREST_NODE_ID','UNREST_NODE_TYPE','UNREST_HANDOFF_PATH','UNREST_NODE_ASSIGNMENT'))
+
+
+def application_environment(baseline,observed):
+    expected={**baseline,**{key:value for key,value in observed.items() if key in APP_KEYS}}
+    if observed!=expected:
+        raise Refused('Git environment outside closed application metadata')
+    return expected
 
 
 def ready(host,workspace):
@@ -45,17 +56,24 @@ def proposal(host,actor,raw):
     base={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
     if actor['role']=='root':
         host.root_only(actor)
-        if len(records)>=2 or any(row['case']==case and 'server_slot' in row for row in host.intents.values()):
+        if (len(records)>=2+SOURCE.get(case,0)
+                or any(row['case']==case and 'server_slot' in row for row in host.intents.values())):
             raise Refused('completion root fixture sequence')
-        vector=FIXTURE[len(records)]
-        identity=repository(str(workspace),Path(host.meta['owned']),initialize=not records)
-        key=('completion-git-root',case)
-        previous=host.fixture_roots.setdefault(key,identity)
-        if previous[0]!=identity[0] or previous[1] is not None and previous[1]!=identity[1]:
-            raise Refused('completion fixture repository generation')
-        host.fixture_roots[key]=identity
+        is_fixture=len(records)<2
+        if is_fixture:
+            vector=FIXTURE[len(records)]
+            identity=repository(str(workspace),Path(host.meta['owned']),initialize=not records)
+            key=('completion-git-root',case)
+            previous=host.fixture_roots.setdefault(key,identity)
+            if previous[0]!=identity[0] or previous[1] is not None and previous[1]!=identity[1]:
+                raise Refused('completion fixture repository generation')
+            host.fixture_roots[key]=identity
+            environment=base
+        else:
+            ready(host,workspace)
+            vector=('git','rev-parse','HEAD')
+            environment=application_environment(base,raw['environment'])
         command=Command(vector,str(workspace))
-        environment,is_fixture=base,True
     else:
         server=actor_slot(host,actor)
         if len(records)>=schedule(case)[server['server_slot']][2]:
@@ -69,7 +87,7 @@ def proposal(host,actor,raw):
         tuple(sorted(environment.items())),str(workspace),'native')
     translated=['/usr/bin/git',*vector[1:]]
     answer=admit_expected(host,actor,raw,expected,'git-command',translated,
-        maximum=2+sum(row[2] for row in schedule(case)))
+        maximum=2+SOURCE.get(case,sum(row[2] for row in schedule(case))))
     if answer is None:
         return None
     intent=host.intents[answer['ticket']]

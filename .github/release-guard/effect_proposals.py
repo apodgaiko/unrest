@@ -220,11 +220,10 @@ def proposal(host, actor, raw):
         from cohort_controller import parent
         parent(host,actor)
         from controlled_pairs import scope,before_spawn
-        from bootstrap_cases import declaration
         if case in CONTROLLED:
             scope(case,'bridge',cwd,owned)
         elif (str(Path(cwd).resolve())!=cwd or not Path(cwd).is_relative_to(owned)
-                or Path(cwd).name!='worker' or Path(cwd).parent.name!='owner' or declaration(case).children==0):
+                or Path(cwd).name!='worker' or Path(cwd).parent.name!='owner'):
             raise Refused('source declared worker launch home')
         backend = argv[1:2]!=[str(checkout/ACP)]
         role='backend' if backend else 'acp'

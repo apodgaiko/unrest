@@ -18,6 +18,20 @@ from source_observer import Observer
 from process_ledger import Birth
 
 
+from ordinary_acp import TEST
+NEGATIVE_CASES = tuple(TEST + '::' + name for name in (
+    *(f'test_owned_node_local_rejection_starts_no_mcp_client_or_protocol[{command}-{role}]'
+      for command in ('empty', 'whitespace', 'tokenization', 'empty-argv0', 'missing', 'argv0-nul', 'later-argv-nul', 'unencodable')
+      for role in ('work', 'validate')),
+    *(f'test_owned_node_rejects_malformed_os_fields_before_any_launch_work[{malformation}-{field}-{role}]'
+      for malformation in ('nul', 'unencodable') for field in ('cwd', 'env_key', 'env_value', 'path')
+      for role in ('work', 'validate')),
+    *(f'test_owned_node_rejects_illegal_environment_name_before_any_launch_work[{role}]' for role in ('work', 'validate')),
+    *(f'test_owned_node_obstruction_starts_no_mcp_client_or_protocol[{fixture}-{category}-{role}]'
+      for fixture, category in (('directory', 'directory'), ('non_executable', 'not_executable')) for role in ('work', 'validate')),
+    'test_terminal_local_rejection_starts_no_mcp_client_or_protocol',
+))
+
 @pytest.mark.parametrize('mutation',[None,'environment','cwd','program','generation'])
 def test_original_mock_agent_bare_sleep_is_bound_to_actual_owned_fixture(tmp_path,monkeypatch,mutation):
     import os
@@ -233,7 +247,7 @@ def test_ordinary_cleanup_refuses_group_before_observing_any_process(monkeypatch
 def test_no_launch_catalogue_preserves_original_parameters_and_ids():
     import ast
     import itertools
-    from ordinary_acp import NEGATIVE_CASES, TEST
+    from ordinary_acp import TEST
 
     tree = ast.parse(
         (
@@ -269,7 +283,7 @@ def test_no_launch_catalogue_preserves_original_parameters_and_ids():
     assert tuple(collected) == NEGATIVE_CASES and len(NEGATIVE_CASES) == 39
 
 
-@pytest.mark.parametrize("case", ordinary_acp.NEGATIVE_CASES)
+@pytest.mark.parametrize("case", NEGATIVE_CASES)
 def test_no_launch_cases_have_no_process_route(tmp_path, case):
     observer = object.__new__(Observer)
     observer.full, observer.outcomes = False, []

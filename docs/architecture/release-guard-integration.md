@@ -756,3 +756,19 @@ PIDs as host PIDs. The init process owns observer and adoptive waits, retains it
 own fallback cleanup record, and fails certification if emergency cleanup was
 needed. Source profiles and every exec resolution bind the actual PID namespace.
 This topology change alone grants no new orphan or restart admission.
+
+Launch catalogues contain only cases with admitted effects. Pure and preflight
+negative cases remain in unexcluded pytest discovery and in the independent
+negative controls; they use the global unknown-launch refusal. Their old
+production catalogue copies and unreachable zero-child branches were retired.
+No test is deselected, and adding a process to one of those cases still fails.
+
+Five source-only server families (47 original parameters) share the two-command
+Git fixture and bounded HEAD-query declaration. They gain no server or Python
+child authority. After fixture setup, eight explicitly enumerated application
+metadata environment keys may retain their observed values: Git does not use
+them for execution, configuration, helpers or repository routing. Baseline and
+all other environment keys remain exact; executable, argv, cwd acquisition,
+sequence, query quota and actual exec environment equality are unchanged. Those
+eight inert values are retained data, not independently predicted application
+identities. This exception applies only to these native Git queries.

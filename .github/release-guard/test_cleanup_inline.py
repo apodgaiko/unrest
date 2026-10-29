@@ -10,11 +10,10 @@ import pytest
 from effect_proposals import proposal
 from content_manifest import Refused
 from cleanup_inline import (
-    CASES,
+    DECLARATIONS,
     STARTUP,
     CLIENT,
     INFLIGHT,
-    NO_LAUNCH,
     SLEEP,
     EXIT,
     body,
@@ -22,6 +21,10 @@ from cleanup_inline import (
 )
 from cleanup_launch import TEST
 
+
+NO_LAUNCH = tuple(TEST + f'::test_response_correlation_keeps_numeric_identity[{variant}]'
+                  for variant in ('1_0', '1_1', 'None', 'True', '1.0', 'rid5', 'rid6'))
+CASES = (*DECLARATIONS, *NO_LAUNCH)
 
 def test_inline_bodies_and_effect_lines_are_original_source():
     file = (
@@ -44,7 +47,8 @@ def test_inline_bodies_and_effect_lines_are_original_source():
 @pytest.mark.parametrize("case", CASES)
 def test_inline_parameters_keep_original_effect_counts(case):
     if case in NO_LAUNCH:
-        assert child_count(case) == 0
+        with pytest.raises(Refused):
+            child_count(case)
         with pytest.raises(Refused):
             body(case)
     else:

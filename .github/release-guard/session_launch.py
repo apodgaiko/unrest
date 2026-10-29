@@ -32,19 +32,7 @@ INVALID = tuple(node('every_role_maps_each_launch_category_with_private_safe_dia
 INVALID_BYTES = b'invalid executable format\n'
 LIVE = (*PLAN, *INVALID, *ARGS)
 TIMEOUT = node('timeout_kills_adapter_process_group')
-CASES = (*PLAN,
-    *(node('every_session_role_maps_preflight_rejection_without_spawn[' + role + ']') for role in ROLES),
-    *(node('every_role_maps_each_launch_category_with_private_safe_diagnostic[' + category + '-' + role + ']')
-      for category in ('invalid_command', 'missing', 'directory', 'not_executable', 'startup_failed') for role in ROLES),
-    *(node('explicit_empty_command_is_invalid_without_fallback[' + role + ']') for role in ROLES),
-    node('clean_exit_zero_without_response_is_failed_unknown_work'), node('response_limit_has_a_non_bypassable_65536_byte_ceiling'),
-    *(node('structured_session_roles_are_read_only_even_in_unsafe_profile[' + role + '-' + profile + ']')
-      for role in ROLES for profile in ('safe', 'unsafe-development-unrestricted')),
-    node('role_provider_mapping_preserves_separate_authorities'),
-    *(node('every_session_role_has_a_bundled_structured_prompt[' + role + ']') for role in ROLES),
-    *tuple(ARGS)[1:3], node('acp_message_ids_select_final_json_without_hiding_prior_bytes'), tuple(ARGS)[3],
-    node('acp_final_message_still_requires_whole_json_and_complete_ids'), *tuple(ARGS)[4:],
-    node('private_artifact_cannot_escape_caller_root'))
+CASES = LIVE
 PINS = {'tests/test_provider_sessions.py': 'a6f8e62dd6ed4dce983bcc11f4ed5d600e92c36f5f1500be1fbae4317fe9145e', 'src/unrest_harness/provider_sessions.py': '7ecb0826e0c6a6b322f08209676d0b8e673688b64dd4c2aa3aad212ddc7cd7cc', 'tests/mock_provider_session_acp.py': '1328102286bd9b61f9bb3bc83f35cf6bc8ef57a1bcc489e015ea5719b62f0dad', 'src/unrest_harness/acp_runner.py': '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a2f'}
 
 

@@ -28,18 +28,6 @@ CASES = tuple(TEST + '::' + name for name in (
 MOCK_CASE=CASES[3]
 
 
-NEGATIVE_CASES = tuple(TEST + '::' + name for name in (
-    *(f'test_owned_node_local_rejection_starts_no_mcp_client_or_protocol[{command}-{role}]'
-      for command in ('empty', 'whitespace', 'tokenization', 'empty-argv0', 'missing', 'argv0-nul', 'later-argv-nul', 'unencodable')
-      for role in ('work', 'validate')),
-    *(f'test_owned_node_rejects_malformed_os_fields_before_any_launch_work[{malformation}-{field}-{role}]'
-      for malformation in ('nul', 'unencodable') for field in ('cwd', 'env_key', 'env_value', 'path')
-      for role in ('work', 'validate')),
-    *(f'test_owned_node_rejects_illegal_environment_name_before_any_launch_work[{role}]' for role in ('work', 'validate')),
-    *(f'test_owned_node_obstruction_starts_no_mcp_client_or_protocol[{fixture}-{category}-{role}]'
-      for fixture, category in (('directory', 'directory'), ('non_executable', 'not_executable')) for role in ('work', 'validate')),
-    'test_terminal_local_rejection_starts_no_mcp_client_or_protocol',
-))
 STARTUP_CASES=tuple(TEST+'::'+name for name in (
     'test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[work]',
     'test_owned_node_real_startup_failure_is_safe_and_starts_no_protocol[validate]',
@@ -51,7 +39,6 @@ TEMPLATE_CASES=tuple(TEST+'::'+name+'['+role+'-'+provider+']'
 BATCH_CASES=tuple(TEST+'::test_dispatch_batch_serializes_mcp_startup_and_preserves_sibling_success['+provider+']'
                   for provider in ('claude','codex'))
 EXECUTION_CASES=(*CASES,*STARTUP_CASES,*TEMPLATE_CASES,*BATCH_CASES)
-ALL_CASES = (*EXECUTION_CASES, *NEGATIVE_CASES)
 
 
 def environment(case, base, root_environment, ordinal=0):

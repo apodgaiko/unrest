@@ -14,7 +14,7 @@ from content_manifest import Refused
 from unrest_harness.experimental_provider_config import ProviderConfig
 
 
-def test_catalogue_is_exact_original_parametrized_collection():
+def test_catalogue_is_exact_original_parametrized_collection(tmp_path):
     checkout = next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
     tree = ast.parse((checkout / TEST).read_text())
     collected = []
@@ -26,8 +26,23 @@ def test_catalogue_is_exact_original_parametrized_collection():
         for values in itertools.product(*parameters):
             suffix = '[' + '-'.join(str(value) for value in values) + ']' if values else ''
             collected.append(TEST + '::' + function.name + suffix)
-    assert tuple(collected) == BOOTSTRAP and len(BOOTSTRAP) == 27
-    assert sum(case.configured for case in DECLARATIONS) == 5
+    zero={TEST+'::'+name for name in (
+        'test_actual_launch_lifetime_and_interruptions[exhausted]',
+        'test_phases_share_one_deadline_across_tasks','test_absolute_ledger_includes_setup_and_cleanup',
+        'test_capped_body_free_observation_is_pre_cleanup','test_turn_reservation_does_not_restart_clock_after_bootstrap',
+        *(f'test_original_limits_refuse_before_grant_or_send[True-{limit}]' for limit in ('turn','episode','campaign')),
+        'test_expiry_during_seal_cannot_publish_grant')}
+    assert tuple(case for case in collected if case not in zero)==BOOTSTRAP
+    assert len(collected)==27 and len(BOOTSTRAP)==18
+    from test_source_integration import backend_request
+    from effect_proposals import proposal
+    for index,case in enumerate(sorted(zero)):
+        host,actor,raw=backend_request(tmp_path/str(index))
+        host.case=raw['case']=case
+        with pytest.raises(Refused):
+            proposal(host,actor,raw)
+        assert not host.intents
+    assert sum(case.configured for case in DECLARATIONS) == 4
     assert wrapper(BOOTSTRAP[0]).find('time.sleep(32)') >= 0
 
 
