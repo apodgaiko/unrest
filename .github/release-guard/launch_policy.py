@@ -13,13 +13,6 @@ from pathlib import Path, PurePosixPath
 
 from content_manifest import Refused, is_sha256
 
-MAX_ARGUMENTS = 256
-MAX_TEXT_BYTES = 131_071
-MAX_VECTOR_BYTES = 2 * 1024 * 1024
-MAX_FIELDS = 1024
-MAX_DECLARATION_BYTES = 2 * 1024 * 1024
-
-
 @dataclass(frozen=True)
 class Expected:
     rule: str
@@ -32,64 +25,11 @@ class Expected:
     payload_kind: str
     payload_sha256: str
 
-def _text(value: object) -> str:
-    if type(value) is not str or "\x00" in value:
-        raise Refused("policy_text")
-    try:
-        if len(value.encode("utf-8")) > MAX_TEXT_BYTES:
-            raise Refused("policy_text_bound")
-    except UnicodeError:
-        raise Refused("policy_text_encoding") from None
-    return value
-
-
 def _absolute(value: str) -> str:
     if (not value.startswith("/") or value.startswith("//")
             or str(PurePosixPath(value)) != value or ".." in PurePosixPath(value).parts):
         raise Refused("policy_absolute_path")
     return value
-
-
-class _Budget:
-    def __init__(self):
-        self.fields, self.bytes = 0, 0
-
-    def text(self, value: object) -> str:
-        self.fields += 1
-        if self.fields > MAX_FIELDS:
-            raise Refused('policy_field_bound')
-        result = _text(value)
-        self.bytes += len(result.encode('utf-8'))
-        if self.bytes > MAX_DECLARATION_BYTES:
-            raise Refused('policy_declaration_bound')
-        return result
-
-
-def _argv(value, budget):
-    if type(value) is not tuple or not 0 < len(value) <= MAX_ARGUMENTS:
-        raise Refused('policy_argv')
-    result = tuple(budget.text(item) for item in value)
-    if sum(len(item.encode('utf-8')) + 1 for item in result) > MAX_VECTOR_BYTES:
-        raise Refused('policy_argv_bound')
-    return result
-
-
-def _environment(value, budget):
-    if type(value) is not tuple or len(value) > MAX_ARGUMENTS:
-        raise Refused('policy_environment')
-    result = []
-    for pair in value:
-        if type(pair) is not tuple or len(pair) != 2:
-            raise Refused('policy_environment')
-        key, item = budget.text(pair[0]), budget.text(pair[1])
-        if '=' in key:
-            raise Refused('policy_environment_key')
-        result.append((key, item))
-    if len({key for key, _ in result}) != len(result):
-        raise Refused('policy_duplicate_environment')
-    if sum(len(key.encode()) + len(item.encode()) + 2 for key, item in result) > MAX_VECTOR_BYTES:
-        raise Refused('policy_environment_bound')
-    return tuple(sorted(result))
 
 
 def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
@@ -128,20 +68,12 @@ def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
 def build_expected(rule: str, case: str, executable: str, executable_sha256: str,
                    argv: tuple[str, ...], environment: tuple[tuple[str, str], ...],
                    cwd: str, payload_kind: str, reference: str | None = None) -> Expected:
-    """Validate the observer-selected declaration without an intermediate policy."""
+    """Derive the trusted builder descriptor; input validation lives at ingress."""
     if not is_sha256(executable_sha256) or type(payload_kind) is not str:
         raise Refused('policy_rule')
-    budget = _Budget()
-    for item in (rule, case):
-        if not budget.text(item):
-            raise Refused('policy_rule')
-    executable = _absolute(budget.text(executable))
-    argv = _argv(argv, budget)
-    cwd = _absolute(budget.text(cwd))
-    environment = _environment(environment, budget)
     _, payload_sha256 = _payload(argv, payload_kind, reference, executable_sha256)
     return Expected(rule, case, executable, executable_sha256, argv,
-                    environment, cwd, payload_kind, payload_sha256)
+                    tuple(sorted(environment)), cwd, payload_kind, payload_sha256)
 
 
 

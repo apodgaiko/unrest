@@ -217,6 +217,17 @@ test-local oracle, retaining all byte/schema/race controls. Production uses the
 unchanged bounded capture/validation primitives and authenticated input references;
 no production admission or enforcement imports that test oracle.
 
+Launch descriptors are trusted output of the selected finite builders, not a
+second input language. Proposal ingress owns primitive, NUL, UTF-8, environment-key
+and canonical-cwd rejection; authenticated JSON frames retain their existing byte,
+depth and work bounds. Authored relative executable/argv spelling and legal empty
+environment names remain. The separate MP route still reconstructs its exact
+stdlib templates and observer-owned environment. Descriptor construction retains
+payload-kind interpretation, inline-body hashing, executable digest checks and
+external script/module pin requirements, with deterministic environment ordering.
+Its duplicate producer-side tuple and aggregate-budget codec is removed. Negative
+controls exercise actual ingress/frame rejection and unchanged byte/exec binding.
+
 ## Verification and retired model controls
 
 Every original product/source test and its real completion, status and cleanup

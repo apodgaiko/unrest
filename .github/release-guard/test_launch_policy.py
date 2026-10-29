@@ -9,6 +9,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
 import launch_policy as policy
+from effect_proposals import proposal_operands
+from control_transport import encode,REQUEST_LIMIT,unique
 
 CASE, IMAGE = "tests/test_example.py::test_launch[work]", "a" * 64
 
@@ -60,21 +62,23 @@ def test_payload_modes_keep_external_content_and_failed_exec_distinct(kind, argv
 
 
 
+def raw(**changes):
+    return {'case':CASE,'executable':'python','argv':['python','-c','pass'],
+            'environment':{'MODE':'controlled'},'cwd':'/source','stdin':None,**changes}
+
+
 @pytest.mark.parametrize('field', ('argv', 'environment', 'cwd', 'executable'))
-@pytest.mark.parametrize('value', (True, 1, b'value', ('nested',), {'slot': 'value'}, object()))
-def test_nonprimitive_fields_and_expression_objects_refuse(field, value):
-    change = {'argv': ('python', '-c', value)} if field == 'argv' else (
-        {'environment': (('VALUE', value),)} if field == 'environment' else {field: value})
+@pytest.mark.parametrize('value', (True, 1, b'value', ('nested',), {'slot':'value'}, object()))
+def test_actual_proposal_ingress_refuses_nonprimitive_fields(field,value):
+    change={'argv':['python','-c',value]} if field=='argv' else (
+        {'environment':{'VALUE':value}} if field=='environment' else {field:value})
     with pytest.raises(policy.Refused):
-        expected(rule(**change))
+        proposal_operands(raw(**change),CASE)
 
 
 @pytest.mark.parametrize("changes", [
-    {"environment": (("MODE", "controlled"), ("MODE", "controlled"))},
-    {"environment": (("BAD=KEY", "x"),)},
     {"reference": "b" * 64},
     {"payload_kind": "python-script"},
-    {"argv": ("python", "-c", ("pass",))},
     {"argv": ("python", "-m", "invalid/module"), "payload_kind": "python-module",
      "reference": "b" * 64},
     {"argv": ("python", "relative.py"), "payload_kind": "python-script",
@@ -92,32 +96,21 @@ def test_external_payload_reference_and_absolute_root():
     assert expected(rule(cwd='/')).cwd == '/'
 
 
-def test_literal_vector_environment_and_aggregate_bounds(monkeypatch):
+def test_actual_proposal_and_frame_bounds_are_enforced_once():
     with pytest.raises(policy.Refused):
-        expected(rule(argv=('python',) * (policy.MAX_ARGUMENTS + 1)))
+        proposal_operands(raw(argv=['python']*257),CASE)
     with pytest.raises(policy.Refused):
-        expected(rule(environment=(('MODE', 'one'), ('MODE', 'two'))))
-    with monkeypatch.context() as context:
-        context.setattr(policy, 'MAX_DECLARATION_BYTES', 256)
-        with pytest.raises(policy.Refused, match='declaration_bound'):
-            expected(rule(environment=(('VALUE', 'x' * 200),)))
-    with monkeypatch.context() as context:
-        context.setattr(policy, 'MAX_TEXT_BYTES', 100)
-        with pytest.raises(policy.Refused, match='text_bound'):
-            expected(rule(environment=(('VALUE', 'x' * 101),)))
-
-
-def test_extra_context_and_all_finite_bounds_refuse(monkeypatch):
-    for name in ('MAX_ARGUMENTS', 'MAX_TEXT_BYTES', 'MAX_VECTOR_BYTES', 'MAX_FIELDS', 'MAX_DECLARATION_BYTES'):
-        with monkeypatch.context() as context:
-            context.setattr(policy, name, 1)
-            with pytest.raises(policy.Refused):
-                expected()
-    nested = 'value'
+        proposal_operands(raw(environment={'BAD=KEY':'x'}),CASE)
+    with pytest.raises(policy.Refused):
+        unique([('MODE','one'),('MODE','two')])
+    with pytest.raises(policy.Refused):
+        encode(raw(environment={'VALUE':'x'*REQUEST_LIMIT}),REQUEST_LIMIT)
+    nested='value'
     for _ in range(100):
-        nested = (nested,)
+        nested=[nested]
     with pytest.raises(policy.Refused):
-        expected(rule(environment=(('MODE', nested),)))
+        proposal_operands(raw(environment={'MODE':nested}),CASE)
+    assert proposal_operands(raw(environment={'':'empty-name','VALUE':'before=after'}),CASE)==['python','-c','pass']
 
 
 @pytest.mark.parametrize('field', ('argv', 'environment', 'cwd', 'executable', 'case'))
@@ -129,23 +122,23 @@ def test_nonliteral_callbacks_never_run(field):
             pytest.fail('equality executed')
         __hash__ = str.__hash__
     value = Trap('value')
-    change = {'argv': ('python', '-c', value)} if field == 'argv' else (
-        {'environment': (('VALUE', value),)} if field == 'environment' else (
+    change = {'argv': ['python', '-c', value]} if field == 'argv' else (
+        {'environment': {'VALUE': value}} if field == 'environment' else (
         {'case': value} if field == 'case' else {field: value}))
     with pytest.raises(policy.Refused):
-        expected(rule(**change))
+        proposal_operands(raw(**change),CASE)
 
 
 @pytest.mark.parametrize('cwd', ('relative', '//owned', '/owned//child', '/owned/../other', False, Path('/owned')))
 def test_literal_cwd_is_primitive_and_canonical(cwd):
     with pytest.raises(policy.Refused):
-        expected(rule(cwd=cwd))
+        proposal_operands(raw(cwd=cwd),CASE)
 
 
 @pytest.mark.parametrize('value', ('bad\0value', '\ud800'))
 def test_literal_text_rejects_nul_and_unencodable_values(value):
     with pytest.raises(policy.Refused):
-        expected(rule(environment=(('VALUE', value),)))
+        proposal_operands(raw(environment={'VALUE':value}),CASE)
 
 
 @pytest.mark.parametrize('extra', ('owner', 'cases', 'values', 'roots'))

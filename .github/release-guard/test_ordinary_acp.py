@@ -203,7 +203,7 @@ def test_constructor_options_refuse_callbacks_before_comparing(field):
     from effect_proposals import proposal
     from types import SimpleNamespace
 
-    host = SimpleNamespace(launch_owner=lambda actor: None)
+    host = SimpleNamespace(case=CASES[0], launch_owner=lambda actor: None)
     raw = {
         "case": CASES[0],
         "executable": "/python",

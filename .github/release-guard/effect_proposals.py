@@ -18,13 +18,11 @@ from controlled_cases import CASES as CONTROLLED
 from bootstrap_cases import BOOTSTRAP
 
 
-def proposal(host, actor, raw):
+def proposal_operands(raw,case):
     from source_observer import shape
-    host.launch_owner(actor)
     from control_transport import finite
     finite(raw)
     shape(raw, ('case','executable','argv','cwd','environment','stdin'))
-    case = host.case
     if raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list:
         raise Refused('finite process proposal case or vector')
     argv = raw['argv']
@@ -34,6 +32,26 @@ def proposal(host, actor, raw):
             or type(raw['environment']) is not dict
             or any(type(k) is not str or type(v) is not str for k,v in raw['environment'].items())):
         raise Refused('finite process proposal operands')
+    values=[raw['executable'],raw['cwd'],*argv,*raw['environment'],*raw['environment'].values()]
+    try:
+        for value in values:
+            if '\0' in value:
+                raise Refused('finite process text')
+            value.encode('utf-8')
+    except UnicodeError:
+        raise Refused('finite process text encoding') from None
+    if any('=' in key for key in raw['environment']):
+        raise Refused('finite process environment key')
+    from launch_policy import _absolute
+    _absolute(raw['cwd'])
+    return argv
+
+
+def proposal(host, actor, raw):
+    host.launch_owner(actor)
+    argv=proposal_operands(raw,host.case)
+    case=host.case
+    from git_sites import CASES as GIT_CASES
     from http_cases import CASES as HTTP_CASES,proposal as http_proposal
     from package_cases import CASES as PACKAGE_CASES
     if case in PACKAGE_CASES:

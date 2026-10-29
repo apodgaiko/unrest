@@ -106,6 +106,15 @@ class OperandModel:
         native = str(Path(sys.executable).resolve())
         if type(observed.argv) is not tuple or any(type(v) is not str for v in observed.argv):
             raise Refused("nonprimitive command vector")
+        from effect_proposals import proposal_operands
+        if (type(observed.environment) is not tuple
+                or any(type(row) is not tuple or len(row)!=2
+                       or any(type(item) is not str for item in row)
+                       for row in observed.environment)):
+            raise Refused("nonprimitive environment")
+        proposal_operands({'case':case,'executable':observed.executable,
+                           'argv':list(observed.argv),'environment':dict(observed.environment),
+                           'cwd':observed.cwd,'stdin':None},case)
         backend = observed.argv[1:2] != (str(self.checkout / ACP),)
         relay = None
         if not backend:
