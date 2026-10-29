@@ -95,13 +95,3 @@ def local_cases(policy,cases,*,normal_outcomes=False,on_last=None):
     result.cases=tuple(cases)
     result.normal_outcomes=normal_outcomes
     return result
-
-
-def main():
-    from source_entry import ACTIVE
-    from postbuild_root import CASES,run
-    if ACTIVE is None or ACTIVE.profile['role']!='root' or tuple(ACTIVE.profile['cases'])!=CASES:
-        raise Refused('archive exact native activation absent')
-    from multiprocess_hooks import install
-    install(ACTIVE)
-    return run(ACTIVE,OriginalCases(ACTIVE))

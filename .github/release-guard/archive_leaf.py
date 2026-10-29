@@ -37,16 +37,19 @@ def checker_main():
 
 def main():
     from source_entry import ACTIVE
-    from source_root import local_cases
+    from source_root import local_cases,OriginalCases
     from postbuild_root import CASES
     import pytest
-    if ACTIVE is None or ACTIVE.profile['role']!='archive-leaf':
+    if ACTIVE is None or ACTIVE.profile['role'] not in ('root','archive-leaf'):
         raise Refused('archive leaf native role')
     policy=ACTIVE
-    kind=NEGATIVE.get(policy.case,'normal')
+    root=policy.profile['role']=='root'
+    if root and tuple(policy.profile['cases'])!=CASES:
+        raise Refused('archive exact native activation absent')
+    kind='normal' if root else NEGATIVE.get(policy.case,'normal')
     if any(name=='unrest_harness' or name.startswith('unrest_harness.') for name in sys.modules):
         raise Refused('archive package preloaded before probe')
-    leaf=local_cases(policy,CASES,normal_outcomes=kind=='missing-corpus')
+    leaf=OriginalCases(policy) if root else local_cases(policy,CASES,normal_outcomes=kind=='missing-corpus')
     original=pytest.main
     called=False
     def run(args,plugins):
@@ -56,11 +59,11 @@ def main():
         called=True
         return original(args,plugins=[*plugins,leaf])
     pytest.main=run
-    sys.argv=[policy.profile['native'],policy.profile['checkout']]
+    sys.argv=[policy.profile['native'],policy.profile['argv'][-1] if root else policy.profile['checkout']]
     code=None
     missing=False
     try:
-        probe=literal(Path(policy.profile['checkout']),'tools/check_distribution.py',None,'_PYTEST_PROBE')
+        probe=__import__('release_distribution_oracle')._PYTEST_PROBE if root else literal(Path(policy.profile['checkout']),'tools/check_distribution.py',None,'_PYTEST_PROBE')
         exec(compile(probe,'<original-distribution-probe>','exec'),{'__name__':'__main__'})
     except ModuleNotFoundError as exc:
         if kind!='missing-package' or exc.name!='unrest_harness' or called or 'unrest_harness' in sys.modules:
@@ -82,6 +85,10 @@ def finish(policy,kind,code,leaf,missing,called):
             or policy.poison or code!=expected or (kind=='missing-package' and (not missing or leaf.completed or leaf.reports or called))
             or kind!='missing-package' and (missing or not called or tuple(leaf.completed)!=CASES or any(leaf.reports.get(case)!=phases for case in CASES))):
         raise Refused('archive actual original outcome incomplete')
+    if policy.profile.get('role')=='root':
+        from source_profile import case_seal
+        policy.client.request('root-finish',case_seal(CASES))
+        return expected
     policy.client.request('archive-result',{'kind':kind,'count':0 if kind=='missing-package' else 15,
         'failed':15 if kind=='missing-corpus' else 0,'exit':expected})
     return expected

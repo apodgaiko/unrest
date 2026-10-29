@@ -228,3 +228,17 @@ def test_prepared_auxiliary_members_are_bound_but_never_treated_as_archives(tmp_
         transport.retained_archive(row,POSITIVE)
     with pytest.raises(Refused,match='two-member'):
         transport.archive_inputs(data['dist'],next(iter(MUTATIONS)))
+
+
+def test_standalone_archive_seals_root_only_after_all_fifteen_real_reports(monkeypatch):
+    from source_profile import case_seal
+    policy,leaf,_,calls=proof(monkeypatch,'normal')
+    policy.profile.update(role='root',cases=list(CASES))
+    leaf.completed=list(CASES)
+    leaf.reports={case:{phase:'passed' for phase in ('setup','call','teardown')} for case in CASES}
+    assert finish(policy,'normal',0,leaf,False,True)==0
+    assert calls==[('root-finish',case_seal(CASES))]
+    leaf.reports[CASES[-1]]['teardown']='failed'
+    with pytest.raises(Refused):
+        finish(policy,'normal',0,leaf,False,True)
+    assert len(calls)==1

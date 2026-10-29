@@ -662,3 +662,11 @@ only concrete case/image/argv/environment/cwd/payload operands; the redundant
 reply rule label is retired. Cleanup scenario translation uses the dispatcher's
 independently selected cleanup role instead. No label grants execution authority.
 Multiprocessing's conditional installation lives with its hook implementation.
+
+Standalone extracted persistence certification and nested archive leaves share one
+original-probe executor and report-phase verifier. Standalone execution retains
+the root actor and its individual case-start/case-finish protocol, then seals the
+root; nested execution retains its enclosing archive actor and archive-result.
+The extracted tree imports the measured dependency copy of the original oracle,
+with the original checkout passed as the excluded provenance root. Omitted corpus
+and package negatives remain distinct and cannot produce a successful root seal.
