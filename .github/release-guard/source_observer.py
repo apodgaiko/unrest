@@ -42,6 +42,7 @@ from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_G
 
 
 from readiness_launch import CASES as READINESS_CASES,READY as READINESS_READY
+from terminal_leaves import CASES as TERMINAL_CASES
 
 PARK_SELF_PAIR=object()
 
@@ -215,7 +216,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('uv-cli','mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps','archive-checker','archive-leaf','archive-installed') and not input_pipe):
+            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('terminal-native','uv-cli','mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps','archive-checker','archive-leaf','archive-installed') and not input_pipe):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -298,7 +299,7 @@ class Observer:
         intent['stdout'] = self.stdio(pid, intent['role'],
             input_pipe=intent.get('input_pipe',False) or intent['role'] == 'git-command' and intent['command'].stdin is not None,intent=intent)
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
-        if intent['role'] in ('sleep', 'session-invalid','ps','uv-cli') or intent['role'].startswith('git-'):
+        if intent['role'] in ('sleep', 'session-invalid','ps','uv-cli','terminal-native') or intent['role'].startswith('git-'):
             actual = process_identity(pid)
             birth = Birth.read(actual)
             pins = (('native-fixture', intent['executable_sha256']),)
@@ -459,8 +460,8 @@ class Observer:
             return completed(actor,terminal)
         if actor.get('case') in UV_CASES:
             return terminal is not None and terminal[2]==1 and (actor.get('kernel_admitted') is True or actor['body_ready'])
-        if actor['role']=='desktop' or actor.get('case') in (DRAIN_CASE,CONSOLE_CASE):
-            return terminal is not None and terminal[2]==0 and actor['body_ready']
+        if actor['role']=='desktop' or actor.get('case') in (DRAIN_CASE,CONSOLE_CASE,*TERMINAL_CASES):
+            return terminal is not None and terminal[2]==0 and (actor['body_ready'] or actor['role']=='terminal-native' and actor.get('kernel_admitted') is True)
         if actor['role']=='pytest-regression':
             return terminal is not None and terminal[2]==0 and actor['body_ready'] and actor.get('preselected_complete') is True
         if actor['role']=='ps':

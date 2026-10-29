@@ -649,3 +649,11 @@ handoff/node environment. Its owned pytest directory generation is acquired befo
 admission, while the resolved system image and original argv remain independently
 bound. The sibling mock ACP body remains the pinned original script, with the
 original workspace and handoff path; neither leaf grants descendant authority.
+
+Terminal leaves retain the actual raw-credential redaction probe, all twelve
+provider/role/profile transform variants, and both optional-null native controls.
+Programs are reconstructed from their pinned original literals or one repr-only
+name tuple. The owned workspace generation, finite environment and merged output
+pipe are independently checked. The native controls admit only `/usr/bin/true`;
+Python leaves require their real body READY. All leaves require actual exit0 and
+original-parent numeric wait, without provider, descendant or network authority.
