@@ -1,10 +1,8 @@
 """Original terminal redaction, credential transform and omission-default leaves."""
-import ast
-import base64
 from pathlib import Path
 
 from content_manifest import Refused
-from launch_policy import source_unit,assignment,build_expected,admit_expected,render_string
+from launch_policy import source_unit,build_expected,admit_expected,pinned_body
 from owned_fixture import acquire
 
 TEST='tests/test_capability_policy.py'
@@ -16,23 +14,9 @@ OPTIONAL=tuple('tests/test_acp_runner.py::test_terminal_create_optional_nulls_us
 CASES=(RAW,*TRANSFORM,*OPTIONAL)
 POLICY='src/unrest_harness/capability_policy.py'
 POLICY_PIN='0aaa3eca3a1b891bcf7458832aeed92768489826fda23320ab000ce3d1df3c30'
-
-
-def program(checkout,case):
-    if case==RAW:
-        unit=source_unit(checkout,TEST,PIN,(case.split('::')[1],))
-        calls=[node for node in ast.walk(unit) if isinstance(node,ast.Dict) and any(isinstance(key,ast.Constant) and key.value=='args' for key in node.keys)]
-        if len(calls)!=1:
-            raise Refused('terminal original argument dictionary')
-        args=ast.literal_eval(calls[0].values[calls[0].keys.index(next(key for key in calls[0].keys if isinstance(key,ast.Constant) and key.value=='args'))])
-        return args[1],{'ZAI_API_KEY':'RAW_ACP_CREDENTIAL_79d0b1'}
-    unit=source_unit(checkout,TEST,PIN,('test_real_terminal_create_excludes_raw_wrappers_and_preserves_transform',))
-    names=ast.literal_eval(assignment(source_unit(checkout,POLICY,POLICY_PIN),'FINITE_CREDENTIAL_NAMES'))
-    observed=(*names,*(f'UNRELATED_ALIAS_{i}' for i in range(len(names))),'HOME','TEMP','SSL_CERT_DIR','NO_PROXY','TMP')
-    template=assignment(unit,'script')
-    body=render_string(template,(('observed_names',114,repr(observed)),))
-    wrapped=f'terminal-sentinel-1-{names[1].lower()}'
-    return body,{'SSL_CERT_DIR':'MONKEY','NO_PROXY':'ordinary-equal-free-value','TMP':base64.urlsafe_b64encode(wrapped.encode()).decode()}
+PROGRAMS={RAW:('f4ce4c072ea2f9aaca39a3fdfbaac6fd245f9af013575da904056ef2114e60a0',{'ZAI_API_KEY':'RAW_ACP_CREDENTIAL_79d0b1'}),
+    **dict.fromkeys(TRANSFORM,('52dfcc2a3a4a04e0db1943f3b43a2791d1c3c854d7fb73a05e28bc9c8f0e6295',
+        {'SSL_CERT_DIR':'MONKEY','NO_PROXY':'ordinary-equal-free-value','TMP':'dGVybWluYWwtc2VudGluZWwtMS1hbnRocm9waWNfYXV0aF90b2tlbg=='}))}
 
 
 def proposal(host,actor,raw):
@@ -57,7 +41,8 @@ def proposal(host,actor,raw):
         from git_observer import image
         executable,pin,vector,role,env='/usr/bin/true',image('/usr/bin/true'),['/usr/bin/true'],'terminal-native',{}
     else:
-        body,env=program(checkout,case)
+        body_pin,env=PROGRAMS[case]
+        body=pinned_body(raw['argv'],body_pin)
         executable,pin,vector,role=native,host.binding['entry']['sha256'],[native,'-c',body],'fixed-inline'
     env={'PATH':host.meta_environment()['PATH'],**env}
     value=build_expected(case,executable,pin,tuple(vector),tuple(sorted(env.items())),str(workspace),

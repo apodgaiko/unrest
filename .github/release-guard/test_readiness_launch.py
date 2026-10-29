@@ -13,7 +13,7 @@ ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is
 
 
 @pytest.mark.parametrize('case',readiness.CASES[:4])
-@pytest.mark.parametrize('mutation',[None,'body','env','cwd','descendant'])
+@pytest.mark.parametrize('mutation',[None,'body','variant','args','env','cwd','descendant'])
 def test_exact_original_readiness_program_and_operands(case,mutation):
     unit=source_unit(ROOT,readiness.TEST,readiness.PIN,(readiness.NAME,'exercise'))
     bodies=[ast.literal_eval(node.value) for node in ast.walk(unit) if isinstance(node,ast.Assign)
@@ -33,6 +33,10 @@ def test_exact_original_readiness_program_and_operands(case,mutation):
          'cwd':str(ROOT),'stdin':None}
     if mutation=='body':
         raw['argv'][2]='print("different")'
+    elif mutation=='variant':
+        raw['argv'][2]=bodies[1 if case==readiness.READY else 0]
+    elif mutation=='args':
+        raw['argv'].append('foreign')
     elif mutation=='env':
         raw['environment']['EXTRA']='not original'
     elif mutation=='cwd':

@@ -94,6 +94,12 @@ def literal(unit,name):
     return value.value
 
 
+def pinned_body(argv,pin):
+    if len(argv)<3 or argv[1]!='-c' or hashlib.sha256(argv[2].encode('utf-8')).hexdigest()!=pin:
+        raise Refused('declared inline body bytes')
+    return argv[2]
+
+
 def render_string(node,substitutions):
     parts=node.values if isinstance(node,ast.JoinedStr) else (node,)
     result=[]

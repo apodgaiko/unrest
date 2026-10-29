@@ -7,15 +7,31 @@ from pathlib import Path
 from types import SimpleNamespace
 import os
 import sys
+import hashlib
 
 import pytest
 
 from content_manifest import Refused
-from launch_policy import source_unit
+from launch_policy import source_unit,assignment,render_string
 import terminal_leaves as leaves
 import owned_fixture
 
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+
+
+def original_program(case):
+    unit=source_unit(ROOT,leaves.TEST,leaves.PIN,(case.split('::')[1].split('[')[0],))
+    if case==leaves.RAW:
+        calls=[node for node in ast.walk(unit) if isinstance(node,ast.Dict) and any(isinstance(key,ast.Constant) and key.value=='args' for key in node.keys)]
+        assert len(calls)==1
+        key=next(key for key in calls[0].keys if isinstance(key,ast.Constant) and key.value=='args')
+        args=ast.literal_eval(calls[0].values[calls[0].keys.index(key)])
+        return args[1],{'ZAI_API_KEY':ast.literal_eval(assignment(unit,'secret'))}
+    names=ast.literal_eval(assignment(source_unit(ROOT,leaves.POLICY,leaves.POLICY_PIN),'FINITE_CREDENTIAL_NAMES'))
+    observed=(*names,*(f'UNRELATED_ALIAS_{i}' for i in range(len(names))),'HOME','TEMP','SSL_CERT_DIR','NO_PROXY','TMP')
+    body=render_string(assignment(unit,'script'),(('observed_names',114,repr(observed)),))
+    wrapped=f'terminal-sentinel-1-{names[1].lower()}'
+    return body,{'SSL_CERT_DIR':'MONKEY','NO_PROXY':'ordinary-equal-free-value','TMP':base64.urlsafe_b64encode(wrapped.encode()).decode()}
 
 
 @pytest.mark.parametrize('case',leaves.OPTIONAL)
@@ -61,7 +77,8 @@ def test_terminal_catalogue_matches_original_collection(monkeypatch):
 
 @pytest.mark.parametrize('case',(leaves.RAW,*leaves.TRANSFORM))
 def test_program_is_identical_to_original_test_operands_without_executing_a_child(tmp_path,case):
-    body,env=leaves.program(ROOT,case)
+    body,env=original_program(case)
+    assert leaves.PROGRAMS[case]==(hashlib.sha256(body.encode()).hexdigest(),env)
     unit=source_unit(ROOT,leaves.TEST,leaves.PIN,(case.split('::')[1].split('[')[0],))
     unit.decorator_list=[]
     names=ast.literal_eval(next(node.value for node in ast.parse((ROOT/leaves.POLICY).read_bytes()).body
@@ -101,7 +118,7 @@ def test_terminal_launch_does_not_grant_other_programs_or_fixture_generations(tm
     base=tmp_path/'pytest'/(leaves.RAW.split('::')[1][:30]+'0')
     workspace=base/'workspace'
     workspace.mkdir(parents=True)
-    body,env=leaves.program(ROOT,leaves.RAW)
+    body,env=original_program(leaves.RAW)
     def root_only(actor):
         if actor['role']!='root':
             raise Refused('root only')

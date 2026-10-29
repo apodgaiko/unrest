@@ -877,3 +877,14 @@ remain. Supplementary tests derive all four digests independently from the
 pinned original literals and postimages and reject cross-variant substitutions.
 This removes runtime AST derivation for constant fixtures; root-dependent
 templates retain their renderer and no generic Python body is admitted.
+The readiness and owned-client leaves likewise select one of seven exact
+constant program digests through their eight original case IDs. Other argv,
+environment, root caller, cwd, role and quota checks stay independent; a valid
+body from another variant or extra argv still refuses. Their supplementary
+tests derive the literal programs from the original source rather than trusting
+the declared hashes.
+The terminal credential-redaction leaves bind their two constant programs and
+their exact public canary environments the same way. Every role/profile/provider
+parameter remains in the original tests; optional-null native `/usr/bin/true`
+leaves retain their separate native image declaration. No raw credential or
+additional terminal environment field follows from a matching program hash.
