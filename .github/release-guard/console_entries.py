@@ -82,7 +82,7 @@ def proposal(host,actor,raw):
     if pin!=host.binding['entry']['sha256']:
         raise Refused('console exact native guard bytes')
     file,file_pin=script(host,'unrest-server')
-    value=build_expected('console:server',CASE,str(executable),pin,tuple(vector),
+    value=build_expected(CASE,str(executable),pin,tuple(vector),
         tuple(sorted(environment.items())),str(cwd),'native')
     if raw['executable']!='unrest-server':
         raise Refused('console exact registered command')

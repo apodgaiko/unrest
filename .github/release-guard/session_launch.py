@@ -74,7 +74,7 @@ def expected(case, cwd, checkout, owned, native, pin, root_environment, *, child
     if invalid:
         argv, pin = (str(base / 'private-canary-startup_failed'),), hashlib.sha256(INVALID_BYTES).hexdigest()
     return build_expected(
-        'session:' + ('child' if child else 'adapter'), case,
+        case,
         argv[0], pin,
         argv,
         tuple(sorted(environment.items())),

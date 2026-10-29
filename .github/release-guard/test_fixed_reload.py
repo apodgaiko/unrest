@@ -70,7 +70,7 @@ def test_original_reload_body_and_assertions_are_unchanged():
     assert value.payload_sha256 == hashlib.sha256(call.args[0].value.encode()).hexdigest()
     assert calls[0][1:] == (
         ("fixed-inline", answer["translated"], value.payload_sha256),
-        {"maximum": 1, "environment": None, "inherited": [], "port": None},
+        {"maximum": 1, "inherited": [], "port": None},
     )
 
 

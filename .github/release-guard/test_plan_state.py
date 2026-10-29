@@ -100,7 +100,7 @@ def test_extra_candidate_after_real_failure_refuses(state):
 
 def test_empty_environment_name_is_literal():
     from launch_policy import build_expected
-    value=build_expected('empty', 'case', '/usr/bin/true', 'a'*64, ('/usr/bin/true',), (('','empty-name'),('VALUE','before=after')), '/owned', 'native')
+    value=build_expected('case', '/usr/bin/true', 'a'*64, ('/usr/bin/true',), (('','empty-name'),('VALUE','before=after')), '/owned', 'native')
     assert value.environment == (('','empty-name'),('VALUE','before=after'))
 
 

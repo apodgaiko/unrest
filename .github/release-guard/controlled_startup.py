@@ -47,7 +47,7 @@ def expected_entry(case,checkout,home,native,native_pin,*,backend,relay=None):
         kind,reference = 'python-script',pin
         environment.update(CODEX_PATH=str(home.parent/'fixed-relay'),INITIAL_AGENT_MODE='read-only',SYNTHETIC_RELAY=json.dumps(relay))
     return build_expected(
-        'controlled-startup:'+('backend' if backend else 'acp'), case,
+        case,
         native, native_pin,
         vector,
         tuple(sorted(environment.items())),

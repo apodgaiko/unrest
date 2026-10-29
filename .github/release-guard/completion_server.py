@@ -4,7 +4,6 @@ from pathlib import Path
 from completion_roles import CASES,root,schedule,program,environment
 from completion_git import proposal as git_proposal,ready as git_ready
 from content_manifest import Refused
-from cleanup_launch import OFFLINE
 from launch_policy import admit_expected,build_expected
 
 
@@ -90,12 +89,12 @@ def proposal(host,actor,raw):
         vector=(native,'-c',body,'--mode',mode,'--transport','streamable-http','--host','127.0.0.1','--port',str(port))
     else:
         vector=(native,'-c',body,*((str(slot),) if family=='setup' else ()),'--mode',mode)
-    value=build_expected('http:mcp' if kind=='http' else 'completion:stdio',case,native,pin,vector,
+    value=build_expected(case,native,pin,vector,
         tuple(sorted(env.items())),str(parent/'workspace'),'python-command')
     translated=[native,'-I','-S',*vector[1:]]
     answer=admit_expected(host,actor,raw,value,'mcp' if kind=='http' else 'fixed-inline',translated,
         fields={'server_slot':slot,'input_pipe':kind=='stdio','server_stdio':kind=='stdio'},
-        maximum=len(schedule(case)),environment={**env,**OFFLINE},port=port)
+        maximum=len(schedule(case)),port=port)
     return answer
 
 

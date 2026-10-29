@@ -52,7 +52,7 @@ def proposal(host,actor,raw):
         +'ADAPTER=Path('+repr(str(adapter))+')\nFIXTURE=Path('+repr(str(checkout/'tests/fixtures/experimental_session_app_server.py'))+')\n'+literal(unit,'source'))
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
-    expected=build_expected('cohort:controller',host.case,native,pin,(native,'-c',body),tuple(sorted(env.items())),str(checkout),'python-command')
+    expected=build_expected(host.case,native,pin,(native,'-c',body),tuple(sorted(env.items())),str(checkout),'python-command')
     if raw['executable']!=native or raw['stdin'] is not None:
         raise Refused('cohort exact controller image or input')
     return admit_expected(host,actor,raw,expected,'fixed-inline',[native,'-I','-S','-c',body],fields={'cohort_controller':True})

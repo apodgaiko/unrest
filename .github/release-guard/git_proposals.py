@@ -36,7 +36,7 @@ def prepare(host,actor,raw):
             raise Refused('Git proposal owned process scope')
         operation,command='owned-process',None
         expected=build_expected(
-            'workspace:owned', case,
+            case,
             native, pin,
             tuple(raw['argv']),
             tuple(sorted({**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}.items())),
@@ -62,7 +62,7 @@ def prepare(host,actor,raw):
         phase=(fixture.phase if fixture is not None else 'setup') if operation in SETUP else 'call'
         environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' ('+phase+')',**dict(command.additions)}
         expected=build_expected(
-            'git:'+operation, case,
+            case,
             '/usr/bin/git', image(),
             command.argv,
             tuple(sorted(environment.items())),
@@ -74,4 +74,4 @@ def prepare(host,actor,raw):
     answer=host.git.launch(actor,operation,repository,command,expected,vector)
     if answer is None:
         return None
-    return {**answer,'translated':vector,'rule':expected.rule}
+    return {**answer,'translated':vector}

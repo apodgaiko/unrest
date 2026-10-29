@@ -100,7 +100,6 @@ def proposal(host, actor, raw):
     native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
     cwd, root_environment = raw['cwd'], host.meta_environment()
     vector, role, maximum, inherited, port = None, None, 1, [], None
-    extra_environment=None
     custody=case in (*CONTROLLED,*COHORT_GIT) and argv[0]=='/usr/bin/git'
     if custody:
         from custody_git import command as custody_command,ENVIRONMENT
@@ -108,7 +107,7 @@ def proposal(host, actor, raw):
         from launch_policy import build_expected
         value,custody_kind=custody_command(case,tuple(argv),cwd,owned)
         expected=build_expected(
-            'custody:git', case,
+            case,
             '/usr/bin/git', image(),
             value.argv,
             tuple(sorted(ENVIRONMENT.items())),
@@ -156,7 +155,7 @@ def proposal(host, actor, raw):
             generation=(str(parent),info.st_dev,info.st_ino)
             if host.fixture_roots.setdefault(case,generation)!=generation or Path(cwd)!=parent/'workspace':
                 raise Refused('pipe drain original workspace generation')
-            expected=build_expected('fixed:drain',case,native,pin,(native,'-c',body),
+            expected=build_expected(case,native,pin,(native,'-c',body),
                 (('PATH',root_environment['PATH']),),cwd,'python-command')
         elif case in COMPLETION_CASES:
             if query:
@@ -238,12 +237,10 @@ def proposal(host, actor, raw):
         if (actor['role']=='mcp')!=(role=='git-observe'):
             raise Refused('cleanup original parent role')
         if role=='mcp':
-            from cleanup_launch import read_pipe,OFFLINE
+            from cleanup_launch import read_pipe
             inherited=[read_pipe(actor['birth'].pid,descriptor)]
         expected = cleanup_expected(case,role,base,native,pin,checkout,root_environment,port=port,descriptor=descriptor)
-        script_pin,vector = expected.payload_sha256,list(cleanup_vector(expected,host.directory))
-        from cleanup_launch import OFFLINE
-        extra_environment={**dict(expected.environment),**(OFFLINE if role=='mcp' else {})}
+        script_pin,vector = expected.payload_sha256,list(cleanup_vector(expected,host.directory,role))
     elif case in (*BOOTSTRAP,*CONTROLLED):
         from cohort_controller import parent
         parent(host,actor)
@@ -289,7 +286,7 @@ def proposal(host, actor, raw):
         answer=launch(host,actor,value,custody_kind,expected)
     else:
         answer=host.admit_launch(actor,expected,role,vector,script_pin,
-            maximum=maximum,environment=extra_environment,inherited=inherited,port=port)
+            maximum=maximum,inherited=inherited,port=port)
     if answer is not None and case in ORDINARY and role=='session-invalid':
         host.intents[answer['ticket']]['attempt_path']=expected.argv[0]
     if answer is not None and case in FIXED:
@@ -306,4 +303,4 @@ def proposal(host, actor, raw):
         snapshot.chmod(0o444)
     if answer is None:
         return None
-    return {**answer,'translated':vector,'rule':expected.rule}
+    return {**answer,'translated':vector}

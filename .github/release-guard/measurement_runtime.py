@@ -83,6 +83,6 @@ def nested(host,actor,raw):
     source_unit(checkout,path,PINS[path])
     if raw['executable']!=native or raw['stdin'] is not None:
         raise Refused('measurement exact Python image or input')
-    expected=build_expected('measurement:'+domain,PROJECT,native,pin,vector,tuple(sorted(environment.items())),str(home.parent/'workspace'),kind,PINS[path])
+    expected=build_expected(PROJECT,native,pin,vector,tuple(sorted(environment.items())),str(home.parent/'workspace'),kind,PINS[path])
     return admit_expected(host,actor,raw,expected,domain,[native,'-I','-S',*vector[1:]],PINS[path],maximum=6,
         inherited=inherited,port=port,fields={'measurement_node':node})

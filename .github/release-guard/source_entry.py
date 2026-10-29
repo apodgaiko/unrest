@@ -14,7 +14,6 @@ from typing import Any, NoReturn
 
 from bootstrap_wire import Client
 from content_manifest import Refused
-from cleanup_launch import OFFLINE
 from git_sites import CASES as GIT_CASES
 from source_profile import digest, validate
 
@@ -84,8 +83,6 @@ class Policy:
             raise Refused('source nested process constructor')
         self.local.launch=answer
         vector[:]=answer['translated']
-        if answer['rule'] in ('cleanup:mcp','http:mcp','completion:stdio'):
-            args[3].update(OFFLINE)
 
     def audit(self, event, args):
         order=getattr(self,'audit_order',None)

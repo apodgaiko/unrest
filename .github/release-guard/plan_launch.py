@@ -133,4 +133,4 @@ def expected(case,cwd,owned,native,native_pin):
         vector=('./invalid-format',)
         attempts=('./invalid-format',)
         tool=(str(target),pin)
-    return Plan(build_expected('preflight:'+role, case, str(target), pin, vector, tuple(sorted(env.items())), cwd, kind, payload),attempts,tool,role)
+    return Plan(build_expected(case, str(target), pin, vector, tuple(sorted(env.items())), cwd, kind, payload),attempts,tool,role)

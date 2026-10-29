@@ -15,7 +15,6 @@ from content_manifest import Refused, is_sha256
 
 @dataclass(frozen=True)
 class Expected:
-    rule: str
     case: str
     executable: str
     executable_sha256: str
@@ -57,12 +56,12 @@ def _payload(argv: tuple[str, ...], kind: str, reference: str | None,
     return index, reference
 
 
-def build_expected(rule: str, case: str, executable: str, executable_sha256: str,
+def build_expected(case: str, executable: str, executable_sha256: str,
                    argv: tuple[str, ...], environment: tuple[tuple[str, str], ...],
                    cwd: str, payload_kind: str, reference: str | None = None) -> Expected:
     """Derive the trusted builder descriptor; input validation lives at ingress."""
     _, payload_sha256 = _payload(argv, payload_kind, reference, executable_sha256)
-    return Expected(rule, case, executable, executable_sha256, argv,
+    return Expected(case, executable, executable_sha256, argv,
                     tuple(sorted(environment)), cwd, payload_kind, payload_sha256)
 
 
@@ -104,4 +103,4 @@ def admit_expected(host,actor,raw,value,role,vector,script_pin=None,*,fields=Non
         return None
     if fields is not None:
         host.intents[answer['ticket']].update(fields)
-    return {**answer,'translated':vector,'rule':value.rule}
+    return {**answer,'translated':vector}

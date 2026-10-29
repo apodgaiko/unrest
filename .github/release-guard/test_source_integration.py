@@ -52,7 +52,7 @@ def backend_request(tmp_path):
     home.mkdir(parents=True)
     cwd = str(home)
     native = '/pinned/python'
-    expected = build_expected('controlled-startup:backend', CASES[0], native, 'a' * 64, (native, str(home.parent / 'fake-app-server'), 'app-server'), tuple(sorted({'HOME': cwd, 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'),
+    expected = build_expected(CASES[0], native, 'a' * 64, (native, str(home.parent / 'fake-app-server'), 'app-server'), tuple(sorted({'HOME': cwd, 'CODEX_HOME': str(home / 'codex'), 'TMPDIR': str(home / 'tmp'),
                       'PATH': '/usr/bin:/bin'}.items())), cwd, 'python-script', BACKEND_PIN)
     request = operands(expected)
     actor = {'birth': observer.root_birth, 'role': 'root'}

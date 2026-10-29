@@ -57,4 +57,4 @@ def expected(host,argv,cwd,environment,native,pin):
     value=json.loads(raw,object_pairs_hook=unique)
     if type(value) is not dict or value.get('id')!=project_id or value.get('workspace_dir')!=str(root/'workspace'):
         raise Refused('inspection actual original project identity')
-    return build_expected('fixed:inspection',case,native,pin,vector,tuple(sorted(environment.items())),expected_cwd,'python-script' if case==SEALED else 'python-command',REPLAY_PIN if case==SEALED else None)
+    return build_expected(case,native,pin,vector,tuple(sorted(environment.items())),expected_cwd,'python-script' if case==SEALED else 'python-command',REPLAY_PIN if case==SEALED else None)

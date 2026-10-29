@@ -654,3 +654,11 @@ remain unchanged. Linux controls inject ledger, frame and admission failures at
 the trace callback boundary and require actual bounded owned-root cleanup while
 an unrelated child remains untouched. Buffered file-read race controls intercept
 the actual fdopen/read boundary; FIFO negatives still refuse before that boundary.
+
+All admitted MCP entries use the product's banner-free server entry, so the guard
+no longer injects a FastMCP update-check environment variable. The original
+observed and executed environment is identical. An Expected declaration carries
+only concrete case/image/argv/environment/cwd/payload operands; the redundant
+reply rule label is retired. Cleanup scenario translation uses the dispatcher's
+independently selected cleanup role instead. No label grants execution authority.
+Multiprocessing's conditional installation lives with its hook implementation.

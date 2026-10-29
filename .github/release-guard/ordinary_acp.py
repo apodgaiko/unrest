@@ -134,7 +134,7 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
         env = environment(case, home.parent, root_environment)
         vector = (native, str(checkout / MOCK))
         executable, pin, kind, payload = native, native_pin, 'python-script', PINS[MOCK]
-    return build_expected('ordinary:' + role, case, executable, pin, vector, tuple(sorted(env.items())), cwd, kind, payload)
+    return build_expected(case, executable, pin, vector, tuple(sorted(env.items())), cwd, kind, payload)
 
 
 def plain_environment(value):

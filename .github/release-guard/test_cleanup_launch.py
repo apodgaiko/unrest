@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from cleanup_launch import ALL_CASES, RECORDED, SAVED, CREDENTIAL, CASES, OFFLINE, selection, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
+from cleanup_launch import ALL_CASES, RECORDED, SAVED, CREDENTIAL, CASES, selection, module_mode, git_completion, PINS, SCRIPT, environment, expected, scenario, snapshot_path, translated
 import cleanup_launch
 from content_manifest import Refused
 
@@ -57,12 +57,11 @@ def test_module_and_script_translation_preserve_original_plan(tmp_path):
     result = expected(CASES[0], 'mcp', tmp_path, '/native', 'a' * 64, tmp_path / 'checkout', root, port=12345, descriptor=12)
     assert result.argv[:3] == ('/native', '-m', 'unrest_harness')
     assert result.argv[-4:] == ('--port', '12345', '--sensitive-inventory-fd', '12')
-    assert translated(result, tmp_path) == ('/native', '-I', '-S', *result.argv[1:])
+    assert translated(result, tmp_path, 'mcp') == ('/native', '-I', '-S', *result.argv[1:])
     assert 'FASTMCP_CHECK_FOR_UPDATES' not in dict(result.environment)
-    assert OFFLINE == {'FASTMCP_CHECK_FOR_UPDATES': 'off'}
     agent = expected(CASES[0], 'cleanup-acp', tmp_path, '/native', 'a' * 64, tmp_path / 'checkout', root)
     assert agent.argv == ('/native', str(tmp_path / 'checkout' / SCRIPT), str(tmp_path / 'scenario.json'))
-    assert translated(agent, tmp_path)[-1] == str(snapshot_path(tmp_path, CASES[0]))
+    assert translated(agent, tmp_path, 'cleanup-acp')[-1] == str(snapshot_path(tmp_path, CASES[0]))
 
 
 @pytest.mark.parametrize('port,descriptor', [(0, 12), (65536, 12), (True, 12), (12345, True), (12345, 2), (12345, 1025)])

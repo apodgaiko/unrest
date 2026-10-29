@@ -74,7 +74,7 @@ def test_changed_original_operands_never_create_http_intent(prepared,field):
     answer=http_cases.proposal(host,{},raw)
     assert answer['translated']==['/native','-I','-S',*value.argv[1:]]
     assert len(calls)==1 and calls[0][1]['port']==12345
-    assert calls[0][1]['environment']=={**dict(value.environment),'FASTMCP_CHECK_FOR_UPDATES':'off'}
+    assert 'environment' not in calls[0][1] and calls[0][0][1].environment==value.environment
     assert 'FASTMCP_CHECK_FOR_UPDATES' not in raw['environment']
 
 
@@ -233,7 +233,7 @@ def test_literal_resolution_refusal_records_only_safe_operand_shapes():
     assert 'private-host-secret' not in str(error.value)
 
 
-def test_http_parent_binds_offline_execution_without_changing_original_observation():
+def test_http_parent_preserves_original_environment_during_translation():
     import threading
     from source_entry import Policy
     policy=object.__new__(Policy)
@@ -243,11 +243,11 @@ def test_http_parent_binds_offline_execution_without_changing_original_observati
     observed=[]
     def request(kind,payload):
         observed.append(payload)
-        return {'ok':True,'ticket':1,'token':'owned','translated':['/native','-I','-S','-c','pass'],'rule':'http:mcp'}
+        return {'ok':True,'ticket':1,'token':'owned','translated':['/native','-I','-S','-c','pass']}
     policy.client=SimpleNamespace(request=request)
     environment={'PATH':'/usr/bin:/bin'}
     vector=['/native','-c','pass']
     policy.popen(('/native',vector,'/source',environment))
     assert observed[0]['environment']=={'PATH':'/usr/bin:/bin'}
-    assert environment=={'PATH':'/usr/bin:/bin','FASTMCP_CHECK_FOR_UPDATES':'off'}
+    assert environment=={'PATH':'/usr/bin:/bin'}
     assert vector==['/native','-I','-S','-c','pass']

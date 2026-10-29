@@ -20,7 +20,7 @@ def test_selected_git_command_still_requires_every_custody_and_actual_wait(failu
     git=Git(host)
     host.ledger.reaped=lambda *args:failure!='unreaped'
     command=Command(('git','rev-parse','HEAD'),'/owned/project')
-    value=build_expected('git:head', host.case, '/usr/bin/git', 'b'*64, command.argv, (), command.cwd, 'native')
+    value=build_expected(host.case, '/usr/bin/git', 'b'*64, command.argv, (), command.cwd, 'native')
     if failure in ('pending','unreaped','descendant'):
         git.last[host.case]={'consumed':failure!='pending','birth':'old','token':'old',
             'command':Command(('git','rev-parse','HEAD'),command.cwd)}

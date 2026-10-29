@@ -65,7 +65,7 @@ def proposal(host,actor,raw):
         vector=('git','rev-parse','HEAD')
         command=Command(vector,str(workspace))
         environment=dict(actor['profile']['environment'])
-    expected=build_expected('completion:git',case,'/usr/bin/git',image(),vector,
+    expected=build_expected(case,'/usr/bin/git',image(),vector,
         tuple(sorted(environment.items())),str(workspace),'native')
     translated=['/usr/bin/git',*vector[1:]]
     answer=admit_expected(host,actor,raw,expected,'git-command',translated,

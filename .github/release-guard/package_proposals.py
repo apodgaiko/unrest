@@ -160,7 +160,7 @@ def proposal(host,actor,raw):
         role='archive-installed'
     else:
         raise Refused('package exact original launch case')
-    value=build_expected('package:'+role,case,native,pin,argv,tuple(sorted(env.items())),cwd,
+    value=build_expected(case,native,pin,argv,tuple(sorted(env.items())),cwd,
         'native' if role=='archive-checker' else 'python-command')
     answer=admit_expected(host,actor,raw,value,role,vector,
         fields={'package_inputs':archive_data})

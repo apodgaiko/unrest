@@ -224,7 +224,7 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     assert answer["translated"] == ['/usr/bin/git',*raw["argv"][1:]]
     assert calls[0][:2] == ("inside", REPO)
     assert calls[0][2].argv == tuple(raw["argv"])
-    assert calls[0][3].rule == "git:inside"
+    assert calls[0][3].case == case and calls[0][3].argv == tuple(raw["argv"])
     raw["argv"] = ["git", "commit", "-m", "child self commit"]
     with pytest.raises(Refused):
         prepare(host, {}, raw)

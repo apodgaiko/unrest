@@ -7,6 +7,8 @@ from multiprocess_entry import ALL_CASES as CASES
 
 
 def install(policy):
+    if not any(case in CASES for case in policy.profile['cases']):
+        return
     from multiprocessing import util
     from multiprocessing.process import BaseProcess
     original,start=util.spawnv_passfds,BaseProcess.start

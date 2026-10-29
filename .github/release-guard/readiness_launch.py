@@ -24,6 +24,6 @@ def proposal(host,actor,raw):
     body=bodies[0 if host.case==READY else 1 if host.case==CASES[0] else 2]
     native=host.binding['entry']['path']
     env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
-    value=build_expected('fixed:readiness',host.case,native,host.binding['entry']['sha256'],
+    value=build_expected(host.case,native,host.binding['entry']['sha256'],
         (native,'-c',body),tuple(sorted(env.items())),host.meta['checkout'],'python-command')
     return admit_expected(host,actor,raw,value,'fixed-inline',[native,'-I','-S','-c',body])

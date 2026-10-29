@@ -25,4 +25,4 @@ def expected(host,argv,cwd,environment,native,pin):
         '--mode','simulated','--output',str(root/'flow.json'))
     if cwd!=str(checkout):
         raise Refused('simulation original working directory')
-    return build_expected('fixed:simulation',CASE,native,pin,vector,tuple(sorted(environment.items())),cwd,'python-script',PINS[TOOL])
+    return build_expected(CASE,native,pin,vector,tuple(sorted(environment.items())),cwd,'python-script',PINS[TOOL])

@@ -106,7 +106,7 @@ def startup_expected(case,native,pin,cwd,owned):
     role,index=STDIO[case]
     environment={'PATH':'/bin:/usr/bin','HOME':cwd,'UNREST_HOME':str(root/'home'),**STDIO_INVALID[index]}
     vector=(native,'-I','-c',STDIO_BODY,'--mode',role)
-    return build_expected('fixed:startup', case, native, pin, vector, tuple(sorted(environment.items())), cwd, 'python-command')
+    return build_expected(case, native, pin, vector, tuple(sorted(environment.items())), cwd, 'python-command')
 
 
 def script(checkout, operation, root=None):
@@ -159,31 +159,31 @@ def expected(case, operation, native, pin, checkout, environment, *, query=False
         if len(calls)!=1:
             raise Refused('journal sole original child')
         program=ast.literal_eval(calls[0].args[0].elts[2])
-        return build_expected('fixed:journal',case,native,pin,(native,'-c',program),tuple(sorted(environment.items())),str(checkout),'python-command')
+        return build_expected(case,native,pin,(native,'-c',program),tuple(sorted(environment.items())),str(checkout),'python-command')
     if case==HERMETIC and not query:
         body,environment=hermetic(checkout,environment)
         nodes=NESTED_CASES[case]
         vector=(native,'-c',body,'-q',*(str(checkout/node) for node in nodes[:2]),nodes[2])
-        return build_expected('fixed:hermetic',case,native,pin,vector,tuple(sorted(environment.items())),str(checkout),'python-command')
+        return build_expected(case,native,pin,vector,tuple(sorted(environment.items())),str(checkout),'python-command')
     if case==NESTED_CASE and not query:
         for path in ('tests/test_task_adapter.py',RELOAD_TEST):
             if hashlib.sha256((checkout/path).read_bytes()).hexdigest()!=PINS[path]:
                 raise Refused('preselected original source bytes')
-        return build_expected('fixed:pytest',case,native,pin,(native,'-m','pytest','-q',*NODES),
+        return build_expected(case,native,pin,(native,'-m','pytest','-q',*NODES),
             tuple(sorted({**environment,'PYTHONDONTWRITEBYTECODE':'1'}.items())),str(checkout),'python-module',PYTEST_PIN)
     if case==CLI_CASE and not query:
         return cli_expected(native,pin,checkout,root,operation)
     if case in ISOLATED:
         if query:
             raise Refused('fixed isolated has no descendant authority')
-        return build_expected('fixed:isolated',case,native,pin,(native,'-c',script(checkout,ISOLATED[case],root)),
+        return build_expected(case,native,pin,(native,'-c',script(checkout,ISOLATED[case],root)),
                               tuple(sorted({**environment,'PYTHONDONTWRITEBYTECODE':'1'}.items())),str(checkout),'python-command')
     if case==OBSERVATION_CASE:
         if query or operation not in OBSERVATION_OPERATIONS:
             raise Refused('observation probe has no query authority')
         argv=(native,'-c',script(checkout,operation),*OBSERVATION_ARGUMENTS[operation])
         return build_expected(
-            'fixed:'+operation, case,
+            case,
             native, pin,
             argv,
             tuple(sorted(environment.items())),
@@ -198,7 +198,7 @@ def expected(case, operation, native, pin, checkout, environment, *, query=False
         tail = (json.dumps(REMOVED),) if operation == 'mcp' else (json.dumps(() if operation == 'check' else REMOVED), json.dumps(ARGUMENTS[operation]))
         argv, executable, kind = (native,'-c',body,*tail), native, 'python-command'
     return build_expected(
-        'fixed:' + ('query' if query else operation), case,
+        case,
         executable, pin,
         argv,
         tuple(sorted(environment.items())),

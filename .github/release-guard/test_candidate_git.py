@@ -80,7 +80,7 @@ def test_candidate_message_option_does_not_borrow_integration_stdin_authority():
     vector=['/usr/bin/git','commit-tree','a'*40,'-m','unrelated']
     def request(kind,frame):
         frames.append((kind,frame))
-        return {'ok':True,'ticket':1,'token':'token','translated':list(vector),'rule':'candidate:git'}
+        return {'ok':True,'ticket':1,'token':'token','translated':list(vector)}
     policy.client=SimpleNamespace(request=request)
     policy.popen(('/usr/bin/git',vector,REPOSITORY,{}))
     assert frames[0][1]['stdin'] is None

@@ -105,7 +105,7 @@ def proposal(host,actor,raw):
         env.setdefault('UV_CACHE_DIR','/tmp/unrest-worker-uv-cache')
         env.setdefault('UV_OFFLINE','1')
         vector=(native,'-S','-c',code,str(data['installed_site']),str(data['dependency_site']))
-        value=build_expected('package:provenance',case,native,pin,vector,tuple(sorted(env.items())),str(workspace),'python-command')
+        value=build_expected(case,native,pin,vector,tuple(sorted(env.items())),str(workspace),'python-command')
         answer=admit_expected(host,actor,raw,value,'archive-installed',[native,'-I','-S',*vector[2:]],
             maximum=21,fields={'security_status':0,'security_operation':'provenance'})
         if answer is not None:
@@ -171,7 +171,7 @@ def proposal(host,actor,raw):
         tail=('init','--agent',provider,'--workspace-dir',str(target))
         status=0
     vector=(native,'-S','-c',code,*tail)
-    value=build_expected('package:credential',case,native,pin,vector,tuple(sorted(env.items())),str(workspace),'python-command')
+    value=build_expected(case,native,pin,vector,tuple(sorted(env.items())),str(workspace),'python-command')
     return admit_expected(host,actor,raw,value,'archive-installed',[native,'-I','-S','-c',translated_code,*tail],
         maximum=limit+1,fields={'security_status':status,'security_operation':'matrix' if case==MATRIX else 'provider',
             'credential_snapshot':sealed,'merged_output':True})

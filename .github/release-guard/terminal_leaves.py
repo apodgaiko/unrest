@@ -64,7 +64,7 @@ def proposal(host,actor,raw):
         body,env=program(checkout,case)
         executable,pin,vector,role=native,host.binding['entry']['sha256'],[native,'-c',body],'fixed-inline'
     env={'PATH':host.meta_environment()['PATH'],**env}
-    value=build_expected('terminal:original',case,executable,pin,tuple(vector),tuple(sorted(env.items())),str(workspace),
+    value=build_expected(case,executable,pin,tuple(vector),tuple(sorted(env.items())),str(workspace),
         'native' if case in OPTIONAL else 'python-command')
     translated=vector if case in OPTIONAL else [native,'-I','-S',*vector[1:]]
     return admit_expected(host,actor,raw,value,role,translated,fields={'merged_output':True})

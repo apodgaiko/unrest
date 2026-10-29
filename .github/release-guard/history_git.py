@@ -78,7 +78,7 @@ def proposal(host,actor,raw):
     if any(not value['consumed'] or not host.ledger.reaped(value['birth'],value['token']) for value in previous):
         raise Refused('history previous actual parent wait')
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':host.case+' (call)'}
-    expected=build_expected('history:git',host.case,'/usr/bin/git',image(),tuple(raw['argv']),
+    expected=build_expected(host.case,'/usr/bin/git',image(),tuple(raw['argv']),
         tuple(sorted(environment.items())),raw['cwd'] if host.case==CLI else str(checkout),'native')
     return admit_expected(host,actor,raw,expected,'git-custody',['/usr/bin/git',*raw['argv'][1:]],maximum=128)
 
@@ -104,6 +104,6 @@ def cli_proposal(host,actor,raw):
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     vector=(native,'-B',str(checkout/TOOL),'--repository',str(repository),'--check-manifest',str(root/('active-manifest.json' if ordinal==0 else 'wrong-manifest.json')))
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':CLI+' (call)'}
-    expected=build_expected('binding:cli',CLI,native,pin,vector,tuple(sorted(environment.items())),str(checkout),'python-script',TOOL_PIN)
+    expected=build_expected(CLI,native,pin,vector,tuple(sorted(environment.items())),str(checkout),'python-script',TOOL_PIN)
     return admit_expected(host,actor,raw,expected,'fixed-inline',[native,'-I','-S',*vector[2:]],TOOL_PIN,maximum=2,
         fields={'fixed_operation':'check','binding_repository':str(repository)})

@@ -67,10 +67,10 @@ def proposal(host,actor,raw):
     if raw['environment']!=environment:
         raise Refused('measurement original Git environment')
     from git_observer import image
-    expected=build_expected('measurement:git',host.case,'/usr/bin/git',image(),value.argv,
+    expected=build_expected(host.case,'/usr/bin/git',image(),value.argv,
         tuple(sorted(environment.items())),value.cwd,'native')
     answer=host.git.launch(actor,operation,repository,value,expected,['/usr/bin/git',*argv[1:]])
-    return None if answer is None else {**answer,'translated':['/usr/bin/git',*argv[1:]],'rule':expected.rule}
+    return None if answer is None else {**answer,'translated':['/usr/bin/git',*argv[1:]]}
 
 
 def cold_root(host,path):

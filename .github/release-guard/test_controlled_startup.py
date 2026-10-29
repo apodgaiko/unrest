@@ -137,7 +137,7 @@ class OperandModel:
             relay=relay,
         )
         if (type(observed.payload_sha256) is not str or observed.payload_sha256!=expected.payload_sha256
-                or build_expected(expected.rule, case, observed.executable, observed.executable_sha256, observed.argv, observed.environment, observed.cwd, observed.payload_kind, None if observed.payload_kind=='python-command' else observed.payload_sha256) != expected):
+                or build_expected(case, observed.executable, observed.executable_sha256, observed.argv, observed.environment, observed.cwd, observed.payload_kind, None if observed.payload_kind=='python-command' else observed.payload_sha256) != expected):
             raise Refused('test model operand mismatch')
         if backend:
             file = self.owner.backend_launcher

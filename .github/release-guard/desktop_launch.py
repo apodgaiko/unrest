@@ -62,6 +62,6 @@ def proposal(host,actor,raw):
         argv=(native,'-I',str(Path(host.meta['checkout'])/TOOL),'serve','--root',str(root))
         environment={'HOME':str(root/'user'),'PATH':'/usr/bin:/bin'}
         reference=PIN
-    value=build_expected('desktop:'+role,CASE,exe,pin,argv,tuple(sorted(environment.items())),str(root),kind,reference)
+    value=build_expected(CASE,exe,pin,argv,tuple(sorted(environment.items())),str(root),kind,reference)
     vector=[exe,*argv[1:]] if query else [exe,'-I','-S',*argv[2:]]
     return admit_expected(host,actor,raw,value,role,vector,reference)

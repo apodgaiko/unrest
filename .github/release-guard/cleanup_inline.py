@@ -52,7 +52,7 @@ def expected(case, native, native_pin, checkout, root_environment, *, base=None,
         cwd = str(checkout)
         environment = {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'}
     return build_expected(
-        'cleanup-inline:' + ('terminal' if terminal else 'initial'), case,
+        case,
         native, native_pin,
         (native, '-c', body(case)),
         tuple(sorted(environment.items())),

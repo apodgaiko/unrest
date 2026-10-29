@@ -116,7 +116,7 @@ def proposal(host,actor,raw):
         raise Refused('candidate fixture exact executable environment or input')
     from git_observer import image
     from launch_policy import build_expected
-    expected=build_expected('candidate:git',host.case,'/usr/bin/git',image(),value.argv,
+    expected=build_expected(host.case,'/usr/bin/git',image(),value.argv,
         tuple(sorted(environment.items())),repository,'native')
     answer=host.git.launch(actor,'init' if not records else 'candidate-command',repository,value,expected,list(value.argv))
-    return None if answer is None else {**answer,'translated':list(value.argv),'rule':expected.rule}
+    return None if answer is None else {**answer,'translated':list(value.argv)}

@@ -126,7 +126,7 @@ def test_owned_workspace_literal_command_derives_its_inline_digest():
     import hashlib
     from git_sites import OWNED_BODY, CASES
     from launch_policy import build_expected
-    assert build_expected('workspace:owned', CASES[7], '/native/python', 'a' * 64, ('/native/python', '-c', OWNED_BODY), (), REPO, 'python-command', None).payload_sha256 == hashlib.sha256(OWNED_BODY.encode()).hexdigest()
+    assert build_expected(CASES[7], '/native/python', 'a' * 64, ('/native/python', '-c', OWNED_BODY), (), REPO, 'python-command', None).payload_sha256 == hashlib.sha256(OWNED_BODY.encode()).hexdigest()
 
 
 

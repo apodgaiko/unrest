@@ -85,7 +85,7 @@ def proposal(host,actor,raw):
     if {'path':str(executable),'sha256':pin}!=host.binding['uv']:
         raise Refused('stock uv current native bytes')
     file,file_pin=script(host,'unrest')
-    value=build_expected('console:uv',case,str(executable),pin,tuple(args),tuple(sorted(env.items())),host.meta['checkout'],'native')
+    value=build_expected(case,str(executable),pin,tuple(args),tuple(sorted(env.items())),host.meta['checkout'],'native')
     return admit_expected(host,actor,raw,value,'uv-cli',args,maximum=len(COMMANDS[case]),
         fields={'uv_console':{'argv':['unrest',*args[3:]],'pin':file_pin,'script':str(file)}})
 

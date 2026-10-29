@@ -154,7 +154,7 @@ def expected(case,argv,passfds,target,native,pin,checkout,environment):
             raise Refused('spawn inherited pipe inventory')
         role='mp-child'
         descriptors=sorted(passfds)
-    value=build_expected(role, case, native, pin, tuple(argv), tuple(sorted(environment.items())), str(checkout), 'python-command')
+    value=build_expected(case, native, pin, tuple(argv), tuple(sorted(environment.items())), str(checkout), 'python-command')
     return value,role,descriptors
 
 

@@ -16,7 +16,7 @@ CASE, IMAGE = "tests/test_example.py::test_launch[work]", "a" * 64
 
 
 def rule(**changes):
-    return {"rule": "role", "case": CASE, "executable": "/runtime/python",
+    return {"case": CASE, "executable": "/runtime/python",
             "executable_sha256": IMAGE, "argv": ("python", "-I", "-S", "-c", "print('finite')"),
             "environment": (("MODE", "controlled"),), "cwd": "/source",
             "payload_kind": "python-command", **changes}

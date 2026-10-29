@@ -51,7 +51,7 @@ class FullCases(OriginalCases):
         if len(set(self.cases))!=len(self.cases):
             raise Refused('full source ambiguous case references')
         profile['cases']=list(self.cases)
-        from source_context import install
+        from multiprocess_hooks import install
         install(self.policy)
 
     @pytest.hookimpl(wrapper=True,tryfirst=True)

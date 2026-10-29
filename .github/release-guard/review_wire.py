@@ -61,7 +61,7 @@ def proposal(host,actor,raw):
     body=scenario(Path(argv[-1]),owned)
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
     value=build_expected(
-        'review-wire', case,
+        case,
         native, pin,
         tuple(argv),
         tuple(sorted(environment.items())),
@@ -77,4 +77,4 @@ def proposal(host,actor,raw):
     with snapshot.open('xb') as stream:
         stream.write(body)
     snapshot.chmod(0o444)
-    return {**answer,'translated':vector,'rule':'review-wire'}
+    return {**answer,'translated':vector}

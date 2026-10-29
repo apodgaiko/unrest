@@ -22,7 +22,6 @@ CASES = tuple(TEST + '::' + name for name in (
     'test_recorded_transport_failures[success-work]',
     'test_recorded_transport_failures[array_id-work]',
     'test_cleanup_faults_and_repeated_cancellation[cancel-work]'))
-OFFLINE = {'FASTMCP_CHECK_FOR_UPDATES': 'off'}
 
 RECORDED = tuple(TEST + f'::test_recorded_transport_failures[{variant}-{role}]'
                  for variant in ('deep_json', 'array_id', 'object_id', 'success')
@@ -168,18 +167,18 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
                            '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit', '--allow-empty', '-qm', 'Controlled'),
             'git-observe': ('rev-parse', 'HEAD')}[role]
         vector, executable, pin, kind, payload = ('git', *arguments), '/usr/bin/git', system_git(), 'native', None
-        env = ({**environment(base, root_environment, agent=False, case=case), **OFFLINE} if role == 'git-observe' else
+        env = (environment(base, root_environment, agent=False, case=case) if role == 'git-observe' else
                {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'})
         cwd = str(checkout) if role == 'git-init' else str(home)
     else:
         raise Refused('cleanup undeclared launch role')
-    return build_expected('cleanup:' + role, case, executable, pin, vector, tuple(sorted(env.items())), cwd, kind, payload)
+    return build_expected(case, executable, pin, vector, tuple(sorted(env.items())), cwd, kind, payload)
 
 
-def translated(result, directory):
+def translated(result, directory, role):
     if result.payload_kind == 'native':
         return (result.executable, *result.argv[1:])
     argv = (result.argv[0], '-I', '-S', *result.argv[1:])
-    if result.rule == 'cleanup:cleanup-acp':
+    if role == 'cleanup-acp':
         argv = (*argv[:-1], str(snapshot_path(directory, result.case)))
     return argv

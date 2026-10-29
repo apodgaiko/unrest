@@ -6,7 +6,7 @@ from content_manifest import Refused
 from git_observer import image
 from launch_policy import admit_expected,build_expected
 from multiprocess_routes import TRANSACTIONS
-from cleanup_launch import EXECUTION_CASES, OFFLINE
+from cleanup_launch import EXECUTION_CASES
 
 from completion_roles import HTTP as ROLE_HTTP
 
@@ -57,7 +57,7 @@ def expected(host, actor, raw):
             environment.update(UNREST_NODE_ID=node,
                 UNREST_HANDOFF_PATH=str(runtime/'attempts'/('attempt-'+subject+'__'+node+'.json')))
         cwd = str(root)
-    value = build_expected('http:'+role, case, executable, pin, vector, tuple(sorted(environment.items())), cwd, kind)
+    value = build_expected(case, executable, pin, vector, tuple(sorted(environment.items())), cwd, kind)
     return value, role, port
 
 
@@ -80,5 +80,4 @@ def stdio(host,pid,row):
 def proposal(host,actor,raw):
     value,role,port = expected(host,actor,raw)
     vector = [value.executable,*value.argv[1:]] if role=='ps' else [value.executable,'-I','-S',*value.argv[1:]]
-    return admit_expected(host,actor,raw,value,role,vector,port=port,
-        environment={**dict(value.environment),**OFFLINE} if role=='mcp' else None)
+    return admit_expected(host,actor,raw,value,role,vector,port=port)

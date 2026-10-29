@@ -74,4 +74,4 @@ def cli_expected(native,pin,checkout,root,operation):
             '--candidate-head','c90a98626d7d595b40a3ac0d1ac954f24e1e12ad',
             '--candidate-tree','d05eec79be56cfa8a9011bfa8859e0a65bfc05ad')
     environment=(('LANG','C'),('LC_ALL','C'),('PYTHONUTF8','1'),('TZ','UTC'))
-    return build_expected('speed-cli',CLI_CASE,native,pin,vector,environment,str(checkout),'python-script',CLI_PIN)
+    return build_expected(CLI_CASE,native,pin,vector,environment,str(checkout),'python-script',CLI_PIN)

@@ -33,4 +33,4 @@ def expected(host,operation,argv,cwd,environment,native,pin):
     if cwd!=str(checkout):
         raise Refused('completion changed fixture generation or cwd')
     vector=(native,'-c',program,str(root/suffix),*((phase,) if operation=='crash' and phase is not None else ()))
-    return build_expected('fixed:completion',case,native,pin,vector,tuple(sorted(environment.items())),cwd,'python-command')
+    return build_expected(case,native,pin,vector,tuple(sorted(environment.items())),cwd,'python-command')

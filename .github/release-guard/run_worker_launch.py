@@ -90,7 +90,7 @@ def descendant(host,actor,raw):
     if host.case!=DESCENDANT or len(rows)!=1:
         raise Refused('worker finite descendant owner')
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
-    value=build_expected('async:descendant',host.case,native,pin,
+    value=build_expected(host.case,native,pin,
         (native,'-c','import time; time.sleep(0.35)'),tuple(sorted(rows[0]['environment'].items())),
         rows[0]['cwd'],'python-command')
     return admit_expected(host,actor,raw,value,'session-child',[native,'-I','-S',*value.argv[1:]],maximum=1)
@@ -133,6 +133,6 @@ def admit_worker(host,actor,raw,home,operation,env,maximum,binding=None,custom=F
     native,pin=host.binding['entry']['path'],host.binding['entry']['sha256']
     vector=[native,'-m','unrest_harness.run_worker','--project-root',str(home),'--run-id',run,
             '--executor','executor_fixture:execute' if custom else 'unrest_harness.runtime_executor:execute','--custody-root-id','local:unrest-run-control','--generation','1']
-    expected=build_expected('async:error-worker',case,native,pin,tuple(vector),tuple(sorted(env.items())),str(home),'python-module',native_digest(Path(host.meta['checkout'])/'src/unrest_harness/run_worker.py'))
+    expected=build_expected(case,native,pin,tuple(vector),tuple(sorted(env.items())),str(home),'python-module',native_digest(Path(host.meta['checkout'])/'src/unrest_harness/run_worker.py'))
     return admit_expected(host,actor,raw,expected,'fixed-inline',[native,'-I','-S',*vector[1:]],maximum=maximum,
                           fields={'run_worker':True,'null_stdio':True,'execution_fixture':binding})

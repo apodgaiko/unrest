@@ -48,5 +48,5 @@ def expected(host,argv,cwd,environment,native,pin):
     file=expected.stat(follow_symlinks=False)
     if not stat.S_ISREG(file.st_mode) or file.st_uid!=OWNER or file.st_nlink!=1 or expected.read_bytes()!=contents.encode():
         raise Refused('storage original read input')
-    return build_expected('fixed:storage',case,native,pin,(native,'-c',script,str(original)),
+    return build_expected(case,native,pin,(native,'-c',script,str(original)),
         tuple(sorted(environment.items())),cwd,'python-command')
