@@ -154,6 +154,11 @@ owned pytest directory generations cannot change between slots. Plain-init
 foundation fixtures acquire either `main` or `master` once and reject a changed
 HEAD branch. Proposals must match that acquired branch. These declarations grant
 no native provider execution or new application-level Git proof.
+The two activation CLI routes reuse the stock-uv image and single console-child
+admission. Their request files are bounded JSON at exact owned fixture paths;
+request semantics remain the original product tests' responsibility. Existing
+invalid/task request-byte checks remain. Mixed Git/uv cases retain every actual
+parent wait and separately require the exact uv/console child count.
 
 ## Verification and retired model controls
 

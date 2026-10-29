@@ -12,8 +12,10 @@ from owned_fixture import acquire
 TEST='tests/test_v04_activation.py'
 INVALID=TEST+'::test_subprocess_commands_reject_private_invalid_requests_without_effect'
 TASK=TEST+'::test_task_click_and_subprocess_stop_without_provider_approval'
-CASES=(INVALID,TASK)
-COMMANDS={INVALID:('run-task','run-project','run-improvement'),TASK:('run-task',)}
+PROJECT=TEST+'::test_project_click_and_subprocess_stop_without_exact_request'
+IMPROVEMENT=TEST+'::test_improvement_click_and_subprocess_stop_without_exact_request'
+CASES=(INVALID,TASK,PROJECT,IMPROVEMENT)
+COMMANDS={INVALID:('run-task','run-project','run-improvement'),TASK:('run-task',),PROJECT:('run-project',),IMPROVEMENT:('run-improvement',)}
 PIN='4741feb6a71d9c06be777a08a34e064be0610c1f8b755ebfffef21489621c435'
 
 
@@ -54,14 +56,25 @@ def proposal(host,actor,raw):
         document={'run-task':{'brief':private},'run-project':{'max_steps':1,'mission_id':'mission-001',
             'nodes':[{'body':private,'id':'node','needs':['missing']}],'project_id':'project:invalid'},
             'run-improvement':{'repository':str(parent/'invalid-improvement-repository'),'request':{'private':private}}}[command]
-    else:
+    elif case==TASK:
         home=parent/'task-subprocess-home'
         file=parent/'task-subprocess.json'
         document={'bounds':{'max_branches':1,'max_steps':1,'timeout_seconds':30},'brief':'private cli task brief',
             'idempotency_key':'private-cli-idempotency','pause_reason':'private-pause-secret'}
+    else:
+        file=parent/('project-subprocess.json' if case==PROJECT else 'improvement-subprocess.json')
+        home=parent/('home-subprocess' if case==PROJECT else 'unused-improvement-home')
+        document=None
     body,_,_=read_regular(file,65536,uid=20000)
-    if path!=file or path.resolve()!=path or json.loads(body,object_pairs_hook=unique)!=document or home.exists():
+    if path!=file or path.resolve()!=path or (document is not None and json.loads(body,object_pairs_hook=unique)!=document) or (case!=PROJECT and home.exists()):
         raise Refused('stock uv original request bytes and unused home')
+    if case in (PROJECT,IMPROVEMENT):
+        # Requests remain application inputs: the original product test owns their
+        # semantic assertions. Admit only the exact owned path and bounded JSON.
+        if type(json.loads(body,object_pairs_hook=unique)) is not dict:
+            raise Refused('stock uv bounded original request object')
+        if case==PROJECT and (not home.is_dir() or home.resolve()!=home):
+            raise Refused('stock uv original project home')
     env={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)',
         'UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
     if raw['executable']!='uv':

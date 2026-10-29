@@ -52,7 +52,7 @@ def proposal(host, actor, raw):
     if case in READINESS_CASES:
         from readiness_launch import proposal as readiness_proposal
         return readiness_proposal(host,actor,raw)
-    if case in UV_CASES:
+    if case in UV_CASES and argv[0]=='uv':
         from uv_cli import proposal as uv_proposal
         return uv_proposal(host,actor,raw)
     if case==CONSOLE_CASE:
