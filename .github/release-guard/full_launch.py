@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 
 from case_inventory import LIMIT,document,seal,identity
-from content_manifest import Refused,native_digest,_capture,read_regular
+from content_manifest import Refused,native_digest,read_regular
 from control_transport import unique
 from full_source import environment,child_environment
 
@@ -51,7 +51,8 @@ def resolve(host,pid,path,vector,env,cwd):
     process=host.ledger.process(birth)
     if (pid==host.launcher and process.generation==1 and path==str(runtime/'bin/uv')
             and vector==['uv','run','pytest','-q',*(['--collect-only'] if host.binding.get('collection_only') else [])] and env==environment(host.meta)):
-        pin=_capture(Path(path).parent,[Path(path).name],None,64*1024*1024)['files'][0]['sha256']
+        from uv_cli import uv_digest
+        pin=uv_digest(Path(path))
         if host.binding['uv']!={'path':path,'sha256':pin}:
             return False
         host.ledger.register(birth,os.urandom(16).hex(),(('uv',pin),),pin,

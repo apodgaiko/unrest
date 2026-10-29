@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import os
 
-from content_manifest import Refused,read_regular,native_digest
+from content_manifest import Refused,read_regular,native_digest,_capture
 from control_transport import unique
 from console_entries import normalized,script
 from launch_policy import build_expected,source_unit
@@ -15,6 +15,10 @@ TASK=TEST+'::test_task_click_and_subprocess_stop_without_provider_approval'
 CASES=(INVALID,TASK)
 COMMANDS={INVALID:('run-task','run-project','run-improvement'),TASK:('run-task',)}
 PIN='4741feb6a71d9c06be777a08a34e064be0610c1f8b755ebfffef21489621c435'
+
+
+def uv_digest(path):
+    return _capture(path.parent,[path.name],None,64*1024*1024)['files'][0]['sha256']
 
 
 def child_environment(metadata,parent):
@@ -64,7 +68,7 @@ def proposal(host,actor,raw):
         raise Refused('stock uv original environment and cwd')
     runtime=Path(host.meta['runtime_root'])
     executable=runtime/'bin/uv'
-    pin=native_digest(executable)
+    pin=uv_digest(executable)
     if {'path':str(executable),'sha256':pin}!=host.binding['uv']:
         raise Refused('stock uv current native bytes')
     file,file_pin=script(host,'unrest')

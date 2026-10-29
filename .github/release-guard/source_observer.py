@@ -264,7 +264,10 @@ class Observer:
                    and value['cwd'] == cwd and path == value.get('executable', self.binding['entry']['path'])]
         if len(matches) != 1:
             return False
-        if native_digest(Path(path).resolve(strict=True)) != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
+        from uv_cli import uv_digest
+        actual_pin=(uv_digest(Path(path).resolve(strict=True)) if matches[0]['role']=='uv-cli'
+                    else native_digest(Path(path).resolve(strict=True)))
+        if actual_pin != matches[0].get('executable_sha256', self.binding['entry']['sha256']):
             return False
         intent = matches[0]
         if intent.get('package_inputs') is not None:

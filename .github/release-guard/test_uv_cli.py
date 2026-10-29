@@ -29,6 +29,7 @@ def original(tmp_path,monkeypatch):
     monkeypatch.setattr(uv,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
     read=uv.read_regular
     monkeypatch.setattr(uv,'read_regular',lambda path,*args,**kwargs:read(path,*args,**{**kwargs,'uid':os.getuid()}))
+    monkeypatch.setattr(uv,'uv_digest',lambda path:'b'*64)
     monkeypatch.setattr(uv,'native_digest',lambda path:'b'*64 if path.name=='uv' else 'a'*64)
     monkeypatch.setattr(uv,'script',lambda host,name:(Path('/dependencies/.release-distribution/installed/bin')/name,'c'*64))
     case=uv.INVALID
