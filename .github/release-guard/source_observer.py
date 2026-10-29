@@ -28,7 +28,7 @@ from controlled_startup import ACP
 from endpoint_policy import Endpoints, Owner, Route
 from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
-from socket_observation import acquire_tcp, acquire_unix_member, acquire_unix_pair
+from socket_observation import acquire_tcp, acquire_unix_pair
 from source_profile import METHODS, ROOT_COMMAND
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
@@ -44,7 +44,6 @@ from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, GROUPS as CLEANUP_G
 from readiness_launch import CASES as READINESS_CASES,READY as READINESS_READY
 from terminal_leaves import CASES as TERMINAL_CASES
 
-PARK_SELF_PAIR=object()
 
 def shape(value, keys):
     if type(value) is not dict or set(value) != set(keys):
@@ -77,15 +76,14 @@ class Observer:
         self.git = Git(self)
         self.endpoints, self.actors, self.intents = Endpoints(self.ledger), {}, {}
         self.pairs = UnixPairs(self.endpoints)
-        self.bindings, self.listeners, self.listener_fds, self.pair_intents = {}, {}, {}, {}
-        self.routes, self.connections, self.descriptors, self.mp_pipes = {}, {}, {}, {}
-        self.eof_drains, self.eof_fds, self.interrupted_records = {}, {}, []
+        self.bindings, self.listeners, self.pair_intents = {}, {}, {}
+        self.routes, self.descriptors, self.mp_pipes = {}, {}, {}
+
         self.connected_routes: dict[str, int] = {}
         self.probe_ports = {}
         self.readiness_attempts={}
         self.fixture_roots = {}
         self.plan_records: list[dict] = []
-        self.http_contexts: dict[tuple[str,int],dict] = {}
         self.frames, self.controls, self.completed = [], [], []
         self.case, self.finished, self.serial = None, False, 0
         self.out_read, self.output = out_read, bytearray()
@@ -374,61 +372,6 @@ class Observer:
             'inherited': list(inherited), 'port': port}
         return {'ok': True, 'ticket': self.serial, 'token': token}
 
-    def socket_payload(self, actor, payload):
-        shape(payload, ('fd', 'operation', 'bytes'))
-        fd = number(payload['fd'])
-        count = number(payload['bytes'])
-        if payload['operation'] not in ('accept', 'send', 'sendall', 'recv', 'recv_into', 'recvfrom', 'recvfrom_into', 'fd-read', 'fd-write'):
-            raise Refused('source payload operation')
-        key = actor['birth'], fd
-        serial = self.eof_fds.get(key)
-        if serial is not None:
-            drain = self.eof_drains[serial]
-            if (payload['operation'] not in ('recv', 'recv_into', 'fd-read') or drain['reads'] >= 8
-                    or acquire_tcp(actor['birth'], fd, eof_only=True) != drain['socket']):
-                raise Refused('source interrupted socket grants EOF reads only')
-            drain['reads'] += 1
-            return {'ok': True, 'eof_only': True}
-        if key in self.mp_pipes:
-            if payload['operation'] not in ('fd-read','fd-write'):
-                raise Refused('spawn Pipe permits original Connection file I/O only')
-            from multiprocess_pipe import retained as pipe_retained
-            pipe_retained(self,actor,self.mp_pipes[key],body=True)
-            return {'ok':True}
-        pair = self.descriptors.get(key)
-        if pair is not None:
-            observed = acquire_unix_member(actor['birth'], fd, pair)
-            if (observed is None and 9 in actor['signals'] and pair.owner==self.owner(actor)
-                    and self.pairs.pairs.get(pair.serial) is pair and pair.case==self.ledger.process(actor['birth']).case
-                    and any(member.fd==fd for member in pair.members)):
-                return PARK_SELF_PAIR
-            self.pairs.retained(pair, self.owner(actor), observed)
-            return {'ok': True}
-        slot = self.listener_fds.get(key)
-        if slot is not None and payload['operation'] == 'accept':
-            if acquire_tcp(actor['birth'], fd) != slot['socket']:
-                raise Refused('source live listener acceptance')
-            return {'ok': True}
-        connection = self.connections.get(key)
-        if connection is not None:
-            observed = acquire_tcp(actor['birth'],fd)
-            if self.case in ROOT_HTTP:
-                from root_http_observer import retained
-                retained(self,connection,observed)
-            self.endpoints.retained(connection,self.owner(actor),observed)
-            return {'ok': True}
-        tickets = [ticket for ticket in self.endpoints.tickets.values()
-                   if ticket.client.owner == actor['birth'] and ticket.client.fd == fd]
-        if len(tickets) == 1 and payload['operation'] in ('send', 'sendall', 'fd-write'):
-            ticket = tickets[0]
-            self.endpoints.queued_send(ticket,
-                acquire_tcp(ticket.listener.owner, ticket.listener.fd),
-                acquire_tcp(actor['birth'], fd), count)
-            return {'ok': True}
-        if len(tickets) == 1 and actor['birth'] != tickets[0].route.server.birth:
-            return None  # A different process can make the actual accept join.
-        raise Refused('source unadmitted payload descriptor')
-
     def completed_child(self, actor):
         process = self.ledger.process(actor['birth'])
         terminal = process.terminal
@@ -492,53 +435,6 @@ class Observer:
         return (terminal is not None and (actor.get('kernel_admitted') is True or actor['body_ready']
                 or terminal[2] in (-9, -15) and -terminal[2] in actor['signals']))
 
-    def retire_cancelled_tickets(self):
-        if self.case not in BOOTSTRAP or not declaration(self.case).interrupted:
-            raise Refused('source cancelled ticket outside interrupted case')
-        root = self.actors[self.root]
-        for serial,ticket in sorted(list(self.endpoints.tickets.items())):
-            if ticket.route.case != self.case or serial in self.eof_drains:
-                continue
-            child = self.actors.get(ticket.route.client.birth.pid)
-            process = self.ledger.process(ticket.route.client.birth)
-            terminal = process.terminal
-            if (ticket.route.server != self.owner(root) or child is None or child['role']!='acp'
-                    or child['birth']!=ticket.route.client.birth or child['token']!=ticket.route.client.token
-                    or child['case']!=self.case or ticket.route.name not in (child['token']+':bridge',child['token']+':lifetime')
-                    or terminal is None or terminal[2] not in (-9,-15) or -terminal[2] not in child['signals']
-                    or not self.ledger.reaped(child['birth'],child['token'])):
-                raise Refused('source cancelled ticket requires exact signalled parent reap')
-            self.endpoints.abort_reaped(ticket)
-            self.interrupted_records.append({'kind':'cancelled-unjoined','ticket':serial,
-                'actual_original_parent_reap':True,'accepted_peer_proven':False,'descriptor_close_proven':False})
-
-    def interrupted_accept(self, actor, matches, server):
-        """No peer association is inferred from EOF; this is not a Connection."""
-        if not declaration(self.case).interrupted or len(matches) != 1 or server is None:
-            raise Refused('source unjoined accept outside interrupted case')
-        ticket = matches[0]
-        process = self.ledger.process(ticket.route.client.birth)
-        child = self.actors[ticket.route.client.birth.pid]
-        terminal = process.terminal
-        if terminal is None:
-            return None  # The tracer can harvest the dead child while root waits.
-        if (terminal[2] not in (-9, -15) or -terminal[2] not in child['signals']
-                or child['birth'] != ticket.route.client.birth or child['case'] != self.case
-                or ticket.route.case != self.case or ticket.route.server != self.owner(actor)
-                or server.owner != actor['birth'] or server.remote is None or server.remote[0] != '127.0.0.1'
-                or server.local != ticket.listener.local or server.binding() == ticket.listener.binding()
-                or acquire_tcp(actor['birth'], ticket.listener.fd) != ticket.listener):
-            raise Refused('source interrupted accept ownership or signal')
-        eof = acquire_tcp(actor['birth'], server.fd, eof_only=True)
-        if eof is None or eof != server or ticket.serial in self.eof_drains:
-            raise Refused('source interrupted accepted descriptor or EOF')
-        self.eof_drains[ticket.serial] = {'ticket': ticket, 'socket': eof, 'reads': 0}
-        self.eof_fds[actor['birth'], eof.fd] = ticket.serial
-        self.interrupted_records.append({'kind': 'EOF-only-unjoined', 'ticket': ticket.serial,
-            'root': actor['birth'].pid, 'fd': eof.fd, 'inode': eof.inode, 'cookie': eof.cookie,
-            'accepted_peer_proven': False})
-        return {'ok': True, 'eof_only': True}
-
     def dispatch(self, actor, request):
         kind, payload = request['kind'], request['payload']
         if kind == 'core-ready':
@@ -597,8 +493,6 @@ class Observer:
                 self.case = actor['case'] = payload['case']
                 self.ledger.process(self.root_birth).case = self.case
             else:
-                if any('cancelled_pair' in channel for channel in self.frames):
-                    return None
                 children = [value for value in self.actors.values() if value['role'] != 'root' and value['case'] == self.case]
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
                 from package_cases import CASES as PACKAGE_CASES,count as package_count
@@ -612,27 +506,11 @@ class Observer:
                     count,spec=0,None
                     if children:
                         raise Refused('skipped source case launched children')
-                for serial, drain in list(self.eof_drains.items()):
-                    ticket = drain['ticket']
-                    if ticket.route.case == self.case:
-                        if spec is None or not spec.interrupted:
-                            raise Refused('source aborted route in positive case')
-                        self.endpoints.abort_reaped(ticket)
-                        self.interrupted_records.append({'kind': 'aborted-unjoined', 'ticket': serial,
-                            'actual_original_parent_reap': True, 'accepted_peer_proven': False})
-                        self.eof_fds.pop((actor['birth'], drain['socket'].fd), None)
-                        del self.eof_drains[serial]
-                if spec is not None and spec.interrupted:
-                    self.retire_cancelled_tickets()
                 if (payload['case'] != self.case or outcome=='passed' and self.case in GIT_CASES and len(children) < 5 or not ((spec.minimum_children <= len(children) <= spec.children) if spec else len(children) == count)
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
-                        or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)
-                        or any(ticket.route.case == self.case for ticket in self.endpoints.tickets.values())):
+                        or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)):
                     raise Refused('source original case actual cleanup incomplete')
-                if outcome=='passed' and self.case in ROOT_HTTP and (sum(case == self.case for case,_ in self.http_contexts) != (2 if 'initialized_owner' in self.case else 1)
-                        or any(state['active'] for (case,_),state in self.http_contexts.items() if case == self.case)):
-                    raise Refused('root HTTP original contexts incomplete')
                 self.endpoints.retire_case(self.case)
                 if self.full:
                     self.outcomes.append(dict(payload))
@@ -640,8 +518,6 @@ class Observer:
                 self.case = None
         elif kind == 'root-finish':
             self.root_only(actor)
-            if any('cancelled_pair' in channel for channel in self.frames):
-                return None
             from source_profile import case_seal
             shape(payload, ('count', 'cases_sha256'))
             if (self.case is not None or any(row['outcome']=='failed' for row in self.outcomes) or type(payload['count']) is not int or type(payload['cases_sha256']) is not str
@@ -720,10 +596,7 @@ class Observer:
             del self.pair_intents[ticket]
             for member in pair.members:
                 key = actor['birth'], member.fd
-                self.eof_fds.pop(key, None)
                 self.descriptors[key] = pair
-                self.listener_fds.pop(key, None)
-                self.connections.pop(key, None)
         elif kind == 'bind':
             if actor['role']=='fixed-inline' and self.case==READINESS_READY:
                 from readiness_launch import target
@@ -765,10 +638,7 @@ class Observer:
             if observed is None or observed.state != 7 or observed.local != ('0.0.0.0', 0) or observed.remote is not None:
                 raise Refused('source fresh unbound TCP descriptor')
             key = actor['birth'], fd
-            self.eof_fds.pop(key, None)
             self.descriptors.pop(key, None)
-            self.connections.pop(key, None)
-            self.listener_fds.pop(key, None)
             self.bindings[key] = {'socket': observed, 'tag': payload['tag'], 'nonce': nonce,
                                   'case': self.case, 'scope':scope, 'listening': False, 'listen_pending': False}
         elif kind == 'bound':
@@ -823,15 +693,11 @@ class Observer:
                 binding['listen_pending'], binding['listening'] = False, True
                 slot = {**binding, 'socket': observed}
                 self.listeners[self.listener_key(self.case,binding['tag'],binding['scope'])] = slot
-                self.listener_fds[actor['birth'], fd] = slot
             else:
                 raise Refused('source listener stage')
-        elif kind in ('root-http-open','root-http-close'):
-            from root_http_observer import context as http_context
-            return http_context(self,actor,kind,payload)
         elif kind == 'connect':
             root_http = actor['role'] == 'root' and self.case in ROOT_HTTP
-            shape(payload, ('fd', 'address','context') if root_http else ('fd','address'))
+            shape(payload, ('fd','address'))
             address = payload['address']
             if type(address) is not list or len(address) != 2 or address[0] != '127.0.0.1':
                 raise Refused('source literal loopback connection')
@@ -850,8 +716,8 @@ class Observer:
                 probe['attempts'] += 1
                 return {'ok': True, 'probe': True}  # Never creates a Route, Ticket or Connection.
             if root_http:
-                from root_http_observer import connection as http_connection
-                name,maximum = http_connection(self,actor,payload,port)
+                from endpoint_policy import root_http_route
+                name,maximum = root_http_route(self,actor,port)
             elif self.case in MCP_CASES:
                 if actor['role'] not in (('root',) if self.case in HTTP_CASES else ('root', 'cleanup-acp')):
                     raise Refused('source cleanup connection role')
@@ -894,51 +760,7 @@ class Observer:
                                             acquire_tcp(actor['birth'], number(payload['fd'])))
             self.connected_routes[name] = self.connected_routes.get(name, 0) + 1
             self.descriptors.pop((actor['birth'], ticket.client.fd), None)
-            self.connections.pop((actor['birth'], ticket.client.fd), None)
             return {'ok': True, 'ticket': ticket.serial}
-        elif kind == 'connected':
-            shape(payload, ('fd', 'ticket'))
-            serial = number(payload['ticket'], 1)
-            connection = self.endpoints.connections.get(serial)
-            ticket = connection.ticket if connection is not None else self.endpoints.tickets[serial]
-            if ticket.route.client != self.owner(actor) or ticket.client.fd != number(payload['fd']):
-                raise Refused('source connected ticket identity')
-            if self.case in CLEANUP_CASES and connection is None:
-                return None  # Join the real accepted FD before a short readiness probe closes.
-        elif kind == 'accepted':
-            if actor['role'] != 'mcp':
-                self.root_only(actor)
-            elif actor['case'] != self.case or self.case not in MCP_CASES:
-                raise Refused('source declared module accept')
-            shape(payload, ('listener', 'fd'))
-            listener_fd, fd = number(payload['listener']), number(payload['fd'])
-            matches = [ticket for ticket in self.endpoints.tickets.values()
-                       if ticket.listener.owner == actor['birth'] and ticket.listener.fd == listener_fd]
-            server = acquire_tcp(actor['birth'], fd)
-            candidates = []
-            for ticket in matches:
-                process = self.ledger.process(ticket.route.client.birth)
-                if process.exit is not None or process.terminal is not None:
-                    continue
-                try:
-                    client = acquire_tcp(ticket.route.client.birth, ticket.client.fd)
-                except FileNotFoundError:
-                    return None  # Await its kernel terminal fact, never guess a peer.
-                if client is not None and server is not None and client.remote == server.local and server.remote == client.local:
-                    candidates.append((ticket, client))
-            if not candidates:
-                return self.interrupted_accept(actor, matches, server)
-            if len(candidates) != 1:
-                raise Refused('source exact accepted reciprocal peer')
-            ticket, client = candidates[0]
-            connection = self.endpoints.accepted(ticket, client, server)
-            self.eof_fds.pop((actor['birth'], fd), None)
-            self.descriptors.pop((actor['birth'], fd), None)
-            self.listener_fds.pop((actor['birth'], fd), None)
-            self.connections[actor['birth'], fd] = connection
-            self.connections[ticket.route.client.birth, ticket.client.fd] = connection
-        elif kind == 'payload':
-            return self.socket_payload(actor, payload)
         elif kind == 'self-stop':
             shape(payload, ('signal',))
             children = [value for value in self.actors.values() if self.ledger.process(value['birth']).parent == actor['birth']]
@@ -994,34 +816,8 @@ class Observer:
         self.consume(trace)
         self.ledger.wait_entry(Birth.read(trace.identities[pid]), requested)
 
-    def settle_cancelled_channels(self):
-        for channel in list(self.frames):
-            pair=channel.get('cancelled_pair')
-            if pair is None:
-                continue
-            frame,actor=channel['frame'],channel['actor']
-            frame.check()
-            process=self.ledger.process(actor['birth'])
-            if (frame.poison or self.ledger.poison or pair.owner!=self.owner(actor)
-                    or frame.binding[:3]!=(actor['birth'],actor['token'],process.generation)
-                    or process.token!=actor['token'] or process.registered_generation!=process.generation
-                    or 9 not in actor['signals']):
-                raise Refused('self-pair cancellation changed authority')
-            if process.terminal is None:
-                continue
-            if process.exit is None or process.exit[1]!=9 or process.terminal[1:]!=(9,-9):
-                raise Refused('self-pair cancellation lacks actual SIGKILL')
-            self.interrupted_records.append({'kind':'cancelled-self-pair-control',
-                'request':channel['request']['id'],'pair':pair.serial,'pid':actor['birth'].pid,
-                'token':actor['token'],'generation':process.generation,
-                'fd':channel['request']['payload']['fd'],'payload_executed':False,
-                'descriptor_retention_proven':False,'original_parent_wait_proven':self.ledger.reaped(actor['birth'],actor['token'])})
-            frame.stream.close()
-            self.frames.remove(channel)
-
     def tick(self, trace):
         self.consume(trace)
-        self.settle_cancelled_channels()
         while len(self.frames) < 32:
             try:
                 stream, _ = self.server.accept()
@@ -1037,8 +833,6 @@ class Observer:
             self.frames.append({'frame': frame, 'actor': actor, 'request': None})
         for channel in list(self.frames):
             frame, actor = channel['frame'], channel['actor']
-            if 'cancelled_pair' in channel:
-                continue
             if channel['request'] is None:
                 value = frame.read()
                 if value is None:
@@ -1054,9 +848,6 @@ class Observer:
                 self.controls.append({**admitted, 'observed_monotonic_ns': time.monotonic_ns()})
             if frame.output is None:
                 answer = self.dispatch(actor, channel['request'])
-                if answer is PARK_SELF_PAIR:
-                    channel['cancelled_pair']=self.descriptors[actor['birth'],channel['request']['payload']['fd']]
-                    continue
                 if answer is not None:
                     frame.answer(reply(channel['request'], answer))
             if frame.output is not None and frame.send():

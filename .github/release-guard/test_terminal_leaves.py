@@ -18,6 +18,37 @@ import owned_fixture
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
+@pytest.mark.parametrize('case',leaves.OPTIONAL)
+@pytest.mark.parametrize('mutation',[None,'cwd','env','executable'])
+def test_optional_nulls_keep_original_true_image_checkout_and_environment(monkeypatch,case,mutation):
+    import git_observer
+    monkeypatch.setattr(git_observer,'image',lambda path:'b'*64)
+    calls=[]
+    host=SimpleNamespace(case=case,meta={'checkout':str(ROOT),'owned':'/owned'},fixture_roots={},intents={},
+        binding={'entry':{'path':'/native','sha256':'a'*64}},root_only=lambda actor:None,
+        meta_environment=lambda:{'PATH':'/bin'})
+    def admit(*args,**kwargs):
+        calls.append(args)
+        host.intents[1]={}
+        return {'ticket':1,'token':'bound'}
+    host.admit_launch=admit
+    raw={'case':case,'stdin':None,'executable':'/usr/bin/true','argv':['/usr/bin/true'],
+        'cwd':str(ROOT),'environment':{'PATH':'/bin'}}
+    if mutation=='cwd':
+        raw['cwd']='/foreign'
+    elif mutation=='env':
+        raw['environment']['EXTRA']='foreign'
+    elif mutation=='executable':
+        raw['executable']=raw['argv'][0]='/usr/bin/false'
+    if mutation is None:
+        assert leaves.proposal(host,{'role':'root'},raw)['translated']==['/usr/bin/true']
+        assert calls[0][2]=='terminal-native'
+    else:
+        with pytest.raises(Refused):
+            leaves.proposal(host,{'role':'root'},raw)
+        assert not calls
+
+
 def test_terminal_catalogue_matches_original_collection(monkeypatch):
     monkeypatch.setenv('PYTEST_DISABLE_PLUGIN_AUTOLOAD','1')
     nodes=[]

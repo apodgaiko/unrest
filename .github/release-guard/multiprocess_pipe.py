@@ -65,17 +65,3 @@ def retained(host,actor,row,*,body):
             or not body and observed.get('peer_inode')!=row[5]
             or Birth.read(process_identity(birth.pid))!=birth):
         raise Refused('spawn inherited Pipe live member changed')
-
-
-def install_io(read,write,mediate):
-    from multiprocessing.connection import Connection
-    send,recv=getattr(Connection,'_send'),getattr(Connection,'_recv')
-    guarded_read,guarded_write=read,write
-    def connection_send(stream,buffer,write=write):
-        return send(stream,buffer,write=write if write is guarded_write else
-            lambda fd,data:mediate(write,fd,data,writing=True))
-    def connection_recv(stream,size,read=read):
-        return recv(stream,size,read=read if read is guarded_read else
-            lambda fd,size:mediate(read,fd,size,writing=False))
-    setattr(Connection,'_send',connection_send)
-    setattr(Connection,'_recv',connection_recv)

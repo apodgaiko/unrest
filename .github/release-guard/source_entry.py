@@ -297,10 +297,7 @@ def activate(directory, profile, event, arguments):
         policy.sockets = Hooks(policy)
     client.request('core-ready', {'pins': [list(pair) for pair in pins]})
     if policy.sockets is not None:
-        file_io=policy.sockets.install()
-        if profile['role'] in ('root','mp-child'):
-            from multiprocess_pipe import install_io
-            install_io(*file_io)
+        policy.sockets.install()
     policy.install_process_hooks()
     client.request('body-ready', {'seal': profile['seal']})
     sys.dont_write_bytecode = True

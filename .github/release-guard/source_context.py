@@ -3,7 +3,7 @@ from contextvars import ContextVar
 import types
 
 from operands import instance_fields
-from controlled_cases import CASES as CONTROLLED, ROOT_HTTP
+from controlled_cases import CASES as CONTROLLED
 from bootstrap_cases import BOOTSTRAP
 from cleanup_inline import STARTUP
 
@@ -14,19 +14,12 @@ OWNED = ContextVar('release-owned-scope',default=None)
 class Context:
     def __init__(self,policy):
         self.policy=policy
-        self.owners=[]
-        self.http=None
 
     def listener(self):
         value=LISTENER.get()
         if type(value) is not dict:
             self.policy.refuse('finite listener has no metadata')
         return {**value,**({'scope':OWNED.get()} if self.policy.case in CONTROLLED else {})}
-
-    def connection(self,port):
-        if self.http is None:
-            self.policy.refuse('finite root HTTP is undeclared')
-        return self.http.connection(port)
 
     def install(self):
         import asyncio
@@ -51,10 +44,7 @@ class Context:
             import unrest_harness.experimental_session as session
             from unrest_harness.experimental_relay import Bridge
             start,opened=session._SessionOwner.start,session._SessionOwner._open_role_owned
-            context=self
             async def broker(owner,*args,**kwargs):
-                if not any(case==context.policy.case and previous is owner for case,previous in context.owners):
-                    context.owners.append((context.policy.case,owner))
                 fields=instance_fields(owner)
                 owned=OWNED.set(str(fields['root']))
                 listener=LISTENER.set({'tag':'broker','nonce':None})
@@ -82,9 +72,6 @@ class Context:
                     LISTENER.reset(token)
             session._SessionOwner.start,session._SessionOwner._open_role_owned=broker,role
             asyncio.start_server=server
-            if any(case in ROOT_HTTP for case in cases):
-                from root_http import Contexts
-                self.http=Contexts(self)
         if any(case in (*EXECUTION_CASES,*STARTUP) for case in cases):
             from unrest_harness.acp_runner import ACPNodeRunner
             original=ACPNodeRunner._find_free_port

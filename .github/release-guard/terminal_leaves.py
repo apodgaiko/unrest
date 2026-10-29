@@ -46,10 +46,14 @@ def proposal(host,actor,raw):
         raise Refused('terminal finite original leaf')
     checkout,owned=Path(host.meta['checkout']),Path(host.meta['owned'])
     workspace=Path(raw['cwd'])
-    parent,info=acquire(str(workspace.parent),owned,case.split('::')[1].split('[')[0][:30],20000)
-    generation=(str(parent),info.st_dev,info.st_ino)
-    if workspace!=parent/'workspace' or workspace.resolve()!=workspace or host.fixture_roots.setdefault(('terminal',case),generation)!=generation:
-        raise Refused('terminal original workspace generation')
+    if case in OPTIONAL:
+        if workspace!=checkout:
+            raise Refused('terminal optional-null original checkout cwd')
+    else:
+        parent,info=acquire(str(workspace.parent),owned,case.split('::')[1].split('[')[0][:30],20000)
+        generation=(str(parent),info.st_dev,info.st_ino)
+        if workspace!=parent/'workspace' or workspace.resolve()!=workspace or host.fixture_roots.setdefault(('terminal',case),generation)!=generation:
+            raise Refused('terminal original workspace generation')
     native=host.binding['entry']['path']
     if case in OPTIONAL:
         from ordinary_acp import TEST as ACP_TEST,PINS

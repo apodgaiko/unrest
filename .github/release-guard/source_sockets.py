@@ -26,12 +26,10 @@ class Hooks:
         self.policy, self.local = policy, policy.local
         self.socket_type, self.base_type = socket.socket, socket.SocketType
         self.fd = socket.socket.fileno
-        names = ('bind', 'listen', 'connect', 'connect_ex', 'accept', 'send', 'sendall',
-                 'recv', 'recv_into', 'recvfrom', 'recvfrom_into')
+        names = ('bind', 'listen', 'connect', 'connect_ex')
         self.original = {name: getattr(socket.socket, name) for name in names}
         self.pair = socket.socketpair
         self.getaddrinfo = socket.getaddrinfo
-        self.read, self.write = os.read, os.write
         self.unbound_created = False
 
     def descriptor(self, stream):
@@ -109,9 +107,7 @@ class Hooks:
                     or len(args[0]) != 2 or type(args[0][0]) is not str or args[0][0] != '127.0.0.1'
                     or type(args[0][1]) is not int or not 0 < args[0][1] <= 65535):
                 self.policy.refuse('source unknown connection')
-            context = self.policy.calls.connection(args[0][1]) if role == 'root' and self.policy.case in ROOT_HTTP else None
-            answer = self.rpc('connect', {'fd': descriptor, 'address': list(args[0]),
-                **({'context':context} if context is not None else {})})
+            answer = self.rpc('connect', {'fd': descriptor, 'address': list(args[0])})
             probe = answer.get('probe') is True
             if probe and (role != 'root' or self.policy.case not in (*STARTUP,*READINESS_CASES)):
                 self.policy.refuse('source negative probe context')
@@ -119,8 +115,6 @@ class Hooks:
             try:
                 result = self.original[name](stream, *args)
             except BlockingIOError:
-                if not probe:
-                    self.rpc('connected', {'fd': descriptor, 'ticket': answer['ticket']})
                 raise
             finally:
                 self.local.socket = None
@@ -130,22 +124,7 @@ class Hooks:
                 if type(result) is not int or result not in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK, errno.ECONNREFUSED):
                     self.policy.refuse('source negative probe unexpectedly connected')
                 return result
-            self.rpc('connected', {'fd': descriptor, 'ticket': answer['ticket']})
             return result
-        elif name in ('send', 'sendall', 'recv', 'recv_into', 'recvfrom', 'recvfrom_into', 'accept'):
-            count = 0
-            if name in ('send', 'sendall'):
-                if not args or type(args[0]) not in (bytes, bytearray, memoryview):
-                    self.policy.refuse('source payload buffer type')
-                count = args[0].nbytes if type(args[0]) is memoryview else len(args[0])
-            answer = self.rpc('payload', {'fd': descriptor, 'operation': name, 'bytes': count})
-            if answer.get('eof_only') is True:
-                if (kwargs or name not in ('recv', 'recv_into') or not args
-                        or name == 'recv' and (len(args) != 1 or type(args[0]) is not int or args[0] < 0)
-                        or name == 'recv_into' and (len(args) > 2
-                            or type(args[0]) not in (bytearray, memoryview)
-                            or len(args) == 2 and (type(args[1]) is not int or args[1] < 0))):
-                    self.policy.refuse('source EOF-only read flags or buffer')
         elif name == 'listen':
             if (role not in ('root','mcp') and not (role=='fixed-inline' and self.policy.profile['case']==READY)) or kwargs or len(args) > 1 or args and (type(args[0]) is not int or not 0 <= args[0] <= 2048):
                 self.policy.refuse('source listener operation')
@@ -160,9 +139,6 @@ class Hooks:
             self.rpc('bound', {'fd': descriptor})
         elif name == 'listen':
             self.rpc('listen', {'fd': descriptor, 'stage': 'after'})
-        elif name == 'accept':
-            accepted, _ = result
-            self.rpc('accepted', {'listener': descriptor, 'fd': self.descriptor(accepted)})
         return result
 
     def self_pair(self, family=socket.AF_UNIX, type=socket.SOCK_STREAM, proto=0):
@@ -179,28 +155,6 @@ class Hooks:
             self.local.pair = None
         self.rpc('pair-seal', {'ticket': ticket, 'fds': [self.descriptor(stream) for stream in pair]})
         return pair
-
-    def fd_io(self, function, descriptor, *args, writing=None):
-        if type(descriptor) is not int:
-            self.policy.refuse('source file descriptor type')
-        if descriptor < 0:
-            return function(descriptor, *args)  # Preserve the kernel's EBADF; no live FD is reachable.
-        try:
-            target = os.readlink('/proc/self/fd/' + str(descriptor))
-        except FileNotFoundError:
-            return function(descriptor, *args)  # Preserve the real EBADF, never claim a close/reap.
-        if target.startswith('socket:['):
-            is_write=(function is self.write) if writing is None else writing
-            count = 0
-            if is_write:
-                if not args or type(args[0]) not in (bytes, bytearray, memoryview):
-                    self.policy.refuse('source file payload buffer type')
-                count = args[0].nbytes if type(args[0]) is memoryview else len(args[0])
-            answer = self.rpc('payload', {'fd': descriptor, 'operation':'fd-write' if is_write else 'fd-read', 'bytes': count})
-            if answer.get('eof_only') is True and (function is not self.read or len(args) != 1
-                    or type(args[0]) is not int or args[0] < 0):
-                self.policy.refuse('source EOF-only file read')
-        return function(descriptor, *args)
 
     def literal_address(self, host, port, family=0, type=0, proto=0, flags=0):
         if (self.policy.profile['role']=='fixed-inline' and self.policy.profile['case']==SPEED_CASES[0]
@@ -272,10 +226,3 @@ class Hooks:
             return hooks.guarded(hooks.self_pair, *args, **kwargs)
         socket.socketpair = pair
         socket.getaddrinfo = self.literal_address
-        def read(descriptor, count):
-            return hooks.fd_io(hooks.read, descriptor, count)
-        def write(descriptor, data):
-            return hooks.fd_io(hooks.write, descriptor, data)
-        os.read, os.write = read, write
-
-        return read,write,self.fd_io

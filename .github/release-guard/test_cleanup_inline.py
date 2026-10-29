@@ -164,7 +164,7 @@ def negative_probe(tmp_path, monkeypatch):
     observer, actor, _ = backend_request(tmp_path)
     observer.case = next(iter(STARTUP))
     observer.probe_ports = {}
-    observer.endpoints = SimpleNamespace(routes={}, tickets={}, connections={})
+    observer.endpoints = SimpleNamespace(routes={})
     fresh = Socket(actor["birth"], 7, 101, 201, 7, 20000, ("0.0.0.0", 0), None)
     observer.bindings = {
         (actor["birth"], 7): {"socket": fresh, "tag": "mcp-probe", "case": observer.case}
@@ -182,12 +182,7 @@ def test_negative_readiness_attempts_never_mint_connection_authority(tmp_path, m
     observer, actor, request, _ = negative_probe(tmp_path, monkeypatch)
     for _ in range(16):
         assert observer.dispatch(actor, request) == {"ok": True, "probe": True}
-    assert (
-        observer.endpoints.routes
-        == observer.endpoints.tickets
-        == observer.endpoints.connections
-        == {}
-    )
+    assert observer.endpoints.routes=={}
     with pytest.raises(Refused, match="finite negative readiness probe"):
         observer.dispatch(actor, request)
     assert observer.probe_ports[observer.case]["attempts"] == 16
@@ -223,7 +218,7 @@ def test_negative_readiness_has_no_generic_loopback_permission(mutation, tmp_pat
     monkeypatch.setattr(source_observer, "acquire_tcp", lambda *args, **kwargs: client)
     with pytest.raises(Refused, match="finite negative readiness probe"):
         observer.dispatch(actor, request)
-    assert observer.endpoints.connections == {}
+    assert observer.endpoints.routes == {}
 
 
 @pytest.mark.parametrize("outcome", ("pending", "refused", "connected", "zero", "bool"))

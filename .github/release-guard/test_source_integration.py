@@ -345,10 +345,6 @@ def test_root_completion_seal_is_bounded_and_requires_all_ordered_completions():
     with pytest.raises(Refused, match='completion incomplete'):
         observer.dispatch(actor, {'kind':'root-finish','payload':seal})
     observer.completed = list(cases)
-    observer.frames=[{'cancelled_pair':object()}]
-    assert observer.dispatch(actor, {'kind':'root-finish','payload':seal}) is None
-    assert not observer.finished
-    observer.frames=[]
     assert observer.dispatch(actor, {'kind':'root-finish','payload':seal}) == {'ok':True}
     assert observer.finished
 

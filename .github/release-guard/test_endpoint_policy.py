@@ -45,90 +45,12 @@ def connected(*, same_owner=False):
     return endpoints, ticket, client, server
 
 
-@pytest.mark.parametrize('same_owner', [False, True])
-def test_queued_initial_send_is_not_an_accepted_connection(same_owner):
-    endpoints, ticket, client, server = connected(same_owner=same_owner)
-    endpoints.queued_send(ticket, ticket.listener, client, 128)
-    assert endpoints.tickets[ticket.serial] is ticket
-    assert endpoints.queued == {ticket.serial: (1, 128)}
-    assert not endpoints.connections
-    connection = endpoints.accepted(ticket, client, server)
-    assert not endpoints.queued and not endpoints.tickets
-    endpoints.retained(connection, ticket.route.client, client)
-
-
-@pytest.mark.parametrize('mutation', ['syn', 'listener-cookie', 'listener-missing', 'client-cookie',
-    'client-missing', 'foreign-port', 'missing-admission', 'quota'])
-def test_queued_initial_send_requires_fresh_exact_admission(mutation):
-    endpoints, ticket, client, _ = connected()
-    listener = ticket.listener
-    if mutation == 'syn':
-        client = replace(client, state=2)
-    elif mutation == 'listener-cookie':
-        listener = replace(listener, cookie=listener.cookie + 1)
-    elif mutation == 'listener-missing':
-        listener = None
-    elif mutation == 'client-cookie':
-        client = replace(client, cookie=client.cookie + 1)
-    elif mutation == 'client-missing':
-        client = None
-    elif mutation == 'foreign-port':
-        client = replace(client, remote=('127.0.0.1', 23457))
-    elif mutation == 'missing-admission':
-        del endpoints.tickets[ticket.serial]
-    else:
-        endpoints.queued_send(ticket, listener, client, 1048576)
-    with pytest.raises(Refused):
-        endpoints.queued_send(ticket, listener, client, 1)
-    assert endpoints.poison and not endpoints.connections
-
-
-@pytest.mark.parametrize('same_owner', [False, True])
-def test_accepted_peer_survives_listener_close_but_never_allows_reconnect(same_owner):
-    endpoints, ticket, client, server = connected(same_owner=same_owner)
-    connection = endpoints.accepted(ticket, client, server)
-    del endpoints.listeners['route']  # actual adapter must establish close separately
-    endpoints.retained(connection, ticket.route.client, client)
-    endpoints.retained(connection, ticket.route.server, server)
-    endpoints.retained(connection, ticket.route.server, replace(server, state=8))
-    endpoints.retained(connection, ticket.route.server, replace(server, state=7, remote=None))
-    with pytest.raises(Refused):
-        endpoints.connect('route', ticket.listener, replace(client, fd=10, state=7, remote=None))
-    assert endpoints.poison
-
-
 @pytest.mark.parametrize('field,value', [('fd', 20), ('inode', 3000), ('cookie', 4000),
                                         ('state', 1), ('local', ('127.0.0.1', 12346))])
 def test_listener_must_be_reacquired_exactly(field, value):
     endpoints, _, listener = prepared()
     with pytest.raises(Refused):
         endpoints.connect('route', replace(listener, **{field: value}), idle_client(endpoints.routes['route']))
-    assert endpoints.poison
-
-
-@pytest.mark.parametrize('side,field,value', [
-    ('client', 'fd', 10), ('client', 'state', 10), ('server', 'state', 10),
-    ('client', 'remote', ('127.0.0.1', 12346)), ('server', 'remote', ('127.0.0.1', 23457)),
-    ('client', 'local', ('127.0.0.1', 23457)), ('server', 'local', ('127.0.0.1', 12346)),
-])
-def test_reciprocal_kernel_peer_required(side, field, value):
-    endpoints, ticket, client, server = connected()
-    if side == 'client':
-        client = replace(client, **{field: value})
-    else:
-        server = replace(server, **{field: value})
-    with pytest.raises(Refused):
-        endpoints.accepted(ticket, client, server)
-    assert endpoints.poison
-
-
-@pytest.mark.parametrize('field,value', [('fd', 11), ('inode', 3000), ('cookie', 4000),
-                                        ('local', ('127.0.0.1', 23457)), ('remote', None), ('state', 10)])
-def test_retained_connection_cannot_launder_fd_reuse_or_reconnect(field, value):
-    endpoints, ticket, client, server = connected()
-    connection = endpoints.accepted(ticket, client, server)
-    with pytest.raises(Refused):
-        endpoints.retained(connection, ticket.route.client, replace(client, **{field: value}))
     assert endpoints.poison
 
 
@@ -145,16 +67,6 @@ def test_no_connect_before_body_ready_or_after_epoch_loss(phase):
     with pytest.raises(Refused):
         endpoints.connect('route', listener, idle_client(route))
     assert endpoints.poison
-
-
-def test_tickets_are_one_use_and_structural_clone_is_not_issued_ticket():
-    endpoints, ticket, client, server = connected()
-    with pytest.raises(Refused):
-        endpoints.accepted(replace(ticket), client, server)
-    endpoints, ticket, client, server = connected()
-    endpoints.accepted(ticket, client, server)
-    with pytest.raises(Refused):
-        endpoints.accepted(ticket, client, server)
 
 
 @pytest.mark.parametrize('parent_wait', [False, True])
@@ -185,7 +97,6 @@ def test_retirement_keeps_original_parent_wait_requirement(parent_wait):
         assert endpoints.listeners and endpoints.poison
 
 
-
 @pytest.mark.parametrize('field,value', [('fd', True), ('inode', 0), ('cookie', (1 << 64) - 1),
     ('state', True), ('uid', True), ('local', ('localhost', 12345)),
     ('local', ('127.0.0.1', True)), ('remote', ('8.8.8.8', 443))])
@@ -195,64 +106,14 @@ def test_socket_observations_have_strict_finite_fields(field, value):
         replace(listener, **{field: value})
 
 
-@pytest.mark.parametrize('field,value', [('fd', 10), ('inode', 9000), ('cookie', 9001)])
-def test_preconnect_file_description_cannot_be_replaced(field, value):
-    endpoints, ticket, client, server = connected()
-    with pytest.raises(Refused):
-        endpoints.accepted(ticket, replace(client, **{field: value}), server)
-    assert endpoints.poison
-
-
-def test_existing_connection_cannot_obtain_another_connect_ticket():
-    endpoints, ticket, client, server = connected()
-    endpoints.accepted(ticket, client, server)
-    with pytest.raises(Refused):
-        endpoints.connect('route', ticket.listener, replace(client, state=7, remote=None))
-    assert endpoints.poison
-
-
-def test_old_ticket_cannot_bind_replacement_route():
-    endpoints, ticket, client, server = connected()
-    endpoints.routes['route'] = replace(ticket.route)  # even equal-valued route is a different declaration
-    with pytest.raises(Refused, match='stale route'):
-        endpoints.accepted(ticket, client, server)
-    assert endpoints.poison
-
-
-
-def test_numeric_fd_reuse_with_a_new_file_description_is_allowed():
-    endpoints, ticket, client, server = connected()
-    endpoints.accepted(ticket, client, server)
-    new_client = replace(client, inode=9000, cookie=9001, local=('127.0.0.1', 23457))
-    next_ticket = endpoints.connect('route', ticket.listener,
-        replace(new_client, state=7, local=('0.0.0.0', 0), remote=None))
-    next_server = replace(server, fd=10, inode=9002, cookie=9003, remote=new_client.local)
-    connection = endpoints.accepted(next_ticket, new_client, next_server)
-    endpoints.retained(connection, next_ticket.route.client, new_client)
-    assert not endpoints.poison and len(endpoints.connections) == 2
-
-
-
-def test_pending_ticket_cannot_be_duplicated_through_an_fd_alias():
+def test_issued_admission_cannot_be_duplicated_through_an_fd_alias():
     endpoints, ticket, _, _ = connected()
     with pytest.raises(Refused):
         endpoints.connect('route', ticket.listener, replace(ticket.client, fd=20))
     assert endpoints.poison
 
 
-@pytest.mark.parametrize('side', ['client', 'server'])
-def test_accepted_description_cannot_reconnect_via_alias_or_role_switch(side):
-    endpoints, ticket, client, server = connected(same_owner=True)
-    endpoints.accepted(ticket, client, server)
-    saved = client if side == 'client' else server
-    alias = replace(saved, fd=20, state=7, remote=None)
-    with pytest.raises(Refused):
-        endpoints.connect('route', ticket.listener, alias)
-    assert endpoints.poison
-
-
-
-def test_pending_shared_description_cannot_reserve_through_another_owned_birth():
+def test_issued_shared_description_cannot_reserve_through_another_owned_birth():
     endpoints, ticket, _, _ = connected()
     next_route = replace(ticket.route, name='other-route', port=12346, client=ticket.route.server)
     endpoints.declare(next_route)
@@ -264,7 +125,7 @@ def test_pending_shared_description_cannot_reserve_through_another_owned_birth()
     assert endpoints.poison
 
 
-def test_shared_listener_retains_different_client_births_and_tickets():
+def test_shared_listener_retains_different_client_births_and_admissions():
     endpoints, route, listener = prepared()
     ledger = endpoints.ledger
     actual = identity(102, 100)
@@ -319,75 +180,6 @@ def test_retired_case_keeps_observations_but_cannot_reuse_capabilities():
     endpoints.listen(next_route.name, fresh)
     assert endpoints.listeners[next_route.name] is fresh
     assert endpoints.listeners[route.name] is listener
-
-
-def test_case_retirement_never_discards_an_unjoined_ticket():
-    endpoints, route, listener = prepared()
-    ticket = endpoints.connect(route.name, listener, idle_client(route))
-    with pytest.raises(Refused, match='outstanding admission'):
-        endpoints.retire_case(route.case)
-    assert endpoints.tickets[ticket.serial] is ticket and route.case not in endpoints.retired
-
-
-def test_owner_retirement_keeps_pending_admission_instead_of_erasing_it():
-    endpoints,route,listener=prepared()
-    ticket=endpoints.connect(route.name,listener,idle_client(route))
-    endpoints.queued[ticket.serial]=(1,1)
-    terminal(endpoints.ledger,route.server.birth,0)
-    wait4(endpoints.ledger,route.client.birth,route.server.birth,0)
-    with pytest.raises(Refused,match='outstanding admission'):
-        endpoints.retire_owner(route.server,route.case)
-    assert endpoints.tickets[ticket.serial] is ticket
-    assert ticket.serial in endpoints.queued and not endpoints.retired_names
-
-
-def test_same_port_reuse_never_replaces_old_route_or_revives_its_connection():
-    endpoints,ticket,client,server=connected()
-    route=ticket.route
-    connection=endpoints.accepted(ticket,client,server)
-    ledger=endpoints.ledger
-    terminal(ledger,route.server.birth,0)
-    wait4(ledger,route.client.birth,route.server.birth,0)
-    endpoints.retire_owner(route.server,route.case)
-    data=identity(102,route.client.birth.pid)
-    birth=Birth.read(data)
-    emit(ledger,'kernel_child',parent=route.client.birth.pid,child=birth.pid,event=1,identity=data)
-    ledger.register(birth,'fresh-token',PINS,SEAL,case=route.case,command_class='child')
-    owner=ready(ledger,birth)
-    fresh=replace(route,name='fresh-route',server=owner)
-    endpoints.declare(fresh)
-    saved=endpoints.listeners[route.name]
-    endpoints.listen(fresh.name,replace(saved,owner=birth,inode=saved.inode+1,cookie=saved.cookie+1))
-    assert endpoints.routes[route.name] is route and endpoints.routes[fresh.name] is fresh
-    assert endpoints.connections[ticket.serial] is connection
-    with pytest.raises(Refused,match='unknown route'):
-        endpoints.retained(connection,route.client,client)
-
-
-def test_active_connection_cap_is_separate_from_retired_owner_history(monkeypatch):
-    import endpoint_policy
-    monkeypatch.setattr(endpoint_policy,'MAX_ACTIVE_CONNECTIONS',1)
-    monkeypatch.setattr(endpoint_policy,'MAX_RETAINED_ADMISSIONS',2)
-    endpoints,ticket,client,server=connected()
-    connection=endpoints.accepted(ticket,client,server)
-    route=ticket.route
-    terminal(endpoints.ledger,route.server.birth,0)
-    wait4(endpoints.ledger,route.client.birth,route.server.birth,0)
-    endpoints.retire_owner(route.server,route.case)
-    data=identity(102,route.client.birth.pid)
-    birth=Birth.read(data)
-    emit(endpoints.ledger,'kernel_child',parent=route.client.birth.pid,child=birth.pid,event=1,identity=data)
-    endpoints.ledger.register(birth,'fresh-token',PINS,SEAL,case=route.case,command_class='child')
-    fresh=replace(route,name='fresh',server=ready(endpoints.ledger,birth))
-    endpoints.declare(fresh)
-    listener=replace(endpoints.listeners[route.name],owner=birth,inode=3000,cookie=4000)
-    endpoints.listen(fresh.name,listener)
-    fresh_client=replace(idle_client(fresh),inode=5000,cookie=6000)
-    issued=endpoints.connect(fresh.name,listener,fresh_client)
-    assert issued.serial==2 and endpoints.connections[connection.ticket.serial] is connection
-    with pytest.raises(Refused,match='connection bound'):
-        endpoints.connect(fresh.name,listener,replace(fresh_client,inode=5001,cookie=6001))
-    assert endpoints.serial==2
 
 
 def test_retained_route_ceiling_does_not_replace_the_active_route_ceiling(monkeypatch):

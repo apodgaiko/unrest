@@ -9,7 +9,6 @@ from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
 from preflight_cases import CASES as PREFLIGHT_ALL
-from controlled_cases import ROOT_HTTP
 from content_manifest import Refused
 from case_inventory import identity
 
@@ -65,8 +64,6 @@ class OriginalCases:
                 self.skips.append(case)
         elif not passed:
             raise Refused('root original assertions or cleanup failed')
-        if item.nodeid in ROOT_HTTP and passed:
-            self.policy.calls.http.finish()
         self.leave(case,'skipped' if skipped else 'passed' if passed else 'failed',phases)
         self.completed.append(case)
 

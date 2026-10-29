@@ -229,38 +229,3 @@ def test_actual_core_ready_dispatch_precedes_independent_member_recensus(monkeyp
         "ok": True
     }
     assert stage == ["core-ready", "independent-recensus"]
-
-
-@pytest.mark.parametrize("operation", ["send", "recv"])
-@pytest.mark.parametrize("explicit", [False, True])
-def test_connection_defaults_and_explicit_raw_callbacks_must_mediate_before_io(
-    monkeypatch, operation, explicit
-):
-    from multiprocessing.connection import Connection
-
-    old_send, old_recv = getattr(Connection, "_send"), getattr(Connection, "_recv")
-    monkeypatch.setattr(Connection, "_send", old_send)
-    monkeypatch.setattr(Connection, "_recv", old_recv)
-    calls = []
-
-    def raw(*args):
-        pytest.fail("unadmitted descriptor performed actual IO")
-
-    def denied(function, fd, *args, writing=None):
-        calls.append((fd, writing))
-        raise Refused("unknown or replaced inherited descriptor")
-
-    def read(fd, size):
-        return denied(raw, fd, size, writing=False)
-
-    def write(fd, data):
-        return denied(raw, fd, data, writing=True)
-
-    pipe.install_io(read, write, denied)
-    stream = SimpleNamespace(_handle=99)
-    with pytest.raises(Refused):
-        if operation == "send":
-            getattr(Connection, "_send")(stream, b"payload", **({"write": raw} if explicit else {}))
-        else:
-            getattr(Connection, "_recv")(stream, 1, **({"read": raw} if explicit else {}))
-    assert calls == [(99, operation == "send")]

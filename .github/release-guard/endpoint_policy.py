@@ -1,10 +1,4 @@
-"""TCP endpoint state joined to authenticated process epochs and kernel sockets.
-
-Only the trusted supervisor calls this reducer, with independently declared
-routes and freshly acquired observations. It does not authenticate RPC frames
-or perform socket operations. A returned ticket permits exactly one connect;
-an accepted connection never authorizes a replacement listener or reconnect.
-"""
+"""Finite owned-listener admission; application payload and accept are not certified."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -98,18 +92,34 @@ class Route:
 
 
 @dataclass(frozen=True)
-class Ticket:
+class Admission:
     serial: int
     route: Route
     listener: Socket
     client: Socket
 
 
-@dataclass(frozen=True)
-class Connection:
-    ticket: Ticket
-    client: Socket
-    server: Socket
+def root_http_route(host,actor,port):
+    """Root HTTP reaches only this case's actual owned broker listener."""
+    from controlled_cases import ROOT_HTTP,INITIALIZED_HTTP
+    from socket_observation import acquire_tcp
+    host.root_only(actor)
+    if host.case not in ROOT_HTTP:
+        raise Refused('root HTTP finite case')
+    slots=[slot for slot in host.listeners.values() if slot['case']==host.case and slot['tag']=='broker'
+           and slot['socket'].owner==actor['birth'] and slot['socket'].local==('127.0.0.1',port)]
+    if len(slots)!=1:
+        raise Refused('root HTTP exact owned broker listener')
+    listener=slots[0]['socket']
+    if acquire_tcp(actor['birth'],listener.fd)!=listener:
+        raise Refused('root HTTP broker listener generation')
+    name=actor['token']+':root-http:'+host.case+':'+str(port)
+    if name not in host.endpoints.routes:
+        owner=host.owner(actor)
+        sharing=listener if any(route.port==port and host.endpoints.route_active(route) for route in host.endpoints.routes.values()) else None
+        host.endpoints.declare(Route(name,host.case,owner,owner,port),shared_listener=sharing)
+        host.endpoints.listen(name,listener)
+    return name,4 if host.case==INITIALIZED_HTTP else 3
 
 
 class Endpoints:
@@ -117,9 +127,6 @@ class Endpoints:
         self.ledger = ledger
         self.routes: dict[str, Route] = {}
         self.listeners: dict[str, Socket] = {}
-        self.tickets: dict[int, Ticket] = {}
-        self.connections: dict[int, Connection] = {}
-        self.queued: dict[int, tuple[int, int]] = {}
         self.poison: list[str] = []
         self.serial = 0
         self.retired: set[str] = set()
@@ -168,7 +175,7 @@ class Endpoints:
     @fail_closed
     def retire_case(self, case: str) -> None:
         text(case)
-        if case in self.retired or any(ticket.route.case == case for ticket in self.tickets.values()):
+        if case in self.retired:
             raise Refused('endpoint retirement has outstanding admission')
         # Revoke capabilities, preserving observations; this does not assert FD close.
         self.retired.add(case)
@@ -190,106 +197,26 @@ class Endpoints:
         self.listeners[name] = observed
 
     @fail_closed
-    def connect(self, name: str, fresh_listener: Socket, client: Socket) -> Ticket:
+    def connect(self, name: str, fresh_listener: Socket, client: Socket) -> Admission:
         route = self.route(name)
         self.owner(route.client, route.case, body=True)
         self.owner(route.server, route.case, body=True)
         if (type(client) is not Socket or client.owner != route.client.birth
                 or client.uid != route.client.birth.uid or client.state != 7 or client.remote is not None
+                or client.local != ('0.0.0.0',0)
                 or client.description() in self.descriptions):
             raise Refused('endpoint preconnect descriptor')
         if name not in self.listeners or fresh_listener != self.listeners[name]:
             raise Refused('endpoint listener reacquisition')
-        active=len(self.tickets)+sum(self.connection_counts.get(name,0)
+        active=sum(self.connection_counts.get(name,0)
             for name,route in self.routes.items() if self.route_active(route))
-        if (active>=MAX_ACTIVE_CONNECTIONS or self.serial>=MAX_RETAINED_ADMISSIONS
-                or any(item.client.description() == client.description()
-                       for item in self.tickets.values())):
+        if active>=MAX_ACTIVE_CONNECTIONS or self.serial>=MAX_RETAINED_ADMISSIONS:
             raise Refused('endpoint connection bound')
         self.serial += 1
-        ticket = Ticket(self.serial, route, fresh_listener, client)
-        self.tickets[ticket.serial] = ticket
-        return ticket
-
-    @fail_closed
-    def queued_send(self, ticket: Ticket, listener: Socket, client: Socket, count: int) -> None:
-        """Initial client bytes may precede application accept, never its proof.
-
-        Waiting for a same-loop server to accept here deadlocks that loop. The
-        unconsumed ticket remains mandatory until the actual accepted-FD join.
-        """
-        if type(ticket) is not Ticket or self.tickets.get(ticket.serial) is not ticket:
-            raise Refused('endpoint queued admission missing')
-        route = self.route(ticket.route.name)
-        self.owner(route.client, route.case, body=True)
-        self.owner(route.server, route.case, body=True)
-        if (route is not ticket.route or type(listener) is not Socket or listener != ticket.listener
-                or self.listeners.get(route.name) != listener or listener.state != 10
-                or type(client) is not Socket or client.binding() != ticket.client.binding()
-                or client.state != 1 or client.remote != listener.local
-                or client.local[0] != '127.0.0.1' or client.local[1] == 0):
-            raise Refused('endpoint queued live socket binding')
-        integer(count, 0, 1048576)
-        calls, size = self.queued.get(ticket.serial, (0, 0))
-        if calls >= 16 or size + count > 1048576:
-            raise Refused('endpoint queued initial send bound')
-        self.queued[ticket.serial] = calls + 1, size + count
-
-    @fail_closed
-    def accepted(self, ticket: Ticket, client: Socket, server: Socket) -> Connection:
-        if type(ticket) is not Ticket or self.tickets.get(ticket.serial) is not ticket:
-            raise Refused('endpoint unknown or consumed ticket')
-        route = self.route(ticket.route.name)
-        if route is not ticket.route:
-            raise Refused('endpoint stale route ticket')
-        self.owner(route.client, route.case, body=True)
-        self.owner(route.server, route.case, body=True)
-        if (type(client) is not Socket or type(server) is not Socket
-                or client.owner != route.client.birth or server.owner != route.server.birth
-                or client.uid != route.client.birth.uid or server.uid != route.server.birth.uid
-                or client.binding() != ticket.client.binding() or client.state not in (1, 8) or server.state not in (1, 8)
-                or client.remote != server.local or server.remote != client.local
-                or server.local != ('127.0.0.1', route.port)
-                or server.binding() == ticket.listener.binding()
-                or client.binding() == server.binding()):
-            raise Refused('endpoint reciprocal peer')
-        connection = Connection(ticket, client, server)
-        del self.tickets[ticket.serial]
-        self.queued.pop(ticket.serial, None)
-        self.connections[ticket.serial] = connection
-        self.descriptions.update((client.description(),server.description()))
-        self.connection_counts[route.name]=self.connection_counts.get(route.name,0)+1
-        return connection
-
-    @fail_closed
-    def retained(self, connection: Connection, owner: Owner, observed: Socket) -> None:
-        if (type(connection) is not Connection
-                or self.connections.get(connection.ticket.serial) is not connection):
-            raise Refused('endpoint unknown connection')
-        route = self.route(connection.ticket.route.name)
-        self.owner(owner, route.case, body=True)
-        candidates = [saved for expected, saved in ((route.client, connection.client), (route.server, connection.server))
-                      if owner == expected and type(observed) is Socket and observed.binding() == saved.binding()]
-        if len(candidates) != 1:
-            raise Refused('endpoint connection owner or descriptor')
-        saved = candidates[0]
-        if (type(observed) is not Socket or observed.binding() != saved.binding()
-                or observed.local != saved.local
-                or not (observed.state in (1, 8) and observed.remote == saved.remote
-                        or observed.state == 7 and observed.remote is None)):
-            raise Refused('endpoint retained descriptor')
-
-    @fail_closed
-    def abort_reaped(self, ticket: Ticket) -> None:
-        """Retire an unfinished client, without asserting accepted peer identity."""
-        if type(ticket) is not Ticket or self.tickets.get(ticket.serial) is not ticket:
-            raise Refused('endpoint unknown aborted ticket')
-        route = self.route(ticket.route.name)
-        if route is not ticket.route or not self.ledger.reaped(route.client.birth, route.client.token):
-            raise Refused('endpoint aborted client requires actual parent reap')
-        self.owner(route.server, route.case, body=True)
-        del self.tickets[ticket.serial]
-        self.queued.pop(ticket.serial, None)
+        admission = Admission(self.serial, route, fresh_listener, client)
+        self.descriptions.add(client.description())
+        self.connection_counts[name]=self.connection_counts.get(name,0)+1
+        return admission
 
     @fail_closed
     def retire_owner(self, owner: Owner, case: str) -> None:
@@ -301,7 +228,4 @@ class Endpoints:
                 or not self.ledger.reaped(owner.birth,process.life_token)):
             raise Refused('endpoint retirement needs actual parent join')
         names={name for name,route in self.routes.items() if route.case==case and route.server==owner}
-        if (any(ticket.route.name in names for ticket in self.tickets.values())
-                or any(serial not in self.tickets for serial in self.queued)):
-            raise Refused('endpoint retirement has outstanding admission')
         self.retired_names.update(names)

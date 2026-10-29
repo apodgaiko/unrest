@@ -281,7 +281,7 @@ def worker(binding, metadata, raw_directory):
             finished(observer)
         require(result['root_parent_wait_raw'] == 0 and not result['poison'] and not observer.ledger.poison
                 and observer.finished and tuple(observer.completed) == (() if binding.get('collection_only') else observer.cases)
-                and not observer.frames and not observer.pair_intents and not observer.endpoints.poison and not observer.eof_drains
+                and not observer.frames and not observer.pair_intents and not observer.endpoints.poison
                 and all(intent['consumed'] for intent in observer.intents.values()), 'original source completion refused')
     except BaseException:
         failure = traceback.format_exc()
@@ -292,7 +292,7 @@ def worker(binding, metadata, raw_directory):
         raise
     finally:
         try:
-            record = {'schema': 'unrest.bootstrap-source-result.v2', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
+            record = {'schema': 'unrest.bootstrap-source-result.v3', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
                       'release_certified': False, 'completed': [] if observer is None else observer.completed,
                       'result': result, 'failure': failure, 'metadata': metadata,
                       'kernel': [] if trace is None else trace.records,
@@ -303,12 +303,12 @@ def worker(binding, metadata, raw_directory):
                           'retired_routes': sorted(observer.endpoints.retired_names),
                           'listeners': {key: asdict(value) for key, value in observer.endpoints.listeners.items()},
                           'routes': {key: asdict(value) for key, value in observer.endpoints.routes.items()},
-                          'connections': [asdict(value) for value in observer.endpoints.connections.values()],
+                          'connection_admissions':dict(observer.endpoints.connection_counts),
+                          'application_payload_proven':False,
                           'readiness_probes':observer.readiness_attempts,
                           'negative_probes': {case: {'socket': asdict(value['socket']), 'attempts': value['attempts']}
                               for case, value in observer.probe_ports.items()}},
                       'plan_observations': [] if observer is None else observer.plan_records,
-                      'interrupted_connections': [] if observer is None else observer.interrupted_records,
                       'poison': [] if observer is None else observer.ledger.poison,
                       'output_base64': '' if observer is None else base64.b64encode(observer.output).decode()}
             if observer is not None and observer.full:
