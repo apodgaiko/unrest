@@ -8,7 +8,6 @@ import pytest
 from pytest_asyncio.plugin import Coroutine
 from _pytest.python import Function
 
-from preflight_cases import CASES as PREFLIGHT_ALL
 from content_manifest import Refused
 from case_inventory import identity
 
@@ -129,7 +128,7 @@ def main():
         prepared_plugin=[]
     code = pytest.main(['-q', '-p', 'pytest_asyncio.plugin', '-p', 'pytest_mock',
                        '--basetemp', str(Path(policy.profile['owned']) / 'pytest'), '-o',
-                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *(['tests/test_launch_preflight.py'] if tuple(policy.profile['cases']) == PREFLIGHT_ALL else selected)], plugins=[plugin,*prepared_plugin])
+                       'cache_dir=' + str(Path(policy.profile['owned']) / 'pytest-cache'), *selected], plugins=[plugin,*prepared_plugin])
     if code != 0 or plugin.completed != policy.profile['cases'] or policy.poison:
         raise Refused('root original source cases failed')
     from source_profile import case_seal

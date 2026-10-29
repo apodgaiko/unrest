@@ -6,7 +6,7 @@ import threading
 import pytest
 
 from content_manifest import Refused
-from preflight_cases import CASES, NO_EFFECT
+from test_preflight_inventory import CASES, NO_EFFECT
 from plan_launch import CASES as LAUNCHES
 from source_entry import Policy
 from source_context import Context
@@ -76,30 +76,6 @@ def test_no_effect_endpoint_and_signal_requests_are_sticky(event, arguments):
     with pytest.raises(Refused):
         value.audit(event, arguments)
     assert value.poison and records == ["guard-refusal"]
-
-
-def test_complete_module_run_uses_normal_discovery_not_selected_nodeids(monkeypatch, tmp_path):
-    import source_entry
-    import source_root
-
-    requests = []
-    value = SimpleNamespace(
-        profile={"role": "root", "owned": str(tmp_path), "cases": list(CASES)},
-        poison=False,
-        client=SimpleNamespace(request=lambda *args: requests.append(args)),
-        calls=SimpleNamespace(install=lambda: None),
-    )
-    monkeypatch.setattr(source_entry, "ACTIVE", value)
-
-    def run(arguments, plugins):
-        assert arguments[-1] == "tests/test_launch_preflight.py"
-        assert not any("::" in arg for arg in arguments)
-        plugins[0].completed = list(CASES)
-        return 0
-
-    monkeypatch.setattr(source_root.pytest, "main", run)
-    assert source_root.main() == 0
-    assert len(requests) == 1 and requests[0][0] == "root-finish"
 
 
 @pytest.mark.parametrize("with_child", [False, True])

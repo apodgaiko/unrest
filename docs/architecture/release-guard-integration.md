@@ -352,3 +352,11 @@ parent identities, credentials, environment, cwd, namespaces, readonly mounts,
 CPython flags and inherited descriptors. Authenticated producer data never
 replaces these live comparisons. Controlled configuration rendering similarly
 consumes its authored declarations; raw relay input remains validated.
+
+
+The completed preflight54 development selector and its production collection
+catalogue are retired. Normal unexcluded discovery still collects every original
+preflight test; its nine real launch cases retain their exact declarations.
+Non-launch cases use the observer's default zero-child rule and unknown process
+requests still refuse. The frozen 54-case list is only a test collection oracle,
+excluded from native support, and grants no launch or completion authority.

@@ -1,4 +1,4 @@
-"""Exact full-module collection; non-launch cases grant no effects."""
+"""Frozen collection oracle only; not imported by guard enforcement."""
 from plan_launch import CASES as LAUNCHES
 
 CASES = (

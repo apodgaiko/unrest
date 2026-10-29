@@ -18,7 +18,6 @@ from review_wire import CASES as REVIEW_CASES,count as review_count
 from multiprocess_entry import ALL_CASES as MP_CASES, count as mp_count
 from content_manifest import Refused, native_digest
 from http_cases import CASES as HTTP_CASES
-from preflight_cases import NO_EFFECT
 from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as PLAN_PYTHON
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, declaration
@@ -442,7 +441,7 @@ class Observer:
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
                 from package_cases import CASES as PACKAGE_CASES,count as package_count
                 from completion_server import finish as role_finish
-                count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case,self) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else len(children) if self.case in GIT_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case,self) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES  else 1 if self.case in PLAN_CASES else len(children) if self.case in GIT_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
                 from run_worker_launch import EXITS,DESCENDANT
                 if self.case in EXITS:
                     count=len(EXITS[self.case])+int(self.case==DESCENDANT)

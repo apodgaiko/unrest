@@ -30,7 +30,7 @@ def test_complete_ordered_mapping_is_identical(name):
 
 def test_preflight_and_bootstrap_ordered_axes_are_identical():
     from dataclasses import asdict
-    from preflight_cases import CASES
+    from test_preflight_inventory import CASES
     from bootstrap_cases import DECLARATIONS
     snapshots = (
         (CASES, 'decd3ed6e0c3435bfc8ff57adcd5fd28cc51804ad21d9894a47f68d3134088be'),
