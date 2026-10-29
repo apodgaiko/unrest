@@ -102,24 +102,11 @@ class Admission:
 def root_http_route(host,actor,port):
     """Root HTTP reaches only this case's actual owned broker listener."""
     from controlled_cases import ROOT_HTTP,INITIALIZED_HTTP
-    from socket_observation import acquire_tcp
+    from owned_listeners import route
     host.root_only(actor)
     if host.case not in ROOT_HTTP:
         raise Refused('root HTTP finite case')
-    slots=[slot for slot in host.listeners.values() if slot['case']==host.case and slot['tag']=='broker'
-           and slot['socket'].owner==actor['birth'] and slot['socket'].local==('127.0.0.1',port)]
-    if len(slots)!=1:
-        raise Refused('root HTTP exact owned broker listener')
-    listener=slots[0]['socket']
-    if acquire_tcp(actor['birth'],listener.fd)!=listener:
-        raise Refused('root HTTP broker listener generation')
-    name=actor['token']+':root-http:'+host.case+':'+str(port)
-    if name not in host.endpoints.routes:
-        owner=host.owner(actor)
-        sharing=listener if any(route.port==port and host.endpoints.route_active(route) for route in host.endpoints.routes.values()) else None
-        host.endpoints.declare(Route(name,host.case,owner,owner,port),shared_listener=sharing)
-        host.endpoints.listen(name,listener)
-    return name,4 if host.case==INITIALIZED_HTTP else 3
+    return route(host,actor,port,actor),4 if host.case==INITIALIZED_HTTP else 3
 
 
 class Endpoints:

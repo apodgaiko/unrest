@@ -68,20 +68,3 @@ def before_spawn(case: str, home: str, role: str, records: list[dict], actors: d
     elif (role != 'acp' or len(pair) != 1 or pair[0]['role'] != 'backend'
             or not pair[0]['consumed'] or not actors[pair[0]['pid']]['returned']):
         raise Refused('controlled ACP original pair backend return')
-
-
-def before_bind(case: str, tag: str, value: str, records: list[dict]) -> None:
-    maximum, _ = limits(case)
-    slots = {(row['tag'],row['scope']) for row in records}
-    if (tag,value) in slots:
-        raise Refused('controlled listener slot replay')
-    if tag == 'broker':
-        if sum(kind == 'broker' for kind,_ in slots) >= maximum:
-            raise Refused('controlled listener owner bound')
-    else:
-        if ('broker',str(Path(value).parent)) not in slots:
-            raise Refused('controlled role listener without original owner')
-        if tag == 'lifetime' and sum(kind == 'lifetime' for kind,_ in slots) >= maximum:
-            raise Refused('controlled listener role pair bound')
-        if tag == 'bridge' and ('lifetime',value) not in slots:
-            raise Refused('controlled bridge without original lifetime')

@@ -44,23 +44,6 @@ def test_listener_scope_refuses_foreign_paths_and_roles(value):
         scope(next(iter(CASES)),'bridge',value,Path('/owned'))
 
 
-def test_listener_only_owner_and_role_proliferation_refuse():
-    from controlled_pairs import before_bind
-    case = next(case for case in CASES if limits(case)[0] == 1)
-    records = [{'tag':'broker','scope':'/owned/pytest/a'}]
-    with pytest.raises(Refused):
-        before_bind(case,'broker','/owned/pytest/b',records)
-    with pytest.raises(Refused):
-        before_bind(case,'lifetime','/owned/pytest/b/worker',records)
-    before_bind(case,'lifetime','/owned/pytest/a/worker',records)
-    records.append({'tag':'lifetime','scope':'/owned/pytest/a/worker'})
-    with pytest.raises(Refused):
-        before_bind(case,'lifetime','/owned/pytest/a/validator',records)
-    with pytest.raises(Refused):
-        before_bind(case,'bridge','/owned/pytest/a/validator',records)
-    before_bind(case,'bridge','/owned/pytest/a/worker',records)
-
-
 def test_finite_component_partitions_keep_every_original_case_exactly_once():
     from controlled_cases import GROUPS
     members = [case for group in GROUPS.values() for case in group]

@@ -241,9 +241,14 @@ def proposal(host, actor, raw):
         check_inputs(checkout,Path(cwd),case)
         relay = None
         if not backend:
-            bridge = host.listeners[host.listener_key(case,'bridge',cwd)]
-            lifetime = host.listeners[host.listener_key(case,'lifetime',cwd)]
-            relay = [bridge['socket'].local[1],bridge['nonce'],lifetime['socket'].local[1],lifetime['nonce']]
+            import json
+            from control_transport import unique
+            from owned_listeners import find
+            relay=json.loads(raw['environment'].get('SYNTHETIC_RELAY','null'),object_pairs_hook=unique)
+            if type(relay) is not list or len(relay)!=4:
+                raise Refused('controlled original relay tuple')
+            for port in (relay[0],relay[2]):
+                find(host,port,host.root_birth)
         expected,_,script_pin = expected_entry(case,checkout,Path(cwd),native,pin,backend=backend,relay=relay)
         vector = [native,'-I','-S',*expected.argv[1:]]
         if backend and expected.payload_kind=='python-command':

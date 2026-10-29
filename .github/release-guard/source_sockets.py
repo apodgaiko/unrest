@@ -98,7 +98,7 @@ class Hooks:
             else:
                 if role != 'root' or self.policy.calls is None or kwargs or args != (('127.0.0.1', 0),):
                     self.policy.refuse('source unknown bind')
-                source = self.policy.calls.listener()
+                source = {'tag':'mcp-probe' if self.policy.case in (*MCP_CASES,*STARTUP) else 'owned','nonce':None}
             self.rpc('bind', {'fd': descriptor, **source})
             self.local.socket = 'socket.bind', stream, args[0]
         elif name in ('connect', 'connect_ex'):

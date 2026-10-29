@@ -188,6 +188,20 @@ membership grants no launch. Duplicate child-side role/case and focused-group
 catalogues are removed. Actual identity, parent, argv, environment, mounts,
 inherited descriptors, execution pins and READY checks remain.
 
+Controlled and bootstrap TCP listeners use one same-case owned-listener admission.
+The observer acquires the literal loopback FD/cookie and enforces finite per-case
+listener and connection quotas, READY, fresh clients and listener reacquisition.
+Existing client classes remain closed. An ACP relay tuple remains exact bounded
+application input; its ports must name acquired same-case root listeners, and its
+complete environment is bound again at exec. Nonces no longer confer authority.
+The guard no longer certifies broker/bridge/lifetime pairing, handshake nonce
+correspondence or listener ordering; original product tests retain those checks.
+Backend-first child admission, owned launch-home checks, native review refusal,
+actual original-parent waits and private network/Unix-control separation remain.
+Advisory port probes never become listeners. MCP slot ownership and its explicit
+retirement remain separate. Python application-context wrappers are removed;
+only finite multiprocessing hook installation remains after discovery.
+
 ## Verification and retired model controls
 
 Every original product/source test and its real completion, status and cleanup

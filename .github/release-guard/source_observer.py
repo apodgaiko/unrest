@@ -23,7 +23,7 @@ from plan_launch import CASES as PLAN_CASES, INVALID as PLAN_INVALID, PYTHON as 
 from control_transport import Admission, Frame, REQUEST_LIMIT, cancelled_empty, reply
 from bootstrap_cases import BOOTSTRAP, declaration
 from controlled_cases import CASES as CONTROLLED, backend_path, WARNING_REFUSALS, NOTIFICATION_SIGNALS, ROOT_HTTP
-from controlled_pairs import before_bind, before_spawn, limits as controlled_limits, scope as controlled_scope
+from controlled_pairs import limits as controlled_limits
 from controlled_startup import ACP
 from endpoint_policy import Endpoints, Owner, Route
 from linux_observation import process_identity
@@ -76,8 +76,8 @@ class Observer:
         self.git = Git(self)
         self.endpoints, self.actors, self.intents = Endpoints(self.ledger), {}, {}
         self.pairs = UnixPairs(self.endpoints)
-        self.bindings, self.listeners, self.pair_intents = {}, {}, {}
-        self.routes, self.descriptors, self.mp_pipes = {}, {}, {}
+        self.bindings, self.listeners, self.pair_intents, self.listener_counts = {}, {}, {}, {}
+        self.descriptors, self.mp_pipes = {}, {}
 
         self.connected_routes: dict[str, int] = {}
         self.probe_ports = {}
@@ -306,7 +306,7 @@ class Observer:
 
 
     def listener_key(self,case,tag,scope=None):
-        return (case,tag,scope) if case in CONTROLLED or case in ROLE_HTTP and tag=='mcp' else (case,tag)
+        return (case,tag,scope) if tag=='owned' or case in ROLE_HTTP and tag=='mcp' else (case,tag)
 
     def admit_launch(self, actor, expected, role, vector, script_pin,
                      *, maximum=1, environment=None, inherited=(), port=None):
@@ -407,20 +407,6 @@ class Observer:
                 for (birth,_),row in self.mp_pipes.items():
                     if birth==actor['birth']:
                         retained(self,actor,row,body=False)
-            tags = (('bridge', 'lifetime') if actor['role'] == 'acp' else
-                    ('broker',) if actor['role'] in ('backend', 'delayed-backend') and (controlled_limits(actor['case'])[1] > 0 if actor['case'] in CONTROLLED else declaration(actor['case']).broker_http) else ())
-            if tags:
-                root_actor = self.actors[self.root]
-                for tag in tags:
-                    scope = actor['profile']['cwd'] if tag in ('bridge','lifetime') else str(Path(actor['profile']['cwd']).parent)
-                    slot = self.listeners[self.listener_key(actor['case'],tag,scope)]
-                    name = actor['token'] + ':' + tag
-                    route = Route(name, actor['case'], self.owner(root_actor), self.owner(actor), slot['socket'].local[1])
-                    actual_listener = acquire_tcp(self.root_birth, slot['socket'].fd)
-                    sharing = actual_listener if any(value.port == route.port and self.endpoints.route_active(value) for value in self.endpoints.routes.values()) else None
-                    self.endpoints.declare(route, shared_listener=sharing)
-                    self.endpoints.listen(name, actual_listener)
-                    self.routes[actor['birth'], route.port] = name
         elif kind == 'body-ready':
             self.actor_control(actor, kind, payload)
             actor['body_ready'] = True
@@ -565,8 +551,8 @@ class Observer:
                 self.root_only(actor)
             elif actor['case'] != self.case or self.case not in MCP_CASES:
                 raise Refused('source declared module listener case')
-            shape(payload, ('fd', 'tag', 'nonce', *(('scope',) if self.case in CONTROLLED else ())))
-            scope = controlled_scope(self.case,payload['tag'],payload.get('scope'),Path(self.meta['owned'])) if self.case in CONTROLLED else None
+            shape(payload, ('fd', 'tag', 'nonce'))
+            scope=None
             if self.case in ROLE_HTTP:
                 if actor['role']=='mcp':
                     actor_slot(self,actor)
@@ -578,28 +564,24 @@ class Observer:
             fd = number(payload['fd'])
             if ((actor['role']=='fixed-inline' and payload['tag']!='readiness')
                     or (actor['role'] == 'mcp' and payload['tag'] != 'mcp')
-                    or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in (*MCP_CASES, *STARTUP) else ('broker', 'bridge', 'lifetime'))
+                    or actor['role'] == 'root' and (payload['tag'] not in (('mcp-probe',) if self.case in (*MCP_CASES, *STARTUP) else ('owned',))
                         or self.case not in (*BOOTSTRAP, *CONTROLLED, *MCP_CASES, *STARTUP))):
                 raise Refused('source finite root listener')
-            if self.case in CONTROLLED:
-                if scope is None:
-                    raise Refused('controlled listener scope absent')
-                slots = [row for row in (*self.bindings.values(),*self.listeners.values()) if row['case'] == self.case]
-                before_bind(self.case,payload['tag'],scope,slots)
-                if payload['tag'] == 'bridge':
-                    before_spawn(self.case,scope,'acp',[v for v in self.intents.values() if v['case'] == self.case],self.actors)
-            nonce = payload['nonce']
-            if ((payload['tag'] in ('broker','mcp','mcp-probe','readiness') and nonce is not None)
-                    or payload['tag'] not in ('broker','mcp','mcp-probe','readiness') and (type(nonce) is not str or len(nonce) != 64
-                    or any(char not in '0123456789abcdef' for char in nonce))
-                    or self.listener_key(self.case,payload['tag'],scope) in self.listeners):
-                raise Refused('source listener application binding')
+            if payload['nonce'] is not None:
+                raise Refused('listener application metadata is not authority')
+            if payload['tag']=='owned':
+                maximum=3*controlled_limits(self.case)[0] if self.case in CONTROLLED else 3
+                if self.listener_counts.get(self.case,0)>=maximum:
+                    raise Refused('owned listener finite case bound')
             observed = acquire_tcp(actor['birth'], fd)
             if observed is None or observed.state != 7 or observed.local != ('0.0.0.0', 0) or observed.remote is not None:
                 raise Refused('source fresh unbound TCP descriptor')
             key = actor['birth'], fd
+            if payload['tag']=='owned':
+                scope=actor['token']+':'+str(fd)+':'+str(observed.cookie)
+                self.listener_counts[self.case]=self.listener_counts.get(self.case,0)+1
             self.descriptors.pop(key, None)
-            self.bindings[key] = {'socket': observed, 'tag': payload['tag'], 'nonce': nonce,
+            self.bindings[key] = {'socket': observed, 'tag': payload['tag'],
                                   'case': self.case, 'scope':scope, 'listening': False, 'listen_pending': False}
         elif kind == 'bound':
             self.root_only(actor)
@@ -705,8 +687,12 @@ class Observer:
             else:
                 if actor['role'] not in ('acp', 'backend', 'delayed-backend'):
                     raise Refused('source leaf connection role')
-                name = self.routes[actor['birth'], port]
+                from owned_listeners import route
+                name = route(self,actor,port,self.actors[self.root])
                 maximum = 1 if actor['role'] == 'acp' else 8
+            if root_http or actor['role'] in ('acp','backend','delayed-backend'):
+                from owned_listeners import budget
+                budget(self,actor,maximum if root_http else 2 if actor['role']=='acp' else 8)
             if self.case in CONTROLLED and actor['role'] == 'backend':
                 total = sum(count for route,count in self.connected_routes.items()
                     if self.endpoints.routes[route].case == self.case

@@ -63,7 +63,7 @@ def test_each_new_connection_still_requires_fresh_owned_listener_admission(mutat
 
 
 @pytest.mark.parametrize('mutation',[None,'case','port','owner','tag','generation','duplicate'])
-def test_root_http_needs_this_cases_actual_owned_broker_listener(monkeypatch,mutation):
+def test_root_http_needs_this_cases_actual_owned_listener(monkeypatch,mutation):
     from controlled_cases import ROOT_HTTP
     from endpoint_policy import Endpoints,root_http_route
     import socket_observation
@@ -74,7 +74,7 @@ def test_root_http_needs_this_cases_actual_owned_broker_listener(monkeypatch,mut
     endpoints.ledger.process(birth).case=case
     endpoints=Endpoints(endpoints.ledger)
     listener=replace(listener,owner=birth)
-    host=SimpleNamespace(case=case,listeners={1:{'case':case,'tag':'broker','socket':listener}},
+    host=SimpleNamespace(case=case,listeners={1:{'case':case,'tag':'owned','socket':listener}},
         endpoints=endpoints,root_only=lambda actor:None,owner=lambda actor:route.server)
     monkeypatch.setattr(socket_observation,'acquire_tcp',lambda *args:replace(listener,cookie=3000) if mutation=='generation' else listener)
     if mutation=='case':
