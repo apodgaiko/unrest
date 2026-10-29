@@ -56,7 +56,8 @@ def test_async_error_result_requires_normal_process_exit_and_ready(status):
 
     host=object.__new__(Observer)
     host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(None,None,status)))
-    actor={'birth':object(),'role':'fixed-inline','case':next(iter(worker.CASES)),'body_ready':True}
+    actor={'birth':object(),'role':'fixed-inline','case':next(iter(worker.CASES)),'body_ready':True,'token':'token','signals':set()}
+    host.intents={1:{'run_worker':True,'birth':actor['birth'],'token':'token','consumed':True,'worker_status':0}}
     assert host.completed_child(actor) is (status==0)
     actor['body_ready']=False
     assert not host.completed_child(actor)
@@ -133,3 +134,17 @@ def test_each_original_worker_fixture_is_pinned_and_no_cwd_import_is_added(tmp_p
     (home/'executor_fixture.py').write_text(body+'\n# changed')
     with pytest.raises(Refused,match='original executor bytes'):
         worker.fixture(host,home)
+
+
+@pytest.mark.parametrize('case',tuple(worker.WORKERS))
+@pytest.mark.parametrize('actual',(-15,-9,0,1,2,17))
+def test_authored_worker_status_is_bound_to_each_consumed_ordinal(case,actual):
+    from source_observer import Observer
+    host=object.__new__(Observer)
+    host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(None,None,actual)))
+    for expected in worker.EXITS[case]:
+        actor={'birth':object(),'role':'fixed-inline','case':case,'body_ready':True,'token':'token','signals':{9,15}}
+        host.intents={1:{'run_worker':True,'birth':actor['birth'],'token':'token','consumed':True,'worker_status':expected}}
+        assert host.completed_child(actor) is (actual==expected)
+        actor['signals']=set()
+        assert host.completed_child(actor) is (actual==expected and expected>=0 and expected!=2)

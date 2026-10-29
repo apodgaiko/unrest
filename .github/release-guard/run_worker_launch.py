@@ -34,6 +34,7 @@ NAMES=(
 )
 WORKERS={TEST+'::test_'+name: ('end_mission' if name.endswith('[end_mission]') else
          'advance_project' if name.endswith('[advance_project]') else 'start_project') for name in NAMES}
+EXITS=dict(zip(WORKERS,((0,),(2,),(2,),(2,),(2,0),(0,),(17,0),(-9,),(-9,),(0,),(0,),(0,)),strict=True))
 ALL_CASES=(*CASES,*WORKERS)
 DESCENDANT=TEST+'::test_'+NAMES[5]
 
@@ -97,8 +98,10 @@ def proposal(host,actor,raw):
     host.root_only(actor)
     case=host.case
     custom=case in WORKERS
-    maximum=2 if custom and case in (TEST+'::test_'+NAMES[4],TEST+'::test_'+NAMES[6]) else 1
-    if case not in ALL_CASES or sum(row['case']==case and row.get('run_worker',False) for row in host.intents.values())>=maximum:
+    exits=EXITS.get(case,(0,))
+    ordinal=sum(row['case']==case and row.get('run_worker',False) for row in host.intents.values())
+    maximum=len(exits)
+    if case not in ALL_CASES or ordinal>=maximum:
         raise Refused('async error worker exact case and count')
     home=Path(raw['cwd'])
     binding=fixture(host,home) if custom else None
@@ -123,4 +126,4 @@ def proposal(host,actor,raw):
         env={key:env[key] for key in ('LANG','PATH','PYTHONPATH')}
     expected=build_expected('async:error-worker',case,native,pin,tuple(vector),tuple(sorted(env.items())),str(home),'python-module',native_digest(Path(host.meta['checkout'])/'src/unrest_harness/run_worker.py'))
     return admit_expected(host,actor,raw,expected,'fixed-inline',[native,'-I','-S',*vector[1:]],maximum=maximum,
-                          fields={'run_worker':True,'null_stdio':True,'execution_fixture':binding})
+                          fields={'run_worker':True,'null_stdio':True,'execution_fixture':binding,'worker_status':exits[ordinal]})

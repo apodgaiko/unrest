@@ -347,9 +347,11 @@ class Observer:
         from completion_launch import CASES as COMPLETION_CASES
         from run_worker_launch import ALL_CASES as RUN_WORKERS
         if actor['role']=='fixed-inline' and actor['case'] in RUN_WORKERS:
-            from run_worker_launch import TEST,NAMES
-            allowed=(0,17) if actor['case']==TEST+'::test_'+NAMES[6] else (-9,) if actor['case'] in (TEST+'::test_'+NAMES[7],TEST+'::test_'+NAMES[8]) else (0,)
-            return terminal is not None and terminal[2] in allowed and actor['body_ready'] and (terminal[2]>=0 or -terminal[2] in actor['signals'])
+            rows=[row for row in self.intents.values() if row.get('run_worker') and row.get('birth')==actor['birth']
+                  and row['token']==actor['token'] and row['consumed']]
+            code=rows[0]['worker_status'] if len(rows)==1 else None
+            return (code is not None and terminal is not None and terminal[2]==code and actor['body_ready']
+                    and (code!=2 or 15 in actor['signals']) and (code>=0 or -code in actor['signals']))
         from run_worker_launch import DESCENDANT
         if actor['role']=='session-child' and actor['case']==DESCENDANT:
             return terminal is not None and terminal[2]==0 and actor['body_ready']
@@ -449,9 +451,9 @@ class Observer:
                 from package_cases import CASES as PACKAGE_CASES,count as package_count
                 from completion_server import finish as role_finish
                 count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case,self) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else len(children) if self.case in GIT_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
-                from run_worker_launch import WORKERS,DESCENDANT,TEST,NAMES
-                if self.case in WORKERS:
-                    count=2 if self.case in (TEST+'::test_'+NAMES[4],TEST+'::test_'+NAMES[6],DESCENDANT) else 1
+                from run_worker_launch import EXITS,DESCENDANT
+                if self.case in EXITS:
+                    count=len(EXITS[self.case])+int(self.case==DESCENDANT)
                 if outcome=='passed' and self.case in UV_CASES:
                     uv_children=[child for child in children if child['role'] in ('uv-cli','fixed-inline')]
                     if len(uv_children)!=2*len(FIXED_SEQUENCES[self.case]):

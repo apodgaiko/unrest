@@ -263,8 +263,8 @@ nofollow file descriptors and checked against the original pinned test fixture;
 its original path and inode generation remain bound through import. No owned cwd
 is appended to the import path and cached bytecode is never used. The restart
 case alone admits its exact one sleeping descendant, owned by the admitted worker
-and retaining its actual numeric parent wait. Crash and explicit SIGKILL cases
-keep their authored statuses; ordinary completion remains exit zero plus READY.
+and retaining its actual numeric parent wait. Cancellation (exit two following TERM), crash and explicit SIGKILL cases
+keep their authored per-worker-ordinal statuses; ordinary completion remains exit zero plus READY.
 The main script profile now derives from the admitted effective vector rather
 than a parallel role-to-script catalogue; the delayed-backend auxiliary script
 retains its independent pin.
