@@ -3,9 +3,9 @@ import ast
 import hashlib
 import json
 from pathlib import Path
-import stat
 
 from content_manifest import Refused,read_regular
+from owned_fixture import acquire
 from control_transport import unique
 from launch_policy import build_expected
 
@@ -49,13 +49,9 @@ def expected(host,argv,cwd,environment,native,pin):
         environment={**environment,'UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects')}
         vector=(native,'-c','from unrest_harness.cli import cli; cli()','inspect-tasks','--project',project_id)
         expected_cwd=str(root)
-    prefix=case.split('::')[-1][:30]
-    suffix=root.name[len(prefix):]
-    info=root.stat(follow_symlinks=False)
-    if (root.resolve()!=root or root.parent!=owned/'pytest' or not root.name.startswith(prefix)
-            or not suffix.isascii() or not suffix.isdigit() or not stat.S_ISDIR(info.st_mode)
-            or info.st_uid!=OWNER or home!=root/('.unrest' if case==FRONTIER else 'home')
-            or home.resolve()!=home or not project_id or Path(project_id).name!=project_id or project_id in ('.','..')):
+    root,info=acquire(str(root),owned,case.split('::')[-1][:30],OWNER)
+    if (home!=root/('.unrest' if case==FRONTIER else 'home') or home.resolve()!=home
+            or not project_id or Path(project_id).name!=project_id or project_id in ('.','..')):
         raise Refused('inspection owned original home')
     generation=(str(root),info.st_dev,info.st_ino)
     if host.fixture_roots.setdefault(case,generation)!=generation:

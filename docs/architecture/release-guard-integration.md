@@ -471,3 +471,10 @@ independent zero-pending-byte/unchanged-cookie checks. The unused TCP table cens
 and its duplicate process-identity reader are retired. Unix reciprocal peer
 identity still uses its existing netlink dump. Native socket control nodes retain
 cookie/inode/UID, reciprocal endpoint, closed-FD and one-shot-listener assertions.
+
+Owned pytest-directory acquisition is shared by the speed, desktop, storage,
+inspection and simulated-flow declarations. Each caller still supplies its closed
+case prefix and owner, retains the actual directory generation and applies its
+own mode, subdirectory, lexical-path and template-injection constraints. The flow
+probe permits only the original byte-pinned manifest/tool and `--mode simulated`,
+with its owned `flow.json`; it cannot launch descendants or establish live benefit.

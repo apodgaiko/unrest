@@ -1,9 +1,9 @@
 """Two original isolated programs bound to an acquired pytest fixture directory."""
 import ast
 from pathlib import Path
-import stat
 
 from content_manifest import Refused
+from owned_fixture import acquire
 
 NAMES = ('test_precaptured_constructor_resolver_and_command_aliases_are_audit_denied',
          'test_local_control_sockets_and_event_loop_survive_guard_and_runner')
@@ -18,14 +18,10 @@ PRELUDE = 'from product_audit import child;child();'
 def directory(path, owned, case):
     if type(path) is not str or case not in (*CASES,CLI_CASE):
         raise Refused('speed fixture path primitive')
-    root=Path(path)
-    info=root.stat(follow_symlinks=False)
     prefix='v04-speed-runs' if case==CLI_CASE else NAMES[CASES.index(case)][:30]
-    if (str(root.resolve())!=path or root.parent!=owned/'pytest'
-            or not stat.S_ISDIR(info.st_mode) or info.st_uid!=OWNER
-            or not root.name.startswith(prefix) or not root.name[len(prefix):].isascii() or not root.name[len(prefix):].isdigit()
-            or not all(c.isascii() and (c.isalnum() or c in '/._-') for c in path)):
-        raise Refused('speed fixture owned directory')
+    root,info=acquire(path,owned,prefix,OWNER)
+    if not all(c.isascii() and (c.isalnum() or c in '/._-') for c in path):
+        raise Refused('speed source template path')
     return path,info.st_dev,info.st_ino,info.st_mode,info.st_uid
 
 

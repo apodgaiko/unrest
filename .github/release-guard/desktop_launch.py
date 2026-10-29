@@ -3,6 +3,7 @@ from pathlib import Path
 import stat
 
 from content_manifest import Refused
+from owned_fixture import acquire
 from git_observer import image
 from launch_policy import build_expected
 
@@ -14,14 +15,11 @@ OWNER = 20000
 
 def directory(path, owned):
     root=Path(path)
-    parent=root.parent
+    parent,outer=acquire(str(root.parent),owned,CASE.split('::')[1][:30],OWNER)
     info=root.stat(follow_symlinks=False)
-    outer=parent.stat(follow_symlinks=False)
-    prefix=CASE.split('::')[1][:30]
-    suffix=parent.name[len(prefix):]
-    if (str(root.resolve())!=path or root.name!='desktop' or parent.parent!=owned/'pytest'
-            or not parent.name.startswith(prefix) or not suffix.isascii() or not suffix.isdigit()
-            or any(not stat.S_ISDIR(row.st_mode) or row.st_uid!=OWNER or stat.S_IMODE(row.st_mode)!=0o700 for row in (info,outer))):
+    if (str(root.resolve())!=path or root.name!='desktop'
+            or not stat.S_ISDIR(info.st_mode) or info.st_uid!=OWNER
+            or any(stat.S_IMODE(row.st_mode)!=0o700 for row in (info,outer))):
         raise Refused('desktop exact owned fixture directory')
     return path,info.st_dev,info.st_ino,info.st_mode,info.st_uid,outer.st_dev,outer.st_ino
 

@@ -5,6 +5,7 @@ from pathlib import Path
 import stat
 
 from content_manifest import Refused
+from owned_fixture import acquire
 from launch_policy import build_expected
 
 OWNER=20000
@@ -41,12 +42,7 @@ def expected(host,argv,cwd,environment,native,pin):
         root=owned/'pytest'/actual.relative_to(owned/'pytest').parts[0]
     except (ValueError,IndexError):
         raise Refused('storage owned fixture root') from None
-    suffix=root.name[len(case.split('::')[-1].split('[')[0][:30]):]
-    prefix=case.split('::')[-1].split('[')[0][:30]
-    info=root.stat(follow_symlinks=False)
-    if (root.resolve()!=root or not root.name.startswith(prefix) or not suffix.isascii() or not suffix.isdigit()
-            or not stat.S_ISDIR(info.st_mode) or info.st_uid!=OWNER):
-        raise Refused('storage fixture generation')
+    root,info=acquire(str(root),owned,case.split('::')[-1].split('[')[0][:30],OWNER)
     generation=(str(root),info.st_dev,info.st_ino)
     if host.fixture_roots.setdefault(case,generation)!=generation:
         raise Refused('storage changed fixture generation')
