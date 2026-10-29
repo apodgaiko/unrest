@@ -329,3 +329,14 @@ and session. Observer-generated admitted/registered/lifecycle dictionaries are
 removed: they repeated values from that same registration and supplied no
 independent witness. The actual identity, group, one-transition and READY gates
 remain; genuine provider review/approval evidence is a separate unchanged scope.
+
+
+Content acquisition owns file/path/type/link/mode/size/race checks. Its captured
+manifest is encoded deterministically under the existing byte limit without a
+second schema decoder. Native bootstrap authenticates the protected manifest's
+complete bytes against its bound SHA before projecting source pins; it retains
+the native-record/readonly-generation agreement. Git/native preparation still
+measures the actual inputs before source admission. A source cannot create a new
+valid manifest by declaring its own hash; the hash comes from the protected
+observer profile. Test-only roundtrip oracles still remeasure files and compare
+canonical bytes, including malformed/coherently rehashed fixture negatives.

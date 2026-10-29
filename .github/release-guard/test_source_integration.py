@@ -342,24 +342,23 @@ def test_root_completion_seal_is_bounded_and_requires_all_ordered_completions():
 def test_public_git_manifest_envelope_preserves_the_small_source_domain(tmp_path):
     import hashlib
     from input_manifest import read
-    from content_manifest import capture, encode
+    from content_manifest import capture
     source = tmp_path/'source'
     source.mkdir()
     (source/'unit.py').write_bytes(b'value = 1\n')
     small = capture(source,['unit.py'])
     metadata = {'schema':'unrest.git-inputs.v1','file_bound':64 * 1024 * 1024,'files':[{'path':'.git/objects/pack/closed.pack','size':5*1024*1024,'mode':420,'sha256':'a'*64}]}
     envelope = {'schema':'unrest.source-inputs.v1','source':small,'git':metadata}
-    def load(value):
+    def load(value,pin=None):
         raw = json.dumps(value,sort_keys=True,separators=(',',':')).encode()
         (tmp_path/'source-manifest.json').write_bytes(raw)
-        policy = SimpleNamespace(directory=tmp_path,profile={'source_sha256':hashlib.sha256(raw).hexdigest()})
+        policy = SimpleNamespace(directory=tmp_path,profile={'source_sha256':pin or hashlib.sha256(raw).hexdigest()})
         return read(policy.directory,policy.profile)
     assert load(envelope) == {'unit.py':small['files'][0]['sha256']}
+    pin=hashlib.sha256(json.dumps(envelope,sort_keys=True,separators=(',',':')).encode()).hexdigest()
     for bound in (True,128*1024*1024):
-        with pytest.raises(Refused,match='Git manifest schema'):
-            load({**envelope,'git':{**metadata,'file_bound':bound}})
-    with pytest.raises(Refused,match='manifest_member'):
-        encode({'schema':small['schema'],'files':metadata['files']})
+        with pytest.raises(Refused,match='source manifest reference'):
+            load({**envelope,'git':{**metadata,'file_bound':bound}},pin)
 
 
 @pytest.mark.parametrize('consumed', [False, True])

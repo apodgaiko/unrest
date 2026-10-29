@@ -93,7 +93,7 @@ def _root(stack: ExitStack, path: Path) -> tuple[int, list[tuple[int, str, int, 
 
 
 def _member(root: int, name: str, line_counts: dict[str, int] | None,
-            file_bound: int = MAX_FILE_BYTES, *, collected=None, uid=None, mode=None,
+            file_bound: int | None = None, *, collected=None, uid=None, mode=None,
             minimum=0, forbidden=0o7000) -> Member:
     parts = name.split("/")
     directories: list[tuple[int, str, int, tuple[int, ...]]] = []
@@ -154,7 +154,8 @@ def _member(root: int, name: str, line_counts: dict[str, int] | None,
 
 
 def _capture(root: Path, paths: Sequence[str], line_counts: dict[str, int] | None,
-             file_bound: int = MAX_FILE_BYTES) -> Manifest:
+             file_bound: int | None = None) -> Manifest:
+    file_bound=MAX_FILE_BYTES if file_bound is None else file_bound
     names = _inventory(paths)
     try:
         with ExitStack() as stack:
@@ -216,38 +217,10 @@ def is_sha256(value: object) -> bool:
             and all(c in "0123456789abcdef" for c in value))
 
 
-def validate(value: object, paths: Sequence[str]) -> Manifest:
-    names = _inventory(paths)
-    if (type(value) is not dict or set(value) != {"schema", "files"}
-            or value["schema"] != SCHEMA or type(value["files"]) is not list
-            or len(value["files"]) != len(names)):
-        raise Refused("manifest_schema")
-    files: list[Member] = []
-    total = 0
-    for name, member in zip(names, value["files"], strict=True):
-        if (type(member) is not dict or set(member) != {"path", "mode", "size", "sha256"}
-                or member["path"] != name or type(member["mode"]) is not int
-                or not 0 <= member["mode"] <= 0o777 or type(member["size"]) is not int
-                or not 0 <= member["size"] <= MAX_FILE_BYTES
-                or not is_sha256(member["sha256"])):
-            raise Refused("manifest_member")
-        files.append({"path": name, "mode": member["mode"], "size": member["size"],
-                      "sha256": member["sha256"]})
-        total += member["size"]
-        if total > MAX_TOTAL_BYTES:
-            raise Refused("total_byte_bound")
-    return {"schema": SCHEMA, "files": files}
-
-
 def encode(manifest: Manifest) -> bytes:
-    if (type(manifest) is not dict or type(manifest.get("files")) is not list
-            or any(type(member) is not dict or "path" not in member
-                   for member in manifest["files"])):
-        raise Refused("manifest_schema")
-    checked = validate(manifest, [member["path"] for member in manifest["files"]])
     result = bytearray()
     encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    for chunk in encoder.iterencode(checked):
+    for chunk in encoder.iterencode(manifest):
         block = chunk.encode("ascii")
         if len(result) + len(block) + 1 > MAX_MANIFEST_BYTES:
             raise Refused("manifest_byte_bound")
