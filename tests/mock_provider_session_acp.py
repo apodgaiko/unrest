@@ -25,6 +25,7 @@ def main() -> None:
             raise SystemExit(0)
 
         signal.signal(signal.SIGTERM, record_stop)
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
         while True:
             time.sleep(1)
 
@@ -46,13 +47,19 @@ def main() -> None:
         if not args.child_stop_path:
             raise ValueError("--child-stop-path is required with --child-pid-path")
         owner = _ChildOwner()
-        signal.signal(signal.SIGTERM, owner.handle_sigterm)
-        owner.child = subprocess.Popen(
-            [sys.executable, __file__, "--child", args.child_stop_path],
-        )
+        # The product terminates the whole group. A child must inherit TERM
+        # blocked until its handler exists, including interpreter/guard startup.
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            signal.signal(signal.SIGTERM, owner.handle_sigterm)
+            owner.child = subprocess.Popen(
+                [sys.executable, __file__, "--child", args.child_stop_path],
+            )
+            Path(args.child_pid_path).write_text(str(owner.child.pid), encoding="utf-8")
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         if owner.termination_requested:
             owner.cleanup()
-        Path(args.child_pid_path).write_text(str(owner.child.pid), encoding="utf-8")
 
     try:
         for line in sys.stdin:

@@ -432,3 +432,13 @@ cannot start descendants or advance the outer case. The observer reconstructs
 its byte-pinned literal body and adversarial environment, and requires all three
 setup/call/teardown outcomes before accepting the child seal. The probe's own
 parent-environment restoration assertions still execute normally.
+
+The provider-session timeout fixture blocks SIGTERM before installing its parent
+handler and spawning the child, publishes the real child PID while still blocked,
+then restores the exact previous parent mask. The child inherits blocked TERM,
+installs its stopped-marker handler and unblocks TERM. Thus an early product
+group signal remains pending instead of killing the child before its handler.
+There is no readiness polling, extra cleanup grace, group relocation or timeout
+change: the original 0.3-second request, terminate/wait(0.5)/kill/wait(0.5), stopped
+marker, numeric waits and adapter self-SIGTERM remain. A focused control sends real
+group TERM during deliberately delayed child startup and proves marker plus wait0.
