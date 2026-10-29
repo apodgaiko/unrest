@@ -19,7 +19,18 @@ def test_focused_security_selection_retains_every_crosswalk_reference():
         and any(isinstance(target,ast.Name) and target.id=='SCENARIOS' for target in node.targets)))
     references=tuple(sorted({row[2] for row in rows if not row[2].startswith('local::')}))
     assert security.REFERENCES==references
-    assert GROUPS['security3']==(*references,*security.CASES)
+    assert GROUPS['security3']==(*security.REFERENCE_CASES,*security.CASES)
+    assert len(security.REFERENCE_CASES)==17
+
+
+def test_security_parent_selectors_collect_all_original_parameters(monkeypatch):
+    monkeypatch.setenv('PYTEST_DISABLE_PLUGIN_AUTOLOAD','1')
+    nodes=[]
+    class Collected:
+        def pytest_collection_finish(self,session):
+            nodes.extend(item.nodeid for item in session.items)
+    code=pytest.main(['--collect-only','-q',*security.REFERENCES,*security.CASES],plugins=[Collected()])
+    assert code==0 and tuple(nodes)==(*security.REFERENCE_CASES,*security.CASES)
 
 
 def test_matrix_builder_matches_every_original_operand_without_executing_a_child(tmp_path):

@@ -168,9 +168,19 @@ def proposal(host, actor, raw):
         role,maximum='git-fixed' if query else 'pytest-regression' if case in NESTED_CASES else 'fixed-inline',1 if query else len(SEQUENCES[case])
     elif case in ORDINARY:
         host.root_only(actor)
-        role='sleep' if argv[0]=='/bin/sleep' else 'mock-acp'
+        from ordinary_acp import MOCK_CASE
+        base=None
+        if case==MOCK_CASE:
+            from owned_fixture import acquire
+            candidate=(Path(raw['environment'].get('UNREST_HANDOFF_PATH','')).parents[7]
+                       if argv[0]=='sleep' else Path(cwd).parent)
+            base,info=acquire(str(candidate),owned,case.split('::')[1][:30],20000)
+            generation=(str(base),info.st_dev,info.st_ino)
+            if host.fixture_roots.setdefault(('ordinary-mock',case),generation)!=generation:
+                raise Refused('mock-agent fixture generation changed')
+        role='sleep' if argv[0] in ('/bin/sleep','sleep') else 'mock-acp'
         maximum=2 if case==ORDINARY[2] and role=='sleep' else 1
-        expected = ordinary_expected(case,'sleep' if argv[0]=='/bin/sleep' else 'mock-acp',cwd,checkout,native,pin,root_environment,owned)
+        expected = ordinary_expected(case,role,cwd,checkout,native,pin,root_environment,owned,base=base)
         script_pin = expected.payload_sha256
         vector = list(expected.argv) if expected.rule=='ordinary:sleep' else [native,'-I','-S',*expected.argv[1:]]
     elif case in DECLARATIONS:

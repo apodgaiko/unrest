@@ -18,6 +18,49 @@ from source_observer import Observer
 from process_ledger import Birth
 
 
+@pytest.mark.parametrize('mutation',[None,'environment','cwd','program','generation'])
+def test_original_mock_agent_bare_sleep_is_bound_to_actual_owned_fixture(tmp_path,monkeypatch,mutation):
+    import os
+    from types import SimpleNamespace
+    import owned_fixture
+    from ordinary_acp import MOCK_CASE
+    original=owned_fixture.acquire
+    monkeypatch.setattr(owned_fixture,'acquire',lambda path,owned,prefix,owner:original(path,owned,prefix,os.getuid()))
+    monkeypatch.setattr(ordinary_acp,'system_sleep',lambda:'b'*64)
+    base=tmp_path/'pytest'/(MOCK_CASE.split('::')[1][:30]+'0')
+    (base/'workspace').mkdir(parents=True)
+    root=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
+    root_env={'HOME':'/owned/home','TMPDIR':'/owned/tmp','PATH':'/usr/bin:/bin'}
+    env=environment(MOCK_CASE,base,root_env)
+    raw_env={**root_env,'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':MOCK_CASE+' (call)',
+        **{key:env[key] for key in ('UNREST_NODE_ID','UNREST_NODE_TYPE','UNREST_HANDOFF_PATH')}}
+    calls=[]
+    host=SimpleNamespace(case=MOCK_CASE,meta={'checkout':str(root),'owned':str(tmp_path)},
+        binding={'entry':{'path':'/native','sha256':'a'*64}},fixture_roots={},intents={},
+        meta_environment=lambda:root_env,launch_owner=lambda actor:None,root_only=lambda actor:None)
+    def admit(*args,**kwargs):
+        calls.append(args)
+        host.intents[1]={}
+        return {'ticket':1,'token':'bound'}
+    host.admit_launch=admit
+    raw={'case':MOCK_CASE,'executable':'sleep','argv':['sleep','30'],'cwd':str(root),'environment':raw_env,'stdin':None}
+    if mutation=='environment':
+        raw_env['UNREST_NODE_ID']='other'
+    elif mutation=='cwd':
+        raw['cwd']=str(base)
+    elif mutation=='program':
+        raw['argv'][1]='1'
+    elif mutation=='generation':
+        host.fixture_roots[('ordinary-mock',MOCK_CASE)]=('different',0,0)
+    if mutation is None:
+        assert proposal(host,{'role':'root'},raw)['translated']==['sleep','30']
+        assert calls[0][1].executable=='/usr/bin/sleep'
+    else:
+        with pytest.raises(Refused):
+            proposal(host,{'role':'root'},raw)
+        assert not calls
+
+
 class CallbackTrap:
     def __eq__(self, other):
         pytest.fail("admission invoked caller equality")

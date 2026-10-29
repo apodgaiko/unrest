@@ -33,6 +33,10 @@ REFERENCES=(
     'tests/test_server.py::test_redacted_mcp_handoffs_survive_restart_and_mirroring',
 )
 
+REFERENCE_CASES=tuple(node+suffix for node in REFERENCES for suffix in (('[list]','[mapping]')
+    if node.endswith('test_cyclic_containers_have_stable_value_free_boundary_diagnostics') else
+    ('[unknown]','[safe-ish]') if node.endswith('test_unsupported_profile_has_stable_provider_role_version_error') else ('',)))
+
 
 def matrix_program(checkout,bootstrap,trap):
     node=assignment(source_unit(checkout,TEST,PIN,('_run_cli_matrix',)),'script')

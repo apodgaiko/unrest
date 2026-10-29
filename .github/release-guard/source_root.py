@@ -120,6 +120,9 @@ def main():
         return archive_run(policy,plugin)
     from review_wire import CASES as REVIEW_CASES,NODES as REVIEW_NODES
     selected=REVIEW_NODES if tuple(policy.profile['cases'])==REVIEW_CASES else policy.profile['cases']
+    from package_security import CASES as SECURITY_CASES,REFERENCES,REFERENCE_CASES
+    if tuple(policy.profile['cases'])==(*REFERENCE_CASES,*SECURITY_CASES):
+        selected=(*REFERENCES,*SECURITY_CASES)
     if pytest_plugin is not None:
         class PreparedPlugin:
             def pytest_configure(self,config):

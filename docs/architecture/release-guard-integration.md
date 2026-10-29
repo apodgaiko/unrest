@@ -639,3 +639,13 @@ actual body-ready owner and retained descriptor. Negative probes retain port1.
 One readiness connection grants neither payload nor accepted-peer authority.
 All child statuses and original-parent numeric waits remain mandatory; an early
 exit must retain23 and signal cleanup must retain its actually authorized status.
+
+Reference selectors retain their original parent spelling for the contract binder;
+the external case cursor contains every normally collected parameter variant.
+These are separate identities: a selector is not proof that a single leaf ran.
+
+The original mock-agent integration retains its bare `sleep 30` fixture and exact
+handoff/node environment. Its owned pytest directory generation is acquired before
+admission, while the resolved system image and original argv remain independently
+bound. The sibling mock ACP body remains the pinned original script, with the
+original workspace and handoff path; neither leaf grants descendant authority.

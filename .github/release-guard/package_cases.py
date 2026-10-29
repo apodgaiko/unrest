@@ -2,7 +2,7 @@
 
 from launch_policy import source_unit,literal as source_literal
 
-from package_security import CASES as SECURITY_CASES,REFERENCES as SECURITY_REFERENCES
+from package_security import CASES as SECURITY_CASES,REFERENCE_CASES as SECURITY_REFERENCES
 
 TEST='tests/test_distribution_check.py'
 POSITIVE=TEST+'::test_checker_builds_and_executes_15_cases_with_extracted_provenance'

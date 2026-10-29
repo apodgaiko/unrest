@@ -23,7 +23,9 @@ PINS = {PRODUCT: '5698d40663b23bf23f832a3e3f69732fe31004d8b1cf305d5bc5870e11f39a
 CASES = tuple(TEST + '::' + name for name in (
     'test_owned_node_launch_uses_one_identical_plan[work]',
     'test_owned_node_launch_uses_one_identical_plan[validate]',
-    'test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling[claude]'))
+    'test_dispatch_batch_persists_bounded_redacted_crash_without_harming_sibling[claude]',
+    'test_run_node_with_mock_agent'))
+MOCK_CASE=CASES[3]
 
 
 NEGATIVE_CASES = tuple(TEST + '::' + name for name in (
@@ -44,9 +46,11 @@ ALL_CASES = (*CASES, *NEGATIVE_CASES)
 def environment(case, base, root_environment):
     if case not in CASES:
         raise Refused('ordinary finite case')
-    role = case.rsplit('[', 1)[1][:-1]
+    role = 'work' if case==MOCK_CASE else case.rsplit('[', 1)[1][:-1]
     node, spawn = ('v-good', '2026-08-10T07-05-00Z-0000') if role == 'claude' else (
         'plan-' + role, '2026-08-30T00-00-00Z-' + role)
+    if case==MOCK_CASE:
+        node,spawn='w1','2026-05-17T00-00-00Z'
     home = base / '.unrest'
     result = {key: root_environment[key] for key in ('HOME', 'TMPDIR', 'PATH')}
     result.update(UNREST_CAPABILITY_PROFILE='safe', UNREST_CAPABILITY_POLICY_VERSION='1',
@@ -76,7 +80,7 @@ def system_sleep():
     return digest(Path('/usr/bin/sleep'))
 
 
-def expected(case, role, cwd, checkout, native, native_pin, root_environment, owned):
+def expected(case, role, cwd, checkout, native, native_pin, root_environment, owned, *, base=None):
     if case not in CASES or role not in ('mock-acp', 'sleep'):
         raise Refused('ordinary closed launch role')
     if role == 'sleep':
@@ -85,7 +89,12 @@ def expected(case, role, cwd, checkout, native, native_pin, root_environment, ow
         env = {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'}
         if case == CASES[2]:
             env['ANTHROPIC_API_KEY'] = 'batch-crash-known-value'
-        vector, executable, pin, kind, payload = ('/bin/sleep', '30'), '/bin/sleep', system_sleep(), 'native', None
+        if case==MOCK_CASE:
+            if base is None:
+                raise Refused('mock-agent owned fixture absent')
+            leaf=environment(case,base,root_environment)
+            env.update({key:leaf[key] for key in ('UNREST_HANDOFF_PATH','UNREST_NODE_ID','UNREST_NODE_TYPE')})
+        vector, executable, pin, kind, payload = (('sleep' if case==MOCK_CASE else '/bin/sleep'), '30'), ('/usr/bin/sleep' if case==MOCK_CASE else '/bin/sleep'), system_sleep(), 'native', None
     else:
         home = Path(cwd)
         if (not home.is_absolute() or str(home.resolve()) != cwd or home.name != 'workspace'
