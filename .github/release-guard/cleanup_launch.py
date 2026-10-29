@@ -11,11 +11,12 @@ from content_manifest import Refused
 from git_observer import image as system_git
 from launch_policy import build_expected
 from ordinary_acp import PRODUCT, PINS as ACP_PINS
+from review_wire import RUNNER,runner_scenario,SCRIPT as REVIEW_SCRIPT,PIN as REVIEW_PIN,FRAMES,FRAMES_PIN
 
 TEST = 'tests/test_acp_cleanup.py'
 SCRIPT = 'tests/fixtures/cleanup_acp_process.py'
 SERVER = 'src/unrest_harness/server.py'
-PINS = {PRODUCT: ACP_PINS[PRODUCT], TEST: '8903f87610c61684a4db0dcf22f771ed5a9f75bcade8ce4f1c528378b1c992ae',
+PINS = {REVIEW_SCRIPT:REVIEW_PIN,FRAMES:FRAMES_PIN,PRODUCT: ACP_PINS[PRODUCT], TEST: '8903f87610c61684a4db0dcf22f771ed5a9f75bcade8ce4f1c528378b1c992ae',
     SCRIPT: 'f4b1c4ca59b7550e5bcd43210e487b0f979c3133196ff39470eae36b76726959',
     SERVER: 'd1abbe2f76ff874849d113919777efe1ccb8fee0a6327d5eaf27e87892fd886f',
     'tests/test_provider_review.py': 'dd9962020bcf265bc6a4e35de8ca7fe557666a1d0e63fa325b4ad955c2465a5e'}
@@ -33,13 +34,15 @@ FAULTS = tuple(TEST + f'::test_cleanup_faults_and_repeated_cancellation[{variant
 SAVED = tuple(TEST + f'::test_saved_review_observer_compatibility[{variant}]'
               for variant in ('observer', 'cancel', 'transport'))
 ALL_CASES = (*RECORDED, *FAULTS)
-EXECUTION_CASES = (*ALL_CASES, *SAVED)
+EXECUTION_CASES = (*ALL_CASES, *SAVED,*RUNNER)
 CREDENTIAL = {'OPENAI_API_KEY': 'controlled-secret-observer-value'}
 
 
 def selection(case):
     if type(case) is not str or case not in EXECUTION_CASES:
         raise Refused('cleanup finite case declaration')
+    if case in RUNNER:
+        return True,case.rsplit('[',1)[1][:-1],'work'
     if case in SAVED:
         return False, case.rsplit('[', 1)[1][:-1], 'terminal_reviewer'
     variant, role = case.rsplit('[', 1)[1][:-1].split('-', 1)
@@ -67,6 +70,8 @@ def base_path(value, owned):
 
 def scenario(case, base):
     recorded, variant, role = selection(case)
+    if case in RUNNER:
+        return runner_scenario(case,base)
     if case in SAVED:
         record = {'role': role, 'progress': True, 'receipt': str(base / 'receipt'),
                   'raw': json.dumps({'jsonrpc': '2.0', 'id': [], 'result': {}}) if variant == 'transport' else None}
@@ -136,11 +141,15 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
     if case not in EXECUTION_CASES:
         raise Refused('cleanup finite case')
     home = base / 'workspace'
+    if case in RUNNER:
+        from launch_policy import source_unit
+        source_unit(checkout,FRAMES,FRAMES_PIN)
     vector: tuple[str, ...]
     payload: str | None
     if role == 'cleanup-acp':
-        vector = (native, str(checkout / SCRIPT), str(base / 'scenario.json'))
-        executable, pin, kind, payload = native, native_pin, 'python-script', PINS[SCRIPT]
+        script=REVIEW_SCRIPT if case in RUNNER else SCRIPT
+        vector = (native, str(checkout / script), str(base / 'scenario.json'))
+        executable, pin, kind, payload = native, native_pin, 'python-script', PINS[script]
         env = environment(base, root_environment, agent=True, case=case)
         cwd = str(home)
     elif role == 'mcp':
@@ -151,11 +160,14 @@ def expected(case, role, base, native, native_pin, checkout, root_environment, *
         executable, pin, kind, payload = native, native_pin, 'python-module', PINS[SERVER]
         env = environment(base, root_environment, agent=False, case=case)
         cwd = str(home)
-    elif role in ('git-init', 'git-commit', 'git-observe') and (case in RECORDED if role != 'git-observe' else git_completion(case)):
+    elif role in ('git-init', 'git-commit', 'git-observe') and (case in (*RECORDED,*RUNNER) if role != 'git-observe' else git_completion(case)):
         arguments = {'git-init': ('init', '-q', str(home)),
             'git-commit': ('-c', 'user.name=Controlled', '-c', 'user.email=controlled@example.invalid',
                            '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', 'commit', '--allow-empty', '-qm', 'Controlled'),
             'git-observe': ('rev-parse', 'HEAD')}[role]
+        if case in RUNNER and role=='git-commit':
+            arguments=('-c','user.name=Controlled Test','-c','user.email=controlled@example.invalid',
+                'commit','--allow-empty','-qm','Controlled completion identity')
         vector, executable, pin, kind, payload = ('git', *arguments), '/usr/bin/git', system_git(), 'native', None
         env = (environment(base, root_environment, agent=False, case=case) if role == 'git-observe' else
                {**root_environment, 'PYTEST_VERSION': '9.0.2', 'PYTEST_CURRENT_TEST': case + ' (call)'})

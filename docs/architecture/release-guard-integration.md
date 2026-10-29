@@ -772,3 +772,11 @@ all other environment keys remain exact; executable, argv, cwd acquisition,
 sequence, query quota and actual exec environment equality are unchanged. Those
 eight inert values are retained data, not independently predicted application
 identities. This exception applies only to these native Git queries.
+
+The five original matching-ID runner parameters reuse cleanup transport custody,
+with their separately pinned approval fixture and exact Git commit arguments.
+Their separate scenario schema admits only one inert response envelope, the
+selected ordering, and the owned handoff/receipt paths. It retains bounded
+protocol data without treating it as launch permission. Existing wire-only cases
+still reject all handoff, receipt and frame-program fields. No external review
+or denied-review retry is introduced by these controlled fixture cases.

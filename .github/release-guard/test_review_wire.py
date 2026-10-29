@@ -287,3 +287,37 @@ def test_extra_wire_catalogue_matches_the_unmodified_original_collection(monkeyp
         and any(isinstance(call,ast.Call) and isinstance(call.func,ast.Name) and call.func.id=='wire' for call in ast.walk(fn))}
     expected=tuple(node for node in nodes if node.split('::')[1].split('[')[0] in consumers)
     assert tuple(node for node in wire.NODES if node.startswith(wire.FRAMES+'::'))==expected
+
+
+@pytest.mark.parametrize('case',wire.RUNNER)
+@pytest.mark.parametrize('mutation',(None,'handoff','receipt','ordering','command','frame','events'))
+def test_runner_scenario_is_separate_and_cannot_widen_wire_authority(tmp_path,monkeypatch,case,mutation):
+    import os
+    from tests.test_provider_review_frames import malformed
+    frame=malformed('result',{})
+    frame['id']='$prompt_id'
+    value={'events':[],'frames':[frame],'ordering':case.rsplit('[',1)[1][:-1],
+        'handoff':str(tmp_path/'home/projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json'),
+        'mcp_receipt':str(tmp_path/'mcp-receipt')}
+    if mutation=='handoff':
+        value['handoff']='/foreign/handoff'
+    elif mutation=='receipt':
+        value['mcp_receipt']='/foreign/receipt'
+    elif mutation=='ordering':
+        value['ordering']='unknown'
+    elif mutation=='command':
+        value['command']='foreign'
+    elif mutation=='frame':
+        frame['id']=2
+    elif mutation=='events':
+        value['events']=[{}]
+    body=json.dumps(value).encode()
+    (tmp_path/'scenario.json').write_bytes(body)
+    original=wire.read_regular
+    monkeypatch.setattr(wire,'read_regular',lambda path,bound,**kwargs:original(path,bound,**{**kwargs,'uid':os.getuid()}))
+    if mutation is None:
+        assert wire.runner_scenario(case,tmp_path)==body
+        assert case not in wire.CASES
+    else:
+        with pytest.raises(Refused):
+            wire.runner_scenario(case,tmp_path)

@@ -58,6 +58,29 @@ def scenario(file,owned):
     return body
 
 
+RUNNER=tuple(FRAMES+'::test_actual_runner_matching_id_order_and_owned_cleanup['+value+']'
+    for value in ('before','after','batch_before','batch_after','eof'))
+
+
+def runner_scenario(case,base):
+    if case not in RUNNER:
+        raise Refused('review runner exact case')
+    body,_,_=read_regular(base/'scenario.json',131072,uid=20000,mode=0o644)
+    value=json.loads(body,object_pairs_hook=unique)
+    if (type(value) is not dict or set(value)!={'events','frames','ordering','handoff','mcp_receipt'}
+            or value['events']!=[] or type(value['frames']) is not list or len(value['frames'])!=1
+            or value['ordering']!=case.rsplit('[',1)[1][:-1]
+            or value['handoff']!=str(base/'home/projects/project/.unrest-runtime/missions/mission-001/attempts/attempt-1__w1.json')
+            or value['mcp_receipt']!=str(base/'mcp-receipt')):
+        raise Refused('review runner inert scenario scope')
+    frame=value['frames'][0]
+    if (type(frame) is not dict or set(frame)!={'jsonrpc','method','params','id','result'}
+            or frame['jsonrpc']!='2.0' or frame['method']!='session/update' or frame['id']!='$prompt_id'
+            or frame['result']!={} or type(frame['params']) is not dict):
+        raise Refused('review runner finite response envelope')
+    return body
+
+
 def proposal(host,actor,raw):
     host.root_only(actor)
     case=host.case
