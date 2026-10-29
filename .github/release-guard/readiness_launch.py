@@ -27,11 +27,3 @@ def proposal(host,actor,raw):
     value=build_expected('fixed:readiness',host.case,native,host.binding['entry']['sha256'],
         (native,'-c',body),tuple(sorted(env.items())),host.meta['checkout'],'python-command')
     return admit_expected(host,actor,raw,value,'fixed-inline',[native,'-I','-S','-c',body])
-
-
-def completed(actor,terminal):
-    if terminal is None or not actor['body_ready']:
-        return False
-    if actor['case']==CASES[0]:
-        return terminal[2]==23
-    return terminal[2]==0 or terminal[2] in (-9,-15) and -terminal[2] in actor['signals']

@@ -51,16 +51,16 @@ def test_error_worker_admission_is_exact_and_single(tmp_path,monkeypatch,case,mu
 
 
 @pytest.mark.parametrize('status',[0,1,-15])
-def test_async_error_result_requires_normal_process_exit_and_ready(status):
+def test_worker_execution_requires_ready_and_authorized_signal(status):
     from source_observer import Observer
 
     host=object.__new__(Observer)
     host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(None,None,status)))
     actor={'birth':object(),'role':'fixed-inline','case':next(iter(worker.CASES)),'body_ready':True,'token':'token','signals':set()}
-    host.intents={1:{'run_worker':True,'birth':actor['birth'],'token':'token','consumed':True,'worker_status':0}}
+    host.intents={1:{'run_worker':True,'birth':actor['birth'],'token':'token','consumed':True}}
     host.intents[1].update(ticket=1,role=actor['role'],case=actor['case'])
     actor['intent']=host.intents[1]
-    assert host.completed_child(actor) is (status==0)
+    assert host.completed_child(actor) is (status>=0)
     actor['body_ready']=False
     assert not host.completed_child(actor)
 
@@ -140,15 +140,15 @@ def test_each_original_worker_fixture_is_pinned_and_no_cwd_import_is_added(tmp_p
 
 @pytest.mark.parametrize('case',tuple(worker.WORKERS))
 @pytest.mark.parametrize('actual',(-15,-9,0,1,2,17))
-def test_authored_worker_status_is_bound_to_each_consumed_ordinal(case,actual):
+def test_each_worker_ordinal_requires_real_execution_and_authorized_cleanup(case,actual):
     from source_observer import Observer
     host=object.__new__(Observer)
     host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(None,None,actual)))
-    for expected in worker.EXITS[case]:
+    for _ in range(worker.MAXIMUM[case]):
         actor={'birth':object(),'role':'fixed-inline','case':case,'body_ready':True,'token':'token','signals':{9,15}}
-        host.intents={1:{'run_worker':True,'birth':actor['birth'],'token':'token','consumed':True,'worker_status':expected}}
+        host.intents={1:{'run_worker':True,'birth':actor['birth'],'token':'token','consumed':True}}
         host.intents[1].update(ticket=1,role=actor['role'],case=actor['case'])
         actor['intent']=host.intents[1]
-        assert host.completed_child(actor) is (actual==expected)
+        assert host.completed_child(actor) is True
         actor['signals']=set()
-        assert host.completed_child(actor) is (actual==expected and expected>=0 and expected!=2)
+        assert host.completed_child(actor) is (actual>=0)

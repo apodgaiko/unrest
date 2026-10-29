@@ -106,4 +106,4 @@ def cli_proposal(host,actor,raw):
     environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':CLI+' (call)'}
     expected=build_expected('binding:cli',CLI,native,pin,vector,tuple(sorted(environment.items())),str(checkout),'python-script',TOOL_PIN)
     return admit_expected(host,actor,raw,expected,'fixed-inline',[native,'-I','-S',*vector[2:]],TOOL_PIN,maximum=2,
-        fields={'fixed_operation':'check','binding_repository':str(repository),'binding_status':ordinal})
+        fields={'fixed_operation':'check','binding_repository':str(repository)})

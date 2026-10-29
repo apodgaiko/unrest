@@ -30,13 +30,13 @@ def test_each_primitive_keeps_original_path_phase_literal_and_quota(tmp_path,mon
         completion.expected(host,'undeclared',argv,str(ROOT),{},argv[0],'a'*64)
 
 
-@pytest.mark.parametrize('operation,status,accepted',[('crash',73,True),('crash',0,False),('crash',-15,False),('retry',0,True),('retry',73,False)])
-def test_actual_crash73_cannot_be_relabelled_as_success(operation,status,accepted):
+@pytest.mark.parametrize('operation,status,accepted',[('crash',73,True),('crash',0,True),('crash',-15,False),('retry',0,True),('retry',73,True)])
+def test_primitive_application_status_is_left_to_original_assertions(operation,status,accepted):
     case=next(iter(completion.CASES))
     birth=object()
     host=object.__new__(Observer)
     host.ledger=SimpleNamespace(process=lambda value:SimpleNamespace(terminal=(3,status<<8,status)))
-    actor={'role':'fixed-inline','case':case,'birth':birth,'token':'owned','body_ready':True}
+    actor={'role':'fixed-inline','case':case,'birth':birth,'token':'owned','body_ready':True,'signals':set()}
     host.intents={1:{'birth':birth,'token':'owned','role':'fixed-inline','case':case,'consumed':True,'fixed_operation':operation}}
     host.intents[1].update(ticket=1,role=actor['role'],case=actor['case'])
     actor['intent']=host.intents[1]

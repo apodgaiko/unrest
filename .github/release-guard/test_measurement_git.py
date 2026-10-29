@@ -113,7 +113,7 @@ def test_evolution_workers_are_two_fixed_start_operations(host,monkeypatch,mutat
     request={'cwd':f'/owned/home/cold-roots/rep-{repetition:02d}/harness-home'}
     if mutation is None:
         assert measurement.worker(host,{},request)=={'ok':True,'ticket':99}
-        assert seen[0][4]=='start_project' and seen[0][6:8]==(2,0)
+        assert seen[0][4]=='start_project' and seen[0][6:]==(2,)
         assert seen[0][5]['UNREST_APPROVAL_RECOVERY']=='0'
         assert set(seen[0][5])=={'LANG','PATH','PYTHONPATH','UNREST_HOME','UNREST_PROJECTS_DIR','UNREST_APPROVAL_RECOVERY','UNREST_WORKER_ACP_COMMAND','UNREST_VALIDATOR_ACP_COMMAND'}
     else:

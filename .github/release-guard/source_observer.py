@@ -23,14 +23,12 @@ from linux_observation import process_identity
 from process_ledger import Birth, Ledger, canonical
 from source_profile import METHODS
 from session_launch import TIMEOUT as SESSION_TIMEOUT
-from fixed_inline import CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
+from fixed_inline import CLI_CASE, JOURNAL_CASE
 from completion_roles import CASES as ROLE_CASES,actor_slot
 from git_observer import Git
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, snapshot_path
 
 
-from readiness_launch import CASES as READINESS_CASES
-from terminal_leaves import CASES as TERMINAL_CASES
 
 
 def shape(value, keys):
@@ -341,48 +339,11 @@ class Observer:
             expected={'kind':NEGATIVE.get(actor['case'],'normal'),'count':0 if NEGATIVE.get(actor['case'])=='missing-package' else 15,
                 'failed':15 if NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
             return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
-        from completion_launch import CASES as COMPLETION_CASES
-        from run_worker_launch import ALL_CASES as RUN_WORKERS
-        from history_git import CLI as BINDING_CLI
-        from run_worker_launch import MEASUREMENT_PROJECT
-        if actor['role'] in ('mcp','mock-acp') and actor.get('case')==MEASUREMENT_PROJECT:
-            return (terminal is not None and actor['body_ready'] and (terminal[2]==0
-                or terminal[2] in ((-9,-15) if actor['role']=='mcp' else (-15,)) and -terminal[2] in actor['signals']))
-        if actor['role']=='fixed-inline' and actor['case']==BINDING_CLI:
-            return value is not None and terminal is not None and actor['body_ready'] and terminal[2]==value['binding_status']
-        if actor['role']=='fixed-inline' and actor['case'] in RUN_WORKERS:
-            code=value.get('worker_status') if value is not None and value.get('run_worker') else None
-            return (code is not None and terminal is not None and terminal[2]==code and actor['body_ready']
-                    and (code!=2 or 15 in actor['signals']) and (code>=0 or -code in actor['signals']))
-        from run_worker_launch import DESCENDANT
-        if actor['role']=='session-child' and actor['case']==DESCENDANT:
-            return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='fixed-inline' and actor['case'] in ROLE_CASES:
             from completion_server import status
             return value is not None and status(self,actor,value['server_slot'])
-        if actor['role']=='fixed-inline' and actor['case'] in COMPLETION_CASES:
-            return (value is not None and terminal is not None and actor['body_ready']
-                    and terminal[2]==(73 if value['fixed_operation']=='crash' else 0))
-        if actor.get('case') in READINESS_CASES:
-            from readiness_launch import completed
-            return completed(actor,terminal)
-        if actor.get('case') in UV_CASES and actor['role'] in ('uv-cli','fixed-inline'):
-            return terminal is not None and terminal[2]==1 and (actor.get('kernel_admitted') is True or actor['body_ready'])
-        if actor['role']=='desktop' or actor.get('case') in (DRAIN_CASE,CONSOLE_CASE,*TERMINAL_CASES):
-            return terminal is not None and terminal[2]==0 and (actor['body_ready'] or actor['role']=='terminal-native' and actor.get('kernel_admitted') is True)
         if actor['role']=='pytest-regression':
             return terminal is not None and terminal[2]==0 and actor['body_ready'] and actor.get('preselected_complete') is True
-        if actor['role']=='ps':
-            return terminal is not None and terminal[2]==0 and actor.get('kernel_admitted') is True
-        if actor['role']=='mcp' and actor['case'] in HTTP_CASES:
-            return terminal is not None and actor['body_ready'] and (terminal[2]==0 or terminal[2] in (-9,-15) and -terminal[2] in actor['signals'])
-        if actor['role']=='review-wire':
-            return terminal is not None and actor['body_ready'] and (terminal[2]==0 or terminal[2]==-9 and 9 in actor['signals'])
-        if actor['role'] in ('mp-child','mp-tracker'):
-            if actor['role']=='mp-child' and value is None:
-                return False
-            status=value['mp_status'] if actor['role']=='mp-child' else 0
-            return terminal is not None and terminal[2]==status and actor['body_ready'] and (status>=0 or -status in actor['signals'])
         if actor['case'] in PLAN_CASES:
             if value is None or terminal is None:
                 return False
@@ -393,8 +354,12 @@ class Observer:
         if actor['role'] == 'session-invalid':
             failures = [row for row in self.ledger_trace.records if row['kind'] == 'exec_syscall_return' and row['pid'] == actor['birth'].pid]
             return process.generation == 0 and terminal is not None and terminal[2] == 255 and len(failures) == 1 and failures[0]['return'] == -8
-        return (terminal is not None and (actor.get('kernel_admitted') is True or actor['body_ready']
-                or terminal[2] in (-9, -15) and -terminal[2] in actor['signals']))
+        if terminal is None or value is None or terminal[2]<0 and -terminal[2] not in actor['signals']:
+            return False
+        from run_worker_launch import MEASUREMENT_PROJECT,DESCENDANT
+        early_cleanup=actor['case'] not in (MEASUREMENT_PROJECT,DESCENDANT) and actor['role'] in ('backend','delayed-backend','acp','mock-acp','cleanup-acp','cleanup-inline',
+            'workspace-owned','session-adapter','session-child','session-inline') and terminal[2] in (-9,-15)
+        return actor.get('kernel_admitted') is True or actor['body_ready'] or early_cleanup
 
     def dispatch(self, actor, request):
         kind, payload = request['kind'], request['payload']

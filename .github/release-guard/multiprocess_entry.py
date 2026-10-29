@@ -39,7 +39,7 @@ def plan(case,target):
     if case in TARGETS:
         if target!=TARGETS[case]:
             raise Refused('spawn original target metadata')
-        return Spawn(('queue','arena') if case==IPC_CASES[0] else (),status=17 if case==CASES[1] else 0)
+        return Spawn(('queue','arena') if case==IPC_CASES[0] else ())
     return route_plan(case,target)
 
 
@@ -266,7 +266,7 @@ def proposal(host,actor,raw):
     else:
         if spec is None:
             raise Refused('spawn child declaration absent')
-        host.intents[answer['ticket']].update(mp_target=raw['target'],mp_status=spec.status)
+        host.intents[answer['ticket']].update(mp_target=raw['target'])
     return {**answer,'translated':vector}
 
 

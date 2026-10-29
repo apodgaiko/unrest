@@ -49,9 +49,16 @@ def test_exact_original_readiness_program_and_operands(case,mutation):
 
 
 
-@pytest.mark.parametrize('status,signals,expected',[(0,(),True),(-15,(15,),True),(-15,(),False),(23,(),False)])
+@pytest.mark.parametrize('status,signals,expected',[(0,(),True),(-15,(15,),True),(-15,(),False),(23,(),True)])
 def test_real_child_terminal_status_and_authorized_cleanup_required(status,signals,expected):
-    actor={'case':readiness.READY,'body_ready':True,'signals':signals}
-    assert readiness.completed(actor,(1,0,status)) is expected
-    assert not readiness.completed(actor,None)
-    assert not readiness.completed({**actor,'body_ready':False},(1,0,status))
+    from source_observer import Observer
+    from types import SimpleNamespace
+    actor={'birth':1,'role':'fixed-inline','case':readiness.READY,'body_ready':True,'signals':signals,'token':'owned'}
+    row={'ticket':1,'birth':1,'role':actor['role'],'case':actor['case'],'consumed':True,'token':'owned'}
+    actor['intent']=row
+    host=SimpleNamespace(intents={1:row},ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(1,0,status))))
+    assert Observer.completed_child(host,actor) is expected
+    host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=None))
+    assert not Observer.completed_child(host,actor)
+    host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(1,0,status)))
+    assert not Observer.completed_child(host,{**actor,'body_ready':False})

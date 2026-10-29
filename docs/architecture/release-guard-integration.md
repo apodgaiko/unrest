@@ -606,3 +606,23 @@ reuse that binding instead of independently searching the intent collection.
 Removing a ticket or changing its identity still invalidates the binding; all
 existing READY, exit-code, authorized-signal and actual-parent-wait predicates
 remain separate requirements.
+
+Application exit-code interpretation belongs to the unchanged original source
+tests. The guard no longer independently predicts RunControl's0/2/17 conventions,
+multiprocessing target exits, binding CLI0/1, readiness23, ordinary UV refusal1,
+or desktop/console/terminal success0. These were additional guard-only expectations;
+not every original test asserted each interpreter number verbatim. Their removal
+retires that guard claim rather than claiming those extra assertions still exist.
+Admission ceilings formerly encoded by RunControl's exit list remain explicit
+counts, and spawn target/resource quotas are unchanged.
+
+Retirement still requires the consumed ticket's Birth/token/case/role binding,
+actual guarded body execution (or native admission), a kernel terminal result,
+and the matching original-parent numeric wait. Negative termination additionally
+requires the exact recorded authorized signal. Only the previously supported
+controlled/owned cleanup roles retain early-body cleanup; measurement ACP and the
+RunControl descendant require READY. Native86 refusal and sticky guard poison
+remain failures. Failed-exec proofs, plan exec generation, archive and installed
+provenance, nested-pytest seals, completion-server transitions and the exact cohort
+controller73 exception are retained. No source test, parameter, assertion or
+refusal context is removed or selected out by this ownership change.

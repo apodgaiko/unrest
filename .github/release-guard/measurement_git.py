@@ -120,7 +120,7 @@ def worker(host,actor,raw):
     env={'LANG':'C.UTF-8','PATH':os.defpath,'PYTHONPATH':str(Path(host.meta['checkout'])/'src'),
         'UNREST_APPROVAL_RECOVERY':'0','UNREST_HOME':str(home),'UNREST_PROJECTS_DIR':str(home/'projects'),
         'UNREST_WORKER_ACP_COMMAND':command,'UNREST_VALIDATOR_ACP_COMMAND':command}
-    answer=admit_worker(host,actor,raw,home,operation,env,len(steps),0)
+    answer=admit_worker(host,actor,raw,home,operation,env,len(steps))
     if answer is not None:
         host.intents[answer['ticket']]['measurement_nodes']=nodes
     return answer

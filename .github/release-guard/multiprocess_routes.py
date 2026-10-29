@@ -7,7 +7,6 @@ from content_manifest import Refused
 class Spawn(NamedTuple):
     resources: tuple[str,...]
     maximum: int = 1
-    status: int = 0
 
 
 def route(module,name,targets,*,target_module=None):
@@ -20,7 +19,7 @@ PATCH={
     **route('test_patch_transaction','test_two_mutators_and_two_inspectors_are_process_linearizable',
         {'_mutator_process':Spawn(('arena','queue'),2),'_inspector_process':Spawn(('queue',),2)}),
     **route('test_patch_transaction','test_interrupted_probe_coexists_with_committed_recovery',
-        {'_interrupt_rename_probe':Spawn((),status=73)}),
+        {'_interrupt_rename_probe':Spawn(())}),
 }
 LOCK={
     **route('test_project_lock','test_legacy_lock_survives_nine_target_project_record_replacement',
@@ -28,7 +27,7 @@ LOCK={
     **route('test_project_lock','test_spawned_public_mutations_are_exclusive_and_project_scoped',
         {'_holder_process':Spawn(()),'_competitor_process':Spawn(('queue',))}),
     **route('test_project_lock','test_os_releases_lock_after_abrupt_holder_death',
-        {'_holder_process':Spawn((),status=-15),'_single_call_process':Spawn(('queue',))}),
+        {'_holder_process':Spawn(()),'_single_call_process':Spawn(('queue',))}),
 }
 SUPERVISION={**{key:value for role in ('worker','validator','terminal_reviewer')
     for key,value in route('test_supervision','test_independent_child_process_adapter_observes_bound_action['+role+']',
@@ -54,7 +53,7 @@ for name in ('test_nonwaiter_contention_is_finite_and_checkpoint_cannot_publish'
 TRANSACTIONS.update(route('test_supervision_transactions','test_distinct_processes_share_tail_and_compete_for_one_action',{'_child':Spawn(('pipe',),5)}))
 for cut in ('after_pending_inbox_fsync-steer-True','before_consumed_inbox_fsync-wait-True',
         'after_consumed_inbox_fsync-wait-False','after_receipt_fsync:nudge_consumed-wait-False'):
-    TRANSACTIONS.update(route('test_supervision_transactions',f'test_process_death_releases_stable_carrier_and_recovery_never_replays[{cut}]',{'_child':Spawn(('pipe',),status=-9)}))
+    TRANSACTIONS.update(route('test_supervision_transactions',f'test_process_death_releases_stable_carrier_and_recovery_never_replays[{cut}]',{'_child':Spawn(('pipe',))}))
 TERMINAL=route('test_terminal_review_report_ordering','test_crash_report_survives_finalization_refusal[held_snapshot]',
     {'_hold_snapshot':Spawn(('pipe',))},target_module='test_supervision_finalization')
 ROUTES={**ATTENTION,**PATCH,**LOCK,**SUPERVISION,**FINALIZATION,**NESTED,**PATHS,**TRANSACTIONS,**TERMINAL}

@@ -89,11 +89,13 @@ def test_acp_cannot_start_before_its_exact_server_executes(fixture):
 @pytest.mark.parametrize('role',['mcp','mock-acp'])
 @pytest.mark.parametrize('code,signals,ready,expected',[
     (0,set(),True,True),(-15,{15},True,True),(-15,set(),True,False),
-    (-15,{15},False,False),(1,set(),True,False),(-9,set(),True,False)])
+    (-15,{15},False,False),(1,set(),True,True),(-9,set(),True,False)])
 def test_nested_completion_keeps_actual_authorized_cleanup_status(role,code,signals,ready,expected):
     from source_observer import Observer
     from types import SimpleNamespace
     from run_worker_launch import MEASUREMENT_PROJECT
     host=SimpleNamespace(ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(1,0,code))))
-    actor={'birth':1,'role':role,'case':MEASUREMENT_PROJECT,'body_ready':ready,'signals':signals}
+    actor={'birth':1,'role':role,'case':MEASUREMENT_PROJECT,'body_ready':ready,'signals':signals,'token':'owned'}
+    host.intents={1:{'ticket':1,'birth':1,'role':role,'case':MEASUREMENT_PROJECT,'token':'owned','consumed':True}}
+    actor['intent']=host.intents[1]
     assert Observer.completed_child(host,actor) is expected

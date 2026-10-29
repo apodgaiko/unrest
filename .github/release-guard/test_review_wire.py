@@ -249,16 +249,20 @@ def test_fifo_scenario_without_writer_refuses_before_any_blocking_read(
         (0, set(), True, True),
         (-9, {9}, True, True),
         (-9, set(), True, False),
-        (-15, {15}, True, False),
-        (17, set(), True, False),
+        (-15, {15}, True, True),
+        (17, set(), True, True),
         (-9, {9}, False, False),
     ],
 )
-def test_wire_completion_preserves_real_close_subprocess_status(code, signals, ready, accepted):
+def test_wire_retirement_requires_ready_and_authorized_cleanup(code, signals, ready, accepted):
     from source_observer import Observer
 
-    actor = {"role": "review-wire", "birth": object(), "body_ready": ready, "signals": signals}
+    actor = {"role": "review-wire", "birth": object(), "body_ready": ready, "signals": signals,"case":"case","token":"owned"}
     host = SimpleNamespace(
         ledger=SimpleNamespace(process=lambda birth: SimpleNamespace(terminal=(1, 0, code)))
     )
+    row={key:actor[key] for key in ('role','birth','case','token')}
+    row.update(ticket=1,consumed=True)
+    host.intents={1:row}
+    actor['intent']=row
     assert Observer.completed_child(host, actor) is accepted
