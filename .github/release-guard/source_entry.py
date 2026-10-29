@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import errno
 import hashlib
-import io
 import os
 import signal as signals
 from pathlib import Path
@@ -11,7 +10,7 @@ import subprocess
 import sys
 import threading
 import traceback
-from typing import Any, NoReturn, cast
+from typing import Any, NoReturn
 
 from bootstrap_wire import Client
 from content_manifest import Refused
@@ -77,7 +76,6 @@ class Policy:
         if getattr(self.local,'launch',None) is not None:
             raise Refused('source nested process constructor')
         self.local.launch=answer
-        self.local.custody=answer['rule']=='custody:git'
         vector[:]=answer['translated']
         if answer['rule'] in ('cleanup:mcp','http:mcp','completion:stdio'):
             args[3].update(OFFLINE)
@@ -131,7 +129,6 @@ class Policy:
     def install_process_hooks(self):
         process_class = subprocess.Popen
         original = process_class.__init__
-        original_communicate = process_class.communicate
         original_run = subprocess.run
         original_kill, original_group = os.kill, os.killpg
         policy = self
@@ -168,52 +165,6 @@ class Policy:
             policy.client.request('launch-return', {'pid': process.pid, 'ticket': pending['ticket'], 'token': pending['token']})
             saved = {'token': pending['token'], 'process': process, 'case': policy.case}
             policy.children[process.pid] = saved
-            custody = getattr(policy.local,'custody',False)
-            policy.local.custody = False
-            fields=pending.get('command')
-            if fields is not None:
-                from types import SimpleNamespace
-                command=SimpleNamespace(**fields)
-                saved['git_command'] = command
-                if command.produces is not None:
-                    stream_type = io.BufferedReader if custody else io.TextIOWrapper
-                    if type(process.stdout) is not stream_type:
-                        policy.refuse('git original stdout wrapper')
-                    saved['git_stream_type'] = stream_type
-                    fd = stream_type.fileno(cast(io.BufferedReader | io.TextIOWrapper,process.stdout))
-                    info = os.fstat(fd)
-                    saved['git_stdout'], saved['git_pipe'] = process.stdout, (fd, info.st_dev, info.st_ino)
-                    policy.client.request('git-pipe', {'pid': process.pid, 'token': saved['token'],
-                        'fd': fd, 'dev': info.st_dev, 'ino': info.st_ino})
-
-        def communicate(process, *args, **kwargs):
-            saved = policy.children.get(process.pid)
-            if saved is None:
-                return original_communicate(process,*args,**kwargs)
-            command = saved.get('git_command')
-            if command is None or command.produces is None:
-                return original_communicate(process, *args, **kwargs)
-            if (saved['process'] is not process or saved['case'] != policy.case
-                    or process.stdout is not saved['git_stdout'] or type(process.stdout) is not saved['git_stream_type']
-):
-                policy.refuse('git original communicate identity')
-            if command.stdin is not None:
-                actual=kwargs.get('input',args[0] if args else None)
-                if type(actual) is not str or actual!=command.stdin:
-                    policy.refuse('Git original finite commit input changed')
-            fd, dev, inode = saved['git_pipe']
-            info = os.fstat(saved['git_stream_type'].fileno(process.stdout))
-            if (info.st_dev, info.st_ino) != (dev, inode):
-                policy.refuse('git stdout descriptor generation changed')
-            result = original_communicate(process, *args, **kwargs)
-            if (type(process.returncode) is not int or process.returncode != 0
-                    or type(result) is not tuple or len(result) != 2
-                    or type(result[0]) is not (bytes if saved['git_stream_type'] is io.BufferedReader else str)):
-                policy.refuse('git stdout before successful actual parent wait')
-            policy.client.request('git-output', {'pid': process.pid, 'token': saved['token'],
-                'pipe': [fd, dev, inode], 'stdout': result[0].decode('ascii') if type(result[0]) is bytes else result[0]})
-            return result
-
         def signal(pid, sig, *, group):
             if type(sig) not in (int, signals.Signals):
                 policy.refuse('source nonnumeric signal')
@@ -257,7 +208,6 @@ class Policy:
         if self.profile['role'] in ('root', 'mcp', 'session-adapter', 'fixed-inline','desktop','archive-checker'):
             subprocess.run=run
             setattr(subprocess.Popen, '__init__', construct)
-            setattr(subprocess.Popen, 'communicate', communicate)
             os.kill, os.killpg = kill, killpg
 
 

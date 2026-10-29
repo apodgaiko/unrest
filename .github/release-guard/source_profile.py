@@ -37,7 +37,7 @@ from completion_roles import CASES as ROLE_CASES,GROUPS as ROLE_GROUPS
 ROOT_COMMAND = 'from source_root import main;raise SystemExit(main())'
 METHODS = frozenset({'collection-finish', 'collection', 'core-ready', 'body-ready', 'case-start', 'case-finish', 'root-finish',
     'archive-snapshot','archive-result','preselected-finish','fixture-root','multiprocess-proposal','launch-proposal', 'launch-return', 'pair-intent', 'pair-seal', 'bind', 'bound', 'listen', 'connect',
-    'custody_signal', 'custody_close', 'git-pipe', 'git-output', 'self-stop', 'guard-refusal'})
+    'custody_signal', 'custody_close', 'self-stop', 'guard-refusal'})
 FIELDS = {'schema', 'role', 'case', 'identity', 'parent', 'observer', 'argv', 'environment', 'cwd',
     'native', 'native_sha256', 'entry_sha256', 'nonce', 'token', 'seal', 'generation',
     'mount_namespace', 'checkout', 'owned', 'dependencies', 'runtime_root', 'mounts',

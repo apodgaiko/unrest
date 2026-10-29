@@ -524,10 +524,6 @@ class Observer:
                     or payload != case_seal(self.cases) or tuple(self.completed) != self.cases):
                 raise Refused('source original source completion incomplete')
             self.finished = True
-        elif kind == 'git-pipe':
-            return self.git.seal_pipe(actor, payload)
-        elif kind == 'git-output':
-            return self.git.output(actor, payload)
         elif kind == 'multiprocess-proposal':
             from multiprocess_entry import proposal
             return proposal(self,actor,payload)

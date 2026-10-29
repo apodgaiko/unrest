@@ -1,4 +1,4 @@
-"""Actual Git-parent waits and Python-parent receipts; no source admission claim."""
+"""Actual Git-parent and Python-parent kernel waits; no stdout provenance claim."""
 import hashlib
 import json
 import os
@@ -9,7 +9,9 @@ import uuid
 
 import pytest
 
-from git_values import Values
+from git_observer import Git
+from git_operands import digest
+from types import SimpleNamespace
 from process_ledger import Birth, Ledger
 from test_process_ledger_native import trace
 
@@ -46,7 +48,7 @@ os.close(fd)
 '''
 
 
-def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_path):
+def test_real_git_native_parent_wait_and_distinct_python_parent_numeric_join(tmp_path):
     repository = tmp_path / 'project'
     repository.mkdir()
     environment = {'LC_ALL': 'C.UTF-8', 'PATH': '/usr/bin:/bin', 'HOME': str(tmp_path), 'GIT_CONFIG_NOSYSTEM': '1',
@@ -140,13 +142,12 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
         return ledger, producers, helpers
 
     ledger, producers, helpers = reduce(result['records'])
-    values = Values(ledger)
+    git=Git(SimpleNamespace(ledger=ledger))
     assert ledger.reaped(producers[0], 'child-' + str(producers[0].pid))
     assert ledger.reaped(helpers[0], 'child-' + str(helpers[0].pid))
-    assert values.native_child_reaped(producers[0], helpers[0], 'native-git-control', (('native-fixture', git_pin),))
-    value = values.observe(producers[1], 'child-' + str(producers[1].pid), 'native-git-control',
-        str(repository), 'parent', 'commit', raw['head'])
-    assert value.value == raw['head'].rstrip('\n')
+    assert git.native_child_reaped(producers[0], helpers[0], 'native-git-control', (('native-fixture', git_pin),))
+    assert ledger.reaped(producers[1],'child-'+str(producers[1].pid))
+    assert digest(raw['head'].rstrip('\n'))==raw['head'][:-1]
     missing, parents, children = reduce([row for row in result['records']
         if not (row['kind'] == 'original_parent_wait4' and row['parent_tgid'] == producers[0].tgid)])
-    assert not Values(missing).native_child_reaped(parents[0], children[0], 'native-git-control', (('native-fixture', git_pin),))
+    assert not Git(SimpleNamespace(ledger=missing)).native_child_reaped(parents[0], children[0], 'native-git-control', (('native-fixture', git_pin),))

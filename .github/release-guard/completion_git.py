@@ -6,7 +6,7 @@ from content_manifest import Refused,capture
 from custody_git import repository
 from git_commands import Command
 from git_observer import HOME_CONFIG,image,regular
-from git_values import digest
+from git_operands import digest
 from launch_policy import admit_expected,build_expected
 
 FIXTURE=(('git','init','-q'),('git','-c','user.name=Test','-c','user.email=test@example.invalid',
@@ -75,7 +75,7 @@ def proposal(host,actor,raw):
             raise Refused('completion server-owned Git query quota')
         head=ready(host,workspace)
         vector=('git','rev-parse','HEAD')
-        command=Command(vector,str(workspace),produces=(str(workspace),'commit',()))
+        command=Command(vector,str(workspace))
         environment=dict(actor['profile']['environment'])
     expected=build_expected('completion:git',case,'/usr/bin/git',image(),vector,
         tuple(sorted(environment.items())),str(workspace),'native')
@@ -88,5 +88,4 @@ def proposal(host,actor,raw):
     intent.update(command=command,repository=str(workspace),operation='completion-fixture' if head is None else 'completion-head',
         fixture_git=head is None,fixture_head=head,fixture_stdio=head is None)
     host.git.commands[intent['token']]=intent
-    return {**answer,
-        'command':{'stdin':None,'produces':None if command.produces is None else [command.produces[0],command.produces[1],list(command.produces[2])]}}
+    return answer

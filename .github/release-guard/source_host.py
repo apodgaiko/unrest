@@ -293,7 +293,7 @@ def worker(binding, metadata, raw_directory):
     finally:
         try:
             record = {'schema': 'unrest.bootstrap-source-result.v3', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
-                      'release_certified': False, 'completed': [] if observer is None else observer.completed,
+                      'git_value_provenance_proven':False, 'release_certified': False, 'completed': [] if observer is None else observer.completed,
                       'result': result, 'failure': failure, 'metadata': metadata,
                       'kernel': [] if trace is None else trace.records,
                       'controls': [] if observer is None else observer.controls,

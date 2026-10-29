@@ -1,4 +1,4 @@
-"""Independent Git declarations, owned metadata and causal stdout/wait joins."""
+"""Independent finite Git declarations, owned metadata and actual parent waits."""
 from __future__ import annotations
 
 import configparser
@@ -9,7 +9,6 @@ import stat
 from content_manifest import Refused, native_digest, read_regular
 from git_commands import location_role
 from git_sites import CASES, OPERATIONS
-from git_values import Values
 
 HOME_CONFIG = b'[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n'
 SETUP = ('init', 'config-name', 'config-email', 'stage-base', 'commit-base')
@@ -38,7 +37,6 @@ def image(file='/usr/bin/git'):
 class Git:
     def __init__(self, observer):
         self.host = observer
-        self.values = Values(observer.ledger)
         self.repositories, self.commands, self.last = {}, {}, {}
         self.helpers = {}
         self.custody_roots = {}
@@ -108,13 +106,10 @@ class Git:
             raise Refused('Git finite operation declaration')
         previous = self.last.get(host.case)
         if previous is not None and (not previous['consumed'] or not host.ledger.reaped(previous['birth'], previous['token'])
-                or not self.values.descendants_reaped(previous['birth'])
-                or previous['command'].produces is not None and not previous.get('value_observed')):
-            raise Refused('git next command before original parent/output join')
+                or not self.descendants_reaped(previous['birth'])):
+            raise Refused('git next command before actual parent/descendant wait')
         root = self.repository(repository, operation, family)
         self.location(root, command.cwd)
-        for location, kind, value, inputs in command.requires:
-            self.values.require(host.case, str(root), location, kind, value, inputs)
         answer = host.admit_launch(actor,expected,'git-command',vector,None,maximum=128)
         if answer is None:
             return None
@@ -123,59 +118,6 @@ class Git:
         self.commands[intent['token']] = intent
         self.last[host.case] = intent
         return answer
-
-    def command(self, pid, token):
-        if type(pid) is not int or type(token) is not str:
-            raise Refused('git command identity primitives')
-        intent = self.commands.get(token)
-        if intent is None or intent['pid'] != pid or intent['case'] != self.host.case:
-            raise Refused('git command identity')
-        return intent
-
-    def reporting_parent(self,actor,intent):
-        host=self.host
-        if (not intent['consumed'] or intent.get('parent')!=actor['birth']
-                or host.ledger.process(intent['birth']).parent!=actor['birth']
-                or not host.ledger.body_ready(actor['birth'],actor['token'])):
-            raise Refused('git actual reporting parent')
-
-    def seal_pipe(self, actor, payload):
-        host = self.host
-        if type(payload) is not dict or set(payload) != {'pid', 'token', 'fd', 'dev', 'ino'}:
-            raise Refused('git producer pipe schema')
-        intent = self.command(payload['pid'], payload['token'])
-        self.reporting_parent(actor,intent)
-        fd = payload['fd']
-        if (type(fd) is not int or not 3 <= fd <= 1024 or intent['command'].produces is None
-                or intent['token'] != payload['token'] or intent.get('pipe') is not None
-                or not host.actors[intent['pid']]['returned']):
-            raise Refused('git producer pipe generation')
-        info = (Path('/proc') / str(actor['birth'].pid) / 'fd' / str(fd)).stat()
-        if (not stat.S_ISFIFO(info.st_mode) or (info.st_dev, info.st_ino) != intent['stdout']
-                or any(type(payload[k]) is not int for k in ('dev', 'ino'))
-                or (payload['dev'], payload['ino']) != intent['stdout']):
-            raise Refused('git original stdout pipe')
-        intent['pipe'] = (fd, info.st_dev, info.st_ino)
-        return {'ok': True}
-
-    def output(self, actor, payload):
-        host = self.host
-        if type(payload) is not dict or set(payload) != {'pid', 'token', 'pipe', 'stdout'}:
-            raise Refused('git original stdout schema')
-        intent = self.command(payload['pid'], payload['token'])
-        self.reporting_parent(actor,intent)
-        if (type(payload['pipe']) is not list or any(type(v) is not int for v in payload['pipe'])
-                or tuple(payload['pipe']) != intent.get('pipe') or intent['token'] != payload['token']
-                or intent['command'].produces is None):
-            raise Refused('git stdout pipe join')
-        location, kind, inputs = intent['command'].produces
-        value = self.values.observe(intent['birth'], intent['token'], host.case, intent['repository'],
-            location, kind, payload['stdout'], inputs=inputs)
-        if intent.get('fixture_head') is not None and value.value!=intent['fixture_head']:
-            raise Refused('git fixture head changed')
-        intent['value_observed'] = True
-        return {'ok': True, 'value': value.value}
-
 
     def reserve_helper(self, birth, parent):
         host = self.host
@@ -209,15 +151,32 @@ class Git:
         host.intents[host.serial] = child
         self.helpers[birth] = child
 
+    def native_child_reaped(self,parent,birth,case,pins):
+        ledger=self.host.ledger
+        child,owner=ledger.process(birth),ledger.process(parent)
+        return (not ledger.poison and child.parent==parent and child.case==owner.case==case
+            and child.command_class=='native-git-helper' and owner.command_class in ('native-git-command','native-git-helper')
+            and child.pins==owner.pins==pins and child.generation==child.registered_generation==1
+            and owner.generation==owner.registered_generation==1 and ledger.reaped(birth,child.life_token)
+            and child.terminal[2]==0 and child.parent_wait[3]==0)
+
+    def descendants_reaped(self,birth):
+        process=self.host.ledger.process(birth)
+        pending,checked=[birth],0
+        while pending:
+            parent=pending.pop()
+            for child in self.host.ledger.children.get(parent,()):
+                checked+=1
+                if checked>16 or not self.native_child_reaped(parent,child,process.case,process.pins):
+                    return False
+                pending.append(child)
+        return True
+
     def reaped(self, actor):
         birth = actor['birth']
         if actor['role'] == 'git-helper':
             process = self.host.ledger.process(birth)
-            return self.values.native_child_reaped(process.parent, birth, actor['case'], process.pins)
-        if actor['role'] in ('git-command','git-custody'):
-            intent = self.commands[actor['token']]
-            if intent['command'].produces is not None and not intent.get('value_observed'):
-                return False
+            return self.native_child_reaped(process.parent, birth, actor['case'], process.pins)
         return self.host.ledger.reaped(birth, actor['token'])
 
 

@@ -14,7 +14,7 @@ from controlled_cases import CASES
 from controlled_pairs import limits
 from git_commands import Command
 from git_observer import regular
-from git_values import digest
+from git_operands import digest
 
 SOURCE = 'src/unrest_harness/experimental_custody.py'
 PIN = 'a6da184702daa03c9e9a7b6c5fcf22d9514901abb9112c44c8686a05880d25dc'
@@ -51,7 +51,7 @@ def command(case, argv, cwd, owned):
         else:
             raise Refused('custody Git undeclared template')
     kind = 'head' if args == ('rev-parse','HEAD') else 'commit' if args[0] == 'commit' else 'other'
-    return Command(argv,cwd,produces=(cwd,'commit',()) if kind == 'head' else None),kind
+    return Command(argv,cwd),kind
 
 
 def repository(cwd, owned, *, initialize):
@@ -98,10 +98,6 @@ def launch(host,actor,result,kind,expected):
         raise Refused('custody Git finite case command bound')
     if any(not v['consumed'] or not host.ledger.reaped(v['birth'],v['token']) for v in prior):
         raise Refused('custody Git previous command actual wait')
-    if result.argv[len(PREFIX):len(PREFIX)+3] == ('diff','--cached','--name-only') and not any(
-            row.case == host.case and row.kind == 'commit' and row.value == result.argv[-1]
-            for row in host.git.values.values):
-        raise Refused('custody Git diff without an actual prior commit producer')
     identity = repository(result.cwd,Path(host.meta['owned']),initialize=result.argv[len(PREFIX)] == 'init')
     key = host.case,result.cwd
     previous = host.git.custody_roots.get(key)

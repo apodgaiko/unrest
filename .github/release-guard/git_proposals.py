@@ -1,4 +1,4 @@
-"""Inverse finite Git templates, retaining kernel-wait and value dependencies."""
+"""Finite Git forms and bounded operands; native ownership/waits remain separate."""
 
 from content_manifest import Refused
 from git_commands import build,FIELDS,Command
@@ -7,16 +7,7 @@ from git_observer import SETUP,image
 from launch_policy import build_expected
 
 
-def integration(host,repository,revision):
-    values={(row.location,row.inputs) for row in host.git.values.values
-            if row.case==host.case and row.repository==repository and row.kind=='integration-commit' and row.value==revision}
-    if len(values)!=1:
-        raise Refused('Git proposal lacks unique integration producer')
-    location,inputs=next(iter(values))
-    return {'new_location':location,'new_inputs':inputs}
-
-
-def operands(host,operation,args,raw,repository):
+def operands(operation,args,raw):
     if not FIELDS[operation]:
         return {}
     match operation,args:
@@ -37,9 +28,9 @@ def operands(host,operation,args,raw,repository):
         case ('apply',['apply','--index','--binary',patch]):
             return {'patch':patch}
         case (('update-parent'|'rollback-update'),['update-ref','refs/heads/main',new,old]):
-            return {'new':new,'old':old,**(integration(host,repository,new) if operation=='update-parent' else {})}
+            return {'new':new,'old':old}
         case (('reset-parent'|'rollback-reset'),['reset','--hard',revision]):
-            return {'revision':revision,**(integration(host,repository,revision) if operation=='reset-parent' else {})}
+            return {'revision':revision}
         case ('commit-tree',['commit-tree',tree,'-p',revision]):
             message=raw['stdin']
             if type(message) is not str or len(message)>16384 or not message.startswith('Integrate Unrest workspaces\n\n') or not message.endswith('\n'):
@@ -78,16 +69,13 @@ def prepare(host,actor,raw):
         candidates: dict[str,tuple[dict,Command]] = {}
         for operation in operations:
             try:
-                fields=operands(host,operation,raw['argv'][1:],raw,repository)
+                fields=operands(operation,raw['argv'][1:],raw)
                 command=build(operation,repository,raw['cwd'],fields,family=family)
-                for location,kind,value,inputs in command.requires:
-                    host.git.values.require(case,repository,location,kind,value,inputs)
             except Refused:
                 continue
             if list(command.argv)==raw['argv'] and raw['stdin']==command.stdin:
                 candidates.setdefault(operation,(fields,command))
-        # Promotion/reset labels share argv with rollback. Prefer the complete
-        # integration provenance when both prove the same finite OS effect.
+        # These authored labels describe the same scoped OS effect.
         for canonical,rollback in (('update-parent','rollback-update'),('reset-parent','rollback-reset')):
             if canonical in candidates and rollback in candidates:
                 strong,weak=candidates[canonical][1],candidates[rollback][1]
@@ -112,5 +100,4 @@ def prepare(host,actor,raw):
     answer=host.git.launch(actor,operation,repository,command,expected,vector)
     if answer is None:
         return None
-    return {**answer,'translated':vector,'rule':expected.rule,
-            'command':None if command is None else {'stdin':command.stdin,'produces':[command.produces[0],command.produces[1],list(command.produces[2])] if command.produces else None}}
+    return {**answer,'translated':vector,'rule':expected.rule}

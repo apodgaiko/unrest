@@ -2,16 +2,15 @@
 
 The independent observer validates filesystem custody and process state.
 This builder interprets no expressions and accepts no argv.
-Its causal requirements must be resolved by the observer before admission.
+Dynamic data operands remain scoped; the product tests own Git value semantics.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 from pathlib import PurePosixPath
 
 from content_manifest import Refused
-from git_values import date_text, digest, text
+from git_operands import date_text, digest, text
 
 
 @dataclass(frozen=True)
@@ -20,8 +19,6 @@ class Command:
     cwd: str
     additions: tuple[tuple[str, str], ...] = ()
     stdin: str | None = None
-    requires: tuple[tuple[str, str, str, tuple[str, ...]], ...] = ()
-    produces: tuple[str, str, tuple[str, ...]] | None = None
 
 
 FIXED = {
@@ -44,7 +41,7 @@ FIELDS = {**dict.fromkeys(FIXED, ()), 'init': (), 'config-name': (), 'config-ema
     'rollback-add': ('tree', 'revision'), 'checkout': ('revision',),
     'diff-return': ('revision',), 'apply': ('patch',), 'date': ('revision',),
     'commit-tree': ('tree_id', 'revision', 'date', 'leases'),
-    'update-parent': ('new', 'old', 'new_location', 'new_inputs'), 'reset-parent': ('revision', 'new_location', 'new_inputs'),
+    'update-parent': ('new', 'old'), 'reset-parent': ('revision',),
     'rollback-update': ('new', 'old'), 'rollback-reset': ('revision',),
     'remove-tree': ('tree',)}
 
@@ -55,18 +52,6 @@ def path(value):
     if not value.startswith('/') or value.startswith('//') or str(p) != value or '..' in p.parts:
         raise Refused('git command canonical path')
     return p
-
-
-def integration_inputs(value):
-    if type(value) is not tuple or len(value) != 4:
-        raise Refused('git integration dependencies')
-    tree, predecessor, date, message = value
-    digest(tree)
-    digest(predecessor)
-    text(date)
-    digest(message, 64)
-    date_text(date)
-    return value
 
 
 def location_role(repo, cwd):
@@ -102,20 +87,15 @@ def build(operation, repository, location, fields, *, family):
     if role not in ROLES[operation]:
         raise Refused('git operation location role')
     for key, value in fields.items():
-        if key not in ('leases', 'new_inputs'):
+        if key != 'leases':
             text(value)
     args: tuple[str,...] = ()
-    requirements: tuple[tuple[str,str,str,tuple[str,...]],...] = ()
-    output: tuple[str,str,tuple[str,...]] | None = None
     additions: tuple[tuple[str,str],...] = ()
     stdin: str | None = None
-    origin = 'parent' if role == 'parent' else str(cwd)
     if operation in ('rollback-add', 'rollback-update', 'rollback-reset') and family != 'evolution':
         raise Refused('git rollback family')
     if operation in FIXED:
         args = FIXED[operation]
-        kind = {'head': 'commit', 'head-tree': 'tree', 'write-tree': 'tree'}.get(operation)
-        output = None if kind is None else (origin, kind, ())
     elif operation in ('init', 'config-name', 'config-email', 'stage-base', 'commit-base',
                        'stage-advance', 'commit-advance', 'stage-child', 'commit-child'):
         label = 'Workspace' if family == 'workspaces' else 'Evolution'
@@ -149,17 +129,12 @@ def build(operation, repository, location, fields, *, family):
                 if not tree.name.startswith(prefix) or len(suffix) != 8 or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789_' for c in suffix):
                     raise Refused('git temporary tree name')
             revision = digest(fields['revision'])
-            requirements = (('parent', 'commit', revision, ()),)
             args = ('worktree', 'add', '--detach', *(('--no-checkout',) if operation == 'lease-add' else ()), str(tree), revision)
     elif operation in ('verify-base', 'checkout', 'diff-return', 'date', 'reset-parent', 'rollback-reset'):
         revision = digest(fields['revision'])
-        requirements = ((fields['new_location'], 'integration-commit', revision, integration_inputs(fields['new_inputs'])),) if operation == 'reset-parent' else (('parent', 'commit', revision, ()),)
-        if operation == 'reset-parent' and location_role(repo, path(fields['new_location'])) != 'integration':
-            raise Refused('git reset producer location')
         args = {'verify-base': ('rev-parse', '--verify', revision + '^{commit}'),
             'checkout': ('checkout', '--detach', revision), 'diff-return': ('diff', '--cached', '--binary', '--no-ext-diff', revision),
             'date': ('show', '-s', '--format=%aI', revision), 'reset-parent': ('reset', '--hard', revision), 'rollback-reset': ('reset', '--hard', revision)}[operation]
-        output = ('parent', 'commit', ()) if operation == 'verify-base' else ('parent', 'date', (revision,)) if operation == 'date' else None
     elif operation == 'apply':
         patch = path(fields['patch'])
         if patch.parent != repo / '.unrest/workspaces/patches' or patch.suffix != '.patch':
@@ -168,19 +143,11 @@ def build(operation, repository, location, fields, *, family):
         args = ('apply', '--index', '--binary', str(patch))
     elif operation in ('update-parent', 'rollback-update'):
         new, old = digest(fields['new']), digest(fields['old'])
-        if operation == 'update-parent':
-            if location_role(repo, path(fields['new_location'])) != 'integration':
-                raise Refused('git update producer location')
-            inputs = integration_inputs(fields['new_inputs'])
-            if inputs[1] != old:
-                raise Refused('git integration predecessor')
-            requirements = (('parent', 'commit', old, ()), (fields['new_location'], 'integration-commit', new, inputs))
-        else:
-            requirements = (('parent', 'commit', old, ()), ('parent', 'commit', new, ()))
         args = ('update-ref', 'refs/heads/main', new, old)
     elif operation == 'commit-tree':
         tree, revision, date, leases = fields['tree_id'], digest(fields['revision']), fields['date'], fields['leases']
         digest(tree)
+        date_text(date)
         if type(leases) is not tuple or not 0 < len(leases) <= 128:
             raise Refused('git commit lease set')
         rows = []
@@ -201,7 +168,5 @@ def build(operation, repository, location, fields, *, family):
         additions = tuple(sorted({'GIT_AUTHOR_NAME': 'Unrest parent integration authority', 'GIT_AUTHOR_EMAIL': 'unrest@localhost',
             'GIT_COMMITTER_NAME': 'Unrest parent integration authority', 'GIT_COMMITTER_EMAIL': 'unrest@localhost',
             'GIT_AUTHOR_DATE': date, 'GIT_COMMITTER_DATE': date}.items()))
-        requirements = ((str(cwd), 'tree', tree, ()), ('parent', 'commit', revision, ()), ('parent', 'date', date, (revision,)))
-        inputs = integration_inputs((tree, revision, date, hashlib.sha256(stdin.encode()).hexdigest()))
-        args, output = ('commit-tree', tree, '-p', revision), (str(cwd), 'integration-commit', inputs)
-    return Command(('git', *args), str(cwd), additions, stdin, requirements, output)
+        args = ('commit-tree', tree, '-p', revision)
+    return Command(('git', *args), str(cwd), additions, stdin)

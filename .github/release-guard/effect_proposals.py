@@ -273,7 +273,4 @@ def proposal(host, actor, raw):
         host.intents[answer['ticket']]['execution_data']=[[str(snapshot),hashlib.sha256(body).hexdigest()]]
     if answer is None:
         return None
-    intent=host.intents[answer['ticket']]
-    command=intent.get('command')
-    return {**answer,'translated':vector,'rule':expected.rule,
-            'command':None if command is None else {'stdin':command.stdin,'produces':[command.produces[0],command.produces[1],list(command.produces[2])] if command.produces else None}}
+    return {**answer,'translated':vector,'rule':expected.rule}

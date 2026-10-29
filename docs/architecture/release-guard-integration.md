@@ -132,9 +132,20 @@ Their one literal probe grants neither payload-certification nor accepted-peer
 proof. Terminal leaves retain every credential-transform parameter and exact
 program/env/cwd; native optional-null controls admit only `/usr/bin/true`.
 
-Git currently retains its finite authored command templates, repository/worktree
-custody, helper restrictions, parent waits and additional value-provenance
-checks. Those extra checks do not establish external review acceptance.
+Git retains finite authored command forms, repository/worktree custody, exact
+argv/env/cwd and bounded stdin data, hook/remote/helper restrictions, and actual
+parent/descendant waits. Object IDs are exactly40 lowercase hex characters;
+revision expressions are only fixed authored forms. Paths retain owned slot and
+backlink constraints, and integration-message/date operands retain their bounded
+formats. No generic Git option or executable permission follows.
+
+The guard no longer certifies commit/tree/date semantic dependency graphs or
+original Python stdout-object continuity. Product tests certify correct refs,
+integration, rollback and authority. Actual command status is retained; ordinary
+commands no longer get an implicit exit-zero requirement from a value producer.
+Native helpers and completion queries keep their explicit zero-status checks.
+Source-result records mark `git_value_provenance_proven=false`; this grants no
+external review acceptance and does not reinterpret older records.
 
 ## Verification and retired model controls
 
@@ -144,7 +155,8 @@ non-loopback/DNS, ambient inherited FD, stale listener, sticky caught refusal,
 quota/retirement, invalid profile and missing-parent-wait negatives.
 
 Model-only controls for queued-send/accepted-ticket joins, post-connect payload
-reauthorization, EOF-only drains and parked payload cancellation are retired with
+reauthorization, EOF-only drains, parked payload cancellation, and Git semantic
+producer/stdout-object chains are retired with
 those claims. Their historical source and outcomes remain in Git. New controls
 assert finite fresh listener admission, continued wait requirements and the
 absence of application-payload claims. This is an explicit changed proof model,

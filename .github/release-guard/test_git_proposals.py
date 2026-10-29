@@ -1,4 +1,4 @@
-"""Finite Git operands retain causal dependencies without Python caller policing."""
+"""Finite Git forms retain scoped data operands without Python caller policing."""
 
 from types import SimpleNamespace
 
@@ -7,7 +7,7 @@ import pytest
 from content_manifest import Refused
 from control_transport import finite
 from git_commands import build
-from git_proposals import integration, operands, prepare
+from git_proposals import operands, prepare
 from git_sites import CASES
 
 REPO = "/owned/pytest/case/project"
@@ -28,25 +28,6 @@ def host_value(**changes):
     )
     fields.update(changes)
     return SimpleNamespace(**fields)
-
-
-def test_integration_dependency_is_case_repository_kind_and_value_bound():
-    rows = [
-        host_value(case="foreign"),
-        host_value(repository="/foreign"),
-        host_value(kind="commit"),
-        host_value(value="e" * 40),
-        host_value(),
-    ]
-    host = SimpleNamespace(case=CASES[0], git=SimpleNamespace(values=SimpleNamespace(values=rows)))
-    result = integration(host, REPO, "d" * 40)
-    assert result == {"new_location": rows[-1].location, "new_inputs": INPUTS}
-    host.git.values.values = rows[:-1]
-    with pytest.raises(Refused, match="unique integration producer"):
-        integration(host, REPO, "d" * 40)
-    host.git.values.values = [host_value(), host_value(location="/foreign")]
-    with pytest.raises(Refused, match="unique integration producer"):
-        integration(host, REPO, "d" * 40)
 
 
 @pytest.mark.parametrize(
@@ -82,8 +63,6 @@ def test_integration_dependency_is_case_repository_kind_and_value_bound():
             {
                 "new": "d" * 40,
                 "old": REV,
-                "new_location": REPO + "/.unrest-runtime/workspaces/integration-abcdefgh",
-                "new_inputs": INPUTS,
             },
         ),
         (
@@ -91,8 +70,6 @@ def test_integration_dependency_is_case_repository_kind_and_value_bound():
             REPO,
             {
                 "revision": "d" * 40,
-                "new_location": REPO + "/.unrest-runtime/workspaces/integration-abcdefgh",
-                "new_inputs": INPUTS,
             },
         ),
         (
@@ -107,19 +84,16 @@ def test_integration_dependency_is_case_repository_kind_and_value_bound():
         ),
     ],
 )
-def test_inverse_template_preserves_exact_command_input_and_requirements(
+def test_inverse_template_preserves_exact_command_input_and_bounded_operands(
     operation, location, fields
 ):
-    host = SimpleNamespace(
-        case=CASES[0], git=SimpleNamespace(values=SimpleNamespace(values=[host_value()]))
-    )
     original = build(operation, REPO, location, fields, family="workspaces")
     raw = {"stdin": original.stdin, "environment": dict(original.additions)}
-    recovered = operands(host, operation, list(original.argv[1:]), raw, REPO)
+    recovered = operands(operation, list(original.argv[1:]), raw)
     assert build(operation, REPO, location, recovered, family="workspaces") == original
     if fields:
         with pytest.raises(Refused):
-            operands(host, operation, [*original.argv[1:], "foreign"], raw, REPO)
+            operands(operation, [*original.argv[1:], "foreign"], raw)
 
 
 @pytest.mark.parametrize("mutation", ["argv", "cwd", "environment", "stdin", "family"])
@@ -190,7 +164,7 @@ def test_producer_reply_is_recursively_json_finite(monkeypatch):
     raw["argv"] = ["git", "rev-parse", "HEAD"]
     answer = prepare(host, {}, raw)
     finite(answer)
-    assert answer["command"] == {"stdin": None, "produces": ["parent", "commit", []]}
+    assert "command" not in answer
 
 
 def test_owned_process_refuses_undeclared_stdin_before_admission():
@@ -267,128 +241,5 @@ def test_shared_repository_operations_exist_for_both_product_families(family, op
     fields = {"revision": REV} if operation == "verify-base" else {}
     assert operation in OPERATIONS[family]
     value = build(operation, REPO, REPO, fields, family=family)
-    host = SimpleNamespace()
-    recovered = operands(
-        host, operation, list(value.argv[1:]), {"stdin": None, "environment": {}}, REPO
-    )
+    recovered = operands(operation,list(value.argv[1:]),{"stdin":None,"environment":{}})
     assert build(operation, REPO, REPO, recovered, family=family) == value
-
-
-@pytest.mark.parametrize("operation", ["update-parent", "reset-parent"])
-@pytest.mark.parametrize("parent_knows_new", [False, True])
-def test_effect_selection_retains_integration_provenance_when_rollback_argv_overlaps(
-    monkeypatch, operation, parent_knows_new
-):
-    import git_proposals
-
-    monkeypatch.setattr(git_proposals, "image", lambda: "a" * 64)
-    case = CASES[17]
-    new = "d" * 40
-    integration_row = host_value(case=case)
-    rows = [
-        integration_row,
-        host_value(case=case, location="parent", kind="commit", value=REV, inputs=()),
-    ]
-    if parent_knows_new:
-        rows.append(host_value(case=case, location="parent", kind="commit", value=new, inputs=()))
-
-    class Known:
-        values = rows
-
-        def require(self, case, repository, location, kind, value, inputs):
-            if not any(
-                (row.case, row.repository, row.location, row.kind, row.value, row.inputs)
-                == (case, repository, location, kind, value, inputs)
-                for row in self.values
-            ):
-                raise Refused("missing causal producer")
-
-    calls = []
-    host = SimpleNamespace(
-        case=case,
-        git=SimpleNamespace(values=Known(), repositories={case: {"path": REPO, "setup": 5}}),
-        binding={"entry": {"path": "/native/python", "sha256": "b" * 64}},
-        meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
-    )
-
-    def launch(actor, operation, repository, command, expected, vector):
-        calls.append((operation,repository,command,expected,vector))
-        return {"ok": True, "ticket": 1, "token": "t"}
-
-    host.git.launch = launch
-    argv = (
-        ["git", "update-ref", "refs/heads/main", new, REV]
-        if operation == "update-parent"
-        else ["git", "reset", "--hard", new]
-    )
-    raw = {
-        "case": case,
-        "executable": "git",
-        "argv": argv,
-        "cwd": REPO,
-        "environment": {
-            "PATH": "/bin:/usr/bin",
-            "PYTEST_VERSION": "9.0.2",
-            "PYTEST_CURRENT_TEST": case + " (call)",
-        },
-        "stdin": None,
-    }
-    assert prepare(host, {}, raw)["translated"] == argv
-    assert calls[0][0] == operation
-    host.git.values.values = []
-    with pytest.raises(Refused):
-        prepare(host, {}, raw)
-    assert len(calls) == 1
-
-
-def test_rollback_to_prior_integration_keeps_actual_current_predecessor(monkeypatch):
-    import git_proposals
-
-    monkeypatch.setattr(git_proposals, "image", lambda: "a" * 64)
-    case = CASES[17]
-    new, current = "d" * 40, "e" * 40
-    rows = [
-        host_value(case=case),
-        host_value(case=case, location="parent", kind="commit", value=new, inputs=()),
-        host_value(case=case, location="parent", kind="commit", value=current, inputs=()),
-    ]
-
-    class Known:
-        values = rows
-
-        def require(self, case, repository, location, kind, value, inputs):
-            if not any(
-                (row.case, row.repository, row.location, row.kind, row.value, row.inputs)
-                == (case, repository, location, kind, value, inputs)
-                for row in self.values
-            ):
-                raise Refused("missing causal producer")
-
-    calls = []
-    host = SimpleNamespace(
-        case=case,
-        git=SimpleNamespace(values=Known(), repositories={case: {"path": REPO, "setup": 5}}),
-        binding={"entry": {"path": "/native/python", "sha256": "b" * 64}},
-        meta_environment=lambda: {"PATH": "/bin:/usr/bin"},
-    )
-
-    def launch(actor, operation, repository, command, expected, vector):
-        calls.append((operation,repository,command,expected,vector))
-        return {"ok": True, "ticket": 1, "token": "t"}
-
-    host.git.launch = launch
-    argv = ["git", "update-ref", "refs/heads/main", new, current]
-    raw = {
-        "case": case,
-        "executable": "git",
-        "argv": argv,
-        "cwd": REPO,
-        "environment": {
-            "PATH": "/bin:/usr/bin",
-            "PYTEST_VERSION": "9.0.2",
-            "PYTEST_CURRENT_TEST": case + " (call)",
-        },
-        "stdin": None,
-    }
-    assert prepare(host, {}, raw)["translated"] == argv
-    assert calls[0][0] == "rollback-update"

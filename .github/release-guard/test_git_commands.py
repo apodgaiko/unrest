@@ -57,7 +57,7 @@ def test_original_fixture_identity_is_family_specific(family, label, email):
     assert build('config-email', REPO, REPO, {}, family=family).argv == ('git', 'config', 'user.email', email)
 
 
-def test_integration_message_environment_and_causal_locations_are_exact():
+def test_integration_message_environment_and_data_operands_are_exact():
     result = build('commit-tree', REPO, INTEGRATION, fields('commit-tree'), family='workspaces')
     assert result.argv == ('git', 'commit-tree', TREE, '-p', BASE)
     message = 'Integrate Unrest workspaces\n\nlease:a sha256:' + PATCH + '\nlease:b sha256:' + '5' * 64 + '\n'
@@ -66,17 +66,14 @@ def test_integration_message_environment_and_causal_locations_are_exact():
     assert dict(result.additions) == {'GIT_AUTHOR_NAME': 'Unrest parent integration authority',
         'GIT_COMMITTER_NAME': 'Unrest parent integration authority', 'GIT_AUTHOR_EMAIL': 'unrest@localhost',
         'GIT_COMMITTER_EMAIL': 'unrest@localhost', 'GIT_AUTHOR_DATE': DATE, 'GIT_COMMITTER_DATE': DATE}
-    assert result.requires == ((INTEGRATION, 'tree', TREE, ()), ('parent', 'commit', BASE, ()), ('parent', 'date', DATE, (BASE,)))
     assert result != replace(result, stdin=message + '\n')
 
 
-def test_promotion_and_rollback_have_distinct_causal_roles():
+def test_promotion_and_rollback_have_retain_literal_ref_and_operand_positions():
     promotion = build('update-parent', REPO, REPO, fields('update-parent'), family='workspaces')
     rollback = build('rollback-update', REPO, REPO, {'new': BASE, 'old': NEW}, family='evolution')
     assert promotion.argv == ('git', 'update-ref', 'refs/heads/main', NEW, BASE)
-    assert promotion.requires == (('parent', 'commit', BASE, ()), (INTEGRATION, 'integration-commit', NEW, OPERANDS['new_inputs']))
     assert rollback.argv == ('git', 'update-ref', 'refs/heads/main', BASE, NEW)
-    assert rollback.requires == (('parent', 'commit', NEW, ()), ('parent', 'commit', BASE, ()))
 
 
 @pytest.mark.parametrize('mutation', ('extra', 'missing', 'bool', 'wrong-tree', 'parent-tree', 'patch-scope', 'patch-digest', 'lease-order', 'lease-duplicate'))
