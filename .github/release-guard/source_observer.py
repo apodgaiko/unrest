@@ -33,7 +33,7 @@ from source_profile import METHODS, ROOT_COMMAND
 from ordinary_acp import CASES as ORDINARY_CASES, MOCK, NEGATIVE_CASES
 from unix_endpoints import UnixPairs
 from session_launch import CASES as SESSION_CASES, LIVE as SESSION_LIVE, TIMEOUT as SESSION_TIMEOUT, SCRIPT as SESSION_SCRIPT
-from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE
+from fixed_inline import CASES as FIXED_CASES, SEQUENCES as FIXED_SEQUENCES, CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
 from git_sites import CASES as GIT_CASES
 from completion_roles import CASES as ROLE_CASES,HTTP as ROLE_HTTP,actor_slot
 from git_observer import Git
@@ -55,7 +55,7 @@ def number(value, minimum=0):
 
 
 def native_class(role):
-    return 'native-git-command' if role == 'git-custody' else 'native-' + role
+    return 'native-stock-uv' if role=='uv-cli' else 'native-git-command' if role == 'git-custody' else 'native-' + role
 
 
 class Observer:
@@ -161,7 +161,7 @@ class Observer:
                         if not value['consumed'] and value.get('parent', self.root_birth) == parent]
                     if self.full and parent is not None and parent.pid==self.launcher and not self.full_started:
                         continue
-                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker') or len(candidates) != 1:
+                    if actor is None or actor['role'] not in ('root', 'mcp', 'git-command', 'session-adapter', 'fixed-inline','desktop','archive-checker','uv-cli') or len(candidates) != 1:
                         raise Refused('source fork without a unique original launch intent')
             if row['kind'] == 'kernel_exit' and row.get('raw') == 86 << 8:
                 self.ledger.poison.append('native guard refusal')
@@ -208,7 +208,7 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps','archive-checker','archive-leaf','archive-installed') and not input_pipe):
+            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('uv-cli','mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps','archive-checker','archive-leaf','archive-installed') and not input_pipe):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -284,7 +284,7 @@ class Observer:
         intent['stdout'] = self.stdio(pid, intent['role'],
             input_pipe=intent.get('input_pipe',False) or intent['role'] == 'git-command' and intent['command'].stdin is not None,intent=intent)
         intent['consumed'], intent['pid'], intent['birth'] = True, pid, birth
-        if intent['role'] in ('sleep', 'session-invalid','ps') or intent['role'].startswith('git-'):
+        if intent['role'] in ('sleep', 'session-invalid','ps','uv-cli') or intent['role'].startswith('git-'):
             actual = process_identity(pid)
             birth = Birth.read(actual)
             pins = (('native-fixture', intent['executable_sha256']),)
@@ -292,6 +292,9 @@ class Observer:
                                  case=intent['case'], command_class=native_class(intent['role']), expected_generation=0 if intent['role'] == 'session-invalid' else 1)
             self.actors[pid] = {'birth': birth, 'role': intent['role'], 'case': intent['case'], 'token': intent['token'],
                 'returned': False, 'body_ready': False, 'signals': set(), 'kernel_admitted': True}
+            if intent['role']=='uv-cli':
+                from uv_cli import reserve_child
+                reserve_child(self,intent,birth)
         else:
             from speed_inline import CASES as SPEED_CASES,fixture
             if intent['case'] in (*SPEED_CASES,CLI_CASE):
@@ -431,6 +434,8 @@ class Observer:
                   and row['case']==actor['case'] and row['role']=='fixed-inline' and row['consumed']]
             return (len(rows)==1 and terminal is not None and actor['body_ready']
                     and terminal[2]==(73 if rows[0]['fixed_operation']=='crash' else 0))
+        if actor.get('case') in UV_CASES:
+            return terminal is not None and terminal[2]==1 and (actor.get('kernel_admitted') is True or actor['body_ready'])
         if actor['role']=='desktop' or actor.get('case') in (DRAIN_CASE,CONSOLE_CASE):
             return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='pytest-regression':
@@ -574,7 +579,7 @@ class Observer:
                 spec = declaration(self.case) if self.case in BOOTSTRAP else None
                 from package_cases import CASES as PACKAGE_CASES,count as package_count
                 from completion_server import finish as role_finish
-                count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
+                count = role_finish(self) if self.case in ROLE_CASES and outcome=='passed' else package_count(self.case) if self.case in PACKAGE_CASES else review_count(self.case) if self.case in REVIEW_CASES else mp_count(self.case)+(2 if self.case in HTTP_CASES else 0) if self.case in MP_CASES else 0 if self.case in NO_EFFECT else 1 if self.case in PLAN_CASES else (2*len(FIXED_SEQUENCES[self.case]) if self.case in UV_CASES else len(FIXED_SEQUENCES[self.case]) + FIXED_SEQUENCES[self.case].count('check')) if self.case in FIXED_CASES else (2 if self.case == SESSION_TIMEOUT else 1 if self.case in SESSION_LIVE else 0) if self.case in SESSION_CASES else len(children) if self.case in (*GIT_CASES,*CONTROLLED) else inline_count(self.case) if self.case in DECLARATIONS else child_count(self.case) if self.case in CLEANUP_CASES else 0 if self.case in (*NEGATIVE_CASES, *NO_LAUNCH) else 3 if self.case == ORDINARY_CASES[2] else 2 if self.case in (*BOOTSTRAP,*ORDINARY_CASES) else 0
                 if outcome=='failed':
                     count,spec=len(children),None
                 if skipped:

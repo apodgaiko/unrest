@@ -205,7 +205,7 @@ class Ledger:
         owner = self.process(process.group)
         if owner.exit is not None or owner.terminal is not None or owner.life_token is None:
             raise Refused('ledger waiting parent authority')
-        native = owner.command_class in ('native-git-command', 'native-git-helper', 'native-full-uv')
+        native = owner.command_class in ('native-git-command', 'native-git-helper', 'native-full-uv','native-stock-uv')
         if requested == -1 and native:
             return
         child = self.current.get(requested)

@@ -5,13 +5,13 @@ import json
 import tomllib
 
 from content_manifest import Refused,read_regular,native_digest
-from prepared_distribution import NAME
 from control_transport import unique
 
 REGISTRATIONS={'unrest':'unrest_harness.cli:cli','unrest-server':'unrest_harness.server:main'}
 
 
 def normalized(runtime,dependencies,name,arguments):
+    from prepared_distribution import NAME
     if name=='pytest':
         return [str(runtime/'bin/pytest'),'-I','-S','-m','pytest',*arguments]
     if name not in REGISTRATIONS:
@@ -29,7 +29,7 @@ def script(host,name):
     if declaration!=REGISTRATIONS:
         raise Refused('console current exact project registrations')
     from types import SimpleNamespace
-    from prepared_distribution import inputs
+    from prepared_distribution import inputs,NAME
     from input_manifest import read
     key=('console-inputs',metadata['source_sha256'])
     if key not in host.fixture_roots:
@@ -59,6 +59,13 @@ CONFIG_ENV={'UNREST_ORCHESTRATOR_PROVIDER':'codex','UNREST_WORKER_PROVIDER':'cod
 
 
 def standalone_environment(metadata):
+    from uv_cli import CASES as UV_CASES
+    if any(case in UV_CASES for case in metadata.get('cases',())):
+        from full_source import environment
+        result=environment(metadata)
+        for name in ('PYTEST_PLUGINS','PYTEST_ADDOPTS'):
+            result.pop(name)
+        return {**result,'PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}
     owned=Path(metadata['owned'])
     prefix=str(Path(metadata['runtime_root'])/'bin')+':' if CASE in metadata.get('cases',()) else ''
     return {'HOME':str(owned/'home'),'TMPDIR':str(owned/'tmp'),

@@ -577,3 +577,20 @@ owned user-home generation and unrelated cwd. It grants no descendants or networ
 routes. Provider command strings in configuration remain inert; all launch proposals
 still require independent finite admission. Its original help, exit and no-local-
 configuration assertions are unchanged.
+
+The original three invalid-request routes and task approval refusal retain stock
+`uv run unrest ... --request ...`. Preparation verifies stock uv's first and
+nested environment transformations, including recursion depth and PATH, without
+running a candidate body. Runtime admits the pinned uv image and reserves exactly
+one installed-console child under its actual admitted Birth. That console uses
+the independently pinned real installed script; neither process can launch an
+interpreter probe, synchronizer, provider or additional child. Both the uv-to-
+console wait and original test-parent-to-uv wait remain mandatory. Original request
+bytes, unused home, refusal status, private-token redaction and no-effect assertions
+are unchanged. This does not upgrade historical uv-internal or native-provider
+approval/reuse/final-timing limitations.
+
+Package preparation imports stay out of the source profile's prebody import
+closure. In particular, importing tempfile there can open a cached random-device
+descriptor before inherited-FD validation. Those imports are deferred to preparation
+and already admitted console construction; ambient descriptors are still rejected.

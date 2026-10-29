@@ -10,24 +10,35 @@ from control_transport import unique
 from full_source import environment,child_environment
 
 
-def prepare(binding,metadata):
+def prepare_uv(binding,metadata):
     runtime=Path(metadata['runtime_root'])
     # Warm only stock uv's interpreter metadata before candidate execution.
     # A cache miss during the guarded run never grants a Python helper launch.
     if subprocess.check_output([str(runtime/'bin/uv'),'--version'],text=True,timeout=5).split()[:2]!=['uv','0.11.8']:
         raise Refused('full source supported stock uv version')
-    raw=subprocess.check_output([str(runtime/'bin/uv'),'run','/usr/bin/env'],
-        cwd=metadata['checkout'],env=environment(metadata),timeout=30)
-    rows=raw.decode().splitlines()
-    observed=dict(row.split('=',1) for row in rows)
-    (Path(binding['profiles']).parent/'source-private/uv-preparation.json').write_text(json.dumps({'observed':observed,'expected':child_environment(metadata)},sort_keys=True))
-    if len(rows)!=len(observed) or observed!=child_environment(metadata):
-        raise Refused('full source stock uv environment')
+    from uv_cli import child_environment as nested_environment
+    records=[]
+    parent=environment(metadata)
+    for _ in range(2):
+        raw=subprocess.check_output([str(runtime/'bin/uv'),'run','/usr/bin/env'],
+            cwd=metadata['checkout'],env=parent,timeout=30)
+        rows=raw.decode().splitlines()
+        observed=dict(row.split('=',1) for row in rows)
+        expected=nested_environment(metadata,parent)
+        records.append({'observed':observed,'expected':expected})
+        (Path(binding['profiles']).parent/'source-private/uv-preparation.json').write_text(json.dumps(records,sort_keys=True))
+        if len(rows)!=len(observed) or observed!=expected:
+            raise Refused('full source stock uv environment')
+        parent=expected
     cache=Path(metadata['owned'])/'uv-cache'
     for path in [cache,*sorted(cache.rglob('*'))]:
         if path.is_symlink() or not (path.is_file() or path.is_dir()):
             raise Refused('full source uv cache input')
         os.chown(path,20000,20000)
+
+
+def prepare(binding,metadata):
+    prepare_uv(binding,metadata)
     value={'cases':[],'skips':[],'source':metadata['source_sha256'],'dependency':metadata['dependency_sha256']}
     return {**metadata,'cases':seal(value,Path(binding['profiles']))}
 
