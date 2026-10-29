@@ -42,6 +42,10 @@ def proposal(host, actor, raw):
     from desktop_launch import CASE as DESKTOP_CASE,proposal as desktop_proposal
     if case==DESKTOP_CASE:
         return desktop_proposal(host,actor,raw)
+    from completion_roles import CASES as ROLE_CASES
+    if case in ROLE_CASES:
+        from completion_server import proposal as role_proposal
+        return role_proposal(host,actor,raw)
     if case in HTTP_CASES:
         return http_proposal(host,actor,raw)
     if case in GIT_CASES:

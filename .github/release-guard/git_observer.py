@@ -132,12 +132,19 @@ class Git:
             raise Refused('git command identity')
         return intent
 
+    def reporting_parent(self,actor,intent):
+        host=self.host
+        if (not intent['consumed'] or intent.get('parent')!=actor['birth']
+                or host.ledger.process(intent['birth']).parent!=actor['birth']
+                or not host.ledger.body_ready(actor['birth'],actor['token'])):
+            raise Refused('git actual reporting parent')
+
     def seal_pipe(self, actor, payload):
         host = self.host
-        host.root_only(actor)
         if type(payload) is not dict or set(payload) != {'pid', 'token', 'fd', 'dev', 'ino'}:
             raise Refused('git producer pipe schema')
         intent = self.command(payload['pid'], payload['token'])
+        self.reporting_parent(actor,intent)
         fd = payload['fd']
         if (type(fd) is not int or not 3 <= fd <= 1024 or intent['command'].produces is None
                 or intent['token'] != payload['token'] or intent.get('pipe') is not None
@@ -153,10 +160,10 @@ class Git:
 
     def output(self, actor, payload):
         host = self.host
-        host.root_only(actor)
         if type(payload) is not dict or set(payload) != {'pid', 'token', 'pipe', 'stdout'}:
             raise Refused('git original stdout schema')
         intent = self.command(payload['pid'], payload['token'])
+        self.reporting_parent(actor,intent)
         if (type(payload['pipe']) is not list or any(type(v) is not int for v in payload['pipe'])
                 or tuple(payload['pipe']) != intent.get('pipe') or intent['token'] != payload['token']
                 or intent['command'].produces is None):
@@ -164,6 +171,8 @@ class Git:
         location, kind, inputs = intent['command'].produces
         value = self.values.observe(intent['birth'], intent['token'], host.case, intent['repository'],
             location, kind, payload['stdout'], inputs=inputs)
+        if intent.get('fixture_head') is not None and value.value!=intent['fixture_head']:
+            raise Refused('git fixture head changed')
         intent['value_observed'] = True
         return {'ok': True, 'value': value.value}
 

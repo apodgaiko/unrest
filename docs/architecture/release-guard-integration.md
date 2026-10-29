@@ -510,3 +510,20 @@ returned unevaluated only to the existing closed repr-substitution renderers;
 there is no expression evaluator or permission derived from arbitrary source text.
 Storage, completion, package, inspection, hermetic and fixed-inline declarations
 keep their own exact argv, cwd, custody, status and wait obligations.
+
+Concurrent completion-role cases use finite per-server slots rather than one
+case-wide MCP identity. Each HTTP reservation is single-use and grants no
+listener authority. Actual consumed server Birth/token, acquired listener and
+owned port select each connection; retired servers keep their historical routes.
+The late and recovery phases require all preceding actual parent waits. Stdio
+crash servers retain exit73; normal role servers retain their original owned
+cleanup signals and numeric waits. Setup contenders may construct in either
+order while preserving their authored index and barrier.
+
+Each role fixture retains its two original Git commands. Only a ready admitted
+WORK server can make its bounded original `git rev-parse HEAD` calls, sequenced
+per parent so concurrent contenders remain concurrent. The complete seed metadata
+and actual HEAD are sealed after the two fixture waits; each captured query must
+match that HEAD. Validator slots grant no Git query. Reporting pipes bind the
+actual command parent, child Birth/token and original wait, never generic MCP or
+Python authority. The original 28 parameter cases and assertions are unchanged.

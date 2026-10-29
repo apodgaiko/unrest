@@ -79,7 +79,7 @@ class Policy:
         self.local.launch=answer
         self.local.custody=answer['rule']=='custody:git'
         vector[:]=answer['translated']
-        if answer['rule'] in ('cleanup:mcp','http:mcp'):
+        if answer['rule'] in ('cleanup:mcp','http:mcp','completion:stdio'):
             args[3].update(OFFLINE)
 
     def audit(self, event, args):
@@ -170,14 +170,12 @@ class Policy:
             policy.children[process.pid] = saved
             custody = getattr(policy.local,'custody',False)
             policy.local.custody = False
-            if policy.case in GIT_CASES or custody:
+            fields=pending.get('command')
+            if fields is not None:
                 from types import SimpleNamespace
-                fields=pending.get('command')
-                command=None if fields is None else SimpleNamespace(**fields)
+                command=SimpleNamespace(**fields)
                 saved['git_command'] = command
-                if command is None:
-                    pass  # Kernel custody and owned-child registration remain authoritative.
-                elif command.produces is not None:
+                if command.produces is not None:
                     stream_type = io.BufferedReader if custody else io.TextIOWrapper
                     if type(process.stdout) is not stream_type:
                         policy.refuse('git original stdout wrapper')

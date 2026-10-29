@@ -9,7 +9,7 @@ from content_manifest import Refused
 import http_cases
 
 
-@pytest.fixture(params=http_cases.CASES)
+@pytest.fixture(params=http_cases.SUPERVISION)
 def prepared(request,tmp_path):
     checkout=tmp_path/'source'
     cwd=tmp_path/'pytest/case/workspace'
@@ -119,7 +119,7 @@ def test_actual_profile_validator_accepts_only_the_declared_mcp_family(tmp_path,
     environment={'PATH':'/usr/bin:/bin'}
     profile={key:'a'*64 for key in profiles.FIELDS}
     profile.update(schema='unrest.bootstrap-source.v1',role='mcp',case=case,
-        cases=list(http_cases.CASES if subject.startswith('http') else GROUPS['mp-lock3']),
+        cases=list(http_cases.SUPERVISION if subject.startswith('http') else GROUPS['mp-lock3']),
         native=native,checkout=str(tmp_path/'source'),owned=str(tmp_path/'owned'),
         dependencies=str(tmp_path/'dependencies'),runtime_root=str(runtime),cwd=str(tmp_path),
         identity=canonical(actual),parent=canonical(parent),observer=canonical(observer),
@@ -157,7 +157,8 @@ def test_http_proposals_reject_a_leaf_even_with_the_root_birth(tmp_path):
 def test_http_stdio_requires_exact_null_and_owned_merged_log(prepared,monkeypatch,mutation):
     import stat
     host,_=prepared
-    row={'case':host.case,'role':'mcp','cwd':'/owned/workspace','port':12345}
+    row={'case':host.case,'role':'mcp','cwd':'/owned/workspace','port':12345,
+        'translated':['/native','-I','-S','-c','original','--mode','worker']}
     log=SimpleNamespace(st_dev=1,st_ino=2,st_mode=stat.S_IFREG|0o644,
         st_uid=20001 if mutation=='owner' else 20000,st_nlink=2 if mutation=='hardlink' else 1)
     null=SimpleNamespace(st_mode=stat.S_IFCHR,st_rdev=123)

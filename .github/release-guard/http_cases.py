@@ -8,14 +8,17 @@ from launch_policy import build_expected
 from multiprocess_routes import TRANSACTIONS
 from cleanup_launch import EXECUTION_CASES, OFFLINE
 
-CASES = tuple(TRANSACTIONS)[:9]
+from completion_roles import HTTP as ROLE_HTTP
+
+SUPERVISION = tuple(TRANSACTIONS)[:9]
+CASES = (*SUPERVISION, *ROLE_HTTP)
 TRANSPORT = (*EXECUTION_CASES, *CASES)
 
 
 def expected(host, actor, raw):
     host.root_only(actor)
     case = host.case
-    if case not in CASES or raw['stdin'] is not None:
+    if case not in SUPERVISION or raw['stdin'] is not None:
         raise Refused('HTTP original case or input')
     native, pin = host.binding['entry']['path'], host.binding['entry']['sha256']
     checkout, owned = Path(host.meta['checkout']), Path(host.meta['owned'])
@@ -64,7 +67,7 @@ def stdio(host,pid,row):
     # Operands come from the independently matched kernel exec intent.
     if host.case not in CASES or row['case']!=host.case or row['role']!='mcp':
         raise Refused('HTTP exact prebody output intent')
-    mode = host.case.rsplit('-',1)[1][:-1].replace('_','-')
+    mode = row['translated'][6]
     log = Path(row['cwd'])/('.'+mode+'-'+str(row['port'])+'.log')
     info = log.lstat()
     descriptors = [(Path('/proc')/str(pid)/'fd'/str(fd)).stat() for fd in (0,1,2)]
