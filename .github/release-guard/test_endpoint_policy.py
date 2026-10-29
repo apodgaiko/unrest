@@ -167,16 +167,21 @@ def test_retirement_keeps_original_parent_wait_requirement(parent_wait):
     replacement = Birth.read(new_identity)
     ledger.register(replacement, 'next-token', PINS, SEAL, case=route.case, command_class='child')
     next_owner = ready(ledger, replacement)
-    next_route = replace(route, server=next_owner)
+    next_route = replace(route, name='next-route',server=next_owner)
     terminal(ledger, child, 0)
     # A tracer reap without the actual kernel parent wait is insufficient.
     if parent_wait:
         wait4(ledger, root, child, 0)
-        endpoints.retire('route', next_route)
-        assert endpoints.routes['route'] == next_route and not endpoints.listeners
+        endpoints.retire_owner(route.server,route.case)
+        assert endpoints.routes['route'] is route and endpoints.listeners['route']
+        assert 'route' in endpoints.retired_names
+        endpoints.declare(next_route)
+        assert endpoints.route('next-route') is next_route
+        with pytest.raises(Refused,match='unknown route'):
+            endpoints.route('route')
     else:
         with pytest.raises(Refused):
-            endpoints.retire('route', next_route)
+            endpoints.retire_owner(route.server,route.case)
         assert endpoints.listeners and endpoints.poison
 
 
@@ -322,3 +327,78 @@ def test_case_retirement_never_discards_an_unjoined_ticket():
     with pytest.raises(Refused, match='outstanding admission'):
         endpoints.retire_case(route.case)
     assert endpoints.tickets[ticket.serial] is ticket and route.case not in endpoints.retired
+
+
+def test_owner_retirement_keeps_pending_admission_instead_of_erasing_it():
+    endpoints,route,listener=prepared()
+    ticket=endpoints.connect(route.name,listener,idle_client(route))
+    endpoints.queued[ticket.serial]=(1,1)
+    terminal(endpoints.ledger,route.server.birth,0)
+    wait4(endpoints.ledger,route.client.birth,route.server.birth,0)
+    with pytest.raises(Refused,match='outstanding admission'):
+        endpoints.retire_owner(route.server,route.case)
+    assert endpoints.tickets[ticket.serial] is ticket
+    assert ticket.serial in endpoints.queued and not endpoints.retired_names
+
+
+def test_same_port_reuse_never_replaces_old_route_or_revives_its_connection():
+    endpoints,ticket,client,server=connected()
+    route=ticket.route
+    connection=endpoints.accepted(ticket,client,server)
+    ledger=endpoints.ledger
+    terminal(ledger,route.server.birth,0)
+    wait4(ledger,route.client.birth,route.server.birth,0)
+    endpoints.retire_owner(route.server,route.case)
+    data=identity(102,route.client.birth.pid)
+    birth=Birth.read(data)
+    emit(ledger,'kernel_child',parent=route.client.birth.pid,child=birth.pid,event=1,identity=data)
+    ledger.register(birth,'fresh-token',PINS,SEAL,case=route.case,command_class='child')
+    owner=ready(ledger,birth)
+    fresh=replace(route,name='fresh-route',server=owner)
+    endpoints.declare(fresh)
+    saved=endpoints.listeners[route.name]
+    endpoints.listen(fresh.name,replace(saved,owner=birth,inode=saved.inode+1,cookie=saved.cookie+1))
+    assert endpoints.routes[route.name] is route and endpoints.routes[fresh.name] is fresh
+    assert endpoints.connections[ticket.serial] is connection
+    with pytest.raises(Refused,match='unknown route'):
+        endpoints.retained(connection,route.client,client)
+
+
+def test_active_connection_cap_is_separate_from_retired_owner_history(monkeypatch):
+    import endpoint_policy
+    monkeypatch.setattr(endpoint_policy,'MAX_ACTIVE_CONNECTIONS',1)
+    monkeypatch.setattr(endpoint_policy,'MAX_RETAINED_ADMISSIONS',2)
+    endpoints,ticket,client,server=connected()
+    connection=endpoints.accepted(ticket,client,server)
+    route=ticket.route
+    terminal(endpoints.ledger,route.server.birth,0)
+    wait4(endpoints.ledger,route.client.birth,route.server.birth,0)
+    endpoints.retire_owner(route.server,route.case)
+    data=identity(102,route.client.birth.pid)
+    birth=Birth.read(data)
+    emit(endpoints.ledger,'kernel_child',parent=route.client.birth.pid,child=birth.pid,event=1,identity=data)
+    endpoints.ledger.register(birth,'fresh-token',PINS,SEAL,case=route.case,command_class='child')
+    fresh=replace(route,name='fresh',server=ready(endpoints.ledger,birth))
+    endpoints.declare(fresh)
+    listener=replace(endpoints.listeners[route.name],owner=birth,inode=3000,cookie=4000)
+    endpoints.listen(fresh.name,listener)
+    fresh_client=replace(idle_client(fresh),inode=5000,cookie=6000)
+    issued=endpoints.connect(fresh.name,listener,fresh_client)
+    assert issued.serial==2 and endpoints.connections[connection.ticket.serial] is connection
+    with pytest.raises(Refused,match='connection bound'):
+        endpoints.connect(fresh.name,listener,replace(fresh_client,inode=5001,cookie=6001))
+    assert endpoints.serial==2
+
+
+def test_retained_route_ceiling_does_not_replace_the_active_route_ceiling(monkeypatch):
+    import endpoint_policy
+    monkeypatch.setattr(endpoint_policy,'MAX_ACTIVE_ROUTES',1)
+    endpoints,route,_=prepared()
+    with pytest.raises(Refused,match='declaration bound'):
+        endpoints.declare(replace(route,name='second',port=route.port+1))
+    endpoints,route,_=prepared()
+    monkeypatch.setattr(endpoint_policy,'MAX_RETAINED_ROUTES',1)
+    endpoints.retire_case(route.case)
+    with pytest.raises(Refused,match='declaration bound'):
+        endpoints.declare(replace(route,name='second',port=route.port+1))
+    assert len(endpoints.routes)==1

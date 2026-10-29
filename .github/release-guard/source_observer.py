@@ -520,7 +520,7 @@ class Observer:
                     name = actor['token'] + ':' + tag
                     route = Route(name, actor['case'], self.owner(root_actor), self.owner(actor), slot['socket'].local[1])
                     actual_listener = acquire_tcp(self.root_birth, slot['socket'].fd)
-                    sharing = actual_listener if any(value.port == route.port and value.case not in self.endpoints.retired for value in self.endpoints.routes.values()) else None
+                    sharing = actual_listener if any(value.port == route.port and self.endpoints.route_active(value) for value in self.endpoints.routes.values()) else None
                     self.endpoints.declare(route, shared_listener=sharing)
                     self.endpoints.listen(name, actual_listener)
                     self.routes[actor['birth'], route.port] = name
@@ -800,7 +800,7 @@ class Observer:
                 if name not in self.endpoints.routes:
                     route = Route(name, self.case, self.owner(target), self.owner(actor), port)
                     actual_listener = acquire_tcp(target['birth'], slot['socket'].fd)
-                    sharing = actual_listener if any(value.port == port and value.case not in self.endpoints.retired for value in self.endpoints.routes.values()) else None
+                    sharing = actual_listener if any(value.port == port and self.endpoints.route_active(value) for value in self.endpoints.routes.values()) else None
                     self.endpoints.declare(route, shared_listener=sharing)
                     self.endpoints.listen(name, actual_listener)
                 maximum = 64 if self.case in HTTP_CASES else 1 if actor['role'] == 'root' else 16

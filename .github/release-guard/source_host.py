@@ -300,6 +300,8 @@ def worker(binding, metadata, raw_directory):
                       'controls': [] if observer is None else observer.controls,
                       'outcomes': [] if observer is None else observer.outcomes,
                       'endpoint_observations': None if observer is None else {
+                          'retired_cases': sorted(observer.endpoints.retired),
+                          'retired_routes': sorted(observer.endpoints.retired_names),
                           'listeners': {key: asdict(value) for key, value in observer.endpoints.listeners.items()},
                           'routes': {key: asdict(value) for key, value in observer.endpoints.routes.items()},
                           'connections': [asdict(value) for value in observer.endpoints.connections.values()],

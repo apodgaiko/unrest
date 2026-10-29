@@ -14,6 +14,12 @@ from content_manifest import Refused
 from process_ledger import Birth, Ledger, fail_closed, integer, text
 
 
+MAX_ACTIVE_ROUTES=256
+MAX_RETAINED_ROUTES=20_000
+MAX_ACTIVE_CONNECTIONS=4096
+MAX_RETAINED_ADMISSIONS=65_536
+
+
 @dataclass(frozen=True)
 class Owner:
     birth: Birth
@@ -117,6 +123,9 @@ class Endpoints:
         self.poison: list[str] = []
         self.serial = 0
         self.retired: set[str] = set()
+        self.retired_names: set[str] = set()
+        self.descriptions: set[tuple] = set()
+        self.connection_counts: dict[str,int] = {}
 
     def owner(self, owner: Owner, case: str, *, body: bool) -> None:
         if self.poison or self.ledger.poison or type(owner) is not Owner or case in self.retired:
@@ -129,16 +138,20 @@ class Endpoints:
                 or process.stage not in (('body-ready',) if body else ('core-ready', 'body-ready'))):
             raise Refused('endpoint owner epoch or readiness')
 
+    def route_active(self,route: Route) -> bool:
+        return route.case not in self.retired and route.name not in self.retired_names
+
     @fail_closed
     def declare(self, route: Route, *, shared_listener: Socket | None = None) -> None:
-        if type(route) is not Route or len(self.routes) >= 256:
+        if (type(route) is not Route or len(self.routes)>=MAX_RETAINED_ROUTES
+                or sum(self.route_active(value) for value in self.routes.values())>=MAX_ACTIVE_ROUTES):
             raise Refused('endpoint declaration bound')
         text(route.name)
         text(route.case)
         integer(route.port, 1, 65535)
         self.owner(route.server, route.case, body=False)
         self.owner(route.client, route.case, body=False)
-        duplicates = [item for item in self.routes.values() if item.port == route.port and item.case not in self.retired]
+        duplicates = [item for item in self.routes.values() if item.port == route.port and self.route_active(item)]
         if route.name in self.routes:
             raise Refused('endpoint duplicate declaration')
         if duplicates:
@@ -161,7 +174,7 @@ class Endpoints:
         self.retired.add(case)
 
     def route(self, name: str) -> Route:
-        if type(name) is not str or name not in self.routes or self.poison or self.ledger.poison or self.routes[name].case in self.retired:
+        if type(name) is not str or name not in self.routes or self.poison or self.ledger.poison or not self.route_active(self.routes[name]):
             raise Refused('endpoint unknown route')
         return self.routes[name]
 
@@ -183,12 +196,13 @@ class Endpoints:
         self.owner(route.server, route.case, body=True)
         if (type(client) is not Socket or client.owner != route.client.birth
                 or client.uid != route.client.birth.uid or client.state != 7 or client.remote is not None
-                or any(client.description() == saved.description() for item in self.connections.values()
-                       for saved in (item.client, item.server))):
+                or client.description() in self.descriptions):
             raise Refused('endpoint preconnect descriptor')
         if name not in self.listeners or fresh_listener != self.listeners[name]:
             raise Refused('endpoint listener reacquisition')
-        if (len(self.tickets) + len(self.connections) >= 4096
+        active=len(self.tickets)+sum(self.connection_counts.get(name,0)
+            for name,route in self.routes.items() if self.route_active(route))
+        if (active>=MAX_ACTIVE_CONNECTIONS or self.serial>=MAX_RETAINED_ADMISSIONS
                 or any(item.client.description() == client.description()
                        for item in self.tickets.values())):
             raise Refused('endpoint connection bound')
@@ -243,6 +257,8 @@ class Endpoints:
         del self.tickets[ticket.serial]
         self.queued.pop(ticket.serial, None)
         self.connections[ticket.serial] = connection
+        self.descriptions.update((client.description(),server.description()))
+        self.connection_counts[route.name]=self.connection_counts.get(route.name,0)+1
         return connection
 
     @fail_closed
@@ -276,20 +292,16 @@ class Endpoints:
         self.queued.pop(ticket.serial, None)
 
     @fail_closed
-    def retire(self, name: str, replacement: Route) -> None:
-        route = self.route(name)
-        saved = self.listeners.get(name)
-        process = self.ledger.process(route.server.birth)
-        if (saved is None or type(replacement) is not Route or replacement.name != name
-                or replacement.port != route.port or replacement.case != route.case
-                or replacement.server.token == route.server.token
-                or process.life_token is None
-                or not self.ledger.reaped(route.server.birth, process.life_token)):
+    def retire_owner(self, owner: Owner, case: str) -> None:
+        if type(owner) is not Owner:
+            raise Refused('endpoint retirement owner primitive')
+        process=self.ledger.process(owner.birth)
+        if (process.case!=case or process.token!=owner.token or process.generation!=owner.generation
+                or process.registered_generation!=owner.generation
+                or not self.ledger.reaped(owner.birth,process.life_token)):
             raise Refused('endpoint retirement needs actual parent join')
-        self.owner(replacement.server, replacement.case, body=False)
-        self.owner(replacement.client, replacement.case, body=False)
-        del self.listeners[name]
-        for serial in [serial for serial, ticket in self.tickets.items() if ticket.route is route]:
-            del self.tickets[serial]
-            self.queued.pop(serial, None)
-        self.routes[name] = replacement
+        names={name for name,route in self.routes.items() if route.case==case and route.server==owner}
+        if (any(ticket.route.name in names for ticket in self.tickets.values())
+                or any(serial not in self.tickets for serial in self.queued)):
+            raise Refused('endpoint retirement has outstanding admission')
+        self.retired_names.update(names)

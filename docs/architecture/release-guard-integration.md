@@ -486,3 +486,19 @@ parent wait. Original literal programs, phase parameters, symlink/mode negatives
 filesystem repair assertions and retry stdout remain unchanged. Only crash
 programs inherit all three parent descriptors; the retry keeps captured output.
 These processes receive no server, network or descendant launch permission.
+
+Active endpoint authority and retained history have separate finite bounds. The
+active ceilings remain256 routes and4,096 connections. Retention permits20,000
+routes and65,536 monotonically numbered connection admissions; completed history
+cannot exhaust an active-case allowance. The authored known catalogues conservatively
+require at most1,531 retained TCP routes and6,693 admissions (9,030 with a looser
+backend bound), while a whole case needs no more than36 routes or256 admissions.
+These are planning bounds, not substitutes for actual source execution. They do
+not establish a whole-suite Unix-pair bound; its existing ceiling is unchanged.
+
+A reaped server Owner can only revoke its routes. Revocation requires the actual
+parent-wait join, rejects outstanding/queued admissions, keeps route objects and
+connections, and records inactive names. A later server may acquire the same port
+under a fresh name and Owner; the old name and retained connections stay revoked.
+There is no route-overwrite operation. Cookie-description indexing retains the
+same cross-history alias rejection without rescanning every historical connection.
