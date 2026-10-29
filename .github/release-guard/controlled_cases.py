@@ -7,6 +7,7 @@ Configured fixtures are admitted separately and are absent from this catalogue.
 from __future__ import annotations
 
 from content_manifest import Refused
+from cohort_cases import CAMPAIGNS
 
 STARTUP_FAILURE = 'tests/test_experimental_startup_diagnostics.py::test_coordinator_persists_startup_and_separate_cleanup_failure'
 
@@ -89,6 +90,7 @@ POPULATED = {
               (f'{skills}-{servers}' for skills in (False,True) for servers in (False,True))),
 }
 CASES = {
+    **dict.fromkeys(CAMPAIGNS, STANDARD),
     **POPULATED, **FRESH,
     STARTUP_FAILURE: STANDARD,
     'tests/test_controlled_acp_cancel.py::test_owned_cancel_wire_and_cleanup[pending]':

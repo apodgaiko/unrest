@@ -542,3 +542,17 @@ children. A local Popen handle and its observer-issued token are required before
 a signal request; the observer independently verifies the exact parent birth,
 active case, child token, permitted signal, and process-group identity. Installing
 multiprocessing hooks is independent of this cleanup permission.
+
+Cohort campaign cases share the existing controlled backend byte pins and exact
+owner/role pair admission. The closed cohort table binds 35 campaign and 24
+Git-only original cases to finite launch ceilings; its exceptional Git literals
+apply only to their individual negative or integration cases. Custody Git waits
+serialize each acquired repository generation, allowing distinct lane repositories
+to seal concurrently. Every observed child still needs its actual completion and
+original-parent wait at case closeout; this does not admit controller crash cases.
+
+The real measurement project's local ACP mocks terminate through their owning
+RunControl worker's authorized SIGTERM cleanup. Their actual numeric status stays
+-15; completion requires authenticated body readiness and that exact signal in
+the child's custody record. A missing signal, missing READY, unrelated nonzero
+exit or missing original-parent wait remains a failure.

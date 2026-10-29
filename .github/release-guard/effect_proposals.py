@@ -15,6 +15,7 @@ from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expec
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
 from controlled_startup import expected_entry, ACP
 from controlled_cases import CASES as CONTROLLED
+from cohort_cases import GIT_ONLY as COHORT_GIT
 from bootstrap_cases import BOOTSTRAP
 
 
@@ -88,7 +89,7 @@ def proposal(host, actor, raw):
     from review_wire import CASES as REVIEW_CASES,proposal as review_proposal
     if case in REVIEW_CASES:
         return review_proposal(host,actor,raw)
-    if case not in (*BOOTSTRAP,*CONTROLLED,*ORDINARY,*CLEANUP,*DECLARATIONS,*SESSIONS,*FIXED,*PLANS):
+    if case not in (*BOOTSTRAP,*CONTROLLED,*COHORT_GIT,*ORDINARY,*CLEANUP,*DECLARATIONS,*SESSIONS,*FIXED,*PLANS):
         raise Refused('finite process proposal has no declaration')
     if raw['stdin'] is not None:
         raise Refused('process proposal has undeclared commit input')
@@ -97,7 +98,7 @@ def proposal(host, actor, raw):
     cwd, root_environment = raw['cwd'], host.meta_environment()
     vector, role, maximum, inherited, port = None, None, 1, [], None
     extra_environment=None
-    custody=case in CONTROLLED and argv[0]=='/usr/bin/git'
+    custody=case in (*CONTROLLED,*COHORT_GIT) and argv[0]=='/usr/bin/git'
     if custody:
         from custody_git import command as custody_command,ENVIRONMENT
         from git_observer import image

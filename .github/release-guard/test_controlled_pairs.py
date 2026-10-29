@@ -9,8 +9,8 @@ from controlled_pairs import before_spawn, limits, scope
 
 
 def test_every_catalogue_case_has_a_finite_source_bound():
-    assert len(CASES) == 154
-    assert all(1 <= limits(case)[0] <= 12 and 0 <= limits(case)[1] <= 43 for case in CASES)
+    assert len(CASES) == 189
+    assert all(0 <= limits(case)[0] <= 20 and 0 <= limits(case)[1] <= 43 for case in CASES)
 
 
 def test_pair_cannot_borrow_another_owner_backend():
@@ -45,7 +45,7 @@ def test_listener_scope_refuses_foreign_paths_and_roles(value):
 
 
 def test_every_original_controlled_case_remains_declared():
-    assert len(CASES)==154 and len(set(CASES))==154
+    assert len(CASES)==189 and len(set(CASES))==189
 
 
 def test_startup_failure_cannot_start_an_adapter():

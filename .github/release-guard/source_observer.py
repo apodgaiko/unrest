@@ -24,7 +24,6 @@ from process_ledger import Birth, Ledger, canonical
 from source_profile import METHODS
 from session_launch import TIMEOUT as SESSION_TIMEOUT
 from fixed_inline import CLI_CASE, JOURNAL_CASE, DRAIN_CASE, CONSOLE_CASE, UV_CASES
-from git_sites import CASES as GIT_CASES
 from completion_roles import CASES as ROLE_CASES,actor_slot
 from git_observer import Git
 from cleanup_launch import EXECUTION_CASES as CLEANUP_CASES, snapshot_path
@@ -334,7 +333,7 @@ class Observer:
         from run_worker_launch import MEASUREMENT_PROJECT
         if actor['role'] in ('mcp','mock-acp') and actor.get('case')==MEASUREMENT_PROJECT:
             return (terminal is not None and actor['body_ready'] and (terminal[2]==0
-                or actor['role']=='mcp' and terminal[2] in (-9,-15) and -terminal[2] in actor['signals']))
+                or terminal[2] in ((-9,-15) if actor['role']=='mcp' else (-15,)) and -terminal[2] in actor['signals']))
         if actor['role']=='fixed-inline' and actor['case']==BINDING_CLI:
             rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token'] and 'binding_status' in row]
             return len(rows)==1 and terminal is not None and actor['body_ready'] and terminal[2]==rows[0]['binding_status']
@@ -451,7 +450,7 @@ class Observer:
                 if (payload['case'] != self.case
                         or any(not self.completed_child(value) for value in children)
                         or any(not value['consumed'] for value in self.intents.values() if value['case'] == self.case)
-                        or any(not (self.git.reaped(value) if self.case in (*GIT_CASES,*CONTROLLED) else self.ledger.reaped(value['birth'], value['token'])) for value in children)):
+                        or any(not (self.git.reaped(value) if value['role']=='git-helper' else self.ledger.reaped(value['birth'], value['token'])) for value in children)):
                     raise Refused('source original case actual cleanup incomplete')
                 if self.full:
                     self.outcomes.append(dict(payload))

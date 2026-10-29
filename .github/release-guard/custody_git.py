@@ -12,6 +12,7 @@ import stat
 from content_manifest import Refused
 from controlled_cases import CASES
 from controlled_pairs import limits
+from cohort_cases import CASES as COHORT, EXTRA
 from git_commands import Command
 from git_observer import regular
 from git_operands import digest
@@ -33,14 +34,14 @@ FIXED = (
 
 
 def command(case, argv, cwd, owned):
-    if type(case) is not str or case not in CASES or type(argv) is not tuple or any(type(v) is not str for v in argv):
+    if type(case) is not str or case not in (*CASES,*COHORT) or type(argv) is not tuple or any(type(v) is not str for v in argv):
         raise Refused('custody Git finite command primitives')
     if type(cwd) is not str or str(Path(cwd).resolve()) != cwd or not Path(cwd).is_relative_to(owned/'pytest'):
         raise Refused('custody Git owned repository')
     if argv[:len(PREFIX)] != PREFIX:
         raise Refused('custody Git literal executable and prefix')
     args = argv[len(PREFIX):]
-    if args not in FIXED:
+    if args not in (*FIXED,*EXTRA.get(case,())):
         if args[:2] == ('add','--'):
             if args[2:] not in (('a',),('b',),('lane_a.txt',),('lane_b.txt',)):
                 raise Refused('custody Git exact authored scope')
@@ -92,9 +93,10 @@ def repository(cwd, owned, *, initialize):
 def launch(host,actor,result,kind,expected):
     host.root_only(actor)
     prior = [v for v in host.intents.values() if v['case'] == host.case and v['role'] == 'git-custody']
-    if len(prior) >= 12+8*limits(host.case)[0]:
+    maximum=COHORT[host.case][1] if host.case in COHORT else 12+8*limits(host.case)[0]
+    if len(prior) >= maximum:
         raise Refused('custody Git finite case command bound')
-    if any(not v['consumed'] or not host.ledger.reaped(v['birth'],v['token']) for v in prior):
+    if any(not v['consumed'] or not host.ledger.reaped(v['birth'],v['token']) for v in prior if v.get('repository')==result.cwd):
         raise Refused('custody Git previous command actual wait')
     identity = repository(result.cwd,Path(host.meta['owned']),initialize=result.argv[len(PREFIX)] == 'init')
     key = host.case,result.cwd
@@ -102,7 +104,7 @@ def launch(host,actor,result,kind,expected):
     if previous is not None and (previous[0] != identity[0] or previous[1] is not None and previous[1] != identity[1]):
         raise Refused('custody Git replaced repository generation')
     host.git.custody_roots[key] = identity
-    answer = host.admit_launch(actor,expected,'git-custody',list(result.argv),None,maximum=12+8*limits(host.case)[0])
+    answer = host.admit_launch(actor,expected,'git-custody',list(result.argv),None,maximum=maximum)
     if answer is None:
         return None
     intent = host.intents[answer['ticket']]

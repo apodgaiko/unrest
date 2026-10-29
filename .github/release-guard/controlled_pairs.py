@@ -15,6 +15,9 @@ from controlled_cases import CASES, FRESH, POPULATED, ADMISSION, WARNING_REFUSAL
 def limits(case: str) -> tuple[int, int]:
     if type(case) is not str or case not in CASES:
         raise Refused('controlled pair case')
+    from cohort_cases import CAMPAIGNS
+    if case in CAMPAIGNS:
+        return CAMPAIGNS[case][0], 0
     if case in ROOT_HTTP:
         return 1, 0 if 'initialized_owner' in case else 3
     if case == STARTUP_FAILURE or case in (*FRESH,*ADMISSION,*WARNING_REFUSALS,*NOTIFICATION_STARTUP,*NOTIFICATION_SIGNALS):
