@@ -49,7 +49,7 @@ def fixture(tmp_path,monkeypatch):
     host.admit_launch=admit
     actor={'role':'root','birth':parent,'token':'root-token'}
     def raw(argv,environment=None):
-        return {'executable':'git','argv':list(argv),'cwd':str(workspace),'stdin':None,
+        return {'executable':'/usr/bin/git','argv':list(argv),'cwd':str(workspace),'stdin':None,
             'environment':environment or {**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}}
     def wait(answer):
         row=host.intents[answer['ticket']]

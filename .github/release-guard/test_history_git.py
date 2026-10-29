@@ -49,8 +49,10 @@ def test_nested_cli_cannot_authorize_a_root_git_query():
         proposal(Host(),{'role':'root'}, {'argv':['git','ls-files','--stage','-z']})
 
 
-def test_nested_git_resolution_is_confined_to_binding_cli():
+def test_canonical_git_resolution_does_not_change_the_requested_vector():
     from source_entry import direct_git
     args=(['git','ls-files','--stage','-z'],)
     assert direct_git(args,{},CLI,'fixed-inline')[1]=={'executable':'/usr/bin/git'}
-    assert direct_git(args,{},CASES[0],'fixed-inline')==(args,{})
+    routed,options=direct_git(args,{},CASES[0],'fixed-inline')
+    assert routed==args and options=={'executable':'/usr/bin/git'}
+    assert direct_git(args,{},CLI,'session-child')==(args,{})

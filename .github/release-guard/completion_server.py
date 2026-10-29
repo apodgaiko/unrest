@@ -61,7 +61,7 @@ def before(host,slot):
 
 
 def proposal(host,actor,raw):
-    if raw['executable']=='git':
+    if raw['executable']=='/usr/bin/git':
         return git_proposal(host,actor,raw)
     host.root_only(actor)
     if raw['stdin'] is not None:

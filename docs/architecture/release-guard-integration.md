@@ -467,3 +467,12 @@ to registered generation 1. A consumed intent alone is insufficient because it
 precedes successful exec. Pending execution holds the bounded RPC request; a
 missing or foreign declaration still refuses. Historical successful execution
 remains usable after exit, and all terminal/parent-wait obligations remain.
+
+
+Normal pytest's runtime-first PATH exposed a legacy assumption in completion
+fixtures: bare Git attempted a nonexistent runtime-bin path before the admitted
+system image. Source wrappers now resolve the literal `git` executable directly
+to `/usr/bin/git` for their existing launch-owner roles while retaining the
+original argv. This selects no operation or case permission. The observer still
+requires its complete finite declaration, image, environment, cwd and custody;
+unknown requests refuse before fork. The denied PATH attempts remain evidence.

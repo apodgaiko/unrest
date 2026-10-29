@@ -32,7 +32,7 @@ def ready(host,workspace):
 
 def proposal(host,actor,raw):
     case=host.case
-    if case not in CASES or raw['stdin'] is not None or raw['executable']!='git':
+    if case not in CASES or raw['stdin'] is not None or raw['executable']!='/usr/bin/git':
         raise Refused('completion exact Git proposal')
     parent=root(host,raw['cwd'])
     workspace=parent/'workspace'

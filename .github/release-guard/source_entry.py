@@ -16,13 +16,12 @@ from bootstrap_wire import Client
 from content_manifest import Refused
 from cleanup_launch import OFFLINE
 from git_sites import CASES as GIT_CASES
-from history_git import CLI as BINDING_CLI
 from source_profile import digest, validate
 
 def direct_git(args, kwargs, case, role):
     vector = args[0] if args else kwargs.get('args')
     executable = args[2] if len(args)>2 else kwargs.get('executable')
-    if (role=='root' and case in GIT_CASES or role=='fixed-inline' and case==BINDING_CLI) and type(vector) in (list,tuple) and vector[:1] in (['git'],('git',)) and executable is None:
+    if role in ('root','mcp','fixed-inline') and type(vector) in (list,tuple) and vector[:1] in (['git'],('git',)) and executable is None:
         if len(args)>2:
             args=(*args[:2],'/usr/bin/git',*args[3:])
         else:
