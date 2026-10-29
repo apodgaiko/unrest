@@ -54,7 +54,20 @@ product negative catches the exception. One canonical observer-side proposal
 builder supplies each declaration and preserves the same role, sequence, quota,
 byte, descriptor and configuration checks for raw and wire requests.
 
-Actual original-parent waits and kernel terminal observations establish cleanup.
+Actual original-parent terminal wait4 and kernel terminal observations establish
+cleanup. Before resuming wait4, the observer validates the waiting thread's stored
+birth and parent group, plus the positive PID of an independently admitted owned
+child. Invalid wildcard, foreign, or unregistered Python waits fail even when
+WNOHANG would return zero or ECHILD could be caught. Linux pid_t is decoded as a
+signed32-bit argument. Only independently admitted native Git/uv command classes
+may use wait-any or poll a known owned fork before its exec admission. Such a poll
+cannot retire a child or admit an executable. Terminal retirement still requires
+one matching child birth/token, exit event, tracer terminal status and actual
+original-parent wait4. Waitid/WNOWAIT, cached return codes and PID disappearance
+cannot replace that join. The redundant Python per-wait receipt protocol is
+retired; successful constructor-return ordering and Git pipe/input provenance
+remain separate obligations. Source-result schema v2 names this kernel evidence
+explicitly; historical v1 evidence keeps its original interpretation.
 Adopted fallback cleanup is failure evidence. A nonleader thread terminal status
 may match its own exit event or the independently observed exit of its stored
 thread-group leader. Its birth and own exit must still match; thread waits never

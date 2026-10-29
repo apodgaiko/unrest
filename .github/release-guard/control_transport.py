@@ -23,7 +23,7 @@ CHANNEL_SECONDS = 4
 # Control framing uses captured I/O so source payload mediation cannot recurse
 # into the private, independently peer-authenticated observer channel.
 _SEND, _RECV, _CLOSE = socket.socket.send, socket.socket.recv, socket.socket.close
-DRAIN = frozenset({'custody_close', 'custody_signal', 'drain_inventory', 'drain_child', 'drain_complete'})
+DRAIN = frozenset({'custody_close', 'custody_signal', 'drain_inventory', 'drain_complete'})
 
 
 def unique(pairs):

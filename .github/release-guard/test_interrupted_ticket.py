@@ -9,7 +9,7 @@ from content_manifest import Refused
 from endpoint_policy import Endpoints, Owner, Route, Socket
 from source_observer import Observer
 from test_endpoint_policy import ready
-from test_process_ledger import setup, terminal, wait4, receipt
+from test_process_ledger import setup, terminal, wait4
 
 
 def pending(stage="complete"):
@@ -32,8 +32,6 @@ def pending(stage="complete"):
         terminal(ledger, child, 15)
     if stage in ("kernel-wait", "complete"):
         wait4(ledger, root, child, 15)
-    if stage == "complete":
-        ledger.control(root, "root-token", 0, 2, "parent-wait", receipt(ledger, root, child, 15))
     observer = object.__new__(Observer)
     observer.full, observer.outcomes = False, []
     observer.case, observer.root = case, root.pid
@@ -69,7 +67,7 @@ def test_pending_ticket_retires_only_as_unjoined_without_connection_or_close_cla
     ]
 
 
-@pytest.mark.parametrize("stage", ["none", "terminal", "kernel-wait"])
+@pytest.mark.parametrize("stage", ["none", "terminal"])
 def test_missing_full_original_parent_join_cannot_retire(stage):
     observer, ticket, _ = pending(stage)
     with pytest.raises(Refused):

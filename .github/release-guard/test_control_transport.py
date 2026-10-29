@@ -163,9 +163,9 @@ def test_transport_oserror_is_sticky_and_closes_channel(channels):
         frame.read()
 
 
-@pytest.mark.parametrize('missing', ['none', 'capture', 'parent-wait', 'receipt', 'empty', 'class', 'sigterm'])
+@pytest.mark.parametrize('missing', ['none', 'capture', 'parent-wait', 'empty', 'class', 'sigterm'])
 def test_empty_cancellation_requires_captured_birth_and_complete_sigterm_parent_join(channels, missing):
-    from test_process_ledger import setup, terminal, wait4, receipt
+    from test_process_ledger import setup, terminal, wait4
     ledger, root, child = setup()
     ledger.process(child).command_class = 'controlled-acp' if missing != 'class' else 'other'
     _, _, frame = channels
@@ -179,8 +179,6 @@ def test_empty_cancellation_requires_captured_birth_and_complete_sigterm_parent_
     terminal(ledger, child, raw)
     if missing != 'parent-wait':
         wait4(ledger, root, child, raw)
-    if missing != 'receipt':
-        ledger.control(root, 'root-token', 0, 0, 'parent-wait', receipt(ledger, root, child, raw))
     assert control.cancelled_empty(frame, ledger, child, 'child-token') == (missing == 'none')
 
 
@@ -197,7 +195,7 @@ def test_empty_reap_does_not_extend_channel_deadline(channels, monkeypatch):
 
 @pytest.mark.parametrize('changed', ['generation', 'token', 'class'])
 def test_preexec_empty_channel_cannot_discharge_a_later_registration(channels, changed):
-    from test_process_ledger import setup, terminal, wait4, receipt
+    from test_process_ledger import setup, terminal, wait4
     ledger, root, child = setup()
     process = ledger.process(child)
     process.command_class = 'controlled-acp'
@@ -206,7 +204,6 @@ def test_preexec_empty_channel_cannot_discharge_a_later_registration(channels, c
     frame.binding, frame.eof = (child, 'child-token', 0, 'controlled-acp', 20000), True
     terminal(ledger, child, 15)
     wait4(ledger, root, child, 15)
-    ledger.control(root, 'root-token', 0, 0, 'parent-wait', receipt(ledger, root, child, 15))
     assert ledger.reaped(child, 'child-token')
     if changed == 'generation':
         process.generation += 1
@@ -219,7 +216,7 @@ def test_preexec_empty_channel_cannot_discharge_a_later_registration(channels, c
 
 
 def test_empty_channel_cannot_discharge_using_another_ledger(channels):
-    from test_process_ledger import setup, terminal, wait4, receipt
+    from test_process_ledger import setup, terminal, wait4
     original, _, child = setup()
     other, root, same_child = setup()
     other.nonce = 'different-epoch-nonce'
@@ -229,7 +226,6 @@ def test_empty_channel_cannot_discharge_using_another_ledger(channels):
     frame.binding, frame.eof = (child, 'child-token', 0, 'controlled-acp', 20000), True
     terminal(other, same_child, 15)
     wait4(other, root, same_child, 15)
-    other.control(root, 'root-token', 0, 0, 'parent-wait', receipt(other, root, same_child, 15))
     assert other.reaped(same_child, 'child-token')
     assert not control.cancelled_empty(frame, other, same_child, 'child-token')
 

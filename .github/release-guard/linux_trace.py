@@ -179,7 +179,7 @@ class OwnedTrace:
     """
 
     def __init__(self, child: int, allowed: list[dict[str, Any]], timeout: float,
-                 *, on_tick: Any = None, resolve_exec: Any = None,
+                 *, on_tick: Any = None, resolve_exec: Any = None, validate_wait: Any = None,
                  start_write: int, on_attached: Any = None, selective: bool = False,
                  cleanup_seconds: float = 60, full_source: bool = False):
         if sys.platform != "linux" or os.uname().machine != "x86_64":
@@ -212,6 +212,7 @@ class OwnedTrace:
         self.foreign: set[int] = set()
         self.on_tick = on_tick
         self.resolve_exec = resolve_exec
+        self.validate_wait = validate_wait
         self.selective = selective
         self.on_attached = on_attached
         self.defer_numeric_wait: Any = None
@@ -283,7 +284,15 @@ class OwnedTrace:
         if entering:
             self.pending[pid] = {"syscall": number, "status_address": value.rsi,
                                  "wait_options": value.rdx, "waitid_address": value.rdx,
-                                 "waitid_options": value.r10}
+                                 "waitid_options": value.r10,
+                                 "requested_pid": ctypes.c_int32(value.rdi & 0xffffffff).value,
+                                 "caller_identity": dict(self.identities[pid])}
+            if number == 61:
+                requested = self.pending[pid]["requested_pid"]
+                if self.validate_wait is not None:
+                    self.validate_wait(pid, requested)
+                self.records.append({"kind": "original_parent_wait4_entry",
+                    "identity": dict(self.identities[pid]), "requested_pid": requested})
             if number == 59:  # execve
                 self.admit_exec(pid, value)
             elif number == 322:  # execveat has a distinct ABI; never silently admit.
@@ -300,6 +309,8 @@ class OwnedTrace:
                 self.records.append({"kind": "exec_syscall_return", "pid": pid,
                                      "return": -errno.EPERM, "denied": True})
             elif pending and pending["syscall"] == 61 and signed(value.rax) > 0:
+                if self.identities[pid] != pending["caller_identity"]:
+                    raise RuntimeError("waiting thread identity changed")
                 address = pending["status_address"]
                 raw = int.from_bytes(read_bytes(pid, address, 4), "little") if address else None
                 if raw is None:
@@ -309,7 +320,7 @@ class OwnedTrace:
                                      "child": signed(value.rax), "raw": raw,
                                      "normalized": os.waitstatus_to_exitcode(raw)
                                      if raw is not None and (os.WIFEXITED(raw) or os.WIFSIGNALED(raw)) else None,
-                                     "options": pending["wait_options"]})
+                                     "options": pending["wait_options"], "requested_pid": pending["requested_pid"]})
             elif pending and pending["syscall"] == 247 and signed(value.rax) == 0:
                 address = pending["waitid_address"]
                 wait_info = read_bytes(pid, address, 128) if address else None

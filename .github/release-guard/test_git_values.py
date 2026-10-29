@@ -4,7 +4,7 @@ import pytest
 from content_manifest import Refused
 from git_values import Values
 from process_ledger import Birth, Ledger
-from test_process_ledger import identity, emit, terminal, wait4, receipt, PINS, SEAL
+from test_process_ledger import identity, emit, terminal, wait4, PINS, SEAL
 
 BASE, TREE, NEW, MESSAGE = '1' * 40, '2' * 40, '3' * 40, '4' * 64
 DATE, CASE, REPO = '2026-10-27T00:00:00+00:00', 'case[one]', '/owned/project'
@@ -26,7 +26,6 @@ def setup(*, command_class='native-git-command', execute=True, pins=(('native-fi
 def complete(ledger, root, child, sequence, raw=0):
     terminal(ledger, child, raw)
     wait4(ledger, root, child, raw)
-    ledger.control(root, 'root-token', 0, sequence, 'parent-wait', receipt(ledger, root, child, raw))
     return ledger.process(child).life_token
 
 
@@ -66,7 +65,7 @@ def test_tree_predecessor_date_and_message_remain_distinct_causal_inputs():
             values.require(case, repository, location, kind, value)
 
 
-@pytest.mark.parametrize('missing', ('wait', 'receipt', 'terminal'))
+@pytest.mark.parametrize('missing', ('wait', 'terminal'))
 def test_no_observation_can_replace_a_missing_actual_join(missing):
     ledger, root, child = setup()
     if missing == 'terminal':
@@ -75,8 +74,6 @@ def test_no_observation_can_replace_a_missing_actual_join(missing):
         terminal(ledger, child, 0)
         if missing != 'wait':
             wait4(ledger, root, child, 0)
-    if missing != 'receipt':
-        ledger.control(root, 'root-token', 0, 0, 'parent-wait', receipt(ledger, root, child, 0))
     values = Values(ledger)
     with pytest.raises(Refused):
         values.observe(child, 'child-token', CASE, REPO, 'parent', 'commit', BASE + '\n')
@@ -158,14 +155,13 @@ def test_actual_native_parent_wait_settles_helper_without_python_receipt():
     wait4(ledger, child, helper, 0)
     assert ledger.children[child] == [helper]
     assert ledger.children[helper] == [nested]
-    assert not ledger.reaped(helper, 'helper-102')
+    assert ledger.reaped(helper, 'helper-102')
     token = complete(ledger, root, child, 0)
     values = Values(ledger)
     assert values.observe(child, token, CASE, REPO, 'parent', 'commit', BASE + '\n').value == BASE
-    assert ledger.process(helper).receipt is None
 
 
-@pytest.mark.parametrize('mutation', ('missing-wait', 'missing-terminal', 'failed', 'class', 'case', 'pin', 'epoch', 'receipt', 'options'))
+@pytest.mark.parametrize('mutation', ('missing-wait', 'missing-terminal', 'failed', 'class', 'case', 'pin', 'epoch', 'options'))
 def test_native_descendant_wait_has_no_generic_reap_exception(mutation):
     ledger, root, child = setup()
     helper = native_descendant(ledger, child)
@@ -184,8 +180,6 @@ def test_native_descendant_wait_has_no_generic_reap_exception(mutation):
         process.pins = (('native-fixture', 'b' * 64),)
     elif mutation == 'epoch':
         process.generation = 2
-    elif mutation == 'receipt':
-        ledger.control(child, 'child-token', 1, 0, 'parent-wait', receipt(ledger, child, helper, raw))
     elif mutation == 'options':
         assert process.parent_wait is not None
         process.parent_wait = (*process.parent_wait[:3], 1)

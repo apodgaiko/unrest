@@ -642,16 +642,6 @@ class Observer:
                     or intent['token'] != payload['token'] or child['returned']):
                 raise Refused('source actual constructor return binding')
             child['returned'] = True
-        elif kind == 'drain_child':
-            self.launch_owner(actor)
-            shape(payload, ('pid', 'requested_pid', 'child_token', 'raw_status', 'numeric_returncode', 'options'))
-            child = self.actors.get(number(payload['pid'], 1))
-            if child is None or not child['returned'] or self.ledger.process(child['birth']).parent != actor['birth']:
-                raise Refused('source constructor before parent wait')
-            row = {**payload, 'nonce': self.ledger.nonce, 'owner_pid': actor['birth'].pid,
-                   'owner_identity': self.ledger.process(actor['birth']).registered_identity,
-                   'owner_token': actor['token'], 'wait_event': 'actual_os_waitpid_return'}
-            self.actor_control(actor, 'parent-wait', row)
         elif kind == 'pair-intent':
             shape(payload, ('site',))
             if payload['site'] != 'local-stream-pair' or len(self.pair_intents) >= 32:
@@ -909,6 +899,11 @@ class Observer:
         else:
             raise Refused('source undeclared observer method')
         return {'ok': True}
+
+    def validate_wait(self, trace, pid, requested):
+        # Consume every birth/exec before resuming even a nonblocking/error wait.
+        self.consume(trace)
+        self.ledger.wait_entry(Birth.read(trace.identities[pid]), requested)
 
     def tick(self, trace):
         self.consume(trace)

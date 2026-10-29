@@ -14,7 +14,7 @@ from source_observer import Observer
 from source_sockets import Hooks
 import source_observer
 from test_endpoint_policy import ready
-from test_process_ledger import setup, terminal, wait4, receipt
+from test_process_ledger import setup, terminal, wait4
 
 
 def interrupted(monkeypatch):
@@ -82,7 +82,7 @@ def test_interrupted_accept_rejects_unproven_or_application_channels(monkeypatch
     assert not observer.eof_drains and not observer.interrupted_records
 
 
-@pytest.mark.parametrize('stage', ['none', 'terminal', 'kernel-wait', 'complete'])
+@pytest.mark.parametrize('stage', ['none', 'terminal', 'complete'])
 def test_aborted_ticket_retirement_requires_complete_original_parent_join(stage):
     ledger, root, child = setup()
     server, client = ready(ledger, root), ready(ledger, child)
@@ -97,7 +97,6 @@ def test_aborted_ticket_retirement_requires_complete_original_parent_join(stage)
     if stage in ('kernel-wait', 'complete'):
         wait4(ledger, root, child, 15)
     if stage == 'complete':
-        ledger.control(root, 'root-token', 0, 2, 'parent-wait', receipt(ledger, root, child, 15))
         endpoints.abort_reaped(ticket)
         assert not endpoints.tickets and not endpoints.connections
     else:

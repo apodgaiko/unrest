@@ -2,8 +2,8 @@
 
 Only trusted observers feed kernel rows and authenticated control envelopes.
 This reducer does not authenticate sockets, admit launches or certify a release.
-Waitid/WNOWAIT remains observation; endpoint retirement still needs wait4 plus
-an authenticated receipt of the actual original parent's os.waitpid return.
+Waitid/WNOWAIT remains observation. Retirement requires the original parent's
+terminal wait4, joined to the admitted child birth and tracer terminal status.
 """
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from content_manifest import Refused
 MAX_PROCESSES = 20000
 MAX_EXEC_EPOCHS = 128
 MAX_WAITID_ROWS = 128
-# Two readiness records and at most one receipt per admitted child.
-MAX_CONTROL_ROWS = MAX_PROCESSES + 2
+# Two readiness records per independently registered execution epoch.
+MAX_CONTROL_ROWS = 2
 
 
 def fail_closed(method):
@@ -112,7 +112,6 @@ class Process:
     exit: tuple[int, int] | None = None
     terminal: tuple[int, int, int] | None = None
     parent_wait: tuple[int, int, int, int] | None = None
-    receipt: dict | None = None
     waitid: list[dict] = field(default_factory=list)
 
 
@@ -175,8 +174,7 @@ class Ledger:
                 or type(sequence) is not int or sequence != epoch.sequence
                 or sequence >= MAX_CONTROL_ROWS or type(payload) is not dict):
             raise Refused('ledger control epoch or sequence')
-        if kind != 'parent-wait' and (generation != process.generation
-                                     or process.registered_generation != generation):
+        if generation != process.generation or process.registered_generation != generation:
             raise Refused('stale readiness epoch')
         if kind in ('core-ready', 'body-ready') and (process.exit is not None or process.terminal is not None):
             raise Refused('readiness after terminal')
@@ -191,40 +189,32 @@ class Ledger:
                     or type(payload['seal']) is not str or payload['seal'] != process.expected_seal):
                 raise Refused('ledger execution seal')
             process.stage = 'body-ready'
-        elif kind == 'parent-wait':
-            self._receipt(process, payload)
         else:
             raise Refused('ledger control operation')
         epoch.sequence += 1
         if generation == process.generation:
             process.control_sequence = epoch.sequence
 
-    def _receipt(self, parent: Process, row: dict) -> None:
-        keys = {'pid', 'child_token', 'nonce', 'owner_pid', 'owner_identity', 'owner_token',
-                'requested_pid', 'wait_event', 'raw_status', 'numeric_returncode', 'options'}
-        if (set(row) != keys or row['nonce'] != self.nonce
-                or type(row['owner_pid']) is not int or row['owner_pid'] != parent.birth.pid
-                or row['owner_token'] != parent.life_token
-                or row['owner_identity'] != parent.registered_identity
-                or row['wait_event'] != 'actual_os_waitpid_return'
-                or type(row['pid']) is not int or type(row['requested_pid']) is not int
-                or row['requested_pid'] != row['pid']):
-            raise Refused('ledger original-parent receipt')
-        child_birth = self.by_token.get(row['child_token'])
-        if child_birth is None:
-            raise Refused('ledger unknown child token')
-        child = self.process(child_birth)
-        if (row['child_token'] != child.life_token
-                or child.birth.pid != row['pid'] or child.parent != parent.birth
-                or child.receipt is not None):
-            raise Refused('ledger ambiguous or duplicate parent receipt')
-        if (type(row['owner_identity']) is not dict
-                or set(row['owner_identity']) != set(parent.registered_identity)
-                or canonical(row['owner_identity']) != row['owner_identity']):
-            raise Refused('ledger parent identity schema')
-        status(row['raw_status'], row['numeric_returncode'])
-        integer(row['options'])
-        child.receipt = dict(row)
+    @fail_closed
+    def wait_entry(self, caller: Birth, requested: int) -> None:
+        process = self.process(caller)
+        if (self.current.get(caller.pid) != caller or process.group is None
+                or process.exit is not None or process.terminal is not None
+                or type(requested) is not int):
+            raise Refused('ledger waiting caller birth')
+        owner = self.process(process.group)
+        if owner.exit is not None or owner.terminal is not None or owner.life_token is None:
+            raise Refused('ledger waiting parent authority')
+        native = owner.command_class in ('native-git-command', 'native-git-helper', 'native-full-uv')
+        if requested == -1 and native:
+            return
+        child = self.current.get(requested)
+        if requested <= 0 or child is None:
+            raise Refused('ledger wait outside admitted child')
+        target = self.process(child)
+        if (target.parent != owner.birth or target.life_token is None and not native
+                or target.birth.pid != target.birth.tgid):
+            raise Refused('ledger wait outside admitted child')
 
     @fail_closed
     def kernel(self, sequence: int, row: dict) -> None:
@@ -301,6 +291,8 @@ class Ledger:
                 if process.parent is not None and process.birth.pid == process.birth.tgid:
                     key = (birth.pid, process.parent.tgid, raw, code)
                     self.pending_waits.setdefault(key, []).append(birth)
+        elif kind == 'original_parent_wait4_entry':
+            self.wait_entry(Birth.read(row.get('identity')), row.get('requested_pid'))
         elif kind == 'original_parent_wait4':
             child_pid = integer(row.get('child'), 1)
             raw, code = status(row.get('raw'), row.get('normalized'))
@@ -314,6 +306,10 @@ class Ledger:
                     or self.process(caller).group != process.parent
                     or self.process(caller).exit is not None or self.process(caller).terminal is not None):
                 raise Refused('ledger actual waiting parent birth')
+            requested = row.get('requested_pid')
+            self.wait_entry(caller, requested)
+            if requested != child_pid and requested != -1:
+                raise Refused('ledger parent wait requested child')
             del self.pending_waits[key]
             process.parent_wait = (sequence, raw, code, integer(row.get('options')))
         elif kind == 'original_parent_waitid':
@@ -365,14 +361,13 @@ class Ledger:
 
     def reaped(self, birth: Birth, token: str) -> bool:
         process = self.process(birth)
-        if self.poison or token != process.life_token or process.parent is None:
+        if self.poison or type(token) is not str or token != process.life_token or process.parent is None:
             return False
-        if process.exit is None or process.terminal is None or process.parent_wait is None or process.receipt is None:
+        if process.exit is None or process.terminal is None or process.parent_wait is None:
             return False
-        receipt, wait = process.receipt, process.parent_wait
-        return (process.born < process.exit[0] < process.terminal[0] < wait[0]
-                and (receipt['raw_status'], receipt['numeric_returncode'], receipt['options']) == wait[1:]
-                and receipt['child_token'] == token)
+        return (process.born < process.exit[0] < process.terminal[0] < process.parent_wait[0]
+                and process.exit[1] == process.terminal[1] == process.parent_wait[1]
+                and process.terminal[2] == process.parent_wait[2])
 
     def body_ready(self, birth: Birth, token: str) -> bool:
         process = self.process(birth)

@@ -273,7 +273,8 @@ def worker(binding, metadata, raw_directory):
                     'cwd': metadata['checkout'], 'sha256': hashlib.sha256(Path(vector[0]).read_bytes()).hexdigest()}]
         trace = OwnedTrace(child, allowed, timeout, start_write=start_write, selective=True, cleanup_seconds=5, full_source=full and not binding.get('collection_only',False),
                            on_attached=lambda: observer.consume(trace), on_tick=observer.tick,
-                           resolve_exec=lambda *args: observer.resolve(trace, *args))
+                           resolve_exec=lambda *args: observer.resolve(trace, *args),
+                           validate_wait=lambda *args: observer.validate_wait(trace, *args))
         result = trace.run()
         observer.tick(trace)
         if full:
@@ -292,7 +293,7 @@ def worker(binding, metadata, raw_directory):
         raise
     finally:
         try:
-            record = {'schema': 'unrest.bootstrap-source-result.v1', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
+            record = {'schema': 'unrest.bootstrap-source-result.v2', 'wait_evidence': 'kernel-original-parent-terminal-wait4', 'source_checkpoint_ready': bool(result is not None and result['root_parent_wait_raw']==0 and observer is not None and observer.full and not binding.get('collection_only') and observer.finished and failure is None),
                       'release_certified': False, 'completed': [] if observer is None else observer.completed,
                       'result': result, 'failure': failure, 'metadata': metadata,
                       'kernel': [] if trace is None else trace.records,

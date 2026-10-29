@@ -90,7 +90,6 @@ class Values:
                 or child.pins != pins or owner.pins != pins
                 or child.generation != 1 or child.registered_generation != 1
                 or owner.generation != 1 or owner.registered_generation != 1
-                or child.receipt is not None
                 or child.exit is None or child.terminal is None or child.parent_wait is None):
             return False
         exited, terminal, wait = child.exit, child.terminal, child.parent_wait

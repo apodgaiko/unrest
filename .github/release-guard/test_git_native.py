@@ -137,14 +137,12 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
                 if birth != root:
                     target.append(birth)
         assert root is not None and len(producers) == 2 and len(helpers) == 1
-        for sequence, receipt in enumerate(raw['receipts']):
-            ledger.control(root, 'root', 1, sequence, 'parent-wait', receipt)
         return ledger, producers, helpers
 
     ledger, producers, helpers = reduce(result['records'])
     values = Values(ledger)
     assert ledger.reaped(producers[0], 'child-' + str(producers[0].pid))
-    assert not ledger.reaped(helpers[0], 'child-' + str(helpers[0].pid))
+    assert ledger.reaped(helpers[0], 'child-' + str(helpers[0].pid))
     assert values.native_child_reaped(producers[0], helpers[0], 'native-git-control', (('native-fixture', git_pin),))
     value = values.observe(producers[1], 'child-' + str(producers[1].pid), 'native-git-control',
         str(repository), 'parent', 'commit', raw['head'])
@@ -152,4 +150,3 @@ def test_real_git_native_parent_wait_and_distinct_python_parent_value_join(tmp_p
     missing, parents, children = reduce([row for row in result['records']
         if not (row['kind'] == 'original_parent_wait4' and row['parent_tgid'] == producers[0].tgid)])
     assert not Values(missing).native_child_reaped(parents[0], children[0], 'native-git-control', (('native-fixture', git_pin),))
-    assert missing.process(children[0]).receipt is None

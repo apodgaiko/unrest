@@ -5,7 +5,7 @@ import pytest
 
 from content_manifest import Refused
 from endpoint_policy import Endpoints, Owner, Route, Socket
-from test_process_ledger import PINS, SEAL, emit, identity, receipt, setup, terminal, wait4
+from test_process_ledger import PINS, SEAL, emit, identity, setup, terminal, wait4
 from process_ledger import Birth
 
 
@@ -169,8 +169,7 @@ def test_retirement_keeps_original_parent_wait_requirement(parent_wait):
     next_owner = ready(ledger, replacement)
     next_route = replace(route, server=next_owner)
     terminal(ledger, child, 0)
-    # A tracer reap and source receipt without the actual kernel parent wait is insufficient.
-    ledger.control(root, 'root-token', 0, 2, 'parent-wait', receipt(ledger, root, child, 0))
+    # A tracer reap without the actual kernel parent wait is insufficient.
     if parent_wait:
         wait4(ledger, root, child, 0)
         endpoints.retire('route', next_route)

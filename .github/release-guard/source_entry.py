@@ -133,7 +133,6 @@ class Policy:
         original = process_class.__init__
         original_communicate = process_class.communicate
         original_run = subprocess.run
-        original_wait = os.waitpid
         original_kill, original_group = os.kill, os.killpg
         policy = self
 
@@ -161,11 +160,7 @@ class Policy:
                     else:
                         kwargs['env']=normalized
             policy.local.launch = None
-            policy.local.constructing = process
-            try:
-                original(process, *args, **kwargs)
-            finally:
-                policy.local.constructing = None
+            original(process, *args, **kwargs)
             pending = getattr(policy.local, 'launch', None)
             if pending is None:
                 policy.refuse('source constructor without admitted audit')
@@ -213,37 +208,13 @@ class Policy:
             if (info.st_dev, info.st_ino) != (dev, inode):
                 policy.refuse('git stdout descriptor generation changed')
             result = original_communicate(process, *args, **kwargs)
-            if (saved.get('wait_raw') != 0
+            if (type(process.returncode) is not int or process.returncode != 0
                     or type(result) is not tuple or len(result) != 2
                     or type(result[0]) is not (bytes if saved['git_stream_type'] is io.BufferedReader else str)):
                 policy.refuse('git stdout before successful actual parent wait')
             policy.client.request('git-output', {'pid': process.pid, 'token': saved['token'],
                 'pipe': [fd, dev, inode], 'stdout': result[0].decode('ascii') if type(result[0]) is bytes else result[0]})
             return result
-
-        def waitpid(pid, options):
-            if (type(pid) is int and pid > 0 and pid not in policy.children
-                    and getattr(policy.local, 'launch', None) is not None
-                    and getattr(policy.local, 'constructing', None) is not None):
-                pending = policy.local.launch
-                if pending is None:
-                    policy.refuse('source absent constructor ticket')
-                process = policy.local.constructing
-                if process.pid != pid:
-                    policy.refuse('source failed-constructor child identity')
-                policy.client.request('launch-return', {'pid': pid, 'ticket': pending['ticket'], 'token': pending['token']})
-                policy.children[pid] = {'token': pending['token'], 'process': process, 'case': policy.case}
-            if type(pid) is not int or pid <= 0 or type(options) is not int or pid not in policy.children:
-                policy.refuse('source wait outside owned constructor')
-            saved = policy.children[pid]
-            actual, raw = original_wait(pid, options)
-            if actual:
-                if actual != pid or type(raw) is not int or not (os.WIFEXITED(raw) or os.WIFSIGNALED(raw)):
-                    policy.refuse('source nonnumeric parent wait')
-                policy.client.request('drain_child', {'pid': actual, 'requested_pid': pid, 'child_token': saved['token'],
-                    'raw_status': raw, 'numeric_returncode': os.waitstatus_to_exitcode(raw), 'options': options})
-                saved['wait_raw'] = raw
-            return actual, raw
 
         def signal(pid, sig, *, group):
             if type(sig) not in (int, signals.Signals):
@@ -289,11 +260,7 @@ class Policy:
             subprocess.run=run
             setattr(subprocess.Popen, '__init__', construct)
             setattr(subprocess.Popen, 'communicate', communicate)
-            safe = vars(subprocess).get('_del_safe')
-            if type(safe) is not type or vars(safe).get('waitpid') is not original_wait:
-                policy.refuse('source original polling wait binding')
-            setattr(safe, 'waitpid', staticmethod(waitpid))
-            os.waitpid, os.kill, os.killpg = waitpid, kill, killpg
+            os.kill, os.killpg = kill, killpg
 
 
 def activate(directory, profile, event, arguments):

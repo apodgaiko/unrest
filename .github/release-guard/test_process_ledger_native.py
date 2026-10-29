@@ -1,7 +1,6 @@
 """Actual kernel->parent-return-pipe->incremental ledger composition control."""
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import importlib.util
 import json
@@ -106,7 +105,6 @@ def test_real_original_parent_wait_joins_once_and_missing_wait_remains_incomplet
                     target_birth = birth
         assert root_birth is not None and target_birth is not None
         assert raw_receipt['owner_identity'] == canonical(ledger.process(root_birth).identity)
-        ledger.control(root_birth, 'root', 1, 0, 'parent-wait', deepcopy(raw_receipt))
         return ledger, target_birth
 
     complete, target = reduce(result['records'])

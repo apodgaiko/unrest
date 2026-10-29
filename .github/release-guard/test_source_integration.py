@@ -220,7 +220,6 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
         observer = object.__new__(Observer)
         observer.full, observer.outcomes = False, []
         observer.root_birth, observer.root, observer.ledger, observer.finished = birth, birth.pid, ledger, False
-        actor = {'birth': birth, 'role': 'root', 'token': 'root-token', 'sequence': 0}
         observer.actors = {child: {'birth': child_birth, 'returned': True}}
         payload = {'pid': child, 'requested_pid': child, 'child_token': 'child-token',
                    'raw_status': raw, 'numeric_returncode': os.waitstatus_to_exitcode(raw), 'options': 0}
@@ -234,9 +233,9 @@ def test_poisoned_cleanup_retains_actual_parent_wait_without_restoring_authority
             assert frame.read() == request
             ledger.poison.append('preserved source refusal')
             admission = transport.Admission(ledger, frozenset({'drain_child', 'launch-proposal'}))
-            assert observer.dispatch(actor, admission.admit(frame)) == {'ok': True}
-            assert ledger.process(child_birth).receipt['raw_status'] == raw
-            assert ledger.poison == ['preserved source refusal']
+            with pytest.raises(Refused):
+                admission.admit(frame)
+            assert 'preserved source refusal' in ledger.poison
             assert not ledger.reaped(child_birth, 'child-token')  # No fabricated kernel wait joins.
             frame.received = {**request, 'id': 'b' * 32, 'kind': 'launch-proposal'}
             with pytest.raises(Refused):

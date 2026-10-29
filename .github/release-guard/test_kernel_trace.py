@@ -21,7 +21,7 @@ assert spec is not None and spec.loader is not None
 trace = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(trace)
 
-def run_control(argv, allowed, selective, on_tick=None, resolve_exec=None):
+def run_control(argv, allowed, selective, on_tick=None, resolve_exec=None, validate_wait=None):
     read, write = os.pipe()
     child = os.fork()
     if child == 0:
@@ -38,7 +38,7 @@ def run_control(argv, allowed, selective, on_tick=None, resolve_exec=None):
     os.close(read)
     try:
         observer = trace.OwnedTrace(child, allowed, timeout=30, start_write=write,
-                                   selective=selective, on_tick=on_tick, resolve_exec=resolve_exec)
+                                   selective=selective, on_tick=on_tick, resolve_exec=resolve_exec, validate_wait=validate_wait)
     except BaseException:
         os.close(write)
         os.waitpid(child, 0)  # The controlled child exits on startup EOF.
@@ -310,3 +310,26 @@ def test_vfork_exec_admission_error_reaps_both_without_effect(tmp_path):
     waits = [row for row in observer.records if row['kind'] == 'failure_cleanup_tracer_wait']
     assert len(waits) == 2 and all(row['normalized'] == -signal.SIGKILL for row in waits)
     assert observer.root_parent_wait == signal.SIGKILL
+
+
+@pytest.mark.parametrize('requested', [-1, 0, 2147483647])
+def test_wait_entry_stops_even_caught_nonblocking_or_echild_attempt(requested, tmp_path):
+    marker = tmp_path / 'incorrectly-resumed'
+    body = f"""import os
+try:
+    os.waitpid({requested}, os.WNOHANG)
+except ChildProcessError:
+    pass
+open({str(marker)!r}, 'w').write('resumed')
+"""
+    argv = [sys.executable, '-I', '-S', '-c', body]
+    allowed = [{'path': sys.executable, 'argv': argv, 'environment': {}, 'cwd': os.getcwd(),
+                'sha256': hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}]
+    seen = []
+    def reject(pid, actual):
+        seen.append((pid, actual))
+        raise RuntimeError('wait-entry-rejected')
+    with pytest.raises(RuntimeError, match='wait-entry-rejected'):
+        run_control(argv, allowed, True, validate_wait=reject)
+    assert len(seen) == 1 and seen[0][1] == requested
+    assert not marker.exists()

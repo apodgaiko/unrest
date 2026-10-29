@@ -20,6 +20,8 @@ def identity(pid, parent, *, tgid=None):
 
 
 def emit(ledger, kind, **values):
+    if kind == 'original_parent_wait4':
+        values.setdefault('requested_pid', values['child'])
     ledger.kernel(ledger.next_kernel, {'kind': kind, **values})
 
 
@@ -35,16 +37,6 @@ def setup(*, new_session=False):
     return ledger, root, child
 
 
-def receipt(ledger, root, child, raw):
-    code = __import__('os').waitstatus_to_exitcode(raw)
-    return {'pid': child.pid, 'child_token': ledger.process(child).life_token,
-            'nonce': ledger.nonce, 'owner_pid': root.pid,
-            'owner_identity': dict(ledger.process(root).registered_identity),
-            'owner_token': ledger.process(root).life_token, 'requested_pid': child.pid,
-            'wait_event': 'actual_os_waitpid_return', 'raw_status': raw,
-            'numeric_returncode': code, 'options': 0}
-
-
 def terminal(ledger, child, raw):
     emit(ledger, 'kernel_exit', pid=child.pid, raw=raw)
     emit(ledger, 'tracer_terminal_wait', pid=child.pid, raw=raw,
@@ -58,50 +50,56 @@ def wait4(ledger, root, child, raw):
 
 
 @pytest.mark.parametrize('raw', [0, 17 << 8, int(signal.SIGTERM)])
-@pytest.mark.parametrize('early_receipt', [False, True])
-def test_only_complete_cross_stream_parent_join_establishes_reap(raw, early_receipt):
+def test_only_complete_kernel_parent_join_establishes_reap(raw):
     ledger, root, child = setup()
-    if early_receipt:
-        ledger.control(root, 'root-token', 0, 0, 'parent-wait', receipt(ledger, root, child, raw))
+    ledger.wait_entry(root, child.pid)
     assert not ledger.reaped(child, 'child-token')
     terminal(ledger, child, raw)
     assert not ledger.reaped(child, 'child-token')
     wait4(ledger, root, child, raw)
-    if not early_receipt:
-        assert not ledger.reaped(child, 'child-token')
-        ledger.control(root, 'root-token', 0, 0, 'parent-wait', receipt(ledger, root, child, raw))
     assert ledger.reaped(child, 'child-token')
     assert not ledger.reaped(child, 'different-token')
 
 
-@pytest.mark.parametrize('field,value', [
-    ('pid', 102), ('child_token', 'forged'), ('nonce', 'other'), ('owner_pid', 99),
-    ('owner_token', 'forged'), ('requested_pid', -1), ('wait_event', 'cached'),
-    ('raw_status', True), ('numeric_returncode', -99), ('options', True),
-    ('owner_identity', identity(100, 98)),
-])
-def test_forged_parent_receipt_is_sticky_failure(field, value):
+@pytest.mark.parametrize('requested', [-2, -1, 0, 99, 100, 102, True, None])
+def test_foreign_wildcard_or_unregistered_wait_is_refused_before_syscall(requested):
     ledger, root, child = setup()
-    terminal(ledger, child, 17 << 8)
-    wait4(ledger, root, child, 17 << 8)
-    row = receipt(ledger, root, child, 17 << 8)
-    row[field] = value
-    with pytest.raises((Refused, TypeError)):
-        ledger.control(root, 'root-token', 0, 0, 'parent-wait', row)
+    with pytest.raises(Refused):
+        ledger.wait_entry(root, requested)
     assert ledger.poison and not ledger.reaped(child, 'child-token')
 
 
-def test_receipt_options_must_join_actual_kernel_options():
+@pytest.mark.parametrize('mutation', ['parent', 'token', 'thread', 'caller-exit', 'caller-birth'])
+def test_wait_entry_requires_admitted_child_and_current_living_parent(mutation):
     ledger, root, child = setup()
-    terminal(ledger, child, 0)
-    wait4(ledger, root, child, 0)
-    row = receipt(ledger, root, child, 0)
-    row['options'] = 1
-    ledger.control(root, 'root-token', 0, 0, 'parent-wait', row)
-    assert not ledger.reaped(child, 'child-token')
+    if mutation == 'parent':
+        ledger.process(child).parent = child
+    elif mutation == 'token':
+        ledger.process(child).life_token = None
+    elif mutation == 'thread':
+        ledger.process(child).birth = __import__('dataclasses').replace(child, tgid=root.tgid)
+    elif mutation == 'caller-exit':
+        emit(ledger, 'kernel_exit', pid=root.pid, raw=0)
+    else:
+        ledger.current[root.pid] = child
+    with pytest.raises(Refused):
+        ledger.wait_entry(root, child.pid)
+    assert ledger.poison
 
 
-@pytest.mark.parametrize('missing', ['exit', 'terminal', 'wait4', 'receipt'])
+@pytest.mark.parametrize('command_class', ['native-git-command', 'native-git-helper', 'native-full-uv', 'other', 'root'])
+def test_native_wildcard_wait_is_selected_by_admitted_command_class(command_class):
+    ledger, root, child = setup()
+    ledger.process(root).command_class = command_class
+    if command_class in ('native-git-command', 'native-git-helper', 'native-full-uv'):
+        ledger.wait_entry(root, -1)
+        assert not ledger.reaped(child, 'child-token')
+    else:
+        with pytest.raises(Refused):
+            ledger.wait_entry(root, -1)
+
+
+@pytest.mark.parametrize('missing', ['exit', 'terminal', 'wait4'])
 def test_missing_facts_never_become_success(missing):
     ledger, root, child = setup()
     if missing not in ('exit', 'terminal'):
@@ -110,8 +108,6 @@ def test_missing_facts_never_become_success(missing):
         emit(ledger, 'kernel_exit', pid=child.pid, raw=0)
     if missing not in ('exit', 'terminal', 'wait4'):
         wait4(ledger, root, child, 0)
-    if missing != 'receipt':
-        ledger.control(root, 'root-token', 0, 0, 'parent-wait', receipt(ledger, root, child, 0))
     assert not ledger.reaped(child, 'child-token')
 
 
@@ -120,7 +116,6 @@ def test_waitid_wnowait_and_tracer_wait_do_not_retire():
     terminal(ledger, child, 23 << 8)
     emit(ledger, 'original_parent_waitid', parent=100, child=101,
          reaps=False, options=0x1000000, code=1, status=23)
-    ledger.control(root, 'root-token', 0, 0, 'parent-wait', receipt(ledger, root, child, 23 << 8))
     assert not ledger.reaped(child, 'child-token')
     wait4(ledger, root, child, 23 << 8)
     assert ledger.reaped(child, 'child-token')
@@ -135,19 +130,17 @@ def test_readiness_needs_registration_core_and_execution_seal():
     assert ledger.body_ready(root, 'root-token')
     emit(ledger, 'kernel_exec', pid=root.pid)
     assert not ledger.body_ready(root, 'root-token')
-    with pytest.raises(Refused, match='stale readiness'):
+    with pytest.raises(Refused, match='epoch or sequence'):
         ledger.control(root, 'root-token', 0, 2, 'body-ready', {'seal': SEAL})
     assert not ledger.body_ready(root, 'root-token')
 
 
 def test_delayed_wait_fact_from_prior_exec_epoch_is_joined_but_never_restores_ready():
     ledger, root, child = setup()
-    row = receipt(ledger, root, child, 0)
     terminal(ledger, child, 0)
     wait4(ledger, root, child, 0)
     emit(ledger, 'kernel_exec', pid=root.pid)
     ledger.register(root, 'root-epoch2', PINS, SEAL, case='case[one]', command_class='root')
-    ledger.control(root, 'root-token', 0, 0, 'parent-wait', row)
     assert ledger.reaped(child, 'child-token')
     assert not ledger.body_ready(root, 'root-token')
     assert not ledger.body_ready(root, 'root-epoch2')
@@ -232,7 +225,6 @@ def test_waiting_thread_uses_actual_parent_thread_group():
     terminal(ledger, child, 0)
     emit(ledger, 'original_parent_wait4', parent=102, parent_tgid=100, child=101,
          raw=0, normalized=0, options=0)
-    ledger.control(root, 'root-token', 0, 0, 'parent-wait', receipt(ledger, root, child, 0))
     assert ledger.reaped(child, 'child-token')
 
 
@@ -288,19 +280,17 @@ def test_terminal_waiting_thread_cannot_supply_new_parent_wait():
     assert ledger.poison
 
 
-@pytest.mark.parametrize('duplicate', ['kernel', 'receipt', 'token'])
+@pytest.mark.parametrize('duplicate', ['kernel', 'wait', 'token'])
 def test_duplicate_stream_facts_and_tokens_never_replay(duplicate):
     ledger, root, child = setup()
     terminal(ledger, child, 0)
     wait4(ledger, root, child, 0)
-    row = receipt(ledger, root, child, 0)
-    ledger.control(root, 'root-token', 0, 0, 'parent-wait', row)
     assert ledger.reaped(child, 'child-token')
     with pytest.raises(Refused):
         if duplicate == 'kernel':
             ledger.kernel(ledger.next_kernel - 1, {'kind': 'kernel_exec', 'pid': root.pid})
-        elif duplicate == 'receipt':
-            ledger.control(root, 'root-token', 0, 1, 'parent-wait', row)
+        elif duplicate == 'wait':
+            wait4(ledger, root, child, 0)
         else:
             ledger.register(child, 'root-token', PINS, SEAL, case='case[one]', command_class='child')
     assert ledger.poison and not ledger.reaped(child, 'child-token')
@@ -319,17 +309,19 @@ def test_many_children_keep_individual_parent_joins_beyond_epoch_bound(missing_w
         terminal(ledger, child, raw)
         if not (missing_wait and index == 128):
             wait4(ledger, root, child, raw)
-        ledger.control(root, 'root-token', 0, index, 'parent-wait', receipt(ledger, root, child, raw))
         assert ledger.reaped(child, ledger.process(child).life_token) == (not missing_wait or index != 128)
-    with pytest.raises(Refused, match='duplicate parent receipt'):
-        ledger.control(root, 'root-token', 0, 129, 'parent-wait', receipt(ledger, root, child, raw))
+    if missing_wait:
+        wait4(ledger, root, child, raw)
+        assert ledger.reaped(child, ledger.process(child).life_token)
+    with pytest.raises(Refused, match='parent wait join'):
+        wait4(ledger, root, child, raw)
     assert ledger.poison
 
 
-def test_exec_epoch_bound_is_independent_of_parent_receipt_capacity():
+def test_exec_epoch_bound_is_independent_of_parent_wait_count():
     from process_ledger import MAX_EXEC_EPOCHS, MAX_CONTROL_ROWS
     ledger, root, child = setup()
-    assert MAX_CONTROL_ROWS > MAX_EXEC_EPOCHS == 128
+    assert MAX_CONTROL_ROWS == 2 and MAX_EXEC_EPOCHS == 128
     for generation in range(1, MAX_EXEC_EPOCHS):
         emit(ledger, 'kernel_exec', pid=child.pid)
         ledger.register(child, f'epoch-{generation}', PINS, SEAL, case='case[one]', command_class='child')
@@ -391,3 +383,23 @@ def test_process_leader_cannot_borrow_parent_or_thread_terminal_status():
             identity=ledger.process(child).identity,
         )
     assert not ledger.process(child).parent_wait
+
+
+@pytest.mark.parametrize('requested', [None, -1, 0, 102, True])
+def test_terminal_wait_cannot_borrow_a_different_requested_child(requested):
+    ledger, root, child = setup()
+    terminal(ledger, child, 0)
+    with pytest.raises(Refused):
+        emit(ledger, 'original_parent_wait4', parent=root.pid, parent_tgid=root.tgid,
+             requested_pid=requested, child=child.pid, raw=0, normalized=0, options=0)
+    assert ledger.poison and not ledger.reaped(child, 'child-token')
+
+
+def test_waiting_thread_entry_binds_original_group_and_cannot_borrow_another_child():
+    ledger, root, child = setup()
+    thread_id = identity(102, root.parent, tgid=root.tgid)
+    thread = Birth.read(thread_id)
+    emit(ledger, 'kernel_child', parent=root.pid, child=102, event=3, identity=thread_id)
+    ledger.wait_entry(thread, child.pid)
+    with pytest.raises(Refused):
+        ledger.wait_entry(thread, root.pid)
