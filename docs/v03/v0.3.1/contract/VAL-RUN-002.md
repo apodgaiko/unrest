@@ -22,3 +22,9 @@ ownership to a different interpreter.
 **Evidence:** Cancel before dispatch and at each boundary, disconnect, kill and
 restart the server, inspect ancestry/locks/receipts, concurrent attach, repeated
 cancel, missing run, orphan recovery, and exact effect count.
+
+Cancellation terminalizes Mission attempt snapshots only for the built-in
+`unrest_harness.runtime_executor:execute` executor. Custom executors keep their
+own project identifiers and cannot cause ambient Mission configuration discovery
+or cross-project snapshot mutation. All executors still complete durable
+RunControl draining/cancellation and retain cancellation exit code 2.

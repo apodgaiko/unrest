@@ -147,7 +147,8 @@ def main(argv: list[str] | None = None) -> int:
     except WorkerCancelled:
         if control is not None:
             try:
-                _terminalize_cancelled_attempts(arguments)
+                if options.executor == "unrest_harness.runtime_executor:execute":
+                    _terminalize_cancelled_attempts(arguments)
                 control.worker_draining(options.run_id)
                 control.worker_cancelled(options.run_id)
             except RunControlError:
