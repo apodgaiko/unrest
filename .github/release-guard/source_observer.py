@@ -395,7 +395,7 @@ class Observer:
         from completion_launch import CASES as COMPLETION_CASES
         from run_worker_launch import CASES as RUN_WORKERS
         if actor['role']=='fixed-inline' and actor['case'] in RUN_WORKERS:
-            return terminal is not None and terminal[2]==1 and actor['body_ready']
+            return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='fixed-inline' and actor['case'] in ROLE_CASES:
             from completion_server import status
             rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']

@@ -47,3 +47,15 @@ def test_error_worker_admission_is_exact_and_single(tmp_path,monkeypatch,case,mu
         with pytest.raises(Refused):
             worker.proposal(host,{},raw)
         assert mutation=='repeat' or not host.intents
+
+
+@pytest.mark.parametrize('status',[0,1,-15])
+def test_async_error_result_requires_normal_process_exit_and_ready(status):
+    from source_observer import Observer
+
+    host=object.__new__(Observer)
+    host.ledger=SimpleNamespace(process=lambda birth:SimpleNamespace(terminal=(None,None,status)))
+    actor={'birth':object(),'role':'fixed-inline','case':next(iter(worker.CASES)),'body_ready':True}
+    assert host.completed_child(actor) is (status==0)
+    actor['body_ready']=False
+    assert not host.completed_child(actor)
