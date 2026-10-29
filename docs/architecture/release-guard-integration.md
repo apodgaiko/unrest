@@ -502,3 +502,11 @@ connections, and records inactive names. A later server may acquire the same por
 under a fresh name and Owner; the old name and retained connections stay revoked.
 There is no route-overwrite operation. Cookie-description indexing retains the
 same cross-history alias rejection without rescanning every historical connection.
+
+Pinned-source extraction has one shared implementation. It verifies complete
+source bytes before parsing, follows only each declaration's explicit owner names,
+and requires one direct assignment for a string literal. Joined-string nodes are
+returned unevaluated only to the existing closed repr-substitution renderers;
+there is no expression evaluator or permission derived from arbitrary source text.
+Storage, completion, package, inspection, hermetic and fixed-inline declarations
+keep their own exact argv, cwd, custody, status and wait obligations.

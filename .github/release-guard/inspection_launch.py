@@ -1,13 +1,11 @@
 """Two non-launching original fresh-interpreter project inspections."""
-import ast
-import hashlib
 import json
 from pathlib import Path
 
 from content_manifest import Refused,read_regular
 from owned_fixture import acquire
 from control_transport import unique
-from launch_policy import build_expected
+from launch_policy import build_expected,source_unit,literal
 
 FRONTIER='tests/test_coordinator.py::TestCurrentEvidenceFrontier::test_frontier_reconstructs_byte_identically_in_fresh_interpreters'
 RECOVERY='tests/test_stranded_recovery.py::test_real_cli_inspection_after_recovery'
@@ -22,27 +20,15 @@ def expected(host,argv,cwd,environment,native,pin):
         raise Refused('inspection finite original arguments')
     checkout,owned=Path(host.meta['checkout']),Path(host.meta['owned'])
     path=case.split('::')[0]
-    body=(checkout/path).read_bytes()
-    if hashlib.sha256(body).hexdigest()!=PINS[path]:
-        raise Refused('inspection original literal bytes')
     if case==FRONTIER:
         home=Path(argv[3])
         root=home.parent
-        program=ast.parse(body)
-        for name in case.split('::')[1:]:
-            rows=[node for node in program.body if isinstance(node,(ast.ClassDef,ast.FunctionDef)) and node.name==name]
-            if len(rows)!=1:
-                raise Refused('inspection sole original owner')
-            program=rows[0]
-        values=[node.value for node in program.body if isinstance(node,ast.Assign) and len(node.targets)==1
-                and isinstance(node.targets[0],ast.Name) and node.targets[0].id=='script']
-        if len(values)!=1:
-            raise Refused('inspection sole original literal')
-        script=ast.literal_eval(values[0])
+        script=literal(source_unit(checkout,path,PINS[path],case.split('::')[1:]),'script')
         project_id=argv[4]
         vector=(native,'-c',script,str(root/'.unrest'),project_id)
         expected_cwd=str(checkout)
     else:
+        source_unit(checkout,path,PINS[path])
         root=Path(cwd)
         home=root/'home'
         project_id=argv[5]

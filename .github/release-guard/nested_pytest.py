@@ -1,7 +1,7 @@
 """One exact non-launching original regression selection, never a release root."""
 from content_manifest import Refused
+from launch_policy import source_unit,assignment,literal
 import ast
-import hashlib
 
 CASE='tests/test_v04_speed_runner.py::test_async_task_adapter_then_guard_regression_runs_in_one_process'
 NODES=('tests/test_task_adapter.py::test_nominal_bounded_completion_and_handoff',
@@ -17,21 +17,10 @@ PINS={'tests/test_environment_isolation.py': '3e82797b6dee4e339b1fb53f62fe3ccd9c
 
 
 def hermetic(checkout, environment):
-    trees={}
-    for path,pin in PINS.items():
-        body=(checkout/path).read_bytes()
-        if hashlib.sha256(body).hexdigest()!=pin:
-            raise Refused('hermetic original source bytes')
-        trees[path]=ast.parse(body)
-    def assigned(tree,name):
-        rows=[node.value for node in tree.body if isinstance(node,ast.Assign) and len(node.targets)==1
-              and isinstance(node.targets[0],ast.Name) and node.targets[0].id==name]
-        if len(rows)!=1:
-            raise Refused('hermetic sole original declaration')
-        return ast.literal_eval(rows[0])
+    trees={path:source_unit(checkout,path,pin) for path,pin in PINS.items()}
     tree=trees[HERMETIC_TEST]
     function=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name=='_adversarial_environment')
-    names=set(assigned(trees['src/unrest_harness/config.py'],'_CONFIG_ENV').values())
+    names=set(ast.literal_eval(assignment(trees['src/unrest_harness/config.py'],'_CONFIG_ENV')).values())
     names.update(('UNREST_CAPABILITY_PROFILE','UNREST_CAPABILITY_POLICY_VERSION','UNREST_UNSAFE_DEVELOPMENT_UNRESTRICTED'))
     values={name:f'ambient-{index}-{name.lower()}' for index,name in enumerate(sorted(names),1)}
     overrides=[node for node in ast.walk(function) if isinstance(node,ast.Call)
@@ -41,7 +30,7 @@ def hermetic(checkout, environment):
     values.update(ast.literal_eval(overrides[0].args[0]))
     if set(values)!=names:
         raise Refused('hermetic complete environment inventory')
-    return assigned(tree,'_PYTEST_RESTORE_PROBE'), {**environment,**values,
+    return literal(tree,'_PYTEST_RESTORE_PROBE'), {**environment,**values,
         'UNREST_TEST_ISOLATION_UNRELATED_SENTINEL':'outer-unrelated-value'}
 
 

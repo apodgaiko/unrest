@@ -1,12 +1,11 @@
 """Original fresh-process reads, scoped to each actual atomic-write fixture."""
 import ast
-import hashlib
 from pathlib import Path
 import stat
 
 from content_manifest import Refused
 from owned_fixture import acquire
-from launch_policy import build_expected
+from launch_policy import build_expected,source_unit
 
 OWNER=20000
 TEST='tests/test_storage.py'
@@ -26,11 +25,7 @@ def expected(host,argv,cwd,environment,native,pin):
     if case not in CASES or len(argv)!=4:
         raise Refused('storage finite read declaration')
     checkout,owned=Path(host.meta['checkout']),Path(host.meta['owned'])
-    body=(checkout/TEST).read_bytes()
-    if hashlib.sha256(body).hexdigest()!=PIN:
-        raise Refused('storage original literal bytes')
-    owner=next(node for node in ast.parse(body).body if isinstance(node,ast.ClassDef) and node.name=='TestAtomicWriteText')
-    function=next(node for node in owner.body if isinstance(node,ast.FunctionDef) and node.name=='_fresh_process_bytes')
+    function=source_unit(checkout,TEST,PIN,('TestAtomicWriteText','_fresh_process_bytes'))
     calls=[node for node in ast.walk(function) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='check_output']
     if len(calls)!=1:
         raise Refused('storage sole original read')

@@ -1,8 +1,6 @@
 """Finite original distribution and installed-package cases and literal bodies."""
-import ast
-import hashlib
 
-from content_manifest import Refused
+from launch_policy import source_unit,literal as source_literal
 
 TEST='tests/test_distribution_check.py'
 POSITIVE=TEST+'::test_checker_builds_and_executes_15_cases_with_extracted_provenance'
@@ -28,20 +26,7 @@ PINS={'tests/contracts/conftest.py': '397631196d19b0060ab5042601888f502982e227c9
 
 
 def literal(checkout,path,name,variable):
-    body=(checkout/path).read_bytes()
-    if hashlib.sha256(body).hexdigest()!=PINS[path]:
-        raise Refused('package original source bytes')
-    tree=ast.parse(body)
-    if name is not None:
-        rows=[node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name==name]
-        if len(rows)!=1:
-            raise Refused('package original function')
-        tree=rows[0]
-    rows=[node.value for node in tree.body if isinstance(node,ast.Assign) and len(node.targets)==1
-          and isinstance(node.targets[0],ast.Name) and node.targets[0].id==variable]
-    if len(rows)!=1 or not isinstance(rows[0],ast.Constant) or type(rows[0].value) is not str:
-        raise Refused('package original literal')
-    return rows[0].value
+    return source_literal(source_unit(checkout,path,PINS[path],() if name is None else (name,)),variable)
 
 
 def count(case):

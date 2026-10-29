@@ -1,10 +1,8 @@
 """Original intentional-crash completion primitives and their real retry."""
-import ast
-import hashlib
 from pathlib import Path
 
 from content_manifest import Refused
-from launch_policy import build_expected
+from launch_policy import build_expected,source_unit,literal
 from owned_fixture import acquire
 
 PUBLICATION='tests/test_completion_ownership.py::test_interrupted_publication_and_lock_recovery'
@@ -29,18 +27,11 @@ def expected(host,operation,argv,cwd,environment,native,pin):
     checkout=Path(host.meta['checkout'])
     path,name=case.split('::')
     name=name.split('[')[0]
-    body=(checkout/path).read_bytes()
-    if hashlib.sha256(body).hexdigest()!=PINS[path]:
-        raise Refused('completion original primitive bytes')
-    owner=next(node for node in ast.parse(body).body if isinstance(node,ast.FunctionDef) and node.name==name)
-    values=[node.value for node in owner.body if isinstance(node,ast.Assign) and len(node.targets)==1
-            and isinstance(node.targets[0],ast.Name) and node.targets[0].id==('retry' if operation=='retry' else 'script')]
-    if len(values)!=1 or not isinstance(values[0],ast.Constant) or type(values[0].value) is not str:
-        raise Refused('completion original sole primitive literal')
+    program=literal(source_unit(checkout,path,PINS[path],(name,)),'retry' if operation=='retry' else 'script')
     root=Path(argv[3]).parents[len(Path(suffix).parts)-1]
     root,info=acquire(str(root),Path(host.meta['owned']),name[:30],OWNER)
     generation=(str(root),info.st_dev,info.st_ino)
     if host.fixture_roots.setdefault(case,generation)!=generation or cwd!=str(checkout):
         raise Refused('completion changed fixture generation or cwd')
-    vector=(native,'-c',values[0].value,str(root/suffix),*((phase,) if operation=='crash' and phase is not None else ()))
+    vector=(native,'-c',program,str(root/suffix),*((phase,) if operation=='crash' and phase is not None else ()))
     return build_expected('fixed:completion',case,native,pin,vector,tuple(sorted(environment.items())),cwd,'python-command')

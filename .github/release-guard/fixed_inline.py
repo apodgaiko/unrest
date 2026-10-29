@@ -8,7 +8,7 @@ from pathlib import Path
 
 from content_manifest import Refused
 from git_observer import image
-from launch_policy import build_expected
+from launch_policy import build_expected,source_unit,literal
 from speed_inline import CASES as SPEED_CASES, PRELUDE, CLI_CASE, cli_expected
 from nested_pytest import CASE as NESTED_CASE, NODES, PYTEST_PIN, CASES as NESTED_CASES, HERMETIC, hermetic
 from desktop_launch import CASE as DESKTOP_CASE
@@ -98,14 +98,12 @@ def startup_expected(case,native,pin,cwd,owned):
 
 def script(checkout, operation, root=None):
     path = RELOAD_TEST if operation in ('reload','detached',*METHODS,*NETWORK,*SPEED_CASES) else OBSERVATION_TEST if operation in OBSERVATION_OPERATIONS else TEST
-    data = (checkout / path).read_bytes()
-    if hashlib.sha256(data).hexdigest() != PINS[path]:
-        raise Refused('fixed inline source bytes')
+    tree=source_unit(checkout,path,PINS[path])
     if operation in SPEED_CASES:
         from speed_inline import body
-        return body(ast.parse(data),operation,root,checkout)
+        return body(tree,operation,root,checkout)
     name = NETWORK_NAME if operation in NETWORK else 'test_detached_socket_descriptor_is_preflight_evidence' if operation=='detached' else RELOAD_NAME if operation=='reload' else METHOD_NAME if operation in METHODS else 'test_fresh_entrypoint_import_boundary' if operation in OBSERVATION_OPERATIONS else 'test_mcp_help_does_not_import_repository_modules' if operation == 'mcp' else '_import_probe'
-    functions = [node for node in ast.parse(data).body if isinstance(node, ast.FunctionDef) and node.name == name]
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name]
     if len(functions) != 1:
         raise Refused('fixed inline literal owner')
     if operation in ('reload','detached',*METHODS,*NETWORK):
@@ -134,12 +132,7 @@ def script(checkout, operation, root=None):
             else:
                 raise Refused('fixed isolated template substitution')
         return ''.join(parts)
-    values = [node.value.value for node in functions[0].body if isinstance(node, ast.Assign)
-              and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and node.targets[0].id == 'script'
-              and isinstance(node.value, ast.Constant) and type(node.value.value) is str]
-    if len(values) != 1:
-        raise Refused('fixed inline literal declaration')
-    return values[0]
+    return literal(functions[0],'script')
 
 
 def expected(case, operation, native, pin, checkout, environment, *, query=False, root=None):
@@ -148,10 +141,7 @@ def expected(case, operation, native, pin, checkout, environment, *, query=False
     if case==JOURNAL_CASE:
         if query:
             raise Refused('journal sleep has no descendants')
-        body=(checkout/JOURNAL_TEST).read_bytes()
-        if hashlib.sha256(body).hexdigest()!=PINS[JOURNAL_TEST]:
-            raise Refused('journal original body bytes')
-        owner=next(node for node in ast.parse(body).body if isinstance(node,ast.FunctionDef) and node.name==JOURNAL_CASE.split('::')[-1])
+        owner=source_unit(checkout,JOURNAL_TEST,PINS[JOURNAL_TEST],(JOURNAL_CASE.split('::')[-1],))
         calls=[node for node in ast.walk(owner) if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='Popen']
         if len(calls)!=1:
             raise Refused('journal sole original child')

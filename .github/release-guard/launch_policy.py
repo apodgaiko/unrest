@@ -6,9 +6,10 @@ from an untrusted launch vector merely to make a declaration accept that vector.
 """
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 import hashlib
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from content_manifest import Refused, is_sha256
 
@@ -141,3 +142,32 @@ def build_expected(rule: str, case: str, executable: str, executable_sha256: str
     _, payload_sha256 = _payload(argv, payload_kind, reference, executable_sha256)
     return Expected(rule, case, executable, executable_sha256, argv,
                     environment, cwd, payload_kind, payload_sha256)
+
+
+
+def source_unit(checkout: Path,path: str,pin: str,owners=()):
+    body=(checkout/path).read_bytes()
+    if hashlib.sha256(body).hexdigest()!=pin:
+        raise Refused('original source bytes')
+    unit=ast.parse(body)
+    for name in owners:
+        rows=[node for node in unit.body if isinstance(node,(ast.ClassDef,ast.FunctionDef)) and node.name==name]
+        if len(rows)!=1:
+            raise Refused('sole original source owner')
+        unit=rows[0]
+    return unit
+
+
+def assignment(unit,name):
+    rows=[node.value for node in unit.body if isinstance(node,ast.Assign) and len(node.targets)==1
+          and isinstance(node.targets[0],ast.Name) and node.targets[0].id==name]
+    if len(rows)!=1:
+        raise Refused('sole original source assignment')
+    return rows[0]
+
+
+def literal(unit,name):
+    value=assignment(unit,name)
+    if not isinstance(value,ast.Constant) or type(value.value) is not str:
+        raise Refused('original string literal')
+    return value.value
