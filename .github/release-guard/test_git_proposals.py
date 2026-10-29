@@ -6,8 +6,9 @@ import pytest
 
 from content_manifest import Refused
 from control_transport import finite
-from git_commands import build
-from git_proposals import operands, prepare
+from git_commands import match as match_command
+from test_git_vectors import build
+from git_proposals import prepare
 from git_sites import CASES
 
 REPO = "/owned/pytest/case/project"
@@ -84,16 +85,15 @@ def host_value(**changes):
         ),
     ],
 )
-def test_inverse_template_preserves_exact_command_input_and_bounded_operands(
+def test_complete_vector_matches_exact_template_and_bounded_operands(
     operation, location, fields
 ):
     original = build(operation, REPO, location, fields, family="workspaces")
     raw = {"stdin": original.stdin, "environment": dict(original.additions)}
-    recovered = operands(operation, list(original.argv[1:]), raw)
-    assert build(operation, REPO, location, recovered, family="workspaces") == original
+    assert match_command(operation,REPO,location,list(original.argv),raw["stdin"],raw["environment"],family="workspaces")==original
     if fields:
         with pytest.raises(Refused):
-            operands(operation, [*original.argv[1:], "foreign"], raw)
+            match_command(operation,REPO,location,[*original.argv,"foreign"],raw["stdin"],raw["environment"],family="workspaces")
 
 
 @pytest.mark.parametrize("mutation", ["argv", "cwd", "environment", "stdin", "family"])
@@ -241,12 +241,11 @@ def test_shared_repository_operations_exist_for_both_product_families(family, op
     fields = {"revision": REV} if operation == "verify-base" else {}
     assert operation in OPERATIONS[family]
     value = build(operation, REPO, REPO, fields, family=family)
-    recovered = operands(operation,list(value.argv[1:]),{"stdin":None,"environment":{}})
-    assert build(operation, REPO, REPO, recovered, family=family) == value
+    assert match_command(operation,REPO,REPO,list(value.argv),None,{},family=family)==value
 
 
 @pytest.mark.parametrize('branch',['main','master'])
-def test_proposal_update_targets_only_the_acquired_branch(monkeypatch,branch):
+def test_proposal_update_targets_only_authored_main_or_master(monkeypatch,branch):
     import git_proposals
     from git_fixtures import SLOTS
 
@@ -262,7 +261,7 @@ def test_proposal_update_targets_only_the_acquired_branch(monkeypatch,branch):
          'cwd':REPO,'stdin':None,'environment':{'PATH':'/bin:/usr/bin','PYTEST_VERSION':'9.0.2',
             'PYTEST_CURRENT_TEST':case+' (call)'}}
     assert prepare(host,{},raw)['translated']==['/usr/bin/git',*raw['argv'][1:]]
-    raw['argv'][2]='refs/heads/'+('master' if branch=='main' else 'main')
+    raw['argv'][2]='refs/heads/foreign'
     with pytest.raises(Refused):
         prepare(host,{},raw)
     assert len(calls)==1

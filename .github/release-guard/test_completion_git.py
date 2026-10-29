@@ -75,13 +75,13 @@ def prepare(fixture):
 
 def test_fixture_needs_two_actual_parent_waits_before_sealing_model_metadata(fixture):
     host,actor,raw,wait,workspace=prepare(fixture)
-    assert git.ready(host,workspace)=='1'*40
+    assert git.ready(host,workspace) is None
     with pytest.raises(Refused,match='root fixture sequence'):
         git.proposal(host,actor,raw(git.FIXTURE[1]))
     assert len(host.intents)==2
 
 
-@pytest.mark.parametrize('mutation',['generation','bytes','symlink','home','argv','env'])
+@pytest.mark.parametrize('mutation',['generation','bytes','symlink','hardlink','special-mode','home','argv','env'])
 def test_foreign_or_changed_git_inputs_never_become_query_authority(fixture,mutation):
     if mutation in ('argv','env'):
         host,actor,raw,wait,workspace=fixture
@@ -91,7 +91,7 @@ def test_foreign_or_changed_git_inputs_never_become_query_authority(fixture,muta
         assert not host.intents
         return
     host,actor,raw,wait,workspace=prepare(fixture)
-    assert git.ready(host,workspace)=='1'*40
+    assert git.ready(host,workspace) is None
     if mutation=='generation':
         (workspace/'.git').rename(workspace/'.old-git')
         (workspace/'.git').mkdir()
@@ -99,9 +99,15 @@ def test_foreign_or_changed_git_inputs_never_become_query_authority(fixture,muta
         (workspace/'.git/refs/heads/main').write_text('2'*40+'\n')
     elif mutation=='symlink':
         (workspace/'.git/foreign').symlink_to(workspace/'.git/HEAD')
+    elif mutation=='hardlink':
+        os.link(workspace/'.git/HEAD',workspace/'.git/foreign')
+    elif mutation=='special-mode':
+        (workspace/'.git/HEAD').chmod(0o1644)
     elif mutation=='home':
         (Path(host.meta_environment()['HOME'])/'.gitconfig').write_bytes(b'foreign')
-    if mutation in ('generation','bytes','symlink'):
+    if mutation=='bytes':
+        assert git.ready(host,workspace) is None  # Original tests own HEAD-value correctness.
+    elif mutation in ('generation','symlink','hardlink','special-mode'):
         with pytest.raises(Refused):
             git.ready(host,workspace)
     elif mutation=='home':

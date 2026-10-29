@@ -1,12 +1,12 @@
 """Two root fixture mutations and bounded server-owned read-only HEAD queries."""
 from pathlib import Path
+import stat
 
 from completion_roles import CASES,schedule,root,actor_slot
-from content_manifest import Refused,capture
+from content_manifest import Refused
 from custody_git import repository
 from git_commands import Command
 from git_observer import HOME_CONFIG,image,regular
-from git_operands import digest
 from launch_policy import admit_expected,build_expected
 
 FIXTURE=(('git','init','-q'),('git','-c','user.name=Test','-c','user.email=test@example.invalid',
@@ -23,24 +23,11 @@ def ready(host,workspace):
         raise Refused('completion fixture repository generation changed')
     metadata=workspace/'.git'
     members=sorted(metadata.rglob('*'))
-    if any(path.is_symlink() or not (path.is_file() or path.is_dir()) for path in members):
-        raise Refused('completion fixture Git member custody')
-    names=[str(path.relative_to(metadata)) for path in members if path.is_file()]
-    value={'identity':identity,'files':capture(metadata,names)}
-    key=('completion-git',host.case)
-    if host.fixture_roots.setdefault(key,value)!=value:
-        raise Refused('completion fixture Git metadata changed')
-    head=regular(metadata/'HEAD').decode()
-    if not head.startswith('ref: ') or not head.endswith('\n'):
-        raise Refused('completion fixture symbolic HEAD')
-    reference=Path(head[5:-1])
-    file=metadata/reference
-    if reference.is_absolute() or '..' in reference.parts or reference.parts[:2]!=('refs','heads') or file.resolve()!=file:
-        raise Refused('completion fixture HEAD reference')
-    raw=regular(file)
-    if len(raw)!=41 or not raw.endswith(b'\n'):
-        raise Refused('completion fixture HEAD bytes')
-    return digest(raw[:-1].decode())
+    for path in members:
+        info=path.lstat()
+        if (not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)) or info.st_mode&0o7000
+                or stat.S_ISREG(info.st_mode) and info.st_nlink!=1):
+            raise Refused('completion fixture Git member custody')
 
 
 def proposal(host,actor,raw):
@@ -68,12 +55,13 @@ def proposal(host,actor,raw):
             raise Refused('completion fixture repository generation')
         host.fixture_roots[key]=identity
         command=Command(vector,str(workspace))
-        environment,head=base,None
+        environment,is_fixture=base,True
     else:
         server=actor_slot(host,actor)
         if len(records)>=schedule(case)[server['server_slot']][2]:
             raise Refused('completion server-owned Git query quota')
-        head=ready(host,workspace)
+        ready(host,workspace)
+        is_fixture=False
         vector=('git','rev-parse','HEAD')
         command=Command(vector,str(workspace))
         environment=dict(actor['profile']['environment'])
@@ -85,7 +73,7 @@ def proposal(host,actor,raw):
     if answer is None:
         return None
     intent=host.intents[answer['ticket']]
-    intent.update(command=command,repository=str(workspace),operation='completion-fixture' if head is None else 'completion-head',
-        fixture_git=head is None,fixture_head=head,fixture_stdio=head is None)
+    intent.update(command=command,repository=str(workspace),operation='completion-fixture' if is_fixture else 'completion-head',
+        fixture_git=is_fixture,fixture_stdio=is_fixture)
     host.git.commands[intent['token']]=intent
     return answer

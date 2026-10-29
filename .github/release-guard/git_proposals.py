@@ -1,43 +1,10 @@
 """Finite Git forms and bounded operands; native ownership/waits remain separate."""
 
 from content_manifest import Refused
-from git_commands import build,FIELDS,Command
+from git_commands import match as match_command,Command
 from git_sites import CASES,OPERATIONS,OWNED_BODY,SHARED_OPERATIONS
 from git_observer import SETUP,image
 from launch_policy import build_expected
-
-
-def operands(operation,args,raw):
-    if not FIELDS[operation]:
-        return {}
-    match operation,args:
-        case ('lease-add', ['worktree','add','--detach','--no-checkout',tree,revision]):
-            return {'tree':tree,'revision':revision}
-        case (('integration-add'|'rollback-add'), ['worktree','add','--detach',tree,revision]):
-            return {'tree':tree,'revision':revision}
-        case ('remove-tree',['worktree','remove','--force',tree]):
-            return {'tree':tree}
-        case ('verify-base',['rev-parse','--verify',revision]) if revision.endswith('^{commit}'):
-            return {'revision':revision[:-9]}
-        case ('checkout',['checkout','--detach',revision]):
-            return {'revision':revision}
-        case ('diff-return',['diff','--cached','--binary','--no-ext-diff',revision]):
-            return {'revision':revision}
-        case ('date',['show','-s','--format=%aI',revision]):
-            return {'revision':revision}
-        case ('apply',['apply','--index','--binary',patch]):
-            return {'patch':patch}
-        case (('update-parent'|'rollback-update'),['update-ref',ref,new,old]) if ref in ('refs/heads/main','refs/heads/master'):
-            return {'new':new,'old':old}
-        case (('reset-parent'|'rollback-reset'),['reset','--hard',revision]):
-            return {'revision':revision}
-        case ('commit-tree',['commit-tree',tree,'-p',revision]):
-            message=raw['stdin']
-            if type(message) is not str or len(message)>16384 or not message.startswith('Integrate Unrest workspaces\n\n') or not message.endswith('\n'):
-                raise Refused('Git proposal finite commit input')
-            leases=tuple(tuple(line.split(' ')) for line in message[len('Integrate Unrest workspaces\n\n'):-1].split('\n'))
-            return {'tree_id':tree,'revision':revision,'date':raw['environment'].get('GIT_AUTHOR_DATE'),'leases':leases}
-    raise Refused('Git proposal does not match a template')
 
 
 def prepare(host,actor,raw):
@@ -58,7 +25,7 @@ def prepare(host,actor,raw):
     if owned:
         if case!=CASES[7] or slot is None or raw['stdin'] is not None or raw['cwd']!=repository+'/.unrest-runtime/workspaces/trees/process':
             raise Refused('Git proposal owned process scope')
-        operation,fields,command='owned-process',{},None
+        operation,command='owned-process',None
         expected=build_expected(
             'workspace:owned', case,
             native, pin,
@@ -70,28 +37,20 @@ def prepare(host,actor,raw):
     else:
         if raw['executable']!='/usr/bin/git':
             raise Refused('Git proposal original executable')
-        setup=0 if slot is None else slot['setup']
-        operations=(SETUP[setup],) if setup<len(SETUP) else SHARED_OPERATIONS if fixture is not None else OPERATIONS[family]
-        candidates: dict[str,tuple[dict,Command]] = {}
+        operations=(*SETUP,*SHARED_OPERATIONS) if fixture is not None else OPERATIONS[family]
+        branch='master' if fixture is not None and fixture.init==('init',) and raw['argv'][1:3]==['update-ref','refs/heads/master'] else 'main'
+        operations=tuple(dict.fromkeys({'rollback-update':'update-parent','rollback-reset':'reset-parent'}.get(operation,operation) for operation in operations))
+        candidates: dict[str,Command] = {}
         for operation in operations:
             try:
-                fields=operands(operation,raw['argv'][1:],raw)
-                command=build(operation,repository,raw['cwd'],fields,family=family,fixture=fixture,branch=slot.get('branch','main') if slot is not None else 'main')
+                command=match_command(operation,repository,raw['cwd'],raw['argv'],raw['stdin'],raw['environment'],family=family,fixture=fixture,branch=branch)
             except Refused:
                 continue
-            if list(command.argv)==raw['argv'] and raw['stdin']==command.stdin:
-                candidates.setdefault(operation,(fields,command))
-        # These authored labels describe the same scoped OS effect.
-        for canonical,rollback in (('update-parent','rollback-update'),('reset-parent','rollback-reset')):
-            if canonical in candidates and rollback in candidates:
-                strong,weak=candidates[canonical][1],candidates[rollback][1]
-                if (strong.argv,strong.cwd,strong.additions,strong.stdin)!=(weak.argv,weak.cwd,weak.additions,weak.stdin):
-                    raise Refused('Git overlapping declarations differ')
-                del candidates[rollback]
+            candidates[operation]=command
         if len(candidates)!=1:
             raise Refused('Git proposal requires one finite operation')
-        operation,(fields,command)=next(iter(candidates.items()))
-        phase=(fixture.phase if fixture is not None else 'setup') if setup<len(SETUP) else 'call'
+        operation,command=next(iter(candidates.items()))
+        phase=(fixture.phase if fixture is not None else 'setup') if operation in SETUP else 'call'
         environment={**host.meta_environment(),'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' ('+phase+')',**dict(command.additions)}
         expected=build_expected(
             'git:'+operation, case,

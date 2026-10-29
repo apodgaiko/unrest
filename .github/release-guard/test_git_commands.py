@@ -5,7 +5,8 @@ import hashlib
 import pytest
 
 from content_manifest import Refused
-from git_commands import build, FIELDS, FIXED, ROLES
+from git_commands import FIXED, ROLES
+from test_git_vectors import build,FIELDS
 
 REPO = '/owned/project'
 LEASE = REPO + '/.unrest-runtime/workspaces/trees/one'
@@ -30,7 +31,7 @@ def fields(operation):
 
 
 @pytest.mark.parametrize('operation', tuple(FIELDS))
-def test_every_closed_operation_is_built_without_observed_argv(operation):
+def test_every_closed_operation_matches_its_literal_vector(operation):
     cwd = LOCATIONS[ROLES[operation][0]]
     result = build(operation, REPO, cwd, fields(operation), family='evolution' if operation.startswith('rollback-') else 'workspaces')
     assert result.argv[0] == 'git' and result.cwd == cwd
@@ -77,7 +78,7 @@ def test_promotion_and_rollback_have_retain_literal_ref_and_operand_positions():
 
 
 @pytest.mark.parametrize('mutation', ('extra', 'missing', 'bool', 'wrong-tree', 'parent-tree', 'patch-scope', 'patch-digest', 'lease-order', 'lease-duplicate'))
-def test_swapped_operands_are_refused_before_command_construction(mutation):
+def test_swapped_operands_are_refused_at_complete_vector_matching(mutation):
     operation = 'lease-add'
     data = fields(operation)
     if mutation == 'extra':
@@ -106,14 +107,9 @@ class CallbackTrap:
         pytest.fail('Git builder invoked caller equality')
 
 
-def test_family_and_dependency_inputs_are_primitive_and_predecessor_bound():
+def test_family_is_primitive_and_rollback_forms_stay_scoped():
     with pytest.raises(Refused):
         build('head', REPO, REPO, {}, family=CallbackTrap())
-    for dependency in ((TREE, NEW, DATE, '6' * 64), (TREE, BASE, 'invalid-date', '6' * 64), True):
-        data = fields('update-parent')
-        data['new_inputs'] = dependency
-        with pytest.raises(Refused):
-            build('update-parent', REPO, REPO, data, family='workspaces')
     with pytest.raises(Refused, match='rollback family'):
         build('rollback-add', REPO, REPO, fields('rollback-add'), family='workspaces')
 
@@ -131,3 +127,13 @@ def test_owned_workspace_literal_command_derives_its_inline_digest():
     from git_sites import OWNED_BODY, CASES
     from launch_policy import build_expected
     assert build_expected('workspace:owned', CASES[7], '/native/python', 'a' * 64, ('/native/python', '-c', OWNED_BODY), (), REPO, 'python-command', None).payload_sha256 == hashlib.sha256(OWNED_BODY.encode()).hexdigest()
+
+
+
+def test_commit_input_preserves_the_per_lease_identifier_byte_bound():
+    data=fields('commit-tree')
+    data['leases']=(('lease:'+'a'*4091,'sha256:'+PATCH),)
+    with pytest.raises(Refused,match='lease identity'):
+        build('commit-tree',REPO,INTEGRATION,data,family='workspaces')
+    data['leases']=(('lease:'+'a'*4090,'sha256:'+PATCH),)
+    assert build('commit-tree',REPO,INTEGRATION,data,family='workspaces').stdin

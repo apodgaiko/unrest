@@ -62,35 +62,27 @@ class Git:
         if slot is None:
             if operation != 'init' or (root / '.git').exists():
                 raise Refused('git first original fixture operation')
-            slot = {'path': repository, 'identities': identities, 'setup': 0}
+            slot = {'path': repository, 'identities': identities}
             self.repositories[key] = slot
         if slot['path'] != repository or slot['identities'] != identities:
             raise Refused('git repository generation')
-        if slot['setup'] < len(SETUP):
-            if operation != SETUP[slot['setup']]:
-                raise Refused('git fixture setup order')
-        if slot['setup']:
-            parser = configparser.RawConfigParser(strict=True)
-            parser.read_string(regular(root / '.git/config').decode('utf-8'))
-            user = {} if slot['setup'] == 1 else {'name': fixture.user if fixture is not None else 'Workspace Test' if family == 'workspaces' else 'Evolution Test'}
-            if slot['setup'] >= 3:
-                user['email'] = fixture.email if fixture is not None else 'workspace@example.test' if family == 'workspaces' else 'evolution@example.test'
-            head=regular(root/'.git/HEAD',256)
-            allowed=(b'ref: refs/heads/main\n',b'ref: refs/heads/master\n') if fixture is not None and fixture.init==('init',) else (b'ref: refs/heads/main\n',)
-            if head not in allowed:
-                raise Refused('Git exact fixture branch')
-            branch=head.decode()[16:-1]
-            if slot.setdefault('branch',branch)!=branch:
-                raise Refused('Git fixture branch changed')
-            if (parser.defaults() or set(parser.sections()) != ({'core', 'user'} if user else {'core'})
-                    or dict(parser['core']) != {'repositoryformatversion': '0', 'filemode': 'true', 'bare': 'false', 'logallrefupdates': 'true'}
-                    or user and dict(parser['user']) != user
-                   ):
-                raise Refused('git original repository configuration')
+        metadata=root/'.git'
+        if not metadata.exists() and not metadata.is_symlink():
+            if operation!='init':
+                raise Refused('git declared metadata missing')
+        else:
+            info=metadata.lstat()
+            if (not stat.S_ISDIR(info.st_mode) or metadata.resolve(strict=True)!=metadata
+                    or info.st_uid!=20000 or info.st_mode&0o6022):
+                raise Refused('git declared metadata directory')
+            parser=configparser.RawConfigParser(strict=True)
+            parser.read_string(regular(metadata/'config').decode('utf-8'))
+            if (parser.defaults() or not {'core'}<=set(parser.sections())<={'core','user'}
+                    or dict(parser['core'])!={'repositoryformatversion':'0','filemode':'true','bare':'false','logallrefupdates':'true'}
+                    or 'user' in parser and not set(parser['user'])<={'name','email'}):
+                raise Refused('git repository routing configuration')
         if regular(owned / 'home/.gitconfig', uid=20001) != HOME_CONFIG:
             raise Refused('git immutable diagnostic home configuration')
-        if slot['setup'] < len(SETUP):
-            slot['setup'] += 1
         return root
 
     def location(self, root, location):
@@ -143,12 +135,9 @@ class Git:
         siblings = host.ledger.children.get(parent, ())
         if list(siblings) != [birth]:
             raise Refused('git single current checkout helper')
-        tree, revision = intent['command'].argv[-2:]
+        tree = intent['command'].argv[-2]
         root, worktree = Path(intent['repository']), Path(tree)
         self.location(root, tree)
-        expected_head = revision.encode() + b'\n'
-        if regular(root / '.git/worktrees' / worktree.name / 'HEAD', 64) != expected_head:
-            raise Refused('git helper detached HEAD phase')
         executable = '/usr/lib/git-core/git'
         pin=intent['executable_sha256']
         if image(executable) != pin:

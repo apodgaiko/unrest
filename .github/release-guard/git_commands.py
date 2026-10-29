@@ -1,7 +1,7 @@
 """Closed Git commands for the workspace/evolution launch families.
 
 The independent observer validates filesystem custody and process state.
-This builder interprets no expressions and accepts no argv.
+The matcher interprets no expressions and admits only complete closed argv forms.
 Dynamic data operands remain scoped; the product tests own Git value semantics.
 """
 from __future__ import annotations
@@ -34,16 +34,14 @@ FIXED = {
     'check-index': ('diff', '--cached', '--check'),
     'prune': ('worktree', 'prune'),
 }
-FIELDS = {**dict.fromkeys(FIXED, ()), 'init': (), 'config-name': (), 'config-email': (),
-    'stage-base': (), 'commit-base': (), 'stage-advance': (), 'commit-advance': (),
-    'stage-child': (), 'commit-child': (), 'verify-base': ('revision',),
-    'lease-add': ('tree', 'revision'), 'integration-add': ('tree', 'revision'),
-    'rollback-add': ('tree', 'revision'), 'checkout': ('revision',),
-    'diff-return': ('revision',), 'apply': ('patch',), 'date': ('revision',),
-    'commit-tree': ('tree_id', 'revision', 'date', 'leases'),
-    'update-parent': ('new', 'old'), 'reset-parent': ('revision',),
-    'rollback-update': ('new', 'old'), 'rollback-reset': ('revision',),
-    'remove-tree': ('tree',)}
+OPERATIONS = (*FIXED,
+    'init', 'config-name', 'config-email', 'stage-base',
+    'commit-base', 'stage-advance', 'commit-advance', 'stage-child',
+    'commit-child', 'verify-base', 'lease-add', 'integration-add',
+    'rollback-add', 'checkout', 'diff-return', 'apply',
+    'date', 'commit-tree', 'update-parent', 'reset-parent',
+    'rollback-update', 'rollback-reset', 'remove-tree',
+)
 
 
 def path(value):
@@ -68,109 +66,89 @@ def location_role(repo, cwd):
     raise Refused('git operation location')
 
 
-ROLES = {**dict.fromkeys(FIELDS, ('parent',)),
+ROLES = {**dict.fromkeys(OPERATIONS, ('parent',)),
     'top': ('parent', 'lease'), 'head': ('parent', 'lease'),
     **dict.fromkeys(('inventory', 'stage-return', 'checkout', 'diff-return', 'stage-child', 'commit-child'), ('lease',)),
     **dict.fromkeys(('apply', 'write-tree', 'commit-tree'), ('integration',)),
     'check-index': ('integration', 'rollback')}
 
 
-def build(operation, repository, location, fields, *, family, fixture=None, branch="main"):
-    if type(operation) is not str or operation not in FIELDS or type(family) is not str or family not in ('workspaces', 'evolution'):
+def match(operation, repository, location, argv, stdin, environment, *, family, fixture=None, branch="main"):
+    """Match one closed complete vector; dynamic operands grant no extra forms."""
+    if type(family) is not str or family not in ('workspaces','evolution') or type(operation) is not str or operation not in OPERATIONS:
         raise Refused('git closed operation')
-    if branch not in ("main","master"):
-        raise Refused("Git declared branch")
-    repo, cwd = path(repository), path(location)
-    if type(fields) is not dict or any(type(k) is not str for k in fields) or set(fields) != set(FIELDS[operation]):
-        raise Refused('git operation operands')
-    role = location_role(repo, cwd)
-    if role == 'rollback' and family != 'evolution':
+    if type(argv) is not list or not argv or any(type(value) is not str for value in argv) or argv[0]!='git':
+        raise Refused('git literal argument vector')
+    repo,cwd=path(repository),path(location)
+    role=location_role(repo,cwd)
+    if role=='rollback' and family!='evolution':
         raise Refused('git rollback location family')
     if role not in ROLES[operation]:
         raise Refused('git operation location role')
-    for key, value in fields.items():
-        if key != 'leases':
-            text(value)
-    args: tuple[str,...] = ()
-    additions: tuple[tuple[str,str],...] = ()
-    stdin: str | None = None
-    if operation in ('rollback-add', 'rollback-update', 'rollback-reset') and family != 'evolution':
-        raise Refused('git rollback family')
+    args=tuple(argv[1:])
+    additions=()
     if operation in FIXED:
-        args = FIXED[operation]
-    elif operation in ('init', 'config-name', 'config-email', 'stage-base', 'commit-base',
-                       'stage-advance', 'commit-advance', 'stage-child', 'commit-child'):
-        label = 'Workspace' if family == 'workspaces' else 'Evolution'
-        args = {'init': ('init', '-b', 'main'), 'config-name': ('config', 'user.name', label + ' Test'),
-            'config-email': ('config', 'user.email', family.removesuffix('s') + '@example.test'),
-            'stage-base': ('add', 'README.md'), 'commit-base': ('commit', '-m', 'base'),
-            'stage-advance': ('add', 'advance.txt'), 'commit-advance': ('commit', '-m', 'advance parent'),
-            'stage-child': ('add', 'child.txt'), 'commit-child': ('commit', '-m', 'child self commit')}[operation]
+        if args!=FIXED[operation]:
+            raise Refused('git fixed command')
+    elif operation in ('init','config-name','config-email','stage-base','commit-base','stage-advance','commit-advance','stage-child','commit-child'):
+        label='Workspace' if family=='workspaces' else 'Evolution'
+        expected={'init':('init','-b','main'),'config-name':('config','user.name',label+' Test'),
+            'config-email':('config','user.email',family.removesuffix('s')+'@example.test'),
+            'stage-base':('add','README.md'),'commit-base':('commit','-m','base'),
+            'stage-advance':('add','advance.txt'),'commit-advance':('commit','-m','advance parent'),
+            'stage-child':('add','child.txt'),'commit-child':('commit','-m','child self commit')}[operation]
         if fixture is not None and operation in ('init','config-name','config-email','stage-base','commit-base'):
-            args=fixture.commands[('init','config-name','config-email','stage-base','commit-base').index(operation)]
-        if (operation in ('stage-child', 'commit-child')) != (cwd != repo):
-            raise Refused('git fixture location')
-        if family == 'evolution' and operation in ('stage-child', 'commit-child', 'stage-advance', 'commit-advance'):
-            raise Refused('git fixture family')
-    elif operation in ('lease-add', 'integration-add', 'rollback-add', 'remove-tree'):
-        tree = path(fields['tree'])
-        parent = repo / '.unrest-runtime' / ('evolution' if operation == 'rollback-add' else 'workspaces')
-        if operation == 'lease-add':
-            parent /= 'trees'
-        if operation == 'remove-tree':
-            parents = (repo / '.unrest-runtime/workspaces', repo / '.unrest-runtime/workspaces/trees', repo / '.unrest-runtime/evolution')
-            if tree.parent not in parents or location_role(repo, tree) not in ('lease', 'integration', 'rollback'):
-                raise Refused('git remove tree scope')
-            if location_role(repo, tree) == 'rollback' and family != 'evolution':
-                raise Refused('git rollback target family')
-            args = ('worktree', 'remove', '--force', str(tree))
-        else:
-            if tree.parent != parent or cwd != repo or location_role(repo, tree) != {'lease-add': 'lease', 'integration-add': 'integration', 'rollback-add': 'rollback'}[operation]:
-                raise Refused('git add tree scope')
-            if operation != 'lease-add':
-                prefix = 'integration-' if operation == 'integration-add' else 'rollback-'
-                suffix = tree.name.removeprefix(prefix)
-                if not tree.name.startswith(prefix) or len(suffix) != 8 or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789_' for c in suffix):
-                    raise Refused('git temporary tree name')
-            revision = digest(fields['revision'])
-            args = ('worktree', 'add', '--detach', *(('--no-checkout',) if operation == 'lease-add' else ()), str(tree), revision)
-    elif operation in ('verify-base', 'checkout', 'diff-return', 'date', 'reset-parent', 'rollback-reset'):
-        revision = digest(fields['revision'])
-        args = {'verify-base': ('rev-parse', '--verify', revision + '^{commit}'),
-            'checkout': ('checkout', '--detach', revision), 'diff-return': ('diff', '--cached', '--binary', '--no-ext-diff', revision),
-            'date': ('show', '-s', '--format=%aI', revision), 'reset-parent': ('reset', '--hard', revision), 'rollback-reset': ('reset', '--hard', revision)}[operation]
-    elif operation == 'apply':
-        patch = path(fields['patch'])
-        if patch.parent != repo / '.unrest/workspaces/patches' or patch.suffix != '.patch':
-            raise Refused('git patch scope')
-        digest(patch.stem, 64)
-        args = ('apply', '--index', '--binary', str(patch))
-    elif operation in ('update-parent', 'rollback-update'):
-        new, old = digest(fields['new']), digest(fields['old'])
-        args = ('update-ref', 'refs/heads/'+branch, new, old)
-    elif operation == 'commit-tree':
-        tree, revision, date, leases = fields['tree_id'], digest(fields['revision']), fields['date'], fields['leases']
-        digest(tree)
-        date_text(date)
-        if type(leases) is not tuple or not 0 < len(leases) <= 128:
-            raise Refused('git commit lease set')
-        rows = []
-        for row in leases:
-            if type(row) is not tuple or len(row) != 2:
-                raise Refused('git commit lease row')
-            lease, patch = row
-            text(lease)
-            if not lease.startswith('lease:') or not lease[6:] or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in lease[6:]):
-                raise Refused('git commit lease identity')
-            if type(patch) is not str or not patch.startswith('sha256:'):
-                raise Refused('git commit patch identity')
-            digest(patch[7:], 64)
-            rows.append((lease, patch))
-        if rows != sorted(rows) or len({row[0] for row in rows}) != len(rows):
-            raise Refused('git commit deterministic lease order')
-        stdin = 'Integrate Unrest workspaces\n\n' + '\n'.join(f'{lease} {patch}' for lease, patch in rows) + '\n'
-        additions = tuple(sorted({'GIT_AUTHOR_NAME': 'Unrest parent integration authority', 'GIT_AUTHOR_EMAIL': 'unrest@localhost',
-            'GIT_COMMITTER_NAME': 'Unrest parent integration authority', 'GIT_COMMITTER_EMAIL': 'unrest@localhost',
-            'GIT_AUTHOR_DATE': date, 'GIT_COMMITTER_DATE': date}.items()))
-        args = ('commit-tree', tree, '-p', revision)
-    return Command(('git', *args), str(cwd), additions, stdin)
+            expected=fixture.commands[('init','config-name','config-email','stage-base','commit-base').index(operation)]
+        if (args!=expected or (operation in ('stage-child','commit-child'))!=(cwd!=repo)
+                or family=='evolution' and operation in ('stage-child','commit-child','stage-advance','commit-advance')):
+            raise Refused('git fixture command or family')
+    else:
+        match operation,args:
+            case ('lease-add',('worktree','add','--detach','--no-checkout',tree,revision)) | (('integration-add'|'rollback-add'),('worktree','add','--detach',tree,revision)):
+                tree=path(tree)
+                target={'lease-add':'lease','integration-add':'integration','rollback-add':'rollback'}[operation]
+                if location_role(repo,tree)!=target or target=='rollback' and family!='evolution':
+                    raise Refused('git add tree scope or rollback family')
+                digest(revision)
+            case ('remove-tree',('worktree','remove','--force',tree)):
+                target=location_role(repo,path(tree))
+                if target not in ('lease','integration','rollback') or target=='rollback' and family!='evolution':
+                    raise Refused('git remove tree scope or rollback target family')
+            case ('verify-base',('rev-parse','--verify',revision)) if revision.endswith('^{commit}'):
+                digest(revision[:-9])
+            case ('checkout',('checkout','--detach',revision)) | ('diff-return',('diff','--cached','--binary','--no-ext-diff',revision)) | ('date',('show','-s','--format=%aI',revision)):
+                digest(revision)
+            case (('reset-parent'|'rollback-reset'),('reset','--hard',revision)):
+                digest(revision)
+                if operation=='rollback-reset' and family!='evolution':
+                    raise Refused('git rollback family')
+            case ('apply',('apply','--index','--binary',patch)):
+                patch=path(patch)
+                if patch.parent!=repo/'.unrest/workspaces/patches' or patch.suffix!='.patch':
+                    raise Refused('git patch scope')
+                digest(patch.stem,64)
+            case (('update-parent'|'rollback-update'),('update-ref',reference,new,old)):
+                if branch not in ('main','master') or reference!='refs/heads/'+branch or operation=='rollback-update' and family!='evolution':
+                    raise Refused('git update reference or rollback family')
+                digest(new)
+                digest(old)
+            case ('commit-tree',('commit-tree',tree,'-p',revision)):
+                digest(tree)
+                digest(revision)
+                date=environment.get('GIT_AUTHOR_DATE')
+                date_text(date)
+                if type(stdin) is not str or len(stdin)>16384 or not stdin.startswith('Integrate Unrest workspaces\n\n') or not stdin.endswith('\n'):
+                    raise Refused('Git finite commit input')
+                rows=stdin[len('Integrate Unrest workspaces\n\n'):-1].split('\n')
+                import re
+                if (not 0<len(rows)<=128 or rows!=sorted(rows) or len(set(row.split(' ')[0] for row in rows))!=len(rows)
+                        or any(len(row.split(' ',1)[0])>4096 or re.fullmatch(r'lease:[A-Za-z0-9_-]+ sha256:[a-f0-9]{64}',row) is None for row in rows)):
+                    raise Refused('git commit deterministic lease identity')
+                additions=tuple(sorted({'GIT_AUTHOR_NAME':'Unrest parent integration authority','GIT_AUTHOR_EMAIL':'unrest@localhost',
+                    'GIT_COMMITTER_NAME':'Unrest parent integration authority','GIT_COMMITTER_EMAIL':'unrest@localhost',
+                    'GIT_AUTHOR_DATE':date,'GIT_COMMITTER_DATE':date}.items()))
+            case _:
+                raise Refused('Git proposal does not match a template')
+    if operation!='commit-tree' and stdin is not None:
+        raise Refused('git unexpected command input')
+    return Command(tuple(argv),str(cwd),additions,stdin)

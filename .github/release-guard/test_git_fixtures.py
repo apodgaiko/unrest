@@ -8,7 +8,7 @@ import pytest
 
 from content_manifest import Refused
 from launch_policy import source_unit
-from git_commands import build
+from test_git_vectors import build
 import git_fixtures as fixtures
 import owned_fixture
 
@@ -75,7 +75,7 @@ def test_each_setup_uses_only_its_authored_commands_and_phase(case):
     assert spec.phase in ('setup','call')
 
 
-def test_repository_pins_first_acquired_branch_and_refuses_changed_head(tmp_path,monkeypatch):
+def test_repository_keeps_generation_and_closed_routing_configuration(tmp_path,monkeypatch):
     import git_observer
     from git_observer import Git,HOME_CONFIG
 
@@ -90,17 +90,23 @@ def test_repository_pins_first_acquired_branch_and_refuses_changed_head(tmp_path
         info=original(path,*args,**kwargs)
         return SimpleNamespace(st_mode=info.st_mode,st_uid=20000,st_dev=info.st_dev,st_ino=info.st_ino)
     monkeypatch.setattr(Path,'lstat',lstat)
-    branch=['master']
-    def regular(path,*args,**kwargs):
-        if path.name=='.gitconfig':
-            return HOME_CONFIG
-        if path.name=='HEAD':
-            return ('ref: refs/heads/'+branch[0]+'\n').encode()
-        return b'[core]\nrepositoryformatversion = 0\nfilemode = true\nbare = false\nlogallrefupdates = true\n'
-    monkeypatch.setattr(git_observer,'regular',regular)
+    config=[b'[core]\nrepositoryformatversion = 0\nfilemode = true\nbare = false\nlogallrefupdates = true\n']
+    monkeypatch.setattr(git_observer,'regular',lambda path,*args,**kwargs:HOME_CONFIG if path.name=='.gitconfig' else config[0])
     git.repository(str(repository),'init','workspaces')
+    (repository/'.git').mkdir()
     git.repository(str(repository),'config-name','workspaces')
-    assert git.repositories[(case,str(repository))]['branch']=='master'
-    branch[0]='main'
-    with pytest.raises(Refused,match='branch changed'):
+    assert set(git.repositories[(case,str(repository))])=={'path','identities'}
+    metadata=repository/'.git'
+    metadata.rmdir()
+    with pytest.raises(Refused,match='metadata missing'):
+        git.repository(str(repository),'head','workspaces')
+    foreign=repository.parent/'foreign-metadata'
+    foreign.mkdir()
+    metadata.symlink_to(foreign,target_is_directory=True)
+    with pytest.raises(Refused,match='metadata directory'):
+        git.repository(str(repository),'head','workspaces')
+    metadata.unlink()
+    metadata.mkdir()
+    config[0]+=b'worktree=/outside\n'
+    with pytest.raises(Refused,match='routing configuration'):
         git.repository(str(repository),'config-email','workspaces')

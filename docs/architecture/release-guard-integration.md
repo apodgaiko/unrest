@@ -293,3 +293,22 @@ peer-authenticated control pathname, immutable native/script/argv admission,
 finite launches, READY and original-parent numeric waits remain mandatory.
 Filesystem Unix sockets receive no general allowance. Every original product
 case and assertion remains, including the strengthened RunControl joins.
+
+
+Git containment no longer certifies fixture operation ordering, observed branch
+value continuity, the completion repository's whole-content immutability or HEAD
+value correctness. Original Git/product tests retain those assertions. The guard
+keeps exact authored command forms, phase/environment/cwd, native image, acquired
+repository generations, linked-worktree backlinks, closed routing configuration,
+helper identities and original parent/helper waits. Only main/master update refs
+explicitly authored by each fixture remain eligible. Completion queries still
+require their consumed server owner and finite query slot.
+
+
+Workspace/evolution Git now has one authoritative complete-argv matcher. Dynamic
+OIDs, dates, owned paths, refs and commit input are validated in their matched
+positions. The separate inverse grammar, forward reconstruction and duplicate
+rollback-label reconciliation are removed. Closed case/operation declarations
+still select the eligible forms before matching; complete environment/cwd and
+kernel exec identity checks follow. Literal vector fixtures live only in tests
+and are excluded from native support; they confer no launch authority.
