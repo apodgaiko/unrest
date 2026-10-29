@@ -15,7 +15,7 @@ import owned_fixture
 ROOT=next(p for p in Path(__file__).resolve().parents if (p/'pyproject.toml').is_file())
 
 
-@pytest.mark.parametrize('file',tuple(file for file,spec in fixtures.MODULES.items() if spec.family!='candidate'))
+@pytest.mark.parametrize('file',tuple(file for file,spec in fixtures.MODULES.items() if spec.family not in ('candidate','measurement')))
 def test_setup_commands_are_original_pinned_fixture_literals(file):
     name='repository' if file.endswith(('test_project_adapter.py','test_improve_adapter.py')) else '_repository'
     unit=source_unit(ROOT,file,fixtures.PINS[file],(name,))
@@ -31,7 +31,7 @@ def test_selected_fixtures_collect_every_original_parameter_without_bodies(monke
         def pytest_collection_finish(self,session):
             nodes.extend(item.nodeid for item in session.items)
     assert pytest.main(['--collect-only','-q',*fixtures.SLOTS],plugins=[Collected()])==0
-    assert tuple(nodes)==tuple(fixtures.SLOTS) and len(nodes)==158
+    assert tuple(nodes)==tuple(fixtures.SLOTS) and len(nodes)==169
 
 
 
@@ -39,7 +39,7 @@ def test_selected_fixtures_collect_every_original_parameter_without_bodies(monke
 def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,monkeypatch,mutation):
     acquire=owned_fixture.acquire
     monkeypatch.setattr(fixtures,'acquire',lambda path,owned,prefix,owner:acquire(path,owned,prefix,os.getuid()))
-    case=next(case for case in fixtures.SLOTS if fixtures.fixture(case).family!='candidate')
+    case=next(case for case in fixtures.SLOTS if fixtures.fixture(case).family not in ('candidate','measurement'))
     base=tmp_path/'pytest'/(case.split('::')[1][:30]+'0')
     repository=base/'repo'
     repository.mkdir(parents=True)
@@ -64,7 +64,7 @@ def test_additional_repositories_are_bound_to_exact_owned_case_slots(tmp_path,mo
             fixtures.root(host,case,str(repository))
 
 
-@pytest.mark.parametrize('case',tuple(case for case in fixtures.SLOTS if fixtures.fixture(case).family!='candidate'))
+@pytest.mark.parametrize('case',tuple(case for case in fixtures.SLOTS if fixtures.fixture(case).family not in ('candidate','measurement')))
 def test_each_setup_uses_only_its_authored_commands_and_phase(case):
     spec=fixtures.fixture(case)
     repo='/owned/'+fixtures.SLOTS[case][0]
@@ -78,7 +78,7 @@ def test_repository_keeps_generation_and_closed_routing_configuration(tmp_path,m
     import git_observer
     from git_observer import Git,HOME_CONFIG
 
-    case=next(case for case in fixtures.SLOTS if fixtures.fixture(case).family!='candidate')
+    case=next(case for case in fixtures.SLOTS if fixtures.fixture(case).family not in ('candidate','measurement'))
     repository=tmp_path/'pytest/case/repo'
     repository.mkdir(parents=True)
     host=SimpleNamespace(case=case,meta={'owned':str(tmp_path)})

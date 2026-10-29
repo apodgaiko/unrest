@@ -6,6 +6,7 @@ import re
 from content_manifest import Refused
 from launch_policy import source_unit
 from owned_fixture import acquire
+from measurement_git import CASES as MEASUREMENT_CASES,TEST as MEASUREMENT_TEST,PIN as MEASUREMENT_PIN
 from candidate_git import CASES as CANDIDATE_CASES,TEST as CANDIDATE_TEST,PIN as CANDIDATE_PIN
 
 
@@ -25,6 +26,7 @@ class Fixture:
 
 
 MODULES={
+    MEASUREMENT_TEST:Fixture('measurement',('init','-q'),'','',('.',),'call'),
     CANDIDATE_TEST:Fixture('candidate',('init','--initial-branch=main','--object-format=sha1'),'Fixture','fixture@example.invalid',('.',),'setup'),
     'tests/test_foundation_authority.py':Fixture('workspaces',('init',),'Authority Test','authority@example.test',('.',),'call'),
     'tests/test_foundation_integration.py':Fixture('workspaces',('init',),'Foundation Integration','foundation@example.test',('.',),'call'),
@@ -33,6 +35,7 @@ MODULES={
     'tests/test_v04_activation.py':Fixture('activation',('init','-b','main'),'ACT-190 Activation','act190@example.test',('README.md',),'call'),
 }
 PINS={
+    MEASUREMENT_TEST:MEASUREMENT_PIN,
     CANDIDATE_TEST:CANDIDATE_PIN,
     'tests/test_foundation_authority.py':'c8f63d70d4dcc3d74215a9db538632fc9115086d32d42f633235135dcaea2c70',
     'tests/test_foundation_integration.py':'bcbddfff3ffabd8b4374be17fa22b35872bd347d2daa8ca9ee3132f007caa8ef',
@@ -88,6 +91,7 @@ SLOTS={
     'tests/test_v04_activation.py::test_improvement_click_and_subprocess_stop_without_exact_request':('improve-click-cli', 'improve-subprocess-cli'),
 }
 SLOTS.update(dict.fromkeys(CANDIDATE_CASES,('repository',)))
+SLOTS.update(dict.fromkeys(MEASUREMENT_CASES,('source',)))
 
 
 def fixture(case):

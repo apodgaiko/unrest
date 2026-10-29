@@ -476,3 +476,13 @@ to `/usr/bin/git` for their existing launch-owner roles while retaining the
 original argv. This selects no operation or case permission. The observer still
 requires its complete finite declaration, image, environment, cwd and custody;
 unknown requests refuse before fork. The denied PATH attempts remain evidence.
+
+
+Measurement source fixtures have a separate finite Git family: the exact
+source-pinned init/add/index-query forms in their owned `source` slot. Synthetic
+protocol tests may carry only the original two mock-ACP command environment
+values for index queries; those strings grant no process permission. Native
+image, readonly home configuration, repository generation, per-case quota and
+actual prior parent wait checks reuse the common Git boundary. Cold-workspace
+and nested ACP launches remain separate declarations; this source-fixture slice
+does not certify those paths or authorize live provider/benchmark work.

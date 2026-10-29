@@ -148,5 +148,6 @@ def test_factored_eligibility_preserves_every_original_ordered_operation():
         'workspaces':'8da98ddc26915917729c0404c320e144347b0122f7cfdee352229296b7868e2a',
         'evolution':'5d4a2d4fc642e59600be2fa37f4bfd53e09fa389d221239a58a1848d01d0ebf7',
         'candidate':'c5e3d1b55f4ed0619e7fb061d7bbb3be3d00aec16993e44d193ed399555d5773'}
-    for name,values in [('shared',SHARED_OPERATIONS),*OPERATIONS.items()]:
+    assert OPERATIONS['measurement']==('init','measurement-command')
+    for name,values in [('shared',SHARED_OPERATIONS),*((name,OPERATIONS[name]) for name in ('workspaces','evolution','candidate'))]:
         assert hashlib.sha256(json.dumps(values,separators=(',',':')).encode()).hexdigest()==pins[name]

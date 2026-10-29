@@ -39,7 +39,7 @@ WORKSPACE_ONLY=frozenset({'head-tree','stage-advance','commit-advance','stage-ch
 SHARED_OPERATIONS=tuple(sorted(set(COMMANDS)-WORKSPACE_ONLY-set(SETUP)))
 OPERATIONS={'workspaces':tuple(sorted(COMMANDS)),
     'evolution':tuple(sorted(set(COMMANDS)-WORKSPACE_ONLY)),
-    'candidate':('init','candidate-command')}
+    'candidate':('init','candidate-command'),'measurement':('init','measurement-command')}
 
 OWNED_BODY = 'import time; time.sleep(60)'
 

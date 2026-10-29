@@ -21,7 +21,18 @@ def test_original_git_vector_avoids_path_probe_before_audit(tmp_path,positional)
     assert process.stdout.startswith(b'git version ') and vector==['git','--version']
 
 
-@pytest.mark.parametrize('case,role', [('foreign','root'),(CASES[0],'fixed-inline')])
-def test_unrelated_cases_receive_no_executable_substitution(case,role):
+@pytest.mark.parametrize('role', ['session-child','acp','backend'])
+def test_roles_without_subprocess_ownership_receive_no_substitution(role):
     args,kwargs=(['git','--version'],),{}
-    assert direct_git(args,kwargs,case,role)==(args,kwargs)
+    assert direct_git(args,kwargs,'foreign',role)==(args,kwargs)
+
+
+def test_canonical_resolution_grants_no_undeclared_case_permission():
+    from types import SimpleNamespace
+    from content_manifest import Refused
+    from effect_proposals import proposal
+    args,kwargs=direct_git((['git','--version'],),{},'foreign','root')
+    host=SimpleNamespace(case='foreign',launch_owner=lambda actor:None)
+    with pytest.raises(Refused,match='no declaration'):
+        proposal(host,{'role':'root'},{'case':'foreign','argv':args[0],
+            'executable':kwargs['executable'],'cwd':'/owned','environment':{},'stdin':None})
