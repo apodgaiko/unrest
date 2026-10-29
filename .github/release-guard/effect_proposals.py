@@ -9,7 +9,7 @@ import hashlib
 from content_manifest import Refused
 from plan_launch import CASES as PLANS, expected as plan_expected
 from session_launch import CASES as SESSIONS, expected as session_expected
-from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
+from fixed_inline import CASES as FIXED, SEQUENCES, NESTED_CASES, STORAGE_CASES, INSPECTION_CASES, MEASUREMENT_CASE, COMPLETION_CASES, expected as fixed_expected, STDIO, startup_expected, translated as fixed_translated
 from ordinary_acp import CASES as ORDINARY, expected as ordinary_expected
 from cleanup_launch import EXECUTION_CASES as CLEANUP, expected as cleanup_expected, base_path, translated as cleanup_vector
 from cleanup_inline import DECLARATIONS, INFLIGHT, expected as inline_expected
@@ -97,7 +97,12 @@ def proposal(host, actor, raw):
             raise Refused('finite fixed proposal exhausted')
         operation = 'check' if query else SEQUENCES[case][len(records)]
         environment = {**root_environment,'PYTEST_VERSION':'9.0.2','PYTEST_CURRENT_TEST':case+' (call)'}
-        if case==MEASUREMENT_CASE:
+        if case in COMPLETION_CASES:
+            if query:
+                raise Refused('completion primitive has no descendants')
+            from completion_launch import expected as completion_expected
+            expected=completion_expected(host,operation,argv,cwd,environment,native,pin)
+        elif case==MEASUREMENT_CASE:
             if query:
                 raise Refused('simulation child has no descendants')
             from measurement_launch import expected as measurement_expected

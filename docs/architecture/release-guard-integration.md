@@ -478,3 +478,11 @@ case prefix and owner, retains the actual directory generation and applies its
 own mode, subdirectory, lexical-path and template-injection constraints. The flow
 probe permits only the original byte-pinned manifest/tool and `--mode simulated`,
 with its owned `flow.json`; it cannot launch descendants or establish live benefit.
+
+The twelve primitive completion-interruption cases retain fourteen actual child
+runs. Crash programs must finish with73 and their publication retry with0; each
+status is joined independently to body READY, its consumed launch and actual
+parent wait. Original literal programs, phase parameters, symlink/mode negatives,
+filesystem repair assertions and retry stdout remain unchanged. Only crash
+programs inherit all three parent descriptors; the retry keeps captured output.
+These processes receive no server, network or descendant launch permission.

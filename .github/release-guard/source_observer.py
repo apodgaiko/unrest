@@ -184,6 +184,7 @@ class Observer:
 
     def stdio(self, pid, role, *, input_pipe=False, intent=None):
         from storage_launch import CASES as STORAGE_CASES
+        from completion_launch import CASES as COMPLETION_CASES
         if role=='mcp' and self.case in HTTP_CASES:
             from http_cases import stdio
             return stdio(self,pid,intent)
@@ -201,7 +202,8 @@ class Observer:
             inline = role == 'cleanup-inline'
             terminal = inline and self.case in INFLIGHT and os.readlink(Path('/proc') / str(pid) / 'cwd') != self.meta['checkout']
             inherited = (inline and (descriptor == 0 if terminal or self.case in STARTUP else descriptor == 2)
-                or role=='fixed-inline' and (self.case in STORAGE_CASES and descriptor==2 or self.case==JOURNAL_CASE))
+                or role=='fixed-inline' and (self.case in STORAGE_CASES and descriptor==2 or self.case==JOURNAL_CASE
+                    or self.case in COMPLETION_CASES and intent is not None and intent.get('fixed_operation')=='crash'))
             if terminal and descriptor == 2:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
@@ -411,6 +413,12 @@ class Observer:
             expected={'kind':NEGATIVE.get(actor['case'],'normal'),'count':0 if NEGATIVE.get(actor['case'])=='missing-package' else 15,
                 'failed':15 if NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
             return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
+        from completion_launch import CASES as COMPLETION_CASES
+        if actor['role']=='fixed-inline' and actor['case'] in COMPLETION_CASES:
+            rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']
+                  and row['case']==actor['case'] and row['role']=='fixed-inline' and row['consumed']]
+            return (len(rows)==1 and terminal is not None and actor['body_ready']
+                    and terminal[2]==(73 if rows[0]['fixed_operation']=='crash' else 0))
         if actor['role']=='desktop':
             return terminal is not None and terminal[2]==0 and actor['body_ready']
         if actor['role']=='pytest-regression':
