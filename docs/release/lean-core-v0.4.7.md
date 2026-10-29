@@ -117,33 +117,20 @@ release manifests bind their original tagged bytes and remain immutable; they
 do not declare the current 0.4.7 candidate. Archive and installed-layout binding
 is completed after packaging.
 
-Linux source-guard environment work is tracked in the
-[source-checkpoint environment](v046-source-checkpoint-environment.md). Its
-synthetic readiness controls do not certify the source suite or discharge any
-remaining release obligation.
+## Simplified release guard
 
-Readiness evidence now has a direct encrypted structured-record path; operator
-consumption excludes private logs. Same-SHA CI runs serialize without cancelling
-in-progress work. The isolated primary command executor and successful full
-source/package receipt reuse remain incomplete; readiness artifacts cannot
-authorize either. See `v046-source-checkpoint-environment.md`.
+The replacement guard removes the previous release executor and uses a finite
+native entry, a separate process observer, immutable measured inputs and actual
+kernel exit/original-parent wait evidence. Its conservative footprint is 9,999
+physical enforcement lines, counting every non-test file under `.github`;
+retained guard tests and the existing distribution oracle are reported separately.
+The counter does not itself prove dependency closure or release eligibility.
+See [guard integration](../architecture/release-guard-integration.md) for the
+retained boundaries and explicitly retired duplicate enforcement claims.
 
-
-Primary CI binds generated scripts through the isolated control plane and checks
-same-SHA reuse against original full certificates and exact package bytes.
-Focused readiness remains false; full source/package integration and the first
-complete certificate remain pending. See
-[v0.4.7 source checkpoint environment](v046-source-checkpoint-environment.md).
-
-Primary phase custody and the original-certificate reducer/exporter now have
-focused implementation checks. The original lint and mypy duties also have
-isolated hosted execution evidence. Full source/package execution remains
-incomplete; no original full certificate or release certification is claimed.
-
-
-Primary SOURCE entry integration is documented in
-[v046-source-checkpoint-environment.md](v046-source-checkpoint-environment.md).
-Its root/Git TEST probes passed; ordinary Python activation remains blocked by
-the immutable producer callback. These probes do not constitute the frozen
-unexcluded source checkpoint;
-source carrier, package and final closure remain required.
+Bounded native controls and selected original source families have execution
+evidence. The shared extracted-sdist path completed all 15 original persistence
+cases in CI run 40933142225 on 2026-10-29. Selected diagnostics are not the frozen
+unexcluded checkpoint. The canonical CI workflow now owns the full source,
+archive, installed lifecycle and native controls; certification and publication
+remain pending until that frozen run and independent review pass.

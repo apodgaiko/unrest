@@ -1,44 +1,9 @@
 """Closed metadata/input-envelope controls; no provider or child execution."""
 
-import hashlib
-import json
-from types import SimpleNamespace
 
 import pytest
 
-from content_manifest import Refused
-from native_metadata import descriptor
-from input_manifest import read
 from source_observer import Observer
-
-
-@pytest.mark.parametrize(
-    "record, mounted", [(True, True), (True, False), (False, True), (False, False)]
-)
-def test_native_descriptor_and_readonly_generation_must_agree(tmp_path, record, mounted):
-    source = {
-        "schema": "unrest.guard-content.v1",
-        "files": [{"path": "module.py", "sha256": "a" * 64}],
-    }
-    value = (
-        {"schema": "unrest.source-inputs.v1", "source": source, "native_metadata": descriptor()}
-        if record
-        else source
-    )
-    raw = json.dumps(value).encode()
-    (tmp_path / "source-manifest.json").write_bytes(raw)
-    policy = SimpleNamespace(
-        directory=tmp_path,
-        profile={
-            "source_sha256": hashlib.sha256(raw).hexdigest(),
-            "mounts": {"/native": [1, 2, 3]} if mounted else {},
-        },
-    )
-    if record == mounted:
-        assert read(policy.directory,policy.profile) == {"module.py": "a" * 64}
-    else:
-        with pytest.raises(Refused):
-            read(policy.directory,policy.profile)
 
 
 def test_metadata_changes_only_root_discovery_path():

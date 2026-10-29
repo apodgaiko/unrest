@@ -39,9 +39,6 @@ class Policy:
         self.case, self.poison = None, False
         self.children: dict[int, dict] = {}
         self.local = threading.local()
-        if profile['role']=='root':
-            from input_manifest import read
-            self.pins=read(directory,profile)
         self.sockets: Any = None
 
     def refuse(self, code) -> NoReturn:

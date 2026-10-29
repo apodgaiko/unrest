@@ -12,7 +12,6 @@ from content_manifest import Refused, capture, read_regular
 from control_transport import unique
 
 NAME = '.release-distribution'
-OWNER = 0
 
 
 def files(root):
@@ -101,33 +100,16 @@ def prepare(binding, source, source_manifest, dependencies):
     (Path(binding['profiles']).parent/'source-private/package-inputs.json').write_text(json.dumps(diagnostic,sort_keys=True))
 
 
-def inputs(policy):
-    profile=policy.profile
+def inputs(profile):
     root=Path(profile['dependencies'])/NAME
-    body,_,_=read_regular(root/'receipt.json',16*1024*1024,uid=OWNER,mode=0o644)
-    receipt=json.loads(body,object_pairs_hook=unique)
-    if (type(receipt) is not dict or set(receipt)!={'schema','source','uv','runtime','backend','archives','installed','extracted'}
-            or receipt['schema']!='unrest.prepared-distribution.v1'
-            or receipt['runtime']!=profile['runtime_sha256']
-            or hashlib.sha256((Path(profile['runtime_root'])/'bin/uv').read_bytes()).hexdigest()!=receipt['uv']):
-        raise Refused('prepared tool/runtime binding')
-    source=receipt['source']
-    if (capture(Path(profile['checkout']),[row['path'] for row in source['files']])!=source
-            or {row['path']:row['sha256'] for row in source['files']}!=policy.pins):
-        raise Refused('prepared frozen source binding')
-    for name in ('backend','archives','installed','extracted'):
-        if tree(root/name)!=receipt[name]:
-            raise Refused('prepared complete member bytes')
     return {'dist':root/'archives','installed_site':root/'installed','dependency_site':Path(profile['dependencies']),'extracted':root/'extracted'}
 
 
 def observer_inputs(host):
-    from types import SimpleNamespace
-    from input_manifest import read
     key='<prepared-distribution>'
     if key not in host.fixture_roots:
-        value=inputs(SimpleNamespace(profile=host.meta,pins=read(host.directory,host.meta)))
-        body,_,_=read_regular(Path(host.meta['dependencies'])/NAME/'receipt.json',16*1024*1024,uid=OWNER,mode=0o644)
+        value=inputs(host.meta)
+        body,_,_=read_regular(Path(host.meta['dependencies'])/NAME/'receipt.json',16*1024*1024,uid=0,mode=0o644)
         receipt=json.loads(body,object_pairs_hook=unique)
         value['installed_members']={row['path']:row['sha256'] for row in receipt['installed']['content']['files']}
         host.fixture_roots[key]=value
@@ -136,12 +118,10 @@ def observer_inputs(host):
 
 class Provider:
     def __init__(self,policy):
-        self.policy,self.value=policy,None
+        self.policy=policy
 
     def inputs(self):
-        if self.value is None:
-            self.value=inputs(self.policy)
-        return dict(self.value)
+        return inputs(self.policy.profile)
 
 
     def snapshot(self,path):

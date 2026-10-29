@@ -670,3 +670,20 @@ root; nested execution retains its enclosing archive actor and archive-result.
 The extracted tree imports the measured dependency copy of the original oracle,
 with the original checkout passed as the excluded provenance root. Omitted corpus
 and package negatives remain distinct and cannot produce a successful root seal.
+
+Frozen prepared distributions rely on the issuer's complete dependency-generation
+measurement and the already-required read-only namespace mount. Consumers select
+four fixed paths; they no longer repeat source/runtime/archive/installed/extracted
+measurements after the seal. Preparation still performs the real build/install,
+compares frozen source bytes before and after build, records complete member bytes,
+and includes the receipt in the measured dependency generation. The observer still
+reads the protected receipt for installed console-script pins. Snapshot acquisition,
+original package/lifecycle tests, namespace checks and fail-closed launches remain.
+The obsolete downstream-remeasurement assertions and unused manifest decoder are
+retired explicitly; no original product test, parameter or assertion is removed.
+
+The temporary guard diagnostic workflow is retired at freeze. Canonical CI retains
+all guard pytest cases, the three bounded standalone native isolation controls,
+full unexcluded Python 3.13 source validation, archive and installed lifecycle
+checks, and always uploads encrypted native/source/archive evidence. Earlier
+successful and failed diagnostic evidence remains private and unchanged.
