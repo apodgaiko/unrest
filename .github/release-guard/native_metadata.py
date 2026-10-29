@@ -3,9 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import io
-import os
-from pathlib import Path
-import stat
 import tarfile
 import urllib.request
 
@@ -41,38 +38,9 @@ def validate(record):
         raise Refused('original native metadata descriptor')
 
 
-def measure(root):
-    root = Path(root)
-    expected = {row[0] for row in MEMBERS} | {LINK[0]}
-    for name in tuple(expected):
-        expected.update(str(parent) for parent in Path(name).parents if str(parent) != '.')
-    def names():
-        return {str(path.relative_to(root)) for path in root.rglob('*')}
-    if root.resolve(strict=True) != root or names() != expected:
-        raise Refused('native metadata exact graph')
-    for path in (root, *(root/name for name in sorted(expected) if (root/name).is_dir())):
-        info = path.lstat()
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid != OWNER or stat.S_IMODE(info.st_mode) != 0o555:
-            raise Refused('native metadata directory custody')
-    for name, mode, size, pin in MEMBERS:
-        path = root/name
-        if stat.S_IMODE(path.lstat().st_mode) != mode:
-            raise Refused('native metadata file mode')
-        body = regular(path,maximum=150*1024*1024,uid=OWNER)
-        if len(body) != size or hashlib.sha256(body).hexdigest() != pin:
-            raise Refused('native metadata complete member bytes')
-        if name == 'bin/node' and body[:4] != bytes.fromhex('cffaedfe'):
-            raise Refused('native metadata original platform')
-    link = root/LINK[0]
-    info = link.lstat()
-    if (not stat.S_ISLNK(info.st_mode) or info.st_uid != OWNER or info.st_nlink != 1
-            or os.readlink(link) != LINK[1] or link.resolve(strict=True) != root/MEMBERS[1][0]
-            or names() != expected):
-        raise Refused('native metadata literal launcher link')
-    return descriptor()
-
-
 def prepare(root):
+    if root.resolve()!=root:
+        raise Refused('native metadata canonical root')
     root.mkdir(mode=0o755)
     for name, url, archive_pin, member, member_pin in INPUTS:
         with urllib.request.urlopen(url, timeout=60) as response:
@@ -94,8 +62,11 @@ def prepare(root):
         target.parent.mkdir(parents=True,exist_ok=True)
         target.write_bytes(body)
         target.chmod(mode)
+        written=regular(target,maximum=150*1024*1024,uid=OWNER)
+        if len(written)!=MEMBERS[0 if name=='node.data' else 1][2] or hashlib.sha256(written).hexdigest()!=member_pin:
+            raise Refused('native metadata complete written bytes')
     (root/LINK[0]).symlink_to(LINK[1])
     for path in [root,*sorted(root.rglob('*'))]:
         if not path.is_symlink() and path.is_dir():
             path.chmod(0o555)
-    return measure(root)
+    return descriptor()

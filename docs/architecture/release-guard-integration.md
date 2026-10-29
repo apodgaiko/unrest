@@ -556,3 +556,11 @@ RunControl worker's authorized SIGTERM cleanup. Their actual numeric status stay
 -15; completion requires authenticated body readiness and that exact signal in
 the child's custody record. A missing signal, missing READY, unrelated nonzero
 exit or missing original-parent wait remains a failure.
+
+Native metadata is constructed once in a fresh protected host directory from the
+original complete archive/member SHA256 pins. Each written member is reread for
+its complete byte and size check before the fixed graph is made readonly. The
+bind mount must expose that same measured directory generation, owned by root
+with mode0555; the common mount inventory still verifies readonly coverage.
+The duplicate arbitrary-tree walk after mounting is retired. Source children
+cannot modify these inputs, and metadata remains data with execution forbidden.

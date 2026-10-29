@@ -55,31 +55,37 @@ def graph(tmp_path, monkeypatch):
 def test_original_metadata_graph_is_readonly_and_descriptor_is_closed(graph):
     root, value = graph
     metadata.validate(value)
-    assert metadata.measure(root) == value
+    assert value==metadata.descriptor()
+    assert all(path.stat().st_mode & 0o777==0o555 for path in [root,*root.rglob('*')] if path.is_dir())
+    assert (root/'bin/codex-acp').readlink().as_posix()==metadata.LINK[1]
     assert not (root / "bin/node").stat().st_mode & 0o111
     assert (root / "bin/codex-acp").resolve() == root / metadata.MEMBERS[1][0]
 
 
-@pytest.mark.parametrize("mutation", ["body", "mode", "extra", "link", "platform"])
-def test_native_metadata_graph_rejects_mutation(graph, mutation):
-    root, _ = graph
-    if mutation in ("body", "platform"):
-        path = root / metadata.MEMBERS[0][0]
-        path.chmod(0o644)
-        path.write_bytes(b"wrong bytes")
-        path.chmod(0o444)
-    elif mutation == "mode":
-        (root / "bin/node").chmod(0o555)
-    elif mutation == "extra":
-        root.chmod(0o755)
-        (root / "extra").write_text("untrusted")
+@pytest.mark.parametrize('mutation',['archive','member','written','size','alias'])
+def test_factory_refuses_changed_bytes_before_exposing_readonly_inputs(graph,monkeypatch,mutation):
+    root,_=graph
+    target=root.parent/'new-metadata'
+    if mutation in ('archive','member'):
+        rows=[list(row) for row in metadata.INPUTS]
+        rows[0][2 if mutation=='archive' else 4]='0'*64
+        monkeypatch.setattr(metadata,'INPUTS',tuple(tuple(row) for row in rows))
+    elif mutation=='written':
+        monkeypatch.setattr(metadata,'regular',lambda *args,**kwargs:b'changed after write')
+    elif mutation=='size':
+        rows=[list(row) for row in metadata.MEMBERS]
+        rows[1][2]+=1
+        monkeypatch.setattr(metadata,'MEMBERS',tuple(tuple(row) for row in rows))
     else:
-        (root / "bin").chmod(0o755)
-        link = root / "bin/codex-acp"
-        link.unlink()
-        link.symlink_to("/foreign")
-    with pytest.raises(Refused):
-        metadata.measure(root)
+        target.symlink_to(root)
+    try:
+        with pytest.raises(Refused):
+            metadata.prepare(target)
+    finally:
+        if target.is_dir() and not target.is_symlink():
+            for path in [target,*target.rglob('*')]:
+                if path.is_dir() and not path.is_symlink():
+                    path.chmod(0o755)
 
 
 @pytest.mark.parametrize("field", ["members", "link", "platform", "execution"])

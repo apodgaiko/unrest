@@ -149,6 +149,7 @@ def prepare(binding, checkout, root, git=False, public=False, native=False, extr
         from native_metadata import prepare as prepare_native
         native_root = root/'native-metadata'
         native_input = {'root':str(native_root),'descriptor':prepare_native(native_root)}
+        native_input['generation']=[native_root.stat().st_dev,native_root.stat().st_ino]
     raw = encode(manifest)
     if public or native:
         envelope = {'schema':'unrest.source-inputs.v1','source':manifest}
@@ -191,13 +192,14 @@ def isolate(metadata, support):
         mount(encoded, encoded, 4096)
         mount(None, encoded, 4096 | 32 | 1 | 2 | 4)  # bind remount ro,nosuid,nodev
     if native_input is not None:
-        from native_metadata import measure
         target = Path('/native')
         require(not target.exists() and not target.is_symlink(), 'private native mount target already exists')
         target.mkdir(mode=0o755)
         mount(os.fsencode(native_input['root']), b'/native', 4096)
         mount(None, b'/native', 4096 | 32 | 1 | 2 | 4)
-        require(measure(target) == native_input['descriptor'], 'native readonly view bytes changed')
+        info=target.stat()
+        require([info.st_dev,info.st_ino]==native_input['generation'] and info.st_uid==0
+                and stat.S_IMODE(info.st_mode)==0o555, 'native readonly input generation changed')
         points = (*points, '/native')
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as stream:
         request = struct.pack('16sH14x', b'lo', 0)
