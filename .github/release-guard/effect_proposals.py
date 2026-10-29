@@ -28,12 +28,12 @@ def proposal(host, actor, raw):
     if raw['case'] != case or type(raw['executable']) is not str or type(raw['argv']) is not list:
         raise Refused('finite process proposal case or vector')
     argv = raw['argv']
+    from git_sites import CASES as GIT_CASES
     if (not 0 < len(argv) <= 256 or any(type(arg) is not str for arg in argv)
-            or raw['executable'] != argv[0] or type(raw['cwd']) is not str
+            or (raw['executable'] != argv[0] and not (case in GIT_CASES and argv[0]=='git' and raw['executable']=='/usr/bin/git')) or type(raw['cwd']) is not str
             or type(raw['environment']) is not dict
             or any(type(k) is not str or type(v) is not str for k,v in raw['environment'].items())):
         raise Refused('finite process proposal operands')
-    from git_sites import CASES as GIT_CASES
     from http_cases import CASES as HTTP_CASES,proposal as http_proposal
     from package_cases import CASES as PACKAGE_CASES
     if case in PACKAGE_CASES:
@@ -60,6 +60,9 @@ def proposal(host, actor, raw):
         return console_proposal(host,actor,raw)
     if case in HTTP_CASES:
         return http_proposal(host,actor,raw)
+    from run_worker_launch import CASES as RUN_WORKERS,proposal as run_proposal
+    if case in RUN_WORKERS and argv[1:3]==['-m','unrest_harness.run_worker']:
+        return run_proposal(host,actor,raw)
     if case in GIT_CASES:
         from git_proposals import prepare
         return prepare(host,actor,raw)

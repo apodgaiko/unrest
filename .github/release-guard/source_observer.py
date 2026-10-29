@@ -132,7 +132,8 @@ class Observer:
         self.actors[pid] = actor
         command_class = {'root': 'bootstrap-root', 'acp': 'controlled-acp',
                          'backend': 'controlled-backend', 'delayed-backend': 'controlled-backend-wrapper', 'mock-acp': 'ordinary-mock-acp', 'mcp': 'worker-mcp', 'cleanup-acp': 'cleanup-acp', 'cleanup-inline': 'cleanup-inline', 'workspace-owned': 'workspace-owned', 'session-adapter': 'session-adapter', 'session-child': 'session-child', 'session-inline': 'session-inline', 'fixed-inline': 'fixed-inline','plan-python':'plan-python','mp-child':'mp-child','mp-tracker':'mp-tracker','review-wire':'review-wire','pytest-regression':'pytest-regression','desktop':'desktop',**dict.fromkeys(('archive-checker','archive-leaf','archive-installed'),'archive-python')}[role]
-        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES or role=='fixed-inline' and case in ROLE_CASES
+        from run_worker_launch import CASES as RUN_WORKERS
+        new_session = role in ('backend','delayed-backend','acp','workspace-owned','session-adapter','session-inline') or role=='mcp' and case in HTTP_CASES or role=='fixed-inline' and case in (*ROLE_CASES,*RUN_WORKERS)
         self.ledger.register(actor['birth'], token, pins, source['seal'], case=case,
                              command_class=command_class, new_session=new_session, expected_generation=1)
         if new_session:
@@ -214,7 +215,11 @@ class Observer:
                 other = (Path('/proc') / str(pid) / 'fd/1').stat()
                 if (info.st_dev, info.st_ino) != (other.st_dev, other.st_ino):
                     raise Refused('cleanup inline merged terminal stderr')
-            if role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('terminal-native','uv-cli','mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps','archive-checker','archive-leaf','archive-installed') and not input_pipe):
+            if intent is not None and intent.get('null_stdio'):
+                null=Path('/dev/null').stat()
+                if not stat.S_ISCHR(info.st_mode) or info.st_rdev!=null.st_rdev:
+                    raise Refused('source declared null stdio')
+            elif role in ('git-init', 'git-commit', 'session-child','mp-child','mp-tracker') or role == 'git-command' and descriptor == 0 and not input_pipe or inherited or (descriptor == 0 and role in ('terminal-native','uv-cli','mcp', 'git-observe', 'fixed-inline', 'pytest-regression', 'git-fixed','ps','archive-checker','archive-leaf','archive-installed') and not input_pipe):
                 expected_info = (parent / str(descriptor)).stat()
                 if (info.st_mode, info.st_dev, info.st_ino, info.st_rdev) != (expected_info.st_mode, expected_info.st_dev, expected_info.st_ino, expected_info.st_rdev):
                     raise Refused('source exact inherited descriptor')
@@ -388,6 +393,9 @@ class Observer:
                 'failed':15 if NEGATIVE.get(actor['case'])=='missing-corpus' else 0,'exit':code}
             return terminal is not None and terminal[2]==code and actor['body_ready'] and (actor['role']!='archive-leaf' or actor.get('archive_result')==expected)
         from completion_launch import CASES as COMPLETION_CASES
+        from run_worker_launch import CASES as RUN_WORKERS
+        if actor['role']=='fixed-inline' and actor['case'] in RUN_WORKERS:
+            return terminal is not None and terminal[2]==1 and actor['body_ready']
         if actor['role']=='fixed-inline' and actor['case'] in ROLE_CASES:
             from completion_server import status
             rows=[row for row in self.intents.values() if row.get('birth')==actor['birth'] and row['token']==actor['token']

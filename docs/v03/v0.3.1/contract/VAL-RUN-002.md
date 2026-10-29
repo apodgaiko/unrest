@@ -11,6 +11,14 @@ report-complete, and terminal boundaries as applicable. Server restart either
 reattaches a live owned worker or marks an orphan for attention; no live worker
 loses its lock and no effect is repeated.
 
+Within the spawning interpreter, controllers share the actual worker process
+handle. Terminal attach also joins that child, respecting the caller's remaining
+timeout without changing the durable result or killing it. A timed-out join
+retains the handle for a later attach. Recovery polls known local children before
+checking liveness, so an exited child cannot appear live merely as a zombie.
+After fork, local ownership is reset. Persisted PID records never grant wait
+ownership to a different interpreter.
+
 **Evidence:** Cancel before dispatch and at each boundary, disconnect, kill and
 restart the server, inspect ancestry/locks/receipts, concurrent attach, repeated
 cancel, missing run, orphan recovery, and exact effect count.

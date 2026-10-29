@@ -160,6 +160,16 @@ request semantics remain the original product tests' responsibility. Existing
 invalid/task request-byte checks remain. Mixed Git/uv cases retain every actual
 parent wait and separately require the exact uv/console child count.
 
+The foundation async error cases reuse the library-module child domain for one
+exact `run_worker` entry and retained request identity. Executor, generation,
+private home, argv and environment stay fixed; approval recovery is off, stdio
+is null, and no descendants or provider launch is declared. Actual parent wait
+is required. `RunControl` retains the real handle and joins terminal workers;
+it does not turn a durable PID record into ownership.
+Bare fixture Git commands are executed through the measured `/usr/bin/git`
+image directly, avoiding undeclared PATH probes when stock-uv support adds a
+runtime bin directory. Command arguments and original product assertions remain.
+
 ## Verification and retired model controls
 
 Every original product/source test and its real completion, status and cleanup

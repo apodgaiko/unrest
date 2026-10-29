@@ -24,6 +24,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any, BinaryIO, Iterator, NoReturn
 
@@ -31,6 +32,21 @@ from .canonical_identity import IdentityRecord, construct_identity
 from .foundation_store import CustodyActor, FoundationStore
 from .mutation_journal import DurableMutationJournal, MutationJournalError
 from .receipts import construct_receipt, load_receipt_catalog
+
+
+# Only actual children spawned by this interpreter can be joined. Durable PID
+# records convey lifecycle state, never parent wait ownership.
+_local_workers: dict[tuple[str, str, int], subprocess.Popen[bytes]] = {}
+_local_workers_lock = threading.Lock()
+
+
+def _after_worker_fork() -> None:
+    global _local_workers, _local_workers_lock
+    _local_workers = {}
+    _local_workers_lock = threading.Lock()
+
+
+os.register_at_fork(after_in_child=_after_worker_fork)
 
 
 RUN_OPERATIONS = frozenset(
@@ -629,6 +645,21 @@ class RunControl:
         while True:
             summary = self.inspect_run(run_id)
             if summary.state in TERMINAL_RUN_STATES:
+                request = self._load_request(run_id)
+                key = (str(self.project_root.resolve()), run_id, request.generation)
+                with _local_workers_lock:
+                    worker = _local_workers.get(key)
+                if worker is not None:
+                    remaining = None if timeout_seconds is None else max(
+                        0.0, timeout_seconds - (time.monotonic() - started)
+                    )
+                    try:
+                        worker.wait(timeout=remaining)
+                    except subprocess.TimeoutExpired:
+                        _fail("timeout", "run worker did not exit")
+                    with _local_workers_lock:
+                        if _local_workers.get(key) is worker:
+                            del _local_workers[key]
                 return summary
             if timeout_seconds is not None and time.monotonic() - started >= timeout_seconds:
                 _fail("timeout", "run did not reach a terminal state")
@@ -715,6 +746,10 @@ class RunControl:
 
     def recover(self) -> tuple[RunSummary, ...]:
         recovered: list[RunSummary] = []
+        with _local_workers_lock:
+            for key, worker in list(_local_workers.items()):
+                if key[0] == str(self.project_root.resolve()) and worker.poll() is not None:
+                    del _local_workers[key]
         with _exclusive_lock(self.runtime_root / "admission.lock"):
             for request in self._all_requests():
                 with _exclusive_lock(self._run_lock(request.run_id)):
@@ -1144,16 +1179,22 @@ class RunControl:
                 "PYTHONPATH": package_source,
                 **self.worker_environment,
             }
-            subprocess.Popen(
-                command,
-                cwd=self.project_root,
-                env=worker_environment,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-                close_fds=True,
-            )
+            with _local_workers_lock:
+                key = (str(self.project_root.resolve()), request.run_id, request.generation)
+                existing = _local_workers.get(key)
+                if existing is not None and existing.poll() is None:
+                    return
+                worker = subprocess.Popen(
+                    command,
+                    cwd=self.project_root,
+                    env=worker_environment,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                    close_fds=True,
+                )
+                _local_workers[key] = worker
         except OSError as exc:
             self._finalize_terminal_unlocked(
                 request.run_id,

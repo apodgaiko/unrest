@@ -68,7 +68,7 @@ def prepare(host,actor,raw):
         )
         vector=[native,'-I','-S','-c',OWNED_BODY]
     else:
-        if raw['executable']!='git':
+        if raw['executable']!='/usr/bin/git':
             raise Refused('Git proposal original executable')
         setup=0 if slot is None else slot['setup']
         operations=(SETUP[setup],) if setup<len(SETUP) else SHARED_OPERATIONS if fixture is not None else OPERATIONS[family]
@@ -100,7 +100,7 @@ def prepare(host,actor,raw):
             tuple(sorted(environment.items())),
             command.cwd, 'native',
         )
-        vector=list(command.argv)
+        vector=['/usr/bin/git',*command.argv[1:]]
     if raw['environment']!=dict(expected.environment) or raw['cwd']!=expected.cwd:
         raise Refused('Git proposal environment or cwd differs')
     answer=host.git.launch(actor,operation,repository,command,expected,vector)

@@ -18,6 +18,17 @@ from cleanup_launch import OFFLINE
 from git_sites import CASES as GIT_CASES
 from source_profile import METHODS, digest, validate
 
+def direct_git(args, kwargs, case, role):
+    vector = args[0] if args else kwargs.get('args')
+    executable = args[2] if len(args)>2 else kwargs.get('executable')
+    if role=='root' and case in GIT_CASES and type(vector) in (list,tuple) and vector[:1] in (['git'],('git',)) and executable is None:
+        if len(args)>2:
+            args=(*args[:2],'/usr/bin/git',*args[3:])
+        else:
+            kwargs={**kwargs,'executable':'/usr/bin/git'}
+    return args,kwargs
+
+
 ACTIVE = None
 PATH_TYPE = type(Path('/'))
 
@@ -156,6 +167,7 @@ class Policy:
                         args=(*args[:10],normalized,*args[11:])
                     else:
                         kwargs['env']=normalized
+            args,kwargs=direct_git(args,kwargs,policy.case,policy.profile['role'])
             policy.local.launch = None
             original(process, *args, **kwargs)
             pending = getattr(policy.local, 'launch', None)

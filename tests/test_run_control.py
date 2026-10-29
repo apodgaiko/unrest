@@ -124,13 +124,19 @@ def test_exact_six_operations_and_closed_argument_schemas(project: Path) -> None
 def test_admission_returns_quickly_and_terminal_run_has_identity_receipt_and_custody(
     project: Path,
 ) -> None:
+    import unrest_harness.run_control as runtime
+
     control = _control(project)
     started = time.monotonic()
     queued = control.submit_run("start_project", _start_args(project), "idem:success")
     elapsed = time.monotonic() - started
     assert elapsed < 1
     assert queued.state == "queued"
+    worker = runtime._local_workers[(str(project.resolve()), queued.run_id, 1)]
     terminal = control.attach_run(queued.run_id, timeout_seconds=5)
+    assert worker.returncode == 0
+    with pytest.raises(ChildProcessError):
+        os.waitpid(worker.pid, os.WNOHANG)
     assert terminal.state == "succeeded"
     assert terminal.result is not None and terminal.result["projectId"] == "created-project"
     assert terminal.receipt_id is not None
@@ -410,3 +416,55 @@ def test_hash_chain_tamper_fails_closed_without_leaking_record(project: Path) ->
         control.inspect_run(run.run_id)
     assert caught.value.code == "integrity_error"
     assert "TOP-SECRET" not in str(caught.value)
+
+
+def test_terminal_attach_preserves_result_and_ownership_when_worker_exit_times_out(
+    project: Path,
+) -> None:
+    import unrest_harness.run_control as runtime
+
+    # A real worker can publish its result before interpreter finalization ends.
+    source = project / "executor_fixture.py"
+    source.write_text(source.read_text().replace(
+        '    counter = Path.cwd()',
+        '    import atexit; atexit.register(time.sleep, 0.4)\n    counter = Path.cwd()',
+    ))
+    control = _control(project)
+    queued = control.submit_run("start_project", _start_args(project), "idem:exit-delay")
+    _wait_for_state(control, queued.run_id, {"succeeded"})
+    key = (str(project.resolve()), queued.run_id, 1)
+    worker = runtime._local_workers[key]
+    with pytest.raises(RunControlError) as timeout:
+        control.attach_run(queued.run_id, timeout_seconds=0.01)
+    assert timeout.value.code == "timeout"
+    assert runtime._local_workers[key] is worker
+    assert control.inspect_run(queued.run_id).state == "succeeded"
+    assert _control(project, recover=False).attach_run(queued.run_id, timeout_seconds=5).state == "succeeded"
+    assert worker.returncode == 0 and key not in runtime._local_workers
+    with pytest.raises(ChildProcessError):
+        os.waitpid(worker.pid, os.WNOHANG)
+
+
+def test_recovery_before_worker_cursor_keeps_the_original_live_child(
+    project: Path,
+) -> None:
+    import unrest_harness.run_control as runtime
+
+    first = _control(project)
+    source = project / "executor_fixture.py"
+    source.write_text(
+        "import pathlib,time\n"
+        "while not pathlib.Path(__file__).with_name('allow-start').exists(): time.sleep(0.01)\n"
+        + source.read_text()
+    )
+    run = first.submit_run("start_project", _start_args(project), "idem:before-cursor")
+    key = (str(project.resolve()), run.run_id, 1)
+    worker = runtime._local_workers[key]
+    try:
+        assert not list((project / ".unrest-runtime/runs").glob("*.worker.json"))
+        _control(project)
+        assert runtime._local_workers[key] is worker
+    finally:
+        (project / "allow-start").touch()
+    assert first.attach_run(run.run_id, timeout_seconds=5).state == "succeeded"
+    assert (project / "effect-count.log").read_text().splitlines() == ["start_project"]

@@ -111,7 +111,7 @@ def test_proposal_mutation_never_reaches_launch(monkeypatch, mutation):
     )
     raw = {
         "case": host.case,
-        "executable": "git",
+        "executable": "/usr/bin/git",
         "argv": ["git", "init", "-b", "main"],
         "cwd": REPO,
         "environment": {
@@ -149,7 +149,7 @@ def test_producer_reply_is_recursively_json_finite(monkeypatch):
     )
     raw = {
         "case": host.case,
-        "executable": "git",
+        "executable": "/usr/bin/git",
         "argv": ["git", "head"],
         "cwd": REPO,
         "environment": {
@@ -210,7 +210,7 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
     host.git.launch = launch
     raw = {
         "case": case,
-        "executable": "git",
+        "executable": "/usr/bin/git",
         "argv": ["git", "rev-parse", "--is-inside-work-tree"],
         "cwd": REPO,
         "environment": {
@@ -221,7 +221,7 @@ def test_evolution_uses_shared_workspace_query_after_its_fixture_setup(monkeypat
         "stdin": None,
     }
     answer = prepare(host, {}, raw)
-    assert answer["translated"] == raw["argv"]
+    assert answer["translated"] == ['/usr/bin/git',*raw["argv"][1:]]
     assert calls[0][:2] == ("inside", REPO)
     assert calls[0][2].argv == tuple(raw["argv"])
     assert calls[0][3].rule == "git:inside"
@@ -258,10 +258,10 @@ def test_proposal_update_targets_only_the_acquired_branch(monkeypatch,branch):
                             launch=lambda *args:calls.append(args) or {'ticket':1}),
         binding={'entry':{'path':'/native/python','sha256':'b'*64}},
         meta_environment=lambda:{'PATH':'/bin:/usr/bin'})
-    raw={'executable':'git','argv':['git','update-ref','refs/heads/'+branch,TREE,REV],
+    raw={'executable':'/usr/bin/git','argv':['git','update-ref','refs/heads/'+branch,TREE,REV],
          'cwd':REPO,'stdin':None,'environment':{'PATH':'/bin:/usr/bin','PYTEST_VERSION':'9.0.2',
             'PYTEST_CURRENT_TEST':case+' (call)'}}
-    assert prepare(host,{},raw)['translated']==raw['argv']
+    assert prepare(host,{},raw)['translated']==['/usr/bin/git',*raw['argv'][1:]]
     raw['argv'][2]='refs/heads/'+('master' if branch=='main' else 'main')
     with pytest.raises(Refused):
         prepare(host,{},raw)
